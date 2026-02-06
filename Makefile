@@ -417,10 +417,6 @@ integration-test-arm: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
 
-# =============================================================================
-# OBI Integration Tests (generated from .obi-src)
-# =============================================================================
-
 .PHONY: generate-obi-tests
 generate-obi-tests:
 	@echo "### Generating OBI integration tests from .obi-src"
@@ -430,53 +426,6 @@ generate-obi-tests:
 clean-obi-tests:
 	@echo "### Cleaning generated OBI tests"
 	./scripts/generate-obi-tests.sh --clean
-
-.PHONY: run-integration-test-obi
-run-integration-test-obi:
-	@echo "### Running OBI integration tests"
-	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration --tags=integration
-
-.PHONY: run-integration-test-beyla
-run-integration-test-beyla:
-	@echo "### Running Beyla-specific integration tests"
-	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
-
-.PHONY: obi-integration-test-matrix-json
-obi-integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-5}"
-
-.PHONY: beyla-integration-test-matrix-json
-beyla-integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
-
-.PHONY: obi-k8s-integration-test-matrix-json
-obi-k8s-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/obi/test/integration/k8s common
-
-.PHONY: beyla-k8s-integration-test-matrix-json
-beyla-k8s-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/test/integration/k8s common
-
-.PHONY: integration-test-obi
-integration-test-obi: prereqs generate-obi-tests prepare-integration-test
-	$(MAKE) run-integration-test-obi || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
-	$(MAKE) itest-coverage-data
-	$(MAKE) cleanup-integration-test
-
-.PHONY: integration-test-beyla
-integration-test-beyla: prereqs prepare-integration-test
-	$(MAKE) run-integration-test-beyla || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
-	$(MAKE) itest-coverage-data
-	$(MAKE) cleanup-integration-test
-
-.PHONY: integration-test-all
-integration-test-all: prereqs generate-obi-tests prepare-integration-test
-	$(MAKE) run-integration-test-obi || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
-	$(MAKE) run-integration-test-beyla || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
-	$(MAKE) itest-coverage-data
-	$(MAKE) cleanup-integration-test
 
 .PHONY: itest-coverage-data
 itest-coverage-data:

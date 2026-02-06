@@ -146,6 +146,8 @@ apply_transforms() {
 # Inject a line of code after each matching line in a file.
 # Rules are "sed_pattern|code_to_inject"; only files containing the pattern
 # are modified.
+# Uses awk instead of sed for the injection because BSD sed (macOS) does not
+# interpret \n in replacement strings.
 apply_injections() {
     local file="$1"
     shift
@@ -154,7 +156,9 @@ apply_injections() {
         local pattern="${rule%%|*}"
         local injection="${rule#*|}"
         if grep -q "${pattern}" "$file" 2>/dev/null; then
-            sed_i -e "s|${pattern}|&\n\t${injection}|" "$file"
+            awk -v pat="${pattern}" -v inj="${injection}" \
+                '{print} $0 ~ pat {print "\t" inj}' "$file" > "$file.tmp" \
+                && mv "$file.tmp" "$file"
         fi
     done
 }

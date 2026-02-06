@@ -107,7 +107,7 @@ GINKGO = $(TOOLS_DIR)/ginkgo
 ENVTEST = $(TOOLS_DIR)/setup-envtest
 ENVTEST_K8S_VERSION = 1.30.0
 
-.phony: obi-submodule
+.PHONY: obi-submodule
 obi-submodule:
 	@echo "# Updating OBI Git submodule..."
 	git submodule update --init --recursive

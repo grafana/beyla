@@ -34,7 +34,7 @@ GEN_IMG_VERSION=latest
 # building eBPF binaries
 GEN_IMG ?= ghcr.io/open-telemetry/obi-generator:$(GEN_IMG_VERSION)
 
-COMPOSE_ARGS ?= -f internal/test/integration/docker-compose.yml
+COMPOSE_ARGS ?= -f internal/obi/test/integration/docker-compose.yml
 
 OCI_BIN ?= docker
 
@@ -196,11 +196,16 @@ docker-generate: obi-submodule
 copy-obi-vendor:
 	@echo "### Vendoring OBI submodule..."
 	go get go.opentelemetry.io/obi
-	go get -t github.com/grafana/beyla/v3/internal/obi/test/integration
+	go mod vendor
+
+.PHONY: vendor-obi-tests
+vendor-obi-tests:
+	@echo "### Vendoring OBI test dependencies..."
+	go get -t ./internal/obi/test/integration/...
 	go mod vendor
 
 .PHONY: vendor-obi
-vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor
+vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor vendor-obi-tests
 
 .PHONY: verify
 verify: prereqs lint-dashboard vendor-obi lint test

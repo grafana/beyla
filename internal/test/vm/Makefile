@@ -36,7 +36,7 @@ $(ROOT_IMG): Dockerfile
 	# Build the Docker image and create a tarball
 	DOCKER_BUILDKIT=1 docker build --quiet -f Dockerfile \
 		--build-arg target=$(TARGET_TEST) \
-		--build-arg test_pattern=$(TEST_PATTERN) \
+		--build-arg "test_pattern=$(TEST_PATTERN)" \
 		--build-arg run_number=$(RUN_NUMBER) \
 		--output "type=tar,dest=$(TARBALL)" .
 	# Create a raw image, format it, and extract the tarball

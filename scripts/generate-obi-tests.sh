@@ -91,13 +91,14 @@ generate() {
         fi
     done
     
-    # Transform Go import paths
+    # Transform Go import paths and Dockerfile references in Go files
     echo "  Transforming Go imports..."
     find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
         sed_i \
             -e 's|go\.opentelemetry\.io/obi/internal/test/integration|github.com/grafana/beyla/v3/internal/obi/test/integration|g' \
             -e 's|go\.opentelemetry\.io/obi/internal/test/tools|github.com/grafana/beyla/v3/internal/obi/test/tools|g' \
             -e 's|// import "go\.opentelemetry\.io/obi/internal/test/integration[^"]*"||g' \
+            -e 's|"internal/test/integration/components/|".obi-src/internal/test/integration/components/|g' \
             "$file"
     done
     

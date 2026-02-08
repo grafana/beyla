@@ -18,7 +18,7 @@ RUN go mod download
 RUN go build gosqlite.go
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim@sha256:d5d3f9c23164ea16f31852f95bd5959aad1c5e854332fe00f7b3a20fcc9f635c
+FROM debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 WORKDIR /
 COPY --from=builder /src/gosqlite .

@@ -70,7 +70,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      # required for CODECOV token
+      # required for CODECOV token, Dockerhub access
       id-token: write
       checks: write
       # Required for uploading artifacts
@@ -83,6 +83,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@051f0a1cef0e1ef9f92fbe57c65b1eec029c3904
 
       - name: Free up disk space
         run: |

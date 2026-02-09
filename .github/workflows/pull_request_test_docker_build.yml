@@ -9,6 +9,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest-8-cores
+    permissions:
+      contents: read
+      # required for DockerHub access
+      id-token: write
 
     strategy:
       matrix:
@@ -21,6 +25,10 @@ jobs:
         with:
           persist-credentials: "false"
           submodules: "recursive"
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@051f0a1cef0e1ef9f92fbe57c65b1eec029c3904
+
       - id: docker-build-beyla
         uses: grafana/shared-workflows/actions/build-push-to-dockerhub@fa48192dac470ae356b3f7007229f3ac28c48a25 # main
         with:

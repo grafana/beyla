@@ -69,6 +69,9 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 	if metricsEnabled {
 		exportModes.AllowMetrics()
 	}
+	if logsEnabled {
+		exportModes.AllowLogs()
+	}
 
 	// If selector has export modes, override the global ones
 	if selector != nil {
@@ -77,7 +80,7 @@ func (pm *PodMutator) configureContainerEnvVars(meta *metav1.ObjectMeta, contain
 		}
 	}
 
-	pm.configureExporters(container, exportModes, logsEnabled)
+	pm.configureExporters(container, exportModes)
 
 	if pm.cfg.Metrics.Features.AnySpanMetrics() {
 		extraResAttrs[attr.SkipSpanMetrics.OTEL()] = "true"
@@ -162,10 +165,8 @@ func (pm *PodMutator) configurePropagators(container *corev1.Container, propagat
 // configureExporters sets exporter environment variables based on the export modes.
 // Sets OTEL_METRICS_EXPORTER to "otlp" or "none" based on CanExportMetrics().
 // Sets OTEL_TRACES_EXPORTER to "otlp" or "none" based on CanExportTraces().
-// Sets OTEL_LOGS_EXPORTER to "otlp" or "none" based on logsEnabled parameter.
-// Logs are passed separately until they are added to ExportModes
-// See https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pull/1207
-func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes, logsEnabled bool) {
+// Sets OTEL_LOGS_EXPORTER to "otlp" or "none" based on CanExportLogs().
+func (pm *PodMutator) configureExporters(container *corev1.Container, exportModes services.ExportModes) {
 	// Set metrics exporter
 	if exportModes.CanExportMetrics() {
 		setEnvVar(container, envOtelMetricsExporterName, "otlp")
@@ -181,7 +182,7 @@ func (pm *PodMutator) configureExporters(container *corev1.Container, exportMode
 	}
 
 	// Set logs exporter
-	if logsEnabled {
+	if exportModes.CanExportLogs() {
 		setEnvVar(container, envOtelLogsExporterName, "otlp")
 	} else {
 		setEnvVar(container, envOtelLogsExporterName, "none")

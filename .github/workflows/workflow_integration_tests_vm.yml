@@ -8,6 +8,7 @@ on:
       - "bpf/**"
       - "internal/**"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
@@ -16,6 +17,7 @@ on:
       - "bpf/**"
       - "internal/**"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".obi-src/**"
 
 permissions:
@@ -31,6 +33,10 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
+
+      - name: Generate OBI tests
+        run: make generate-obi-tests
 
       - name: build matrix
         id: build-matrix
@@ -67,6 +73,10 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@051f0a1cef0e1ef9f92fbe57c65b1eec029c3904
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -85,7 +95,7 @@ jobs:
       - name: Pre-compile Go integration tests
         run: |
           mkdir compiled-tests
-          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/test/integration
+          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/obi/test/integration
 
       - name: Run VM integration tests (${{ matrix.test.description }})
         timeout-minutes: 60

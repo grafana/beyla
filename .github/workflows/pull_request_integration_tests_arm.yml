@@ -13,6 +13,7 @@ on:
       - "cmd/**"
       - "vendor/**"
       - "Makefile"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
       - ".obi-src/**"
 
@@ -28,6 +29,7 @@ on:
       - "cmd/**"
       - "vendor/**"
       - "Makefile"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
       - ".obi-src/**"
 
@@ -49,6 +51,11 @@ jobs:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           persist-credentials: false
+          submodules: true
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@051f0a1cef0e1ef9f92fbe57c65b1eec029c3904
+
       - name: Set up Go
         uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
         with:
@@ -58,9 +65,11 @@ jobs:
         run: |
           docker system prune -af
           docker volume prune -f
+
       - name: Run integration tests
         run: make docker-generate integration-test-arm
         timeout-minutes: 60
+
       - name: Upload integration test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
@@ -69,6 +78,7 @@ jobs:
           path: |
             testoutput/*.log
             testoutput/kind
+
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         continue-on-error: true
@@ -76,6 +86,7 @@ jobs:
           # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:token
+
       - name: Report coverage
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         continue-on-error: true

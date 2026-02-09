@@ -1,0 +1,9 @@
+# Vendor directories
+vendor/** linguist-generated linguist-vendored
+.obi-src/** linguist-vendored
+internal/test/integration/components/old_grpc/**/vendor/** linguist-generated linguist-vendored
+
+# Generated files
+*.pb.go linguist-generated
+*_grpc.pb.go linguist-generated
+third_party_licenses.csv linguist-generated

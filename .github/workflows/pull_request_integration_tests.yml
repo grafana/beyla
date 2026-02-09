@@ -14,6 +14,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests.yml"
       - ".obi-src/**"
   pull_request:
@@ -29,6 +30,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests.yml"
       - ".obi-src/**"
 
@@ -46,11 +48,15 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
 
-      - name: build matrix
+      - name: Generate OBI tests
+        run: make generate-obi-tests
+
+      - name: Build matrix
         id: build-matrix
         env:
-          PARTITIONS: 10
+          PARTITIONS: 15
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
@@ -64,7 +70,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      # required for CODECOV token
+      # required for CODECOV token, Dockerhub access
       id-token: write
       checks: write
       # Required for uploading artifacts
@@ -76,6 +82,10 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          submodules: true
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@051f0a1cef0e1ef9f92fbe57c65b1eec029c3904
 
       - name: Free up disk space
         run: |
@@ -149,15 +159,15 @@ jobs:
             exit 1
           fi
 
-          mkdir reports
+          mkdir -p reports
 
           ~/go/bin/gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
-              --packages="./internal/test/integration" -ftestname \
+              --packages="./internal/obi/test/integration" -ftestname \
               --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
               -- -race -tags=${TEST_TAGS} -timeout 30m \
               -mod vendor \
-              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/test/integration
+              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/obi/test/integration
 
       - name: Process coverage data
         run: make itest-coverage-data

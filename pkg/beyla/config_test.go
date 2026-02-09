@@ -17,6 +17,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/config"
 	obiconfig "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -178,7 +179,8 @@ network:
 				AsyncWriterWorkers:    8,
 				AsyncWriterChannelLen: 500,
 			},
-			BPFFSPath: "/sys/fs/bpf/",
+			BPFFSPath:      "/sys/fs/bpf/",
+			InstrumentCuda: config.CudaModeAuto,
 		},
 		Grafana: otel.GrafanaConfig{
 			OTLP: otel.GrafanaOTLP{

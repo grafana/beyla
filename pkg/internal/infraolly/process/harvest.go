@@ -34,6 +34,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/shirou/gopsutil/v3/process"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
@@ -53,11 +54,11 @@ type Harvester struct {
 	// allows overriding the /proc filesystem location via HOST_PROC env var
 	procFSRoot string
 	privileged bool
-	cache      *simplelru.LRU[int32, *linuxProcess]
+	cache      *simplelru.LRU[app.PID, *linuxProcess]
 	log        *slog.Logger
 }
 
-func newHarvester(cfg *CollectConfig, cache *simplelru.LRU[int32, *linuxProcess]) *Harvester {
+func newHarvester(cfg *CollectConfig, cache *simplelru.LRU[app.PID, *linuxProcess]) *Harvester {
 	// we need to use the same method to override HOST_PROC that is used by gopsutil library
 	hostProc, ok := os.LookupEnv("HOST_PROC")
 	if !ok {

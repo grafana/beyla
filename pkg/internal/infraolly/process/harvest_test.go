@@ -32,8 +32,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
+
+const invalidPID = app.PID(^uint32(0))
 
 func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 	cases := []struct {
@@ -45,11 +48,11 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprint("mode ", c.mode), func(t *testing.T) {
-			cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+			cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
 			h := newHarvester(&CollectConfig{RunMode: c.mode}, cache)
 
 			// If not privileged, it is expected to not report neither FDs nor IO counters
-			status, err := h.Harvest(&svc.Attrs{ProcPID: int32(os.Getpid())})
+			status, err := h.Harvest(&svc.Attrs{ProcPID: app.PID(os.Getpid())})
 			require.NoError(t, err)
 			if c.privileged {
 				assert.NotZero(t, status.FdCount)
@@ -64,17 +67,17 @@ func TestLinuxHarvester_IsPrivileged(t *testing.T) {
 
 func TestLinuxHarvester_Harvest(t *testing.T) {
 	// Given a process harvester
-	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+	cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When retrieving for a given process status (e.g. the current testing executable)
-	status, err := h.Harvest(&svc.Attrs{ProcPID: int32(os.Getpid())})
+	status, err := h.Harvest(&svc.Attrs{ProcPID: app.PID(os.Getpid())})
 
 	// It returns the corresponding process status with valid data
 	require.NoError(t, err)
 	require.NotNil(t, status)
 
-	assert.Equal(t, int32(os.Getpid()), status.ID.ProcessID)
+	assert.Equal(t, app.PID(os.Getpid()), status.ID.ProcessID)
 	assert.Equal(t, "process.test", status.ID.Command)
 	assert.Contains(t, status.ID.CommandLine, os.Args[0])
 	assert.NotEmpty(t, status.ID.User)
@@ -95,11 +98,11 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 
 	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
 		// Given a process harvester configured to showw the full command line
-		cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+		cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
 		h := newHarvester(&CollectConfig{}, cache)
 
 		// When retrieving for a given process status (e.g. the current testing executable)
-		status, err := h.Harvest(&svc.Attrs{ProcPID: int32(cmd.Process.Pid)})
+		status, err := h.Harvest(&svc.Attrs{ProcPID: app.PID(cmd.Process.Pid)})
 
 		// It returns the corresponding Command line without stripping arguments
 		require.NoError(t, err)
@@ -114,11 +117,11 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 }
 
 func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
-	currentPid := int32(os.Getpid())
+	currentPid := app.PID(os.Getpid())
 
 	// Given a process harvester
 	// That has cached an old process sharing the PID with a new process
-	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+	cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
 	cache.Add(currentPid, &linuxProcess{stats: procStats{command: "something old"}})
 	h := newHarvester(&CollectConfig{}, cache)
 
@@ -132,12 +135,12 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {
 }
 
 func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
-	currentPid := int32(os.Getpid())
+	currentPid := app.PID(os.Getpid())
 
 	// Given a process harvester
 	// That has cached an old process sharing the PID with a new process
-	cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
-	cache.Add(currentPid, &linuxProcess{stats: procStats{ppid: -1}})
+	cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
+	cache.Add(currentPid, &linuxProcess{stats: procStats{ppid: invalidPID}})
 	h := newHarvester(&CollectConfig{}, cache)
 
 	// When the process is harvested
@@ -145,5 +148,5 @@ func TestLinuxHarvester_Do_InvalidateCache_DifferentPid(t *testing.T) {
 	require.NoError(t, err)
 
 	// The status is updated
-	assert.NotEqual(t, -1, status.ID.ParentProcessID)
+	assert.NotEqual(t, invalidPID, status.ID.ParentProcessID)
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 
 	"github.com/grafana/beyla/v3/pkg/internal/helpers"
 )
@@ -66,7 +67,7 @@ type linuxProcess struct {
 	procFSRoot string
 
 	// data that will be reused between harvests of the same process.
-	pid                int32
+	pid                app.PID
 	user               string
 	commandInfoFetched bool
 	commandArgs        []string
@@ -103,7 +104,7 @@ func init() {
 
 // getLinuxProcess returns a linux process snapshot, trying to reuse the data from a previous snapshot of the same
 // process.
-func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, privileged bool) (*linuxProcess, error) {
+func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid app.PID, privileged bool) (*linuxProcess, error) {
 	var gops *process.Process
 	var err error
 
@@ -122,7 +123,7 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, pri
 		currentStats.command != cachedCopy.stats.command ||
 		currentStats.ppid != cachedCopy.stats.ppid {
 
-		gops, err = process.NewProcess(pid)
+		gops, err = process.NewProcess(int32(pid))
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +146,7 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, pri
 	return cachedCopy, nil
 }
 
-func (pw *linuxProcess) Pid() int32 {
+func (pw *linuxProcess) Pid() app.PID {
 	return pw.pid
 }
 
@@ -234,7 +235,7 @@ func (pw *linuxProcess) NumFDs() (int32, error) {
 // procStats contains data to be parsed from /proc/<pid>/stat
 type procStats struct {
 	command    string
-	ppid       int32
+	ppid       app.PID
 	numThreads int32
 	state      string
 	vmRSS      int64
@@ -257,7 +258,7 @@ const (
 )
 
 // readProcStat will gather information about the pid from /proc/<pid>/stat file.
-func readProcStat(procFSRoot string, pid int32) (procStats, error) {
+func readProcStat(procFSRoot string, pid app.PID) (procStats, error) {
 	statPath := path.Join(procFSRoot, strconv.Itoa(int(pid)), "stat")
 
 	content, err := os.ReadFile(statPath)
@@ -297,7 +298,7 @@ func parseProcStat(content string) (procStats, error) {
 	if err != nil {
 		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
-	stats.ppid = int32(ppid)
+	stats.ppid = app.PID(ppid)
 
 	// User time
 	utime, err := strconv.ParseInt(fields[statUtime], 10, 64)

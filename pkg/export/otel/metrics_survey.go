@@ -9,6 +9,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/otel"
@@ -155,11 +156,11 @@ func (smr *SurveyMetricsReporter) watchForProcessEvents(ctx context.Context) {
 	}
 }
 
-func (smr *SurveyMetricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
+func (smr *SurveyMetricsReporter) setupPIDToServiceRelationship(pid app.PID, uid svc.UID) {
 	smr.pidTracker.AddPID(pid, uid)
 }
 
-func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
+func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid app.PID) (bool, svc.UID) {
 	return smr.pidTracker.RemovePID(pid)
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -149,11 +150,11 @@ func (r *surveyMetricsReporter) deleteSurveyInfo(uid svc.UID, service *svc.Attrs
 	r.surveyInfo.DeleteLabelValues(targetInfoLabelValues...)
 }
 
-func (r *surveyMetricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
+func (r *surveyMetricsReporter) setupPIDToServiceRelationship(pid app.PID, uid svc.UID) {
 	r.pidsTracker.AddPID(pid, uid)
 }
 
-func (r *surveyMetricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
+func (r *surveyMetricsReporter) disassociatePIDFromService(pid app.PID) (bool, svc.UID) {
 	return r.pidsTracker.RemovePID(pid)
 }
 

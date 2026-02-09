@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 )
@@ -44,8 +45,8 @@ func ReadGoOTelEventIntoSpan(record *ringbuf.Record) (request.Span, bool, error)
 		ParentSpanID:  trace.SpanID(event.Tp.ParentId),
 		Status:        int(event.Status),
 		Pid: request.PidInfo{
-			HostPID:   event.Pid.HostPid,
-			UserPID:   event.Pid.UserPid,
+			HostPID:   app.PID(event.Pid.HostPid),
+			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
 	}, false, nil

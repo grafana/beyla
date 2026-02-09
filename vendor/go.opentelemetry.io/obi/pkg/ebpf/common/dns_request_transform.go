@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
@@ -72,8 +73,8 @@ func readDNSEventIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 			ParentSpanID:  trace.SpanID(event.Tp.ParentId),
 			Status:        int(-1),
 			Pid: request.PidInfo{
-				HostPID:   event.Pid.HostPid,
-				UserPID:   event.Pid.UserPid,
+				HostPID:   app.PID(event.Pid.HostPid),
+				UserPID:   app.PID(event.Pid.UserPid),
 				Namespace: event.Pid.Ns,
 			},
 		}

@@ -47,6 +47,7 @@ const (
 	InstrumentationErrorAttachingKprobe                = "attaching_kprobe"
 	InstrumentationErrorAttachingUprobe                = "attaching_uprobe"
 	InstrumentationErrorAttachingIter                  = "attaching_iter"
+	InstrumentationErrorAttachingTracing               = "attaching_tracing"
 	InstrumentationErrorInvalidTracepoint              = "invalid_tracepoint"
 )
 

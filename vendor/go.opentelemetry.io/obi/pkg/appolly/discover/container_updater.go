@@ -18,6 +18,7 @@ import (
 // ContainerDBUpdaterProvider is a stage in the Process Finder pipeline that will be
 // enabled only if Kubernetes decoration is enabled.
 // It just updates part of the kubernetes database when a new process is discovered.
+// TODO: rename to avoid confusions with Docker-only containers
 func ContainerDBUpdaterProvider(
 	meta kubeMetadataProvider, input, output *msg.Queue[[]Event[ebpf.Instrumentable]],
 ) swarm.InstanceFunc {
@@ -45,7 +46,7 @@ func updateLoop(
 				switch ev.Type {
 				case EventCreated:
 					log.Debug("adding process", "pid", ev.Obj.FileInfo.Pid)
-					db.AddProcess(uint32(ev.Obj.FileInfo.Pid))
+					db.AddProcess(ev.Obj.FileInfo.Pid)
 				case EventDeleted:
 					// we don't need to handle process deletion from here, as the Kubernetes informer will
 					// remove the process from the database when the Pod that contains it is deleted.

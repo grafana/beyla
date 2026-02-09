@@ -24,6 +24,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -182,6 +183,8 @@ func (p *Tracer) Iters() []*ebpfcommon.Iter {
 	return nil
 }
 
+func (p *Tracer) Tracing() []*ebpfcommon.Tracing { return nil }
+
 func (p *Tracer) RecordInstrumentedLib(uint64, []io.Closer) {}
 
 func (p *Tracer) AddInstrumentedLibRef(uint64) {}
@@ -212,16 +215,16 @@ func (p *Tracer) removePID(key uint64) error {
 	return nil
 }
 
-func (p *Tracer) AllowPID(pid, ns uint32, _ *svc.Attrs) {
+func (p *Tracer) AllowPID(pid app.PID, ns uint32, _ *svc.Attrs) {
 	p.pidsMU.Lock()
 	defer p.pidsMU.Unlock()
 
-	pk := p.pidKey(ns, pid)
+	pk := p.pidKey(ns, uint32(pid))
 	if err := p.addPID(pk); err != nil {
 		p.log.Error(err.Error())
 	}
 
-	nsPids, err := procs.FindNamespacedPids(int32(pid))
+	nsPids, err := procs.FindNamespacedPids(pid)
 	if err != nil {
 		p.log.Error("allow pid: error finding namespaced pids", "error", err)
 		return
@@ -232,7 +235,7 @@ func (p *Tracer) AllowPID(pid, ns uint32, _ *svc.Attrs) {
 			continue
 		}
 
-		nsPk := p.pidKey(ns, nsPid)
+		nsPk := p.pidKey(ns, uint32(nsPid))
 		if err := p.addPID(nsPk); err != nil {
 			p.log.Error(err.Error())
 		}
@@ -240,11 +243,11 @@ func (p *Tracer) AllowPID(pid, ns uint32, _ *svc.Attrs) {
 	}
 }
 
-func (p *Tracer) BlockPID(pid, ns uint32) {
+func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.pidsMU.Lock()
 	defer p.pidsMU.Unlock()
 
-	pk := p.pidKey(ns, pid)
+	pk := p.pidKey(ns, uint32(pid))
 	if err := p.removePID(pk); err != nil {
 		p.log.Error(err.Error())
 	}

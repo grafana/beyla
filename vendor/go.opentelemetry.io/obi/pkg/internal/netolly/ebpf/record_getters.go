@@ -53,9 +53,9 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		getter = func(r *Record) attribute.KeyValue {
 			return attribute.String(string(attr.SrcAddress), r.Id.SrcIP().IP().String())
 		}
-	case attr.DstAddres:
+	case attr.DstAddress:
 		getter = func(r *Record) attribute.KeyValue {
-			return attribute.String(string(attr.DstAddres), r.Id.DstIP().IP().String())
+			return attribute.String(string(attr.DstAddress), r.Id.DstIP().IP().String())
 		}
 	case attr.SrcPort:
 		getter = func(r *Record) attribute.KeyValue { return attribute.Int(string(attr.SrcPort), int(r.Id.SrcPort)) }

@@ -10,11 +10,12 @@ import (
 	"os"
 	"slices"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/internal/fastelf"
 )
 
-func FindProcLanguage(pid int32) svc.InstrumentableType {
+func FindProcLanguage(pid app.PID) svc.InstrumentableType {
 	maps, err := FindLibMaps(pid)
 	if err != nil {
 		return svc.InstrumentableGeneric
@@ -50,7 +51,7 @@ func FindProcLanguage(pid int32) svc.InstrumentableType {
 	return instrumentableFromEnviron(string(bytes))
 }
 
-func resolveProcBinary(pid int32) (string, error) {
+func resolveProcBinary(pid app.PID) (string, error) {
 	exePath := fmt.Sprintf("/proc/%d/exe", pid)
 
 	realPath, err := os.Readlink(exePath)

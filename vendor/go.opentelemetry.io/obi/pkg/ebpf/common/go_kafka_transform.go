@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 )
@@ -51,8 +52,8 @@ func GoKafkaSaramaToSpan(event *GoSaramaClientInfo, data *KafkaInfo) request.Spa
 		End:           int64(event.EndMonotimeNs),
 		Status:        0,
 		Pid: request.PidInfo{
-			HostPID:   event.Pid.HostPid,
-			UserPID:   event.Pid.UserPid,
+			HostPID:   app.PID(event.Pid.HostPid),
+			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
 	}
@@ -96,8 +97,8 @@ func ReadGoKafkaGoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, e
 		ParentSpanID:  trace.SpanID(event.Tp.ParentId),
 		Status:        0,
 		Pid: request.PidInfo{
-			HostPID:   event.Pid.HostPid,
-			UserPID:   event.Pid.UserPid,
+			HostPID:   app.PID(event.Pid.HostPid),
+			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
 	}, false, nil

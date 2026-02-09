@@ -15,6 +15,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -98,6 +99,7 @@ type MetricsReporter struct {
 	attrHTTPClientRequestSize  []attributes.Field[*request.Span, attribute.KeyValue]
 	attrHTTPClientResponseSize []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelCalls         []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUGraphCalls          []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelGridSize      []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelBlockSize     []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
@@ -140,6 +142,7 @@ type Metrics struct {
 	spanMetricsResponseSizeTotal *Expirer[*request.Span, instrument.Float64Counter, float64]
 	// cuda/gpu
 	gpuKernelCallsTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuGraphCallsTotal   *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuMemoryAllocsTotal *Expirer[*request.Span, instrument.Int64Counter, int64]
 	gpuKernelGridSize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	gpuKernelBlockSize   *Expirer[*request.Span, instrument.Float64Histogram, float64]
@@ -265,15 +268,17 @@ func newMetricsReporter(
 
 	if is.GPUEnabled() {
 		mr.attrGPUKernelCalls = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.GPUKernelLaunchCalls))
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaKernelLaunchCalls))
+		mr.attrGPUGraphCalls = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaGraphLaunchCalls))
 		mr.attrGPUMemoryAllocations = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.GPUMemoryAllocations))
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaMemoryAllocations))
 		mr.attrGPUKernelGridSize = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.GPUKernelGridSize))
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaKernelGridSize))
 		mr.attrGPUKernelBlockSize = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.GPUKernelBlockSize))
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaKernelBlockSize))
 		mr.attrGPUMemoryCopies = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.GPUMemoryCopies))
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaMemoryCopies))
 	}
 
 	if is.DNSEnabled() {
@@ -492,35 +497,42 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.GPUEnabled() {
-		gpuKernelCallsTotal, err := meter.Int64Counter(attributes.GPUKernelLaunchCalls.OTEL)
+		gpuKernelCallsTotal, err := meter.Int64Counter(attributes.GPUCudaKernelLaunchCalls.OTEL)
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel calls total: %w", err)
 		}
 		m.gpuKernelCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuKernelCallsTotal, mr.attrGPUKernelCalls, timeNow, mr.cfg.TTL)
 
-		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attributes.GPUMemoryAllocations.OTEL, instrument.WithUnit("By"))
+		gpuGraphCallsTotal, err := meter.Int64Counter(attributes.GPUCudaGraphLaunchCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu graph calls total: %w", err)
+		}
+		m.gpuGraphCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuGraphCallsTotal, mr.attrGPUGraphCalls, timeNow, mr.cfg.TTL)
+
+		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attributes.GPUCudaMemoryAllocations.OTEL, instrument.WithUnit("By"))
 		if err != nil {
 			return fmt.Errorf("creating gpu memory allocations total: %w", err)
 		}
 		m.gpuMemoryAllocsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuMemoryAllocationsTotal, mr.attrGPUMemoryAllocations, timeNow, mr.cfg.TTL)
 
-		gpuKernelGridSize, err := meter.Float64Histogram(attributes.GPUKernelGridSize.OTEL, instrument.WithUnit("1"))
+		gpuKernelGridSize, err := meter.Float64Histogram(attributes.GPUCudaKernelGridSize.OTEL, instrument.WithUnit("1"))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel grid size histogram: %w", err)
 		}
 		m.gpuKernelGridSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuKernelGridSize, mr.attrGPUKernelGridSize, timeNow, mr.cfg.TTL)
 
-		gpuKernelBlockSize, err := meter.Float64Histogram(attributes.GPUKernelBlockSize.OTEL, instrument.WithUnit("1"))
+		gpuKernelBlockSize, err := meter.Float64Histogram(attributes.GPUCudaKernelBlockSize.OTEL, instrument.WithUnit("1"))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel block size histogram: %w", err)
 		}
 		m.gpuKernelBlockSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuKernelBlockSize, mr.attrGPUKernelBlockSize, timeNow, mr.cfg.TTL)
 
-		gpuMemoryCopySize, err := meter.Float64Histogram(attributes.GPUMemoryCopies.OTEL, instrument.WithUnit("1"))
+		gpuMemoryCopySize, err := meter.Float64Histogram(attributes.GPUCudaMemoryCopies.OTEL, instrument.WithUnit("1"))
 		if err != nil {
 			return fmt.Errorf("creating gpu memcpy size histogram: %w", err)
 		}
@@ -889,7 +901,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 					msgProcessDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				}
 			}
-		case request.EventTypeGPUKernelLaunch:
+		case request.EventTypeGPUCudaKernelLaunch:
 			if mr.is.GPUEnabled() {
 				gcalls, attrs := r.gpuKernelCallsTotal.ForRecord(span)
 				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
@@ -900,12 +912,17 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				gblock, attrs := r.gpuKernelBlockSize.ForRecord(span)
 				gblock.Record(ctx, float64(span.SubType), instrument.WithAttributeSet(attrs))
 			}
-		case request.EventTypeGPUMalloc:
+		case request.EventTypeGPUCudaMalloc:
 			if mr.is.GPUEnabled() {
 				gmem, attrs := r.gpuMemoryAllocsTotal.ForRecord(span)
 				gmem.Add(ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
 			}
-		case request.EventTypeGPUMemcpy:
+		case request.EventTypeGPUCudaGraphLaunch:
+			if mr.is.GPUEnabled() {
+				ggraph, attrs := r.gpuGraphCallsTotal.ForRecord(span)
+				ggraph.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaMemcpy:
 			if mr.is.GPUEnabled() {
 				gmem, attrs := r.gpuMemoryCopySize.ForRecord(span)
 				gmem.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
@@ -986,11 +1003,11 @@ func (mr *MetricsReporter) deleteTracesTargetInfo(attrs *attribute.Set) {
 	mr.tracesTargetInfo.Remove(mr.ctx, attrOpt)
 }
 
-func (mr *MetricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
+func (mr *MetricsReporter) setupPIDToServiceRelationship(pid app.PID, uid svc.UID) {
 	mr.pidTracker.AddPID(pid, uid)
 }
 
-func (mr *MetricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
+func (mr *MetricsReporter) disassociatePIDFromService(pid app.PID) (bool, svc.UID) {
 	return mr.pidTracker.RemovePID(pid)
 }
 

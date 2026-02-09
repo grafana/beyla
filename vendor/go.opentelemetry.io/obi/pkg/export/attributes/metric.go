@@ -89,30 +89,35 @@ var (
 		Prom:    "messaging_process_duration_seconds",
 		OTEL:    "messaging.process.duration",
 	}
-	GPUKernelLaunchCalls = Name{
-		Section: "gpu.kernel.launch.calls",
-		Prom:    "gpu_kernel_launch_calls_total",
-		OTEL:    "gpu.kernel.launch.calls",
+	GPUCudaKernelLaunchCalls = Name{
+		Section: "gpu.cuda.kernel.launch.calls",
+		Prom:    "gpu_cuda_kernel_launch_calls_total",
+		OTEL:    "gpu.cuda.kernel.launch.calls",
 	}
-	GPUKernelGridSize = Name{
-		Section: "gpu.kernel.grid.size",
-		Prom:    "gpu_kernel_grid_size_total",
-		OTEL:    "gpu.kernel.grid.size",
+	GPUCudaGraphLaunchCalls = Name{
+		Section: "gpu.cuda.graph.launch.calls",
+		Prom:    "gpu_cuda_graph_launch_calls_total",
+		OTEL:    "gpu.cuda.graph.launch.calls",
 	}
-	GPUKernelBlockSize = Name{
-		Section: "gpu.kernel.block.size",
-		Prom:    "gpu_kernel_block_size_total",
-		OTEL:    "gpu.kernel.block.size",
+	GPUCudaKernelGridSize = Name{
+		Section: "gpu.cuda.kernel.grid.size",
+		Prom:    "gpu_cuda_kernel_grid_size_total",
+		OTEL:    "gpu.cuda.kernel.grid.size",
 	}
-	GPUMemoryAllocations = Name{
-		Section: "gpu.memory.allocations",
-		Prom:    "gpu_memory_allocations_bytes_total",
-		OTEL:    "gpu.memory.allocations",
+	GPUCudaKernelBlockSize = Name{
+		Section: "gpu.cuda.kernel.block.size",
+		Prom:    "gpu_cuda_kernel_block_size_total",
+		OTEL:    "gpu.cuda.kernel.block.size",
 	}
-	GPUMemoryCopies = Name{
-		Section: "gpu.memory.copies",
-		Prom:    "gpu_memory_copies_bytes_total",
-		OTEL:    "gpu.memory.copies",
+	GPUCudaMemoryAllocations = Name{
+		Section: "gpu.cuda.memory.allocations",
+		Prom:    "gpu_cuda_memory_allocations_bytes_total",
+		OTEL:    "gpu.cuda.memory.allocations",
+	}
+	GPUCudaMemoryCopies = Name{
+		Section: "gpu.cuda.memory.copies",
+		Prom:    "gpu_cuda_memory_copies_bytes_total",
+		OTEL:    "gpu.cuda.memory.copies",
 	}
 	DNSLookupDuration = Name{
 		Section: "dns.lookup.duration",

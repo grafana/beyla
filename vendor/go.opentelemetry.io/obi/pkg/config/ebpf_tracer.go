@@ -5,6 +5,7 @@ package config // import "go.opentelemetry.io/obi/pkg/config"
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -78,7 +79,7 @@ type EBPFTracer struct {
 	HeuristicSQLDetect bool `yaml:"heuristic_sql_detect" env:"OTEL_EBPF_HEURISTIC_SQL_DETECT" validate:"boolean"`
 
 	// Enables GPU instrumentation for CUDA kernel launches and allocations
-	InstrumentGPU bool `yaml:"instrument_gpu" env:"OTEL_EBPF_INSTRUMENT_GPU" validate:"boolean"`
+	InstrumentCuda CudaMode `yaml:"instrument_cuda" env:"OTEL_EBPF_INSTRUMENT_CUDA" validate:"oneof=1 2 3"`
 
 	// Enables debug printing of the protocol data
 	ProtocolDebug bool `yaml:"protocol_debug_print" env:"OTEL_EBPF_PROTOCOL_DEBUG_PRINT" validate:"boolean"`
@@ -117,7 +118,27 @@ type EBPFTracer struct {
 	CouchbaseDBCacheSize int `yaml:"couchbase_db_cache_size" env:"OTEL_EBPF_COUCHBASE_DB_CACHE_SIZE" validate:"gt=0"`
 
 	// BPF path used to pin eBPF maps
-	BpfFsPath string `yaml:"bpf_fs_path" env:"OTEL_EBPF_BPF_FS_PATH"`
+	BPFFSPath string `yaml:"bpf_fs_path" env:"OTEL_EBPF_BPF_FS_PATH"`
+}
+
+var nvidiaSMIExistsFunc = nvidiaSMIExists
+
+func nvidiaSMIExists() bool {
+	if _, err := exec.LookPath("nvidia-smi"); err == nil {
+		return true
+	}
+
+	return false
+}
+
+func (e *EBPFTracer) CudaInstrumentationEnabled() bool {
+	switch e.InstrumentCuda {
+	case CudaModeOn:
+		return true
+	case CudaModeAuto:
+		return nvidiaSMIExistsFunc()
+	}
+	return false
 }
 
 // Per-protocol data buffer size in bytes.

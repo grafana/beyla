@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -47,11 +48,13 @@ var cgroupFormats = []*regexp.Regexp{
 	// as fallback, other formats for cgroup which might appear in other Docker implementations
 	// 0::/../../pode039200acb850c82bb901653cc38ff6e/58452031ab6dcaa4fe3ff91f8a46fd41a4a2405586f3cf3d5cb9c93b5bcf62cc
 	regexp.MustCompile(`^\d+:.*:.*/.*/.*/([0-9a-fA-F]{64})`),
+	// 0::/../a3a2c831c9ef9fe82d17ef9d9b10a44586bcea8b3223d5b35cccc7f0d1fe9218
+	regexp.MustCompile(`^\d+:.*:/(?:\.\./)+([0-9a-fA-F]{64})`),
 }
 
 // InfoForPID returns the container ID and PID namespace for the given PID.
-func InfoForPID(pid uint32) (Info, error) {
-	ns, err := namespaceFinder(int32(pid))
+func InfoForPID(pid app.PID) (Info, error) {
+	ns, err := namespaceFinder(pid)
 	if err != nil {
 		return Info{}, fmt.Errorf("finding PID %d namespace: %w", pid, err)
 	}

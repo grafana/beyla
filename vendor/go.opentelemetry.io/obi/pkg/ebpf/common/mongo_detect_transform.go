@@ -15,6 +15,7 @@ import (
 
 	trace2 "go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 )
@@ -491,8 +492,8 @@ func TCPToMongoToSpan(trace *TCPRequestInfo, info *mongoSpanInfo) request.Span {
 		ParentSpanID:  trace.Tp.ParentId,
 		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
-			HostPID:   trace.Pid.HostPid,
-			UserPID:   trace.Pid.UserPid,
+			HostPID:   app.PID(trace.Pid.HostPid),
+			UserPID:   app.PID(trace.Pid.UserPid),
 			Namespace: trace.Pid.Ns,
 		},
 	}
@@ -621,8 +622,8 @@ func ReadGoMongoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 		ParentSpanID:  trace2.SpanID(event.Tp.ParentId),
 		TraceFlags:    event.Tp.Flags,
 		Pid: request.PidInfo{
-			HostPID:   event.Pid.HostPid,
-			UserPID:   event.Pid.UserPid,
+			HostPID:   app.PID(event.Pid.HostPid),
+			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
 	}, false, nil

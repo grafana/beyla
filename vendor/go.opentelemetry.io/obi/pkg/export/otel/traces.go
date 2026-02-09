@@ -337,6 +337,10 @@ func createZapLoggerDev(sdkLogLevel string) *zap.Logger {
 		slog.Error("unsupported trace exporter logger level", "error", err, "level", sdkLogLevel)
 		return zap.NewNop()
 	}
+	if level > zapcore.ErrorLevel {
+		slog.Warn("trace exporter logger level mapped to 'error'", "level", sdkLogLevel, "mapped_to", zapcore.ErrorLevel.String())
+		level = zapcore.ErrorLevel
+	}
 
 	config := zap.NewDevelopmentConfig()
 	config.Level = zap.NewAtomicLevelAt(level)

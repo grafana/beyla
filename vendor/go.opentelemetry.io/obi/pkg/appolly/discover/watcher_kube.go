@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
 	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
@@ -33,7 +34,7 @@ type watcherKubeEnricher struct {
 
 	// cached system objects
 	mt                 sync.RWMutex
-	containerByPID     map[PID]container.Info
+	containerByPID     map[app.PID]container.Info
 	processByContainer map[string][]ProcessAttrs
 
 	podsInfoCh chan Event[*informer.ObjectMeta]
@@ -63,7 +64,7 @@ func WatcherKubeEnricherProvider(
 		wk := watcherKubeEnricher{
 			log:                slog.With("component", "discover.watcherKubeEnricher"),
 			store:              store,
-			containerByPID:     map[PID]container.Info{},
+			containerByPID:     map[app.PID]container.Info{},
 			processByContainer: map[string][]ProcessAttrs{},
 			podsInfoCh:         make(chan Event[*informer.ObjectMeta], 10),
 			input:              input.Subscribe(msg.SubscriberName("WatcherKubeEnricher")),
@@ -213,7 +214,7 @@ func (wk *watcherKubeEnricher) onProcessTerminate(procInfo ProcessAttrs) {
 		}
 	}
 	delete(wk.containerByPID, procInfo.pid)
-	wk.store.DeleteProcess(uint32(procInfo.pid))
+	wk.store.DeleteProcess(procInfo.pid)
 }
 
 func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[ProcessAttrs] {
@@ -248,11 +249,11 @@ func (wk *watcherKubeEnricher) onDeletedPod(pod *informer.ObjectMeta) {
 	}
 }
 
-func (wk *watcherKubeEnricher) getContainerInfo(pid PID) (container.Info, error) {
+func (wk *watcherKubeEnricher) getContainerInfo(pid app.PID) (container.Info, error) {
 	if cntInfo, ok := wk.containerByPID[pid]; ok {
 		return cntInfo, nil
 	}
-	cntInfo, err := containerInfoForPID(uint32(pid))
+	cntInfo, err := containerInfoForPID(pid)
 	if err != nil {
 		return container.Info{}, err
 	}

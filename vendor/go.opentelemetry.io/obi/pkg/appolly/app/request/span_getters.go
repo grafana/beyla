@@ -220,8 +220,6 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			}
 			return MessagingMessageID("")
 		}
-	case attr.CudaKernelName:
-		getter = func(span *Span) attribute.KeyValue { return CudaKernel(span.Method) }
 	case attr.CudaMemcpyKind:
 		getter = func(span *Span) attribute.KeyValue { return CudaMemcpy(span.SubType) }
 	case attr.Job:

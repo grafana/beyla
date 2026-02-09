@@ -508,6 +508,7 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 				Labels:          svc.Labels,
 				Ips:             ips,
 				Kind:            typeService,
+				Annotations:     svc.Annotations,
 				StatusTimeEpoch: objLastUpdateTime(&svc.ObjectMeta, nil, nil),
 			},
 		}, nil

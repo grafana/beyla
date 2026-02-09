@@ -6,12 +6,14 @@
 package tcmanager // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"golang.org/x/sys/unix"
 
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
 )
@@ -193,12 +195,15 @@ func (tcx *tcxManager) attachProgramToIfaceLocked(prog *attachedProg, iface int)
 		Interface: iface,
 		Anchor:    link.Head(),
 	})
-	if err != nil {
-		tcx.emitError("Error attaching tcx", "error", err)
-		return
-	}
 
-	tcx.links = append(tcx.links, &ifaceLink{Link: link, progName: prog.name, iface: iface})
+	switch {
+	case err == nil:
+		tcx.links = append(tcx.links, &ifaceLink{Link: link, progName: prog.name, iface: iface})
+	case errors.Is(err, unix.EEXIST):
+		tcx.log.Warn("Program already attached", "program", prog.name, "iface", iface)
+	default:
+		tcx.emitError("Error attaching tcx", "error", err)
+	}
 }
 
 func (tcx *tcxManager) onInterfaceAdded(iface *ifaces.Interface) {

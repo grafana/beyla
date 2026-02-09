@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/internal/docker"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -33,8 +34,10 @@ type ContextInfo struct {
 	// MetricAttributeGroups will selectively enable or disable diverse groups of attributes
 	// in the metric exporters
 	MetricAttributeGroups attributes.AttrGroups
-	// K8sInformer enables direct access to the Kubernetes API
+	// K8sInformer enables direct access to the Kubernetes ContainerStore
 	K8sInformer *kube.MetadataProvider
+	// DockerMetadata stores per-PID information of docker containers
+	DockerMetadata *docker.ContainerStore
 
 	// OverrideAppExportQueue allows overriding the output queue of the application exporter
 	// to connect your own application exporters outside the OBI code base. If left unset, OBI will

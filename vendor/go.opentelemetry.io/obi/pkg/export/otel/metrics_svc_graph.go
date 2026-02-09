@@ -14,6 +14,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -342,11 +343,11 @@ func ClientSpanToUninstrumentedService(tracker *PidServiceTracker, span *request
 	return false
 }
 
-func (mr *SvcGraphMetricsReporter) setupPIDToServiceRelationship(pid int32, uid svc.UID) {
+func (mr *SvcGraphMetricsReporter) setupPIDToServiceRelationship(pid app.PID, uid svc.UID) {
 	mr.pidTracker.AddPID(pid, uid)
 }
 
-func (mr *SvcGraphMetricsReporter) disassociatePIDFromService(pid int32) (bool, svc.UID) {
+func (mr *SvcGraphMetricsReporter) disassociatePIDFromService(pid app.PID) (bool, svc.UID) {
 	return mr.pidTracker.RemovePID(pid)
 }
 

@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/prometheus/procfs"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 )
 
 func envStrsToMap(varsStr []string) map[string]string {
@@ -28,7 +30,7 @@ func envStrsToMap(varsStr []string) map[string]string {
 	return vars
 }
 
-func EnvVars(pid int32) (map[string]string, error) {
+func EnvVars(pid app.PID) (map[string]string, error) {
 	proc, err := procfs.NewProc(int(pid))
 	if err != nil {
 		return nil, err

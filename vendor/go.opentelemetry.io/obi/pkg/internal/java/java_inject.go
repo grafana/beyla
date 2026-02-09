@@ -20,6 +20,7 @@ import (
 
 	"github.com/grafana/jvmtools/jvm"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -200,7 +201,7 @@ func getLocalAgentPath() (string, error) {
 }
 
 // to be changed in tests
-var rootDirForPID func(int32) string = ebpfcommon.RootDirectoryForPID
+var rootDirForPID func(app.PID) string = ebpfcommon.RootDirectoryForPID
 
 func (i *JavaInjector) copyAgent(ie *ebpf.Instrumentable) (string, error) {
 	root := rootDirForPID(ie.FileInfo.Pid)
@@ -262,7 +263,7 @@ func (i *JavaInjector) attachOpts() string {
 	return "=" + strings.Join(opts, ",")
 }
 
-func (i *JavaInjector) attachJDKAgent(attacher *jvm.JAttacher, pid int32, path string) error {
+func (i *JavaInjector) attachJDKAgent(attacher *jvm.JAttacher, pid app.PID, path string) error {
 	attacher.Init()
 
 	defer func() {
@@ -311,7 +312,7 @@ func (i *JavaInjector) attachJDKAgent(attacher *jvm.JAttacher, pid int32, path s
 	return nil
 }
 
-func (i *JavaInjector) jdkAgentAlreadyLoaded(attacher *jvm.JAttacher, pid int32) (bool, error) {
+func (i *JavaInjector) jdkAgentAlreadyLoaded(attacher *jvm.JAttacher, pid app.PID) (bool, error) {
 	attacher.Init()
 
 	defer func() {
@@ -344,7 +345,7 @@ func (i *JavaInjector) jdkAgentAlreadyLoaded(attacher *jvm.JAttacher, pid int32)
 
 // Hotspot version 8 doesn't support VM.class_hierarchy, we use GC.class_histogram and look for the class itself
 // without the address
-func (i *JavaInjector) jdkAgentAlreadyLoadedHotspot8(attacher *jvm.JAttacher, pid int32) (bool, error) {
+func (i *JavaInjector) jdkAgentAlreadyLoadedHotspot8(attacher *jvm.JAttacher, pid app.PID) (bool, error) {
 	attacher.Init()
 
 	defer func() {
@@ -375,7 +376,7 @@ func (i *JavaInjector) jdkAgentAlreadyLoadedHotspot8(attacher *jvm.JAttacher, pi
 	return false, nil
 }
 
-func (i *JavaInjector) verifyJVMVersion(attacher *jvm.JAttacher, pid int32) (bool, bool) {
+func (i *JavaInjector) verifyJVMVersion(attacher *jvm.JAttacher, pid app.PID) (bool, bool) {
 	attacher.Init()
 
 	defer func() {

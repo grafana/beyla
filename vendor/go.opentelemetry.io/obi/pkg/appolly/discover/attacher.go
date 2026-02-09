@@ -12,6 +12,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
@@ -71,7 +72,7 @@ type traceAttacher struct {
 	routeHarvester *harvest.RouteHarvester
 
 	// Is able to find process lifetime duration
-	processAgeFunc func(int32) time.Duration
+	processAgeFunc func(app.PID) time.Duration
 }
 
 func traceAttacherProvider(ta *traceAttacher) swarm.InstanceFunc {
@@ -286,7 +287,7 @@ func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
 		if procAge < delayTime {
 			time.AfterFunc(delayTime-procAge, func() {
 				// sanity check that the program is still up and running and it's the same command
-				if exePath, ready := ExecutableReady(PID(ie.FileInfo.Pid)); ready && exePath == ie.FileInfo.CmdExePath {
+				if exePath, ready := ExecutableReady(ie.FileInfo.Pid); ready && exePath == ie.FileInfo.CmdExePath {
 					ta.harvestRoutesProcessor(ie, reused)
 				}
 			})
@@ -354,7 +355,7 @@ func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	ie.CopyToServiceAttributes()
 
 	// allowing the tracer to forward traces from the discovered PID and its children processes
-	tracer.AllowPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns, &ie.FileInfo.Service)
+	tracer.AllowPID(ie.FileInfo.Pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
 	for _, pid := range ie.ChildPids {
 		tracer.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
 	}
@@ -370,7 +371,7 @@ func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 		})
 		for _, pid := range ie.ChildPids {
 			service := ie.FileInfo.Service
-			service.ProcPID = int32(pid)
+			service.ProcPID = pid
 			spans = append(spans, request.Span{
 				Type:    request.EventTypeProcessAlive,
 				Service: service,
@@ -394,7 +395,7 @@ func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed
 		ta.Metrics.UninstrumentProcess(ie.FileInfo.ExecutableName())
-		tracer.BlockPID(uint32(ie.FileInfo.Pid), ie.FileInfo.Ns)
+		tracer.BlockPID(ie.FileInfo.Pid, ie.FileInfo.Ns)
 
 		// if there are no more trace instances for a program, we need to notify that
 		// the tracer needs to be stopped and deleted.

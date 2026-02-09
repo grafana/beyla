@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -28,8 +29,8 @@ type RouteHarvester struct {
 	mux      *sync.Mutex
 
 	// testing related
-	javaExtractRoutes func(pid int32) (*RouteHarvesterResult, error)
-	nodeExtractRoutes func(pid int32) (*RouteHarvesterResult, error)
+	javaExtractRoutes func(pid app.PID) (*RouteHarvesterResult, error)
+	nodeExtractRoutes func(pid app.PID) (*RouteHarvesterResult, error)
 }
 
 type RouteHarvesterResultKind uint8

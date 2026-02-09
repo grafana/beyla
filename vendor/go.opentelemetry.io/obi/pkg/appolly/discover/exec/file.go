@@ -8,6 +8,7 @@ import (
 	"debug/elf"
 	"strings"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
@@ -17,8 +18,8 @@ type FileInfo struct {
 	CmdExePath     string
 	ProExeLinkPath string
 	ELF            *elf.File
-	Pid            int32
-	Ppid           int32
+	Pid            app.PID
+	Ppid           app.PID
 	Ino            uint64
 	Ns             uint32
 }

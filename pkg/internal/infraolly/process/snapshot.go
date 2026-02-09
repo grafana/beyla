@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 
 	"github.com/grafana/beyla/v3/pkg/internal/helpers"

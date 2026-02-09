@@ -446,7 +446,7 @@ func (c *Config) Validate() error {
 			" application_span or application_span_otel")
 	}
 
-	if len(c.Routes.WildcardChar) > 1 {
+	if c.Routes != nil && len(c.Routes.WildcardChar) > 1 {
 		return ConfigError("wildcard_char can only be a single character, multiple characters are not allowed")
 	}
 
@@ -532,7 +532,7 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
 	OverrideOBIGlobalConfig()
-	cfg := DefaultConfig()
+	cfg := *DefaultConfig()
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {
@@ -540,15 +540,15 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		}
 		// replaces environment variables in YAML file
 		cfgBuf = config.ReplaceEnv(cfgBuf)
-		if err := yaml.Unmarshal(cfgBuf, cfg); err != nil {
+		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}
 	}
-	if err := env.Parse(cfg); err != nil {
+	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
-	normalizeConfig(cfg)
-	return cfg, nil
+	normalizeConfig(&cfg)
+	return &cfg, nil
 }
 
 // normalizeConfig normalizes user input to a common set of assumptions that are global to Beyla/OBI

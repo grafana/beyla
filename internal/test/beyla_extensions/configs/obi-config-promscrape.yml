@@ -13,6 +13,7 @@ prometheus_export:
   features:
     - application
     - application_process
+    - application_host
   extra_resource_attributes: ["deployment_environment"]
 attributes:
   select:

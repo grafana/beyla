@@ -39,7 +39,7 @@ services:
       BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 8999
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
-      BEYLA_PROMETHEUS_FEATURES: "application,application_process"
+      BEYLA_PROMETHEUS_FEATURES: "application,application_process,application_host"
       BEYLA_OTEL_METRIC_FEATURES: "application"
     ports:
       - "8999:8999"

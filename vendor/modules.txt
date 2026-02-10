@@ -991,6 +991,7 @@ go.opentelemetry.io/obi/pkg/appolly/services
 go.opentelemetry.io/obi/pkg/appolly/traces
 go.opentelemetry.io/obi/pkg/buildinfo
 go.opentelemetry.io/obi/pkg/config
+go.opentelemetry.io/obi/pkg/docker
 go.opentelemetry.io/obi/pkg/ebpf
 go.opentelemetry.io/obi/pkg/ebpf/common
 go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser
@@ -1018,7 +1019,6 @@ go.opentelemetry.io/obi/pkg/export/otel/perapp
 go.opentelemetry.io/obi/pkg/export/otel/tracesgen
 go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
-go.opentelemetry.io/obi/pkg/internal/docker
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience
 go.opentelemetry.io/obi/pkg/internal/ebpf/couchbasekv

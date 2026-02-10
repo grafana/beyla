@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package docker // import "go.opentelemetry.io/obi/pkg/internal/docker"
+package docker // import "go.opentelemetry.io/obi/pkg/docker"
 
 import (
 	"context"

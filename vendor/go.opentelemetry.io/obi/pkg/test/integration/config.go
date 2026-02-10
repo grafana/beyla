@@ -29,7 +29,7 @@ func DefaultOBIConfig() *TestConfig {
 		EnvPrefix:          "OTEL_EBPF_",
 		ComposeServiceName: "obi",
 		ComposeImageName:   "hatest-obi",
-		DockerfilePath:     "ebpf-instrument/Dockerfile",
+		DockerfilePath:     "obi/Dockerfile",
 		ConfigPath:         "obi-config.yml",
 		MetricPrefix:       "obi",
 		IPAttribute:        "obi.ip",

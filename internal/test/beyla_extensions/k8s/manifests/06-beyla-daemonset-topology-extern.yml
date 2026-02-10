@@ -4,36 +4,28 @@ metadata:
   name: beyla-config
 data:
   beyla-config.yml: |
-    prometheus_export:
-      port: 8999
-      features:
-        - application
-        - application_process
     attributes:
-      select:
-        process_cpu_utilization:
-          include: ["*"]
-          exclude: ["cpu_mode"]
-        process_cpu_time:
-          include: ["*"]
-          exclude: ["cpu_mode"]
-        process_memory_usage:
-          include: ["*"]
-        process_memory_virtual:
-          include: ["*"]
-        process_disk_io:
-          include: ["*"]
-        process_network_io:
-          include: ["*"]
       kubernetes:
         enable: true
         resource_labels:
           deployment.environment: ["deployment.environment"]
+      select:
+        process_*:
+          include: ["*"]
     trace_printer: text
     log_level: debug
     discovery:
-      services:
-        - k8s_deployment_name: (otherinstance|testserver)
+      instrument:
+        - k8s_deployment_name: testserver
+      patterns:
+        - /pingpong
+      ignored_patterns:
+        - /metrics
+      unmatched: path
+    otel_metrics_export:
+      endpoint: http://otelcol:4318
+    otel_traces_export:
+      endpoint: http://jaeger:4318
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -82,20 +74,11 @@ spec:
               value: "10ms"
             - name: BEYLA_BPF_BATCH_TIMEOUT
               value: "10ms"
-          ports:
-            - containerPort: 8999
-              name: prometheus
-              protocol: TCP
----
----
-kind: Service
-apiVersion: v1
-metadata:
-  name: beyla-promscrape
-spec:
-  selector:
-    instrumentation: beyla
-  ports:
-    - port: 8999
-      name: prometheus
-      protocol: TCP
+            - name: BEYLA_OTEL_METRICS_TTL
+              value: "30m0s"
+            - name: BEYLA_OTEL_METRICS_FEATURES
+              value: "application,application_process"
+            - name: BEYLA_NAME_RESOLVER_SOURCES
+              value: "k8s,dns"
+            - name: BEYLA_TOPOLOGY_SPANS
+              value: "inter_cluster"

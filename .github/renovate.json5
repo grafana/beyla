@@ -24,10 +24,10 @@
     // Legacy components that should not be updated (test old library behavior)
     "internal/test/integration/components/testserver_1.17/**",
     
-    // Config and compose files synced from OBI
-    "internal/test/integration/configs/**",
+    // Config and compose files synced from OBI (generated into internal/obi)
+    "internal/obi/test/integration/configs/**",
     "internal/test/integration/docker-compose*.yml",
-    "internal/test/integration/k8s/manifests/**",
+    "internal/test/beyla_extensions/k8s/manifests/**",
     
     // github.com/Shopify/sarama has been moved to github.com/IBM/sarama
     // but we keep supporting the go-offsets for the outdated library, which must not

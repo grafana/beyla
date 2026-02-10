@@ -79,11 +79,10 @@ BEHAVIORAL_TRANSFORMS=(
     'DockerfileOBI|DockerfileBeyla'
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
 
-    # --- K8s image tags and manifest paths (Phase 2) ---
+    # --- K8s image tags ---
     '"obi:dev"|"beyla:dev"'
     '"obi-k8s-cache:dev"|"beyla-k8s-cache:dev"'
     'Tag: "obi:dev"|Tag: "beyla:dev"'
-    '06-obi-|06-beyla-'
 )
 
 # ---- Code injections (line inserted after a matching line in Go files) --------
@@ -206,6 +205,15 @@ generate() {
     cp -r "$OBI_SRC/system" "$OBI_DEST/"
     cp -r "$OBI_SRC/k8s" "$OBI_DEST/"
 
+    # Copy Beyla-specific manifests (no OBI counterpart) into generated manifests dir
+    BEYLA_MANIFESTS_SRC="internal/test/beyla_extensions/k8s/manifests"
+    BEYLA_MANIFESTS="$OBI_DEST/k8s/manifests"
+    for f in 06-beyla-all-processes.yml 06-beyla-daemonset-topology-extern.yml; do
+        if [[ -f "$BEYLA_MANIFESTS_SRC/$f" ]]; then
+            cp "$BEYLA_MANIFESTS_SRC/$f" "$BEYLA_MANIFESTS/"
+        fi
+    done 2>/dev/null || true
+
     echo "  Discovering and copying Go sub-packages..."
     discover_go_packages | while read -r pkg; do
         if [[ -d "$OBI_SRC/$pkg" ]]; then
@@ -295,6 +303,9 @@ generate() {
     # -----------------------------------------------------------------
     if [[ -f "$OBI_DEST/k8s/common/testpath/testpath.go" ]]; then
         sed_i -e 's|Components      = path.Join(IntegrationTest, "components")|Components      = path.Join(Root, ".obi-src", "internal", "test", "integration", "components")|' \
+            "$OBI_DEST/k8s/common/testpath/testpath.go"
+        # Manifests sourced from OBI (internal/obi) — content transformed on the fly during generate
+        sed_i -e 's|Manifests       = path.Join(IntegrationTest, "k8s", "manifests")|Manifests       = path.Join(Root, "internal", "obi", "test", "integration", "k8s", "manifests")|' \
             "$OBI_DEST/k8s/common/testpath/testpath.go"
     fi
     if [[ -f "$OBI_DEST/k8s/common/k8s_common.go" ]]; then

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -36,12 +37,20 @@ const (
 var cluster *kube.Kind
 
 func TestMain(m *testing.M) {
-	if err := docker.Build(os.Stdout, tools.ProjectDir(),
+	root := tools.ProjectDir()
+	obiRoot := path.Join(root, ".obi-src")
+	// OBI components (testserver, httppinger) require .obi-src as build context (internal/test/, go.mod)
+	if err := docker.Build(os.Stdout, obiRoot,
 		docker.ImageBuild{Tag: "testserver:dev", Dockerfile: k8s.DockerfileTestServer},
-		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
 		docker.ImageBuild{Tag: "httppinger:dev", Dockerfile: k8s.DockerfileHTTPPinger},
 	); err != nil {
-		slog.Error("can't build docker images", "error", err)
+		slog.Error("can't build OBI docker images", "error", err)
+		os.Exit(-1)
+	}
+	if err := docker.Build(os.Stdout, root,
+		docker.ImageBuild{Tag: "beyla:dev", Dockerfile: k8s.DockerfileBeyla},
+	); err != nil {
+		slog.Error("can't build Beyla docker image", "error", err)
 		os.Exit(-1)
 	}
 

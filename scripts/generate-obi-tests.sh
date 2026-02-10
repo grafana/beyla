@@ -234,11 +234,10 @@ generate() {
     if [[ -d "$BEYLA_EXT" ]]; then
         find "$BEYLA_EXT" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
         find "$BEYLA_EXT" -maxdepth 1 -name "docker-compose*.yml" -exec cp {} "$OBI_DEST/" \;
-        # Source Go files use //go:build beyla_extension to prevent compilation
-        # during lint (the linter only enables the 'integration' tag).
-        # Replace with //go:build integration for the generated output.
+        # Source Go files use //go:build ignore to prevent compilation during
+        # vendor and lint. Replace with //go:build integration for the generated output.
         for file in "$OBI_DEST"/*.go; do
-            sed_i 's|^//go:build beyla_extension$|//go:build integration|' "$file"
+            sed_i 's|^//go:build ignore$|//go:build integration|' "$file"
         done
         # Copy Beyla-specific config overrides (e.g. configs that add
         # application_process features for process-level metric tests).
@@ -265,6 +264,7 @@ generate() {
     echo "  Transforming Go imports and paths..."
     find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
         sed_i \
+            -e 's|^//go:build ignore$|//go:build integration|' \
             -e "s|${OBI_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
             -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
             -e "s|${BEYLA_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \

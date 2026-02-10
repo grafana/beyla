@@ -1,4 +1,4 @@
-//go:build integration
+//go:build ignore
 
 package connection_spans
 

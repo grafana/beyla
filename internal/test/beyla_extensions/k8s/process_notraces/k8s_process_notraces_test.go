@@ -1,4 +1,4 @@
-//go:build integration
+//go:build ignore
 
 package prom
 
@@ -16,7 +16,7 @@ import (
 
 	"github.com/grafana/beyla/v3/internal/test/integration/components/docker"
 	"github.com/grafana/beyla/v3/internal/test/integration/components/kube"
-	"github.com/grafana/beyla/v3/internal/test/integration/components/prom"
+	"github.com/grafana/beyla/v3/internal/test/integration/components/promtest"
 	k8s "github.com/grafana/beyla/v3/internal/test/integration/k8s/common"
 	"github.com/grafana/beyla/v3/internal/test/integration/k8s/common/testpath"
 	"github.com/grafana/beyla/v3/internal/test/tools"
@@ -64,7 +64,7 @@ const prometheusHostPort = "localhost:39090"
 func waitForSomeMetrics() features.Feature {
 	return features.New("wait for some metrics to appear before starting the actual test").
 		Assess("smoke test", func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-			pq := prom.Client{HostPort: prometheusHostPort}
+			pq := promtest.Client{HostPort: prometheusHostPort}
 			// timeout needs to be high, as the K8s cluster needs to be spinned up at this right moment
 			test.Eventually(t, 5*time.Minute, func(t require.TestingT) {
 				results, err := pq.Query("process_cpu_time_seconds_total")

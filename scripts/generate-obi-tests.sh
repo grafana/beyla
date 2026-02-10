@@ -78,11 +78,16 @@ BEHAVIORAL_TRANSFORMS=(
     # --- K8s component paths (Phase 3) ---
     'DockerfileOBI|DockerfileBeyla'
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
+    'internal/test/integration/components/beyla|internal/test/beyla_extensions/components/beyla'
+    'internal/test/integration/components/beyla-k8s-cache|internal/test/beyla_extensions/components/beyla-k8s-cache'
 
     # --- K8s image tags ---
     '"obi:dev"|"beyla:dev"'
     '"obi-k8s-cache:dev"|"beyla-k8s-cache:dev"'
     'Tag: "obi:dev"|Tag: "beyla:dev"'
+    # YAML manifests use unquoted image tags
+    'image: obi:dev|image: beyla:dev'
+    'image: obi-k8s-cache:dev|image: beyla-k8s-cache:dev'
 )
 
 # ---- Code injections (line inserted after a matching line in Go files) --------
@@ -91,6 +96,9 @@ BEHAVIORAL_TRANSFORMS=(
 #
 # Format: "sed_pattern|code_to_inject"
 CODE_INJECTIONS=(
+    # Path setup: OBI components live in .obi-src submodule (run early, before path-dependent transforms)
+    'pathRoot   = tools.ProjectDir()|pathObiSrc  = path.Join(pathRoot, ".obi-src")'
+    'Root            = tools.ProjectDir()|ObiRoot         = path.Join(Root, ".obi-src")'
     # The vendored DefaultOBIConfig() returns MetricPrefix="obi", but the
     # Beyla binary exports internal metrics with the "beyla" prefix.
     'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
@@ -270,6 +278,10 @@ generate() {
     # 2. Go import / path transforms
     # -----------------------------------------------------------------
     echo "  Transforming Go imports and paths..."
+    # Run code injections first (pathObiSrc, ObiRoot) so later blocks can reference them
+    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
+        apply_injections "$file" "${CODE_INJECTIONS[@]}"
+    done
     find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
         sed_i \
             -e 's|^//go:build ignore$|//go:build integration|' \
@@ -290,6 +302,20 @@ generate() {
             "$OBI_DEST/dockerutil_test.go"
     fi
 
+    # go_otel BuildImage: use .obi-src as context (go_otel Dockerfile expects
+    # internal/test/integration/components/go_otel/ relative to context).
+    if [[ -f "$OBI_DEST/http_go_otel_test.go" ]]; then
+        sed_i -e 's|ContextDir:   pathRoot,|ContextDir:   pathObiSrc,|' \
+            -e 's|Dockerfile:   "\.obi-src/internal/test/integration/components/go_otel/Dockerfile"|Dockerfile:   "internal/test/integration/components/go_otel/Dockerfile"|' \
+            "$OBI_DEST/http_go_otel_test.go"
+    fi
+
+    # Component file paths: testserver, rusttestserver etc. live in .obi-src.
+    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
+        sed_i -e 's|path\.Join(pathRoot, "internal", "test", "integration", "components",|path.Join(pathObiSrc, "internal", "test", "integration", "components",|g' \
+            "$file"
+    done
+
     # Update docker/compose.go to reference the obi test directory.
     if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
         sed_i -e 's|"internal", "test", "integration"|"internal", "obi", "test", "integration"|g' \
@@ -302,20 +328,17 @@ generate() {
     #     Beyla components: internal/test/beyla_extensions/components/
     # -----------------------------------------------------------------
     if [[ -f "$OBI_DEST/k8s/common/testpath/testpath.go" ]]; then
-        # ObiRoot: build context for OBI components (testserver, pythontestserver, etc.)
-        sed_i -e '/Root            = tools.ProjectDir()/a\
-	ObiRoot         = path.Join(Root, ".obi-src")
-' "$OBI_DEST/k8s/common/testpath/testpath.go"
         sed_i -e 's|Components      = path.Join(IntegrationTest, "components")|Components      = path.Join(Root, ".obi-src", "internal", "test", "integration", "components")|' \
             "$OBI_DEST/k8s/common/testpath/testpath.go"
         # Manifests sourced from OBI (internal/obi) — content transformed on the fly during generate
         sed_i -e 's|Manifests       = path.Join(IntegrationTest, "k8s", "manifests")|Manifests       = path.Join(Root, "internal", "obi", "test", "integration", "k8s", "manifests")|' \
             "$OBI_DEST/k8s/common/testpath/testpath.go"
     fi
+    # k8s_common: path replacements only; variable names (DockerfileOBI→DockerfileBeyla)
+    # are handled by BEHAVIORAL_TRANSFORMS in step 4.
     if [[ -f "$OBI_DEST/k8s/common/k8s_common.go" ]]; then
-        sed_i -e 's|DockerfileOBI              = path.Join(testpath.Components, "obi", "Dockerfile")|DockerfileBeyla = path.Join(testpath.Root, "internal", "test", "beyla_extensions", "components", "beyla", "Dockerfile")|' \
-            "$OBI_DEST/k8s/common/k8s_common.go"
-        sed_i -e 's|DockerfileK8sCache         = path.Join(testpath.Components, "ebpf-instrument-k8s-cache", "Dockerfile")|DockerfileBeylaK8sCache = path.Join(testpath.Root, "internal", "test", "beyla_extensions", "components", "beyla-k8s-cache", "Dockerfile")|' \
+        sed_i -e 's|path.Join(testpath.Components, "obi", "Dockerfile")|path.Join(testpath.Root, "internal", "test", "beyla_extensions", "components", "beyla", "Dockerfile")|' \
+            -e 's|path.Join(testpath.Components, "ebpf-instrument-k8s-cache", "Dockerfile")|path.Join(testpath.Root, "internal", "test", "beyla_extensions", "components", "beyla-k8s-cache", "Dockerfile")|' \
             "$OBI_DEST/k8s/common/k8s_common.go"
     fi
 
@@ -344,9 +367,7 @@ generate() {
         # build context at the Beyla repo root instead of .obi-src.
         sed_i -e "s|dockerfile: \\./${OBI_DOCKERFILE}|dockerfile: ${BEYLA_DOCKERFILE}|" "$file"
         sed_i -e "s|dockerfile: ${OBI_DOCKERFILE}|dockerfile: ${BEYLA_DOCKERFILE}|" "$file"
-        # Phase 3: Transform Beyla Dockerfile paths (beyla_extensions)
-        sed_i -e 's|internal/test/integration/components/beyla|internal/test/beyla_extensions/components/beyla|g' "$file"
-        sed_i -e 's|internal/test/integration/components/beyla-k8s-cache|internal/test/beyla_extensions/components/beyla-k8s-cache|g' "$file"
+        # Beyla Dockerfile paths (beyla_extensions) handled by BEHAVIORAL_TRANSFORMS in step 4.
         # When context points to .obi-src but dockerfile is Beyla (in beyla_extensions),
         # use repo root as context instead.
         awk '{
@@ -385,9 +406,6 @@ generate() {
     echo "  Applying OBI → Beyla behavioral transforms..."
     find "$OBI_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | while read -r file; do
         apply_transforms "$file" "${BEHAVIORAL_TRANSFORMS[@]}"
-    done
-    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
-        apply_injections "$file" "${CODE_INJECTIONS[@]}"
     done
 
     # -----------------------------------------------------------------

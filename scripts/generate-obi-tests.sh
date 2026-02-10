@@ -440,6 +440,24 @@ adjust_docker_compose_paths() {
     done 2>/dev/null || true
 }
 
+ensure_multiexec_local_image_reuse() {
+    # docker compose up --quiet-pull attempts to pull image-only services. The
+    # multiexec suites intentionally reuse the image built by testserver.
+    for file in "$OBI_DEST/docker-compose-multiexec.yml" "$OBI_DEST/docker-compose-multiexec-host.yml"; do
+        [[ -f "$file" ]] || continue
+        awk '
+            /^  testserver-unused:$/ { in_unused=1 }
+            in_unused && /^    image: hatest-testserver$/ {
+                print
+                print "    pull_policy: never"
+                next
+            }
+            in_unused && /^  [a-zA-Z0-9_-]+:$/ && $0 !~ /^  testserver-unused:$/ { in_unused=0 }
+            { print }
+        ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    done
+}
+
 split_docker_build_contexts() {
     # Split docker.Build: OBI components (testserver, pythontestserver, etc.) need
     # .obi-src as build context; Beyla needs repo root. Tests with both get two Build calls.
@@ -448,10 +466,16 @@ split_docker_build_contexts() {
     script_dir="$(cd "$(dirname "$0")" && pwd)"
     find "$OBI_DEST/k8s" -name "*_main_test.go" -type f | while read -r file; do
         grep -q 'docker.Build.*tools.ProjectDir' "$file" || continue
-        grep -q 'DockerfileBeyla\|DockerfileOBI' "$file" || continue
-        grep -q 'DockerfileTestServer\|DockerfilePythonTestServer\|DockerfilePinger\|DockerfileHTTPPinger' "$file" || continue
         python3 "$script_dir/split-docker-build.py" "$file" || true
     done 2>/dev/null || true
+}
+
+ensure_daemonset_process_metrics_enabled() {
+    # Daemonset y/z extension tests assert process_* and beyla_survey_info.
+    # The generated 06-obi-daemonset manifest must enable application_process.
+    local file="$OBI_DEST/k8s/manifests/06-obi-daemonset.yml"
+    [[ -f "$file" ]] || return 0
+    sed_i -e '/name: BEYLA_OTEL_METRICS_FEATURES/{n;s|value: "application"|value: "application,application_process"|;}' "$file"
 }
 
 apply_behavioral_transforms() {
@@ -489,8 +513,10 @@ generate() {
     transform_go_imports_and_paths "$jobs"
     apply_component_consolidation
     adjust_docker_compose_paths
+    ensure_multiexec_local_image_reuse
     split_docker_build_contexts
     apply_behavioral_transforms "$jobs"
+    ensure_daemonset_process_metrics_enabled
     cleanup_and_inject_build_tags "$jobs"
 
     echo "Done. Generated OBI tests at $OBI_DEST"

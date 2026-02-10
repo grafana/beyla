@@ -27,7 +27,14 @@ def main():
             continue
         # Preserve indentation; ensure trailing comma
         line = line.rstrip(',') + ','
-        if 'DockerfileBeyla' in line or 'DockerfileOBI' in line:
+        # Beyla Dockerfiles must build from repo root because they COPY vendor/.
+        # This includes pre-transform (DockerfileK8sCache) and post-transform
+        # (DockerfileBeylaK8sCache) names.
+        if (
+            'DockerfileBeyla' in line
+            or 'DockerfileK8sCache' in line
+            or 'DockerfileBeylaK8sCache' in line
+        ):
             beyla.append(line)
         else:
             obi.append(line)

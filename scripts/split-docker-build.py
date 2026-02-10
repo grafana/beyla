@@ -41,8 +41,9 @@ def main():
         else:
             obi.append(line)
 
-    new_block = '\troot := tools.ProjectDir()\n\tobiRoot := path.Join(root, ".obi-src")\n'
+    new_block = '\troot := tools.ProjectDir()\n'
     if obi:
+        new_block += '\tobiRoot := path.Join(root, ".obi-src")\n'
         new_block += '\tif err := docker.Build(os.Stdout, obiRoot,\n'
         new_block += '\n'.join(obi) + '\n'
         new_block += '\t); err != nil {\n\t\tslog.Error("can\'t build OBI docker images", "error", err)\n\t\tos.Exit(-1)\n\t}\n'
@@ -53,7 +54,7 @@ def main():
 
     new_content = content[:m.start()] + new_block + content[m.end():]
 
-    if '"path"' not in new_content:
+    if obi and '"path"' not in new_content:
         new_content = new_content.replace('\t"os"', '\t"path"\n\t"os"')
 
     with open(path, 'w') as f:

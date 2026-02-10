@@ -103,6 +103,10 @@ BEHAVIORAL_TRANSFORMS=(
     # YAML manifests use unquoted image tags
     'image: obi:dev|image: beyla:dev'
     'image: obi-k8s-cache:dev|image: beyla-k8s-cache:dev'
+    # Generated k8s manifests are nested one level deeper than upstream:
+    # internal/obi/test/integration/k8s/manifests, so testoutput hostPath
+    # needs one extra "../" to keep pointing at repo-root ./testoutput.
+    '../../../../../testoutput|../../../../../../testoutput'
 )
 
 # ---- Code injections (line inserted after a matching line in Go files) --------

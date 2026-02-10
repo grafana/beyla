@@ -16,8 +16,8 @@ services:
       retries: 10
   testserver:
     build:
-      context: ../../../../.obi-src
-      dockerfile: internal/test/integration/components/gomysql/Dockerfile
+      context: ../../../../.obi-src/internal/test/integration/components/gomysql
+      dockerfile: Dockerfile
     image: gomysqlclient
     depends_on:
       mysqlserver:

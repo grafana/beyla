@@ -2,8 +2,8 @@ version: "3.9"
 services:
   testserver:
     build:
-      context: ../../../../.obi-src
-      dockerfile: internal/test/integration/components/sqlclient/Dockerfile
+      context: ../../../../.obi-src/internal/test/integration/components/sqlclient
+      dockerfile: Dockerfile
     image: gosqlclient
     ports:
       - "8080:8080"

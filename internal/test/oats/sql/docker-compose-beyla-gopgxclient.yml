@@ -2,8 +2,8 @@ version: "3.9"
 services:
   sqlserver:
     build:
-      context: ../../../../.obi-src
-      dockerfile: internal/test/integration/components/postgresql/Dockerfile
+      context: ../../../../.obi-src/internal/test/integration/components/postgresql
+      dockerfile: Dockerfile
     image: postgres
     environment:
       POSTGRES_PASSWORD: "postgres" # Supplied so we can load the test schema
@@ -11,8 +11,8 @@ services:
       - "5432:5432"
   testserver:
     build:
-      context: ../../../../.obi-src
-      dockerfile: internal/test/integration/components/gopgx/Dockerfile
+      context: ../../../../.obi-src/internal/test/integration/components/gopgx
+      dockerfile: Dockerfile
     image: gopgxclient
     ports:
       - "8080:8080"

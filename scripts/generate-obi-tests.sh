@@ -28,6 +28,21 @@ BEYLA_DOCKERFILE="internal/test/beyla_extensions/components/beyla/Dockerfile"
 
 # Go sub-packages are discovered automatically — see discover_go_packages().
 
+# Parallel workers for file-wide transforms. Override with OBI_GEN_JOBS.
+default_jobs() {
+    if [[ -n "${OBI_GEN_JOBS:-}" ]]; then
+        echo "$OBI_GEN_JOBS"
+        return
+    fi
+    if command -v sysctl >/dev/null 2>&1; then
+        sysctl -n hw.logicalcpu 2>/dev/null && return
+    fi
+    if command -v getconf >/dev/null 2>&1; then
+        getconf _NPROCESSORS_ONLN 2>/dev/null && return
+    fi
+    echo 4
+}
+
 # ---- Behavioral transforms: OBI → Beyla (applied to Go + YAML files) --------
 # These ensure the generated tests validate Beyla-specific behavior:
 #   - env var interface (BEYLA_* instead of OTEL_EBPF_*)
@@ -75,7 +90,7 @@ BEHAVIORAL_TRANSFORMS=(
     '"value":"go\.opentelemetry\.io/obi"|"value":"github.com/grafana/beyla"'
     'opentelemetry-ebpf-instrumentation|beyla'
 
-    # --- K8s component paths (Phase 3) ---
+    # --- K8s component paths ---
     'DockerfileOBI|DockerfileBeyla'
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
     'internal/test/integration/components/beyla|internal/test/beyla_extensions/components/beyla'
@@ -157,11 +172,13 @@ apply_transforms() {
     local file="$1"
     shift
     local transforms=("$@")
+    local sed_args=()
     for rule in "${transforms[@]}"; do
         local pattern="${rule%%|*}"
         local replacement="${rule#*|}"
-        sed_i -e "s|${pattern}|${replacement}|g" "$file"
+        sed_args+=(-e "s|${pattern}|${replacement}|g")
     done
+    sed_i "${sed_args[@]}" "$file"
 }
 
 # Inject a line of code after each matching line in a file.
@@ -184,44 +201,105 @@ apply_injections() {
     done
 }
 
+# Run a worker function against newline-delimited file paths from stdin using
+# bounded parallelism in fixed-size batches (portable to bash 3.x).
+run_parallel() {
+    local jobs="$1"
+    local worker="$2"
+    shift 2
+    local worker_args=("$@")
+    local pids=()
+    local file
+    local running=0
+
+    while IFS= read -r file; do
+        [[ -n "$file" ]] || continue
+        "$worker" "$file" "${worker_args[@]}" &
+        pids+=($!)
+        running=$((running + 1))
+
+        if (( running >= jobs )); then
+            local pid
+            for pid in "${pids[@]}"; do
+                wait "$pid"
+            done
+            pids=()
+            running=0
+        fi
+    done
+
+    local pid
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+}
+
 clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "$OBI_DEST"
     echo "Done."
 }
 
-generate() {
-    echo "Generating OBI tests from $OBI_SRC..."
+apply_go_import_path_transforms() {
+    local file="$1"
+    sed_i \
+        -e 's|^//go:build ignore$|//go:build integration|' \
+        -e "s|${OBI_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
+        -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
+        -e "s|${BEYLA_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
+        -e "s|${BEYLA_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
+        -e "s|// import \"${OBI_MODULE}/internal/test/integration[^\"]*\"||g" \
+        -e 's|"internal/test/integration/components/|".obi-src/internal/test/integration/components/|g' \
+        -e 's|"internal/test/integration/configs"|".obi-src/internal/test/integration/configs"|g' \
+        -e 's|"internal/test/integration/system/|".obi-src/internal/test/integration/system/|g' \
+        "$file"
+}
 
+determine_jobs() {
+    local jobs
+    jobs="$(default_jobs)"
+    [[ "$jobs" =~ ^[0-9]+$ ]] || jobs=4
+    if (( jobs < 1 )); then
+        jobs=1
+    fi
+    echo "$jobs"
+}
+
+ensure_source_exists() {
     # Ensure source exists
     if [[ ! -d "$OBI_SRC" ]]; then
         echo "ERROR: OBI source not found at $OBI_SRC"
         echo "Make sure submodules are initialized: git submodule update --init"
         exit 1
     fi
+}
 
-    # -----------------------------------------------------------------
-    # 1. Copy files
-    # -----------------------------------------------------------------
+prepare_destination() {
     rm -rf "$OBI_DEST"
     mkdir -p "$OBI_DEST"
+}
 
+copy_upstream_files() {
     echo "  Copying files..."
     find "$OBI_SRC" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
     find "$OBI_SRC" -maxdepth 1 -name "docker-compose*.yml" -exec cp {} "$OBI_DEST/" \;
     cp -r "$OBI_SRC/configs" "$OBI_DEST/"
     cp -r "$OBI_SRC/system" "$OBI_DEST/"
     cp -r "$OBI_SRC/k8s" "$OBI_DEST/"
+}
 
+copy_beyla_manifests() {
     # Copy Beyla-specific manifests (no OBI counterpart) into generated manifests dir
-    BEYLA_MANIFESTS_SRC="internal/test/beyla_extensions/k8s/manifests"
-    BEYLA_MANIFESTS="$OBI_DEST/k8s/manifests"
+    local beyla_manifests_src="internal/test/beyla_extensions/k8s/manifests"
+    local beyla_manifests="$OBI_DEST/k8s/manifests"
     for f in 06-beyla-all-processes.yml 06-beyla-daemonset-topology-extern.yml; do
-        if [[ -f "$BEYLA_MANIFESTS_SRC/$f" ]]; then
-            cp "$BEYLA_MANIFESTS_SRC/$f" "$BEYLA_MANIFESTS/"
+        if [[ -f "$beyla_manifests_src/$f" ]]; then
+            cp "$beyla_manifests_src/$f" "$beyla_manifests/"
         fi
     done 2>/dev/null || true
+}
 
+copy_discovered_go_subpackages() {
     echo "  Discovering and copying Go sub-packages..."
     discover_go_packages | while read -r pkg; do
         if [[ -d "$OBI_SRC/$pkg" ]]; then
@@ -229,7 +307,9 @@ generate() {
             find "$OBI_SRC/$pkg" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/$pkg/" \;
         fi
     done
+}
 
+copy_test_tools() {
     if [[ -d ".obi-src/internal/test/tools" ]]; then
         mkdir -p "internal/obi/test/tools"
         cp -r ".obi-src/internal/test/tools/"* "internal/obi/test/tools/"
@@ -237,19 +317,14 @@ generate() {
             sed_i -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" "$file"
         done
     fi
+}
 
-    # -----------------------------------------------------------------
-    # 1b. Copy Beyla-specific extension tests
-    #     These are Beyla-original tests (not from OBI upstream) that run
-    #     alongside the generated OBI tests. They already use Beyla naming
-    #     (BEYLA_* env vars, beyla_ metric prefix) so no behavioral
-    #     transforms are needed — just a straight copy.
-    # -----------------------------------------------------------------
+copy_beyla_extensions() {
     echo "  Copying Beyla extension tests..."
-    BEYLA_EXT="internal/test/beyla_extensions"
-    if [[ -d "$BEYLA_EXT" ]]; then
-        find "$BEYLA_EXT" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
-        find "$BEYLA_EXT" -maxdepth 1 -name "docker-compose*.yml" -exec cp {} "$OBI_DEST/" \;
+    local beyla_ext="internal/test/beyla_extensions"
+    if [[ -d "$beyla_ext" ]]; then
+        find "$beyla_ext" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/" \;
+        find "$beyla_ext" -maxdepth 1 -name "docker-compose*.yml" -exec cp {} "$OBI_DEST/" \;
         # Source Go files use //go:build ignore to prevent compilation during
         # vendor and lint. Replace with //go:build integration for the generated output.
         for file in "$OBI_DEST"/*.go; do
@@ -258,14 +333,14 @@ generate() {
         # Copy Beyla-specific config overrides (e.g. configs that add
         # application_process features for process-level metric tests).
         # These overlay on top of the OBI upstream configs already copied.
-        if [[ -d "$BEYLA_EXT/configs" ]]; then
-            cp "$BEYLA_EXT"/configs/*.yml "$OBI_DEST/configs/" 2>/dev/null || true
+        if [[ -d "$beyla_ext/configs" ]]; then
+            cp "$beyla_ext"/configs/*.yml "$OBI_DEST/configs/" 2>/dev/null || true
         fi
-        # Copy Beyla-specific k8s tests (Phase 2): process_notraces, connection_spans,
+        # Copy Beyla-specific k8s tests: process_notraces, connection_spans,
         # daemonset y/z metrics. These merge into the generated k8s output.
-        if [[ -d "$BEYLA_EXT/k8s" ]]; then
+        if [[ -d "$beyla_ext/k8s" ]]; then
             echo "  Copying Beyla extension k8s tests..."
-            for dir in "$BEYLA_EXT/k8s"/*/; do
+            for dir in "$beyla_ext/k8s"/*/; do
                 [[ -d "$dir" ]] || continue
                 dirname=$(basename "$dir")
                 mkdir -p "$OBI_DEST/k8s/$dirname"
@@ -273,28 +348,14 @@ generate() {
             done
         fi
     fi
+}
 
-    # -----------------------------------------------------------------
-    # 2. Go import / path transforms
-    # -----------------------------------------------------------------
+transform_go_imports_and_paths() {
+    local jobs="$1"
     echo "  Transforming Go imports and paths..."
     # Run code injections first (pathObiSrc, ObiRoot) so later blocks can reference them
-    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
-        apply_injections "$file" "${CODE_INJECTIONS[@]}"
-    done
-    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
-        sed_i \
-            -e 's|^//go:build ignore$|//go:build integration|' \
-            -e "s|${OBI_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
-            -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
-            -e "s|${BEYLA_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
-            -e "s|${BEYLA_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
-            -e "s|// import \"${OBI_MODULE}/internal/test/integration[^\"]*\"||g" \
-            -e 's|"internal/test/integration/components/|".obi-src/internal/test/integration/components/|g' \
-            -e 's|"internal/test/integration/configs"|".obi-src/internal/test/integration/configs"|g' \
-            -e 's|"internal/test/integration/system/|".obi-src/internal/test/integration/system/|g' \
-            "$file"
-    done
+    find "$OBI_DEST" -name "*.go" -type f | run_parallel "$jobs" apply_injections "${CODE_INJECTIONS[@]}"
+    find "$OBI_DEST" -name "*.go" -type f | run_parallel "$jobs" apply_go_import_path_transforms
 
     # Point the OBI image build (in dockerutil_test.go) at the Beyla Dockerfile.
     if [[ -f "$OBI_DEST/dockerutil_test.go" ]]; then
@@ -311,22 +372,16 @@ generate() {
     fi
 
     # Component file paths: testserver, rusttestserver etc. live in .obi-src.
-    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
-        sed_i -e 's|path\.Join(pathRoot, "internal", "test", "integration", "components",|path.Join(pathObiSrc, "internal", "test", "integration", "components",|g' \
-            "$file"
-    done
+    find "$OBI_DEST" -name "*.go" -type f | run_parallel "$jobs" apply_component_path_transform
 
     # Update docker/compose.go to reference the obi test directory.
     if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
         sed_i -e 's|"internal", "test", "integration"|"internal", "obi", "test", "integration"|g' \
             "$OBI_DEST/components/docker/compose.go"
     fi
+}
 
-    # -----------------------------------------------------------------
-    # 2b. Phase 3: Components consolidation — testpath and k8s_common
-    #     OBI components: .obi-src/internal/test/integration/components/
-    #     Beyla components: internal/test/beyla_extensions/components/
-    # -----------------------------------------------------------------
+apply_component_consolidation() {
     if [[ -f "$OBI_DEST/k8s/common/testpath/testpath.go" ]]; then
         sed_i -e 's|Components      = path.Join(IntegrationTest, "components")|Components      = path.Join(Root, ".obi-src", "internal", "test", "integration", "components")|' \
             "$OBI_DEST/k8s/common/testpath/testpath.go"
@@ -341,13 +396,9 @@ generate() {
             -e 's|path.Join(testpath.Components, "ebpf-instrument-k8s-cache", "Dockerfile")|path.Join(testpath.Root, "internal", "test", "beyla_extensions", "components", "beyla-k8s-cache", "Dockerfile")|' \
             "$OBI_DEST/k8s/common/k8s_common.go"
     fi
+}
 
-    # -----------------------------------------------------------------
-    # 3. Docker-compose path depth correction
-    #    OBI compose files lived 3 levels below OBI root (internal/test/integration/).
-    #    In Beyla they're 4 levels below Beyla root (internal/obi/test/integration/).
-    #    All ../../.. references need an extra ../ level.
-    # -----------------------------------------------------------------
+adjust_docker_compose_paths() {
     echo "  Adjusting docker-compose relative paths..."
     find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" | while read -r file; do
         # Build contexts → .obi-src (slash-suffixed first, then bare end-of-line)
@@ -383,41 +434,32 @@ generate() {
     find "$OBI_DEST/k8s" -name "*.yml" 2>/dev/null | while read -r file; do
         sed_i -e 's|dockerfile: internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' "$file"
     done 2>/dev/null || true
+}
 
-    # -----------------------------------------------------------------
-    # 3b. Split docker.Build: OBI components need .obi-src context, Beyla needs repo root
-    #     testserver, pythontestserver, grpcpinger, httppinger -> testpath.ObiRoot
-    #     beyla -> testpath.Root
-    # -----------------------------------------------------------------
+split_docker_build_contexts() {
     # Split docker.Build: OBI components (testserver, pythontestserver, etc.) need
     # .obi-src as build context; Beyla needs repo root. Tests with both get two Build calls.
     echo "  Splitting docker.Build for OBI vs Beyla context..."
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    local script_dir
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
     find "$OBI_DEST/k8s" -name "*_main_test.go" -type f | while read -r file; do
         grep -q 'docker.Build.*tools.ProjectDir' "$file" || continue
         grep -q 'DockerfileBeyla\|DockerfileOBI' "$file" || continue
         grep -q 'DockerfileTestServer\|DockerfilePythonTestServer\|DockerfilePinger\|DockerfileHTTPPinger' "$file" || continue
-        python3 "$SCRIPT_DIR/split-docker-build.py" "$file" || true
+        python3 "$script_dir/split-docker-build.py" "$file" || true
     done 2>/dev/null || true
+}
 
-    # -----------------------------------------------------------------
-    # 4. Behavioral transforms (OBI → Beyla)
-    # -----------------------------------------------------------------
+apply_behavioral_transforms() {
+    local jobs="$1"
     echo "  Applying OBI → Beyla behavioral transforms..."
-    find "$OBI_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | while read -r file; do
-        apply_transforms "$file" "${BEHAVIORAL_TRANSFORMS[@]}"
-    done
+    find "$OBI_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
+}
 
-    # -----------------------------------------------------------------
-    # 5. Cleanup & build-tag injection
-    # -----------------------------------------------------------------
+cleanup_and_inject_build_tags() {
+    local jobs="$1"
     echo "  Cleaning up headers and adding build tags..."
-    find "$OBI_DEST" -name "*.go" -type f | while read -r file; do
-        sed_i \
-            -e '/^\/\/ Copyright The OpenTelemetry Authors/d' \
-            -e '/^\/\/ SPDX-License-Identifier:/d' \
-            "$file"
-    done
+    find "$OBI_DEST" -name "*.go" -type f | run_parallel "$jobs" strip_headers
 
     find "$OBI_DEST" -name "*_test.go" -type f | while read -r file; do
         if ! grep -q "^//go:build" "$file"; then
@@ -425,10 +467,45 @@ generate() {
             mv "$file.tmp" "$file"
         fi
     done
+}
+
+generate() {
+    echo "Generating OBI tests from $OBI_SRC..."
+    local jobs
+    jobs="$(determine_jobs)"
+    echo "  Using $jobs parallel worker(s) for file transforms..."
+
+    ensure_source_exists
+    prepare_destination
+    copy_upstream_files
+    copy_beyla_manifests
+    copy_discovered_go_subpackages
+    copy_test_tools
+    copy_beyla_extensions
+    transform_go_imports_and_paths "$jobs"
+    apply_component_consolidation
+    adjust_docker_compose_paths
+    split_docker_build_contexts
+    apply_behavioral_transforms "$jobs"
+    cleanup_and_inject_build_tags "$jobs"
 
     echo "Done. Generated OBI tests at $OBI_DEST"
     echo ""
     echo "To run OBI tests: make test-integration-obi"
+}
+
+apply_component_path_transform() {
+    local file="$1"
+    sed_i -e 's|path\.Join(pathRoot, "internal", "test", "integration", "components",|path.Join(pathObiSrc, "internal", "test", "integration", "components",|g' \
+        "$file"
+}
+
+strip_headers() {
+    local file="$1"
+    sed_i \
+        -e '/^\/\/ Copyright The OpenTelemetry Authors/d' \
+        -e '/^\/\/ SPDX-License-Identifier:/d' \
+        "$file"
 }
 
 # =============================================================================

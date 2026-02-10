@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/docker"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -241,6 +242,8 @@ func buildCommonContextInfo(
 		RestrictLocalNode:   config.Attributes.Kubernetes.MetaRestrictLocalNode,
 		ServiceNameTemplate: templ,
 	}, ctxInfo.Metrics)
+
+	ctxInfo.DockerMetadata = docker.NewStore()
 
 	attributeGroups(config, ctxInfo)
 

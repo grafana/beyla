@@ -16,7 +16,6 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/goccy/go-json v0.10.5
 	github.com/gorilla/mux v1.8.1
-	github.com/grafana/jvmtools v0.0.5
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.8
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
@@ -51,6 +50,7 @@ require (
 	golang.org/x/mod v0.31.0
 	golang.org/x/net v0.48.0
 	golang.org/x/sync v0.19.0
+	golang.org/x/sys v0.40.0
 	google.golang.org/grpc v1.78.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
@@ -142,9 +142,9 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grafana/go-offsets-tracker v0.1.7 // indirect
+	github.com/grafana/jvmtools v0.0.5 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect
-	github.com/ianlancetaylor/demangle v0.0.0-20251118225945-96ee0021ea0f // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
@@ -240,7 +240,6 @@ require (
 	golang.org/x/arch v0.23.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/time v0.14.0 // indirect

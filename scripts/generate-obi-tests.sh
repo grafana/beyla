@@ -59,7 +59,8 @@ BEHAVIORAL_TRANSFORMS=(
     '"source":[ ]*"obi"|"source": "beyla"'
 
     # --- Binary name (entrypoint overrides in compose files) ---
-    '/obi|/beyla'
+    '^/obi|/beyla'
+    '\([^.a-zA-Z0-9/_-]\)/obi|\1/beyla'
 
     # --- Metric name prefixes (exported output) ---
     'obi_|beyla_'

@@ -52,7 +52,7 @@ spec:
         teardown: delete
     spec:
       hostPID: true  #important!
-      serviceAccountName: beyla
+      serviceAccountName: obi
       volumes:
         - name: beyla-config
           configMap:

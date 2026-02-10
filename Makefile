@@ -479,13 +479,15 @@ oats-test-debug: oats-prereq
 	cd internal/test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: update-licenses check-license
-update-licenses: prereqs
+update-licenses: prereqs generate-obi-tests
 	@echo "### Updating third_party_licenses.csv"
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --ignore testing --ignore debug --ignore expvar --ignore structs --ignore go --ignore html --ignore text --ignore compress --ignore mime --ignore database --ignore unique --ignore vendor/golang.org --ignore hash --ignore embed --ignore flag --ignore weak --ignore cmp --ignore net --ignore context --ignore bufio --ignore container --ignore crypto --ignore iter --ignore path --ignore strconv --ignore strings --ignore encoding --ignore reflect --ignore fmt --ignore log --ignore maps --ignore errors --ignore io --ignore slices --ignore runtime --ignore syscall --ignore time --ignore sync --ignore sort --ignore bytes --ignore os --ignore regex --ignore internal --ignore math --ignore unicode --ignore go.opentelemetry.io/obi ./... 2>/dev/null | sed 's/\r$$//' > third_party_licenses.csv
 
 check-licenses: update-licenses
 	@echo "### Checking third party licenses"
 	@if [ "$(strip $(shell git diff HEAD third_party_licenses.csv))" != "" ]; then \
+		echo "### Diff for third_party_licenses.csv"; \
+		git --no-pager diff -- third_party_licenses.csv; \
 		echo "ERROR: third_party_licenses.csv is not up to date. Run 'make update-licenses' and push the changes to your PR"; \
 		exit 1; \
 	fi

@@ -9,7 +9,7 @@ ENV GOARCH=$TARGETARCH
 
 WORKDIR /
 
-COPY internal/test/integration/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
+COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
 
 WORKDIR /src
 

@@ -17,7 +17,7 @@ COPY pkg/ pkg/
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY Makefile Makefile
-COPY internal/test/integration/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
+COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
 
 # Build
 RUN make compile-for-coverage

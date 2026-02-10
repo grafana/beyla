@@ -302,6 +302,10 @@ generate() {
     #     Beyla components: internal/test/beyla_extensions/components/
     # -----------------------------------------------------------------
     if [[ -f "$OBI_DEST/k8s/common/testpath/testpath.go" ]]; then
+        # ObiRoot: build context for OBI components (testserver, pythontestserver, etc.)
+        sed_i -e '/Root            = tools.ProjectDir()/a\
+	ObiRoot         = path.Join(Root, ".obi-src")
+' "$OBI_DEST/k8s/common/testpath/testpath.go"
         sed_i -e 's|Components      = path.Join(IntegrationTest, "components")|Components      = path.Join(Root, ".obi-src", "internal", "test", "integration", "components")|' \
             "$OBI_DEST/k8s/common/testpath/testpath.go"
         # Manifests sourced from OBI (internal/obi) — content transformed on the fly during generate
@@ -357,6 +361,22 @@ generate() {
     # K8s manifests referencing component Dockerfiles
     find "$OBI_DEST/k8s" -name "*.yml" 2>/dev/null | while read -r file; do
         sed_i -e 's|dockerfile: internal/test/integration/components/|dockerfile: .obi-src/internal/test/integration/components/|g' "$file"
+    done 2>/dev/null || true
+
+    # -----------------------------------------------------------------
+    # 3b. Split docker.Build: OBI components need .obi-src context, Beyla needs repo root
+    #     testserver, pythontestserver, grpcpinger, httppinger -> testpath.ObiRoot
+    #     beyla -> testpath.Root
+    # -----------------------------------------------------------------
+    # Split docker.Build: OBI components (testserver, pythontestserver, etc.) need
+    # .obi-src as build context; Beyla needs repo root. Tests with both get two Build calls.
+    echo "  Splitting docker.Build for OBI vs Beyla context..."
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    find "$OBI_DEST/k8s" -name "*_main_test.go" -type f | while read -r file; do
+        grep -q 'docker.Build.*tools.ProjectDir' "$file" || continue
+        grep -q 'DockerfileBeyla\|DockerfileOBI' "$file" || continue
+        grep -q 'DockerfileTestServer\|DockerfilePythonTestServer\|DockerfilePinger\|DockerfileHTTPPinger' "$file" || continue
+        python3 "$SCRIPT_DIR/split-docker-build.py" "$file" || true
     done 2>/dev/null || true
 
     # -----------------------------------------------------------------

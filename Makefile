@@ -349,7 +349,7 @@ run-integration-test:
 run-integration-test-k8s:
 	@echo "### Running K8s integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/k8s/... --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration/k8s/... --tags=integration
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
@@ -393,7 +393,7 @@ vm-integration-test-matrix-json:
 
 .PHONY: k8s-integration-test-matrix-json
 k8s-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/test/integration/k8s common
+	@./scripts/generate-dir-matrix.sh internal/obi/test/integration/k8s common
 
 .PHONY: oats-integration-test-matrix-json
 oats-integration-test-matrix-json:
@@ -406,7 +406,7 @@ integration-test: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) cleanup-integration-test
 
 .PHONY: integration-test-k8s
-integration-test-k8s: prereqs prepare-integration-test
+integration-test-k8s: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) run-integration-test-k8s || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test

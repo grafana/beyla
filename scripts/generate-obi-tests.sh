@@ -78,6 +78,12 @@ BEHAVIORAL_TRANSFORMS=(
     # --- K8s component paths (Phase 3) ---
     'DockerfileOBI|DockerfileBeyla'
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
+
+    # --- K8s image tags and manifest paths (Phase 2) ---
+    '"obi:dev"|"beyla:dev"'
+    '"obi-k8s-cache:dev"|"beyla-k8s-cache:dev"'
+    'Tag: "obi:dev"|Tag: "beyla:dev"'
+    '06-obi-|06-beyla-'
 )
 
 # ---- Code injections (line inserted after a matching line in Go files) --------
@@ -240,6 +246,17 @@ generate() {
         if [[ -d "$BEYLA_EXT/configs" ]]; then
             cp "$BEYLA_EXT"/configs/*.yml "$OBI_DEST/configs/" 2>/dev/null || true
         fi
+        # Copy Beyla-specific k8s tests (Phase 2): process_notraces, connection_spans,
+        # daemonset y/z metrics. These merge into the generated k8s output.
+        if [[ -d "$BEYLA_EXT/k8s" ]]; then
+            echo "  Copying Beyla extension k8s tests..."
+            for dir in "$BEYLA_EXT/k8s"/*/; do
+                [[ -d "$dir" ]] || continue
+                dirname=$(basename "$dir")
+                mkdir -p "$OBI_DEST/k8s/$dirname"
+                find "$dir" -maxdepth 1 -name "*.go" -exec cp {} "$OBI_DEST/k8s/$dirname/" \;
+            done
+        fi
     fi
 
     # -----------------------------------------------------------------
@@ -250,6 +267,8 @@ generate() {
         sed_i \
             -e "s|${OBI_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
             -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
+            -e "s|${BEYLA_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
+            -e "s|${BEYLA_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
             -e "s|// import \"${OBI_MODULE}/internal/test/integration[^\"]*\"||g" \
             -e 's|"internal/test/integration/components/|".obi-src/internal/test/integration/components/|g' \
             -e 's|"internal/test/integration/configs"|".obi-src/internal/test/integration/configs"|g' \

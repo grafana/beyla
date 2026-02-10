@@ -23,8 +23,8 @@ services:
       - "9093:9093"
   testserver:
     build:
-      context: ../../../..
-      dockerfile: ./internal/test/integration/components/javakafka/Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/javakafka/Dockerfile
     image: javakafka
     ports:
       - "8080:8080"
@@ -35,7 +35,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

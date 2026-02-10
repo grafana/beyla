@@ -2,8 +2,8 @@ version: "3.9"
 services:
   testserver:
     build:
-      context: ../../integration/components/sqlclient
-      dockerfile: Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/sqlclient/Dockerfile
     image: gosqlclient
     ports:
       - "8080:8080"
@@ -11,7 +11,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

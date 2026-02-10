@@ -2,8 +2,8 @@ version: "3.9"
 services:
   sqlserver:
     build:
-      context: ../../integration/components/postgresql
-      dockerfile: Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/postgresql/Dockerfile
     image: postgres
     environment:
       POSTGRES_PASSWORD: "postgres" # Supplied so we can load the test schema
@@ -11,8 +11,8 @@ services:
       - "5432:5432"
   testserver:
     build:
-      context: ../../integration/components/gopgx
-      dockerfile: Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/gopgx/Dockerfile
     image: gopgxclient
     ports:
       - "8080:8080"
@@ -20,7 +20,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

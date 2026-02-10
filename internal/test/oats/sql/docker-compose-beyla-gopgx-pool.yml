@@ -2,8 +2,8 @@ version: "3.9"
 services:
   sqlserver:
     build:
-      context: ../../integration/components/postgresql
-      dockerfile: Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/postgresql/Dockerfile
     image: postgres
     environment:
       POSTGRES_PASSWORD: "postgres"
@@ -16,8 +16,8 @@ services:
       retries: 10
   testserver:
     build:
-      context: ../../integration/components/gopgx-pool
-      dockerfile: Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/gopgx-pool/Dockerfile
     image: gopgx-pool-client
     ports:
       - "8080:8080"
@@ -28,7 +28,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

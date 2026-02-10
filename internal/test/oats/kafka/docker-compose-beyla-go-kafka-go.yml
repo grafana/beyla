@@ -31,8 +31,8 @@ services:
   # Go HTTP server based on the Sarama Kafka examples
   testserver:
     build:
-      context: ../../../..
-      dockerfile: ./internal/test/integration/components/gokafka-seg/Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/gokafka-seg/Dockerfile
     image: gokafka
     ports:
       - "8080:8080"
@@ -43,7 +43,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

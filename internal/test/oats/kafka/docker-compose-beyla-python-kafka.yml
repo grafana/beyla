@@ -31,8 +31,8 @@ services:
   # Simple python HTTP server, which exposes one endpoint /message that does Kafka query
   testserver:
     build:
-      context: ../../integration/components/pythonkafka
-      dockerfile: Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/pythonkafka/Dockerfile
     image: pythonkafka
     ports:
       - "8080:8080"
@@ -43,7 +43,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

@@ -1,8 +1,8 @@
 services:
   wrapper:
     build:
-      context: ../../integration/components/java_tls/wrapper
-      dockerfile: Dockerfile
+      context: ../../../../.obi-src
+      dockerfile: internal/test/integration/components/java_tls/wrapper/Dockerfile
     image: wrapper
     ports:
       - "8080:8080"
@@ -14,7 +14,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile-with-javaagent
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile-with-javaagent
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

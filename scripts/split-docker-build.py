@@ -28,10 +28,12 @@ def main():
         # Preserve indentation; ensure trailing comma
         line = line.rstrip(',') + ','
         # Beyla Dockerfiles must build from repo root because they COPY vendor/.
-        # This includes pre-transform (DockerfileK8sCache) and post-transform
-        # (DockerfileBeylaK8sCache) names.
+        # This includes pre-transform (DockerfileOBI, DockerfileK8sCache) and post-transform
+        # (DockerfileBeyla, DockerfileBeylaK8sCache) names. Split runs before behavioral
+        # transforms, so we must match DockerfileOBI here.
         if (
-            'DockerfileBeyla' in line
+            'DockerfileOBI' in line
+            or 'DockerfileBeyla' in line
             or 'DockerfileK8sCache' in line
             or 'DockerfileBeylaK8sCache' in line
         ):

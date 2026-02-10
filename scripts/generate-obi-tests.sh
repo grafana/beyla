@@ -197,8 +197,9 @@ apply_injections() {
     for rule in "${rules[@]}"; do
         local pattern="${rule%%|*}"
         local injection="${rule#*|}"
+        local awk_pattern="${pattern//\\/\\\\}"
         if grep -q "${pattern}" "$file" 2>/dev/null; then
-            awk -v pat="${pattern}" -v inj="${injection}" \
+            awk -v pat="${awk_pattern}" -v inj="${injection}" \
                 '{print} $0 ~ pat {print "\t" inj}' "$file" > "$file.tmp" \
                 && mv "$file.tmp" "$file"
         fi
@@ -464,7 +465,7 @@ split_docker_build_contexts() {
     echo "  Splitting docker.Build for OBI vs Beyla context..."
     local script_dir
     script_dir="$(cd "$(dirname "$0")" && pwd)"
-    find "$OBI_DEST/k8s" -name "*_main_test.go" -type f | while read -r file; do
+    find "$OBI_DEST/k8s" -name "*_test.go" -type f | while read -r file; do
         grep -q 'docker.Build.*tools.ProjectDir' "$file" || continue
         python3 "$script_dir/split-docker-build.py" "$file" || true
     done 2>/dev/null || true

@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -22,12 +23,12 @@ func SurveyCriteriaMatcherProvider(
 	input *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]],
 	output *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessMatch]],
 ) swarm.InstanceFunc {
-	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
+	beylaNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	m := &obiDiscover.Matcher{
 		Log:              slog.With("component", "obiDiscover.SurveyCriteriaMatcher"),
 		Criteria:         surveyCriteria(cfg),
 		ExcludeCriteria:  surveyExcludingCriteria(cfg),
-		ProcessHistory:   map[obiDiscover.PID]obiDiscover.ProcessMatch{},
+		ProcessHistory:   map[app.PID]obiDiscover.ProcessMatch{},
 		Input:            input.Subscribe(msg.SubscriberName("surveyInput")),
 		Output:           output,
 		Namespace:        beylaNamespace,

@@ -74,12 +74,20 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents)),
 		swarm.WithID("ProcessWatcher"))
 
+	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "kubeEnrichedEvents")
+	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, kubeEnrichedEvents),
+		swarm.WithID("WatcherKubeEnricher"))
+
 	enrichedProcessEvents := startConfig.enrichedProcessEvents
 	if enrichedProcessEvents == nil {
 		enrichedProcessEvents = msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "enrichedProcessEvents")
 	}
-	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
-		swarm.WithID("WatcherKubeEnricher"))
+	swi.Add(DockerDiscoveryDecoratorProvider(
+		pf.ctxInfo.K8sInformer,
+		pf.ctxInfo.DockerMetadata,
+		kubeEnrichedEvents,
+		enrichedProcessEvents,
+	), swarm.WithID("DockerDiscoveryDecoratorProvider"))
 
 	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, "criteriaFilteredEvents")
 	swi.Add(criteriaMatcherProvider(pf.cfg, enrichedProcessEvents, criteriaFilteredEvents),
@@ -153,7 +161,7 @@ func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config,
 	tracers = append(tracers, generictracer.New(pidFilter, cfg, metrics))
 
 	// Enables GPU tracer
-	if cfg.EBPF.InstrumentGPU {
+	if cfg.EBPF.CudaInstrumentationEnabled() {
 		tracers = append(tracers, gpuevent.New(pidFilter, cfg, metrics))
 	}
 

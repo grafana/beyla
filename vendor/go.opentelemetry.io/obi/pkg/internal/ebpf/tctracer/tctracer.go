@@ -14,6 +14,7 @@ import (
 
 	"github.com/cilium/ebpf"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -44,9 +45,9 @@ func New(cfg *obi.Config) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(uint32, uint32, *svc.Attrs) {}
+func (p *Tracer) AllowPID(app.PID, uint32, *svc.Attrs) {}
 
-func (p *Tracer) BlockPID(uint32, uint32) {}
+func (p *Tracer) BlockPID(app.PID, uint32) {}
 
 func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 	if !ebpfcommon.HasHostPidAccess() {
@@ -117,6 +118,8 @@ func (p *Tracer) SockOps() []ebpfcommon.SockOps {
 func (p *Tracer) Iters() []*ebpfcommon.Iter {
 	return nil
 }
+
+func (p *Tracer) Tracing() []*ebpfcommon.Tracing { return nil }
 
 func (p *Tracer) RecordInstrumentedLib(uint64, []io.Closer) {}
 

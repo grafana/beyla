@@ -83,6 +83,9 @@ const (
 	K8SServerNamespace = Name("server_k8s_namespace_name")
 	K8SClientCluster   = Name("client_k8s_cluster_name")
 	K8SServerCluster   = Name("server_k8s_cluster_name")
+
+	ContainerName = Name(semconv.ContainerNameKey)
+	ContainerID   = Name(semconv.ContainerIDKey)
 )
 
 // OBI-specific network attributes
@@ -104,7 +107,7 @@ const (
 	NetworkType     = Name("network.type")
 	NetworkProtocol = Name("network.protocol.name")
 	SrcAddress      = Name("src.address")
-	DstAddres       = Name("dst.address")
+	DstAddress      = Name("dst.address")
 	SrcPort         = Name("src.port")
 	DstPort         = Name("dst.port")
 	SrcName         = Name("src.name")
@@ -198,7 +201,6 @@ const (
 // Beyla specific GPU events
 const (
 	// GPU/Cuda related attributes
-	CudaKernelName = Name("cuda.kernel.name")
 	CudaMemcpyKind = Name("cuda.memcpy.kind")
 )
 

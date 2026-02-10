@@ -14,6 +14,7 @@ import (
 
 	"go.opentelemetry.io/otel/sdk/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -52,7 +53,7 @@ func ExecTyperProvider(
 		metrics:             metrics,
 		k8sInformer:         k8sInformer,
 		log:                 slog.With("component", "discover.ExecTyper"),
-		currentPids:         map[int32]*exec.FileInfo{},
+		currentPids:         map[app.PID]*exec.FileInfo{},
 		instrumentableCache: instrumentableCache,
 	}
 	return func(_ context.Context) (swarm.RunFunc, error) {
@@ -75,7 +76,7 @@ type typer struct {
 	metrics             imetrics.Reporter
 	k8sInformer         *kube.MetadataProvider
 	log                 *slog.Logger
-	currentPids         map[int32]*exec.FileInfo
+	currentPids         map[app.PID]*exec.FileInfo
 	allGoFunctions      []string
 	instrumentableCache *lru.Cache[uint64, instrumentedExecutable]
 }
@@ -226,7 +227,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	}
 
 	// select the parent (or grandparent) of the executable, if any
-	var child []uint32
+	var child []app.PID
 	parent, ok := t.currentPids[execElf.Ppid]
 	for ok && execElf.Ppid != execElf.Pid &&
 		// we will ignore parent processes that are not the same executable. For example,
@@ -234,7 +235,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		// when they launch an instrumentable service
 		execElf.CmdExePath == parent.CmdExePath {
 		log.Debug("replacing executable by its parent", "ppid", execElf.Ppid)
-		child = append(child, uint32(execElf.Pid))
+		child = append(child, execElf.Pid)
 		execElf = parent
 		parent, ok = t.currentPids[parent.Ppid]
 	}

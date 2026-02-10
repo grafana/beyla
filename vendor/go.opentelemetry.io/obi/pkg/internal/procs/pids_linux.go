@@ -11,9 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 )
 
-func FindNamespace(pid int32) (uint32, error) {
+func FindNamespace(pid app.PID) (uint32, error) {
 	pidPath := fmt.Sprintf("/proc/%d/ns/pid", pid)
 	f, err := os.Open(pidPath)
 	if err != nil {
@@ -50,7 +52,7 @@ func FindNamespace(pid int32) (uint32, error) {
 	return 0, fmt.Errorf("couldn't find ns pid in the symlink [%s]", nsPid)
 }
 
-func FindNamespacedPids(pid int32) ([]uint32, error) {
+func FindNamespacedPids(pid app.PID) ([]app.PID, error) {
 	statusPath := fmt.Sprintf("/proc/%d/status", pid)
 	f, err := os.Open(statusPath)
 	if err != nil {
@@ -64,7 +66,7 @@ func FindNamespacedPids(pid int32) ([]uint32, error) {
 		if strings.HasPrefix(line, "NSpid:") {
 			l := line[6:]
 			parts := strings.Split(l, "\t")
-			result := make([]uint32, 0)
+			result := make([]app.PID, 0)
 
 			for _, p := range parts {
 				if len(p) == 0 {
@@ -76,7 +78,7 @@ func FindNamespacedPids(pid int32) ([]uint32, error) {
 					return nil, fmt.Errorf("failed to parse namespaced pid %w", err)
 				}
 
-				result = append(result, uint32(id))
+				result = append(result, app.PID(id))
 			}
 
 			return result, nil

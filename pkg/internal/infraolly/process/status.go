@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -27,8 +28,8 @@ type ID struct {
 	// which will be the composition of Service.Instance-ProcessID
 	UID svc.UID
 
-	ProcessID       int32
-	ParentProcessID int32
+	ProcessID       app.PID
+	ParentProcessID app.PID
 	User            string
 	Command         string
 	CommandArgs     []string
@@ -75,7 +76,7 @@ type Status struct {
 	NetRcvBytesDelta int64
 }
 
-func NewStatus(pid int32, svcID *svc.Attrs) *Status {
+func NewStatus(pid app.PID, svcID *svc.Attrs) *Status {
 	return &Status{ID: ID{
 		ProcessID: pid,
 		Service:   svcID,

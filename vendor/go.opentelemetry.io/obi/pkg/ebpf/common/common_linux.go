@@ -6,7 +6,7 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 import (
 	"errors"
 	"fmt"
-	"os"
+	goos "os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/internal/helpers"
 )
 
@@ -72,12 +73,12 @@ func hasCapSysAdmin() bool {
 func HasHostPidAccess() bool {
 	// not itself pid 1 and not running in sidecar mode
 	// with pid:service
-	return os.Getpid() != 1 && os.Getppid() != 0
+	return goos.Getpid() != 1 && goos.Getppid() != 0
 }
 
-func FindNetworkNamespace(pid int32) (string, error) {
+func FindNetworkNamespace(pid app.PID) (string, error) {
 	netPath := fmt.Sprintf("/proc/%d/ns/net", pid)
-	f, err := os.Open(netPath)
+	f, err := goos.Open(netPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open(/proc/%d/ns/net): %w", pid, err)
 	}
@@ -96,7 +97,7 @@ func FindNetworkNamespace(pid int32) (string, error) {
 
 func HasHostNetworkAccess() (bool, error) {
 	// Get the network namespace of the current process
-	containerNS, err := FindNetworkNamespace(int32(os.Getpid()))
+	containerNS, err := FindNetworkNamespace(app.PID(goos.Getpid()))
 	if err != nil {
 		return false, err
 	}
@@ -111,14 +112,14 @@ func HasHostNetworkAccess() (bool, error) {
 	return containerNS == hostNS, nil
 }
 
-func RootDirectoryForPID(pid int32) string {
+func RootDirectoryForPID(pid app.PID) string {
 	return filepath.Join("/proc", strconv.Itoa(int(pid)), "root")
 }
 
 // CMDLineForPID parses /proc/<pid>/cmdline and extracts the executable and arguments.
 // Returns the executable path and a slice of arguments (excluding the executable).
 // The cmdline file contains null-separated arguments.
-func CMDLineForPID(pid int32) (string, []string, error) {
+func CMDLineForPID(pid app.PID) (string, []string, error) {
 	cmdlinePath := filepath.Join("/proc", strconv.Itoa(int(pid)), "cmdline")
 	exec, args, err := cmdLineForPath(cmdlinePath)
 	if err != nil {
@@ -128,7 +129,7 @@ func CMDLineForPID(pid int32) (string, []string, error) {
 }
 
 func cmdLineForPath(cmdlinePath string) (string, []string, error) {
-	data, err := os.ReadFile(cmdlinePath)
+	data, err := goos.ReadFile(cmdlinePath)
 	if err != nil {
 		return "", nil, err
 	}
@@ -169,10 +170,10 @@ func cmdLineForPath(cmdlinePath string) (string, []string, error) {
 
 // CWDForPID extracts the current working directory for a process by reading
 // the symlink at /proc/<pid>/cwd.
-func CWDForPID(pid int32) (string, error) {
+func CWDForPID(pid app.PID) (string, error) {
 	cwdPath := filepath.Join("/proc", strconv.Itoa(int(pid)), "cwd")
 
-	cwd, err := os.Readlink(cwdPath)
+	cwd, err := goos.Readlink(cwdPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read symlink /proc/%d/cwd: %w", pid, err)
 	}

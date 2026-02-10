@@ -19,6 +19,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
@@ -42,9 +43,10 @@ const (
 	EventTypeMQTTServer
 	EventTypeMongoClient
 	EventTypeManualSpan
-	EventTypeGPUKernelLaunch
-	EventTypeGPUMalloc
-	EventTypeGPUMemcpy
+	EventTypeGPUCudaKernelLaunch
+	EventTypeGPUCudaGraphLaunch
+	EventTypeGPUCudaMalloc
+	EventTypeGPUCudaMemcpy
 	EventTypeFailedConnect
 	EventTypeDNS
 	EventTypeCouchbaseClient
@@ -115,11 +117,13 @@ func (t EventType) String() string {
 		return "KafkaServer"
 	case EventTypeMQTTServer:
 		return "MQTTServer"
-	case EventTypeGPUKernelLaunch:
-		return "CUDALaunch"
-	case EventTypeGPUMalloc:
+	case EventTypeGPUCudaKernelLaunch:
+		return "CUDALaunchKernel"
+	case EventTypeGPUCudaGraphLaunch:
+		return "CUDALaunchGraph"
+	case EventTypeGPUCudaMalloc:
 		return "CUDAMalloc"
-	case EventTypeGPUMemcpy:
+	case EventTypeGPUCudaMemcpy:
 		return "CUDAMemcpy"
 	case EventTypeMongoClient:
 		return "MongoClient"
@@ -155,10 +159,10 @@ var clocks = converter{monoClock: monotime.Now, clock: time.Now}
 // PidInfo stores different views of the PID of the process that generated the span
 type PidInfo struct {
 	// HostPID is the PID as seen by the host (root cgroup)
-	HostPID uint32
+	HostPID app.PID
 	// UserID is the PID as seen by the user space.
 	// Might differ from HostPID if the process is in a different namespace/cgroup/container/etc.
-	UserPID uint32
+	UserPID app.PID
 	// Namespace for the PIDs
 	Namespace uint32
 }
@@ -224,8 +228,9 @@ type AWSSQS struct {
 
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
-// REMINDER: any attribute here must be also added to the functions SpanOTELGetters,
-// SpanPromGetters and getDefinitions in pkg/export/attributes/attr_defs.go
+// REMINDER: any attribute here must be also added to the functions SpanOTELGetters
+// and SpanPromGetters in pkg/appolly/app/request/span_getters_providers.go and
+// getDefinitions in pkg/export/attributes/attr_defs.go
 type Span struct {
 	Type              EventType      `json:"type"`
 	Flags             uint8          `json:"-"`
@@ -412,16 +417,19 @@ func spanAttributes(s *Span) SpanAttributes {
 			}
 		}
 		return attrs
-	case EventTypeGPUKernelLaunch:
+	case EventTypeGPUCudaKernelLaunch:
 		return SpanAttributes{
-			"function":  s.Method,
-			"callStack": s.Path,
 			"gridSize":  strconv.FormatInt(s.ContentLength, 10),
 			"blockSize": strconv.Itoa(s.SubType),
 		}
-	case EventTypeGPUMalloc:
+	case EventTypeGPUCudaMalloc:
 		return SpanAttributes{
 			"size": strconv.FormatInt(s.ContentLength, 10),
+		}
+	case EventTypeGPUCudaMemcpy:
+		return SpanAttributes{
+			"size": strconv.FormatInt(s.ContentLength, 10),
+			"kind": CudaMemcpyName(s.SubType),
 		}
 	case EventTypeMongoClient:
 		return SpanAttributes{
@@ -586,6 +594,10 @@ func SpanStatusMessage(span *Span) string {
 		}
 	case EventTypeManualSpan:
 		return span.Path
+	case EventTypeHTTPClient:
+		if span.SubType == HTTPSubtypeSQLPP && span.Status != 0 && span.DBError.Description != "" {
+			return span.DBError.Description
+		}
 	}
 	return ""
 }

@@ -25,6 +25,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -49,7 +50,7 @@ type CollectConfig struct {
 type Collector struct {
 	cfg                *CollectConfig
 	harvest            *Harvester
-	cache              *simplelru.LRU[int32, *linuxProcess]
+	cache              *simplelru.LRU[app.PID, *linuxProcess]
 	log                *slog.Logger
 	newPids            <-chan []request.Span
 	collectedProcesses *msg.Queue[[]*Status]
@@ -63,7 +64,7 @@ func NewCollectorProvider(
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		// we purge entries explicitly so size is unbounded
-		cache, _ := simplelru.NewLRU[int32, *linuxProcess](math.MaxInt, nil)
+		cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
 		collector := &Collector{
 			cfg:                cfg,
 			harvest:            newHarvester(cfg, cache),
@@ -77,7 +78,7 @@ func NewCollectorProvider(
 }
 
 func (ps *Collector) Run(ctx context.Context) {
-	pids := map[int32]*svc.Attrs{}
+	pids := map[app.PID]*svc.Attrs{}
 	collectTicker := time.NewTicker(ps.cfg.Interval)
 	defer ps.collectedProcesses.Close()
 	defer collectTicker.Stop()
@@ -107,10 +108,10 @@ func (ps *Collector) Run(ctx context.Context) {
 
 // Collect returns the status for all the running processes, decorated with Docker runtime information, if applies.
 // It also returns the PIDs that have to be removed from the map, as they do not exist anymore
-func (ps *Collector) Collect(pids map[int32]*svc.Attrs) ([]*Status, []int32) {
+func (ps *Collector) Collect(pids map[app.PID]*svc.Attrs) ([]*Status, []app.PID) {
 	results := make([]*Status, 0, len(pids))
 
-	var removed []int32
+	var removed []app.PID
 	for pid, svcID := range pids {
 		status, err := ps.harvest.Harvest(svcID)
 		if err != nil {

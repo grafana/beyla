@@ -212,6 +212,16 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	if hn != "" {
 		span.HostName = hn
 	}
+
+	nr.logger.Debug("resolved peer names",
+		"type", span.Type,
+		"host_ip", span.Host,
+		"host_name", span.HostName,
+		"peer_ip", span.Peer,
+		"peer_name", span.PeerName,
+		"other_namespace", span.OtherNamespace,
+		"other_k8s_namespace", span.OtherK8SNamespace,
+	)
 }
 
 // resolve attempts to resolve an IP address to a hostname using available resolution methods.
@@ -288,7 +298,9 @@ func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, s
 }
 
 func (nr *NameResolver) resolveFromK8s(ip string) (string, string, string) {
-	return nr.db.ServiceNameNamespaceForIP(ip)
+	name, ns, k8sNs := nr.db.ServiceNameNamespaceForIP(ip)
+	nr.logger.Debug("k8s resolve result", "ip", ip, "name", name, "namespace", ns, "k8s_namespace", k8sNs)
+	return name, ns, k8sNs
 }
 
 func (nr *NameResolver) resolveIP(ip string) string {

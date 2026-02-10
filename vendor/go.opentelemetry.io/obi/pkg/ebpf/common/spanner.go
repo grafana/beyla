@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
@@ -62,8 +63,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		ParentSpanID:   trace.Tp.ParentId,
 		TraceFlags:     trace.Tp.Flags,
 		Pid: request.PidInfo{
-			HostPID:   trace.Pid.HostPid,
-			UserPID:   trace.Pid.UserPid,
+			HostPID:   app.PID(trace.Pid.HostPid),
+			UserPID:   app.PID(trace.Pid.UserPid),
 			Namespace: trace.Pid.Ns,
 		},
 		Statement: schemeHost,
@@ -130,8 +131,8 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 		ParentSpanID:  trace.Tp.ParentId,
 		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
-			HostPID:   trace.Pid.HostPid,
-			UserPID:   trace.Pid.UserPid,
+			HostPID:   app.PID(trace.Pid.HostPid),
+			UserPID:   app.PID(trace.Pid.UserPid),
 			Namespace: trace.Pid.Ns,
 		},
 		Statement: sql,

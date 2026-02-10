@@ -125,6 +125,12 @@ type Iter struct {
 	Link    link.Link
 }
 
+type Tracing struct {
+	Program  *ebpf.Program
+	AttachAs ebpf.AttachType
+	Link     link.Link
+}
+
 type MisclassifiedEvent struct {
 	EventType int
 	TCPInfo   *TCPRequestInfo

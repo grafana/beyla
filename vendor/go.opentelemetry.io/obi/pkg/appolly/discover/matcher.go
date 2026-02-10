@@ -13,6 +13,7 @@ import (
 
 	"github.com/shirou/gopsutil/v3/process"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -33,13 +34,13 @@ func criteriaMatcherProvider(
 	input *msg.Queue[[]Event[ProcessAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 ) swarm.InstanceFunc {
-	beylaNamespace, _ := namespaceFetcherFunc(int32(osPidFunc()))
+	beylaNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	m := &Matcher{
 		Log:                 slog.With("component", "discover.CriteriaMatcher"),
 		Criteria:            FindingCriteria(cfg),
 		ExcludeCriteria:     ExcludingCriteria(cfg),
 		LogEnricherCriteria: LogEnricherFindingCriteria(cfg),
-		ProcessHistory:      map[PID]ProcessMatch{},
+		ProcessHistory:      map[app.PID]ProcessMatch{},
 		Input:               input.Subscribe(msg.SubscriberName("discover.CriteriaMatcher")),
 		Output:              output,
 		Namespace:           beylaNamespace,
@@ -58,7 +59,7 @@ type Matcher struct {
 	// ProcessHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
 	// This avoids keep inspecting again and again client processes each time they open a new connection port
-	ProcessHistory   map[PID]ProcessMatch
+	ProcessHistory   map[app.PID]ProcessMatch
 	Input            <-chan []Event[ProcessAttrs]
 	Output           *msg.Queue[[]Event[ProcessMatch]]
 	Namespace        string
@@ -105,7 +106,7 @@ func (m *Matcher) filter(events []Event[ProcessAttrs]) []Event[ProcessMatch] {
 	return matches
 }
 
-func (m *Matcher) alreadyMatched(pid PID) bool {
+func (m *Matcher) alreadyMatched(pid app.PID) bool {
 	_, ok := m.ProcessHistory[pid]
 	return ok
 }
@@ -168,7 +169,7 @@ func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
 	}
 
 	// We didn't match the process, but let's see if the parent PID is tracked, it might be the child hasn't opened the port yet
-	if procMatch, ok := m.ProcessHistory[PID(proc.PPid)]; ok {
+	if procMatch, ok := m.ProcessHistory[proc.PPid]; ok {
 		m.Log.Debug("found process by matching the process parent id", "pid", proc.Pid, "ppid", proc.PPid, "comm", proc.ExePath, "metadata", obj.metadata)
 
 		procMatch.Process = proc
@@ -471,8 +472,8 @@ var processInfo = func(pp ProcessAttrs) (*services.ProcessInfo, error) {
 		}
 	}
 	return &services.ProcessInfo{
-		Pid:       proc.Pid,
-		PPid:      ppid,
+		Pid:       app.PID(proc.Pid),
+		PPid:      app.PID(ppid),
 		ExePath:   exePath,
 		OpenPorts: pp.openPorts,
 	}, nil

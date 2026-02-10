@@ -18,6 +18,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
@@ -304,8 +305,8 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status
 		ParentSpanID:  trace.SpanID(info.Tp.ParentId),
 		TraceFlags:    info.Tp.Flags,
 		Pid: request.PidInfo{
-			HostPID:   info.Pid.HostPid,
-			UserPID:   info.Pid.UserPid,
+			HostPID:   app.PID(info.Pid.HostPid),
+			UserPID:   app.PID(info.Pid.UserPid),
 			Namespace: info.Pid.Ns,
 		},
 	}
@@ -452,7 +453,7 @@ func ReadHTTP2InfoIntoSpan(parseContext *EBPFParseContext, record *ringbuf.Recor
 		return request.Span{}, true, err
 	}
 
-	if !filter.ValidPID(event.Pid.UserPid, event.Pid.Ns, PIDTypeKProbes) {
+	if !filter.ValidPID(app.PID(event.Pid.UserPid), event.Pid.Ns, PIDTypeKProbes) {
 		return request.Span{}, true, nil
 	}
 

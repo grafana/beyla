@@ -30,7 +30,7 @@ func (dc GlobDefinitionCriteria) Validate() error {
 		}
 		for k := range dc[i].Metadata {
 			if _, ok := AllowedAttributeNames[k]; !ok {
-				return fmt.Errorf("unknown attribute in discovery.services[%d]: %s", i, k)
+				return fmt.Errorf("unknown attribute in discovery.instrument[%d]: %s", i, k)
 			}
 		}
 	}

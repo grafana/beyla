@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
+import "go.opentelemetry.io/obi/pkg/appolly/app"
 
 func KernelVersion() (major, minor int) {
 	return 0, 0
@@ -19,18 +20,18 @@ func HasHostNetworkAccess() (bool, error) {
 	return false, nil
 }
 
-func FindNetworkNamespace(_ int32) (string, error) {
+func FindNetworkNamespace(_ app.PID) (string, error) {
 	return "", nil
 }
 
-func RootDirectoryForPID(_ int32) string {
+func RootDirectoryForPID(_ app.PID) string {
 	return ""
 }
 
-func CMDLineForPID(_ int32) (string, []string, error) {
+func CMDLineForPID(_ app.PID) (string, []string, error) {
 	return "", nil, nil
 }
 
-func CWDForPID(_ int32) (string, error) {
+func CWDForPID(_ app.PID) (string, error) {
 	return "", nil
 }

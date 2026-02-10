@@ -76,7 +76,14 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventsKubeDecorated,
 	))
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsKubeDecorated)
+	processEventsDockerDecorated := msg2.QueueFromConfig[exec.ProcessEvent](config.AsOBI(), "processEventsDockerDecorated")
+	swi.Add(transform.DockerProcessEventDecoratorProvider(
+		ctxInfo,
+		processEventsKubeDecorated,
+		processEventsDockerDecorated,
+	))
+
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsDockerDecorated)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}

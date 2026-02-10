@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/otel"
@@ -337,7 +338,7 @@ func TestHandleProcessEventCreated_EdgeCases(t *testing.T) {
 
 			event := exec.ProcessEvent{
 				Type: exec.ProcessEventCreated,
-				File: &exec.FileInfo{Pid: int32(1000 + i), Service: service},
+				File: &exec.FileInfo{Pid: app.PID(1000 + i), Service: service},
 			}
 			reporter.handleProcessEvent(event, slog.Default())
 		}

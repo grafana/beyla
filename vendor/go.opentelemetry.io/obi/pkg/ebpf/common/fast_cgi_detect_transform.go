@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"unsafe"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 )
 
@@ -217,8 +218,8 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		ParentSpanID:  trace.Tp.ParentId,
 		TraceFlags:    trace.Tp.Flags,
 		Pid: request.PidInfo{
-			HostPID:   trace.Pid.HostPid,
-			UserPID:   trace.Pid.UserPid,
+			HostPID:   app.PID(trace.Pid.HostPid),
+			UserPID:   app.PID(trace.Pid.UserPid),
 			Namespace: trace.Pid.Ns,
 		},
 	}

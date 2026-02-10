@@ -117,7 +117,7 @@ func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, cfg *obi.
 		Instrumentables: map[uint64]*instrumenter{},
 		shutdownTimeout: cfg.ShutdownTimeout,
 		metrics:         metrics,
-		bpfFsPath:       cfg.EBPF.BpfFsPath,
+		bpffsPath:       cfg.EBPF.BPFFSPath,
 	}
 }
 
@@ -185,14 +185,34 @@ func (pt *ProcessTracer) loadSpec(p Tracer) (*ebpf.CollectionSpec, error) {
 	return spec, nil
 }
 
-func (pt *ProcessTracer) makeOtelBpfFsPath() (string, error) {
-	otelPath := path.Join(pt.bpfFsPath, "otel")
+func (pt *ProcessTracer) makeOtelBPFFSPath() (string, error) {
+	otelPath := path.Join(pt.bpffsPath, "otel")
 
 	if err := os.MkdirAll(otelPath, 0o1700); err != nil {
 		return "", fmt.Errorf("creating bpffs otel path: %w", err)
 	}
 
 	return otelPath, nil
+}
+
+func (pt *ProcessTracer) setupBPFFS(spec *ebpf.CollectionSpec) string {
+	otelBPFFSPath, err := pt.makeOtelBPFFSPath()
+
+	if err == nil {
+		return otelBPFFSPath
+	}
+
+	slog.Warn("creating OTEL namespace in bpffs failed (is bpffs mounted?)", "bpffs_path", pt.bpffsPath, "err", err)
+	slog.Warn("OBI will still work, but features depending on pinned maps (e.g., log enricher, profile correlation) will be disabled")
+
+	for _, v := range spec.Maps {
+		if v.Pinning == ebpf.PinByName {
+			v.Pinning = ebpf.PinNone
+			v.MaxEntries = 1
+		}
+	}
+
+	return ""
 }
 
 func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer) error {
@@ -206,23 +226,10 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 		return err
 	}
 
-	otelBpfFsPath, err := pt.makeOtelBpfFsPath()
-	if err != nil {
-		slog.Error("creating OTEL namespace in BPFFS failed (is BPFFS mounted?)", "bpf_fs_path", pt.bpfFsPath, "err", err)
-
-		// Avoid load errors due to pinning when BPFFS is not mounted
-		// OBI will still work, but features depending on pinned maps (e.g., log enricher, profile correlation)
-		// will not work.
-		for _, v := range spec.Maps {
-			if v.Pinning == ebpf.PinByName {
-				v.Pinning = ebpf.PinNone
-				v.MaxEntries = 1
-			}
-		}
-	}
+	otelBPFFSPath := pt.setupBPFFS(spec)
 
 	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
-	collOpts.Maps = ebpf.MapOptions{PinPath: otelBpfFsPath}
+	collOpts.Maps = ebpf.MapOptions{PinPath: otelBPFFSPath}
 
 	return spec.LoadAndAssign(p.BpfObjects(), collOpts)
 }
@@ -286,6 +293,11 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 	}
 
 	if err := i.iters(p); err != nil {
+		printVerifierErrorInfo(err)
+		return err
+	}
+
+	if err := i.tracing(p); err != nil {
 		printVerifierErrorInfo(err)
 		return err
 	}

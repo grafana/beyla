@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 )
 
@@ -573,7 +574,7 @@ var (
 	cwdForPID     = ebpfcommon.CWDForPID
 )
 
-func ExtractNodejsRoutes(pid int32) (*RouteHarvesterResult, error) {
+func ExtractNodejsRoutes(pid app.PID) (*RouteHarvesterResult, error) {
 	rootDir := rootDirForPID(pid)
 	_, args, err := cmdlineForPID(pid)
 	if err != nil {

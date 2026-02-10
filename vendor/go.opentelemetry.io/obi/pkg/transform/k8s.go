@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -199,16 +200,16 @@ type procEventMetadataDecorator struct {
 }
 
 type pidContainerTracker struct {
-	missedPods    maps2.Map2[string, int32, *exec.ProcessEvent]
+	missedPods    maps2.Map2[string, app.PID, *exec.ProcessEvent]
 	missedPodsMux sync.Mutex
-	missedPodPids map[int32]string
+	missedPodPids map[app.PID]string
 }
 
 func newPidContainerTracker() *pidContainerTracker {
 	return &pidContainerTracker{
-		missedPods:    maps2.Map2[string, int32, *exec.ProcessEvent]{},
+		missedPods:    maps2.Map2[string, app.PID, *exec.ProcessEvent]{},
 		missedPodsMux: sync.Mutex{},
-		missedPodPids: map[int32]string{},
+		missedPodPids: map[app.PID]string{},
 	}
 }
 
@@ -222,7 +223,7 @@ func (t *pidContainerTracker) track(containerID string, pe *exec.ProcessEvent) {
 	t.missedPodPids[pe.File.Pid] = containerID
 }
 
-func (t *pidContainerTracker) remove(pid int32) {
+func (t *pidContainerTracker) remove(pid app.PID) {
 	t.missedPodsMux.Lock()
 	defer t.missedPodsMux.Unlock()
 	if containerID, ok := t.missedPodPids[pid]; ok {
@@ -244,7 +245,7 @@ func (t *pidContainerTracker) removeAll(containerID string) {
 	t.missedPods.DeleteAll(containerID)
 }
 
-func (t *pidContainerTracker) info(containerID string) (map[int32]*exec.ProcessEvent, bool) {
+func (t *pidContainerTracker) info(containerID string) (map[app.PID]*exec.ProcessEvent, bool) {
 	t.missedPodsMux.Lock()
 	defer t.missedPodsMux.Unlock()
 
@@ -322,8 +323,8 @@ mainLoop:
 	md.log.Debug("stopping kubernetes process event decoration loop")
 }
 
-func (md *procEventMetadataDecorator) getContainerInfo(pid int32) (container.Info, error) {
-	cntInfo, err := containerInfoForPID(uint32(pid))
+func (md *procEventMetadataDecorator) getContainerInfo(pid app.PID) (container.Info, error) {
+	cntInfo, err := containerInfoForPID(pid)
 	if err != nil {
 		return container.Info{}, err
 	}
@@ -331,6 +332,7 @@ func (md *procEventMetadataDecorator) getContainerInfo(pid int32) (container.Inf
 }
 
 func (md *procEventMetadataDecorator) handlePodUpdateEvent(pod *informer.ObjectMeta) {
+	md.log.Debug("pod update event", "pod", pod)
 	for _, cnt := range pod.Pod.Containers {
 		md.log.Debug("looking up running process for pod container", "container", cnt.Id)
 		if peMap, ok := md.tracker.info(cnt.Id); ok {

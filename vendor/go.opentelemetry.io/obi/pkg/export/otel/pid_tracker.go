@@ -6,26 +6,27 @@ package otel // import "go.opentelemetry.io/obi/pkg/export/otel"
 import (
 	"sync"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
 type PidServiceTracker struct {
-	pidToService map[int32]svc.UID
-	servicePIDs  map[svc.UID]map[int32]struct{}
+	pidToService map[app.PID]svc.UID
+	servicePIDs  map[svc.UID]map[app.PID]struct{}
 	lock         sync.Mutex
 	names        map[svc.ServiceNameNamespace]svc.UID
 }
 
 func NewPidServiceTracker() PidServiceTracker {
 	return PidServiceTracker{
-		pidToService: map[int32]svc.UID{},
-		servicePIDs:  map[svc.UID]map[int32]struct{}{},
+		pidToService: map[app.PID]svc.UID{},
+		servicePIDs:  map[svc.UID]map[app.PID]struct{}{},
 		lock:         sync.Mutex{},
 		names:        map[svc.ServiceNameNamespace]svc.UID{},
 	}
 }
 
-func (p *PidServiceTracker) AddPID(pid int32, uid svc.UID) {
+func (p *PidServiceTracker) AddPID(pid app.PID, uid svc.UID) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -33,7 +34,7 @@ func (p *PidServiceTracker) AddPID(pid int32, uid svc.UID) {
 
 	pids, ok := p.servicePIDs[uid]
 	if !ok {
-		pids = map[int32]struct{}{}
+		pids = map[app.PID]struct{}{}
 		n := uid.NameNamespace()
 		p.names[n] = uid
 	}
@@ -41,7 +42,7 @@ func (p *PidServiceTracker) AddPID(pid int32, uid svc.UID) {
 	p.servicePIDs[uid] = pids
 }
 
-func (p *PidServiceTracker) RemovePID(pid int32) (bool, svc.UID) {
+func (p *PidServiceTracker) RemovePID(pid app.PID) (bool, svc.UID) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -64,7 +65,7 @@ func (p *PidServiceTracker) RemovePID(pid int32) (bool, svc.UID) {
 	return false, svc.UID{}
 }
 
-func (p *PidServiceTracker) TracksPID(pid int32) (svc.UID, bool) {
+func (p *PidServiceTracker) TracksPID(pid app.PID) (svc.UID, bool) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 

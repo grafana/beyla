@@ -23,7 +23,7 @@ OBI_MODULE="go.opentelemetry.io/obi"
 BEYLA_MODULE="github.com/grafana/beyla/v3"
 
 # OBI Dockerfile → Beyla Dockerfile (for the instrumentation binary)
-OBI_DOCKERFILE="internal/test/integration/components/ebpf-instrument/Dockerfile"
+OBI_DOCKERFILE="internal/test/integration/components/obi/Dockerfile"
 BEYLA_DOCKERFILE="internal/test/integration/components/beyla/Dockerfile"
 
 # Go sub-packages are discovered automatically — see discover_go_packages().
@@ -59,7 +59,8 @@ BEHAVIORAL_TRANSFORMS=(
     '"source":[ ]*"obi"|"source": "beyla"'
 
     # --- Binary name (entrypoint overrides in compose files) ---
-    '/ebpf-instrument|/beyla'
+    '^/obi|/beyla'
+    '\([^.a-zA-Z0-9/_-]\)/obi|\1/beyla'
 
     # --- Metric name prefixes (exported output) ---
     'obi_|beyla_'

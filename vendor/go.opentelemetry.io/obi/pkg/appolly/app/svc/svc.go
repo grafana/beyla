@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -102,7 +103,7 @@ type Attrs struct {
 	// ProcPID is the PID of the instrumented process as seen by Beyla's /proc filesystem.
 	// It is stored here at process discovery time, because it might differ form the
 	// UserPID and HostPID fields of the request.PidInfo struct.
-	ProcPID int32
+	ProcPID app.PID
 
 	// HostName running the process. It will default to the Beyla host and will be overridden
 	// by other metadata if available (e.g., Pod Name, Node Name, etc...)

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -30,15 +31,15 @@ var readNamespacePIDs = procs.FindNamespacedPids
 type PIDInfo struct {
 	service        *svc.Attrs
 	pidType        PIDType
-	otherKnownPids []uint32
+	otherKnownPids []app.PID
 }
 
 type ServiceFilter interface {
-	AllowPID(uint32, uint32, *svc.Attrs, PIDType)
-	BlockPID(uint32, uint32)
-	ValidPID(uint32, uint32, PIDType) bool
+	AllowPID(app.PID, uint32, *svc.Attrs, PIDType)
+	BlockPID(app.PID, uint32)
+	ValidPID(app.PID, uint32, PIDType) bool
 	Filter(inputSpans []request.Span) []request.Span
-	CurrentPIDs(PIDType) map[uint32]map[uint32]svc.Attrs
+	CurrentPIDs(PIDType) map[uint32]map[app.PID]svc.Attrs
 }
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
@@ -46,7 +47,7 @@ type ServiceFilter interface {
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
 	log                 *slog.Logger
-	current             map[uint32]map[uint32]PIDInfo
+	current             map[uint32]map[app.PID]PIDInfo
 	mux                 *sync.RWMutex
 	ignoreOtel          bool
 	ignoreOtelSpan      bool
@@ -57,7 +58,7 @@ type PIDsFilter struct {
 func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
 	return &PIDsFilter{
 		log:                 log,
-		current:             map[uint32]map[uint32]PIDInfo{},
+		current:             map[uint32]map[app.PID]PIDInfo{},
 		mux:                 &sync.RWMutex{},
 		ignoreOtel:          c.ExcludeOTelInstrumentedServices,
 		ignoreOtelSpan:      c.ExcludeOTelInstrumentedServicesSpanMetrics,
@@ -66,19 +67,19 @@ func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetri
 	}
 }
 
-func (pf *PIDsFilter) AllowPID(pid, ns uint32, svc *svc.Attrs, pidType PIDType) {
+func (pf *PIDsFilter) AllowPID(pid app.PID, ns uint32, svc *svc.Attrs, pidType PIDType) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
 	pf.addPID(pid, ns, svc, pidType)
 }
 
-func (pf *PIDsFilter) BlockPID(pid, ns uint32) {
+func (pf *PIDsFilter) BlockPID(pid app.PID, ns uint32) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
 	pf.removePID(pid, ns)
 }
 
-func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
+func (pf *PIDsFilter) ValidPID(userPID app.PID, ns uint32, pidType PIDType) bool {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()
 
@@ -91,13 +92,13 @@ func (pf *PIDsFilter) ValidPID(userPID, ns uint32, pidType PIDType) bool {
 	return false
 }
 
-func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[uint32]svc.Attrs {
+func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[app.PID]svc.Attrs {
 	pf.mux.RLock()
 	defer pf.mux.RUnlock()
-	cp := map[uint32]map[uint32]svc.Attrs{}
+	cp := map[uint32]map[app.PID]svc.Attrs{}
 
 	for k, v := range pf.current {
-		cVal := map[uint32]svc.Attrs{}
+		cVal := map[app.PID]svc.Attrs{}
 		for kv, vv := range v {
 			if vv.pidType == t {
 				cVal[kv] = *vv.service
@@ -160,14 +161,14 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
-func (pf *PIDsFilter) addPID(pid, nsid uint32, s *svc.Attrs, t PIDType) {
+func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, s *svc.Attrs, t PIDType) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
-		ns = make(map[uint32]PIDInfo)
+		ns = make(map[app.PID]PIDInfo)
 		pf.current[nsid] = ns
 	}
 
-	allPids, err := readNamespacePIDs(int32(pid))
+	allPids, err := readNamespacePIDs(pid)
 	if err != nil {
 		pf.log.Debug("Error looking up namespaced pids", "pid", pid, "error", err)
 		return
@@ -178,7 +179,7 @@ func (pf *PIDsFilter) addPID(pid, nsid uint32, s *svc.Attrs, t PIDType) {
 	}
 }
 
-func (pf *PIDsFilter) removePID(pid, nsid uint32) {
+func (pf *PIDsFilter) removePID(pid app.PID, nsid uint32) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		return
@@ -200,15 +201,15 @@ func (pf *PIDsFilter) removePID(pid, nsid uint32) {
 // for concrete cases like GPU tracer
 type IdentityPidsFilter struct{}
 
-func (pf *IdentityPidsFilter) AllowPID(_ uint32, _ uint32, _ *svc.Attrs, _ PIDType) {}
+func (pf *IdentityPidsFilter) AllowPID(_ app.PID, _ uint32, _ *svc.Attrs, _ PIDType) {}
 
-func (pf *IdentityPidsFilter) BlockPID(_ uint32, _ uint32) {}
+func (pf *IdentityPidsFilter) BlockPID(_ app.PID, _ uint32) {}
 
-func (pf *IdentityPidsFilter) ValidPID(_ uint32, _ uint32, _ PIDType) bool {
+func (pf *IdentityPidsFilter) ValidPID(_ app.PID, _ uint32, _ PIDType) bool {
 	return true
 }
 
-func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[uint32]svc.Attrs {
+func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[app.PID]svc.Attrs {
 	return nil
 }
 

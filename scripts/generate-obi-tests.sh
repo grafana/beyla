@@ -24,7 +24,7 @@ BEYLA_MODULE="github.com/grafana/beyla/v3"
 
 # OBI Dockerfile → Beyla Dockerfile (for the instrumentation binary)
 OBI_DOCKERFILE="internal/test/integration/components/obi/Dockerfile"
-BEYLA_DOCKERFILE="internal/test/integration/components/beyla/Dockerfile"
+BEYLA_DOCKERFILE="internal/test/beyla_extensions/components/beyla/Dockerfile"
 
 # Go sub-packages are discovered automatically — see discover_go_packages().
 
@@ -74,6 +74,10 @@ BEHAVIORAL_TRANSFORMS=(
     'Value: "go\.opentelemetry\.io/obi"|Value: "github.com/grafana/beyla"'
     '"value":"go\.opentelemetry\.io/obi"|"value":"github.com/grafana/beyla"'
     'opentelemetry-ebpf-instrumentation|beyla'
+
+    # --- K8s component paths (Phase 3) ---
+    'DockerfileOBI|DockerfileBeyla'
+    'DockerfileK8sCache|DockerfileBeylaK8sCache'
 )
 
 # ---- Code injections (line inserted after a matching line in Go files) --------
@@ -266,6 +270,22 @@ generate() {
     fi
 
     # -----------------------------------------------------------------
+    # 2b. Phase 3: Components consolidation — testpath and k8s_common
+    #     OBI components: .obi-src/internal/test/integration/components/
+    #     Beyla components: internal/test/beyla_extensions/components/
+    # -----------------------------------------------------------------
+    if [[ -f "$OBI_DEST/k8s/common/testpath/testpath.go" ]]; then
+        sed_i -e 's|Components      = path.Join(IntegrationTest, "components")|Components      = path.Join(Root, ".obi-src", "internal", "test", "integration", "components")|' \
+            "$OBI_DEST/k8s/common/testpath/testpath.go"
+    fi
+    if [[ -f "$OBI_DEST/k8s/common/k8s_common.go" ]]; then
+        sed_i -e 's|DockerfileOBI              = path.Join(testpath.Components, "obi", "Dockerfile")|DockerfileBeyla = path.Join(testpath.Root, "internal", "test", "beyla_extensions", "components", "beyla", "Dockerfile")|' \
+            "$OBI_DEST/k8s/common/k8s_common.go"
+        sed_i -e 's|DockerfileK8sCache         = path.Join(testpath.Components, "ebpf-instrument-k8s-cache", "Dockerfile")|DockerfileBeylaK8sCache = path.Join(testpath.Root, "internal", "test", "beyla_extensions", "components", "beyla-k8s-cache", "Dockerfile")|' \
+            "$OBI_DEST/k8s/common/k8s_common.go"
+    fi
+
+    # -----------------------------------------------------------------
     # 3. Docker-compose path depth correction
     #    OBI compose files lived 3 levels below OBI root (internal/test/integration/).
     #    In Beyla they're 4 levels below Beyla root (internal/obi/test/integration/).
@@ -290,8 +310,13 @@ generate() {
         # build context at the Beyla repo root instead of .obi-src.
         sed_i -e "s|dockerfile: \\./${OBI_DOCKERFILE}|dockerfile: ${BEYLA_DOCKERFILE}|" "$file"
         sed_i -e "s|dockerfile: ${OBI_DOCKERFILE}|dockerfile: ${BEYLA_DOCKERFILE}|" "$file"
+        # Phase 3: Transform Beyla Dockerfile paths (beyla_extensions)
+        sed_i -e 's|internal/test/integration/components/beyla|internal/test/beyla_extensions/components/beyla|g' "$file"
+        sed_i -e 's|internal/test/integration/components/beyla-k8s-cache|internal/test/beyla_extensions/components/beyla-k8s-cache|g' "$file"
+        # When context points to .obi-src but dockerfile is Beyla (in beyla_extensions),
+        # use repo root as context instead.
         awk '{
-            if (prev ~ /context:.*\.obi-src/ && $0 ~ /components\/beyla\/Dockerfile/) {
+            if (prev ~ /context:.*\.obi-src/ && $0 ~ /beyla_extensions\/components\/(beyla|beyla-k8s-cache)\/Dockerfile/) {
                 sub(/\.\.\/\.\.\/\.\.\/\.\.\/\.obi-src/, "../../../..", prev)
             }
             if (NR > 1) print prev

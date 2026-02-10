@@ -91,7 +91,7 @@ spec:
 kind: Service
 apiVersion: v1
 metadata:
-  name: beyla-promscrape
+  name: obi-promscrape
 spec:
   selector:
     instrumentation: beyla

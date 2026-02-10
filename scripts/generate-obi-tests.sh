@@ -479,6 +479,17 @@ ensure_daemonset_process_metrics_enabled() {
     sed_i -e '/name: BEYLA_OTEL_METRICS_FEATURES/{n;s|value: "application"|value: "application,application_process"|;}' "$file"
 }
 
+ensure_otherinstance_has_service_version() {
+    # Daemonset y/z tests expect service_version "3.2.1" for otherinstance.
+    # Add resource.opentelemetry.io/service.version annotation so metrics get decorated.
+    # (testserver already has it; we add to otherinstance which has to-be-ignored-in-favor-of-env-var)
+    local file="$OBI_DEST/k8s/manifests/05-uninstrumented-service.yml"
+    [[ -f "$file" ]] || return 0
+    if ! grep -A1 "to-be-ignored-in-favor-of-env-var" "$file" | grep -q "resource.opentelemetry.io/service.version"; then
+        awk "/to-be-ignored-in-favor-of-env-var/ { print; print \"        resource.opentelemetry.io/service.version: '3.2.1'\"; next } 1" "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    fi
+}
+
 apply_behavioral_transforms() {
     local jobs="$1"
     echo "  Applying OBI → Beyla behavioral transforms..."
@@ -518,6 +529,7 @@ generate() {
     split_docker_build_contexts
     apply_behavioral_transforms "$jobs"
     ensure_daemonset_process_metrics_enabled
+    ensure_otherinstance_has_service_version
     cleanup_and_inject_build_tags "$jobs"
 
     echo "Done. Generated OBI tests at $OBI_DEST"

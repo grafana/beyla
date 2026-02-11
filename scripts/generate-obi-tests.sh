@@ -21,6 +21,9 @@ OBI_DEST="internal/obi/test/integration"
 OATS_SRC=".obi-src/internal/test/oats"
 OATS_DEST="internal/obi/test/oats"
 
+VM_SRC=".obi-src/internal/test/vm"
+VM_DEST="internal/obi/test/vm"
+
 # OBI module path → Beyla module path
 OBI_MODULE="go.opentelemetry.io/obi"
 BEYLA_MODULE="github.com/grafana/beyla/v3"
@@ -246,6 +249,7 @@ clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "$OBI_DEST"
     rm -rf "$OATS_DEST"
+    rm -rf "$VM_DEST"
     echo "Done."
 }
 
@@ -605,6 +609,26 @@ fixup_oats_testoutput_paths() {
     done
 }
 
+# =============================================================================
+# VM FUNCTIONS
+# =============================================================================
+
+copy_vm() {
+    echo "  Copying VM test infrastructure..."
+    if [[ -d "$VM_SRC" ]]; then
+        rm -rf "$VM_DEST"
+        mkdir -p "$VM_DEST"
+        cp -r "$VM_SRC"/* "$VM_DEST/"
+
+        # Adjust REPO_ROOT: generated vm is one level deeper than upstream
+        # (internal/obi/test/vm/ = 4 levels vs internal/test/vm/ = 3 levels)
+        if [[ -f "$VM_DEST/Makefile" ]]; then
+            sed_i -e 's|REPO_ROOT ?= \.\./\.\./\.\.|REPO_ROOT ?= ../../../..|' \
+                "$VM_DEST/Makefile"
+        fi
+    fi
+}
+
 generate() {
     echo "Generating OBI tests from $OBI_SRC..."
     local jobs
@@ -637,6 +661,11 @@ generate() {
     transform_oats_go_files "$jobs"
     apply_oats_behavioral_transforms "$jobs"
     fixup_oats_testoutput_paths
+
+    # -----------------------------------------------------------------
+    # VM test infrastructure
+    # -----------------------------------------------------------------
+    copy_vm
 
     echo "Done. Generated OBI tests at $OBI_DEST"
     echo "Done. Generated OATs at $OATS_DEST"

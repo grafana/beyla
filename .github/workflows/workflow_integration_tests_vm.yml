@@ -117,7 +117,7 @@ jobs:
           fi
 
           # Run VM tests with pre-compiled tests
-          sudo make -C internal/test/vm \
+          sudo make -C internal/obi/test/vm \
             KERNEL_VER=${KERNEL_VERSION} \
             ARCH=${ARCH} \
             TEST_PATTERN="${MATRIX_TEST_PATTERN}" \

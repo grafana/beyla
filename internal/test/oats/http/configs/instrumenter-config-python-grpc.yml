@@ -1,9 +1,0 @@
-discovery:
-  instrument:
-    - namespace: grpc-python
-      name: grpcsrv
-      open_ports: 50051
-    - namespace: grpc-python
-      name: testserver
-      open_ports: 8080
-      

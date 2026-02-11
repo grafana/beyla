@@ -397,7 +397,7 @@ k8s-integration-test-matrix-json:
 
 .PHONY: oats-integration-test-matrix-json
 oats-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/test/oats
+	@./scripts/generate-dir-matrix.sh internal/obi/test/oats
 
 .PHONY: integration-test
 integration-test: prereqs generate-obi-tests prepare-integration-test
@@ -447,28 +447,28 @@ oats-prereq: bin/ginkgo vendor-obi
 
 .PHONY: oats-test-sql
 oats-test-sql: oats-prereq
-	mkdir -p internal/test/oats/sql/$(TEST_OUTPUT)/run
-	cd internal/test/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/obi/test/oats/sql/$(TEST_OUTPUT)/run
+	cd internal/obi/test/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-redis
 oats-test-redis: oats-prereq
-	mkdir -p internal/test/oats/redis/$(TEST_OUTPUT)/run
-	cd internal/test/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/obi/test/oats/redis/$(TEST_OUTPUT)/run
+	cd internal/obi/test/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-kafka
 oats-test-kafka: oats-prereq
-	mkdir -p internal/test/oats/kafka/$(TEST_OUTPUT)/run
-	cd internal/test/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/obi/test/oats/kafka/$(TEST_OUTPUT)/run
+	cd internal/obi/test/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-http
 oats-test-http: oats-prereq
-	mkdir -p internal/test/oats/http/$(TEST_OUTPUT)/run
-	cd internal/test/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/obi/test/oats/http/$(TEST_OUTPUT)/run
+	cd internal/obi/test/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-mongo
 oats-test-mongo: oats-prereq
-	mkdir -p internal/test/oats/mongo/$(TEST_OUTPUT)/run
-	cd internal/test/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/obi/test/oats/mongo/$(TEST_OUTPUT)/run
+	cd internal/obi/test/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test
 oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http
@@ -476,7 +476,7 @@ oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-te
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
-	cd internal/test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+	cd internal/obi/test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: update-licenses check-license
 update-licenses: prereqs generate-obi-tests

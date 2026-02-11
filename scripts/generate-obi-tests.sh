@@ -18,6 +18,9 @@ set -euo pipefail
 OBI_SRC=".obi-src/internal/test/integration"
 OBI_DEST="internal/obi/test/integration"
 
+OATS_SRC=".obi-src/internal/test/oats"
+OATS_DEST="internal/obi/test/oats"
+
 # OBI module path → Beyla module path
 OBI_MODULE="go.opentelemetry.io/obi"
 BEYLA_MODULE="github.com/grafana/beyla/v3"
@@ -242,6 +245,7 @@ run_parallel() {
 clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "$OBI_DEST"
+    rm -rf "$OATS_DEST"
     echo "Done."
 }
 
@@ -517,6 +521,90 @@ cleanup_and_inject_build_tags() {
     done
 }
 
+# =============================================================================
+# OATs FUNCTIONS
+# =============================================================================
+
+copy_oats() {
+    echo "  Copying OATs..."
+    if [[ -d "$OATS_SRC" ]]; then
+        rm -rf "$OATS_DEST"
+        mkdir -p "$OATS_DEST"
+        cp -r "$OATS_SRC"/* "$OATS_DEST/"
+    fi
+}
+
+adjust_oats_compose_paths() {
+    echo "  Adjusting OATs docker-compose paths..."
+    find "$OATS_DEST" -name "docker-compose*.yml" | while read -r file; do
+        # Component build contexts: OATs reference OBI components via relative path
+        # ../../integration/components/ → absolute path via .obi-src
+        sed_i -e 's|context: \.\./\.\./integration/components/|context: ../../../../../.obi-src/internal/test/integration/components/|g' "$file"
+
+        # Volume mount paths: some compose files mount files from OBI components
+        # (e.g. init.sql, certs). These also use ../../integration/components/
+        sed_i -e 's|\.\./\.\./integration/components/|../../../../../.obi-src/internal/test/integration/components/|g' "$file"
+
+        # Repo root context: ../../../.. (OBI root from oats subdir) → .obi-src
+        # Anchored to end-of-line to avoid matching other patterns
+        sed_i -e 's|context: \.\./\.\./\.\./\.\.$|context: ../../../../../.obi-src|' "$file"
+
+        # OBI Dockerfile → Beyla Dockerfile
+        sed_i -e "s|dockerfile: \./${OBI_DOCKERFILE}|dockerfile: ./${BEYLA_DOCKERFILE}|" "$file"
+        sed_i -e "s|dockerfile: ${OBI_DOCKERFILE}|dockerfile: ${BEYLA_DOCKERFILE}|" "$file"
+
+        # NOTE: testoutput volume paths (../../../../testoutput) are NOT adjusted here.
+        # They are adjusted in a post-behavioral-transform fixup to avoid double-adjustment
+        # by the BEHAVIORAL_TRANSFORMS testoutput depth entry.
+
+        # When context points to .obi-src but dockerfile is Beyla (in beyla_extensions),
+        # use repo root as context instead (Beyla Dockerfile lives in Beyla repo, not .obi-src).
+        awk '{
+            if (prev ~ /context:.*\.obi-src/ && $0 ~ /beyla_extensions\/components\/(beyla|beyla-k8s-cache)\/Dockerfile/) {
+                sub(/\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/\.obi-src/, "../../../../..", prev)
+            }
+            if (NR > 1) print prev
+            prev = $0
+        } END { print prev }' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    done
+}
+
+rewrite_oats_go_mod() {
+    echo "  Rewriting OATs go.mod files..."
+    find "$OATS_DEST" -name "go.mod" -type f | while read -r modfile; do
+        # Rewrite module path: OBI → Beyla convention (no /v3 for standalone test modules)
+        sed_i -e "s|module ${OBI_MODULE}/internal/test/oats|module github.com/grafana/beyla/internal/obi/test/oats|g" "$modfile"
+    done
+}
+
+transform_oats_go_files() {
+    local jobs="$1"
+    echo "  Transforming OATs Go files..."
+    # Apply Go import transforms (safety net for future OATs that might import OBI packages)
+    find "$OATS_DEST" -name "*.go" -type f 2>/dev/null | while read -r file; do
+        sed_i -e "s|${OBI_MODULE}/internal/test|${BEYLA_MODULE}/internal/obi/test|g" "$file"
+    done
+    # Strip copyright headers
+    find "$OATS_DEST" -name "*.go" -type f | run_parallel "$jobs" strip_headers
+}
+
+apply_oats_behavioral_transforms() {
+    local jobs="$1"
+    echo "  Applying OBI → Beyla behavioral transforms to OATs..."
+    find "$OATS_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
+}
+
+fixup_oats_testoutput_paths() {
+    # OATs compose files at internal/obi/test/oats/SUBDIR/ need 5 levels of ../
+    # to reach repo root. The OBI source has ../../../../testoutput (4 levels).
+    # BEHAVIORAL_TRANSFORMS won't match (it looks for 5 levels), so the path is
+    # still ../../../../testoutput after behavioral transforms. Fix it here.
+    echo "  Fixing OATs testoutput volume paths..."
+    find "$OATS_DEST" -name "docker-compose*.yml" | while read -r file; do
+        sed_i -e 's|\.\./\.\./\.\./\.\./testoutput|../../../../../testoutput|g' "$file"
+    done
+}
+
 generate() {
     echo "Generating OBI tests from $OBI_SRC..."
     local jobs
@@ -540,7 +628,18 @@ generate() {
     ensure_otherinstance_has_service_version
     cleanup_and_inject_build_tags "$jobs"
 
+    # -----------------------------------------------------------------
+    # OATs generation
+    # -----------------------------------------------------------------
+    copy_oats
+    adjust_oats_compose_paths
+    rewrite_oats_go_mod
+    transform_oats_go_files "$jobs"
+    apply_oats_behavioral_transforms "$jobs"
+    fixup_oats_testoutput_paths
+
     echo "Done. Generated OBI tests at $OBI_DEST"
+    echo "Done. Generated OATs at $OATS_DEST"
     echo ""
     echo "To run OBI tests: make test-integration-obi"
 }

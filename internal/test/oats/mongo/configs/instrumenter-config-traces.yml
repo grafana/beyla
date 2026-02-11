@@ -1,5 +1,0 @@
-routes:
-  patterns:
-    - /create-trace
-    - /smoke
-  unmatched: path

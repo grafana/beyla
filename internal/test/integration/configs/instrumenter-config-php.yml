@@ -1,8 +1,0 @@
-otel_metrics_export:
-  endpoint: http://127.0.0.1:4018
-otel_traces_export:
-  endpoint: http://127.0.0.1:4318
-attributes:
-  select:
-    "*":
-      include: ["*"]

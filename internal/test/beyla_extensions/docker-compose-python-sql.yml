@@ -27,7 +27,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security

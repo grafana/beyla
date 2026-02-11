@@ -2,7 +2,7 @@ services:
   # Use MySQL as a test SQL server
   sqlserver:
     build:
-      context: ../../integration/components/mysqldb
+      context: ../../../../.obi-src/internal/test/integration/components/mysqldb
       dockerfile: Dockerfile
     image: mysql
     ports:
@@ -10,7 +10,7 @@ services:
   # Simple python HTTP server, which exposes one endpoint /query that does SQL query
   testserver:
     build:
-      context: ../../integration/components/pythonsql
+      context: ../../../../.obi-src/internal/test/integration/components/pythonsql
       dockerfile: Dockerfile_mysql
     image: pysqlclient
     ports:
@@ -22,7 +22,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces-sql-text.yml
     volumes:

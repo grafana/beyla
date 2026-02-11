@@ -1,4 +1,4 @@
-//go:build beyla_extension
+//go:build ignore
 
 // Beyla-specific Python SQL RED metrics test helpers
 // This file is copied to internal/obi/test/integration/ by generate-obi-tests.sh

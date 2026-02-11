@@ -7,7 +7,7 @@ services:
   # Simple python HTTP server, which exposes one endpoint /query that does a few redis queries
   testserver:
     build:
-      context: ../../integration/components/pythonredis
+      context: ../../../../.obi-src/internal/test/integration/components/pythonredis
       dockerfile: Dockerfile
     image: pyredisclient
     ports:
@@ -19,7 +19,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

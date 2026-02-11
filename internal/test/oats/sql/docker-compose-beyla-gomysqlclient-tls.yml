@@ -11,8 +11,8 @@ services:
       MYSQL_ROOT_PASSWORD: mysql
       MYSQL_DATABASE: sqltest
     volumes:
-      - ../../integration/components/gomysql-tls/certs:/etc/certs
-      - ../../integration/components/gomysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../../../../.obi-src/internal/test/integration/components/gomysql-tls/certs:/etc/certs
+      - ../../../../.obi-src/internal/test/integration/components/gomysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "3306:3306"
     healthcheck:
@@ -22,7 +22,7 @@ services:
       retries: 10
   testserver:
     build:
-      context: ../../integration/components/gomysql-tls
+      context: ../../../../.obi-src/internal/test/integration/components/gomysql-tls
       dockerfile: Dockerfile
     image: gomysqlclient-tls
     depends_on:
@@ -33,7 +33,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

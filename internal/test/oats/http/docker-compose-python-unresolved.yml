@@ -2,7 +2,7 @@ services:
   # GRPC server
   grpcsrv:
     build:
-      context: ../../integration/components/pythongrpc
+      context: ../../../../.obi-src/internal/test/integration/components/pythongrpc
       dockerfile: Dockerfile_srv
     image: grpcsrv
     ports:
@@ -10,7 +10,7 @@ services:
   # Simple python HTTP server, which exposes one endpoint /query that calls the GRPC server
   testserver:
     build:
-      context: ../../integration/components/pythongrpc
+      context: ../../../../.obi-src/internal/test/integration/components/pythongrpc
       dockerfile: Dockerfile
     image: grpclient
     ports:
@@ -22,7 +22,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-python-grpc.yml
     volumes:

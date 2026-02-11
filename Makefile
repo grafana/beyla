@@ -349,7 +349,7 @@ run-integration-test:
 run-integration-test-k8s:
 	@echo "### Running K8s integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration/k8s/... --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration/k8s/... --tags=integration
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
@@ -393,7 +393,7 @@ vm-integration-test-matrix-json:
 
 .PHONY: k8s-integration-test-matrix-json
 k8s-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/test/integration/k8s common
+	@./scripts/generate-dir-matrix.sh internal/obi/test/integration/k8s common
 
 .PHONY: oats-integration-test-matrix-json
 oats-integration-test-matrix-json:
@@ -406,7 +406,7 @@ integration-test: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) cleanup-integration-test
 
 .PHONY: integration-test-k8s
-integration-test-k8s: prereqs prepare-integration-test
+integration-test-k8s: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) run-integration-test-k8s || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
 	$(MAKE) itest-coverage-data
 	$(MAKE) cleanup-integration-test
@@ -479,13 +479,15 @@ oats-test-debug: oats-prereq
 	cd internal/test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: update-licenses check-license
-update-licenses: prereqs
+update-licenses: prereqs generate-obi-tests
 	@echo "### Updating third_party_licenses.csv"
-	GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --ignore testing --ignore debug --ignore expvar --ignore structs --ignore go --ignore html --ignore text --ignore compress --ignore mime --ignore database --ignore unique --ignore vendor/golang.org --ignore hash --ignore embed --ignore flag --ignore weak --ignore cmp --ignore net --ignore context --ignore bufio --ignore container --ignore crypto --ignore iter --ignore path --ignore strconv --ignore strings --ignore encoding --ignore reflect --ignore fmt --ignore log --ignore maps --ignore errors --ignore io --ignore slices --ignore runtime --ignore syscall --ignore time --ignore sync --ignore sort --ignore bytes --ignore os --ignore regex --ignore internal --ignore math --ignore unicode --ignore go.opentelemetry.io/obi ./... > third_party_licenses.csv
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --ignore testing --ignore debug --ignore expvar --ignore structs --ignore go --ignore html --ignore text --ignore compress --ignore mime --ignore database --ignore unique --ignore vendor/golang.org --ignore hash --ignore embed --ignore flag --ignore weak --ignore cmp --ignore net --ignore context --ignore bufio --ignore container --ignore crypto --ignore iter --ignore path --ignore strconv --ignore strings --ignore encoding --ignore reflect --ignore fmt --ignore log --ignore maps --ignore errors --ignore io --ignore slices --ignore runtime --ignore syscall --ignore time --ignore sync --ignore sort --ignore bytes --ignore os --ignore regex --ignore internal --ignore math --ignore unicode --ignore go.opentelemetry.io/obi ./... 2>/dev/null | sed 's/\r$$//' > third_party_licenses.csv
 
 check-licenses: update-licenses
 	@echo "### Checking third party licenses"
 	@if [ "$(strip $(shell git diff HEAD third_party_licenses.csv))" != "" ]; then \
+		echo "### Diff for third_party_licenses.csv"; \
+		git --no-pager diff -- third_party_licenses.csv; \
 		echo "ERROR: third_party_licenses.csv is not up to date. Run 'make update-licenses' and push the changes to your PR"; \
 		exit 1; \
 	fi

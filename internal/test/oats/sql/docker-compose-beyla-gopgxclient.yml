@@ -2,7 +2,7 @@ version: "3.9"
 services:
   sqlserver:
     build:
-      context: ../../integration/components/postgresql
+      context: ../../../../.obi-src/internal/test/integration/components/postgresql
       dockerfile: Dockerfile
     image: postgres
     environment:
@@ -11,7 +11,7 @@ services:
       - "5432:5432"
   testserver:
     build:
-      context: ../../integration/components/gopgx
+      context: ../../../../.obi-src/internal/test/integration/components/gopgx
       dockerfile: Dockerfile
     image: gopgxclient
     ports:
@@ -20,7 +20,7 @@ services:
   autoinstrumenter:
     build:
       context: ../../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/instrumenter-config-traces.yml
     volumes:

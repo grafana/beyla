@@ -12,7 +12,7 @@ services:
   obi:
     build:
       context: ../../..
-      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+      dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile
     command:
       - --config=/configs/obi-config-promscrape.yml
     volumes:

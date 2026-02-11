@@ -17,101 +17,58 @@ import (
 
 var processMetrics = []string{
 	"process_cpu_time_seconds_total",
-	"process_resident_memory_bytes",
+	"process_cpu_utilization_ratio",
+	"process_memory_usage_bytes",
+	"process_memory_virtual_bytes",
+	"process_disk_io_bytes_total",
+	"process_network_io_bytes_total",
 }
 
 // FeatureProcessMetricsDecoration returns a feature that asserts process metrics
 // (e.g. process_cpu_time_seconds_total) are decorated with the expected K8s
 // attributes. overrideAttrs can override default expected attributes (e.g. for
 // testing otherinstance instead of testserver); pass nil for defaults.
-func FeatureProcessMetricsDecoration(overrideAttrs map[string]string) features.Feature {
-	allAttributes := map[string]string{
-		"k8s_namespace_name":     "^default$",
-		"k8s_node_name":         ".+-control-plane$",
-		"k8s_pod_uid":           UUIDRegex,
-		"k8s_pod_start_time":    TimeRegex,
-		"k8s_owner_name":        "^testserver$",
-		"k8s_deployment_name":   "^testserver$",
-		"k8s_replicaset_name":   "^testserver-",
-		"k8s_cluster_name":      "^obi-k8s-test-cluster$",
-		"service_instance_id":   "^default\\.testserver-.+\\.testserver",
-		"deployment_environment": "integration-test",
-		"service_version":       "3.2.1",
+func FeatureProcessMetricsDecoration(overrideProperties map[string]string) features.Feature {
+	properties := map[string]string{
+		"k8s_namespace_name":  "^default$",
+		"k8s_node_name":       ".+-control-plane$",
+		"k8s_pod_name":        "^testserver-.*",
+		"k8s_pod_uid":         UUIDRegex,
+		"k8s_pod_start_time":  TimeRegex,
+		"k8s_deployment_name": "^testserver$",
+		"k8s_replicaset_name": "^testserver-",
+		"k8s_cluster_name":    "^obi-k8s-test-cluster",
 	}
-	attrs := attributeMap(allAttributes, overrideAttrs,
-		"k8s_namespace_name",
-		"k8s_node_name",
-		"k8s_pod_uid",
-		"k8s_pod_start_time",
-		"k8s_owner_name",
-		"k8s_deployment_name",
-		"k8s_replicaset_name",
-		"k8s_cluster_name",
-		"service_instance_id",
-		"deployment_environment",
-		"service_version",
-	)
-	queryArgs := `{k8s_pod_name=~"testserver-.*"}`
-	if overrideAttrs != nil {
-		if podName, ok := overrideAttrs["k8s_pod_name"]; ok {
-			// Strip leading ^ for Prometheus regex (e.g. "^otherinstance-.*" -> "otherinstance-.*")
-			if len(podName) > 0 && podName[0] == '^' {
-				podName = podName[1:]
-			}
-			queryArgs = `{k8s_pod_name=~"` + podName + `"}`
-		}
+	for k, v := range overrideProperties {
+		properties[k] = v
 	}
 	return features.New("Process metrics decoration").
 		Assess("process metrics are decorated with K8s attributes",
-			processMetricsDecoration(processMetrics, queryArgs, attrs)).
+			processMetricsDecoration(processMetrics, `{k8s_pod_name=~"`+properties["k8s_pod_name"]+`"}`, properties)).
 		Feature()
 }
 
 // FeatureSurveyMetricsDecoration returns a feature that asserts survey_info
 // metrics are decorated with the expected K8s attributes. overrideAttrs can
 // override default expected attributes; pass nil for defaults.
-func FeatureSurveyMetricsDecoration(overrideAttrs map[string]string) features.Feature {
-	allAttributes := map[string]string{
-		"k8s_namespace_name":     "^default$",
-		"k8s_node_name":          ".+-control-plane$",
-		"k8s_pod_uid":            UUIDRegex,
-		"k8s_pod_start_time":     TimeRegex,
-		"k8s_owner_name":         "^testserver$",
-		"k8s_deployment_name":    "^testserver$",
-		"k8s_replicaset_name":    "^testserver-",
-		"k8s_cluster_name":      "^obi-k8s-test-cluster$",
-		"k8s_kind":               "Deployment",
-		"service_instance_id":    "^default\\.testserver-.+\\.testserver",
-		"deployment_environment": "integration-test",
-		"service_version":        "3.2.1",
+func FeatureSurveyMetricsDecoration(overrideProperties map[string]string) features.Feature {
+	properties := map[string]string{
+		"k8s_namespace_name":  "^default$",
+		"k8s_node_name":       ".+-control-plane$",
+		"k8s_pod_name":        "^testserver-.*",
+		"k8s_pod_uid":         UUIDRegex,
+		"k8s_pod_start_time":  TimeRegex,
+		"k8s_deployment_name": "^testserver$",
+		"k8s_replicaset_name": "^testserver-",
+		"k8s_cluster_name":    "^obi-k8s-test-cluster",
 	}
-	attrs := attributeMap(allAttributes, overrideAttrs,
-		"k8s_namespace_name",
-		"k8s_node_name",
-		"k8s_pod_uid",
-		"k8s_pod_start_time",
-		"k8s_owner_name",
-		"k8s_deployment_name",
-		"k8s_replicaset_name",
-		"k8s_cluster_name",
-		"k8s_kind",
-		"service_instance_id",
-		"deployment_environment",
-		"service_version",
-	)
-	queryArgs := `{k8s_pod_name=~"testserver-.*"}`
-	if overrideAttrs != nil {
-		if podName, ok := overrideAttrs["k8s_pod_name"]; ok {
-			if len(podName) > 0 && podName[0] == '^' {
-				podName = podName[1:]
-			}
-			queryArgs = `{k8s_pod_name=~"` + podName + `"}`
-		}
+	for k, v := range overrideProperties {
+		properties[k] = v
 	}
 	surveyMetrics := []string{"survey_info"}
 	return features.New("Survey metrics decoration").
 		Assess("survey_info metrics are decorated with K8s attributes",
-			processMetricsDecoration(surveyMetrics, queryArgs, attrs)).
+			processMetricsDecoration(surveyMetrics, `{k8s_pod_name=~"`+properties["k8s_pod_name"]+`"}`, properties)).
 		Feature()
 }
 

@@ -625,6 +625,9 @@ copy_vm() {
         if [[ -f "$VM_DEST/Makefile" ]]; then
             sed_i -e 's|REPO_ROOT ?= \.\./\.\./\.\.|REPO_ROOT ?= ../../../..|' \
                 "$VM_DEST/Makefile"
+            # Quote test_pattern build-arg: patterns contain | which the shell interprets
+            sed_i -e 's|--build-arg test_pattern=$(TEST_PATTERN)|--build-arg "test_pattern=$(TEST_PATTERN)"|' \
+                "$VM_DEST/Makefile"
         fi
     fi
 }

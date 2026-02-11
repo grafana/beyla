@@ -24,6 +24,7 @@ OATS_DEST="internal/obi/test/oats"
 VM_SRC=".obi-src/internal/test/vm"
 VM_DEST="internal/obi/test/vm"
 
+
 # OBI module path → Beyla module path
 OBI_MODULE="go.opentelemetry.io/obi"
 BEYLA_MODULE="github.com/grafana/beyla/v3"

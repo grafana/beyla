@@ -24,8 +24,6 @@ OATS_DEST="internal/obi/test/oats"
 VM_SRC=".obi-src/internal/test/vm"
 VM_DEST="internal/obi/test/vm"
 
-BPF_SRC=".obi-src/internal/test/bpf"
-BPF_DEST="internal/obi/test/bpf"
 
 # OBI module path → Beyla module path
 OBI_MODULE="go.opentelemetry.io/obi"
@@ -253,7 +251,6 @@ clean() {
     rm -rf "$OBI_DEST"
     rm -rf "$OATS_DEST"
     rm -rf "$VM_DEST"
-    rm -rf "$BPF_DEST"
     echo "Done."
 }
 
@@ -636,19 +633,6 @@ copy_vm() {
     fi
 }
 
-# =============================================================================
-# BPF FUNCTIONS
-# =============================================================================
-
-copy_bpf() {
-    echo "  Copying BPF test files..."
-    if [[ -d "$BPF_SRC" ]]; then
-        rm -rf "$BPF_DEST"
-        mkdir -p "$BPF_DEST"
-        cp -r "$BPF_SRC"/* "$BPF_DEST/"
-    fi
-}
-
 generate() {
     echo "Generating OBI tests from $OBI_SRC..."
     local jobs
@@ -686,11 +670,6 @@ generate() {
     # VM test infrastructure
     # -----------------------------------------------------------------
     copy_vm
-
-    # -----------------------------------------------------------------
-    # BPF test files
-    # -----------------------------------------------------------------
-    copy_bpf
 
     echo "Done. Generated OBI tests at $OBI_DEST"
     echo "Done. Generated OATs at $OATS_DEST"

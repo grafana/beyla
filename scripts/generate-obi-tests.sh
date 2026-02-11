@@ -472,11 +472,19 @@ split_docker_build_contexts() {
 }
 
 ensure_daemonset_process_metrics_enabled() {
-    # Daemonset y/z extension tests assert process_* and beyla_survey_info.
+    # Daemonset y/z extension tests assert process_* and survey_info.
     # The generated 06-obi-daemonset manifest must enable application_process.
     local file="$OBI_DEST/k8s/manifests/06-obi-daemonset.yml"
     [[ -f "$file" ]] || return 0
     sed_i -e '/name: BEYLA_OTEL_METRICS_FEATURES/{n;s|value: "application"|value: "application,application_process"|;}' "$file"
+    # TestSurveyMetrics expects survey_info; it is only emitted when discovery.survey is set.
+    if ! grep -q 'survey:' "$file"; then
+        awk '/exclude_instrument:/ {
+            print "      survey:"
+            print "        - k8s_deployment_name: \"otherinstance\""
+        }
+        { print }' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    fi
 }
 
 ensure_otherinstance_has_service_version() {

@@ -108,7 +108,7 @@ func FeatureSurveyMetricsDecoration(overrideAttrs map[string]string) features.Fe
 			queryArgs = `{k8s_pod_name=~"` + podName + `"}`
 		}
 	}
-	surveyMetrics := []string{"beyla_survey_info"}
+	surveyMetrics := []string{"survey_info"}
 	return features.New("Survey metrics decoration").
 		Assess("survey_info metrics are decorated with K8s attributes",
 			processMetricsDecoration(surveyMetrics, queryArgs, attrs)).

@@ -132,6 +132,10 @@ def check_all_dependencies(lines):
         package_name, version_spec = parsed
         total += 1
         
+        # Ignore our version of pip
+        if package_name == 'pip':
+            continue
+
         is_installed, is_compatible, installed_ver, error_msg = check_package_version(
             package_name, version_spec
         )

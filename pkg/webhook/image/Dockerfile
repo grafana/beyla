@@ -30,7 +30,7 @@ RUN python ./deps_analyser.py
 RUN rm build_dep_tree.sh
 RUN rm deps_analyser.py
 RUN rm dependency-tree.txt
-COPY python/inject.py .
+COPY python/sitecustomize.py .
 
 # Get the Python SDK for musl
 FROM python:3.14.3-alpine3.23 AS build-python-musl
@@ -45,7 +45,7 @@ RUN python ./deps_analyser.py
 RUN rm build_dep_tree.sh
 RUN rm deps_analyser.py
 RUN rm dependency-tree.txt
-COPY python/inject.py .
+COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK
 FROM alpine:3.23.2 AS download-java-sdk

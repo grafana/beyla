@@ -608,6 +608,13 @@ copy_vm() {
             # Quote test_pattern build-arg: patterns contain | which the shell interprets
             sed_i -e 's|--build-arg test_pattern=$(TEST_PATTERN)|--build-arg "test_pattern=$(TEST_PATTERN)"|' \
                 "$VM_DEST/Makefile"
+
+            # Beyla's Docker build is heavier than upstream (vendored deps,
+            # larger codebase, coverage-instrumented binary).  The default
+            # 10G VM disk image fills up during `make compile-for-coverage`
+            # inside Docker.  Bump to 20G so there is headroom.
+            sed_i -e 's|^IMG_SIZE ?= 10G|IMG_SIZE ?= 20G|' \
+                "$VM_DEST/Makefile"
         fi
     fi
 }

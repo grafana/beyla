@@ -30,7 +30,7 @@ var (
 	runtimeScheme     = runtime.NewScheme()
 	codecFactory      = serializer.NewCodecFactory(runtimeScheme)
 	deserializer      = codecFactory.UniversalDeserializer()
-	supportedSDKLangs = []svc.InstrumentableType{svc.InstrumentableDotnet, svc.InstrumentableJava, svc.InstrumentableNodejs}
+	supportedSDKLangs = []svc.InstrumentableType{svc.InstrumentableDotnet, svc.InstrumentableJava, svc.InstrumentableNodejs, svc.InstrumentablePython}
 )
 
 const (
@@ -67,6 +67,7 @@ const (
 	envDotnetEnabledName = "DOTNET_AUTO_INSTRUMENTATION_AGENT_PATH_PREFIX"
 	envJavaEnabledName   = "JVM_AUTO_INSTRUMENTATION_AGENT_PATH"
 	envNodejsEnabledName = "NODEJS_AUTO_INSTRUMENTATION_AGENT_PATH"
+	envPythonEnabledName = "PYTHON_AUTO_INSTRUMENTATION_AGENT_PATH_PREFIX"
 )
 
 func init() {

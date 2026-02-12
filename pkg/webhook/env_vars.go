@@ -374,6 +374,8 @@ func (pm *PodMutator) disableUndesiredSDKs(c *corev1.Container) {
 				setEnvVarEvenIfEmpty(c, envJavaEnabledName, "")
 			case svc.InstrumentableNodejs:
 				setEnvVarEvenIfEmpty(c, envNodejsEnabledName, "")
+			case svc.InstrumentablePython:
+				setEnvVarEvenIfEmpty(c, envPythonEnabledName, "")
 			}
 		}
 	}

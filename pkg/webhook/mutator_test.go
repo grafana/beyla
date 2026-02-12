@@ -64,6 +64,7 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 					{InstrumentableType: svc.InstrumentableJava},
 					{InstrumentableType: svc.InstrumentableDotnet},
 					{InstrumentableType: svc.InstrumentableNodejs},
+					{InstrumentableType: svc.InstrumentablePython},
 				},
 			},
 		},
@@ -87,6 +88,11 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 		{
 			name:     "NodeJS is supported",
 			kind:     svc.InstrumentableNodejs,
+			expected: true,
+		},
+		{
+			name:     "NodeJS is supported",
+			kind:     svc.InstrumentablePython,
 			expected: true,
 		},
 		{

@@ -10,7 +10,7 @@ require (
 	github.com/XSAM/otelsql v0.41.0
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/distribution/reference v0.6.0
-	github.com/docker/docker v28.3.3+incompatible
+	github.com/docker/docker v28.5.2+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-sql-driver/mysql v1.9.3

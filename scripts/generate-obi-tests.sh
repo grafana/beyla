@@ -649,10 +649,13 @@ generate() {
     # -----------------------------------------------------------------
     copy_vm
 
-    echo "Done. Generated OBI tests at $OBI_DEST"
-    echo "Done. Generated OATs at $OATS_DEST"
     echo ""
-    echo "To run OBI tests: make test-integration-obi"
+    echo "Generated integration tests at $OBI_DEST"
+    echo "Generated oats tests at $OATS_DEST"
+    echo "Imported vm assets into $VM_DEST"
+    echo ""
+    echo "Using Beyla module path: $BEYLA_MODULE"
+    echo "Env vars, metric names, etc. were automatically transformed to use Beyla conventions."
 }
 
 apply_component_path_transform() {

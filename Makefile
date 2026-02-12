@@ -193,7 +193,7 @@ docker-generate: obi-submodule
 	@cd $(OBI_MODULE) && make docker-generate
 
 .PHONY: copy-obi-vendor
-copy-obi-vendor:
+copy-obi-vendor: vendor-obi-tests
 	@echo "### Vendoring OBI submodule..."
 	go get go.opentelemetry.io/obi
 	go mod vendor
@@ -205,7 +205,7 @@ vendor-obi-tests:
 	go mod vendor
 
 .PHONY: vendor-obi
-vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor vendor-obi-tests
+vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor
 
 .PHONY: verify
 verify: prereqs lint-dashboard vendor-obi lint test

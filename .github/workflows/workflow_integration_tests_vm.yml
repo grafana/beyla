@@ -70,6 +70,48 @@ jobs:
             arch: "x86_64"
         test: ${{ fromJson(needs.vm-test-matrix.outputs.matrix).include }}
     steps:
+      - name: Check initial disk usage
+        run: df -h
+
+      - name: Free up disk space
+        run: |
+          # Remove Java (JDKs)
+          sudo rm -rf /usr/lib/jvm
+
+          # Remove .NET SDKs
+          sudo rm -rf /usr/share/dotnet
+
+          # Remove Swift toolchain
+          sudo rm -rf /usr/share/swift
+
+          # Remove Haskell (GHC)
+          sudo rm -rf /usr/local/.ghcup
+
+          # Remove Julia
+          sudo rm -rf /usr/local/julia*
+
+          # Remove Android SDKs
+          sudo rm -rf /usr/local/lib/android
+
+          # Remove Chromium (optional if not using for browser tests)
+          sudo rm -rf /usr/local/share/chromium
+
+          # Remove Microsoft/Edge and Google Chrome builds
+          sudo rm -rf /opt/microsoft /opt/google
+
+          # Remove Azure CLI
+          sudo rm -rf /opt/az
+
+          # Remove PowerShell
+          sudo rm -rf /usr/local/share/powershell
+
+          # Remove CodeQL (but keep hostedtoolcache for Go)
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+          docker system prune -af || true
+          docker builder prune -af || true
+          df -h
+
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
@@ -95,7 +137,7 @@ jobs:
       - name: Pre-compile Go integration tests
         run: |
           mkdir compiled-tests
-          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/obi/test/integration
+          CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/testgenerated/integration
 
       - name: Run VM integration tests (${{ matrix.test.description }})
         timeout-minutes: 60
@@ -117,7 +159,7 @@ jobs:
           fi
 
           # Run VM tests with pre-compiled tests
-          sudo make -C internal/obi/test/vm \
+          sudo make -C internal/testgenerated/vm \
             KERNEL_VER=${KERNEL_VERSION} \
             ARCH=${ARCH} \
             TEST_PATTERN="${MATRIX_TEST_PATTERN}" \

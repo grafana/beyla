@@ -1,7 +1,7 @@
 //go:build ignore
 
 // Beyla-specific integration tests for multiprocess context propagation
-// This file is copied to internal/obi/test/integration/ by generate-obi-tests.sh
+// This file is copied to internal/testgenerated/integration/ by generate-obi-tests.sh
 
 package integration
 
@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v3/internal/obi/test/integration/components/docker"
+	"github.com/grafana/beyla/v3/internal/testgenerated/integration/components/docker"
 )
 
 // TestMultiProcessAppCPNoIP_Beyla is a Beyla-specific test for context propagation

@@ -16,13 +16,13 @@ set -euo pipefail
 # =============================================================================
 
 OBI_SRC=".obi-src/internal/test/integration"
-OBI_DEST="internal/obi/test/integration"
+OBI_DEST="internal/testgenerated/integration"
 
 OATS_SRC=".obi-src/internal/test/oats"
-OATS_DEST="internal/obi/test/oats"
+OATS_DEST="internal/testgenerated/oats"
 
 VM_SRC=".obi-src/internal/test/vm"
-VM_DEST="internal/obi/test/vm"
+VM_DEST="internal/testgenerated/vm"
 
 
 # OBI module path → Beyla module path
@@ -110,10 +110,6 @@ BEHAVIORAL_TRANSFORMS=(
     # YAML manifests use unquoted image tags
     'image: obi:dev|image: beyla:dev'
     'image: obi-k8s-cache:dev|image: beyla-k8s-cache:dev'
-    # Generated k8s manifests are nested one level deeper than upstream:
-    # internal/obi/test/integration/k8s/manifests, so testoutput hostPath
-    # needs one extra "../" to keep pointing at repo-root ./testoutput.
-    '../../../../../testoutput|../../../../../../testoutput'
 )
 
 # ---- Code injections (line inserted after a matching line in Go files) --------
@@ -248,9 +244,7 @@ run_parallel() {
 
 clean() {
     echo "Cleaning generated OBI tests..."
-    rm -rf "$OBI_DEST"
-    rm -rf "$OATS_DEST"
-    rm -rf "$VM_DEST"
+    rm -rf "internal/testgenerated"
     echo "Done."
 }
 
@@ -258,10 +252,10 @@ apply_go_import_path_transforms() {
     local file="$1"
     sed_i \
         -e 's|^//go:build ignore$|//go:build integration|' \
-        -e "s|${OBI_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
-        -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
-        -e "s|${BEYLA_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/obi/test/integration|g" \
-        -e "s|${BEYLA_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" \
+        -e "s|${OBI_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/testgenerated/integration|g" \
+        -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/testgenerated/tools|g" \
+        -e "s|${BEYLA_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/testgenerated/integration|g" \
+        -e "s|${BEYLA_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/testgenerated/tools|g" \
         -e "s|// import \"${OBI_MODULE}/internal/test/integration[^\"]*\"||g" \
         -e 's|"internal/test/integration/components/|".obi-src/internal/test/integration/components/|g' \
         -e 's|"internal/test/integration/configs"|".obi-src/internal/test/integration/configs"|g' \
@@ -325,10 +319,10 @@ copy_discovered_go_subpackages() {
 
 copy_test_tools() {
     if [[ -d ".obi-src/internal/test/tools" ]]; then
-        mkdir -p "internal/obi/test/tools"
-        cp -r ".obi-src/internal/test/tools/"* "internal/obi/test/tools/"
-        find "internal/obi/test/tools" -name "*.go" -type f | while read -r file; do
-            sed_i -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/obi/test/tools|g" "$file"
+        mkdir -p "internal/testgenerated/tools"
+        cp -r ".obi-src/internal/test/tools/"* "internal/testgenerated/tools/"
+        find "internal/testgenerated/tools" -name "*.go" -type f | while read -r file; do
+            sed_i -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/testgenerated/tools|g" "$file"
         done
     fi
 }
@@ -388,9 +382,9 @@ transform_go_imports_and_paths() {
     # Component file paths: testserver, rusttestserver etc. live in .obi-src.
     find "$OBI_DEST" -name "*.go" -type f | run_parallel "$jobs" apply_component_path_transform
 
-    # Update docker/compose.go to reference the obi test directory.
+    # Update docker/compose.go to reference the generated test directory.
     if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
-        sed_i -e 's|"internal", "test", "integration"|"internal", "obi", "test", "integration"|g' \
+        sed_i -e 's|"internal", "test", "integration"|"internal", "testgenerated", "integration"|g' \
             "$OBI_DEST/components/docker/compose.go"
     fi
 }
@@ -399,8 +393,8 @@ apply_component_consolidation() {
     if [[ -f "$OBI_DEST/k8s/common/testpath/testpath.go" ]]; then
         sed_i -e 's|Components      = path.Join(IntegrationTest, "components")|Components      = path.Join(Root, ".obi-src", "internal", "test", "integration", "components")|' \
             "$OBI_DEST/k8s/common/testpath/testpath.go"
-        # Manifests sourced from OBI (internal/obi) — content transformed on the fly during generate
-        sed_i -e 's|Manifests       = path.Join(IntegrationTest, "k8s", "manifests")|Manifests       = path.Join(Root, "internal", "obi", "test", "integration", "k8s", "manifests")|' \
+        # Manifests sourced from generated output — content transformed on the fly during generate
+        sed_i -e 's|Manifests       = path.Join(IntegrationTest, "k8s", "manifests")|Manifests       = path.Join(Root, "internal", "testgenerated", "integration", "k8s", "manifests")|' \
             "$OBI_DEST/k8s/common/testpath/testpath.go"
     fi
     # k8s_common: path replacements only; variable names (DockerfileOBI→DockerfileBeyla)
@@ -416,17 +410,18 @@ adjust_docker_compose_paths() {
     echo "  Adjusting docker-compose relative paths..."
     find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" | while read -r file; do
         # Build contexts → .obi-src (slash-suffixed first, then bare end-of-line)
-        sed_i -e 's|context: \.\./\.\./\.\./|context: ../../../../.obi-src/|g' "$file"
-        sed_i -e 's|context: \.\./\.\./\.\.$|context: ../../../../.obi-src|' "$file"
-        # Volume mounts
-        sed_i -e 's|\.\./\.\./\.\./testoutput|../../../../testoutput|g' "$file"
-        sed_i -e 's|\.\./\.\./\.\./internal/|../../../../.obi-src/internal/|g' "$file"
+        # Depth matches upstream (3 levels), just redirect to .obi-src
+        sed_i -e 's|context: \.\./\.\./\.\./|context: ../../../.obi-src/|g' "$file"
+        sed_i -e 's|context: \.\./\.\./\.\.$|context: ../../../.obi-src|' "$file"
+        # Volume mounts: internal/ paths → .obi-src
+        # (testoutput paths are unchanged — depth matches upstream)
+        sed_i -e 's|\.\./\.\./\.\./internal/|../../../.obi-src/internal/|g' "$file"
 
         # Redirect bare ./components/ and components/ paths to .obi-src.
         # These reference standalone app dirs that aren't copied to the
         # generated output (they're built via Docker from the OBI source).
-        sed_i -e 's|\./components/|../../../../.obi-src/internal/test/integration/components/|g' "$file"
-        sed_i -e 's|context: components/|context: ../../../../.obi-src/internal/test/integration/components/|g' "$file"
+        sed_i -e 's|\./components/|../../../.obi-src/internal/test/integration/components/|g' "$file"
+        sed_i -e 's|context: components/|context: ../../../.obi-src/internal/test/integration/components/|g' "$file"
 
         # Swap the OBI Dockerfile for the Beyla Dockerfile and point its
         # build context at the Beyla repo root instead of .obi-src.
@@ -437,7 +432,7 @@ adjust_docker_compose_paths() {
         # use repo root as context instead.
         awk '{
             if (prev ~ /context:.*\.obi-src/ && $0 ~ /beyla_extensions\/components\/(beyla|beyla-k8s-cache)\/Dockerfile/) {
-                sub(/\.\.\/\.\.\/\.\.\/\.\.\/\.obi-src/, "../../../..", prev)
+                sub(/\.\.\/\.\.\/\.\.\/\.obi-src/, "../../..", prev)
             }
             if (NR > 1) print prev
             prev = $0
@@ -544,29 +539,26 @@ adjust_oats_compose_paths() {
     find "$OATS_DEST" -name "docker-compose*.yml" | while read -r file; do
         # Component build contexts: OATs reference OBI components via relative path
         # ../../integration/components/ → absolute path via .obi-src
-        sed_i -e 's|context: \.\./\.\./integration/components/|context: ../../../../../.obi-src/internal/test/integration/components/|g' "$file"
+        # Depth matches upstream (4 levels from oats/SUBDIR/ to repo root)
+        sed_i -e 's|context: \.\./\.\./integration/components/|context: ../../../../.obi-src/internal/test/integration/components/|g' "$file"
 
         # Volume mount paths: some compose files mount files from OBI components
         # (e.g. init.sql, certs). These also use ../../integration/components/
-        sed_i -e 's|\.\./\.\./integration/components/|../../../../../.obi-src/internal/test/integration/components/|g' "$file"
+        sed_i -e 's|\.\./\.\./integration/components/|../../../../.obi-src/internal/test/integration/components/|g' "$file"
 
         # Repo root context: ../../../.. (OBI root from oats subdir) → .obi-src
         # Anchored to end-of-line to avoid matching other patterns
-        sed_i -e 's|context: \.\./\.\./\.\./\.\.$|context: ../../../../../.obi-src|' "$file"
+        sed_i -e 's|context: \.\./\.\./\.\./\.\.$|context: ../../../../.obi-src|' "$file"
 
         # OBI Dockerfile → Beyla Dockerfile
         sed_i -e "s|dockerfile: \./${OBI_DOCKERFILE}|dockerfile: ./${BEYLA_DOCKERFILE}|" "$file"
         sed_i -e "s|dockerfile: ${OBI_DOCKERFILE}|dockerfile: ${BEYLA_DOCKERFILE}|" "$file"
 
-        # NOTE: testoutput volume paths (../../../../testoutput) are NOT adjusted here.
-        # They are adjusted in a post-behavioral-transform fixup to avoid double-adjustment
-        # by the BEHAVIORAL_TRANSFORMS testoutput depth entry.
-
         # When context points to .obi-src but dockerfile is Beyla (in beyla_extensions),
         # use repo root as context instead (Beyla Dockerfile lives in Beyla repo, not .obi-src).
         awk '{
             if (prev ~ /context:.*\.obi-src/ && $0 ~ /beyla_extensions\/components\/(beyla|beyla-k8s-cache)\/Dockerfile/) {
-                sub(/\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/\.obi-src/, "../../../../..", prev)
+                sub(/\.\.\/\.\.\/\.\.\/\.\.\/\.obi-src/, "../../../..", prev)
             }
             if (NR > 1) print prev
             prev = $0
@@ -578,7 +570,7 @@ rewrite_oats_go_mod() {
     echo "  Rewriting OATs go.mod files..."
     find "$OATS_DEST" -name "go.mod" -type f | while read -r modfile; do
         # Rewrite module path: OBI → Beyla convention (no /v3 for standalone test modules)
-        sed_i -e "s|module ${OBI_MODULE}/internal/test/oats|module github.com/grafana/beyla/internal/obi/test/oats|g" "$modfile"
+        sed_i -e "s|module ${OBI_MODULE}/internal/test/oats|module github.com/grafana/beyla/internal/testgenerated/oats|g" "$modfile"
     done
 }
 
@@ -587,7 +579,7 @@ transform_oats_go_files() {
     echo "  Transforming OATs Go files..."
     # Apply Go import transforms (safety net for future OATs that might import OBI packages)
     find "$OATS_DEST" -name "*.go" -type f 2>/dev/null | while read -r file; do
-        sed_i -e "s|${OBI_MODULE}/internal/test|${BEYLA_MODULE}/internal/obi/test|g" "$file"
+        sed_i -e "s|${OBI_MODULE}/internal/test|${BEYLA_MODULE}/internal/testgenerated|g" "$file"
     done
     # Strip copyright headers
     find "$OATS_DEST" -name "*.go" -type f | run_parallel "$jobs" strip_headers
@@ -597,17 +589,6 @@ apply_oats_behavioral_transforms() {
     local jobs="$1"
     echo "  Applying OBI → Beyla behavioral transforms to OATs..."
     find "$OATS_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
-}
-
-fixup_oats_testoutput_paths() {
-    # OATs compose files at internal/obi/test/oats/SUBDIR/ need 5 levels of ../
-    # to reach repo root. The OBI source has ../../../../testoutput (4 levels).
-    # BEHAVIORAL_TRANSFORMS won't match (it looks for 5 levels), so the path is
-    # still ../../../../testoutput after behavioral transforms. Fix it here.
-    echo "  Fixing OATs testoutput volume paths..."
-    find "$OATS_DEST" -name "docker-compose*.yml" | while read -r file; do
-        sed_i -e 's|\.\./\.\./\.\./\.\./testoutput|../../../../../testoutput|g' "$file"
-    done
 }
 
 # =============================================================================
@@ -621,11 +602,9 @@ copy_vm() {
         mkdir -p "$VM_DEST"
         cp -r "$VM_SRC"/* "$VM_DEST/"
 
-        # Adjust REPO_ROOT: generated vm is one level deeper than upstream
-        # (internal/obi/test/vm/ = 4 levels vs internal/test/vm/ = 3 levels)
+        # Depth matches upstream (internal/testgenerated/vm/ = 3 levels, same as
+        # internal/test/vm/) so REPO_ROOT needs no adjustment.
         if [[ -f "$VM_DEST/Makefile" ]]; then
-            sed_i -e 's|REPO_ROOT ?= \.\./\.\./\.\.|REPO_ROOT ?= ../../../..|' \
-                "$VM_DEST/Makefile"
             # Quote test_pattern build-arg: patterns contain | which the shell interprets
             sed_i -e 's|--build-arg test_pattern=$(TEST_PATTERN)|--build-arg "test_pattern=$(TEST_PATTERN)"|' \
                 "$VM_DEST/Makefile"
@@ -664,7 +643,6 @@ generate() {
     rewrite_oats_go_mod
     transform_oats_go_files "$jobs"
     apply_oats_behavioral_transforms "$jobs"
-    fixup_oats_testoutput_paths
 
     # -----------------------------------------------------------------
     # VM test infrastructure

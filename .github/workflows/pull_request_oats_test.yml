@@ -96,7 +96,7 @@ jobs:
         if: always()
         with:
           name: Oats test logs - ${{ matrix.basename }}
-          path: internal/obi/test/oats/${{ matrix.basename }}/build/*
+          path: internal/testgenerated/oats/${{ matrix.basename }}/build/*
 
       - name: Process coverage data
         run: make itest-coverage-data

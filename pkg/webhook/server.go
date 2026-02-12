@@ -57,7 +57,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		cfg:     cfg,
 		mutator: mutator,
 		bouncer: bouncer,
-		scanner: NewInitialStateScanner(),
+		scanner: NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
 		matcher: matcher,
 		logger:  slog.Default().With("component", "webhook-server"),
 		ctxInfo: ctxInfo,
@@ -161,16 +161,15 @@ func (s *Server) establishInitialProcessState() error {
 	s.initialState = initialState
 
 	if s.cfg.Injector.ManageSDKVersions {
-		if oldestSDK, err := s.scanner.OldestSDKVersion(); err == nil {
-			// we could be downgrading the SDK, check if the oldest version is not
-			// newer than what we are launching with now
-			if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
-				oldestSDK = s.cfg.Injector.SDKPkgVersion
-			}
+		oldestSDK := s.scanner.OldestSDKVersion()
+		// we could be downgrading the SDK, check if the oldest version is not
+		// newer than what we are launching with now
+		if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
+			oldestSDK = s.cfg.Injector.SDKPkgVersion
+		}
 
-			if err := s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
-				s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
-			}
+		if err := s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
+			s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
 		}
 	}
 	return nil
@@ -312,6 +311,8 @@ func (s *Server) cleanupOldInstrumentationVersions(instrumentDir string, minVers
 	if err != nil {
 		return fmt.Errorf("failed to read directory %s: %w", instrumentDir, err)
 	}
+
+	s.logger.Debug("found SDK versions", "entries", entries)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {

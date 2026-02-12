@@ -75,6 +75,7 @@ func DefaultConfig() *Config {
 		{InstrumentableType: svc.InstrumentableJava},
 		{InstrumentableType: svc.InstrumentableDotnet},
 		{InstrumentableType: svc.InstrumentableNodejs},
+		{InstrumentableType: svc.InstrumentablePython},
 	}
 
 	if !slices.Contains(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name") {
@@ -291,6 +292,9 @@ type SDKInject struct {
 	// language instrumentations.
 	// nolint:undoc
 	EnabledSDKs []servicesextra.InstrumentableType `yaml:"enabled_sdks"`
+	// Enables injection debugging
+	// nolint:undoc
+	Debug bool `yaml:"debug"`
 }
 
 // SDKExport defines which telemetry signals should be exported from injected SDKs.

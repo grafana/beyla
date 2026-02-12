@@ -54,6 +54,7 @@ const (
 	envInjectorOtelK8sPodName         = "OTEL_INJECTOR_K8S_POD_NAME"
 	envInjectorOtelK8sPodUID          = "OTEL_INJECTOR_K8S_POD_UID"
 	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
+	envInjectorDebugName              = "OTEL_INJECTOR_LOG_LEVEL"
 	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // stored in OTEL_INJECTOR_RESOURCE_ATTRIBUTES, since there's no individual OTEL_INJECTOR_K8S_NODE_NAME
 	envVarSDKVersion                  = "BEYLA_INJECTOR_SDK_PKG_VERSION"
 	envOtelTracesSamplerName          = "OTEL_TRACES_SAMPLER"
@@ -107,13 +108,17 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) 
 	}
 
 	logger := slog.Default().With("component", "webhook")
+	proto := string(cfg.Traces.Protocol)
+	if proto == "" {
+		proto = string(otelcfg.ProtocolHTTPProtobuf)
+	}
 	return &PodMutator{
 		logger:        logger,
 		matcher:       matcher,
 		cfg:           cfg,
 		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 		exportHeaders: opts.Headers,
-		proto:         string(cfg.Traces.Protocol),
+		proto:         proto,
 	}, nil
 }
 
@@ -447,6 +452,9 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container, s
 	setEnvVar(c, envOtelExporterOtlpEndpointName, pm.endpoint)
 	setEnvVar(c, envOtelExporterOtlpProtocolName, pm.proto)
 	setEnvVar(c, envOtelSemConvStabilityName, "http")
+	if pm.cfg.Injector.Debug {
+		setEnvVar(c, envInjectorDebugName, "debug")
+	}
 
 	pm.configureContainerEnvVars(meta, c, selector)
 	pm.disableUndesiredSDKs(c)

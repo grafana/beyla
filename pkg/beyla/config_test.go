@@ -342,6 +342,7 @@ network:
 				{InstrumentableType: svc.InstrumentableJava},
 				{InstrumentableType: svc.InstrumentableDotnet},
 				{InstrumentableType: svc.InstrumentableNodejs},
+				{InstrumentableType: svc.InstrumentablePython},
 			},
 		},
 	}, cfg)

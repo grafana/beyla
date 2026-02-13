@@ -188,12 +188,14 @@ docker-generate: obi-submodule
 copy-obi-vendor: vendor-obi-tests
 	@echo "### Vendoring OBI submodule..."
 	go get go.opentelemetry.io/obi
+	go mod tidy
 	go mod vendor
 
 .PHONY: vendor-obi-tests
 vendor-obi-tests:
 	@echo "### Vendoring OBI test dependencies..."
 	go get -t ./internal/testgenerated/integration/...
+	go mod tidy
 	go mod vendor
 
 .PHONY: vendor-obi

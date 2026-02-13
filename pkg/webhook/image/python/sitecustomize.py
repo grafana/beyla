@@ -147,6 +147,8 @@ def check_all_dependencies(lines):
         elif error_msg:
             errors.append((package_name, version_spec, installed_ver, error_msg))
         else:
+            if package_name.startswith("opentelemetry-"):
+                conflicts.append((package_name, version_spec, installed_ver, "opentelemetry already installed"))
             compatible.append((package_name, version_spec, installed_ver))
     
     return (total, not_installed, conflicts, compatible, errors)
@@ -240,14 +242,14 @@ def verify_and_load():
     # Exit with error code if conflicts found
     if not conflicts or errors:
         try:
-            if verbose:
-                print("Importing and initializing OpenTelemetry Python auto-instrumentation")
+            print("Importing and initializing OpenTelemetry Python auto-instrumentation")
             from opentelemetry.instrumentation import auto_instrumentation
             auto_instrumentation.initialize()
         except Exception as e:
             print("Error installing OpenTelemetry auto-instrumentation: {}".format(e), file=sys.stderr)
             sys.path.remove(current_pkg_dir)
     else:
+        print("Not importing OpenTelemetry Python auto-instrumentation. Errors {}, conflicts {}. Set OTEL_INJECTOR_LOG_LEVEL=debug for more details".format(len(errors), len(conflicts)))
         sys.path.remove(current_pkg_dir)
 
 def check_otlp_proto(): 

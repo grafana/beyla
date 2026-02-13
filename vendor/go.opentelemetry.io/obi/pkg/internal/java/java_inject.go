@@ -48,7 +48,7 @@ func NewJavaInjector(cfg *obi.Config) (*JavaInjector, error) {
 		return nil, nil
 	}
 
-	agentPath, err := getLocalAgentPath()
+	agentPath, err := getLocalAgentPath(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to find the local OBI java agent jar, error %w", err)
 	}
@@ -178,7 +178,13 @@ func (i *JavaInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 	return nil
 }
 
-func getLocalAgentPath() (string, error) {
+func getLocalAgentPath(cfg *obi.Config) (string, error) {
+	// If a custom agent path is configured, use it
+	if path := cfg.Java.GetAgentPath(); path != "" {
+		return cfg.Java.GetAgentPath(), nil
+	}
+
+	// Otherwise, use the default behavior: look in the same directory as the OBI binary
 	// Get the path to OBI
 	exePath, err := os.Executable()
 	if err != nil {

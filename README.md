@@ -160,7 +160,7 @@ Beyla's `Makefile` provides several specific-purpose build targets. The most com
 - `compile` - compiles the `beyla` binary (but does not automatically regenerates the eBPF binaries)
 - `dev` - equivalent to `make prereqs && make docker-generate && make compile`
 - `test` - runs unit tests
-- `integration-tests` - runs integration tests - may require `sudo`
+- `integration-test` - runs integration tests - may require `sudo`
 - `clang-format` - formats C (eBPF) source code[^1]
 - `vendor-obi` - Downloads all the Opentelemetry-eBPF-Instrumentation (OBI) dependencies in a submodule, builds the BPF targets, and vendors it.
 
@@ -233,13 +233,13 @@ All of them are enforced on pull requests as part of the Beyla github workflows.
 In addition to the `test` and `integration-test` `Makefile` targets, Beyla also runs select tests on QEMU virtual machines in order to be able to test different kernel versions. These tests are also part of our GitHub workflow, but it is also possible to run them manually using the following command:
 
 ```
-$ sudo make -C internal/test/vm KERNEL_VER=...
+$ sudo make -C internal/testgenerated/vm KERNEL_VER=...
 ```
 
-where `KERNEL_VER` is one of the supported kernel versions located in `internal/test/vm/kernels`. For example, to run tests against kernel version 5.15.152, simply do:
+where `KERNEL_VER` is one of the supported kernel versions located in `internal/testgenerated/vm/kernels`. For example, to run tests against kernel version 5.15.152, simply do:
 
 ```
-$ sudo make -C internal/test/vm KERNEL_VER=5.15.152
+$ sudo make -C internal/testgenerated/vm KERNEL_VER=5.15.152
 ```
 
 ## Credits

@@ -633,7 +633,7 @@ func TestServer_EstablishInitialProcessState(t *testing.T) {
 			}
 
 			// Create real scanner
-			scanner := NewInitialStateScanner()
+			scanner := NewInitialStateScanner("0.0.7")
 
 			// Create server with mocked config
 			server := &Server{

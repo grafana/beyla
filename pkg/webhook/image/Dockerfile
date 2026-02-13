@@ -4,7 +4,7 @@ ARG JAVA_SDK_VERSION=v2.23.0
 ARG INJECTOR_VERSION=v0.0.3
 
 # download the opentelemetry-injector binary for the target architecture
-FROM alpine:3.23.2@sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62 AS download-injector-binary
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-injector-binary
 ARG TARGETARCH
 ARG INJECTOR_VERSION
 
@@ -18,7 +18,7 @@ RUN case ${TARGETARCH} in \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/${INJECTOR_VERSION}/${INJECTOR_LIB}"
 
 # Get the OTel Java SDK
-FROM alpine:3.23.2@sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62 AS download-java-sdk
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-java-sdk
 ARG JAVA_SDK_VERSION
 
 RUN apk add --no-cache curl unzip
@@ -27,7 +27,7 @@ RUN curl -sSfL -o opentelemetry-javaagent.jar \
     "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/${JAVA_SDK_VERSION}/opentelemetry-javaagent.jar"
 
 # Get the OTel .NET SDK
-FROM alpine:3.23.2@sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62 AS download-dotnet-sdk
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-dotnet-sdk
 ARG DOTNET_SDK_VERSION
 ARG TARGETARCH
 
@@ -60,7 +60,7 @@ RUN npm install
 RUN ls -al *
 
 # build the final instrumentation image
-FROM alpine:3.23.2@sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
 COPY copy-to-volume.sh /
 RUN mkdir -p /dist
 

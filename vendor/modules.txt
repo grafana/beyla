@@ -399,7 +399,7 @@ github.com/grafana/go-offsets-tracker/pkg/versions
 ## explicit; go 1.23.2
 github.com/grafana/jvmtools/jvm
 github.com/grafana/jvmtools/util
-# github.com/grafana/pyroscope-go/godeltaprof v0.1.8
+# github.com/grafana/pyroscope-go/godeltaprof v0.1.9
 ## explicit; go 1.18
 github.com/grafana/pyroscope-go/godeltaprof
 github.com/grafana/pyroscope-go/godeltaprof/http/pprof
@@ -1295,7 +1295,7 @@ k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
 k8s.io/api/storagemigration/v1beta1
-# k8s.io/apimachinery v0.35.0
+# k8s.io/apimachinery v0.35.1
 ## explicit; go 1.25.0
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors

@@ -105,6 +105,23 @@ def check_package_version(package_name, version_spec):
     except Exception as e:
         return (False, False, None, "Error checking package: {}".format(str(e)))
 
+def check_package_versions(package_name):
+    """
+    Check all installed versions of a specific package. Unused for now if we need to find
+    that existing OTel exporter can create a conflict. Can be used as:
+    
+    versions = check_package_versions('opentelemetry-api')
+    if len(versions) > 1:
+        print(f"Multiple versions found: {versions}")
+    """
+    from importlib.metadata import distributions
+
+    versions = []
+    for dist in distributions():
+        if dist.name.lower() == package_name.lower():
+            versions.append((dist.version, dist.locate_file('').parent))
+    
+    return versions
 
 def check_all_dependencies(lines):
     """
@@ -147,8 +164,6 @@ def check_all_dependencies(lines):
         elif error_msg:
             errors.append((package_name, version_spec, installed_ver, error_msg))
         else:
-            if package_name.startswith("opentelemetry-"):
-                conflicts.append((package_name, version_spec, installed_ver, "opentelemetry already installed"))
             compatible.append((package_name, version_spec, installed_ver))
     
     return (total, not_installed, conflicts, compatible, errors)

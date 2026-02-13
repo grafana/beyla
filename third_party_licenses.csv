@@ -60,7 +60,6 @@ github.com/go-playground/universal-translator,https://github.com/grafana/beyla/b
 github.com/go-playground/validator/v10,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-playground/validator/v10/LICENSE,MIT
 github.com/go-viper/mapstructure/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-viper/mapstructure/v2/LICENSE,MIT
 github.com/gobwas/glob,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gobwas/glob/LICENSE,MIT
-github.com/gogo/protobuf/proto,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gogo/protobuf/LICENSE,BSD-3-Clause
 github.com/golang/snappy,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/golang/snappy/LICENSE,BSD-3-Clause
 github.com/google/gnostic-models,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/gnostic-models/LICENSE,Apache-2.0
 github.com/google/go-tpm,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/google/go-tpm/LICENSE,Apache-2.0

@@ -2004,6 +2004,7 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 				{InstrumentableType: svc.InstrumentableJava},
 				{InstrumentableType: svc.InstrumentableDotnet},
 				{InstrumentableType: svc.InstrumentableNodejs},
+				{InstrumentableType: svc.InstrumentablePython},
 			},
 			expected: map[string]string{},
 		},
@@ -2012,6 +2013,7 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 			enabledSDKs: []svcextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableDotnet},
 				{InstrumentableType: svc.InstrumentableNodejs},
+				{InstrumentableType: svc.InstrumentablePython},
 			},
 			expected: map[string]string{
 				envJavaEnabledName: "",
@@ -2022,6 +2024,7 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 			enabledSDKs: []svcextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},
 				{InstrumentableType: svc.InstrumentableNodejs},
+				{InstrumentableType: svc.InstrumentablePython},
 			},
 			expected: map[string]string{
 				envDotnetEnabledName: "",
@@ -2032,48 +2035,74 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 			enabledSDKs: []svcextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},
 				{InstrumentableType: svc.InstrumentableDotnet},
+				{InstrumentableType: svc.InstrumentablePython},
 			},
 			expected: map[string]string{
 				envNodejsEnabledName: "",
 			},
 		},
 		{
+			name: "Python disabled - only Python env var set",
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentableJava},
+				{InstrumentableType: svc.InstrumentableDotnet},
+				{InstrumentableType: svc.InstrumentableNodejs},
+			},
+			expected: map[string]string{
+				envPythonEnabledName: "",
+			},
+		}, {
 			name:        "all SDKs disabled - all env vars set",
 			enabledSDKs: []svcextra.InstrumentableType{},
 			expected: map[string]string{
 				envJavaEnabledName:   "",
 				envDotnetEnabledName: "",
 				envNodejsEnabledName: "",
+				envPythonEnabledName: "",
 			},
 		},
 		{
-			name: "only Java enabled - Dotnet and NodeJS env vars set",
+			name: "only Java enabled - Dotnet, Python and NodeJS env vars set",
 			enabledSDKs: []svcextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},
 			},
 			expected: map[string]string{
 				envDotnetEnabledName: "",
 				envNodejsEnabledName: "",
+				envPythonEnabledName: "",
 			},
 		},
 		{
-			name: "only Dotnet enabled - Java and NodeJS env vars set",
+			name: "only Dotnet enabled - Java, Python and NodeJS env vars set",
 			enabledSDKs: []svcextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableDotnet},
 			},
 			expected: map[string]string{
 				envJavaEnabledName:   "",
 				envNodejsEnabledName: "",
+				envPythonEnabledName: "",
 			},
 		},
 		{
-			name: "only NodeJS enabled - Java and Dotnet env vars set",
+			name: "only NodeJS enabled - Java, Python and Dotnet env vars set",
 			enabledSDKs: []svcextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableNodejs},
 			},
 			expected: map[string]string{
 				envJavaEnabledName:   "",
 				envDotnetEnabledName: "",
+				envPythonEnabledName: "",
+			},
+		},
+		{
+			name: "only Python enabled - Java, Nodejs and Dotnet env vars set",
+			enabledSDKs: []svcextra.InstrumentableType{
+				{InstrumentableType: svc.InstrumentablePython},
+			},
+			expected: map[string]string{
+				envJavaEnabledName:   "",
+				envDotnetEnabledName: "",
+				envNodejsEnabledName: "",
 			},
 		},
 	}

@@ -103,7 +103,7 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 		{
 			name:     "Python is not supported",
 			kind:     svc.InstrumentablePython,
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "Ruby is not supported",

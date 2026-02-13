@@ -175,21 +175,13 @@ update-offsets: prereqs
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 .PHONY: generate
-generate: export BPF_CLANG := $(CLANG)
-generate: export BPF_CFLAGS := $(CFLAGS)
-generate: export BPF2GO := $(BPF2GO)
-generate: export GOFLAGS := "-mod=mod"
 generate: obi-submodule
 	@echo "### Generating files..."
-	@OTEL_EBPF_GENFILES_RUN_LOCALLY=1 go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make generate
 
 .PHONY: docker-generate
-docker-generate: export GOFLAGS := "-mod=mod"
 docker-generate: obi-submodule
 	@echo "### Generating files (submodule:  $(OBI_MODULE))"
-	@$(OCI_BIN) pull $(GEN_IMG)
-	@OTEL_EBPF_GENFILES_GEN_IMG=$(GEN_IMG) go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
 .PHONY: copy-obi-vendor

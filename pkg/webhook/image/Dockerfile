@@ -27,9 +27,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN pip install --root-user-action ignore --target . -r requirements.txt
 RUN ./build_dep_tree.sh
 RUN python ./deps_analyser.py
-RUN rm build_dep_tree.sh
-RUN rm deps_analyser.py
-RUN rm dependency-tree.txt
+RUN rm build_dep_tree.sh deps_analyser.py dependency-tree.txt
 COPY python/sitecustomize.py .
 
 # Get the Python SDK for musl
@@ -42,9 +40,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN pip install --root-user-action ignore --target . -r requirements.txt
 RUN ./build_dep_tree.sh
 RUN python ./deps_analyser.py
-RUN rm build_dep_tree.sh
-RUN rm deps_analyser.py
-RUN rm dependency-tree.txt
+RUN rm build_dep_tree.sh deps_analyser.py dependency-tree.txt
 COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK

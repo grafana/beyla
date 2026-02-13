@@ -60,11 +60,10 @@ def check_package_version(package_name, version_spec):
     # Now we can safely import Python 3.9+ features
     try:
         from importlib.metadata import version, PackageNotFoundError
+        from packaging.specifiers import SpecifierSet, InvalidSpecifier
+        from packaging.version import Version, InvalidVersion
     except Exception as e:
         return (False, False, None, "Error checking package: {}".format(str(e)))
-
-    from packaging.specifiers import SpecifierSet, InvalidSpecifier
-    from packaging.version import Version, InvalidVersion
 
     try:
         # Try to get the installed version
@@ -109,7 +108,7 @@ def check_package_versions(package_name):
     """
     Check all installed versions of a specific package. Unused for now if we need to find
     that existing OTel exporter can create a conflict. Can be used as:
-    
+
     versions = check_package_versions('opentelemetry-api')
     if len(versions) > 1:
         print(f"Multiple versions found: {versions}")
@@ -174,17 +173,13 @@ def verify_and_load():
     current_pkg_dir = os.path.dirname(__file__)
     input_file = os.path.join(current_pkg_dir, 'all-deps.txt')
         
-    # Read dependencies from file or stdin
-    if input_file:
-        try:
-            with open(input_file, 'r') as f:
-                lines = f.readlines()
-        except IOError as e:
-            print("Error reading file: {}".format(e), file=sys.stderr)
-            sys.path.remove(current_pkg_dir)
-            return
-    else:
-        lines = sys.stdin.readlines()
+    try:
+        with open(input_file, 'r') as f:
+            lines = f.readlines()
+    except IOError as e:
+        print("Error reading file: {}".format(e), file=sys.stderr)
+        sys.path.remove(current_pkg_dir)
+        return
     
     # Put ourselves last on the path to allow application 
     # dependencies to win even if we are compatible
@@ -255,7 +250,7 @@ def verify_and_load():
         print("=" * 70)
     
     # Exit with error code if conflicts found
-    if not conflicts or errors:
+    if not conflicts and not errors:
         try:
             print("Importing and initializing OpenTelemetry Python auto-instrumentation")
             from opentelemetry.instrumentation import auto_instrumentation
@@ -278,7 +273,7 @@ def check_otlp_proto():
     """
     proto = os.environ.get('OTEL_EXPORTER_OTLP_PROTOCOL')
     if (proto is None) or (proto == 'grpc') or (proto == ''):
-        print("gRPC export protocol not supported, use OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf for auto-instrumentation")
+        print("gRPC export protocol not supported and it's default for Python, use OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf for auto-instrumentation")
         return False
     return True
 

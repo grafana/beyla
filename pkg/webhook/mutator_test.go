@@ -91,7 +91,7 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "NodeJS is supported",
+			name:     "Python is supported",
 			kind:     svc.InstrumentablePython,
 			expected: true,
 		},
@@ -101,7 +101,7 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Python is not supported",
+			name:     "Python is supported",
 			kind:     svc.InstrumentablePython,
 			expected: true,
 		},

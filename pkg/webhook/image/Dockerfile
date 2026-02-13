@@ -4,7 +4,7 @@ ARG JAVA_SDK_VERSION=v2.23.0
 ARG INJECTOR_VERSION=v0.1.0
 
 # download the opentelemetry-injector binary for the target architecture
-FROM alpine:3.23.2 AS download-injector-binary
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-injector-binary
 ARG TARGETARCH
 ARG INJECTOR_VERSION
 
@@ -44,7 +44,7 @@ RUN rm build_dep_tree.sh deps_analyser.py dependency-tree.txt
 COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK
-FROM alpine:3.23.2 AS download-java-sdk
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-java-sdk
 ARG JAVA_SDK_VERSION
 
 RUN apk add --no-cache curl unzip
@@ -53,7 +53,7 @@ RUN curl -sSfL -o opentelemetry-javaagent.jar \
     "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/${JAVA_SDK_VERSION}/opentelemetry-javaagent.jar"
 
 # Get the OTel .NET SDK
-FROM alpine:3.23.2 AS download-dotnet-sdk
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-dotnet-sdk
 ARG DOTNET_SDK_VERSION
 ARG TARGETARCH
 
@@ -76,7 +76,7 @@ RUN case ${TARGETARCH} in \
 # Build the Node.js artifacts
 # The version is hardcoded in package.json and copied from the OTel Operator
 # TODO: Can we allow this to be configurable just like the JVM and .NET
-FROM node:20 AS build-nodejs-sdk
+FROM node:20@sha256:94a5714e6b243bf37a1767e637996302fadd9443327f5bdbf0179758fe70cacd AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY node.js/package.json .
@@ -86,7 +86,7 @@ RUN npm install
 RUN ls -al *
 
 # build the final instrumentation image
-FROM alpine:3.23.2
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
 COPY copy-to-volume.sh /
 RUN mkdir -p /dist
 

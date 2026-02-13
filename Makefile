@@ -34,7 +34,7 @@ GEN_IMG_VERSION=latest
 # building eBPF binaries
 GEN_IMG ?= ghcr.io/open-telemetry/obi-generator:$(GEN_IMG_VERSION)
 
-COMPOSE_ARGS ?= -f internal/obi/test/integration/docker-compose.yml
+COMPOSE_ARGS ?= -f internal/testgenerated/integration/docker-compose.yml
 
 OCI_BIN ?= docker
 
@@ -175,37 +175,31 @@ update-offsets: prereqs
 	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 .PHONY: generate
-generate: export BPF_CLANG := $(CLANG)
-generate: export BPF_CFLAGS := $(CFLAGS)
-generate: export BPF2GO := $(BPF2GO)
-generate: export GOFLAGS := "-mod=mod"
 generate: obi-submodule
 	@echo "### Generating files..."
-	@OTEL_EBPF_GENFILES_RUN_LOCALLY=1 go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make generate
 
 .PHONY: docker-generate
-docker-generate: export GOFLAGS := "-mod=mod"
 docker-generate: obi-submodule
 	@echo "### Generating files (submodule:  $(OBI_MODULE))"
-	@$(OCI_BIN) pull $(GEN_IMG)
-	@OTEL_EBPF_GENFILES_GEN_IMG=$(GEN_IMG) go generate $(OBI_MODULE)/cmd/obi-genfiles/obi_genfiles.go
 	@cd $(OBI_MODULE) && make docker-generate
 
 .PHONY: copy-obi-vendor
-copy-obi-vendor:
+copy-obi-vendor: vendor-obi-tests
 	@echo "### Vendoring OBI submodule..."
 	go get go.opentelemetry.io/obi
+	go mod tidy
 	go mod vendor
 
 .PHONY: vendor-obi-tests
 vendor-obi-tests:
 	@echo "### Vendoring OBI test dependencies..."
-	go get -t ./internal/obi/test/integration/...
+	go get -t ./internal/testgenerated/integration/...
+	go mod tidy
 	go mod vendor
 
 .PHONY: vendor-obi
-vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor vendor-obi-tests
+vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor
 
 .PHONY: verify
 verify: prereqs lint-dashboard vendor-obi lint test
@@ -343,13 +337,13 @@ cleanup-integration-test:
 run-integration-test:
 	@echo "### Running integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration --tags=integration
 
 .PHONY: run-integration-test-k8s
 run-integration-test-k8s:
 	@echo "### Running K8s integration tests"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/obi/test/integration/k8s/... --tags=integration
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration/k8s/... --tags=integration
 
 .PHONY: run-integration-test-vm
 run-integration-test-vm:
@@ -374,30 +368,30 @@ run-integration-test-vm:
 			-v -a \
 			-mod vendor \
 			-tags=integration \
-			-run="^($(TEST_PATTERN))\$$" ./internal/obi/test/integration; \
+			-run="^($(TEST_PATTERN))\$$" ./internal/testgenerated/integration; \
 	fi
 
 .PHONY: run-integration-test-arm
 run-integration-test-arm:
 	@echo "### Running integration tests (ARM)"
 	go clean -testcache
-	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/obi/test/integration --tags=integration -run "^TestMultiProcess"
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/testgenerated/integration --tags=integration -run "^TestMultiProcess"
 
 .PHONY: integration-test-matrix-json
 integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-5}"
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/testgenerated/integration "$${PARTITIONS:-5}"
 
 .PHONY: vm-integration-test-matrix-json
 vm-integration-test-matrix-json:
-	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/obi/test/integration "$${PARTITIONS:-3}" "TestMultiProcess"
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/testgenerated/integration "$${PARTITIONS:-3}" "TestMultiProcess"
 
 .PHONY: k8s-integration-test-matrix-json
 k8s-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/obi/test/integration/k8s common
+	@./scripts/generate-dir-matrix.sh internal/testgenerated/integration/k8s common
 
 .PHONY: oats-integration-test-matrix-json
 oats-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/obi/test/oats
+	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats
 
 .PHONY: integration-test
 integration-test: prereqs generate-obi-tests prepare-integration-test
@@ -447,28 +441,28 @@ oats-prereq: bin/ginkgo vendor-obi
 
 .PHONY: oats-test-sql
 oats-test-sql: oats-prereq
-	mkdir -p internal/obi/test/oats/sql/$(TEST_OUTPUT)/run
-	cd internal/obi/test/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/testgenerated/oats/sql/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-redis
 oats-test-redis: oats-prereq
-	mkdir -p internal/obi/test/oats/redis/$(TEST_OUTPUT)/run
-	cd internal/obi/test/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/testgenerated/oats/redis/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-kafka
 oats-test-kafka: oats-prereq
-	mkdir -p internal/obi/test/oats/kafka/$(TEST_OUTPUT)/run
-	cd internal/obi/test/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/testgenerated/oats/kafka/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-http
 oats-test-http: oats-prereq
-	mkdir -p internal/obi/test/oats/http/$(TEST_OUTPUT)/run
-	cd internal/obi/test/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/testgenerated/oats/http/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-mongo
 oats-test-mongo: oats-prereq
-	mkdir -p internal/obi/test/oats/mongo/$(TEST_OUTPUT)/run
-	cd internal/obi/test/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/testgenerated/oats/mongo/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test
 oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http
@@ -476,7 +470,7 @@ oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-te
 
 .PHONY: oats-test-debug
 oats-test-debug: oats-prereq
-	cd internal/obi/test/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+	cd internal/testgenerated/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
 
 .PHONY: update-licenses check-license
 update-licenses: prereqs generate-obi-tests

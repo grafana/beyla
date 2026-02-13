@@ -29,7 +29,7 @@ jobs:
     - name: "Update offsets"
       run: make update-offsets
     - name: "Create/update PR"
-      uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5
+      uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5.0.3
       with:
         commit-message: Automatic update of offsets.json
         title: Automatic update of offsets.json

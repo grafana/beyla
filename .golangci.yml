@@ -26,9 +26,8 @@ linters:
       - ^docs
       - ^.obi-src
       - ^vendor
-      - ^internal/test/integration/components # Synced from OBI, lint issues should be fixed upstream
       - ^internal/test/beyla_extensions # Beyla-specific tests, copied to generated OBI tests by generate-obi-tests.sh
-      - ^internal/obi/ # Generated OBI tests, not in git
+      - ^internal/testgenerated/ # Generated OBI tests, not in git
     presets:
       - std-error-handling
     # Log a warning if an exclusion rule is unused.

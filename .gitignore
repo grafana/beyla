@@ -23,92 +23,17 @@ testoutput
 # vendor/
 
 deployments/01-grafana-credentials.yml
-internal/test/cmd/pingserver/server
 *.log
 **/.vscode
 .idea/
 .claude
 
-internal/test/cmd/grpc/server/server
-internal/test/cmd/grpc/client/client
-
 bin/
-internal/test/integration/components/server
-internal/test/integration/components/testserver/testserver
-
-internal/test/cmd/rust_pingserver/target
-internal/test/cmd/rust_pingiron/target
-internal/test/cmd/rust_pingrouille/target
-internal/test/cmd/rust_ironssl/target
 *__pycache__/
-internal/test/cmd/pingwrapper/wrapper
-internal/test/cmd/grpc/server/grpcsrv
-internal/test/cmd/greeting-service/target
-internal/test/integration/components/javatestserver/target/
-internal/test/integration/components/rusttestserver/target/
-internal/test/integration/components/rustssltestserver/target/
-internal/test/integration/components/nodejsserver/node_modules/
-# Ruby on Rails test
-# Ignore bundler config.
-internal/test/integration/components/rubytestserver/testapi/.bundle
-
-# Ignore the default SQLite database.
-internal/test/integration/components/rubytestserver/testapi/db/*.sqlite3
-internal/test/integration/components/rubytestserver/testapi/db/*.sqlite3-*
-
-# Ignore all logfiles and tempfiles.
-internal/test/integration/components/rubytestserver/testapi/log/*
-internal/test/integration/components/rubytestserver/testapi/tmp/*
-!internal/test/integration/components/rubytestserver/testapi/log/.keep
-!internal/test/integration/components/rubytestserver/testapi/tmp/.keep
-
-# Ignore pidfiles, but keep the directory.
-internal/test/integration/components/rubytestserver/testapi/tmp/pids/*
-!internal/test/integration/components/rubytestserver/testapi/tmp/pids/
-!internal/test/integration/components/rubytestserver/testapi/tmp/pids/.keep
-
-# Ignore uploaded files in development.
-internal/test/integration/components/rubytestserver/testapi/storage/*
-!internal/test/integration/components/rubytestserver/testapi/storage/.keep
-internal/test/integration/components/rubytestserver/testapi/tmp/storage/*
-!internal/test/integration/components/rubytestserver/testapi/tmp/storage/
-!internal/test/integration/components/rubytestserver/testapi/tmp/storage/.keep
-internal/test/integration/components/dotnetserver/obj/*
-internal/test/oats/*/build/*
-internal/test/cmd/grpc/client/grpclient
-internal/test/integration/components/gohttp2/client/client
-internal/test/integration/components/gohttp2/server/http2srv
 beyla.sln
-internal/test/integration/components/gokafka/gokafka
-internal/test/integration/components/gokafka/vendor/*
-internal/test/integration/components/gokafka-seg/vendor/*
-internal/test/integration/components/gokafka-seg/gokafka
-internal/test/integration/components/goredis/vendor/*
-internal/test/integration/components/goredis/goredis
-internal/test/integration/components/go_otel/rolldice
-internal/test/integration/components/go_otel_grpc/rolldice
-internal/test/integration/components/pythonserver/lib/
-internal/test/integration/components/pythonserver/lib64
-internal/test/integration/components/pythonserver/pyvenv.cfg
-internal/test/integration/components/gosql/qosql
-internal/test/integration/components/testserver_1.17/vendor
-
-# Go vendor directories in test components - should be downloaded during docker build, not committed
-# Exception: old_grpc/*/vendor is committed because it needs specific older dependency versions
-internal/test/integration/components/go_*/vendor/
-internal/test/integration/components/gomysql/vendor/
-internal/test/integration/components/gomysql-tls/vendor/
-internal/test/integration/components/gomongo/vendor/
-internal/test/integration/components/gomongov2/vendor/
-internal/test/integration/components/gopgx/vendor/
-internal/test/integration/components/gopgx-pool/vendor/
-internal/test/integration/components/gopgx-stdlib/vendor/
-internal/test/integration/components/gosql/vendor/
-internal/test/integration/components/sqlclient/vendor/
-internal/test/integration/components/gohttp2/*/vendor/
 
 *_bpfel.go
 *_bpfel.o
 
 # Generated OBI test suite (created by scripts/generate-obi-tests.sh)
-internal/obi/test
+internal/testgenerated

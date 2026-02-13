@@ -1,7 +1,7 @@
 //go:build ignore
 
 // Beyla-specific test helpers
-// This file is copied to internal/obi/test/integration/ by generate-obi-tests.sh
+// This file is copied to internal/testgenerated/integration/ by generate-obi-tests.sh
 
 package integration
 
@@ -15,7 +15,7 @@ import (
 	obipkg "go.opentelemetry.io/obi/pkg/obi"
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
-	"github.com/grafana/beyla/v3/internal/obi/test/integration/components/promtest"
+	"github.com/grafana/beyla/v3/internal/testgenerated/integration/components/promtest"
 )
 
 // testConfig returns the Beyla-specific test configuration used by integration

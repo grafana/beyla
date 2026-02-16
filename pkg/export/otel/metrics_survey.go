@@ -77,7 +77,7 @@ func newSurveyMetricsReporter(
 		processEvents: processEventsQueue.Subscribe(msg.SubscriberName("processEvents")),
 		pidTracker:    otel.NewPidServiceTracker(),
 	}
-	log.Debug("creating new Survey Metrics reporter")
+	log.Debug("creating new Survey AppO11yMetrics reporter")
 
 	var err error
 	smr.exporter, err = ctxInfo.OTELMetricsExporter.Instantiate(ctx)

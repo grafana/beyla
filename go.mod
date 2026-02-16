@@ -30,7 +30,7 @@ require (
 	go.opentelemetry.io/collector/config/configretry v1.49.0
 	go.opentelemetry.io/collector/config/configtls v1.49.0
 	go.opentelemetry.io/collector/consumer v1.49.0
-	go.opentelemetry.io/collector/exporter v1.49.0
+	go.opentelemetry.io/collector/exporter v1.51.0
 	go.opentelemetry.io/collector/exporter/exporterhelper v0.143.0
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.143.0
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.143.0

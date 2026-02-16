@@ -91,7 +91,7 @@ func MetadataDecoratorProvider(
 type decorator struct {
 	log              *slog.Logger
 	alreadyLoggedIPs *simplelru.LRU[string, struct{}]
-	kube             *kube.Store
+	store            *kube.Store
 	clusterName      string
 }
 
@@ -126,7 +126,7 @@ func (n *decorator) transform(flow *ebpf.Record) bool {
 
 // decorate the flow with Kube metadata. Returns false if there is no metadata found for such IP
 func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
-	cachedObj := n.kube.ObjectMetaByIP(ip)
+	cachedObj := n.store.ObjectMetaByIP(ip)
 	if cachedObj == nil {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
 			// avoid spoofing the debug logs with the same message for each flow whose IP can't be decorated
@@ -169,7 +169,7 @@ func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.
 	// add any other ownership label (they might be several, e.g. replicaset and deployment)
 	if meta.Pod != nil && meta.Pod.HostIp != "" {
 		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
-		if host := n.kube.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
+		if host := n.store.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
 			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Meta.Name
 			nodeLabels = host.Meta.Labels
 		}
@@ -191,14 +191,14 @@ func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.
 
 // newDecorator create a new transform
 func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, k8sInformer *kube.MetadataProvider) (*decorator, error) {
-	meta, err := k8sInformer.Get(ctx)
+	store, err := k8sInformer.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}
 	nt := decorator{
 		log:         log(),
 		clusterName: transform.KubeClusterName(ctx, cfg, k8sInformer),
-		kube:        meta,
+		store:       store,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {
 		var err error

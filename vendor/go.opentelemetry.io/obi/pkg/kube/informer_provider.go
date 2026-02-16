@@ -58,7 +58,7 @@ type MetadataConfig struct {
 type MetadataProvider struct {
 	mt sync.Mutex
 
-	metadata *Store
+	store    *Store
 	informer meta.Notifier
 
 	localNodeName string
@@ -118,8 +118,8 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Store, error) {
 	mp.mt.Lock()
 	defer mp.mt.Unlock()
 
-	if mp.metadata != nil {
-		return mp.metadata, nil
+	if mp.store != nil {
+		return mp.store, nil
 	}
 
 	informer, err := mp.getInformer(ctx)
@@ -127,9 +127,9 @@ func (mp *MetadataProvider) Get(ctx context.Context) (*Store, error) {
 		return nil, err
 	}
 
-	mp.metadata = NewStore(informer, mp.cfg.ResourceLabels, mp.cfg.ServiceNameTemplate, mp.internalMetrics)
+	mp.store = NewStore(informer, mp.cfg.ResourceLabels, mp.cfg.ServiceNameTemplate, mp.internalMetrics)
 
-	return mp.metadata, nil
+	return mp.store, nil
 }
 
 func (mp *MetadataProvider) getInformer(ctx context.Context) (meta.Notifier, error) {

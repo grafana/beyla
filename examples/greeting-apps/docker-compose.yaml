@@ -145,7 +145,7 @@ services:
 
   # Tempo
   tempo:
-    image: grafana/tempo@sha256:2ad69866569c355ed678544d538f259e98f8c6bd7d93d940887951b68b067aa2
+    image: grafana/tempo@sha256:3e19e1a4bafd25d1c143f5d33ec6019933d4e2f9bc99d01b2db4d179eb7593ed
     container_name: demo-tempo
     command:
       - -config.file
@@ -171,7 +171,7 @@ services:
       - "9096:9096"
 
   grafana:
-    image: grafana/grafana@sha256:5683be4319a6da1d6ab28c3443b3739683e367f8d72d800638390a04a2680c1c
+    image: grafana/grafana@sha256:9e1e77ade304069aee3196e9a4f210830e96e80ce9a2640891eccc324b152faf
     container_name: demo-grafana
     volumes:
       - ./configs/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml

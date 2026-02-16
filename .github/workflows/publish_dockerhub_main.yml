@@ -20,7 +20,7 @@ jobs:
           persist-credentials: "false"
           submodules: "recursive"
       - id: push-beyla-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@8ef55db5803bf7fc92e32ca4a4f488657f3f53fe # main
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@775874934ae5e0adbc55b3e7d3571d140bcc7886 # main
         with:
           repository: grafana/beyla
           context: .
@@ -32,7 +32,7 @@ jobs:
           push: true
 
       - id: push-beyla-k8s-cache-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@8ef55db5803bf7fc92e32ca4a4f488657f3f53fe # main
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@775874934ae5e0adbc55b3e7d3571d140bcc7886 # main
         with:
           repository: grafana/beyla-k8s-cache
           file: k8scache.Dockerfile

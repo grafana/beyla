@@ -46,6 +46,8 @@ def parse_dependency_tree(filename):
                 required_match = re.search(r'\[required:\s*([^,]+),', cleaned)
                 if required_match:
                     version_requirement = required_match.group(1).strip()
+                    if version_requirement.lower() == 'any':
+                        continue  # No version constraint, skip
                     dependencies.add((package_name, version_requirement))
     
     return sorted(dependencies)

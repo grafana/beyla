@@ -119,11 +119,6 @@ type DiscoveryConfig struct {
 	DisabledRouteHarvesters []string `yaml:"disabled_route_harvesters"`
 
 	RouteHarvestConfig RouteHarvestingConfig `yaml:"route_harvester_advanced"`
-
-	// Executable paths for which we don't run language detection and cannot be
-	// selected using the path or language selection criteria
-	//nolint:undoc
-	ExcludedLinuxSystemPaths []string `yaml:"excluded_linux_system_paths"`
 }
 
 type RouteHarvestingConfig struct {

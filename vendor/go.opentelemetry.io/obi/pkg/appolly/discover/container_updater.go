@@ -15,11 +15,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
-// ContainerStoreUpdaterProvider is a stage in the Process Finder pipeline that will be
+// ContainerDBUpdaterProvider is a stage in the Process Finder pipeline that will be
 // enabled only if Kubernetes decoration is enabled.
-// It just updates part of the kubernetes store when a new process is discovered.
+// It just updates part of the kubernetes database when a new process is discovered.
 // TODO: rename to avoid confusions with Docker-only containers
-func ContainerStoreUpdaterProvider(
+func ContainerDBUpdaterProvider(
 	meta kubeMetadataProvider, input, output *msg.Queue[[]Event[ebpf.Instrumentable]],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
@@ -28,16 +28,16 @@ func ContainerStoreUpdaterProvider(
 		}
 		store, err := meta.Get(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("instantiating ContainerStoreUpdater: %w", err)
+			return nil, fmt.Errorf("instantiating ContainerDBUpdater: %w", err)
 		}
-		return updateLoop(store, input.Subscribe(msg.SubscriberName("ContainerStoreUpdater")), output), nil
+		return updateLoop(store, input.Subscribe(msg.SubscriberName("ContainerDBUpdater")), output), nil
 	}
 }
 
 func updateLoop(
-	store *kube.Store, in <-chan []Event[ebpf.Instrumentable], out *msg.Queue[[]Event[ebpf.Instrumentable]],
+	db *kube.Store, in <-chan []Event[ebpf.Instrumentable], out *msg.Queue[[]Event[ebpf.Instrumentable]],
 ) swarm.RunFunc {
-	log := slog.With("component", "ContainerStoreUpdater")
+	log := slog.With("component", "ContainerDBUpdater")
 	return func(ctx context.Context) {
 		defer out.Close()
 		swarms.ForEachInput(ctx, in, log.Debug, func(instrumentables []Event[ebpf.Instrumentable]) {
@@ -46,7 +46,7 @@ func updateLoop(
 				switch ev.Type {
 				case EventCreated:
 					log.Debug("adding process", "pid", ev.Obj.FileInfo.Pid)
-					store.AddProcess(ev.Obj.FileInfo.Pid)
+					db.AddProcess(ev.Obj.FileInfo.Pid)
 				case EventDeleted:
 					// we don't need to handle process deletion from here, as the Kubernetes informer will
 					// remove the process from the database when the Pod that contains it is deleted.

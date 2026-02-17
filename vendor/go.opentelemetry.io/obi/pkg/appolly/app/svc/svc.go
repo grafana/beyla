@@ -18,8 +18,7 @@ import (
 type InstrumentableType int
 
 const (
-	InstrumentableUnknown InstrumentableType = iota
-	InstrumentableGolang
+	InstrumentableGolang InstrumentableType = iota + 1
 	InstrumentableJava
 	InstrumentableJavaNative
 	InstrumentableDotnet
@@ -29,7 +28,6 @@ const (
 	InstrumentableRust
 	InstrumentableGeneric
 	InstrumentablePHP
-	InstrumentableCPP
 )
 
 func (it InstrumentableType) String() string {
@@ -50,8 +48,6 @@ func (it InstrumentableType) String() string {
 		return semconv.TelemetrySDKLanguageRust.Value.AsString()
 	case InstrumentablePHP:
 		return semconv.TelemetrySDKLanguagePHP.Value.AsString()
-	case InstrumentableCPP:
-		return semconv.TelemetrySDKLanguageCPP.Value.AsString()
 	case InstrumentableGeneric:
 		return "generic"
 	default:

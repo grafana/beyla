@@ -94,12 +94,12 @@ func KubeDecoratorProvider(
 			// if kubernetes decoration is disabled, we just bypass the node
 			return swarm.Bypass(input, output)
 		}
-		store, err := ctxInfo.K8sInformer.Get(ctx)
+		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
 		}
 		decorator := &metadataDecorator{
-			store:       store,
+			db:          metaStore,
 			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
 			input:       input.Subscribe(msg.SubscriberName("transform.KubeDecorator")),
 			output:      output,
@@ -117,14 +117,14 @@ func KubeProcessEventDecoratorProvider(
 		if !ctxInfo.K8sInformer.IsKubeEnabled() {
 			return swarm.Bypass(input, output)
 		}
-		store, err := ctxInfo.K8sInformer.Get(ctx)
+		metaStore, err := ctxInfo.K8sInformer.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
 		}
 
 		decorator := &procEventMetadataDecorator{
 			log:         slog.With("component", "transform.KubeProcessEventDecoratorProvider"),
-			store:       store,
+			db:          metaStore,
 			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
 			input:       input.Subscribe(msg.SubscriberName("transform.KubeProcessEventDecorator")),
 			output:      output,
@@ -138,7 +138,7 @@ func KubeProcessEventDecoratorProvider(
 }
 
 type metadataDecorator struct {
-	store       *kube.Store
+	db          *kube.Store
 	clusterName string
 	input       <-chan []request.Span
 	output      *msg.Queue[[]request.Span]
@@ -157,20 +157,20 @@ func (md *metadataDecorator) nodeLoop(ctx context.Context) {
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
-	if podMeta, containerName := md.store.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
-		AppendKubeMetadata(md.store, &span.Service, podMeta, md.clusterName, containerName)
+	if podMeta, containerName := md.db.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
+		AppendKubeMetadata(md.db, &span.Service, podMeta, md.clusterName, containerName)
 	} else if span.Service.Metadata == nil {
 		// do not leave the service attributes map as nil
 		span.Service.Metadata = map[attr.Name]string{}
 	}
 	// override the peer and host names from Kubernetes metadata, if found
 	if span.Host != "" {
-		if name, _, _ := md.store.ServiceNameNamespaceForIP(span.Host); name != "" {
+		if name, _, _ := md.db.ServiceNameNamespaceForIP(span.Host); name != "" {
 			span.HostName = name
 		}
 	}
 	if span.Peer != "" {
-		if name, _, _ := md.store.ServiceNameNamespaceForIP(span.Peer); name != "" {
+		if name, _, _ := md.db.ServiceNameNamespaceForIP(span.Peer); name != "" {
 			span.PeerName = name
 		}
 	}
@@ -191,7 +191,7 @@ type Event[T any] struct {
 
 type procEventMetadataDecorator struct {
 	log         *slog.Logger
-	store       *kube.Store
+	db          *kube.Store
 	clusterName string
 	input       <-chan exec.ProcessEvent
 	output      *msg.Queue[exec.ProcessEvent]
@@ -275,7 +275,7 @@ func (md *procEventMetadataDecorator) k8sLoop(ctx context.Context) {
 	defer md.output.Close()
 
 	md.log.Debug("starting kubernetes process event decoration loop")
-	go md.store.Subscribe(md)
+	go md.db.Subscribe(md)
 
 mainLoop:
 	for {
@@ -288,8 +288,8 @@ mainLoop:
 			}
 			md.log.Debug("annotating process event", "event", pe)
 
-			if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
-				AppendKubeMetadata(md.store, &pe.File.Service, podMeta, md.clusterName, containerName)
+			if podMeta, containerName := md.db.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
+				AppendKubeMetadata(md.db, &pe.File.Service, podMeta, md.clusterName, containerName)
 			} else {
 				// do not leave the service attributes map as nil
 				pe.File.Service.Metadata = map[attr.Name]string{}
@@ -338,9 +338,9 @@ func (md *procEventMetadataDecorator) handlePodUpdateEvent(pod *informer.ObjectM
 		if peMap, ok := md.tracker.info(cnt.Id); ok {
 			md.log.Debug("found missed pid info", "containerId", cnt.Id)
 			for _, pe := range peMap {
-				if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
+				if podMeta, containerName := md.db.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
 					md.log.Debug("resubmitting process event", "event", pe)
-					AppendKubeMetadata(md.store, &pe.File.Service, podMeta, md.clusterName, containerName)
+					AppendKubeMetadata(md.db, &pe.File.Service, podMeta, md.clusterName, containerName)
 					md.output.Send(*pe)
 				}
 			}
@@ -359,14 +359,14 @@ func (md *procEventMetadataDecorator) cleanupPodData(pod *informer.ObjectMeta) {
 // AppendKubeMetadata populates some metadata values in the passed svc.Attrs.
 // This method should be invoked by any entity willing to follow a common policy for
 // setting metadata attributes. For example this metadataDecorator or the survey informer
-func AppendKubeMetadata(store *kube.Store, svc *svc.Attrs, meta *ikube.CachedObjMeta, clusterName, containerName string) {
+func AppendKubeMetadata(db *kube.Store, svc *svc.Attrs, meta *ikube.CachedObjMeta, clusterName, containerName string) {
 	if meta.Meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
 		return
 	}
 	topOwner := ikube.TopOwner(meta.Meta.Pod)
-	name, namespace := store.ServiceNameNamespaceForMetadata(meta.Meta, containerName)
+	name, namespace := db.ServiceNameNamespaceForMetadata(meta.Meta, containerName)
 	// If the user has not defined criteria values for the reported
 	// service name and namespace, we will automatically set it from
 	// the kubernetes metadata

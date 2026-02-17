@@ -249,7 +249,6 @@ var DefaultConfig = Config{
 		RouteHarvestConfig: services.RouteHarvestingConfig{
 			JavaHarvestDelay: 60 * time.Second,
 		},
-		ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
 	},
 	NodeJS: NodeJSConfig{
 		Enabled: true,

@@ -325,6 +325,7 @@ network:
 			RouteHarvestConfig: servicesextra.RouteHarvestingConfig{
 				JavaHarvestDelay: 60 * time.Second,
 			},
+			ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
 		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},

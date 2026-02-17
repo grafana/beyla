@@ -11,17 +11,30 @@ import (
 )
 
 var (
-	rubyModule   = regexp.MustCompile(`^(.*/)?ruby[\d.]*$`)
-	pythonModule = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
+	rubyModule      = regexp.MustCompile(`^(.*/)?ruby[\d.]*$`)
+	pythonModule    = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
+	libpythonModule = regexp.MustCompile(`libpython3[\d.]*\.so`)
+	librubyModule   = regexp.MustCompile(`libruby-[\d.]*\.so`)
 )
 
-func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
+func instrumentableFromModuleMapSharedLib(moduleName string) svc.InstrumentableType {
 	if strings.Contains(moduleName, "libcoreclr.so") {
 		return svc.InstrumentableDotnet
 	}
 	if strings.Contains(moduleName, "libjvm.so") {
 		return svc.InstrumentableJava
 	}
+	if libpythonModule.MatchString(moduleName) {
+		return svc.InstrumentablePython
+	}
+	if librubyModule.MatchString(moduleName) {
+		return svc.InstrumentableRuby
+	}
+
+	return svc.InstrumentableGeneric
+}
+
+func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
 	if strings.HasSuffix(moduleName, "/node") || moduleName == "node" {
 		return svc.InstrumentableNodejs
 	}
@@ -32,7 +45,7 @@ func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
 		return svc.InstrumentablePython
 	}
 
-	return svc.InstrumentableGeneric
+	return instrumentableFromModuleMapSharedLib(moduleName)
 }
 
 func instrumentableFromEnviron(environ string) svc.InstrumentableType {
@@ -54,8 +67,17 @@ func instrumentableFromSymbolName(symbol string) svc.InstrumentableType {
 }
 
 func instrumentableFromPath(path string) svc.InstrumentableType {
-	if strings.Contains(path, "php") {
+	if strings.Contains(path, "php") || strings.Contains(path, "php-fpm") {
 		return svc.InstrumentablePHP
 	}
+	return svc.InstrumentableGeneric
+}
+
+func instrumentableLastResort(moduleName string) svc.InstrumentableType {
+	if strings.Contains(moduleName, "libstdc++.so") || // GCC
+		strings.Contains(moduleName, "libc++.so") { // Clang
+		return svc.InstrumentableCPP
+	}
+
 	return svc.InstrumentableGeneric
 }

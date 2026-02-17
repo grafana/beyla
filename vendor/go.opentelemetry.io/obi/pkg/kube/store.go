@@ -25,7 +25,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 )
 
-func dblog() *slog.Logger {
+func storelog() *slog.Logger {
 	return slog.With("component", "kube.Store")
 }
 
@@ -130,9 +130,9 @@ func NewStore(
 	serviceNameTemplate *template.Template,
 	internalMetrics imetrics.Reporter,
 ) *Store {
-	log := dblog()
+	log := storelog()
 
-	db := &Store{
+	store := &Store{
 		log:                 log,
 		containerIDs:        maps.Map2[string, app.PID, *container.Info]{},
 		namespaces:          maps.Map2[uint32, app.PID, *container.Info]{},
@@ -148,8 +148,8 @@ func NewStore(
 		serviceNameTemplate: serviceNameTemplate,
 		metrics:             internalMetrics,
 	}
-	kubeMetadata.Subscribe(db)
-	return db
+	kubeMetadata.Subscribe(store)
+	return store
 }
 
 func (s *Store) ID() string { return "unique-metadata-observer" }

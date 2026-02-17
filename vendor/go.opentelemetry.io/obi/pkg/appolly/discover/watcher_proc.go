@@ -21,6 +21,7 @@ import (
 	"github.com/tklauser/go-sysconf"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -57,6 +58,7 @@ type ProcessAttrs struct {
 	podLabels      map[string]string
 	podAnnotations map[string]string
 	processAge     time.Duration
+	detectedType   svc.InstrumentableType
 }
 
 func wplog() *slog.Logger {
@@ -479,7 +481,7 @@ func fetchProcessPorts(scanPorts bool) (map[app.PID]ProcessAttrs, error) {
 
 	for _, pid := range pids {
 		if !scanPorts {
-			processes[app.PID(pid)] = ProcessAttrs{pid: app.PID(pid), openPorts: []uint32{}, processAge: processAgeFunc(app.PID(pid))}
+			processes[app.PID(pid)] = ProcessAttrs{pid: app.PID(pid), detectedType: svc.InstrumentableUnknown, openPorts: []uint32{}, processAge: processAgeFunc(app.PID(pid))}
 			continue
 		}
 		conns, err := net.ConnectionsPid("inet", pid)
@@ -492,7 +494,7 @@ func fetchProcessPorts(scanPorts bool) (map[app.PID]ProcessAttrs, error) {
 		for _, conn := range conns {
 			openPorts = append(openPorts, conn.Laddr.Port)
 		}
-		processes[app.PID(pid)] = ProcessAttrs{pid: app.PID(pid), openPorts: openPorts, processAge: time.Duration(0)}
+		processes[app.PID(pid)] = ProcessAttrs{pid: app.PID(pid), detectedType: svc.InstrumentableUnknown, openPorts: openPorts, processAge: time.Duration(0)}
 	}
 	return processes, nil
 }

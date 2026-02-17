@@ -22,7 +22,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/stretchr/testify v1.11.1
 	github.com/vladimirvivien/gexe v0.5.0
-	go.opentelemetry.io/collector/component v1.49.0
+	go.opentelemetry.io/collector/component v1.51.0
 	go.opentelemetry.io/collector/config/configgrpc v0.143.0
 	go.opentelemetry.io/collector/config/confighttp v0.143.0
 	go.opentelemetry.io/collector/config/configopaque v1.49.0

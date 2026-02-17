@@ -167,6 +167,11 @@ def check_all_dependencies(lines):
     
     return (total, not_installed, conflicts, compatible, errors)
 
+def safe_remove_from_path(p):
+    try:
+        sys.path.remove(p)
+    except ValueError:
+        pass
 
 def verify_and_load():
     """Function to check dependency conflicts."""
@@ -178,12 +183,12 @@ def verify_and_load():
             lines = f.readlines()
     except IOError as e:
         print("Error reading file: {}".format(e), file=sys.stderr)
-        sys.path.remove(current_pkg_dir)
+        safe_remove_from_path(current_pkg_dir)
         return
     
     # Put ourselves last on the path to allow application 
     # dependencies to win even if we are compatible
-    sys.path.remove(current_pkg_dir)
+    safe_remove_from_path(current_pkg_dir)
     sys.path.append(current_pkg_dir)
 
     # Check all dependencies
@@ -257,10 +262,10 @@ def verify_and_load():
             auto_instrumentation.initialize()
         except Exception as e:
             print("Error installing OpenTelemetry auto-instrumentation: {}".format(e), file=sys.stderr)
-            sys.path.remove(current_pkg_dir)
+            safe_remove_from_path(current_pkg_dir)
     else:
         print("Not importing OpenTelemetry Python auto-instrumentation. Errors {}, conflicts {}. Set OTEL_INJECTOR_LOG_LEVEL=debug for more details".format(len(errors), len(conflicts)))
-        sys.path.remove(current_pkg_dir)
+        safe_remove_from_path(current_pkg_dir)
 
 def check_otlp_proto(): 
     """

@@ -142,7 +142,7 @@ func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnri
 
 	surveyExecutableTypes := msg2.QueueFromConfig[[]obiDiscover.Event[ebpf.Instrumentable]](
 		pf.cfg.AsOBI(), "surveyExecutableTypes")
-	swi.Add(obiDiscover.ContainerDBUpdaterProvider(pf.ctxInfo.K8sInformer, surveyExecutables, surveyExecutableTypes),
+	swi.Add(obiDiscover.ContainerStoreUpdaterProvider(pf.ctxInfo.K8sInformer, surveyExecutables, surveyExecutableTypes),
 		swarm.WithID("SurveyContainerStoreUpdaterProvider"))
 
 	surveyEvents := msg2.QueueFromConfig[exec.ProcessEvent](

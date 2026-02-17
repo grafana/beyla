@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -24,6 +25,20 @@ const (
 	serviceNameKey      = "service.name"
 	serviceNamespaceKey = "service.namespace"
 )
+
+func FindINodeForPID(pid app.PID) (uint64, error) {
+	exePath := fmt.Sprintf("/proc/%d/exe", pid)
+	info, err := os.Stat(exePath)
+	if err == nil {
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			return 0, fmt.Errorf("couldn't cast stat into syscall.Stat_t for %s", exePath)
+		}
+		return stat.Ino, nil
+	}
+
+	return 0, err
+}
 
 func findExecElf(p *services.ProcessInfo, svcID svc.Attrs) (*exec.FileInfo, error) {
 	// In container environments or K8s, we can't just open the executable exe path, because it might
@@ -45,16 +60,11 @@ func findExecElf(p *services.ProcessInfo, svcID svc.Attrs) (*exec.FileInfo, erro
 		return nil, fmt.Errorf("can't open ELF file in %s: %w", file.ProExeLinkPath, err)
 	}
 
-	info, err := os.Stat(file.ProExeLinkPath)
-	if err == nil {
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok {
-			return nil, fmt.Errorf("couldn't cast stat into syscall.Stat_t for %s", file.ProExeLinkPath)
-		}
-		file.Ino = stat.Ino
-	} else {
+	ino, err := FindINodeForPID(p.Pid)
+	if err != nil {
 		return nil, err
 	}
+	file.Ino = ino
 
 	envVars, err := procs.EnvVars(p.Pid)
 	if err != nil {

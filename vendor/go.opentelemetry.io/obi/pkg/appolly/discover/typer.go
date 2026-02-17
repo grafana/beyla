@@ -240,6 +240,9 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		parent, ok = t.currentPids[parent.Ppid]
 	}
 
+	// Typer finds the executable type again. The language decorator can skip certain type detection,
+	// for example, it will skip Linux system services. If the selection criteria brought us here on
+	// executable path, open port, we respect that choice and find the language for the pipeline.
 	detectedType := procs.FindProcLanguage(execElf.Pid)
 
 	if !t.cfg.Discovery.SkipGoSpecificTracers && detectedType == svc.InstrumentableGolang && err == nil {

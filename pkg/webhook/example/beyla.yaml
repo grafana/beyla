@@ -86,7 +86,7 @@ data:
         key_path: /etc/webhook/certs/tls.key
       instrument:
         - k8s_namespace: "*"
-      sdk_package_version: v0.0.4
+      sdk_package_version: v0.0.7
       host_mount_path: /var/lib/beyla/instrumentation
     discovery:
       services:
@@ -143,10 +143,10 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       initContainers:
         - name: populate-instrumentation
-          image: ghcr.io/grafana/beyla/inject-sdk-image:0.0.4
+          image: ghcr.io/grafana/beyla/inject-sdk-image:0.0.7
           env:
             - name: SDK_PKG_VERSION
-              value: "v0.0.4"
+              value: "v0.0.7"
             - name: MOUNT_PATH
               value: "/var/lib/beyla/instrumentation"
           volumeMounts:
@@ -202,6 +202,8 @@ spec:
               mountPath: /sys/fs/cgroup
             - mountPath: /config
               name: beyla-config
+            - name: instrumentation-hostpath
+              mountPath: /var/lib/beyla/instrumentation
           ports:
             - name: webhook
               containerPort: 8443

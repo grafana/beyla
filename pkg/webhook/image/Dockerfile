@@ -1,7 +1,7 @@
 # Args can be overriden like: docker build --build-arg DOTNET_SDK_VERSION=v1.10.0 --build-arg JAVA_SDK_VERSION=v2.20.0 ...
 ARG DOTNET_SDK_VERSION=v1.11.0
 ARG JAVA_SDK_VERSION=v2.23.0
-ARG INJECTOR_VERSION=v0.0.3
+ARG INJECTOR_VERSION=v0.1.0
 
 # download the opentelemetry-injector binary for the target architecture
 FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-injector-binary
@@ -16,6 +16,32 @@ RUN case ${TARGETARCH} in \
     *)     echo "architecture unsupported: ${TARGETARCH}" && exit 1 ;; \
   esac && \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/${INJECTOR_VERSION}/${INJECTOR_LIB}"
+
+# Get the Python SDK for glibc
+FROM python:3.14.3-trixie AS build-python-glibc
+WORKDIR /operator-build
+COPY python/requirements.txt .
+COPY python/build_dep_tree.sh .
+COPY python/deps_analyser.py .
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN pip install --root-user-action ignore --target . -r requirements.txt
+RUN ./build_dep_tree.sh
+RUN python ./deps_analyser.py
+RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
+COPY python/sitecustomize.py .
+
+# Get the Python SDK for musl
+FROM python:3.14.3-alpine3.23 AS build-python-musl
+WORKDIR /operator-build
+COPY python/requirements.txt .
+COPY python/build_dep_tree.sh .
+COPY python/deps_analyser.py .
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN pip install --root-user-action ignore --target . -r requirements.txt
+RUN ./build_dep_tree.sh
+RUN python ./deps_analyser.py
+RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
+COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK
 FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-java-sdk
@@ -72,6 +98,8 @@ COPY --from=download-dotnet-sdk /musl /dist/agents/dotnet/musl
 COPY --from=download-java-sdk /opentelemetry-javaagent.jar /dist/agents/jvm/opentelemetry-javaagent.jar
 COPY --from=build-nodejs-sdk /operator-build/build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/ /dist/agents/node.js/
 COPY --from=build-nodejs-sdk /operator-build/node_modules /dist/agents/node.js/node_modules
+COPY --from=build-python-glibc /operator-build/ /dist/agents/python/glibc
+COPY --from=build-python-musl /operator-build/ /dist/agents/python/musl
 
 WORKDIR /
 CMD ["/copy-to-volume.sh"]

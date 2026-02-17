@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewInitialStateScanner(t *testing.T) {
-	scanner := NewInitialStateScanner()
+	scanner := NewInitialStateScanner("v0.0.1")
 
 	assert.NotNil(t, scanner)
 	assert.NotNil(t, scanner.logger)
@@ -30,19 +30,16 @@ func TestLocalProcessScanner_OldestSDKVersion(t *testing.T) {
 		{
 			name:        "no SDK version found",
 			version:     dummySDKVersion,
-			expectError: true,
 			expectedVer: "",
 		},
 		{
 			name:        "valid SDK version",
 			version:     "v0.0.3",
-			expectError: false,
 			expectedVer: "v0.0.3",
 		},
 		{
 			name:        "another valid SDK version",
 			version:     "v1.2.5",
-			expectError: false,
 			expectedVer: "v1.2.5",
 		},
 	}
@@ -53,15 +50,8 @@ func TestLocalProcessScanner_OldestSDKVersion(t *testing.T) {
 				oldestSDKVersion: tt.version,
 			}
 
-			ver, err := scanner.OldestSDKVersion()
-
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.Equal(t, "", ver)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedVer, ver)
-			}
+			ver := scanner.OldestSDKVersion()
+			assert.Equal(t, tt.expectedVer, ver)
 		})
 	}
 }
@@ -463,7 +453,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: "container-2"}, nil
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -544,7 +534,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: fmt.Sprintf("container-%d", pid)}, nil
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -552,8 +542,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 		assert.Len(t, containers, 3)
 
 		// Verify the oldest SDK version was found
-		oldestVer, err := scanner.OldestSDKVersion()
-		assert.NoError(t, err)
+		oldestVer := scanner.OldestSDKVersion()
 		assert.Equal(t, "v0.0.3", oldestVer)
 
 		// Verify all processes were added to containers
@@ -604,7 +593,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: "same-container"}, nil
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -663,7 +652,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: fmt.Sprintf("container-%d", pid)}, nil
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -685,7 +674,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return nil, fmt.Errorf("failed to fetch processes")
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.Error(t, err)
@@ -728,7 +717,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return nil, fmt.Errorf("process not found")
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -777,7 +766,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{}, fmt.Errorf("container not found")
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -824,7 +813,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: "container-1"}, nil
 		}
 
-		scanner := NewInitialStateScanner()
+		scanner := NewInitialStateScanner("v0.0.1")
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)

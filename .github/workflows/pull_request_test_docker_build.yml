@@ -27,10 +27,10 @@ jobs:
           submodules: "recursive"
 
       - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@8ef55db5803bf7fc92e32ca4a4f488657f3f53fe
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
 
       - id: docker-build-beyla
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@8ef55db5803bf7fc92e32ca4a4f488657f3f53fe # main
+        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@775874934ae5e0adbc55b3e7d3571d140bcc7886 # main
         with:
           context: .
           file: ${{ matrix.file }}

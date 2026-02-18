@@ -96,6 +96,7 @@ jobs:
           submodules: true
 
       - name: Login to DockerHub
+        if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
         uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
 
       - name: Set up Go

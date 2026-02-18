@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,8 +15,9 @@ import (
 )
 
 type LocalProcessScanner struct {
-	logger           *slog.Logger
-	oldestSDKVersion string
+	logger            *slog.Logger
+	oldestSDKVersion  string
+	currentSDKVersion string
 }
 
 type ProcessInfo struct {
@@ -49,19 +49,20 @@ var (
 	pythonModule = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
 )
 
-func NewInitialStateScanner() *LocalProcessScanner {
+func NewInitialStateScanner(currentSDKVersion string) *LocalProcessScanner {
 	return &LocalProcessScanner{
-		logger:           slog.With("component", "webhook.Scanner"),
-		oldestSDKVersion: dummySDKVersion,
+		logger:            slog.With("component", "webhook.Scanner"),
+		oldestSDKVersion:  dummySDKVersion,
+		currentSDKVersion: currentSDKVersion,
 	}
 }
 
-func (s *LocalProcessScanner) OldestSDKVersion() (string, error) {
+func (s *LocalProcessScanner) OldestSDKVersion() string {
 	if s.oldestSDKVersion == dummySDKVersion {
-		return "", errors.New("no SDK version found in processes")
+		return s.currentSDKVersion
 	}
 
-	return s.oldestSDKVersion, nil
+	return s.oldestSDKVersion
 }
 
 func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo, error) {

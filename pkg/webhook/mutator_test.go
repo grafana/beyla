@@ -64,6 +64,7 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 					{InstrumentableType: svc.InstrumentableJava},
 					{InstrumentableType: svc.InstrumentableDotnet},
 					{InstrumentableType: svc.InstrumentableNodejs},
+					{InstrumentableType: svc.InstrumentablePython},
 				},
 			},
 		},
@@ -90,14 +91,19 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "Python is supported",
+			kind:     svc.InstrumentablePython,
+			expected: true,
+		},
+		{
 			name:     "Go is not supported",
 			kind:     svc.InstrumentableGolang,
 			expected: false,
 		},
 		{
-			name:     "Python is not supported",
+			name:     "Python is supported",
 			kind:     svc.InstrumentablePython,
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "Ruby is not supported",

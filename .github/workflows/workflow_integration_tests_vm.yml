@@ -118,7 +118,7 @@ jobs:
           submodules: true
 
       - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@8ef55db5803bf7fc92e32ca4a4f488657f3f53fe
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0

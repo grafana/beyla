@@ -1,0 +1,72 @@
+name: Update OBI submodule
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
+jobs:
+  update-obi:
+    name: Update OBI submodule and open PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed for creating commits and pushing branch
+      pull-requests: write # Needed for creating PRs
+      id-token: write # Required for DockerHub login
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Create branch and update submodule
+        run: |
+          git checkout -b "update-obi-submodule-${{ github.run_id }}"
+          git submodule update --checkout --remote .obi-src
+
+      - name: Get OBI short SHA
+        id: obi-sha
+        run: |
+          echo "sha=$(git -C .obi-src rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Commit submodule update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .obi-src
+          git diff --staged --quiet || git commit -m "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
+      - name: Rebuild BPF and vendor OBI
+        run: make vendor-obi
+
+      - name: Create/update PR
+        uses: peter-evans/create-pull-request@4e1beaa7521e8b457b572c090b25bd3db56bf1c5 # v5.0.3
+        with:
+          commit-message: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
+          title: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
+          body: |
+            Automated update of the OBI (OpenTelemetry eBPF Instrumentation) submodule to the latest commit from grafana/opentelemetry-ebpf-instrumentation main.
+
+            OBI commit: `${{ steps.obi-sha.outputs.sha }}`
+          base: main
+          branch: "update-obi-submodule-${{ github.run_id }}"
+          labels: automated-pr
+          delete-branch: true

@@ -10,13 +10,15 @@ concurrency:
   cancel-in-progress: true
 
 # Set restrictive permissions at workflow level
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   sync-fork:
     name: Sync grafana/opentelemetry-ebpf-instrumentation with upstream
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for create-github-app-token
     steps:
       - name: Get GitHub App token
         id: get-github-app-token

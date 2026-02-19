@@ -10,8 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 # Set restrictive permissions at workflow level
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   update-obi:
@@ -20,7 +19,7 @@ jobs:
     permissions:
       contents: write # Needed for creating commits and pushing branch
       pull-requests: write # Needed for creating PRs
-      id-token: write # Required for DockerHub login
+      id-token: write # Required for DockerHub login and create-github-app-token
     steps:
       - name: Checkout repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

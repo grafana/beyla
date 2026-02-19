@@ -18,11 +18,19 @@ jobs:
     name: Sync grafana/opentelemetry-ebpf-instrumentation with upstream
     runs-on: ubuntu-latest
     steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@580590a644e82e79bb2598bdaba0be245a14dda0 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
       - name: Sync fork with upstream
+        env:
+          GITHUB_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
         run: |
           curl -sSf -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer TODO" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/grafana/opentelemetry-ebpf-instrumentation/merge-upstream \
             -d '{"branch":"main"}'

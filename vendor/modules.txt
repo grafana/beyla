@@ -664,7 +664,7 @@ go.opentelemetry.io/collector/internal/statusutil
 # go.opentelemetry.io/collector/client v1.49.0
 ## explicit; go 1.24.0
 go.opentelemetry.io/collector/client
-# go.opentelemetry.io/collector/component v1.49.0
+# go.opentelemetry.io/collector/component v1.51.0
 ## explicit; go 1.24.0
 go.opentelemetry.io/collector/component
 # go.opentelemetry.io/collector/config/configauth v1.49.0
@@ -772,10 +772,10 @@ go.opentelemetry.io/collector/extension/extensionmiddleware
 # go.opentelemetry.io/collector/extension/xextension v0.143.0
 ## explicit; go 1.24.0
 go.opentelemetry.io/collector/extension/xextension/storage
-# go.opentelemetry.io/collector/featuregate v1.49.0
+# go.opentelemetry.io/collector/featuregate v1.51.0
 ## explicit; go 1.24.0
 go.opentelemetry.io/collector/featuregate
-# go.opentelemetry.io/collector/pdata v1.49.0
+# go.opentelemetry.io/collector/pdata v1.51.0
 ## explicit; go 1.24.0
 go.opentelemetry.io/collector/pdata/internal
 go.opentelemetry.io/collector/pdata/internal/json
@@ -1112,7 +1112,7 @@ gomodules.xyz/jsonpatch/v2
 # google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217
 ## explicit; go 1.24.0
 google.golang.org/genproto/googleapis/api/httpbody
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b
 ## explicit; go 1.24.0
 google.golang.org/genproto/googleapis/rpc/errdetails
 google.golang.org/genproto/googleapis/rpc/status

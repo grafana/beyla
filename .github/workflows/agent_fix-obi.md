@@ -1,12 +1,11 @@
 ---
 # Fix OBI submodule CI — run when the automated OBI update PR fails CI.
-# Trigger: comment "/fix-obi" on a PR (e.g. the "Update OBI submodule to <sha>" PR).
+# Trigger: add the "agent/fix-obi" label to a PR (e.g. the "Update OBI submodule to <sha>" PR).
 description: "Analyze OBI submodule update PR CI failures and suggest or apply fixes"
 on:
-  slash_command:
-    name: fix-obi
-    events: [pull_request, pull_request_comment]
-  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+    names: [agent/fix-obi]
 permissions:
   contents: read
   pull-requests: read
@@ -17,10 +16,10 @@ steps:
     id: vault-secrets
     uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
     with:
-      # Vault secret paths:
-      # - ci/repo/grafana/beyla/github-actions
+      # Vault path: ci/repo/grafana/beyla/github-actions
       repo_secrets: |
         ANTHROPIC_API_KEY=github-actions:ANTHROPIC_API_KEY
+        GH_AW_GITHUB_TOKEN=github-actions:GH_AW_GITHUB_TOKEN
   - name: Init .obi-src submodule
     run: git submodule update --init --recursive .obi-src
 engine: claude
@@ -28,6 +27,8 @@ tools:
   bash: ["gh", "make", "go", "git"]
   github:
     toolsets: [pull_requests, issues]
+    read-only: true
+    lockdown: true
   edit: {}
 safe-outputs:
   add-comment:
@@ -37,7 +38,7 @@ timeout-minutes: 15
 
 # Fix OBI submodule CI
 
-This workflow runs when someone comments on a pull request (for example, on the automated "Update OBI submodule to \<sha\>" PR when it fails CI due to breaking changes from upstream OBI).
+This workflow runs when the **agent/fix-obi** label is added to a pull request (for example, on the automated "Update OBI submodule to \<sha\>" PR when it fails CI due to breaking changes from upstream OBI).
 
 ## Context
 

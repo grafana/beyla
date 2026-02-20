@@ -23,25 +23,21 @@
 #
 # Analyze OBI submodule update PR CI failures and suggest or apply fixes
 #
-# gh-aw-metadata: {"schema_version":"v1","frontmatter_hash":"dab55a29b786171fe9243b5ef2600f1b50958bf5f8b3672bab14543b75355efd","compiler_version":"v0.47.2"}
+# gh-aw-metadata: {"schema_version":"v1","frontmatter_hash":"2bcdead78cc8e0240b02d1e7c09fdabfdf70644ce68ec9d18439987ae1f9702f","compiler_version":"v0.47.2"}
 
 name: "Fix OBI submodule CI"
 "on":
-  issue_comment:
-    types:
-    - created
-    - edited
   pull_request:
+    # names: # Label filtering applied via job conditions
+    # - agent/fix-obi # Label filtering applied via job conditions
     types:
-    - opened
-    - edited
-    - reopened
-  workflow_dispatch: null
+    - labeled
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
 
 run-name: "Fix OBI submodule CI"
 
@@ -49,21 +45,15 @@ jobs:
   activation:
     needs: pre_activation
     if: >
-      (needs.pre_activation.outputs.activated == 'true') && (((github.event_name == 'pull_request' || github.event_name == 'issue_comment') &&
-      ((github.event_name == 'issue_comment') && (((startsWith(github.event.comment.body, '/fix-obi ')) || (github.event.comment.body == '/fix-obi')) &&
-      (github.event.issue.pull_request != null)) || (github.event_name == 'pull_request') && ((startsWith(github.event.pull_request.body, '/fix-obi ')) ||
-      (github.event.pull_request.body == '/fix-obi')))) || (!(github.event_name == 'pull_request' || github.event_name == 'issue_comment')))
+      (needs.pre_activation.outputs.activated == 'true') && (((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.id == github.repository_id)) &&
+      ((github.event_name != 'pull_request') || ((github.event.action != 'labeled') || (github.event.label.name == 'agent/fix-obi'))))
     runs-on: ubuntu-slim
     permissions:
       contents: read
-      discussions: write
-      issues: write
-      pull-requests: write
     outputs:
       body: ${{ steps.sanitized.outputs.body }}
       comment_id: ""
       comment_repo: ""
-      slash_command: ${{ needs.pre_activation.outputs.matched_command }}
       text: ${{ steps.sanitized.outputs.text }}
       title: ${{ steps.sanitized.outputs.title }}
     steps:
@@ -118,7 +108,6 @@ jobs:
           GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
           GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
           GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
-          GH_AW_IS_PR_COMMENT: ${{ github.event.issue.pull_request && 'true' || '' }}
           GH_AW_STEPS_SANITIZED_OUTPUTS_TEXT: ${{ steps.sanitized.outputs.text }}
         run: |
           bash /opt/gh-aw/actions/create_prompt_first.sh
@@ -186,9 +175,6 @@ jobs:
           </github-context>
           
           GH_AW_PROMPT_EOF
-          if [ "$GITHUB_EVENT_NAME" = "issue_comment" ] && [ -n "$GH_AW_IS_PR_COMMENT" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_review_comment" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_review" ]; then
-            cat "/opt/gh-aw/prompts/pr_context_prompt.md" >> "$GH_AW_PROMPT"
-          fi
           cat << 'GH_AW_PROMPT_EOF' >> "$GH_AW_PROMPT"
           </system>
           GH_AW_PROMPT_EOF
@@ -218,7 +204,6 @@ jobs:
           GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
           GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
           GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
-          GH_AW_IS_PR_COMMENT: ${{ github.event.issue.pull_request && 'true' || '' }}
           GH_AW_NEEDS_PRE_ACTIVATION_OUTPUTS_ACTIVATED: ${{ needs.pre_activation.outputs.activated }}
           GH_AW_NEEDS_PRE_ACTIVATION_OUTPUTS_MATCHED_COMMAND: ${{ needs.pre_activation.outputs.matched_command }}
           GH_AW_STEPS_SANITIZED_OUTPUTS_TEXT: ${{ steps.sanitized.outputs.text }}
@@ -241,7 +226,6 @@ jobs:
                 GH_AW_GITHUB_REPOSITORY: process.env.GH_AW_GITHUB_REPOSITORY,
                 GH_AW_GITHUB_RUN_ID: process.env.GH_AW_GITHUB_RUN_ID,
                 GH_AW_GITHUB_WORKSPACE: process.env.GH_AW_GITHUB_WORKSPACE,
-                GH_AW_IS_PR_COMMENT: process.env.GH_AW_IS_PR_COMMENT,
                 GH_AW_NEEDS_PRE_ACTIVATION_OUTPUTS_ACTIVATED: process.env.GH_AW_NEEDS_PRE_ACTIVATION_OUTPUTS_ACTIVATED,
                 GH_AW_NEEDS_PRE_ACTIVATION_OUTPUTS_MATCHED_COMMAND: process.env.GH_AW_NEEDS_PRE_ACTIVATION_OUTPUTS_MATCHED_COMMAND,
                 GH_AW_STEPS_SANITIZED_OUTPUTS_TEXT: process.env.GH_AW_STEPS_SANITIZED_OUTPUTS_TEXT
@@ -305,6 +289,7 @@ jobs:
         with:
           repo_secrets: |
             ANTHROPIC_API_KEY=github-actions:ANTHROPIC_API_KEY
+            GH_AW_GITHUB_TOKEN=github-actions:GH_AW_GITHUB_TOKEN
       - name: Init .obi-src submodule
         run: git submodule update --init --recursive .obi-src
 
@@ -391,16 +376,17 @@ jobs:
         run: bash /opt/gh-aw/actions/install_awf_binary.sh v0.20.2
       - name: Install Claude Code CLI
         run: npm install -g --silent @anthropic-ai/claude-code@2.1.47
-      - name: Determine automatic lockdown mode for GitHub MCP Server
-        id: determine-automatic-lockdown
+      - name: Validate lockdown mode requirements
+        id: validate-lockdown-requirements
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
+          GITHUB_MCP_LOCKDOWN_EXPLICIT: "true"
           GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
           GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
         with:
           script: |
-            const determineAutomaticLockdown = require('/opt/gh-aw/actions/determine_automatic_lockdown.cjs');
-            await determineAutomaticLockdown(github, context, core);
+            const validateLockdownRequirements = require('/opt/gh-aw/actions/validate_lockdown_requirements.cjs');
+            validateLockdownRequirements(core);
       - name: Download container images
         run: bash /opt/gh-aw/actions/download_docker_images.sh ghcr.io/github/gh-aw-firewall/agent:0.20.2 ghcr.io/github/gh-aw-firewall/api-proxy:0.20.2 ghcr.io/github/gh-aw-firewall/squid:0.20.2 ghcr.io/github/gh-aw-mcpg:v0.1.4 ghcr.io/github/github-mcp-server:v0.30.3 node:lts-alpine
       - name: Write Safe Outputs Config
@@ -599,7 +585,6 @@ jobs:
           GH_AW_SAFE_OUTPUTS: ${{ env.GH_AW_SAFE_OUTPUTS }}
           GH_AW_SAFE_OUTPUTS_API_KEY: ${{ steps.safe-outputs-start.outputs.api_key }}
           GH_AW_SAFE_OUTPUTS_PORT: ${{ steps.safe-outputs-start.outputs.port }}
-          GITHUB_MCP_LOCKDOWN: ${{ steps.determine-automatic-lockdown.outputs.lockdown == 'true' && '1' || '0' }}
           GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
@@ -624,7 +609,7 @@ jobs:
               "github": {
                 "container": "ghcr.io/github/github-mcp-server:v0.30.3",
                 "env": {
-                  "GITHUB_LOCKDOWN_MODE": "$GITHUB_MCP_LOCKDOWN",
+                  "GITHUB_LOCKDOWN_MODE": "1",
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "$GITHUB_MCP_SERVER_TOKEN",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "pull_requests,issues"
@@ -814,7 +799,6 @@ jobs:
           GH_AW_ALLOWED_DOMAINS: "*.githubusercontent.com,anthropic.com,api.anthropic.com,api.github.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,cdn.playwright.dev,codeload.github.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,files.pythonhosted.org,ghcr.io,github-cloud.githubusercontent.com,github-cloud.s3.amazonaws.com,github.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,lfs.github.com,objects.githubusercontent.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,playwright.download.prss.microsoft.com,ppa.launchpad.net,pypi.org,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,sentry.io,statsig.anthropic.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
-          GH_AW_COMMAND: fix-obi
         with:
           script: |
             const { setupGlobals } = require('/opt/gh-aw/actions/setup_globals.cjs');
@@ -1088,37 +1072,17 @@ jobs:
 
   pre_activation:
     if: >
-      ((github.event_name == 'pull_request' || github.event_name == 'issue_comment') && ((github.event_name == 'issue_comment') &&
-      (((startsWith(github.event.comment.body, '/fix-obi ')) || (github.event.comment.body == '/fix-obi')) &&
-      (github.event.issue.pull_request != null)) || (github.event_name == 'pull_request') && ((startsWith(github.event.pull_request.body, '/fix-obi ')) ||
-      (github.event.pull_request.body == '/fix-obi')))) || (!(github.event_name == 'pull_request' || github.event_name == 'issue_comment'))
+      ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.id == github.repository_id)) &&
+      ((github.event_name != 'pull_request') || ((github.event.action != 'labeled') || (github.event.label.name == 'agent/fix-obi')))
     runs-on: ubuntu-slim
-    permissions:
-      discussions: write
-      issues: write
-      pull-requests: write
     outputs:
-      activated: ${{ (steps.check_membership.outputs.is_team_member == 'true') && (steps.check_command_position.outputs.command_position_ok == 'true') }}
-      matched_command: ${{ steps.check_command_position.outputs.matched_command }}
+      activated: ${{ steps.check_membership.outputs.is_team_member == 'true' }}
     steps:
       - name: Setup Scripts
         uses: github/gh-aw/actions/setup@faf2523ba6ae8aa862dc5c98e06d72e54a342d1f # v0.47.2
         with:
           destination: /opt/gh-aw/actions
-      - name: Add eyes reaction for immediate feedback
-        id: react
-        if: github.event_name == 'issues' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment' || github.event_name == 'discussion' || github.event_name == 'discussion_comment' || (github.event_name == 'pull_request') && (github.event.pull_request.head.repo.id == github.repository_id)
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        env:
-          GH_AW_REACTION: "eyes"
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { setupGlobals } = require('/opt/gh-aw/actions/setup_globals.cjs');
-            setupGlobals(core, github, context, exec, io);
-            const { main } = require('/opt/gh-aw/actions/add_reaction.cjs');
-            await main();
-      - name: Check team membership for command workflow
+      - name: Check team membership for workflow
         id: check_membership
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
@@ -1129,17 +1093,6 @@ jobs:
             const { setupGlobals } = require('/opt/gh-aw/actions/setup_globals.cjs');
             setupGlobals(core, github, context, exec, io);
             const { main } = require('/opt/gh-aw/actions/check_membership.cjs');
-            await main();
-      - name: Check command position
-        id: check_command_position
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        env:
-          GH_AW_COMMANDS: "[\"fix-obi\"]"
-        with:
-          script: |
-            const { setupGlobals } = require('/opt/gh-aw/actions/setup_globals.cjs');
-            setupGlobals(core, github, context, exec, io);
-            const { main } = require('/opt/gh-aw/actions/check_command_position.cjs');
             await main();
 
   safe_outputs:

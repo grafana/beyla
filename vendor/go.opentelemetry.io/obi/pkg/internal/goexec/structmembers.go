@@ -688,8 +688,8 @@ func readMembers(
 				offsets[constName] = uint64(constLocation)
 			} else {
 				// Temporary workaround
-				return fmt.Errorf("at the moment, Beyla only supports constant values for DW_AT_data_member_location;"+
-					"got %s. Beyla will read the offsets from a pre-fetched database", attrs[dwarf.AttrDataMemberLoc])
+				return fmt.Errorf("at the moment, OBI only supports constant values for DW_AT_data_member_location;"+
+					"got %s. OBI will read the offsets from a pre-fetched database", attrs[dwarf.AttrDataMemberLoc])
 			}
 		}
 	}

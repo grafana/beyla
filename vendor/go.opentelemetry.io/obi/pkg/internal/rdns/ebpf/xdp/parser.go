@@ -7,6 +7,7 @@ package xdp // import "go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp"
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 )
 
 // wordSize represents the size of a DNS message word (2 bytes)
@@ -115,7 +116,7 @@ func parseQSection(data *bytes.Buffer) *question {
 // Labels are separated by dots and terminated by a zero-length label.
 // Returns an empty string if the label sequence is malformed.
 func parseSectionLabel(data *bytes.Buffer) string {
-	var label string
+	var labelBuilder strings.Builder
 
 	sep := ""
 
@@ -130,12 +131,13 @@ func parseSectionLabel(data *bytes.Buffer) string {
 			break
 		}
 
-		label += sep + string(data.Next(labelLen))
+		labelBuilder.WriteString(sep)
+		labelBuilder.Write(data.Next(labelLen))
 
 		sep = "."
 	}
 
-	return label
+	return labelBuilder.String()
 }
 
 // parseRecords parses the answer records section of a DNS message.

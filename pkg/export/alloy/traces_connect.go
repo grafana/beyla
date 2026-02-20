@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -44,7 +45,7 @@ func ConnectionSpansReceiver(
 		}
 
 		tr := &connectionSpansReceiver{
-			hostID:           ctxInfo.HostID,
+			nodeMeta:         &ctxInfo.NodeMeta,
 			input:            input.Subscribe(),
 			attributeGetters: otel.ConnectionSpanAttributes(unresolvedNames),
 			traceConsumers:   cfg.TracesReceiver.Traces,
@@ -55,7 +56,7 @@ func ConnectionSpansReceiver(
 }
 
 type connectionSpansReceiver struct {
-	hostID           string
+	nodeMeta         *meta.NodeMeta
 	input            <-chan []request.Span
 	traceConsumers   []beyla.Consumer
 	attributeGetters []attributes.Getter[*request.Span, attribute.KeyValue]
@@ -72,7 +73,7 @@ func (tr *connectionSpansReceiver) provideLoop(ctx context.Context) {
 				}
 
 				for _, tc := range tr.traceConsumers {
-					traces := otel.GenerateConnectSpans(tr.hostID, sample.Span, spanGroup)
+					traces := otel.GenerateConnectSpans(tr.nodeMeta, sample.Span, spanGroup)
 					err := tc.ConsumeTraces(ctx, traces)
 					if err != nil {
 						slog.Error("error sending trace to consumer", "error", err)

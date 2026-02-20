@@ -129,14 +129,14 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		span := &inputSpans[i]
 
-		// We first confirm that the current namespace seen by BPF is tracked by Beyla
+		// We first confirm that the current namespace seen by BPF is tracked by OBI
 		ns, nsExists := pf.current[span.Pid.Namespace]
 
 		if !nsExists {
 			continue
 		}
 
-		// If the namespace exist, we confirm that we are tracking the user PID that Beyla
+		// If the namespace exist, we confirm that we are tracking the user PID that OBI
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {

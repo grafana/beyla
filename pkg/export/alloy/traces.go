@@ -11,6 +11,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	attributes "go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -38,7 +39,7 @@ func TracesReceiver(
 		}
 
 		tr := &tracesReceiver{
-			cfg: cfg, hostID: ctxInfo.HostID, spanMetricsEnabled: spanMetricsEnabled,
+			cfg: cfg, nodeMeta: &ctxInfo.NodeMeta, spanMetricsEnabled: spanMetricsEnabled,
 			input:          input.Subscribe(msg.SubscriberName("alloyTracesInput")),
 			is:             instrumentations.NewInstrumentationSelection(cfg.Instrumentations),
 			attributeCache: expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.Minute),
@@ -53,7 +54,7 @@ func TracesReceiver(
 
 type tracesReceiver struct {
 	cfg                *beyla.TracesReceiverConfig
-	hostID             string
+	nodeMeta           *meta.NodeMeta
 	spanMetricsEnabled bool
 	is                 instrumentations.InstrumentationSelection
 	input              <-chan []request.Span
@@ -95,7 +96,7 @@ func (tr *tracesReceiver) provideLoop(ctx context.Context) {
 
 					envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
 					for _, tc := range tr.cfg.Traces {
-						traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.hostID, spanGroup, otel.ReporterName)
+						traces := tracesgen.GenerateTracesWithAttributes(tr.attributeCache, &sample.Span.Service, envResourceAttrs, tr.nodeMeta, spanGroup, otel.ReporterName)
 						err := tc.ConsumeTraces(ctx, traces)
 						if err != nil {
 							slog.Error("error sending trace to consumer", "error", err)

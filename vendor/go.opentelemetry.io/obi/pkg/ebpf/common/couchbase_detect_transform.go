@@ -45,25 +45,17 @@ func ProcessPossibleCouchbaseEvent(event *TCPRequestInfo, requestBuf []byte, res
 	return info, ignore, err
 }
 
-// handleSelectBucket processes the SELECT_BUCKET command and updates the bucket cache.
-func handleSelectBucket(connInfo BpfConnectionInfoT, reqPacket *couchbasekv.Packet, responseBuf []byte, bucketCache *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]) {
-	respPacket, respErr := couchbasekv.ParsePacket(responseBuf)
-	if respErr != nil {
-		return
-	}
-	handleSelectBucketWithResponse(connInfo, reqPacket, respPacket, bucketCache)
-}
-
 // handleSelectBucketWithResponse processes the SELECT_BUCKET command with an already-parsed response.
-func handleSelectBucketWithResponse(connInfo BpfConnectionInfoT, reqPacket *couchbasekv.Packet, respPacket *couchbasekv.Packet, bucketCache *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]) {
+// If respPacket is nil, the response is assumed to be successful.
+func handleSelectBucketWithResponse(connInfo BpfConnectionInfoT, reqPacket couchbasekv.Packet, respPacket couchbasekv.Packet, bucketCache *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]) {
 	bucketName := reqPacket.KeyString()
 	if bucketCache == nil || bucketName == "" {
 		return
 	}
 
 	// Check if bucket selection was successful
-	// there might be cases where the response is nil (e.g., truncated), we assume success
-	if respPacket != nil && (!respPacket.IsResponse() || !respPacket.Header.Status.IsSuccess()) {
+	// there might be cases where there is no response (e.g., truncated), we assume success
+	if respPacket != nil && (!respPacket.IsResponse() || !respPacket.Header().Status().IsSuccess()) {
 		return
 	}
 
@@ -76,25 +68,16 @@ func handleSelectBucketWithResponse(connInfo BpfConnectionInfoT, reqPacket *couc
 	bucketCache.Add(connInfo, bucketInfo)
 }
 
-// handleGetCollectionID processes the GET_COLLECTION_ID command and updates the bucket cache with scope/collection.
-func handleGetCollectionID(connInfo BpfConnectionInfoT, reqPacket *couchbasekv.Packet, responseBuf []byte, bucketCache *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]) {
-	// Parse response to check if collection lookup was successful
-	respPacket, respErr := couchbasekv.ParsePacket(responseBuf)
-	if respErr != nil {
-		return
-	}
-	handleGetCollectionIDWithResponse(connInfo, reqPacket, respPacket, bucketCache)
-}
-
 // handleGetCollectionIDWithResponse processes the GET_COLLECTION_ID command with an already-parsed response.
-func handleGetCollectionIDWithResponse(connInfo BpfConnectionInfoT, reqPacket *couchbasekv.Packet, respPacket *couchbasekv.Packet, bucketCache *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]) {
+// If respPacket is nil, the collection lookup is considered failed.
+func handleGetCollectionIDWithResponse(connInfo BpfConnectionInfoT, reqPacket couchbasekv.Packet, respPacket couchbasekv.Packet, bucketCache *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]) {
 	scopeCollection := reqPacket.ValueString()
 	if bucketCache == nil || scopeCollection == "" {
 		return
 	}
 
 	// Check if collection lookup was successful
-	if respPacket == nil || !respPacket.IsResponse() || !respPacket.Header.Status.IsSuccess() {
+	if respPacket == nil || !respPacket.IsResponse() || !respPacket.Header().Status().IsSuccess() {
 		return
 	}
 
@@ -119,64 +102,52 @@ func handleGetCollectionIDWithResponse(connInfo BpfConnectionInfoT, reqPacket *c
 // processCouchbaseEvent parses Couchbase packets from request and response buffers.
 // It handles multiple packets that may be pipelined in a single TCP segment.
 func processCouchbaseEvent(connInfo BpfConnectionInfoT, requestBuf []byte, responseBuf []byte, bucketCache *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]) (*CouchbaseInfo, bool, error) {
-	reqPackets, err := couchbasekv.ParsePackets(requestBuf)
-	if err != nil {
-		return nil, true, err
-	}
-
-	// If no valid request packets, return early
-	if len(reqPackets) == 0 {
-		return nil, true, errors.New("no valid Couchbase request packets found")
-	}
-
-	// We need at least one request packet
-	hasRequest := false
-	for _, pkt := range reqPackets {
-		if pkt.IsRequest() {
-			hasRequest = true
+	// Build a map of response packets by Opaque for matching
+	respByOpaque := make(map[uint32]couchbasekv.Packet)
+	for pkt, err := range couchbasekv.ParsePackets(responseBuf) {
+		if err != nil {
 			break
 		}
-	}
-	if !hasRequest {
-		return nil, true, nil
-	}
-
-	respPackets, _ := couchbasekv.ParsePackets(responseBuf)
-
-	// Build a map of response packets by Opaque for matching
-	respByOpaque := make(map[uint32]*couchbasekv.Packet)
-	for _, pkt := range respPackets {
 		if pkt.IsResponse() {
-			respByOpaque[pkt.Header.Opaque] = pkt
+			respByOpaque[pkt.Header().Opaque()] = pkt
 		}
 	}
 
-	for _, reqPacket := range reqPackets {
+	hasPackets := false
+	for reqPacket, err := range couchbasekv.ParsePackets(requestBuf) {
+		if err != nil {
+			if !hasPackets {
+				return nil, true, errors.New("no valid Couchbase request packets found")
+			}
+			break
+		}
+		hasPackets = true
+
 		if !reqPacket.IsRequest() {
 			continue
 		}
 
-		respPacket := respByOpaque[reqPacket.Header.Opaque]
+		respPacket, hasResp := respByOpaque[reqPacket.Header().Opaque()]
 
-		if reqPacket.Header.Opcode == couchbasekv.OpcodeSelectBucket {
+		if reqPacket.Header().Opcode() == couchbasekv.OpcodeSelectBucket {
 			handleSelectBucketWithResponse(connInfo, reqPacket, respPacket, bucketCache)
 			// Don't create a span for SELECT_BUCKET
 			continue
 		}
 
-		if reqPacket.Header.Opcode == couchbasekv.OpcodeCollectionsGetID {
+		if reqPacket.Header().Opcode() == couchbasekv.OpcodeCollectionsGetID {
 			handleGetCollectionIDWithResponse(connInfo, reqPacket, respPacket, bucketCache)
 			// Don't create a span for GET_COLLECTION_ID
 			continue
 		}
 
-		if !reqPacket.Header.Opcode.IsKVOperation() {
-			slog.Debug("Ignoring non-KV Couchbase operation", "opcode", reqPacket.Header.Opcode.String())
+		if !reqPacket.Header().Opcode().IsKVOperation() {
+			slog.Debug("Ignoring non-KV Couchbase operation", "opcode", reqPacket.Header().Opcode().String())
 			continue
 		}
 
 		info := &CouchbaseInfo{
-			Operation: reqPacket.Header.Opcode.String(),
+			Operation: reqPacket.Header().Opcode().String(),
 			Key:       reqPacket.KeyString(),
 		}
 
@@ -189,12 +160,15 @@ func processCouchbaseEvent(connInfo BpfConnectionInfoT, requestBuf []byte, respo
 			}
 		}
 
-		if respPacket != nil && respPacket.IsResponse() {
-			info.Status = respPacket.Header.Status
-			info.IsError = respPacket.Header.Status.IsError()
+		if hasResp && respPacket.IsResponse() {
+			info.Status = respPacket.Header().Status()
+			info.IsError = respPacket.Header().Status().IsError()
 		}
 
 		return info, false, nil
+	}
+	if !hasPackets {
+		return nil, true, errors.New("no valid Couchbase request packets found")
 	}
 	return nil, true, nil
 }

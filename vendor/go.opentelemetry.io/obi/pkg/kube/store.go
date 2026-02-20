@@ -413,7 +413,7 @@ func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta, contain
 }
 
 // function implemented to provide consistent service metadata naming across multiple
-// OTEL implementations: OTEL operator, Loki and Beyla
+// OTEL implementations: OTEL operator and OBI
 // https://github.com/grafana/k8s-monitoring-helm/issues/942
 func (s *Store) valueFromMetadata(om *informer.ObjectMeta, annotationName string, labelNames []string) string {
 	// if this object meta is not a pod, we ignore the metadata

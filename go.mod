@@ -1,6 +1,6 @@
 module github.com/grafana/beyla/v3
 
-go 1.25.6
+go 1.25.7
 
 // opentelemetry-ebpf-instrumentation is not downloaded directly via go mod
 // but included as a go submodule

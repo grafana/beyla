@@ -13,6 +13,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/expire"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
@@ -63,7 +64,7 @@ type procMetricsExporter struct {
 	cfg   *ProcMetricsConfig
 	clock *expire.CachedClock
 
-	hostID string
+	nodeMeta *meta.NodeMeta
 
 	exporter  sdkmetric.Exporter
 	reporters otelcfg.ReporterPool[*process.ID, *procMetrics]
@@ -154,7 +155,7 @@ func newProcMetricsExporter(
 		log:         log,
 		ctx:         ctx,
 		cfg:         cfg,
-		hostID:      ctxInfo.HostID,
+		nodeMeta:    &ctxInfo.NodeMeta,
 		clock:       expire.NewCachedClock(timeNow),
 		attrCPUTime: attrCPUTime,
 		attrCPUUtil: attrCPUUtil,
@@ -210,8 +211,8 @@ func newProcMetricsExporter(
 
 // getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
 // for process metrics.
-func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
-	baseAttrs := otelcfg.GetResourceAttrs(hostID, procID.Service)
+func getFilteredProcessResourceAttrs(nodeMeta *meta.NodeMeta, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
+	baseAttrs := otelcfg.GetResourceAttrs(nodeMeta, procID.Service)
 	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),
 		extranames.ProcCommand.OTEL().String(procID.Command),
@@ -229,7 +230,7 @@ func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSele
 func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {
 	log := me.log.With("service", procID.Service, "processID", procID.UID)
 	log.Debug("creating new Metrics exporter")
-	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.hostID, procID, me.cfg.SelectorCfg.SelectionCfg)...)
+	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.nodeMeta, procID, me.cfg.SelectorCfg.SelectionCfg)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(me.exporter,

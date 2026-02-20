@@ -115,7 +115,7 @@ func (sc *cacheSvcClient) connect(ctx context.Context) error {
 			return fmt.Errorf("error receiving message: %w", err)
 		}
 		// send a notification about the client being synced with the K8s metadata service
-		// so Beyla can start processing/decorating the received flows and traces
+		// so OBI can start processing/decorating the received flows and traces
 		if event.GetType() == informer.EventType_SYNC_FINISHED && !sc.waitForSyncClosed {
 			close(sc.waitForSynchronization)
 			sc.waitForSyncClosed = true

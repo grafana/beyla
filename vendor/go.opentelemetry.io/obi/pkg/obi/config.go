@@ -80,8 +80,8 @@ const (
 )
 
 var (
-	k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
-	k8sDefaultNamespacesGlob  = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
+	k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
+	k8sDefaultNamespacesGlob  = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
 )
 
 var DefaultConfig = Config{
@@ -155,7 +155,7 @@ var DefaultConfig = Config{
 	OTELMetrics: otelcfg.MetricsConfig{
 		Protocol:        otelcfg.ProtocolUnset,
 		MetricsProtocol: otelcfg.ProtocolUnset,
-		// Matches Alloy and Grafana recommended scrape interval
+		// Matches recommended scrape interval for OpenTelemetry and other collectors
 		OTELIntervalMS:       60_000,
 		Buckets:              export.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
@@ -211,9 +211,7 @@ var DefaultConfig = Config{
 			InformersResyncPeriod: 30 * time.Minute,
 			ResourceLabels:        kube.DefaultResourceLabels,
 		},
-		HostID: HostIDConfig{
-			FetchTimeout: 500 * time.Millisecond,
-		},
+		HostID:                         HostIDConfig{},
 		RenameUnresolvedHosts:          "unresolved",
 		RenameUnresolvedHostsOutgoing:  "outgoing",
 		RenameUnresolvedHostsIncoming:  "incoming",
@@ -229,7 +227,7 @@ var DefaultConfig = Config{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
 			services.RegexSelector{
-				Path: services.NewRegexp("(?:^|/)(beyla$|obi$|alloy$|otelcol[^/]*$)"),
+				Path: services.NewRegexp("(?:^|/)(obi$|otelcol[^/]*$)"),
 			},
 			services.RegexSelector{
 				Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
@@ -237,7 +235,7 @@ var DefaultConfig = Config{
 		},
 		DefaultExcludeInstrument: services.GlobDefinitionCriteria{
 			services.GlobAttributes{
-				Path: services.NewGlob("{*beyla,*alloy,*/obi,obi,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
+				Path: services.NewGlob("{*/obi,obi,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
 			},
 			services.GlobAttributes{
 				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
@@ -278,6 +276,7 @@ type Config struct {
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"OTEL_EBPF_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	//
 	// Deprecated: Use OTEL_EBPF_AUTO_TARGET_EXE
 	Exec services.RegexpAttr `yaml:"executable_path" env:"OTEL_EBPF_EXECUTABLE_PATH"`
 
@@ -292,11 +291,17 @@ type Config struct {
 	// will instrument all the service calls in all the ports, not only the port specified here.
 	Port services.PortEnum `yaml:"open_port" env:"OTEL_EBPF_OPEN_PORT"`
 
+	// AutoTargetLanguage selects the executable to instrument matching a Glob of chosen languages.
+	// To set this value via YAML, use discovery > instrument.
+	AutoTargetLanguage services.GlobAttr `env:"OTEL_EBPF_AUTO_TARGET_LANGUAGE,expand"`
+
 	// ServiceName is taken from either OTEL_EBPF_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
 	// Using env and envDefault is a trick to get the value either from one of either variables.
+	//
 	// Deprecated: Service name should be set in the instrumentation target (env vars, kube metadata...)
 	// as this is a reminiscence of past times when we only supported one executable per instance.
 	ServiceName string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${OTEL_EBPF_SERVICE_NAME}"`
+	//
 	// Deprecated: Service namespace should be set in the instrumentation target (env vars, kube metadata...)
 	// as this is a reminiscence of past times when we only supported one executable per instance.
 	ServiceNamespace string `yaml:"service_namespace" env:"OTEL_EBPF_SERVICE_NAMESPACE"`
@@ -506,8 +511,6 @@ type Attributes struct {
 type HostIDConfig struct {
 	// Override allows overriding the reported host.id in OBI
 	Override string `yaml:"override" env:"OTEL_EBPF_HOST_ID"`
-	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
-	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"OTEL_EBPF_HOST_ID_FETCH_TIMEOUT"`
 }
 
 type NodeJSConfig struct {
@@ -639,7 +642,7 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureNetO11y:
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
-		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || len(c.Discovery.Instrument) > 0 ||
+		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || len(c.Discovery.Instrument) > 0 ||
 			c.Exec.IsSet() || len(c.Discovery.Services) > 0
 	}
 	return false
@@ -651,7 +654,7 @@ func (c *Config) SpanMetricsEnabledForTraces() bool {
 }
 
 // ExternalLogger sets the logging capabilities of OBI.
-// Used for integrating OBI with an external logging system (for example Alloy)
+// Used for integrating OBI with an external logging system (for example an OpenTelemetry collector)
 // TODO: maybe this method has too many responsibilities, as it affects the global logger.
 func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 	slog.SetDefault(slog.New(handler))

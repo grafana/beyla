@@ -74,6 +74,7 @@ func (ld *languageDecorator) decorateEvent(ev *Event[ProcessAttrs]) {
 			}
 			t := _findProcLanguage(ev.Obj.pid)
 			ev.Obj.detectedType = t
+			ld.log.Debug("detected type", "pid", ev.Obj.pid, "type", t)
 			ld.typeCache.Add(ino, t)
 		}
 	}

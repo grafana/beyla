@@ -63,16 +63,19 @@ type ProcessInfo struct {
 type DiscoveryConfig struct {
 	// Services selection. If the user defined the OTEL_EBPF_EXECUTABLE_PATH or OTEL_EBPF_OPEN_PORT variables, they will be automatically
 	// added to the services definition criteria, with the lowest preference.
+	//
 	// Deprecated: Use Instrument instead
 	Services RegexDefinitionCriteria `yaml:"services"`
 
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.
+	//
 	// Deprecated: Use ExcludeInstrument instead
 	ExcludeServices RegexDefinitionCriteria `yaml:"exclude_services"`
 
-	// DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector)
+	// DefaultExcludeServices by default prevents self-instrumentation of OBI as well as related observability tools
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
+	//
 	// Deprecated: Use DefaultExcludeInstrument instead
 	DefaultExcludeServices RegexDefinitionCriteria `yaml:"default_exclude_services"`
 
@@ -86,7 +89,7 @@ type DiscoveryConfig struct {
 	// even if they match the Instrument selection.
 	ExcludeInstrument GlobDefinitionCriteria `yaml:"exclude_instrument"`
 
-	// DefaultExcludeInstrument by default prevents self-instrumentation of OBI as well as related services (Beyla, Alloy and OpenTelemetry collector)
+	// DefaultExcludeInstrument by default prevents self-instrumentation of OBI as well as related observability tools
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
 	DefaultExcludeInstrument GlobDefinitionCriteria `yaml:"default_exclude_instrument"`
 
@@ -155,6 +158,7 @@ type Selector interface {
 	GetPath() StringMatcher
 	GetPathRegexp() StringMatcher
 	GetOpenPorts() *PortEnum
+	GetLanguages() StringMatcher
 	IsContainersOnly() bool
 	RangeMetadata() iter.Seq2[string, StringMatcher]
 	RangePodLabels() iter.Seq2[string, StringMatcher]

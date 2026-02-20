@@ -32,7 +32,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 	otlp, err := collector.Start(ctx)
 	require.NoError(t, err)
 
-	// GIVEN an OTEL Metrics Exporter whose process CPU metrics consider the cpu.mode
+	// GIVEN an OTEL AppO11yMetrics Exporter whose process CPU metrics consider the cpu.mode
 	includedAttributes := attributes.InclusionLists{
 		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
 	}

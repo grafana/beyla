@@ -228,7 +228,7 @@ func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSele
 
 func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, error) {
 	log := me.log.With("service", procID.Service, "processID", procID.UID)
-	log.Debug("creating new Metrics exporter")
+	log.Debug("creating new AppO11yMetrics exporter")
 	resources := resource.NewWithAttributes(semconv.SchemaURL, getFilteredProcessResourceAttrs(me.hostID, procID, me.cfg.SelectorCfg.SelectionCfg)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),

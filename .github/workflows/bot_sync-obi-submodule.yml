@@ -73,6 +73,8 @@ jobs:
             Automated update of the OBI (OpenTelemetry eBPF Instrumentation) submodule to the latest commit from grafana/opentelemetry-ebpf-instrumentation main.
 
             OBI commit: `${{ steps.obi-sha.outputs.sha }}`
+
+            If CI fails due to upstream breaking changes, add the **agent/fix-obi** label to this PR to run the agentic workflow and get suggested fixes.
           base: main
           branch: "update-obi-submodule-${{ github.run_id }}"
           labels: automated-pr

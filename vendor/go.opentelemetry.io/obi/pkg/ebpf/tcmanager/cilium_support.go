@@ -145,7 +145,7 @@ func EnsureCiliumCompatibility(backend config.TCBackend) error {
 	// we are using TC/Netlink attachment (TCBackendTC)
 
 	if hasCiliumTCX() {
-		return errors.New("detected Cilium TCX attachment, but Beyla has been configured to use TC")
+		return errors.New("detected Cilium TCX attachment, but OBI has been configured to use TC")
 	}
 
 	minPrio, maxPrio := ciliumTCPriorities()
@@ -165,5 +165,5 @@ func EnsureCiliumCompatibility(backend config.TCBackend) error {
 
 	// minPrio == maxPrio == 1 -> cilium should be reconfigured with
 	// bpf-filter-priority >= 2
-	return errors.New("detected Cilium TC with priority 1 - Cilium may clobber Beyla")
+	return errors.New("detected Cilium TC with priority 1 - Cilium may clobber OBI")
 }

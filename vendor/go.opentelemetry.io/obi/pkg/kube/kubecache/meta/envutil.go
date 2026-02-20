@@ -38,10 +38,11 @@ func formatMap(m map[string]string) (fmtStr string) {
 	for key := range m {
 		keys.Insert(key)
 	}
+	var builder strings.Builder
 	for _, key := range keys.List() {
-		fmtStr += fmt.Sprintf("%v=%q\n", key, m[key])
+		fmt.Fprintf(&builder, "%v=%q\n", key, m[key])
 	}
-	fmtStr = strings.TrimSuffix(fmtStr, "\n")
+	fmtStr = strings.TrimSuffix(builder.String(), "\n")
 
 	return
 }

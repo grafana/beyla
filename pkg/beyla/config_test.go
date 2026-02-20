@@ -261,8 +261,7 @@ network:
 				ResourceLabels:        metaSources,
 			},
 			HostID: HostIDConfig{
-				Override:     "the-host-id",
-				FetchTimeout: 4 * time.Second,
+				Override: "the-host-id",
 			},
 			Select: attributes.Selection{
 				attributes.NetworkFlow.Section: attributes.InclusionLists{

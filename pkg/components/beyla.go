@@ -221,10 +221,8 @@ func buildCommonContextInfo(
 		OverrideAppExportQueue:  msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "overriddenAppExportQueue"),
 	}
 
-	if config.Attributes.HostID.Override == "" {
-		ctxInfo.FetchHostID(ctx, config.Attributes.HostID.FetchTimeout)
-	} else {
-		ctxInfo.HostID = config.Attributes.HostID.Override
+	if config.Attributes.HostID.Override != "" {
+		ctxInfo.NodeMeta.HostID = config.Attributes.HostID.Override
 	}
 	ctxInfo.Metrics, err = internalMetrics(ctx, config, ctxInfo, promMgr)
 	if err != nil {

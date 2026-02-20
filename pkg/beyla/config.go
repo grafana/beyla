@@ -120,6 +120,10 @@ type Config struct {
 	// It also accepts BEYLA_AUTO_TARGET_EXE for compatibility with opentelemetry-go-instrumentation
 	AutoTargetExe services.GlobAttr `env:"BEYLA_AUTO_TARGET_EXE,expand" envDefault:"${OTEL_GO_AUTO_TARGET_EXE}"`
 
+	// AutoTargetLanguage selects the executable to instrument matching a Glob of chosen languages.
+	// To set this value via YAML, use discovery > instrument.
+	AutoTargetLanguage services.GlobAttr `env:"BEYLA_AUTO_TARGET_LANGUAGE"`
+
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
@@ -237,9 +241,6 @@ type HostIDConfig struct {
 	// Override allows overriding the reported host.id in Beyla
 	// nolint:undoc
 	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
-	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
-	// nolint:undoc
-	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }
 
 // OpenTelemetry SDK injection for Kubernetes

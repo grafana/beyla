@@ -9,6 +9,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
@@ -26,7 +27,7 @@ func TestConnection_Spans(t *testing.T) {
 
 	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	cse, err := ConnectionSpansExport(
-		&global.ContextInfo{HostID: "the-host"},
+		&global.ContextInfo{NodeMeta: meta.NodeMeta{HostID: "the-host"}},
 		&otelcfg.TracesConfig{
 			TracesEndpoint: otlp.ServerEndpoint + "/v1/traces",
 			TracesProtocol: otelcfg.ProtocolHTTPJSON,

@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
@@ -33,7 +34,7 @@ type SurveyMetricsReporter struct {
 
 	surveyInfo instrument.Int64UpDownCounter
 
-	hostID        string
+	nodeMeta      *meta.NodeMeta
 	processEvents <-chan exec.ProcessEvent
 	exporter      sdkmetric.Exporter
 	pidTracker    otel.PidServiceTracker
@@ -72,7 +73,7 @@ func newSurveyMetricsReporter(
 	smr := &SurveyMetricsReporter{
 		log:           log,
 		cfg:           cfg,
-		hostID:        ctxInfo.HostID,
+		nodeMeta:      &ctxInfo.NodeMeta,
 		serviceMap:    map[svc.UID][]attribute.KeyValue{},
 		processEvents: processEventsQueue.Subscribe(msg.SubscriberName("processEvents")),
 		pidTracker:    otel.NewPidServiceTracker(),
@@ -165,7 +166,7 @@ func (smr *SurveyMetricsReporter) disassociatePIDFromService(pid app.PID) (bool,
 }
 
 func (smr *SurveyMetricsReporter) attrsFromService(service *svc.Attrs) []attribute.KeyValue {
-	return append(otelcfg.GetAppResourceAttrs(smr.hostID, service), otelcfg.ResourceAttrsFromEnv(service)...)
+	return append(otelcfg.GetAppResourceAttrs(smr.nodeMeta, service), otelcfg.ResourceAttrsFromEnv(service)...)
 }
 
 func (smr *SurveyMetricsReporter) createSurveyInfo(ctx context.Context, service *svc.Attrs) {

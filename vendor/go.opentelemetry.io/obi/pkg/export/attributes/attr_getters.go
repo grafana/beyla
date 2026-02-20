@@ -25,7 +25,7 @@ type NamedGetters[T, O any] func(name attr.Name) (Getter[T, O], bool)
 // PrometheusGetters builds a list of Getter getters for the names provided by the
 // user configuration, ready to be passed to a Prometheus exporter.
 // It differentiates two name formats: the exposed name for the attribute (uses _ for word separation, as
-// required by Prometheus); and the internal name of the attribute (uses . for word separation, as internally Beyla
+// required by Prometheus); and the internal name of the attribute (uses . for word separation, as internally OBI
 // stores the metadata).
 func PrometheusGetters[T, O any](getter NamedGetters[T, O], names []attr.Name) []Field[T, O] {
 	return buildGetterList(getter, names, attr.Name.Prom)

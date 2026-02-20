@@ -28,6 +28,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -93,13 +94,13 @@ func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any
 	return result
 }
 
-func GetAppResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
-	return append(GetResourceAttrs(hostID, service),
+func GetAppResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.KeyValue {
+	return append(GetResourceAttrs(nodeMeta, service),
 		semconv.ServiceInstanceID(service.UID.Instance),
 	)
 }
 
-func GetResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
+func GetResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.UID.Name),
 		// SpanMetrics requires an extra attribute besides service name
@@ -111,7 +112,7 @@ func GetResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
 		semconv.TelemetrySDKVersion(buildinfo.Version),
 		semconv.HostName(service.HostName),
-		semconv.HostID(hostID),
+		semconv.HostID(nodeMeta.HostID),
 		semconv.OSTypeLinux,
 	}
 
@@ -121,6 +122,10 @@ func GetResourceAttrs(hostID string, service *svc.Attrs) []attribute.KeyValue {
 
 	for k, v := range service.Metadata {
 		attrs = append(attrs, k.OTEL().String(v))
+	}
+
+	for _, entry := range nodeMeta.Metadata {
+		attrs = append(attrs, entry.Key.OTEL().String(entry.Value))
 	}
 	return attrs
 }

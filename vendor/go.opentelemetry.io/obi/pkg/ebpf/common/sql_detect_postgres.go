@@ -159,11 +159,14 @@ func postgresPreparedStatements(b []byte) (string, string, string) {
 		if err == nil {
 			op = "PREPARED STATEMENT"
 			table = fmt.Sprintf("%s.%s", statement, portal)
+			var sqlBuilder strings.Builder
 			for _, arg := range args {
 				if isASCII(arg) {
-					sql += arg + " "
+					sqlBuilder.WriteString(arg)
+					sqlBuilder.WriteString(" ")
 				}
 			}
+			sql = sqlBuilder.String()
 		}
 	} else if isPostgresQueryCommand(b) {
 		text, err := parsePosgresQueryCommand(b)

@@ -79,7 +79,7 @@ func newSurveyReporter(
 		processEvents: processEventCh.Subscribe(msg.SubscriberName("processEvents")),
 		serviceMap:    map[svc.UID]svc.Attrs{},
 		pidsTracker:   otel.NewPidServiceTracker(),
-		hostID:        ctxInfo.HostID,
+		hostID:        ctxInfo.NodeMeta.HostID,
 		promConnect:   ctxInfo.Prometheus,
 		surveyInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: otel2.SurveyInfoMetricName,

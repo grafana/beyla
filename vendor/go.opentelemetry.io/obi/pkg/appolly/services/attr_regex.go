@@ -24,6 +24,7 @@ func (dc RegexDefinitionCriteria) Validate() error {
 		if dc[i].OpenPorts.Len() == 0 &&
 			!dc[i].Path.IsSet() &&
 			!dc[i].PathRegexp.IsSet() &&
+			!dc[i].Languages.IsSet() &&
 			len(dc[i].Metadata) == 0 &&
 			len(dc[i].PodLabels) == 0 &&
 			len(dc[i].PodAnnotations) == 0 {
@@ -54,11 +55,15 @@ func (dc RegexDefinitionCriteria) PortOfInterest(port int) bool {
 type RegexSelector struct {
 	// Name will define a name for the matching service. If unset, it will take the name of the executable process,
 	// from the OTEL_SERVICE_NAME env var of the instrumented process, or from other metadata like Kubernetes annotations.
+	//
 	// Deprecated: Name should be set in the instrumentation target via kube metadata or standard env vars.
+	//
 	// To be kept undocumented until we remove it.
 	Name string `yaml:"name"`
 	// Namespace will define a namespace for the matching service. If unset, it will be left empty.
+	//
 	// Deprecated: Namespace should be set in the instrumentation target via kube metadata or standard env vars.
+	//
 	// To be kept undocumented until we remove it.
 	Namespace string `yaml:"namespace"`
 	// OpenPorts allows defining a group of ports that this service could open. It accepts a comma-separated
@@ -66,6 +71,9 @@ type RegexSelector struct {
 	OpenPorts PortEnum `yaml:"open_ports"`
 	// Path allows defining the regular expression matching the full executable path.
 	Path RegexpAttr `yaml:"exe_path"`
+	// Language allows defining services to instrument based on the
+	// programming language they are written in.
+	Languages RegexpAttr `yaml:"languages"`
 	// PathRegexp is deprecated but kept here for backwards compatibility with Beyla 1.0.x.
 	// Deprecated. Please use Path (exe_path YAML attribute)
 	PathRegexp RegexpAttr `yaml:"exe_path_regexp"`
@@ -155,6 +163,7 @@ func (p *RegexpAttr) MatchString(input string) bool {
 func (a *RegexSelector) GetName() string                        { return a.Name }
 func (a *RegexSelector) GetNamespace() string                   { return a.Namespace }
 func (a *RegexSelector) GetPath() StringMatcher                 { return &a.Path }
+func (a *RegexSelector) GetLanguages() StringMatcher            { return &a.Languages }
 func (a *RegexSelector) GetPathRegexp() StringMatcher           { return &a.PathRegexp }
 func (a *RegexSelector) GetOpenPorts() *PortEnum                { return &a.OpenPorts }
 func (a *RegexSelector) IsContainersOnly() bool                 { return a.ContainersOnly }

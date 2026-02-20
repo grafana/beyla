@@ -54,6 +54,7 @@ type MetricsConfig struct {
 	// Features of metrics that can be exported. Accepted values: application, network,
 	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
+	//
 	// Deprecated: use top-level MetricsConfig.Features instead.
 	DeprFeatures export.Features `yaml:"features"`
 

@@ -129,17 +129,14 @@ func DBOperationName(val string) attribute.KeyValue {
 }
 
 func DBSystemName(val string) attribute.KeyValue {
-	// TODO: replace by semconv.DBSystemName when we update to OTEL semconv library 1.30
 	return attribute.Key(attr.DBSystemName).String(val)
 }
 
 func GraphqlOperationType(val string) attribute.KeyValue {
-	// TODO: replace once it's available in semconv
 	return attribute.Key(attr.GraphQLOperationType).String(val)
 }
 
 func ElasticsearchNodeName(val string) attribute.KeyValue {
-	// TODO: replace it when it's available in the imported semconv version
 	return attribute.Key(attr.ElasticsearchNodeName).String(val)
 }
 

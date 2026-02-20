@@ -63,7 +63,7 @@ func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 type Decorator func(s *svc.Attrs, pid int)
 
 func HostNamePIDDecorator(cfg *config.InstanceIDConfig) Decorator {
-	// TODO: periodically update in case the current Beyla instance is created from a VM snapshot running as a different hostname
+	// TODO: periodically update in case the current OBI instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()
 	log := rlog().With("function", "instance_ID_hostNamePIDDecorator")

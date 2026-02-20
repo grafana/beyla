@@ -60,19 +60,20 @@ type KubernetesDecorator struct {
 	// kubernetes metadata decoration.
 	DisableInformers []string `yaml:"disable_informers" env:"OTEL_EBPF_KUBE_DISABLE_INFORMERS"`
 
-	// MetaCacheAddress is the host:port address of the beyla-k8s-cache service instance
+	// MetaCacheAddress is the host:port address of the obi-k8s-cache service instance
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"OTEL_EBPF_KUBE_META_CACHE_ADDRESS"`
 
 	// MetaRestrictLocalNode will download only the metadata from the Pods that are located in the same
-	// node as the Beyla instance. It will also restrict the Node information to the local node.
+	// node as the OBI instance. It will also restrict the Node information to the local node.
 	MetaRestrictLocalNode bool `yaml:"meta_restrict_local_node" env:"OTEL_EBPF_KUBE_META_RESTRICT_LOCAL_NODE"`
 
-	// MetaSourceLabels allows Beyla overriding the service name and namespace of an application from
+	// MetaSourceLabels allows OBI overriding the service name and namespace of an application from
 	// the given labels.
+	//
 	// Deprecated: kept for backwards-compatibility with Beyla 1.9
 	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
 
-	// ResourceLabels allows Beyla overriding the OTEL Resource attributes from a map of user-defined labels.
+	// ResourceLabels allows OBI overriding the OTEL Resource attributes from a map of user-defined labels.
 	ResourceLabels kube.ResourceLabels `yaml:"resource_labels"`
 
 	// ServiceNameTemplate allows to override the service.name with a custom value. Uses the go template language.

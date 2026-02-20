@@ -33,7 +33,7 @@ func rdlog() *slog.Logger {
 var netLookupAddr = net.LookupAddr
 
 // ReverseDNS is currently experimental. It is kept disabled by default and will be hidden
-// from the documentation. This means that it does not impact in the overall Beyla performance.
+// from the documentation. This means that it does not impact in the overall OBI performance.
 type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default), "local" and "ebpf"
 	Type string `yaml:"type" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE" validate:"oneof=none local ebpf"`

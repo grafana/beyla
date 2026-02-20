@@ -120,9 +120,9 @@ func (m *TracesConfig) guessProtocol() Protocol {
 // The HTTP path will be defined from one of the following sources, from highest to lowest priority
 // - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, if defined
 // - OTEL_EXPORTER_OTLP_ENDPOINT, if defined
-// - https://otlp-gateway-${GRAFANA_CLOUD_ZONE}.grafana.net/otlp, if GRAFANA_CLOUD_ZONE is defined
-// If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
-// correct URL with the OTLP_EXPORTER_... variables.
+// - Cloud provider-specific endpoints can be configured via OTEL_EXPORTER_OTLP_ENDPOINT
+// If the cloud provider changes its OTLP Gateway URL in the future, you can point to the
+// correct URL with the OTEL_EXPORTER_... variables.
 func ParseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 	endpoint, isCommon := cfg.OTLPTracesEndpoint()
 

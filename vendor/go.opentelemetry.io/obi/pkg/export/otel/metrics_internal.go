@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -56,7 +57,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		return nil, err
 	}
 
-	res := newResourceInternal(ctxInfo.HostID)
+	res := newResourceInternal(&ctxInfo.NodeMeta)
 	provider := newInternalMeterProvider(res, &exporter, metrics.Interval)
 	meter := provider.Meter("obi_internal")
 	tracerFlushes, err := meter.Float64Histogram(
@@ -239,13 +240,17 @@ func (p *InternalMetricsReporter) InstrumentationError(processName, errorType st
 	))
 }
 
-func newResourceInternal(hostID string) *resource.Resource {
+func newResourceInternal(nodeMeta *meta.NodeMeta) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(attr.VendorSDKName),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
 		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
-		semconv.HostID(hostID),
+		semconv.HostID(nodeMeta.HostID),
+	}
+
+	for _, event := range nodeMeta.Metadata {
+		attrs = append(attrs, event.Key.OTEL().String(event.Value))
 	}
 
 	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)

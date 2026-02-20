@@ -43,7 +43,7 @@ type IPAddr [net.IPv6len]uint8
 type Record struct {
 	NetFlowRecordT
 
-	// Attrs of the flow record: source/destination, Interface, Beyla IP, etc...
+	// Attrs of the flow record: source/destination, Interface, OBI IP, etc...
 	Attrs RecordAttrs
 }
 

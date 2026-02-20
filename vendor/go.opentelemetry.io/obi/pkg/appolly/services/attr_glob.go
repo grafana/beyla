@@ -23,6 +23,7 @@ func (dc GlobDefinitionCriteria) Validate() error {
 	for i := range dc {
 		if dc[i].OpenPorts.Len() == 0 &&
 			!dc[i].Path.IsSet() &&
+			!dc[i].Languages.IsSet() &&
 			len(dc[i].Metadata) == 0 &&
 			len(dc[i].PodLabels) == 0 &&
 			len(dc[i].PodAnnotations) == 0 {
@@ -49,17 +50,25 @@ func (dc GlobDefinitionCriteria) PortOfInterest(port int) bool {
 type GlobAttributes struct {
 	// Name will define a name for the matching service. If unset, it will take the name of the executable process,
 	// from the OTEL_SERVICE_NAME env var of the instrumented process, or from other metadata like Kubernetes annotations.
+	//
 	// Deprecated: Name should be set in the instrumentation target via kube metadata or standard env vars.
+	//
 	// To be kept undocumented until we remove it.
 	Name string `yaml:"name"`
 	// Namespace will define a namespace for the matching service. If unset, it will be left empty.
+	//
 	// Deprecated: Namespace should be set in the instrumentation target via kube metadata or standard env vars.
+	//
 	// To be kept undocumented until we remove it.
 	Namespace string `yaml:"namespace"`
 
 	// OpenPorts allows defining a group of ports that this service could open. It accepts a comma-separated
 	// list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089)
 	OpenPorts PortEnum `yaml:"open_ports"`
+
+	// Language allows defining services to instrument based on the
+	// programming language they are written in. Use lowercase names, e.g. java,go
+	Languages GlobAttr `yaml:"languages"`
 
 	// Path allows defining the regular expression matching the full executable path.
 	Path GlobAttr `yaml:"exe_path"`
@@ -150,6 +159,7 @@ func (p *GlobAttr) MatchString(input string) bool {
 func (ga *GlobAttributes) GetName() string                        { return ga.Name }
 func (ga *GlobAttributes) GetNamespace() string                   { return ga.Namespace }
 func (ga *GlobAttributes) GetPath() StringMatcher                 { return &ga.Path }
+func (ga *GlobAttributes) GetLanguages() StringMatcher            { return &ga.Languages }
 func (ga *GlobAttributes) GetPathRegexp() StringMatcher           { return nilMatcher{} }
 func (ga *GlobAttributes) GetOpenPorts() *PortEnum                { return &ga.OpenPorts }
 func (ga *GlobAttributes) IsContainersOnly() bool                 { return ga.ContainersOnly }

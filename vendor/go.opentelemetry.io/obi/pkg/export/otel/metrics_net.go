@@ -115,7 +115,7 @@ func newMetricsExporter(
 	}
 	exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
-	resource := createFilteredNetworkResource(ctxInfo.HostID, cfg.SelectorCfg.SelectionCfg)
+	resource := createFilteredNetworkResource(ctxInfo.NodeMeta.HostID, cfg.SelectorCfg.SelectionCfg)
 	provider := newMeterProvider(resource, &exporter, cfg.Metrics.Interval)
 
 	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)

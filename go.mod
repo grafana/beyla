@@ -25,7 +25,7 @@ require (
 	go.opentelemetry.io/collector/component v1.49.0
 	go.opentelemetry.io/collector/config/configgrpc v0.143.0
 	go.opentelemetry.io/collector/config/confighttp v0.143.0
-	go.opentelemetry.io/collector/config/configopaque v1.49.0
+	go.opentelemetry.io/collector/config/configopaque v1.52.0
 	go.opentelemetry.io/collector/config/configoptional v1.49.0
 	go.opentelemetry.io/collector/config/configretry v1.49.0
 	go.opentelemetry.io/collector/config/configtls v1.49.0

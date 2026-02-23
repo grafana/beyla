@@ -22,7 +22,7 @@ jobs:
       contents: write          # Push fixes to PR branch via commit signing API
       pull-requests: write     # Post PR comments with analysis and findings
       issues: read             # Read issue/PR metadata for context
-      id-token: write          # OIDC token exchange for Vault secret retrieval
+      id-token: write          # OIDC token exchange for Vault and GitHub App token
     timeout-minutes: 20
     steps:
       - name: Checkout repository
@@ -38,6 +38,12 @@ jobs:
           repo_secrets: |
             ANTHROPIC_API_KEY=anthropic-token:token
 
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@580590a644e82e79bb2598bdaba0be245a14dda0 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
@@ -48,6 +54,9 @@ jobs:
         uses: anthropics/claude-code-action@edd85d61533cbba7b57ed0ca4af1750b1fdfd3c4 # v1.0.55
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
+          # Custom GitHub App token bypasses the built-in Claude Code GitHub
+          # App OIDC exchange (which requires installing github.com/apps/claude).
+          github_token: ${{ steps.get-github-app-token.outputs.token }}
           # label_trigger tells the action to only activate when this specific
           # label is added. The workflow on.pull_request.types:[labeled] fires
           # for any label; the job if: and label_trigger both filter to our label.

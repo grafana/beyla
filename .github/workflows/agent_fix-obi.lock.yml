@@ -23,7 +23,7 @@
 #
 # Analyze OBI submodule update PR CI failures and suggest or apply fixes
 #
-# gh-aw-metadata: {"schema_version":"v1","frontmatter_hash":"2bcdead78cc8e0240b02d1e7c09fdabfdf70644ce68ec9d18439987ae1f9702f","compiler_version":"v0.47.2"}
+# gh-aw-metadata: {"schema_version":"v1","frontmatter_hash":"e2e2a02c3c5805db104e6be16454a06c03f30c4eaabc6e4c74ce2379f69cbc10","compiler_version":"v0.47.2"}
 
 name: "Fix OBI submodule CI"
 "on":
@@ -288,8 +288,7 @@ jobs:
         uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # f1614b210386ac420af6807a997ac7f6d96e477a
         with:
           repo_secrets: |
-            ANTHROPIC_API_KEY=github-actions:ANTHROPIC_API_KEY
-            GH_AW_GITHUB_TOKEN=github-actions:GH_AW_GITHUB_TOKEN
+            ANTHROPIC_API_KEY=anthropic-token:token
       - name: Init .obi-src submodule
         run: git submodule update --init --recursive .obi-src
 
@@ -376,17 +375,16 @@ jobs:
         run: bash /opt/gh-aw/actions/install_awf_binary.sh v0.20.2
       - name: Install Claude Code CLI
         run: npm install -g --silent @anthropic-ai/claude-code@2.1.47
-      - name: Validate lockdown mode requirements
-        id: validate-lockdown-requirements
+      - name: Determine automatic lockdown mode for GitHub MCP Server
+        id: determine-automatic-lockdown
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          GITHUB_MCP_LOCKDOWN_EXPLICIT: "true"
           GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
           GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
         with:
           script: |
-            const validateLockdownRequirements = require('/opt/gh-aw/actions/validate_lockdown_requirements.cjs');
-            validateLockdownRequirements(core);
+            const determineAutomaticLockdown = require('/opt/gh-aw/actions/determine_automatic_lockdown.cjs');
+            await determineAutomaticLockdown(github, context, core);
       - name: Download container images
         run: bash /opt/gh-aw/actions/download_docker_images.sh ghcr.io/github/gh-aw-firewall/agent:0.20.2 ghcr.io/github/gh-aw-firewall/api-proxy:0.20.2 ghcr.io/github/gh-aw-firewall/squid:0.20.2 ghcr.io/github/gh-aw-mcpg:v0.1.4 ghcr.io/github/github-mcp-server:v0.30.3 node:lts-alpine
       - name: Write Safe Outputs Config
@@ -585,6 +583,7 @@ jobs:
           GH_AW_SAFE_OUTPUTS: ${{ env.GH_AW_SAFE_OUTPUTS }}
           GH_AW_SAFE_OUTPUTS_API_KEY: ${{ steps.safe-outputs-start.outputs.api_key }}
           GH_AW_SAFE_OUTPUTS_PORT: ${{ steps.safe-outputs-start.outputs.port }}
+          GITHUB_MCP_LOCKDOWN: ${{ steps.determine-automatic-lockdown.outputs.lockdown == 'true' && '1' || '0' }}
           GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
@@ -609,7 +608,7 @@ jobs:
               "github": {
                 "container": "ghcr.io/github/github-mcp-server:v0.30.3",
                 "env": {
-                  "GITHUB_LOCKDOWN_MODE": "1",
+                  "GITHUB_LOCKDOWN_MODE": "$GITHUB_MCP_LOCKDOWN",
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "$GITHUB_MCP_SERVER_TOKEN",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "pull_requests,issues"

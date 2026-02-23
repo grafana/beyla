@@ -18,8 +18,7 @@ steps:
     with:
       # Vault path: ci/repo/grafana/beyla/github-actions
       repo_secrets: |
-        ANTHROPIC_API_KEY=github-actions:ANTHROPIC_API_KEY
-        GH_AW_GITHUB_TOKEN=github-actions:GH_AW_GITHUB_TOKEN
+        ANTHROPIC_API_KEY=anthropic-token:token
   - name: Init .obi-src submodule
     run: git submodule update --init --recursive .obi-src
 engine: claude
@@ -28,7 +27,6 @@ tools:
   github:
     toolsets: [pull_requests, issues]
     read-only: true
-    lockdown: true
   edit: {}
 safe-outputs:
   add-comment:

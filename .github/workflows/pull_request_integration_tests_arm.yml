@@ -13,6 +13,7 @@ on:
       - "cmd/**"
       - "vendor/**"
       - "Makefile"
+      - "scripts/generate-integration-matrix.sh"
       - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
       - ".obi-src/**"
@@ -29,24 +30,59 @@ on:
       - "cmd/**"
       - "vendor/**"
       - "Makefile"
+      - "scripts/generate-integration-matrix.sh"
       - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_integration_tests_arm.yml"
       - ".obi-src/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 # Set restrictive permissions at workflow level
 permissions:
   contents: read
 
 jobs:
+  test-matrix:
+    name: "Build ARM integration matrix"
+    runs-on: ubuntu-x64-small
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Generate OBI tests
+        run: make generate-obi-tests
+
+      - name: Build matrix
+        id: build-matrix
+        env:
+          PARTITIONS: 5
+          TEST_TAGS: integration
+        run: |
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make vm-integration-test-matrix-json >> $GITHUB_OUTPUT
+
   test:
-    name: test
+    name: ${{ matrix.description }}
+    needs: test-matrix
     runs-on: github-hosted-ubuntu-arm64-large
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
       pull-requests: write
-      # required for CODECOV token
+      # required for CODECOV token, Dockerhub access
       id-token: write
+      checks: write
+      # Required for uploading artifacts
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
     steps:
       - name: Check initial disk usage
         run: df -h
@@ -100,23 +136,50 @@ jobs:
         uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
 
       - name: Set up Go
-        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          cache: false # Disable caching to avoid extraction conflicts
           go-version-file: "go.mod"
+          cache: false
+
+      - name: Generate files
+        run: make prereqs vendor-obi
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.13.0
+
+      - name: Check disk usage before tests
+        run: df -h
 
       - name: Run integration tests
-        run: make docker-generate integration-test-arm
-        timeout-minutes: 60
+        timeout-minutes: 35
+        env:
+          # zizmor template-injection fixes: pass data as env vars
+          MATRIX_ID: ${{ matrix.id }}
+          MATRIX_JSON: ${{ toJson(matrix) }}
+          MATRIX_TEST_PATTERN: ${{ matrix.test_pattern }}
+          RUN_NUMBER: ${{ github.run_number }}
+          TEST_TAGS: integration
+        run: |
+          echo Partition
+          echo "${MATRIX_JSON}"
 
-      - name: Upload integration test logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: Test Logs
-          path: |
-            testoutput/*.log
-            testoutput/kind
+          if [ -z "${MATRIX_TEST_PATTERN}" ]; then
+            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            exit 1
+          fi
+
+          mkdir -p reports
+
+          ~/go/bin/gotestsum \
+              --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
+              --packages="./internal/testgenerated/integration" -ftestname \
+              --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
+              -- -tags=${TEST_TAGS} -timeout 30m \
+              -mod vendor \
+              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration
+
+      - name: Process coverage data
+        run: make itest-coverage-data
 
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
@@ -127,8 +190,28 @@ jobs:
             CODECOV_TOKEN=codecov:token
 
       - name: Report coverage
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
-        continue-on-error: true
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         with:
-          file: ./testoutput/itest-covdata.txt
+          files: ./testoutput/itest-covdata.txt
           flags: integration-test-arm
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: go-test-arm-reports-${{ github.run_number }}-${{ matrix.id }}
+          path: reports/*.log
+          retention-days: 5
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: go-test-arm-logs-${{ github.run_number }}-${{ matrix.id }}
+          path: |
+            testoutput/*.log
+            testoutput/kind
+
+      - name: Check final disk usage
+        if: always()
+        run: df -h

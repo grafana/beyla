@@ -34,6 +34,10 @@ on:
       - ".github/workflows/pull_request_k8s_integration_tests.yml"
       - ".obi-src/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 # Set restrictive permissions at workflow level
 permissions:
   contents: read

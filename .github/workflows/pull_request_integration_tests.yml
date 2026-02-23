@@ -34,6 +34,10 @@ on:
       - ".github/workflows/pull_request_integration_tests.yml"
       - ".obi-src/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 # Set restrictive permissions at workflow level
 permissions:
   contents: read
@@ -134,7 +138,15 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: "go.mod"
-          cache: false
+          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-integration-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-integration-race-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Generate files
         run: make prereqs vendor-obi

@@ -18,6 +18,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 )
 
+// HistogramAggregation defines the histogram aggregation type for metrics export.
+type HistogramAggregation string
+
+const (
+	HistogramAggregationExplicit    HistogramAggregation = "explicit_bucket_histogram"
+	HistogramAggregationExponential HistogramAggregation = "base2_exponential_bucket_histogram"
+)
+
 func mlog() *slog.Logger {
 	return slog.With("component", "otelcfg.MetricsConfig")
 }
@@ -32,8 +40,8 @@ type MetricsConfig struct {
 	// OTEL_EBPF_METRICS_INTERVAL takes precedence over it.
 	OTELIntervalMS int `env:"OTEL_METRIC_EXPORT_INTERVAL"`
 
-	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	MetricsEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"`
+	CommonEndpoint  string `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT" jsonschema:"format=uri"`
+	MetricsEndpoint string `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT" jsonschema:"format=uri"`
 
 	Protocol        Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	MetricsProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"`
@@ -41,8 +49,8 @@ type MetricsConfig struct {
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
-	Buckets              export.Buckets `yaml:"buckets"`
-	HistogramAggregation string         `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
+	Buckets              export.Buckets       `yaml:"buckets"`
+	HistogramAggregation HistogramAggregation `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN"`
 
@@ -54,11 +62,12 @@ type MetricsConfig struct {
 	// Features of metrics that can be exported. Accepted values: application, network,
 	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
+	//
 	// Deprecated: use top-level MetricsConfig.Features instead.
 	DeprFeatures export.Features `yaml:"features"`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
-	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:","`
+	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:"," jsonschema:"uniqueItems=true"`
 
 	// TTL is the time since a metric was updated for the last time until it is
 	// removed from the metrics set.

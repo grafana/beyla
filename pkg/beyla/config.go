@@ -120,11 +120,21 @@ type Config struct {
 	// It also accepts BEYLA_AUTO_TARGET_EXE for compatibility with opentelemetry-go-instrumentation
 	AutoTargetExe services.GlobAttr `env:"BEYLA_AUTO_TARGET_EXE,expand" envDefault:"${OTEL_GO_AUTO_TARGET_EXE}"`
 
+	// AutoTargetLanguage selects the executable to instrument matching a Glob of chosen languages.
+	// To set this value via YAML, use discovery > instrument.
+	AutoTargetLanguage services.GlobAttr `env:"BEYLA_AUTO_TARGET_LANGUAGE"`
+
+	// TargetPIDs selects processes by PID for instrumentation. When non-empty, only these PIDs are
+	// instrumented. Accepts YAML list (target_pids: [1234, 5678]), single number, or env
+	// BEYLA_TARGET_PID=1234,5678. Alternative to Exec or AutoTargetExe when PIDs are known.
+	//nolint:undoc
+	TargetPIDs services.IntEnum `yaml:"target_pids" env:"BEYLA_TARGET_PID"`
+
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
 	// different to zero), the value of the Exec property won't take effect.
 	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
 	// will instrument all the service calls in all the ports, not only the port specified here.
-	Port services.PortEnum `yaml:"open_port" env:"BEYLA_OPEN_PORT"`
+	Port services.IntEnum `yaml:"open_port" env:"BEYLA_OPEN_PORT"`
 
 	// ServiceName is taken from either BEYLA_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility)
 	// Using env and envDefault is a trick to get the value either from one of either variables.
@@ -160,8 +170,8 @@ type Config struct {
 	// nolint:undoc
 	ChannelSendTimeoutPanic bool `yaml:"channel_send_timeout_panic" env:"BEYLA_CHANNEL_SEND_TIMEOUT_PANIC"`
 	// nolint:undoc
-	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
+	ProfilePort     int                            `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics imetrics.InternalMetricsConfig `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// "application_process" features are enabled
@@ -237,9 +247,6 @@ type HostIDConfig struct {
 	// Override allows overriding the reported host.id in Beyla
 	// nolint:undoc
 	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
-	// FetchTimeout specifies the timeout for trying to fetch the HostID from diverse Cloud Providers
-	// nolint:undoc
-	FetchTimeout time.Duration `yaml:"fetch_timeout" env:"BEYLA_HOST_ID_FETCH_TIMEOUT"`
 }
 
 // OpenTelemetry SDK injection for Kubernetes
@@ -509,7 +516,7 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureNetO11y:
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
-		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.Exec.IsSet() ||
+		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
 			c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
 	}
 	return false

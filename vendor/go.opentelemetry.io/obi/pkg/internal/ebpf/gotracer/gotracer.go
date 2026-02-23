@@ -18,7 +18,6 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"strings"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -29,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -56,7 +56,7 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 	disabledRouteHarvesting := false
 
 	for _, lang := range cfg.Discovery.DisabledRouteHarvesters {
-		if strings.ToLower(lang) == "go" {
+		if lang == services.RouteHarvesterLanguageGo {
 			disabledRouteHarvesting = true
 			break
 		}
@@ -258,8 +258,17 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	m := map[string][]*ebpfcommon.ProbeDesc{
 		// Go runtime
 		"runtime.newproc1": {{
-			Start: p.bpfObjects.ObiUprobeProcNewproc1,
-			End:   p.bpfObjects.ObiUprobeProcNewproc1Ret,
+			Start: p.bpfObjects.ObiUprobeRuntimeNewproc1,
+			End:   p.bpfObjects.ObiUprobeRuntimeNewproc1Return,
+		}},
+		"runtime.casgstatus": {{
+			Start: p.bpfObjects.ObiUprobeRuntimeCasgstatus,
+		}},
+		"runtime.mstart1": {{
+			Start: p.bpfObjects.ObiUprobeRuntimeMstart1,
+		}},
+		"runtime.mexit": {{
+			Start: p.bpfObjects.ObiUprobeRuntimeMexit,
 		}},
 		// Go net/http
 		"net/http.serverHandler.ServeHTTP": {{

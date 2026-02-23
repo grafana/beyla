@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -150,7 +151,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 }
 
 func TestGetFilteredProcessResourceAttrs(t *testing.T) {
-	hostID := "test-host-id"
+	nodeMeta := &meta.NodeMeta{HostID: "test-host-id"}
 
 	service := &svc.Attrs{
 		UID: svc.UID{
@@ -182,7 +183,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		},
 	}
 
-	result := getFilteredProcessResourceAttrs(hostID, procID, attrSelector)
+	result := getFilteredProcessResourceAttrs(nodeMeta, procID, attrSelector)
 
 	attrMap := make(map[string]string)
 	for _, attr := range result {
@@ -223,7 +224,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		},
 	}
 
-	result = getFilteredProcessResourceAttrs(hostID, procID, attrSelector)
+	result = getFilteredProcessResourceAttrs(nodeMeta, procID, attrSelector)
 
 	attrMap = make(map[string]string)
 	for _, attr := range result {

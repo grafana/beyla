@@ -60,8 +60,8 @@ func (t InternalMetricsExporter) Valid() bool {
 	return false
 }
 
-// Config options for the different metrics exporters
-type Config struct {
+// InternalMetricsConfig options for the different metrics exporters
+type InternalMetricsConfig struct {
 	Prometheus              PrometheusConfig        `yaml:"prometheus,omitempty"`
 	Exporter                InternalMetricsExporter `yaml:"exporter,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_EXPORTER"`
 	BpfMetricScrapeInterval time.Duration           `yaml:"bpf_metric_scrape_interval" env:"OTEL_EBPF_BPF_METRIC_SCRAPE_INTERVAL"`

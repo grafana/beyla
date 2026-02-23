@@ -17,8 +17,10 @@ github.com/aws/aws-sdk-go-v2/service/ssooidc,https://github.com/grafana/beyla/bl
 github.com/aws/aws-sdk-go-v2/service/sts,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/sts/LICENSE.txt,Apache-2.0
 github.com/aws/smithy-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/smithy-go/LICENSE,Apache-2.0
 github.com/aws/smithy-go/internal/sync/singleflight,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/smithy-go/internal/sync/singleflight/LICENSE,BSD-3-Clause
+github.com/bahlo/generic-list-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/bahlo/generic-list-go/LICENSE,BSD-3-Clause
 github.com/beorn7/perks/quantile,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/beorn7/perks/LICENSE,MIT
 github.com/blang/semver/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/blang/semver/v4/LICENSE,MIT
+github.com/buger/jsonparser,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/buger/jsonparser/LICENSE,MIT
 github.com/caarlos0/env/v9,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/caarlos0/env/v9/LICENSE.md,MIT
 github.com/cenkalti/backoff/v5,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cenkalti/backoff/v5/LICENSE,MIT
 github.com/cespare/xxhash/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cespare/xxhash/v2/LICENSE.txt,MIT
@@ -73,6 +75,7 @@ github.com/grpc-ecosystem/grpc-gateway/v2,https://github.com/grafana/beyla/blob/
 github.com/hashicorp/go-version,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/go-version/LICENSE,MPL-2.0
 github.com/hashicorp/golang-lru/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/golang-lru/v2/LICENSE,MPL-2.0
 github.com/hashicorp/golang-lru/v2/simplelru,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/golang-lru/v2/simplelru/LICENSE_list,BSD-3-Clause
+github.com/invopop/jsonschema,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/invopop/jsonschema/COPYING,MIT
 github.com/json-iterator/go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/json-iterator/go/LICENSE,MIT
 github.com/klauspost/compress,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/klauspost/compress/LICENSE,MIT
 github.com/klauspost/compress,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/klauspost/compress/LICENSE,Apache-2.0
@@ -83,6 +86,7 @@ github.com/knadh/koanf/maps,https://github.com/grafana/beyla/blob/HEAD/vendor/gi
 github.com/knadh/koanf/providers/confmap,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/knadh/koanf/providers/confmap/LICENSE,MIT
 github.com/knadh/koanf/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/knadh/koanf/v2/LICENSE,MIT
 github.com/leodido/go-urn,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/leodido/go-urn/LICENSE,MIT
+github.com/mailru/easyjson,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mailru/easyjson/LICENSE,MIT
 github.com/mitchellh/copystructure,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mitchellh/copystructure/LICENSE,MIT
 github.com/mitchellh/reflectwalk,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mitchellh/reflectwalk/LICENSE,MIT
 github.com/moby/docker-image-spec/specs-go/v1,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/moby/docker-image-spec/LICENSE,Apache-2.0
@@ -113,6 +117,7 @@ github.com/vektah/gqlparser/v2,https://github.com/grafana/beyla/blob/HEAD/vendor
 github.com/vishvananda/netlink,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/vishvananda/netlink/LICENSE,Apache-2.0
 github.com/vishvananda/netns,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/vishvananda/netns/LICENSE,Apache-2.0
 github.com/vladimirvivien/gexe,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/vladimirvivien/gexe/LICENSE,MIT
+github.com/wk8/go-ordered-map/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/wk8/go-ordered-map/v2/LICENSE,Apache-2.0
 github.com/x448/float16,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/x448/float16/LICENSE,MIT
 github.com/xwb1989/sqlparser,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/xwb1989/sqlparser/LICENSE.md,Apache-2.0
 github.com/yl2chen/cidranger,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/yl2chen/cidranger/LICENSE,MIT

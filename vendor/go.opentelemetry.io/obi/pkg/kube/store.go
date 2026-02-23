@@ -50,8 +50,8 @@ func qName(om *informer.ObjectMeta) qualifiedName {
 	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
 }
 
-// MetaSourceLabels allow overriding some metadata from kubernetes labels
-// Deprecated. Left here for backwards-compatibility.
+// Deprecated: MetaSourceLabels allow overriding some metadata from kubernetes labels,
+// Left for backwards-compatibility.
 type MetaSourceLabels struct {
 	ServiceName      string `yaml:"service_name" env:"OTEL_EBPF_KUBE_META_SOURCE_LABEL_SERVICE_NAME"`
 	ServiceNamespace string `yaml:"service_namespace" env:"OTEL_EBPF_KUBE_META_SOURCE_LABEL_SERVICE_NAMESPACE"`
@@ -413,7 +413,7 @@ func (s *Store) ServiceNameNamespaceForMetadata(om *informer.ObjectMeta, contain
 }
 
 // function implemented to provide consistent service metadata naming across multiple
-// OTEL implementations: OTEL operator, Loki and Beyla
+// OTEL implementations: OTEL operator and OBI
 // https://github.com/grafana/k8s-monitoring-helm/issues/942
 func (s *Store) valueFromMetadata(om *informer.ObjectMeta, annotationName string, labelNames []string) string {
 	// if this object meta is not a pod, we ignore the metadata

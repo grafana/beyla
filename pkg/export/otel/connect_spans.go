@@ -28,6 +28,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -117,7 +118,7 @@ func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.
 			}
 
 			// set attributes for src and dst
-			traces := GenerateConnectSpans(tr.ctxInfo.HostID, sample.Span, spanGroup)
+			traces := GenerateConnectSpans(&tr.ctxInfo.NodeMeta, sample.Span, spanGroup)
 			err := exp.ConsumeTraces(ctx, traces)
 			if err != nil {
 				tr.log.Error("error sending trace to consumer", "error", err)
@@ -329,7 +330,7 @@ func GroupConnectionSpans(
 }
 
 func GenerateConnectSpans(
-	hostID string,
+	nodeMeta *meta.NodeMeta,
 	span *request.Span,
 	spans []tracesgen.TraceSpanAndAttributes,
 ) ptrace.Traces {
@@ -337,7 +338,7 @@ func GenerateConnectSpans(
 	rs := traces.ResourceSpans().AppendEmpty()
 	// set trace Resource attributes
 	// TODO: check if we can remove some of them
-	resourceAttrs := otelcfg.GetAppResourceAttrs(hostID, &span.Service)
+	resourceAttrs := otelcfg.GetAppResourceAttrs(nodeMeta, &span.Service)
 	resourceAttrs = append(resourceAttrs, otelcfg.ResourceAttrsFromEnv(&span.Service)...)
 	// Override OBI library name by Beyla
 	resourceAttrsMap := tracesgen.AttrsToMap(resourceAttrs)

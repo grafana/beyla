@@ -15,10 +15,20 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/instrument"
 )
 
+// LogLevel defines the log level for the kubernetes cache service.
+type LogLevel string
+
+const (
+	LogLevelDebug LogLevel = "debug"
+	LogLevelInfo  LogLevel = "info"
+	LogLevelWarn  LogLevel = "warn"
+	LogLevelError LogLevel = "error"
+)
+
 // Config options of the Kubernetes Cache service. Check the "DefaultConfig" variable for a view of the default values.
 type Config struct {
 	// LogLevel can be one of: debug, info, warn, error
-	LogLevel string `yaml:"log_level" env:"OTEL_EBPF_K8S_CACHE_LOG_LEVEL"`
+	LogLevel LogLevel `yaml:"log_level" env:"OTEL_EBPF_K8S_CACHE_LOG_LEVEL"`
 	// Port where the service is going to listen to
 	Port int `yaml:"port" env:"OTEL_EBPF_K8S_CACHE_PORT"`
 	// MaxConnection is the maximum number of concurrent clients that the service can handle at the same time
@@ -32,7 +42,7 @@ type Config struct {
 }
 
 var DefaultConfig = Config{
-	LogLevel:             "info",
+	LogLevel:             LogLevelInfo,
 	Port:                 50055,
 	MaxConnections:       150,
 	InformerResyncPeriod: 30 * time.Minute,

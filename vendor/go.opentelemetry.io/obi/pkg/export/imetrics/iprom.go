@@ -45,7 +45,7 @@ type PrometheusReporter struct {
 	informerLag                      prometheus.Histogram
 }
 
-func NewPrometheusReporter(cfg *Config, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
+func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
 	pr := &PrometheusReporter{
 		connector: manager,
 		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{

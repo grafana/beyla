@@ -130,12 +130,18 @@ github.com/aws/smithy-go/time
 github.com/aws/smithy-go/tracing
 github.com/aws/smithy-go/transport/http
 github.com/aws/smithy-go/transport/http/internal/io
+# github.com/bahlo/generic-list-go v0.2.0
+## explicit; go 1.18
+github.com/bahlo/generic-list-go
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
 # github.com/blang/semver/v4 v4.0.0
 ## explicit; go 1.14
 github.com/blang/semver/v4
+# github.com/buger/jsonparser v1.1.1
+## explicit; go 1.13
+github.com/buger/jsonparser
 # github.com/caarlos0/env/v9 v9.0.0
 ## explicit; go 1.17
 github.com/caarlos0/env/v9
@@ -416,6 +422,9 @@ github.com/hashicorp/golang-lru/v2
 github.com/hashicorp/golang-lru/v2/expirable
 github.com/hashicorp/golang-lru/v2/internal
 github.com/hashicorp/golang-lru/v2/simplelru
+# github.com/invopop/jsonschema v0.13.0
+## explicit; go 1.18
+github.com/invopop/jsonschema
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
@@ -447,6 +456,10 @@ github.com/leodido/go-urn/scim/schema
 # github.com/lufia/plan9stats v0.0.0-20250827001030-24949be3fa54
 ## explicit; go 1.21
 github.com/lufia/plan9stats
+# github.com/mailru/easyjson v0.7.7
+## explicit; go 1.12
+github.com/mailru/easyjson/buffer
+github.com/mailru/easyjson/jwriter
 # github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
 ## explicit; go 1.18
 github.com/mariomac/guara/pkg/test
@@ -622,6 +635,9 @@ github.com/vladimirvivien/gexe/net
 github.com/vladimirvivien/gexe/prog
 github.com/vladimirvivien/gexe/str
 github.com/vladimirvivien/gexe/vars
+# github.com/wk8/go-ordered-map/v2 v2.1.8
+## explicit; go 1.18
+github.com/wk8/go-ordered-map/v2
 # github.com/x448/float16 v0.8.4
 ## explicit; go 1.11
 github.com/x448/float16
@@ -827,13 +843,14 @@ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 # go.opentelemetry.io/obi v0.5.0 => ./.obi-src
-## explicit; go 1.25.6
+## explicit; go 1.25.7
 go.opentelemetry.io/obi/pkg/appolly
 go.opentelemetry.io/obi/pkg/appolly/app
 go.opentelemetry.io/obi/pkg/appolly/app/request
 go.opentelemetry.io/obi/pkg/appolly/app/svc
 go.opentelemetry.io/obi/pkg/appolly/discover
 go.opentelemetry.io/obi/pkg/appolly/discover/exec
+go.opentelemetry.io/obi/pkg/appolly/meta
 go.opentelemetry.io/obi/pkg/appolly/services
 go.opentelemetry.io/obi/pkg/appolly/traces
 go.opentelemetry.io/obi/pkg/buildinfo

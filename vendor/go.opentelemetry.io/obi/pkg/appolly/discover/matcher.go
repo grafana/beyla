@@ -34,7 +34,7 @@ func criteriaMatcherProvider(
 	input *msg.Queue[[]Event[ProcessAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 ) swarm.InstanceFunc {
-	beylaNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
+	instrumenterNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	m := &Matcher{
 		Log:                 slog.With("component", "discover.CriteriaMatcher"),
 		Criteria:            FindingCriteria(cfg),
@@ -43,7 +43,7 @@ func criteriaMatcherProvider(
 		ProcessHistory:      map[app.PID]ProcessMatch{},
 		Input:               input.Subscribe(msg.SubscriberName("discover.CriteriaMatcher")),
 		Output:              output,
-		Namespace:           beylaNamespace,
+		Namespace:           instrumenterNamespace,
 		HasHostPidAccess:    hasHostPidAccess(),
 	}
 	return swarm.DirectInstance(m.Run)
@@ -211,9 +211,15 @@ func (m *Matcher) isExcluded(obj *ProcessAttrs, proc *services.ProcessInfo) bool
 
 func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a services.Selector) bool {
 	log := m.Log.With("pid", p.Pid, "exe", p.ExePath)
-	if !a.GetPath().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
-		log.Debug("no Kube metadata, no local selection criteria. Ignoring")
-		return false
+	if pids, ok := a.GetPIDs(); ok && len(pids) > 0 {
+		return pidInList(p.Pid, pids)
+	}
+	if !a.GetPath().IsSet() && !a.GetLanguages().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
+		pids, hasPIDs := a.GetPIDs()
+		if !hasPIDs || len(pids) == 0 {
+			log.Debug("no Kube metadata, no local selection criteria. Ignoring")
+			return false
+		}
 	}
 	if (a.GetPath().IsSet() || a.GetPathRegexp().IsSet()) && !m.matchByExecutable(p, a) {
 		log.Debug("executable path does not match", "path", a.GetPath(), "pathregexp", a.GetPathRegexp())
@@ -223,18 +229,31 @@ func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a ser
 		log.Debug("open ports do not match", "openPorts", a.GetOpenPorts(), "process ports", p.OpenPorts)
 		return false
 	}
+	if a.GetLanguages().IsSet() && !m.matchByLanguage(obj, a) {
+		log.Debug("executable language does not match", "languages", a.GetLanguages(), "type", obj.detectedType.String())
+		return false
+	}
 	if a.IsContainersOnly() {
 		ns, _ := namespaceFetcherFunc(p.Pid)
 		if ns == m.Namespace && m.HasHostPidAccess {
 			log.Debug("not in a container", "namespace", ns)
 			return false
 		}
-		log.Debug("app is in a container", "namespace", ns, "beyla namespace", m.Namespace)
+		log.Debug("app is in a container", "namespace", ns, "instrumenter namespace", m.Namespace)
 	}
 	// after matching by process basic information, we check if it matches
 	// by metadata.
 	// If there is no metadata, this will return true.
 	return m.matchByAttributes(obj, a)
+}
+
+func pidInList(pid app.PID, list []app.PID) bool {
+	for _, p := range list {
+		if p == pid {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Matcher) matchByPort(p *services.ProcessInfo, a services.Selector) bool {
@@ -251,6 +270,10 @@ func (m *Matcher) matchByExecutable(p *services.ProcessInfo, a services.Selector
 		return a.GetPath().MatchString(p.ExePath)
 	}
 	return a.GetPathRegexp().MatchString(p.ExePath)
+}
+
+func (m *Matcher) matchByLanguage(actual *ProcessAttrs, a services.Selector) bool {
+	return a.GetLanguages().MatchString(actual.detectedType.String())
 }
 
 func (m *Matcher) matchByAttributes(actual *ProcessAttrs, required services.Selector) bool {
@@ -340,6 +363,21 @@ func LogEnricherFindingCriteria(cfg *obi.Config) []services.Selector {
 func FindingCriteria(cfg *obi.Config) []services.Selector {
 	logDeprecationAndConflicts(cfg)
 
+	if cfg.TargetPIDs.Len() > 0 {
+		vals := cfg.TargetPIDs.AllValues()
+		pids := make([]uint32, 0, len(vals))
+		for _, v := range vals {
+			pids = append(pids, uint32(v))
+		}
+		return []services.Selector{
+			&services.GlobAttributes{
+				Name:      cfg.ServiceName,
+				Namespace: cfg.ServiceNamespace,
+				PIDs:      pids,
+			},
+		}
+	}
+
 	if OnlyDefinesDeprecatedServiceSelection(cfg) {
 		// deprecated use case. Supporting the old discovery > services section when the
 		// newest discovery > instrument is not set
@@ -360,13 +398,14 @@ func FindingCriteria(cfg *obi.Config) []services.Selector {
 
 	if len(cfg.Discovery.Instrument) > 0 {
 		finderCriteria := cfg.Discovery.Instrument
-		if cfg.AutoTargetExe.IsSet() || cfg.Port.Len() > 0 {
+		if cfg.AutoTargetExe.IsSet() || cfg.Port.Len() > 0 || cfg.AutoTargetLanguage.IsSet() {
 			finderCriteria = slices.Clone(cfg.Discovery.Instrument)
 			finderCriteria = append(finderCriteria, services.GlobAttributes{
 				Name:      cfg.ServiceName,
 				Namespace: cfg.ServiceNamespace,
 				Path:      cfg.AutoTargetExe,
 				OpenPorts: cfg.Port,
+				Languages: cfg.AutoTargetLanguage,
 			})
 		}
 		return NormalizeGlobCriteria(finderCriteria)
@@ -375,13 +414,14 @@ func FindingCriteria(cfg *obi.Config) []services.Selector {
 	// edge use case: when neither discovery > services nor discovery > instrument sections are set
 	// we will prioritize the newer OTEL_EBPF_AUTO_TARGET_EXE/OTEL_GO_AUTO_TARGET_EXE property
 	// over the old, deprecated OTEL_EBPF_EXECUTABLE_PATH
-	if cfg.AutoTargetExe.IsSet() {
+	if cfg.AutoTargetExe.IsSet() || cfg.AutoTargetLanguage.IsSet() {
 		return []services.Selector{
 			&services.GlobAttributes{
 				Name:      cfg.ServiceName,
 				Namespace: cfg.ServiceNamespace,
 				Path:      cfg.AutoTargetExe,
 				OpenPorts: cfg.Port,
+				Languages: cfg.AutoTargetLanguage,
 			},
 		}
 	}

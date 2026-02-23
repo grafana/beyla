@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/invopop/jsonschema"
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
@@ -52,6 +53,22 @@ var ExportModeUnset = ExportModes{blockSignal: unset}
 //   - When it is defined as a non-empty list, it will only allow the explicitly specified signals.
 type ExportModes struct {
 	blockSignal maps.Bits
+}
+
+func (ExportModes) JSONSchema() *jsonschema.Schema {
+	exportModes := make([]any, 0, len(modeForText))
+
+	for k := range modeForText {
+		exportModes = append(exportModes, k)
+	}
+	return &jsonschema.Schema{
+		Type: "array",
+		Items: &jsonschema.Schema{
+			Type: "string",
+			Enum: exportModes,
+		},
+		Description: "List of signals to export. If undefined or null, all signals are exported. If an empty list, no signals are exported.",
+	}
 }
 
 func NewExportModes() ExportModes {

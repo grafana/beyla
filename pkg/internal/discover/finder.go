@@ -118,7 +118,7 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan obiDiscover.Event[*e
 func (pf *ProcessFinder) IsInstrumentationEnabled() bool {
 	c := pf.cfg
 
-	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.Exec.IsSet() ||
+	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
 		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled()
 }
 

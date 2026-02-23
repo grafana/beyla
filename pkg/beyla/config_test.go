@@ -241,7 +241,7 @@ network:
 			},
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
-		InternalMetrics: imetrics.Config{
+		InternalMetrics: imetrics.InternalMetricsConfig{
 			Exporter: imetrics.InternalMetricsExporterDisabled,
 			Prometheus: imetrics.PrometheusConfig{
 				Port: 3210,
@@ -261,8 +261,7 @@ network:
 				ResourceLabels:        metaSources,
 			},
 			HostID: HostIDConfig{
-				Override:     "the-host-id",
-				FetchTimeout: 4 * time.Second,
+				Override: "the-host-id",
 			},
 			Select: attributes.Selection{
 				attributes.NetworkFlow.Section: attributes.InclusionLists{

@@ -24,14 +24,14 @@ func tlog() *slog.Logger {
 
 type TracesConfig struct {
 	TracesConsumer consumer.Traces `yaml:"-"`
-	CommonEndpoint string          `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-	TracesEndpoint string          `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	CommonEndpoint string          `yaml:"-" env:"OTEL_EXPORTER_OTLP_ENDPOINT" jsonschema:"format=uri"`
+	TracesEndpoint string          `yaml:"endpoint" env:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" jsonschema:"format=uri"`
 
 	Protocol       Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	TracesProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
-	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_TRACES_INSTRUMENTATIONS" envSeparator:","`
+	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_TRACES_INSTRUMENTATIONS" envSeparator:"," jsonschema:"uniqueItems=true"`
 
 	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
@@ -120,9 +120,9 @@ func (m *TracesConfig) guessProtocol() Protocol {
 // The HTTP path will be defined from one of the following sources, from highest to lowest priority
 // - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, if defined
 // - OTEL_EXPORTER_OTLP_ENDPOINT, if defined
-// - https://otlp-gateway-${GRAFANA_CLOUD_ZONE}.grafana.net/otlp, if GRAFANA_CLOUD_ZONE is defined
-// If, by some reason, Grafana changes its OTLP Gateway URL in a distant future, you can still point to the
-// correct URL with the OTLP_EXPORTER_... variables.
+// - Cloud provider-specific endpoints can be configured via OTEL_EXPORTER_OTLP_ENDPOINT
+// If the cloud provider changes its OTLP Gateway URL in the future, you can point to the
+// correct URL with the OTEL_EXPORTER_... variables.
 func ParseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 	endpoint, isCommon := cfg.OTLPTracesEndpoint()
 

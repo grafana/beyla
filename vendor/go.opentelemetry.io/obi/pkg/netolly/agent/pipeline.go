@@ -30,7 +30,7 @@ var newRingBufTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunF
 	return f.rbTracer.TraceLoop(out)
 }
 
-// buildPipeline defines the different nodes in the Beyla's NetO11y module,
+// buildPipeline defines the different nodes in the OBI's NetO11y module,
 // as well as how they are interconnected (in its Connect() method)
 func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	alog := alog()

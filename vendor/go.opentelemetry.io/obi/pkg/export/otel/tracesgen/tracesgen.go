@@ -24,6 +24,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -112,14 +113,14 @@ func GenerateTracesWithAttributes(
 	cache *expirable2.LRU[svc.UID, []attribute.KeyValue],
 	svc *svc.Attrs,
 	envResourceAttrs []attribute.KeyValue,
-	hostID string,
+	nodeMeta *meta.NodeMeta,
 	spans []TraceSpanAndAttributes,
 	reporterName string,
 	extraResAttrs ...attribute.KeyValue,
 ) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
-	resourceAttrs := TraceAppResourceAttrs(cache, hostID, svc)
+	resourceAttrs := TraceAppResourceAttrs(cache, nodeMeta, svc)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrsMap := AttrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelScopeNameKey), reporterName)
@@ -211,17 +212,17 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 
 var emptyUID = svc.UID{}
 
-func TraceAppResourceAttrs(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], hostID string, service *svc.Attrs) []attribute.KeyValue {
+func TraceAppResourceAttrs(cache *expirable2.LRU[svc.UID, []attribute.KeyValue], nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.KeyValue {
 	// TODO: remove?
 	if service.UID == emptyUID {
-		return otelcfg.GetAppResourceAttrs(hostID, service)
+		return otelcfg.GetAppResourceAttrs(nodeMeta, service)
 	}
 
 	attrs, ok := cache.Get(service.UID)
 	if ok {
 		return attrs
 	}
-	attrs = otelcfg.GetAppResourceAttrs(hostID, service)
+	attrs = otelcfg.GetAppResourceAttrs(nodeMeta, service)
 	cache.Add(service.UID, attrs)
 
 	return attrs

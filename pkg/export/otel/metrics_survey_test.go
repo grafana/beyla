@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
@@ -280,6 +281,7 @@ func TestHandleProcessEventCreated(t *testing.T) {
 			// Create a minimal metricsReporter with mocks
 			reporter := &SurveyMetricsReporter{
 				cfg:                &otelcfg.MetricsConfig{},
+				nodeMeta:           &meta.NodeMeta{},
 				log:                slog.Default(),
 				serviceMap:         make(map[svc.UID][]attribute.KeyValue),
 				pidTracker:         obiotel.NewPidServiceTracker(),
@@ -324,6 +326,7 @@ func TestHandleProcessEventCreated_EdgeCases(t *testing.T) {
 
 		reporter := &SurveyMetricsReporter{
 			cfg:                &otelcfg.MetricsConfig{},
+			nodeMeta:           &meta.NodeMeta{},
 			log:                slog.Default(),
 			serviceMap:         make(map[svc.UID][]attribute.KeyValue),
 			pidTracker:         obiotel.NewPidServiceTracker(),
@@ -359,6 +362,7 @@ func TestHandleProcessEventCreated_EdgeCases(t *testing.T) {
 
 		reporter := &SurveyMetricsReporter{
 			cfg:                &otelcfg.MetricsConfig{},
+			nodeMeta:           &meta.NodeMeta{},
 			log:                slog.Default(),
 			serviceMap:         make(map[svc.UID][]attribute.KeyValue),
 			pidTracker:         obiotel.NewPidServiceTracker(),

@@ -55,6 +55,7 @@ channel_buffer_len: 33
 | `log_level`<p>`BEYLA_LOG_LEVEL`</p>               | Sets process logger verbosity. Valid values: `DEBUG`, `INFO`, `WARN`, `ERROR`.                                                             | string  | `INFO`     |
 | `trace_printer`<p>`BEYLA_TRACE_PRINTER`</p>       | Prints instrumented traces to the standard output in a specified format, refer to [trace printer formats](#trace-printer-formats).         | string  | `disabled` |
 | `enforce_sys_caps`<p>`BEYLA_ENFORCE_SYS_CAPS`</p> | Controls how Beyla handles missing system capabilities at startup.                                                                         | boolean | `false`    |
+| _(No YAML)_<p>`BEYLA_AUTO_TARGET_LANGUAGE`</p>    | Selects the executable to instrument matching a Glob of chosen languages.                                                                  | string  | unset      |
 
 ## Executable name matching
 

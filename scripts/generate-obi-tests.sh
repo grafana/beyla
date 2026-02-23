@@ -668,6 +668,7 @@ generate() {
 apply_component_path_transform() {
     local file="$1"
     sed_i -e 's|path\.Join(pathRoot, "internal", "test", "integration", "components",|path.Join(pathObiSrc, "internal", "test", "integration", "components",|g' \
+        -e 's|pathRoot + "/internal/test/|pathObiSrc + "/internal/test/|g' \
         "$file"
 }
 

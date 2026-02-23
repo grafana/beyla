@@ -66,12 +66,12 @@ func fetchAgentIP(cfg *obi.NetworkConfig) (net.IP, error) {
 	case ipIfaceExternal:
 		return fromExternal(cfg.AgentIPType)
 	default:
-		if !strings.HasPrefix(cfg.AgentIPIface, ipIfaceNamedPrefix) {
+		if !strings.HasPrefix(string(cfg.AgentIPIface), ipIfaceNamedPrefix) {
 			return nil, fmt.Errorf(
 				"invalid IP interface %q. Valid values are: %s, %s or %s<iface_name>",
 				cfg.AgentIPIface, ipIfaceLocal, ipIfaceExternal, ipIfaceNamedPrefix)
 		}
-		return fromInterface(cfg.AgentIPIface[len(ipIfaceNamedPrefix):], cfg.AgentIPType)
+		return fromInterface(string(cfg.AgentIPIface[len(ipIfaceNamedPrefix):]), cfg.AgentIPType)
 	}
 }
 

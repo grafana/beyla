@@ -1,5 +1,5 @@
 # Build the autoinstrumenter binary
-ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.6@sha256:440d8777714014e7dc98fecbe2ce96ea827d35f885cfec8861a963b8e41f42cd
+ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:latest
 
 FROM $GEN_IMG AS builder
 

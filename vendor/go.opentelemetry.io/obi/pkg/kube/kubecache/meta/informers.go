@@ -26,7 +26,7 @@ type Informers struct {
 
 	waitForSync chan struct{}
 
-	// localInstance is true if the current informer instance runs inside a Beyla instance
+	// localInstance is true if the current informer instance runs inside an OBI instance
 	// if it runs as part of the k8s-cache service, it is false
 	localInstance bool
 }
@@ -71,7 +71,7 @@ func (inf *Informers) Subscribe(observer Observer) {
 		}
 	}
 
-	// until the informer waitForSync, we won't send the sync_finished event to remote beyla clients
+	// until the informer waitForSync, we won't send the sync_finished event to remote OBI clients
 	// TODO: in some very slowed-down environments (e.g. tests with -race conditions), this last message might
 	// be sent and executed before the rest of previous updates have been processed and submitted.
 	// In production, it might mean that few initialization updates are sent right before the "sync_finished" signal.

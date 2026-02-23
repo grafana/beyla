@@ -57,12 +57,12 @@ type RoutesConfig struct {
 	Unmatch UnmatchType `yaml:"unmatched"`
 	// Patterns of the paths that will match to a route
 	Patterns []string `yaml:"patterns"`
-	// Deprecated. To be removed and replaced by a collector-like filtering mechanism
+	// Deprecated: To be removed and replaced by a collector-like filtering mechanism
 	IgnorePatterns []string `yaml:"ignored_patterns"`
-	// Deprecated. To be removed and replaced by a collector-like filtering mechanism
+	// Deprecated: To be removed and replaced by a collector-like filtering mechanism
 	IgnoredEvents IgnoreMode `yaml:"ignore_mode"`
 	// Character that will be used to replace route segments
-	WildcardChar string `yaml:"wildcard_char,omitempty"`
+	WildcardChar string `yaml:"wildcard_char,omitempty" jsonschema:"maxLength=1"`
 	// Max allowed path segment cardinality (per service) for the heuristic matcher
 	MaxPathSegmentCardinality int `yaml:"max_path_segment_cardinality"`
 }
@@ -172,11 +172,10 @@ func chooseUnmatchPolicy(rn *routerNode) (func(rn *routerNode, span *request.Spa
 		if len(rc.Patterns) == 0 {
 			slog.With("component", "RoutesProvider").
 				Warn("No route match patterns configured. " +
-					"Without route definitions Beyla will not be able to generate a low cardinality " +
+					"Without route definitions OBI will not be able to generate a low cardinality " +
 					"route for trace span names. For optimal experience, please define your application " +
 					"HTTP route patterns or enable the route 'heuristic' mode. " +
-					"For more information please see the documentation at: " +
-					"https://grafana.com/docs/beyla/latest/configure/options/#routes-decorator. " +
+					"For more information please see the OBI documentation. " +
 					"If your application is only using gRPC you can ignore this warning.")
 		}
 	case UnmatchUnset:

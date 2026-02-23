@@ -227,7 +227,7 @@ func (mp *MetadataProvider) fetchClusterNameFromNodeLabels(ctx context.Context) 
 
 func currentNamespace(log *slog.Logger) string {
 	if nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err != nil {
-		log.Warn("can't read service account namespace. Two Beyla pods with the same"+
+		log.Warn("can't read service account namespace. Two OBI pods with the same"+
 			" name could result in inaccuracies in the host.id attribute", "error", err)
 		return ""
 	} else {
@@ -258,13 +258,13 @@ func checkLocalHostNameWithNodeName(
 	}
 	switch len(submatches) {
 	case 0:
-		log.Warn("could not get any node name corresponding to the Beyla pod."+
+		log.Warn("could not get any node name corresponding to the OBI pod."+
 			" This could involve missing or incorrect Kubernetes metadata", "hostName", podHostName)
 	case 1:
 		podHostName = submatches[0]
 	default:
 		podHostName = submatches[0]
-		log.Warn("multiple node matches for the Beyla pod name. "+
+		log.Warn("multiple node matches for the OBI pod name. "+
 			" This could involve missing or incorrect Kubernetes metadata",
 			"matches", submatches, "hostName", podHostName)
 	}
@@ -294,8 +294,8 @@ func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Infor
 	return meta.InitInformers(ctx, opts...)
 }
 
-// initRemoteInformerCacheClient connects via gRPC/Protobuf to a remote beyla-k8s-cache service, to avoid that
-// each Beyla instance connects to the Kube API informer on each node, which would overload the Kube API
+// initRemoteInformerCacheClient connects via gRPC/Protobuf to a remote obi-k8s-cache service, to avoid that
+// each OBI instance connects to the Kube API informer on each node, which would overload the Kube API
 func (mp *MetadataProvider) initRemoteInformerCacheClient(ctx context.Context) *cacheSvcClient {
 	client := &cacheSvcClient{
 		address:      mp.cfg.MetaCacheAddr,

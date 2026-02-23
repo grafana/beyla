@@ -104,12 +104,12 @@ type Attrs struct {
 
 	Metadata map[attr.Name]string
 
-	// ProcPID is the PID of the instrumented process as seen by Beyla's /proc filesystem.
+	// ProcPID is the PID of the instrumented process as seen by OBI's /proc filesystem.
 	// It is stored here at process discovery time, because it might differ form the
 	// UserPID and HostPID fields of the request.PidInfo struct.
 	ProcPID app.PID
 
-	// HostName running the process. It will default to the Beyla host and will be overridden
+	// HostName running the process. It will default to the OBI host and will be overridden
 	// by other metadata if available (e.g., Pod Name, Node Name, etc...)
 	HostName string
 

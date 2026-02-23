@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/invopop/jsonschema"
 )
 
 type ContextPropagationMode uint8
@@ -24,7 +26,13 @@ const (
 	ContextPropagationIPOptions ContextPropagationMode = 1 << 2 // IP options (dangerous)
 
 	// Convenience aliases
-	ContextPropagationAll = ContextPropagationHeaders | ContextPropagationTCP
+	ContextPropagationAll         = ContextPropagationHeaders | ContextPropagationTCP
+	StrContextPropagationDisabled = "disabled"
+	StrContextPropagationAll      = "all"
+	StrContextPropagationHeaders  = "headers"
+	StrContextPropagationHTTP     = "http"
+	StrContextPropagationTCP      = "tcp"
+	StrContextPropagationIP       = "ip"
 )
 
 // EBPFTracer configuration for eBPF programs
@@ -64,9 +72,8 @@ type EBPFTracer struct {
 	// backported prior to version 5.17.
 	OverrideBPFLoopEnabled bool `yaml:"override_bpfloop_enabled" env:"OTEL_EBPF_OVERRIDE_BPF_LOOP_ENABLED" validate:"boolean"`
 
-	// Select the TC attachment backend: accepted values are 'tc' (netlink),
-	// and 'tcx'
-	TCBackend TCBackend `yaml:"traffic_control_backend" env:"OTEL_EBPF_BPF_TC_BACKEND" validate:"oneof=1 2 3"`
+	// Select the TC attachment backend: accepted values are 'tc' (netlink), and 'tcx'
+	TCBackend TCBackend `yaml:"traffic_control_backend" env:"OTEL_EBPF_BPF_TC_BACKEND" validate:"oneof=1 2 3" jsonschema:"type=string,enum=tc,enum=tcx,enum=auto"`
 
 	// Disables OBI black-box context propagation. Used for testing purposes only.
 	DisableBlackBoxCP bool `yaml:"disable_black_box_cp" env:"OTEL_EBPF_BPF_DISABLE_BLACK_BOX_CP" validate:"boolean"`
@@ -176,10 +183,10 @@ func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
 
 	// Handle simple cases first
 	switch str {
-	case "all":
+	case StrContextPropagationAll:
 		*m = ContextPropagationAll
 		return nil
-	case "disabled", "":
+	case StrContextPropagationDisabled, "":
 		*m = ContextPropagationDisabled
 		return nil
 	}
@@ -191,11 +198,11 @@ func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		switch part {
-		case "headers", "http":
+		case StrContextPropagationHeaders, StrContextPropagationHTTP:
 			result |= ContextPropagationHeaders
-		case "tcp":
+		case StrContextPropagationTCP:
 			result |= ContextPropagationTCP
-		case "ip":
+		case StrContextPropagationIP:
 			result |= ContextPropagationIPOptions
 		default:
 			return fmt.Errorf("invalid value for context_propagation: '%s' (valid: all, disabled, headers, tcp, ip)", part)
@@ -231,4 +238,27 @@ func (m ContextPropagationMode) MarshalText() ([]byte, error) {
 	}
 
 	return []byte(strings.Join(parts, ",")), nil
+}
+
+func (ContextPropagationMode) JSONSchema() *jsonschema.Schema {
+	options := []string{StrContextPropagationHeaders, StrContextPropagationHTTP, StrContextPropagationTCP, StrContextPropagationIP}
+	optionsStr := strings.Join(options, "|")
+	OptionsRegexp := fmt.Sprintf("^(%s)(,(%s))*$", optionsStr, optionsStr)
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			{
+				Type:        "string",
+				Enum:        []any{StrContextPropagationAll, StrContextPropagationDisabled, ""},
+				Description: "Enable all propagation methods, disable propagation, or use empty string for disabled",
+			},
+			{
+				Type:        "string",
+				Description: "List of propagation methods to enable (headers/http for HTTP headers, tcp for TCP options, ip for IP options), separated by commas",
+				Examples:    []any{"headers", "tcp", "ip", "headers,tcp", "headers,ip", "tcp,ip", "headers,tcp,ip"},
+				Pattern:     OptionsRegexp,
+			},
+		},
+		Title:       "Context Propagation Mode",
+		Description: "Configures distributed context propagation. Can be 'all' to enable all methods, 'disabled'/'' to disable, or a list of specific methods: 'headers' (or 'http') for HTTP headers, 'tcp' for TCP options, 'ip' for IP options.",
+	}
 }

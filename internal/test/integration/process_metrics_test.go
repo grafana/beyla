@@ -1,11 +1,9 @@
-//go:build ignore
-
-// Beyla-specific process metrics test helpers
-// This file is copied to internal/testgenerated/integration/ by generate-obi-tests.sh
+//go:build integration
 
 package integration
 
 import (
+	"path"
 	"strconv"
 	"testing"
 
@@ -13,8 +11,38 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/beyla/v3/internal/testgenerated/integration/components/promtest"
+	"github.com/grafana/beyla/v3/internal/test/tools/docker"
+	"github.com/grafana/beyla/v3/internal/test/tools/promtest"
 )
+
+func TestProcessMetrics(t *testing.T) {
+	compose, err := docker.ComposeSuite("compose/docker-compose-process.yml", path.Join(pathOutput, "test-suite-process-level-metrics.log"))
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	t.Run("Pingclient process-level metrics", testProcesses(map[string]string{
+		"process_executable_name": "pingclient",
+		"process_executable_path": "/pingclient",
+		"process_command":         "pingclient",
+		"process_command_line":    "/pingclient",
+	}))
+
+	t.Run("Testserver process-level metrics", testProcesses(map[string]string{
+		"process_executable_name": "testserver",
+		"process_executable_path": "/testserver",
+		"process_command":         "testserver",
+		"process_command_line":    "/testserver",
+	}))
+
+	t.Run("Python server process metrics", testProcesses(map[string]string{
+		"process_executable_name": "python",
+		"process_executable_path": "/usr/local/bin/python",
+		"process_command":         "gunicorn",
+		"process_command_line":    "/usr/local/bin/python /usr/local/bin/gunicorn -w 4 -b 0.0.0.0:8380 main:app --timeout 90",
+	}))
+
+	require.NoError(t, compose.Close())
+}
 
 func testProcesses(attribMatcher map[string]string) func(t *testing.T) {
 	return func(t *testing.T) {

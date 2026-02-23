@@ -1,0 +1,85 @@
+version: "3.8"
+
+services:
+  testserver-go:
+    image: ghcr.io/open-telemetry/obi-testimg:go-0.1.1
+    environment:
+      LOG_LEVEL: DEBUG
+    ports:
+      - "8080:8080"
+
+  testserver-python:
+    image: ghcr.io/open-telemetry/obi-testimg:python-0.1.1
+    ports:
+      - "8380:8380"
+
+  client:
+    image: ghcr.io/open-telemetry/obi-testimg:go-http-client-0.1.1
+    environment:
+      TARGET_URL: "http://testserver-go:8080"
+
+  beyla:
+    build:
+      context: ../../../..
+      dockerfile: ./internal/test/integration/components/beyla/Dockerfile
+    command:
+      - --config=/configs/beyla-config-process.yml
+    volumes:
+      - ../configs/:/configs
+      - ../system/sys/kernel/security:/sys/kernel/security
+      - ../../../../testoutput:/coverage
+      - ../../../../testoutput/run-client:/var/run/beyla
+    image: beyla
+    privileged: true
+    pid: "host"
+    environment:
+      GOCOVERDIR: "/coverage"
+      BEYLA_TRACE_PRINTER: "text"
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_OTLP_TRACES_BATCH_TIMEOUT: "1ms"
+      BEYLA_SERVICE_NAMESPACE: "integration-test"
+      BEYLA_METRICS_INTERVAL: "10ms"
+      BEYLA_BPF_BATCH_TIMEOUT: "10ms"
+      BEYLA_LOG_LEVEL: "DEBUG"
+      BEYLA_ENFORCE_SYS_CAPS: "false"
+      BEYLA_BPF_DEBUG: "TRUE"
+      BEYLA_PROCESSES_INTERVAL: "100ms"
+      BEYLA_HOSTNAME: "beyla"
+    ports:
+      - "8999:8999" # Prometheus scrape port, if enabled via config
+
+  # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 125M
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-config/otelcol-config.yml"]
+    volumes:
+      - ../configs/:/etc/otelcol-config
+    ports:
+      - "4317" # OTLP over gRPC receiver
+      - "4318" # OTLP over HTTP receiver
+      - "9464" # Prometheus exporter
+      - "8888" # metrics endpoint
+    depends_on:
+      beyla:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus-config-dual.yml
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+    volumes:
+      - ../configs/:/etc/prometheus
+    ports:
+      - "9090:9090"

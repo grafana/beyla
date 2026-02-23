@@ -241,7 +241,7 @@ network:
 			},
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
-		InternalMetrics: imetrics.Config{
+		InternalMetrics: imetrics.InternalMetricsConfig{
 			Exporter: imetrics.InternalMetricsExporterDisabled,
 			Prometheus: imetrics.PrometheusConfig{
 				Port: 3210,

@@ -5,6 +5,7 @@ package meta // import "go.opentelemetry.io/obi/pkg/appolly/meta"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -25,12 +26,25 @@ func otelNodeFetcher(detector resource.Detector) fetcher {
 		// running asynchronously to avoid that any connection issue blocks the main goroutine
 		resCh := make(chan *resource.Resource, 1)
 		go func() {
-			resource, err := detector.Detect(ctx)
-			// none of the errors from the detector are retriable, so we just log them.
-			if err != nil {
-				log.Debug("can't detect Cloud metadata", "error", err)
+			for {
+				select {
+				case <-ctx.Done():
+					// timeout! exit
+					return
+				default:
+					// keep going
+				}
+				res, err := detector.Detect(ctx)
+				if errors.Is(err, resource.ErrPartialResource) {
+					// retry until timeout
+					continue
+				}
+				// none of the other errors from the detector are retriable, so we just log them.
+				if err != nil {
+					log.Debug("can't detect Cloud metadata", "error", err)
+				}
+				resCh <- res
 			}
-			resCh <- resource
 		}()
 
 		var resource *resource.Resource
@@ -46,7 +60,6 @@ func otelNodeFetcher(detector resource.Detector) fetcher {
 		}
 
 		log.Info("detected Cloud metadata")
-		// In some cases, the API can return an error with a valid (partial resource)
 		attrs := resource.Iter()
 		store := NodeMeta{Metadata: make([]Entry, 0, attrs.Len())}
 		for attrs.Next() {
@@ -62,6 +75,7 @@ func otelNodeFetcher(detector resource.Detector) fetcher {
 					Entry{Key: attr.Name(at.Key), Value: at.Value.Emit()})
 			}
 		}
+		log.Debug("cloud metadata", "metadata", fmt.Sprintf("%+v", store))
 		return store, nil
 	}
 }

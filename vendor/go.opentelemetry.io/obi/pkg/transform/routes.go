@@ -57,12 +57,12 @@ type RoutesConfig struct {
 	Unmatch UnmatchType `yaml:"unmatched"`
 	// Patterns of the paths that will match to a route
 	Patterns []string `yaml:"patterns"`
-	// Deprecated. To be removed and replaced by a collector-like filtering mechanism
+	// Deprecated: To be removed and replaced by a collector-like filtering mechanism
 	IgnorePatterns []string `yaml:"ignored_patterns"`
-	// Deprecated. To be removed and replaced by a collector-like filtering mechanism
+	// Deprecated: To be removed and replaced by a collector-like filtering mechanism
 	IgnoredEvents IgnoreMode `yaml:"ignore_mode"`
 	// Character that will be used to replace route segments
-	WildcardChar string `yaml:"wildcard_char,omitempty"`
+	WildcardChar string `yaml:"wildcard_char,omitempty" jsonschema:"maxLength=1"`
 	// Max allowed path segment cardinality (per service) for the heuristic matcher
 	MaxPathSegmentCardinality int `yaml:"max_path_segment_cardinality"`
 }

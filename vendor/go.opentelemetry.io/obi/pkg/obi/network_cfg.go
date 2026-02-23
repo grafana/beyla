@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/invopop/jsonschema"
 
 	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
 	"go.opentelemetry.io/obi/pkg/netolly/cidr"
@@ -41,6 +42,25 @@ const (
 	NetworkAgentIPIfaceLocal     = "local"
 )
 
+type AgentTypeIface string
+
+func (AgentTypeIface) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			{
+				Type: "string",
+				Enum: []any{NetworkAgentIPIfaceExternal, NetworkAgentIPIfaceLocal},
+			},
+			{
+				Type:    "string",
+				Pattern: `^name:.+$`,
+			},
+		},
+		Title:       "Agent Type Interface",
+		Description: "Specifies which interface should the agent pick the IP address from in order to report it in the AgentIP field on each flow. Accepted values are: external, local, or name:<interface name> (e.g. name:eth0).",
+	}
+}
+
 type NetworkConfig struct {
 	// Enable network metrics.
 	// Default value is false (disabled)
@@ -52,20 +72,20 @@ type NetworkConfig struct {
 
 	// Specify the source type for network events, e.g tc or socket_filter. The tc implementation
 	// cannot be used when there are other tc eBPF probes, e.g. Cilium CNI.
-	Source string `yaml:"source" env:"OTEL_EBPF_NETWORK_SOURCE"  validate:"oneof=tc socket_filter"`
+	Source string `yaml:"source" env:"OTEL_EBPF_NETWORK_SOURCE"  validate:"oneof=tc socket_filter" jsonschema:"type=string,enum=tc,enum=socket_filter"`
 
 	// AgentIP allows overriding the reported Agent IP address on each flow.
-	AgentIP string `yaml:"agent_ip" env:"OTEL_EBPF_NETWORK_AGENT_IP" validate:"omitempty,ip"`
+	AgentIP string `yaml:"agent_ip" env:"OTEL_EBPF_NETWORK_AGENT_IP" validate:"omitempty,ip" jsonschema:"type=string,format=ip"`
 
 	// AgentIPIface specifies which interface should the agent pick the IP address from in order to
 	// report it in the AgentIP field on each flow. Accepted values are: external (default), local,
 	// or name:<interface name> (e.g. name:eth0).
 	// If the AgentIP configuration property is set, this property has no effect.
-	AgentIPIface string `yaml:"agent_ip_iface" env:"OTEL_EBPF_NETWORK_AGENT_IP_IFACE" validate:"agentIPIface"`
+	AgentIPIface AgentTypeIface `yaml:"agent_ip_iface" env:"OTEL_EBPF_NETWORK_AGENT_IP_IFACE" validate:"agentIPIface"`
 	// AgentIPType specifies which type of IP address (IPv4 or IPv6 or any) should the agent report
 	// in the AgentID field of each flow. Accepted values are: any (default), ipv4, ipv6.
 	// If the AgentIP configuration property is set, this property has no effect.
-	AgentIPType string `yaml:"agent_ip_type" env:"OTEL_EBPF_NETWORK_AGENT_IP_TYPE" validate:"omitempty,oneof=any ipv4 ipv6"`
+	AgentIPType string `yaml:"agent_ip_type" env:"OTEL_EBPF_NETWORK_AGENT_IP_TYPE" validate:"omitempty,oneof=any ipv4 ipv6" jsonschema:"type=string,enum=any,enum=ipv4,enum=ipv6"`
 	// Interfaces contains the interface names from where flows will be collected. If empty, the agent
 	// will fetch all the interfaces in the system, excepting the ones listed in ExcludeInterfaces.
 	// If an entry is enclosed by slashes (e.g. `/br-/`), it will match as regular expression,
@@ -93,7 +113,7 @@ type NetworkConfig struct {
 	// both the physical and a virtual interface).
 	// "first_come" will forward only flows from the first interface the flows are received from.
 	// Default value: first_come
-	Deduper string `yaml:"deduper" env:"OTEL_EBPF_NETWORK_DEDUPER" validate:"oneof=none first_come"`
+	Deduper string `yaml:"deduper" env:"OTEL_EBPF_NETWORK_DEDUPER" validate:"oneof=none first_come" jsonschema:"type=string,enum=none,enum=first_come"`
 	// DeduperFCTTL specifies the expiry duration of the flows "first_come" deduplicator. After
 	// a flow hasn't been received for that expiry time, the deduplicator forgets it. That means
 	// that a flow from a connection that has been inactive during that period could be forwarded
@@ -102,7 +122,7 @@ type NetworkConfig struct {
 	DeduperFCTTL time.Duration `yaml:"deduper_fc_ttl" env:"OTEL_EBPF_NETWORK_DEDUPER_FC_TTL" validate:"omitempty,gt=0"`
 	// Direction allows selecting which flows to trace according to its direction. Accepted values
 	// are "ingress", "egress" or "both" (default).
-	Direction string `yaml:"direction" env:"OTEL_EBPF_NETWORK_DIRECTION" validate:"oneof=ingress egress both"`
+	Direction string `yaml:"direction" env:"OTEL_EBPF_NETWORK_DIRECTION" validate:"oneof=ingress egress both" jsonschema:"type=string,enum=ingress,enum=egress,enum=both"`
 	// Sampling holds the rate at which packets should be sampled and sent to the target collector.
 	// E.g. if set to 100, one out of 100 packets, on average, will be sent to the target collector.
 	Sampling int `yaml:"sampling" env:"OTEL_EBPF_NETWORK_SAMPLING" validate:"omitempty,gt=0"`
@@ -111,7 +131,7 @@ type NetworkConfig struct {
 	// If the value is "watch", interfaces are traced immediately after they are created. This is
 	// the recommended setting for most configurations. "poll" value is a fallback mechanism that
 	// periodically queries the current network interfaces (frequency specified by ListenPollPeriod).
-	ListenInterfaces string `yaml:"listen_interfaces" env:"OTEL_EBPF_NETWORK_LISTEN_INTERFACES" validate:"oneof=watch poll"`
+	ListenInterfaces string `yaml:"listen_interfaces" env:"OTEL_EBPF_NETWORK_LISTEN_INTERFACES" validate:"oneof=watch poll" jsonschema:"type=string,enum=watch,enum=poll"`
 	// ListenPollPeriod specifies the periodicity to query the network interfaces when the
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `yaml:"listen_poll_period" env:"OTEL_EBPF_NETWORK_LISTEN_POLL_PERIOD" validate:"gte=0"`

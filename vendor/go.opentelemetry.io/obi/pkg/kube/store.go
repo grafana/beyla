@@ -50,8 +50,8 @@ func qName(om *informer.ObjectMeta) qualifiedName {
 	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
 }
 
-// MetaSourceLabels allow overriding some metadata from kubernetes labels
-// Deprecated. Left here for backwards-compatibility.
+// Deprecated: MetaSourceLabels allow overriding some metadata from kubernetes labels,
+// Left for backwards-compatibility.
 type MetaSourceLabels struct {
 	ServiceName      string `yaml:"service_name" env:"OTEL_EBPF_KUBE_META_SOURCE_LABEL_SERVICE_NAME"`
 	ServiceNamespace string `yaml:"service_namespace" env:"OTEL_EBPF_KUBE_META_SOURCE_LABEL_SERVICE_NAMESPACE"`

@@ -211,9 +211,15 @@ func (m *Matcher) isExcluded(obj *ProcessAttrs, proc *services.ProcessInfo) bool
 
 func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a services.Selector) bool {
 	log := m.Log.With("pid", p.Pid, "exe", p.ExePath)
+	if pids, ok := a.GetPIDs(); ok && len(pids) > 0 {
+		return pidInList(p.Pid, pids)
+	}
 	if !a.GetPath().IsSet() && !a.GetLanguages().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
-		log.Debug("no Kube metadata, no local selection criteria. Ignoring")
-		return false
+		pids, hasPIDs := a.GetPIDs()
+		if !hasPIDs || len(pids) == 0 {
+			log.Debug("no Kube metadata, no local selection criteria. Ignoring")
+			return false
+		}
 	}
 	if (a.GetPath().IsSet() || a.GetPathRegexp().IsSet()) && !m.matchByExecutable(p, a) {
 		log.Debug("executable path does not match", "path", a.GetPath(), "pathregexp", a.GetPathRegexp())
@@ -239,6 +245,15 @@ func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a ser
 	// by metadata.
 	// If there is no metadata, this will return true.
 	return m.matchByAttributes(obj, a)
+}
+
+func pidInList(pid app.PID, list []app.PID) bool {
+	for _, p := range list {
+		if p == pid {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Matcher) matchByPort(p *services.ProcessInfo, a services.Selector) bool {
@@ -347,6 +362,21 @@ func LogEnricherFindingCriteria(cfg *obi.Config) []services.Selector {
 
 func FindingCriteria(cfg *obi.Config) []services.Selector {
 	logDeprecationAndConflicts(cfg)
+
+	if cfg.TargetPIDs.Len() > 0 {
+		vals := cfg.TargetPIDs.AllValues()
+		pids := make([]uint32, 0, len(vals))
+		for _, v := range vals {
+			pids = append(pids, uint32(v))
+		}
+		return []services.Selector{
+			&services.GlobAttributes{
+				Name:      cfg.ServiceName,
+				Namespace: cfg.ServiceNamespace,
+				PIDs:      pids,
+			},
+		}
+	}
 
 	if OnlyDefinesDeprecatedServiceSelection(cfg) {
 		// deprecated use case. Supporting the old discovery > services section when the

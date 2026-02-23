@@ -51,9 +51,6 @@ const (
 	TracesTargetInfo         = "traces_target_info"
 	TargetInfo               = "target_info"
 	TracesHostInfo           = "traces_host_info"
-
-	AggregationExplicit    = "explicit_bucket_histogram"
-	AggregationExponential = "base2_exponential_bucket_histogram"
 )
 
 // CloudHostIDKey is the host ID attribute for cloud provider integrations,
@@ -712,13 +709,13 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 
 func isExponentialAggregation(mc *otelcfg.MetricsConfig, mlog *slog.Logger) bool {
 	switch mc.HistogramAggregation {
-	case AggregationExponential:
+	case otelcfg.HistogramAggregationExponential:
 		return true
-	case AggregationExplicit:
+	case otelcfg.HistogramAggregationExplicit:
 	// do nothing
 	default:
 		mlog.Warn("invalid value for histogram aggregation. Accepted values are: "+
-			AggregationExponential+", "+AggregationExplicit+" (default). Using default",
+			string(otelcfg.HistogramAggregationExponential)+", "+string(otelcfg.HistogramAggregationExplicit)+" (default). Using default",
 			"value", mc.HistogramAggregation)
 	}
 	return false

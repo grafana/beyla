@@ -54,13 +54,13 @@ func (e *HarvestError) Error() string {
 	return e.Message
 }
 
-func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []string, timeout time.Duration) *RouteHarvester {
+func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []services.RouteHarvesterLanguage, timeout time.Duration) *RouteHarvester {
 	dMap := map[svc.InstrumentableType]struct{}{}
 	for _, lang := range disabled {
-		if strings.ToLower(lang) == svc.InstrumentableJava.String() {
+		if lang == services.RouteHarvesterLanguageJava {
 			dMap[svc.InstrumentableJava] = struct{}{}
 		}
-		if strings.ToLower(lang) == svc.InstrumentableNodejs.String() {
+		if lang == services.RouteHarvesterLanguageNodejs {
 			dMap[svc.InstrumentableNodejs] = struct{}{}
 		}
 	}

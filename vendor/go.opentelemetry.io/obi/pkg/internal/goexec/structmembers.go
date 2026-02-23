@@ -627,7 +627,7 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 	for {
 		entry, err := reader.Next()
 		if err != nil {
-			log.Debug("error reading DRWARF info", "data", err)
+			log.Debug("error reading DWARF info", "data", err)
 			return fieldOffsets, expectedReturns
 		}
 		if entry == nil { // END of dwarf data

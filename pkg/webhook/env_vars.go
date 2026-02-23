@@ -150,7 +150,7 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 // Respects existing environment variables (won't override user settings).
 func (pm *PodMutator) configureSampler(container *corev1.Container, samplerConfig *services.SamplerConfig) {
 	// Use existing setEnvVar helper (handles empty values and duplicates)
-	setEnvVar(container, envOtelTracesSamplerName, samplerConfig.Name)
+	setEnvVar(container, envOtelTracesSamplerName, string(samplerConfig.Name))
 	setEnvVar(container, envOtelTracesSamplerArgName, samplerConfig.Arg)
 }
 

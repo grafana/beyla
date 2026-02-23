@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/invopop/jsonschema"
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
@@ -47,6 +48,22 @@ var FeatureMapper = map[string]Features{
 	"ebpf":                      FeatureEBPF,
 	"all":                       FeatureAll,
 	"*":                         FeatureAll,
+}
+
+func (Features) JSONSchema() *jsonschema.Schema {
+	features := make([]any, 0, len(FeatureMapper))
+
+	for k := range FeatureMapper {
+		features = append(features, k)
+	}
+	return &jsonschema.Schema{
+		Type: "array",
+		Items: &jsonschema.Schema{
+			Type: "string",
+			Enum: features,
+		},
+		Description: "List of metric features to enable.",
+	}
 }
 
 // AppO11yFeatures is a bitmask of all metrics that are enabled by default for Application RED

@@ -154,6 +154,14 @@ func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
 		tracers = append(tracers, tctracer.New(cfg))
 	}
 
+	// Enables log enricher which handles trace-log correlation
+	if cfg.EBPF.LogEnricher.Enabled() {
+		logEnricher := logenricher.New(cfg)
+		if logEnricher != nil {
+			tracers = append(tracers, logEnricher)
+		}
+	}
+
 	return tracers
 }
 
@@ -170,14 +178,6 @@ func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config,
 	// Enables GPU tracer
 	if cfg.EBPF.CudaInstrumentationEnabled() {
 		tracers = append(tracers, gpuevent.New(pidFilter, cfg, metrics))
-	}
-
-	// Enables log enricher which handles trace-log correlation
-	if cfg.EBPF.LogEnricher.Enabled() {
-		logEnricher := logenricher.New(cfg)
-		if logEnricher != nil {
-			tracers = append(tracers, logEnricher)
-		}
 	}
 
 	return tracers

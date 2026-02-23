@@ -36,7 +36,7 @@ var netLookupAddr = net.LookupAddr
 // from the documentation. This means that it does not impact in the overall OBI performance.
 type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default), "local" and "ebpf"
-	Type string `yaml:"type" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE" validate:"oneof=none local ebpf"`
+	Type string `yaml:"type" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE" validate:"oneof=none local ebpf" jsonschema:"type=string,enum=none,enum=local,enum=ebpf"`
 
 	// CacheLen only applies to the "local" and "ebpf" ReverseDNS type. It
 	// specifies the max size of the LRU cache that is checked before

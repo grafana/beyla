@@ -132,7 +132,7 @@ type BeylaDiscoveryConfig struct {
 	RouteHarvesterTimeout time.Duration `yaml:"route_harvester_timeout" env:"OTEL_EBPF_ROUTE_HARVESTER_TIMEOUT"`
 
 	// nolint:undoc
-	DisabledRouteHarvesters []string `yaml:"disabled_route_harvesters"`
+	DisabledRouteHarvesters []services.RouteHarvesterLanguage `yaml:"disabled_route_harvesters"`
 
 	// nolint:undoc
 	RouteHarvestConfig RouteHarvestingConfig `yaml:"route_harvester_advanced"`

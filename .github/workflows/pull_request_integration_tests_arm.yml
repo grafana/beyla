@@ -46,7 +46,7 @@ permissions:
 jobs:
   test-matrix:
     name: "Build ARM integration matrix"
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -70,7 +70,7 @@ jobs:
   test:
     name: ${{ matrix.description }}
     needs: test-matrix
-    runs-on: ubuntu-arm64-small
+    runs-on: ubuntu-arm64
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

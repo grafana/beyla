@@ -30,22 +30,22 @@ jobs:
           - image: grafana/beyla
             file: Dockerfile
             platform: linux/amd64
-            runner: ubuntu-x64-small
+            runner: ubuntu-x64
             artifact_suffix: beyla-amd64
           - image: grafana/beyla
             file: Dockerfile
             platform: linux/arm64
-            runner: ubuntu-arm64-small
+            runner: ubuntu-arm64
             artifact_suffix: beyla-arm64
           - image: grafana/beyla-k8s-cache
             file: k8scache.Dockerfile
             platform: linux/amd64
-            runner: ubuntu-x64-small
+            runner: ubuntu-x64
             artifact_suffix: k8s-cache-amd64
           - image: grafana/beyla-k8s-cache
             file: k8scache.Dockerfile
             platform: linux/arm64
-            runner: ubuntu-arm64-small
+            runner: ubuntu-arm64
             artifact_suffix: k8s-cache-arm64
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -85,7 +85,7 @@ jobs:
 
   create-manifest:
     needs: build
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     permissions:
       contents: read
       # required for DockerHub access

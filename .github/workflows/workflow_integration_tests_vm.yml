@@ -30,7 +30,7 @@ permissions:
 jobs:
   vm-test-matrix:
     name: "Build VM integration matrix"
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -179,7 +179,8 @@ jobs:
               context=".obi-src/"
             fi
             echo "Building ${tag} from ${dockerfile} (context: ${context})..."
-            docker build --quiet -t "${tag}" -f "${dockerfile}" "${context}"
+            # -f is relative to CWD, not context, so prepend context path
+            docker build --quiet -t "${tag}" -f "${context}${dockerfile}" "${context}"
             IMAGE_TAGS+=("${tag}")
           done
 

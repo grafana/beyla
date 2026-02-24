@@ -44,7 +44,7 @@ permissions:
 jobs:
   test-matrix:
     name: "Build oats matrix"
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -65,7 +65,7 @@ jobs:
   test:
     name: ${{ matrix.basename }}
     needs: test-matrix
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}

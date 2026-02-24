@@ -30,13 +30,15 @@ type Config struct {
 	// LogLevel can be one of: debug, info, warn, error
 	LogLevel LogLevel `yaml:"log_level" env:"OTEL_EBPF_K8S_CACHE_LOG_LEVEL"`
 	// Port where the service is going to listen to
-	Port int `yaml:"port" env:"OTEL_EBPF_K8S_CACHE_PORT"`
+	Port int `yaml:"port" env:"OTEL_EBPF_K8S_CACHE_PORT" validate:"gte=0"`
 	// MaxConnection is the maximum number of concurrent clients that the service can handle at the same time
-	MaxConnections int `yaml:"max_connections" env:"OTEL_EBPF_K8S_CACHE_MAX_CONNECTIONS"`
+	MaxConnections int `yaml:"max_connections" env:"OTEL_EBPF_K8S_CACHE_MAX_CONNECTIONS" validate:"gte=0"`
 	// ProfilePort is the port where the pprof server is going to listen to. 0 (default) means disabled
-	ProfilePort int `yaml:"profile_port" env:"OTEL_EBPF_K8S_CACHE_PROFILE_PORT"`
+	ProfilePort int `yaml:"profile_port" env:"OTEL_EBPF_K8S_CACHE_PROFILE_PORT" validate:"gte=0"`
 	// InformerResyncPeriod is the time interval between complete resyncs of the informers
-	InformerResyncPeriod time.Duration `yaml:"informer_resync_period" env:"OTEL_EBPF_K8S_CACHE_INFORMER_RESYNC_PERIOD"`
+	InformerResyncPeriod time.Duration `yaml:"informer_resync_period" env:"OTEL_EBPF_K8S_CACHE_INFORMER_RESYNC_PERIOD" validate:"gte=0"`
+	// SendTimeout is the maximum duration to wait to receive an event before dropping the connection.
+	SendTimeout time.Duration `yaml:"informer_send_timeout" env:"OTEL_EBPF_K8S_CACHE_INFORMER_SEND_TIMEOUT" validate:"gte=0"`
 
 	InternalMetrics instrument.InternalMetricsConfig `yaml:"internal_metrics"`
 }
@@ -46,6 +48,7 @@ var DefaultConfig = Config{
 	Port:                 50055,
 	MaxConnections:       150,
 	InformerResyncPeriod: 30 * time.Minute,
+	SendTimeout:          10 * time.Second,
 	ProfilePort:          0,
 }
 

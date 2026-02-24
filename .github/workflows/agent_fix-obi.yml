@@ -65,28 +65,27 @@ jobs:
           # Enable commit signing so Claude can push fixes to the PR branch
           # directly via the GitHub API (no persist-credentials needed).
           use_commit_signing: "true"
-          # Tool permissions via settings (not claude_args --allowedTools)
-          # because the SDK's allowedTools parameter does not support
-          # Bash(X) pattern matching, causing all Bash calls to be denied.
-          settings: |
-            {
-              "permissions": {
-                "allow": [
-                  "Bash(cat)", "Bash(date)", "Bash(echo)", "Bash(gh)",
-                  "Bash(git diff)", "Bash(git log)", "Bash(git show)",
-                  "Bash(git status)", "Bash(git submodule)", "Bash(git rev-parse)",
-                  "Bash(go)", "Bash(grep)", "Bash(head)", "Bash(ls)",
-                  "Bash(make)", "Bash(pwd)", "Bash(sort)", "Bash(tail)",
-                  "Bash(uniq)", "Bash(wc)",
-                  "Edit", "MultiEdit", "Glob", "Grep", "LS",
-                  "Read", "Write", "Task", "TodoWrite",
-                  "mcp__github_file_ops__commit_changes",
-                  "mcp__github_file_ops__create_or_update_file"
-                ]
-              }
-            }
+          # Tool permissions via --allowedTools using Bash(cmd:*) glob syntax.
+          # The :* suffix is required — without it the SDK treats the pattern
+          # as a literal tool name and denies every Bash call.  Tag mode's own
+          # patterns use this same Bash(cmd:*) convention.
+          #
+          # Settings permissions.allow was tried but does not take effect when
+          # running via the Agent SDK's non-interactive query() path.
+          #
+          # Bash(git:*) covers "git -C .obi-src log …" and similar submodule
+          # inspection commands that per-subcommand patterns would miss.
+          # Destructive git ops are blocked by the prompt, not the allow list.
           claude_args: >-
             --max-turns 30
+            --allowedTools
+            "Bash(cat:*),Bash(date:*),Bash(echo:*),Bash(gh:*),
+            Bash(git:*),Bash(go:*),Bash(grep:*),Bash(head:*),Bash(ls:*),
+            Bash(make:*),Bash(pwd:*),Bash(sort:*),Bash(tail:*),
+            Bash(uniq:*),Bash(wc:*),
+            Edit,MultiEdit,Glob,Grep,LS,Read,Write,Task,TodoWrite,
+            mcp__github_file_ops__commit_changes,
+            mcp__github_file_ops__create_or_update_file"
           prompt: |
             # Fix OBI submodule CI
 

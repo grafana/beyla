@@ -60,7 +60,7 @@ jobs:
       - name: Build matrix
         id: build-matrix
         env:
-          PARTITIONS: 15
+          PARTITIONS: 18
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT

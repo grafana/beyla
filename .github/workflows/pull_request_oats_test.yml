@@ -34,13 +34,17 @@ on:
       - ".github/workflows/pull_request_oats_test.yml"
       - ".obi-src/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   test-matrix:
     name: "Build oats matrix"
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:

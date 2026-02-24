@@ -20,13 +20,17 @@ on:
       - "scripts/generate-obi-tests.sh"
       - ".obi-src/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   vm-test-matrix:
     name: "Build VM integration matrix"
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -139,6 +143,53 @@ jobs:
         run: |
           mkdir compiled-tests
           CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/testgenerated/integration
+
+      - name: Pre-build Docker images for VM tests
+        run: |
+          # Auto-discover Docker images from compose files and build them on
+          # the host at native speed, avoiding slow in-VM builds under QEMU
+          # TCG (software CPU emulation). Scans for services that have both a
+          # 'build: dockerfile:' and 'image: hatest-*', skipping entries with
+          # env var substitutions in the dockerfile path.
+          mapfile -t ENTRIES < <(
+            awk '
+              /^  [a-zA-Z]/ {
+                if (df && img && !(img in seen)) { seen[img]=1; print img "=" df }
+                df=""; img=""
+              }
+              /dockerfile:/ {
+                sub(/.*dockerfile: */, ""); gsub(/["'"'"']/, ""); sub(/^\.\/*/, "")
+                if ($0 !~ /\$\{/) df=$0
+              }
+              /image: *hatest-/ { sub(/.*image: */, ""); img=$0 }
+              END { if (df && img && !(img in seen)) print img "=" df }
+            ' internal/testgenerated/integration/docker-compose-multiexec*.yml | sort
+          )
+
+          echo "Discovered ${#ENTRIES[@]} Docker images to pre-build"
+          IMAGE_TAGS=()
+          for entry in "${ENTRIES[@]}"; do
+            tag="${entry%%=*}"
+            dockerfile="${entry#*=}"
+            # Beyla extension Dockerfiles (beyla_extensions/) live in the Beyla
+            # repo root; OBI component Dockerfiles live under .obi-src/.
+            if [[ "$dockerfile" == *beyla_extensions* ]]; then
+              context="./"
+            else
+              context=".obi-src/"
+            fi
+            echo "Building ${tag} from ${dockerfile} (context: ${context})..."
+            # -f is relative to CWD, not context, so prepend context path
+            docker build --quiet -t "${tag}" -f "${context}${dockerfile}" "${context}"
+            IMAGE_TAGS+=("${tag}")
+          done
+
+          if [ ${#IMAGE_TAGS[@]} -gt 0 ]; then
+            echo "Saving ${#IMAGE_TAGS[@]} Docker images to tar..."
+            docker save "${IMAGE_TAGS[@]}" -o compiled-tests/docker-images.tar
+            echo "Docker images saved ($(du -h compiled-tests/docker-images.tar | cut -f1))"
+            docker builder prune -af
+          fi
 
       - name: Run VM integration tests (${{ matrix.test.description }})
         timeout-minutes: 60

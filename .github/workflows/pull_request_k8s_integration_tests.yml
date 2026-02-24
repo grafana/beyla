@@ -34,6 +34,10 @@ on:
       - ".github/workflows/pull_request_k8s_integration_tests.yml"
       - ".obi-src/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 # Set restrictive permissions at workflow level
 permissions:
   contents: read
@@ -41,7 +45,7 @@ permissions:
 jobs:
   test-matrix:
     name: "Build integration k8s matrix"
-    runs-on: ubuntu-x64-small
+    runs-on: ubuntu-x64
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -62,7 +66,7 @@ jobs:
   test:
     name: ${{ matrix.basename }}
     needs: test-matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-x64
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

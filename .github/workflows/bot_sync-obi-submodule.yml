@@ -27,9 +27,8 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Create branch and update submodule
+      - name: Update submodule
         run: |
-          git checkout -b "update-obi-submodule-${{ github.run_id }}"
           git submodule update --checkout --remote .obi-src
 
       - name: Get OBI short SHA
@@ -62,11 +61,13 @@ jobs:
         with:
           github_app: grafana-beyla-bot
 
+      - name: Clean up stray action checkouts
+        run: rm -rf _shared-workflows-*
+
       - name: Create/update PR
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
-        env:
-          GITHUB_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
         with:
+          token: ${{ steps.get-github-app-token.outputs.token }}
           commit-message: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
           title: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
           body: |

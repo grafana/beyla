@@ -69,7 +69,7 @@ jobs:
   test:
     name: ${{ matrix.description }}
     needs: test-matrix
-    runs-on: ubuntu-x64
+    runs-on: ubuntu-x64-large
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

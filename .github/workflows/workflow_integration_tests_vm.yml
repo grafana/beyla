@@ -63,7 +63,7 @@ jobs:
       checks: write
       # Required for uploading artifacts
       actions: write
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-x64-large
     strategy:
       fail-fast: false
       matrix:

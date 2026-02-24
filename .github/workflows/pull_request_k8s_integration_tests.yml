@@ -66,7 +66,7 @@ jobs:
   test:
     name: ${{ matrix.basename }}
     needs: test-matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-x64-small
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

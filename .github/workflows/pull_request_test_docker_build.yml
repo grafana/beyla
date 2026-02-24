@@ -23,16 +23,16 @@ jobs:
         include:
           - file: Dockerfile
             platform: linux/amd64
-            runner: ubuntu-latest-8-cores
+            runner: ubuntu-x64-small
           - file: Dockerfile
             platform: linux/arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-arm64-small
           - file: k8scache.Dockerfile
             platform: linux/amd64
-            runner: ubuntu-latest-8-cores
+            runner: ubuntu-x64-small
           - file: k8scache.Dockerfile
             platform: linux/arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-arm64-small
 
     steps:
       - id: checkout

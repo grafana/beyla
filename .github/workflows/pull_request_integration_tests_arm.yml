@@ -70,7 +70,7 @@ jobs:
   test:
     name: ${{ matrix.description }}
     needs: test-matrix
-    runs-on: github-hosted-ubuntu-arm64-large
+    runs-on: ubuntu-arm64-small
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

@@ -172,7 +172,10 @@ jobs:
             tag="${entry%%=*}"
             dockerfile="${entry#*=}"
             echo "Building ${tag} from ${dockerfile}..."
-            docker build --quiet -t "${tag}" -f "${dockerfile}" .
+            # Build context is .obi-src/ because the generated compose files
+            # redirect contexts to ../../../.obi-src/ and Dockerfile paths are
+            # relative to the OBI submodule root (e.g. internal/test/integration/...).
+            docker build --quiet -t "${tag}" -f "${dockerfile}" .obi-src/
             IMAGE_TAGS+=("${tag}")
           done
 

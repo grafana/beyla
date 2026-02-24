@@ -171,11 +171,15 @@ jobs:
           for entry in "${ENTRIES[@]}"; do
             tag="${entry%%=*}"
             dockerfile="${entry#*=}"
-            echo "Building ${tag} from ${dockerfile}..."
-            # Build context is .obi-src/ because the generated compose files
-            # redirect contexts to ../../../.obi-src/ and Dockerfile paths are
-            # relative to the OBI submodule root (e.g. internal/test/integration/...).
-            docker build --quiet -t "${tag}" -f "${dockerfile}" .obi-src/
+            # Beyla extension Dockerfiles (beyla_extensions/) live in the Beyla
+            # repo root; OBI component Dockerfiles live under .obi-src/.
+            if [[ "$dockerfile" == *beyla_extensions* ]]; then
+              context="."
+            else
+              context=".obi-src/"
+            fi
+            echo "Building ${tag} from ${dockerfile} (context: ${context})..."
+            docker build --quiet -t "${tag}" -f "${dockerfile}" "${context}"
             IMAGE_TAGS+=("${tag}")
           done
 

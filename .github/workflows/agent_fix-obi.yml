@@ -65,10 +65,28 @@ jobs:
           # Enable commit signing so Claude can push fixes to the PR branch
           # directly via the GitHub API (no persist-credentials needed).
           use_commit_signing: "true"
+          # Tool permissions via settings (not claude_args --allowedTools)
+          # because the SDK's allowedTools parameter does not support
+          # Bash(X) pattern matching, causing all Bash calls to be denied.
+          settings: |
+            {
+              "permissions": {
+                "allow": [
+                  "Bash(cat)", "Bash(date)", "Bash(echo)", "Bash(gh)",
+                  "Bash(git diff)", "Bash(git log)", "Bash(git show)",
+                  "Bash(git status)", "Bash(git submodule)", "Bash(git rev-parse)",
+                  "Bash(go)", "Bash(grep)", "Bash(head)", "Bash(ls)",
+                  "Bash(make)", "Bash(pwd)", "Bash(sort)", "Bash(tail)",
+                  "Bash(uniq)", "Bash(wc)",
+                  "Edit", "MultiEdit", "Glob", "Grep", "LS",
+                  "Read", "Write", "Task", "TodoWrite",
+                  "mcp__github_file_ops__commit_changes",
+                  "mcp__github_file_ops__create_or_update_file"
+                ]
+              }
+            }
           claude_args: >-
             --max-turns 30
-            --allowedTools
-            "Bash(cat),Bash(date),Bash(echo),Bash(gh),Bash(git diff),Bash(git log),Bash(git show),Bash(git status),Bash(git submodule),Bash(git rev-parse),Bash(go),Bash(grep),Bash(head),Bash(ls),Bash(make),Bash(pwd),Bash(sort),Bash(tail),Bash(uniq),Bash(wc),Edit,MultiEdit,Glob,Grep,LS,Read,Write,Task,TodoWrite"
           prompt: |
             # Fix OBI submodule CI
 

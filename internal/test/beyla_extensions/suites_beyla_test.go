@@ -39,12 +39,6 @@ func TestSuiteClientPromScrape_Beyla(t *testing.T) {
 	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibraryNoTraces)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
 	t.Run("Testing Host Info metric", testHostInfo)
-	t.Run("Testing process-level metrics", testProcesses(map[string]string{
-		"process_executable_name": "pingclient",
-		"process_executable_path": "/pingclient",
-		"process_command":         "pingclient",
-		"process_command_line":    "/pingclient",
-	}))
 
 	require.NoError(t, compose.Close())
 }

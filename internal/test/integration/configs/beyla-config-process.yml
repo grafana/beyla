@@ -1,0 +1,17 @@
+metrics:
+  features:
+    - application
+    - application_process
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+prometheus_export:
+  port: 8999
+attributes:
+  select:
+    "*":
+      include: ["*"]
+discovery:
+  instrument:
+    - container_name: "*testserver*"
+    - container_name: "*client*"
+

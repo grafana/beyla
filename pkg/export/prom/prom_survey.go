@@ -38,6 +38,7 @@ type surveyMetricsReporter struct {
 	pidsTracker otel.PidServiceTracker
 
 	kubeEnabled         bool
+	dockerEnabled       bool
 	extraMetadataLabels []attr.Name
 
 	// for testing purposes
@@ -46,6 +47,7 @@ type surveyMetricsReporter struct {
 }
 
 func SurveyPrometheusEndpoint(
+	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *prom.PrometheusConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -54,7 +56,7 @@ func SurveyPrometheusEndpoint(
 		if !cfg.EndpointEnabled() {
 			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newSurveyReporter(ctxInfo, cfg, processEventCh)
+		reporter, err := newSurveyReporter(ctx, ctxInfo, cfg, processEventCh)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
@@ -67,12 +69,15 @@ func SurveyPrometheusEndpoint(
 
 // nolint:cyclop
 func newSurveyReporter(
+	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *prom.PrometheusConfig,
 	processEventCh *msg.Queue[exec.ProcessEvent],
 ) (*surveyMetricsReporter, error) {
 
 	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
+	dockerEnabled := ctxInfo.DockerMetadata.IsEnabled(ctx)
+
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
 
 	mr := &surveyMetricsReporter{
@@ -84,9 +89,10 @@ func newSurveyReporter(
 		surveyInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: otel2.SurveyInfoMetricName,
 			Help: "attributes associated to a given surveyed entity",
-		}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)),
+		}, labelNamesTargetInfo(kubeEnabled, dockerEnabled, extraMetadataLabels)),
 		extraMetadataLabels: extraMetadataLabels,
 		kubeEnabled:         kubeEnabled,
+		dockerEnabled:       dockerEnabled,
 	}
 
 	// testing aid
@@ -123,6 +129,9 @@ func (r *surveyMetricsReporter) labelValues(service *svc.Attrs) []string {
 
 	if r.kubeEnabled {
 		values = appendK8sLabelValuesService(values, service)
+	}
+	if r.dockerEnabled {
+		values = appendDockerLabelValues(values, service)
 	}
 
 	for _, k := range r.extraMetadataLabels {

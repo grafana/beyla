@@ -61,7 +61,7 @@ jobs:
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
-            --max-turns 40
+            --max-turns 100
             --allowedTools
             "Bash(cat:*),Bash(gh:*),Bash(grep:*),Bash(head:*),Bash(jq:*),
             Bash(ls:*),Bash(tail:*),Bash(wc:*),
@@ -149,9 +149,9 @@ jobs:
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
-            --max-turns 35
+            --max-turns 100
             --allowedTools
-            "Bash(cat:*),Bash(git:*),Bash(ls:*),Bash(pwd:*),
+            "Bash(cat:*),Bash(git:*),Bash(grep:*),Bash(head:*),Bash(ls:*),Bash(pwd:*),Bash(tail:*),Bash(wc:*),
             Glob,Grep,LS,Read,Write,Task,TodoWrite"
           prompt: |
             # Plan – resolve CI failures (no code changes)
@@ -244,7 +244,7 @@ jobs:
           use_sticky_comment: "true"
           use_commit_signing: "true"
           claude_args: >-
-            --max-turns 60
+            --max-turns 100
             --allowedTools
             "Bash(cat:*),Bash(date:*),Bash(echo:*),Bash(gh:*),
             Bash(git:*),Bash(go:*),Bash(grep:*),Bash(head:*),Bash(jq:*),

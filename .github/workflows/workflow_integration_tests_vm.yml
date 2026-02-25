@@ -46,8 +46,14 @@ jobs:
       - name: build matrix
         id: build-matrix
         env:
-          # 3 partitions, one for each of: TestMultiProcess, TestMultiProcessAppCP, TestMultiProcessAppCPNoIP
-          PARTITIONS: 3
+          # 6 partitions, one for each of:
+          #  1. TestMultiProcess
+          #  2. TestMultiProcessAppCP
+          #  3. TestMultiProcessAppCPHeadersOnly
+          #  4. TestMultiProcessAppCPTCPOnly
+          #  5. TestMultiProcessAppCPIPOnly
+          #  6. TestMultiProcessAppCPNoIP
+          PARTITIONS: 6
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT

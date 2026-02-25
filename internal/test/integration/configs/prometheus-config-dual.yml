@@ -19,4 +19,4 @@ scrape_configs:
       - labels:
           exported: "otel"
         targets:
-          - 'otelcol:8888'
+          - 'otelcol:9464'

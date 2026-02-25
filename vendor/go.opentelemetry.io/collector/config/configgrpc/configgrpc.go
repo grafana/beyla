@@ -310,8 +310,16 @@ func (cc *ClientConfig) ToClientConn(
 	if err != nil {
 		return nil, err
 	}
-	//nolint:staticcheck // SA1019 see https://github.com/open-telemetry/opentelemetry-collector/pull/11575
-	return grpc.DialContext(ctx, cc.sanitizedEndpoint(), grpcOpts...)
+	conn, err := grpc.NewClient(cc.sanitizedEndpoint(), grpcOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initiate connection to match the previous behavior of DialContext
+	// This ensures the connection is established eagerly rather than lazily
+	conn.Connect()
+
+	return conn, nil
 }
 
 func (cc *ClientConfig) addHeadersIfAbsent(ctx context.Context) context.Context {
@@ -549,6 +557,10 @@ func (sc *ServerConfig) getGrpcServerOptions(
 	var uInterceptors []grpc.UnaryServerInterceptor
 	var sInterceptors []grpc.StreamServerInterceptor
 
+	// Add client info first, before auth.
+	uInterceptors = append(uInterceptors, enhanceWithClientInformation(sc.IncludeMetadata))
+	sInterceptors = append(sInterceptors, enhanceStreamWithClientInformation(sc.IncludeMetadata)) //nolint:contextcheck // context already handled
+
 	if sc.Auth.HasValue() {
 		authenticator, err := sc.Auth.Get().GetServerAuthenticator(ctx, extensions)
 		if err != nil {
@@ -566,10 +578,6 @@ func (sc *ServerConfig) getGrpcServerOptions(
 	}
 
 	// Enable OpenTelemetry observability plugin.
-
-	uInterceptors = append(uInterceptors, enhanceWithClientInformation(sc.IncludeMetadata))
-	sInterceptors = append(sInterceptors, enhanceStreamWithClientInformation(sc.IncludeMetadata)) //nolint:contextcheck // context already handled
-
 	opts = append(opts, grpc.StatsHandler(otelgrpc.NewServerHandler(otelOpts...)), grpc.ChainUnaryInterceptor(uInterceptors...), grpc.ChainStreamInterceptor(sInterceptors...))
 
 	// Apply middleware options. Note: OpenTelemetry could be registered as an extension.

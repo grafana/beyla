@@ -46,6 +46,7 @@ jobs:
   test-matrix:
     name: "Build integration k8s matrix"
     runs-on: ubuntu-x64
+    timeout-minutes: 30
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -67,6 +68,7 @@ jobs:
     name: ${{ matrix.basename }}
     needs: test-matrix
     runs-on: ubuntu-x64
+    timeout-minutes: 30
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -150,7 +152,6 @@ jobs:
         run: pwd
 
       - name: Run integration tests
-        timeout-minutes: 35
         env:
           # zizmor template-injection fixes: pass data as env vars
           MATRIX_ID: ${{ matrix.id }}

@@ -31,6 +31,7 @@ jobs:
   vm-test-matrix:
     name: "Build VM integration matrix"
     runs-on: ubuntu-x64
+    timeout-minutes: 30
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -55,6 +56,7 @@ jobs:
   test:
     name: kernel ${{ matrix.kernel.kernel-version }} ${{ matrix.kernel.arch }} ${{ matrix.test.description }}
     needs: vm-test-matrix
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
@@ -192,7 +194,6 @@ jobs:
           fi
 
       - name: Run VM integration tests (${{ matrix.test.description }})
-        timeout-minutes: 60
         env:
           # zizmor template-injection fixes: pass data as env vars
           MATRIX_ID: ${{ matrix.test.id }}

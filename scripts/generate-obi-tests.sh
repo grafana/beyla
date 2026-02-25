@@ -126,12 +126,6 @@ CODE_INJECTIONS=(
     'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
     # Temporarily skip flaky traceparent extraction test
     '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
-    # Skip TCP/IP-only context propagation tests on kernels < 5.17.
-    # The obi_app_egress TC BPF program (loaded when BEYLA_BPF_CONTEXT_PROPAGATION=tcp or ip)
-    # causes an RCU stall / kernel panic on 5.15.x.  kprobeTracesEnabled() gates on >= 5.17,
-    # which is the same requirement as testNestedHTTPTracesKProbes (called by both tests).
-    '^func TestMultiProcessAppCPTCPOnly|if !kprobeTracesEnabled() { t.Skip("TCP-only context propagation (obi_app_egress) requires kernel >= 5.17") }'
-    '^func TestMultiProcessAppCPIPOnly|if !kprobeTracesEnabled() { t.Skip("IP-only context propagation (obi_app_egress) requires kernel >= 5.17") }'
 )
 
 # =============================================================================

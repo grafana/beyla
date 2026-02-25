@@ -2,14 +2,14 @@ version: "3.8"
 
 services:
   testserver-go:
-    image: ghcr.io/open-telemetry/obi-testimg:go-0.1.1
+    image: ghcr.io/open-telemetry/obi-testimg:go-0.1.1@sha256:ba91df37cecce4f22df1408c16ec5920df2da1fa9dad79a011c6fde5174ebdd8
     environment:
       LOG_LEVEL: DEBUG
     ports:
       - "8080:8080"
 
   testserver-python:
-    image: ghcr.io/open-telemetry/obi-testimg:python-0.1.1
+    image: ghcr.io/open-telemetry/obi-testimg:python-0.1.1@sha256:83790451337767ce21b8e6c21f9fae4a1a0d1261b65097f875fdb794c7c151fd
     ports:
       - "8380:8380"
 

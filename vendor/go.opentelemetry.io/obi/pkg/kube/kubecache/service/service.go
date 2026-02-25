@@ -143,18 +143,16 @@ func (o *connection) On(event *informer.Event) error {
 
 func (o *connection) handleMessagesQueue(ctx context.Context) {
 	for {
-		select {
-		case <-ctx.Done():
+		event, ok := o.messages.DequeueOrDone(ctx)
+		if !ok {
 			o.log.Debug("context done. Closing client connection")
 			return
-		default:
-			event := o.messages.Dequeue()
-			if err := o.server.Send(event); err != nil {
-				o.log.Debug("Error sending message. Closing client connection", "clientID", o.ID(), "error", err)
-				o.metrics.MessageError()
-				return
-			}
-			o.metrics.MessageSucceed()
 		}
+		if err := o.server.Send(event); err != nil {
+			o.log.Debug("Error sending message. Closing client connection", "clientID", o.ID(), "error", err)
+			o.metrics.MessageError()
+			return
+		}
+		o.metrics.MessageSucceed()
 	}
 }

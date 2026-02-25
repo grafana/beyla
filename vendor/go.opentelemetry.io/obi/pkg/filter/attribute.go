@@ -103,43 +103,18 @@ func buildMatcher[T any](getters attributes.NamedGetters[T, string], attribute a
 	if err := def.Validate(); err != nil {
 		return m, err
 	}
-	switch {
-	case def.Match != "":
+	if def.Match != "" {
 		var err error
 		if m.Glob, err = glob.Compile(def.Match); err != nil {
 			return m, fmt.Errorf("invalid glob in match property: %w", err)
 		}
-	case def.NotMatch != "":
+	} else {
 		var err error
 		if m.Glob, err = glob.Compile(def.NotMatch); err != nil {
 			return m, fmt.Errorf("invalid glob in not_match property: %w", err)
 		}
 		m.Negate = true
-	default:
-		// use match-all as dummy for numeric-only comparisons
-		m.Glob = glob.MustCompile("*")
-
-		// Set up numeric comparisons
-		if def.Equals != nil {
-			m.Equals = def.Equals
-		}
-		if def.NotEquals != nil {
-			m.NotEquals = def.NotEquals
-		}
-		if def.GreaterEquals != nil {
-			m.GreaterEquals = def.GreaterEquals
-		}
-		if def.GreaterThan != nil {
-			m.GreaterThan = def.GreaterThan
-		}
-		if def.LessEquals != nil {
-			m.LessEquals = def.LessEquals
-		}
-		if def.LessThan != nil {
-			m.LessThan = def.LessThan
-		}
 	}
-
 	getter, ok := getters(attribute)
 	if !ok {
 		var t T

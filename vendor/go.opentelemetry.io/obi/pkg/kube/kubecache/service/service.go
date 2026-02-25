@@ -22,6 +22,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 )
 
+const defaultSendTimeout = 10 * time.Second
+
 // InformersCache configures and starts the gRPC service
 type InformersCache struct {
 	informer.UnimplementedEventStreamServiceServer
@@ -32,10 +34,16 @@ type InformersCache struct {
 	informers *meta.Informers
 	log       *slog.Logger
 
+	// TODO: allow configuring by user
+	SendTimeout time.Duration
+
 	metrics instrument.InternalMetrics
 }
 
 func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) error {
+	if ic.SendTimeout == 0 {
+		ic.SendTimeout = defaultSendTimeout
+	}
 	if ic.started.Swap(true) {
 		return errors.New("server already started")
 	}
@@ -87,7 +95,7 @@ func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server infor
 		log:         ic.log.With("clientID", p.Addr.String()),
 		id:          p.Addr.String(),
 		server:      server,
-		sendTimeout: ic.Config.SendTimeout,
+		sendTimeout: ic.SendTimeout,
 		metrics:     ic.metrics,
 		fromEpoch:   msg.GetFromTimestampEpoch(),
 		messages:    sync.NewQueue[*informer.Event](),

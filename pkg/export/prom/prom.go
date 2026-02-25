@@ -61,6 +61,10 @@ func appendK8sLabelNames(names []string) []string {
 	return names
 }
 
+func appendDockerLabelNames(names []string) []string {
+	return append(names, attr.ContainerID.Prom(), attr.ContainerName.Prom())
+}
+
 func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 	// must follow the order in appendK8sLabelNames
 	values = append(values,
@@ -83,7 +87,11 @@ func appendK8sLabelValuesService(values []string, service *svc.Attrs) []string {
 	return values
 }
 
-func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name) []string {
+func appendDockerLabelValues(values []string, service *svc.Attrs) []string {
+	return append(values, service.Metadata[attr.ContainerID], service.Metadata[attr.ContainerName])
+}
+
+func labelNamesTargetInfo(kubeEnabled, dockerEnabled bool, extraMetadataLabelNames []attr.Name) []string {
 	names := []string{
 		hostIDKey,
 		hostNameKey,
@@ -99,6 +107,9 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
+	}
+	if dockerEnabled {
+		names = appendDockerLabelNames(names)
 	}
 
 	for _, mdn := range extraMetadataLabelNames {

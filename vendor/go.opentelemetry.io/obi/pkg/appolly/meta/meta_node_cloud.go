@@ -67,10 +67,9 @@ func otelNodeFetcher(detector resource.Detector) fetcher {
 			switch at.Key {
 			case semconv.HostIDKey:
 				store.HostID = at.Value.Emit()
-			case semconv.OSTypeKey, semconv.K8SClusterNameKey, semconv.K8SNodeNameKey:
+			case semconv.OSTypeKey:
 				// we ignore some values that are explicitly added in the
-				// exporters, or already added by the K8s informer, and would cause attribute
-				// duplication (panic)
+				// exporters and would cause attribute duplication (panic)
 			default:
 				store.Metadata = append(store.Metadata,
 					Entry{Key: attr.Name(at.Key), Value: at.Value.Emit()})

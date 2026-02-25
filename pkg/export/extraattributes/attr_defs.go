@@ -27,6 +27,7 @@ func getDefinitions(
 ) map[attributes.Section]attributes.AttrReportGroup {
 	kubeEnabled := groups.Has(attributes.GroupKubernetes)
 	promEnabled := groups.Has(attributes.GroupPrometheus)
+	containerEnabled := groups.Has(attributes.GroupContainer)
 
 	appKubeAttributes := attributes.NewAttrReportGroup(
 		!kubeEnabled,
@@ -47,6 +48,16 @@ func getDefinitions(
 			attr.K8sKind:            true,
 		},
 		extraGroupAttributes[attributes.GroupAppKube],
+	)
+
+	containerAttributes := attributes.NewAttrReportGroup(
+		!containerEnabled,
+		nil,
+		map[attr.Name]attributes.Default{
+			attr.ContainerID:   true,
+			attr.ContainerName: true,
+		},
+		extraGroupAttributes[attributes.GroupContainer],
 	)
 
 	// TODO: populate it with host resource attributes in https://opentelemetry.io/docs/specs/semconv/resource/host/
@@ -81,7 +92,12 @@ func getDefinitions(
 
 	processAttributes := attributes.NewAttrReportGroup(
 		false,
-		[]*attributes.AttrReportGroup{&appKubeAttributes, &hostAttributes, &promProcessAttributes},
+		[]*attributes.AttrReportGroup{
+			&appKubeAttributes,
+			&hostAttributes,
+			&promProcessAttributes,
+			&containerAttributes,
+		},
 		map[attr.Name]attributes.Default{
 			names.ProcCPUMode:   true,
 			names.ProcDiskIODir: true,

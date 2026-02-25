@@ -55,7 +55,7 @@ func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDisc
 	swi.Add(obiDiscover.WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
 		swarm.WithID("WatcherKubeEnricher"))
 
-	pf.connectSurveySubPipeline(&swi, enrichedProcessEvents)
+	pf.connectSurveySubPipeline(ctx, &swi, enrichedProcessEvents)
 
 	pipeline, err := swi.Instance(ctx)
 
@@ -79,7 +79,7 @@ func (pf *ProcessFinder) startMixedPipeline(ctx context.Context) (<-chan obiDisc
 		pf.cfg.AsOBI(), "enrichedProcessEvents")
 	swi := swarm.Instancer{}
 	obiPFStart := make(chan (<-chan obiDiscover.Event[*ebpf.Instrumentable]), 1)
-	pf.connectSurveySubPipeline(&swi, enrichedProcessEvents)
+	pf.connectSurveySubPipeline(ctx, &swi, enrichedProcessEvents)
 
 	// runs the OBI's process finder pipeline in a subnode, and listens for the enriched process events
 	// to connect there the Beyla survey pipeline
@@ -124,7 +124,7 @@ func (pf *ProcessFinder) IsInstrumentationEnabled() bool {
 
 // connects the survey sub-pipeline to the pipe of kube enriched events, and forwards
 // survey_info metrics from there
-func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnrichedEvents *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]]) {
+func (pf *ProcessFinder) connectSurveySubPipeline(ctx context.Context, swi *swarm.Instancer, kubeEnrichedEvents *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]]) {
 	if !pf.cfg.Discovery.SurveyEnabled() {
 		return
 	}
@@ -151,6 +151,6 @@ func (pf *ProcessFinder) connectSurveySubPipeline(swi *swarm.Instancer, kubeEnri
 		swarm.WithID("SurveyEventGenerator"))
 	swi.Add(otel.SurveyInfoMetrics(pf.ctxInfo, &pf.cfg.OTELMetrics, surveyEvents),
 		swarm.WithID("SurveyInfoMetrics"))
-	swi.Add(prom.SurveyPrometheusEndpoint(pf.ctxInfo, &pf.cfg.Prometheus, surveyEvents),
+	swi.Add(prom.SurveyPrometheusEndpoint(ctx, pf.ctxInfo, &pf.cfg.Prometheus, surveyEvents),
 		swarm.WithID("SurveyPrometheusEndpoint"))
 }

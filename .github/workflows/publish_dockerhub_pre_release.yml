@@ -1,4 +1,3 @@
-# TODO: trigger only if testing or any other checks previously succeeded
 name: Push to DockerHub (pre-release)
 on:
   push:
@@ -16,39 +15,124 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  build-multiarch:
-    runs-on: ubuntu-latest-8-cores
-
+  build:
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      # required for DockerHub access
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: grafana/beyla
+            file: Dockerfile
+            platform: linux/amd64
+            runner: ubuntu-x64
+            artifact_suffix: beyla-amd64
+          - image: grafana/beyla
+            file: Dockerfile
+            platform: linux/arm64
+            runner: ubuntu-arm64
+            artifact_suffix: beyla-arm64
+          - image: grafana/beyla-k8s-cache
+            file: k8scache.Dockerfile
+            platform: linux/amd64
+            runner: ubuntu-x64
+            artifact_suffix: k8s-cache-amd64
+          - image: grafana/beyla-k8s-cache
+            file: k8scache.Dockerfile
+            platform: linux/arm64
+            runner: ubuntu-arm64
+            artifact_suffix: k8s-cache-arm64
     steps:
-      - id: checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: "false"
           submodules: "recursive"
-      - id: push-beyla-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@775874934ae5e0adbc55b3e7d3571d140bcc7886 # main
-        with:
-          repository: grafana/beyla
-          context: .
-          platforms: |-
-            "linux/amd64"
-            "linux/arm64"
-          tags: |-
-            "type=semver,pattern={{version}}"
-          push: true
 
-      - id: push-beyla-k8s-cache-to-dockerhub
-        uses: grafana/shared-workflows/actions/build-push-to-dockerhub@775874934ae5e0adbc55b3e7d3571d140bcc7886 # main
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
-          repository: grafana/beyla-k8s-cache
-          file: k8scache.Dockerfile
           context: .
-          platforms: |-
-            "linux/amd64"
-            "linux/arm64"
-          tags: |-
-            "type=semver,pattern={{version}}"
-          push: true
+          file: ./${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,"name=${{ matrix.image }}",push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          touch "${{ runner.temp }}/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: digests-${{ matrix.artifact_suffix }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  create-manifest:
+    needs: build
+    runs-on: ubuntu-x64
+    permissions:
+      contents: read
+      # required for DockerHub access
+      id-token: write
+    strategy:
+      matrix:
+        include:
+          - image: grafana/beyla
+            artifact_prefix: beyla
+          - image: grafana/beyla-k8s-cache
+            artifact_prefix: k8s-cache
+    steps:
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+
+      - name: Download amd64 digest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digests-${{ matrix.artifact_prefix }}-amd64
+          path: ${{ runner.temp }}/digests/amd64
+
+      - name: Download arm64 digest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digests-${{ matrix.artifact_prefix }}-arm64
+          path: ${{ runner.temp }}/digests/arm64
+
+      - name: Create manifest list and push
+        env:
+          IMAGE: ${{ matrix.image }}
+          META_JSON: ${{ steps.meta.outputs.json }}
+          DIGESTS_DIR: ${{ runner.temp }}/digests
+        run: |
+          AMD64_DIGEST=$(basename "${DIGESTS_DIR}"/amd64/*)
+          ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${META_JSON}") \
+            "${IMAGE}@sha256:${AMD64_DIGEST}" \
+            "${IMAGE}@sha256:${ARM64_DIGEST}"

@@ -154,7 +154,7 @@ jobs:
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
-            --max-turns 100
+            --max-turns 35
             --allowedTools
             "Bash(cat:*),Bash(git:*),Bash(grep:*),Bash(head:*),Bash(ls:*),Bash(pwd:*),Bash(tail:*),Bash(wc:*),
             Glob,Grep,LS,Read,Write,Task,TodoWrite"
@@ -163,31 +163,15 @@ jobs:
 
             **Triggering PR**: #${{ github.event.pull_request.number }} — "${{ github.event.pull_request.title }}"
 
-            Your only job is to produce a concrete plan for the next step. Do **not** open large log files, re-run tests, or download CI artifacts. Use only:
-            - **triage.md** (in repo root) from the previous step
-            - **Source code** of Beyla and the `.obi-src` (OBI) submodule
+            **Efficiency (stay under ~25 tool calls):** Read **triage.md** first and use it as the main source of truth. Only then open the minimal set of files or run 1–2 git commands (e.g. `git -C .obi-src log OLD..HEAD --oneline`) if triage gives OBI SHAs. Do not explore the repo broadly; do not open large log files, re-run tests, or download CI artifacts. Produce **plan.md** in one focused pass.
 
-            **Scope:** Ideally limit the plan to **porting changes from OBI into Beyla**, based on **new OBI commits** since the submodule was last updated on main. You do not need to switch branches: the **git diff on the PR branch** (e.g. `git diff main -- .obi-src` or the submodule pointer) shows the old and new OBI submodule SHAs. Then inspect **OBI history directly from the submodule dir** (e.g. `git -C .obi-src log OLD_SHA..HEAD`, `git -C .obi-src diff OLD_SHA..HEAD`) to see what changed in OBI and what to port into Beyla.
+            **Inputs:** triage.md (repo root), and only the Beyla / `.obi-src` source files needed to turn triage into a concrete plan.
 
-            Context (use when planning):
-            - **Generated tests**: `scripts/generate-obi-tests.sh` generates into `internal/testgenerated`. Do not plan edits to `internal/testgenerated`; plan script or extension changes instead.
-            - **Breaking changes** often need: `pkg/beyla/config.go`, Go symbol/API refactors, or semantic conventions changes.
-            - **Beyla/OBI**: See `scripts/generate-obi-tests.sh` (BEHAVIORAL_TRANSFORMS, CODE_INJECTIONS) for integration; fixes should be in Beyla only, not in `.obi-src`.
+            **Scope:** Port changes from OBI into Beyla. If triage lists old/new OBI SHAs, use `git -C .obi-src log` / `diff` between those SHAs to see what to port; otherwise infer from triage and a few targeted file reads. Do not plan edits to `internal/testgenerated` (generated); plan script or `scripts/generate-obi-tests.sh` (BEHAVIORAL_TRANSFORMS, CODE_INJECTIONS) or `pkg/beyla/config.go` / Go refactors instead. No test skipping; address failures at the source. Recommend upstream (OBI) changes in the plan if needed; code injections in the test generator are a last resort.
 
-            **Approach (no test skipping):**
-            - **Address failures at the source.** Do not plan to skip or disable tests; fix the underlying cause so tests pass.
-            - **Upstream (OBI) changes:** If a fix properly belongs in OBI, recommend upstream changes in the plan (describe what should change in OBI) and note that the PR comment should ask for that upstream fix; do not plan to skip tests as a workaround.
-            - **Temporary patches:** Code injections in the test generator script (`scripts/generate-obi-tests.sh`, e.g. CODE_INJECTIONS) can be used for temporary patches, but call this out as a **last resort**; prefer porting the proper fix from OBI into Beyla.
+            **Triage rules:** Timeouts → plan a fix (or note RCU CPU stall in VM workflows as known). Stuck metric/cache expiry → plan a fix for expiry or config.
 
-            **How to treat triage entries:**
-            - **Timeouts**: Treat CI timeouts as indicative of an underlying issue and include them in the plan (e.g. increase timeout only if justified, or fix the hang/slow path). Exception: failures explicitly labeled in triage as "RCU CPU stall (VM workflow, known class)" may be noted as known infrastructure flakiness; the plan need not require code changes for those unless other evidence points to a fix.
-            - **Stuck waits**: If triage notes that a test was waiting for metric or cache expiry and it never happened, treat it as a bug: the plan should address it (e.g. expiry configuration, timeouts, or fixing the code that should trigger expiry).
-
-            Write **`plan.md`** in the repository root with:
-            - Summary of failures (from triage.md).
-            - Ordered list of concrete changes (files, edits, or script updates) to fix them, in Beyla only. No OBI submodule edits.
-
-            Output: **only** create/update **`plan.md`**. No code changes.
+            **Output:** Single file **plan.md** in repo root: (1) short summary of failures, (2) ordered list of concrete changes in Beyla only. No code changes.
         env:
           DISABLE_TELEMETRY: "1"
           DISABLE_ERROR_REPORTING: "1"

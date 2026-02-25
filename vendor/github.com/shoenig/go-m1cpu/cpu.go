@@ -1,6 +1,3 @@
-// Copyright (c) The M1CPU Authors
-// SPDX-License-Identifier: MPL-2.0
-
 //go:build darwin && arm64 && cgo
 
 package m1cpu
@@ -16,7 +13,6 @@ package m1cpu
 // #endif
 //
 // #define HzToGHz(hz) ((hz) / 1000000000.0)
-// #define BUFSIZE 512
 //
 // UInt64 global_pCoreHz;
 // UInt64 global_eCoreHz;
@@ -73,14 +69,15 @@ package m1cpu
 //   io_iterator_t  iter;
 //   IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iter);
 //
+//   const size_t bufsize = 512;
 //   io_object_t obj;
 //   while ((obj = IOIteratorNext(iter))) {
-//     char class[BUFSIZE];
+//     char class[bufsize];
 //     IOObjectGetClass(obj, class);
-//     char name[BUFSIZE];
+//     char name[bufsize];
 //     IORegistryEntryGetName(obj, name);
 //
-//     if (strncmp(name, "pmgr", BUFSIZE) == 0) {
+//     if (strncmp(name, "pmgr", bufsize) == 0) {
 //       CFTypeRef pCoreRef = IORegistryEntryCreateCFProperty(obj, CFSTR("voltage-states5-sram"), kCFAllocatorDefault, 0);
 //       CFTypeRef eCoreRef = IORegistryEntryCreateCFProperty(obj, CFSTR("voltage-states1-sram"), kCFAllocatorDefault, 0);
 //

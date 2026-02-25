@@ -22,7 +22,7 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -64,7 +64,7 @@ jobs:
             --max-turns 100
             --allowedTools
             "Bash(cat:*),Bash(gh:*),Bash(grep:*),Bash(head:*),Bash(jq:*),
-            Bash(ls:*),Bash(tail:*),Bash(wc:*),
+            Bash(ls:*),Bash(python3:*),Bash(tail:*),Bash(wc:*),
             Glob,Grep,LS,Read,Write,Task,TodoWrite"
           prompt: |
             # Triage – extract CI failure clues only
@@ -80,6 +80,10 @@ jobs:
             4. Write a single file **`triage.md`** in the repository root with:
                - For each failing check: name, workflow/job, and extracted error messages or clues with enough context to understand what went wrong.
                - One short section per failure; keep each section focused.
+
+            **How to treat failures:**
+            - **Timeouts**: Treat CI job timeouts as indicative of an underlying issue. Record them in triage.md with the job name and any log tail (e.g. last activity before timeout) so the next step can investigate. Exception: **RCU CPU stalls** in VM workflows are a known occurrence; note them and label as "RCU CPU stall (VM workflow, known class)" so the plan step can treat them differently if appropriate.
+            - **Stuck waits**: Some tests wait for metric or cache expiry. If a job times out or fails because that expiry never happens (test stuck waiting), treat it as a bug: note in triage.md that the test appears to be waiting for expiry that did not occur, so the next step can investigate (e.g. config, timeouts, or broken expiry logic).
 
             Output: **only** create/update **`triage.md`**. No other file changes. Focus on efficient tool use and minimal turns.
         env:
@@ -105,7 +109,7 @@ jobs:
       contents: read
       pull-requests: write
       id-token: write
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -167,6 +171,10 @@ jobs:
             - **Breaking changes** often need: `pkg/beyla/config.go`, Go symbol/API refactors, or semantic conventions changes.
             - **Beyla/OBI**: See `scripts/generate-obi-tests.sh` (BEHAVIORAL_TRANSFORMS, CODE_INJECTIONS) for integration; fixes should be in Beyla only, not in `.obi-src`.
 
+            **How to treat triage entries:**
+            - **Timeouts**: Treat CI timeouts as indicative of an underlying issue and include them in the plan (e.g. increase timeout only if justified, or fix the hang/slow path). Exception: failures explicitly labeled in triage as "RCU CPU stall (VM workflow, known class)" may be noted as known infrastructure flakiness; the plan need not require code changes for those unless other evidence points to a fix.
+            - **Stuck waits**: If triage notes that a test was waiting for metric or cache expiry and it never happened, treat it as a bug: the plan should address it (e.g. expiry configuration, timeouts, or fixing the code that should trigger expiry).
+
             Write **`plan.md`** in the repository root with:
             - Summary of failures (from triage.md).
             - Ordered list of concrete changes (files, edits, or script updates) to fix them, in Beyla only. No OBI submodule edits.
@@ -195,7 +203,7 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

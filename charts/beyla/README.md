@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.11.0](https://img.shields.io/badge/Version-1.11.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.8.4](https://img.shields.io/badge/AppVersion-2.8.4-informational?style=flat-square)
+![Version: 1.12.0](https://img.shields.io/badge/Version-1.12.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 2.8.4](https://img.shields.io/badge/AppVersion-2.8.4-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -25,6 +25,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` | used for scheduling of pods based on affinity rules |
+| config.checksum | string | `""` | Use `tpl` so parent charts can pass templated checksums. |
 | config.create | bool | `true` | set to true, to use the below default configurations |
 | config.data | object | `{"attributes":{"kubernetes":{"enable":true}},"filter":{"network":{"k8s_dst_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"},"k8s_src_owner_name":{"not_match":"{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}"}}},"prometheus_export":{"path":"/metrics","port":9090}}` | default value of beyla configuration |
 | config.name | string | `""` |  |

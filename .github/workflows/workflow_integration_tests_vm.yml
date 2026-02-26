@@ -30,7 +30,8 @@ permissions:
 jobs:
   vm-test-matrix:
     name: "Build VM integration matrix"
-    runs-on: ubuntu-x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -45,8 +46,14 @@ jobs:
       - name: build matrix
         id: build-matrix
         env:
-          # 3 partitions, one for each of: TestMultiProcess, TestMultiProcessAppCP, TestMultiProcessAppCPNoIP
-          PARTITIONS: 3
+          # 6 partitions, one for each of:
+          #  1. TestMultiProcess
+          #  2. TestMultiProcessAppCP
+          #  3. TestMultiProcessAppCPHeadersOnly
+          #  4. TestMultiProcessAppCPTCPOnly
+          #  5. TestMultiProcessAppCPIPOnly
+          #  6. TestMultiProcessAppCPNoIP
+          PARTITIONS: 6
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
@@ -55,6 +62,7 @@ jobs:
   test:
     name: kernel ${{ matrix.kernel.kernel-version }} ${{ matrix.kernel.arch }} ${{ matrix.test.description }}
     needs: vm-test-matrix
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
@@ -63,7 +71,7 @@ jobs:
       checks: write
       # Required for uploading artifacts
       actions: write
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -192,7 +200,6 @@ jobs:
           fi
 
       - name: Run VM integration tests (${{ matrix.test.description }})
-        timeout-minutes: 60
         env:
           # zizmor template-injection fixes: pass data as env vars
           MATRIX_ID: ${{ matrix.test.id }}

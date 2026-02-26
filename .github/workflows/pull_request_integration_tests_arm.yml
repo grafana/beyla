@@ -46,7 +46,8 @@ permissions:
 jobs:
   test-matrix:
     name: "Build ARM integration matrix"
-    runs-on: ubuntu-x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -70,7 +71,8 @@ jobs:
   test:
     name: ${{ matrix.description }}
     needs: test-matrix
-    runs-on: ubuntu-arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -151,7 +153,6 @@ jobs:
         run: df -h
 
       - name: Run integration tests
-        timeout-minutes: 35
         env:
           # zizmor template-injection fixes: pass data as env vars
           MATRIX_ID: ${{ matrix.id }}

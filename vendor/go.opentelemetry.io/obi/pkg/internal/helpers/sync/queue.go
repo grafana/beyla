@@ -4,7 +4,6 @@
 package sync // import "go.opentelemetry.io/obi/pkg/internal/helpers/sync"
 
 import (
-	"context"
 	"sync"
 )
 
@@ -51,38 +50,6 @@ func (q *Queue[T]) Dequeue() T {
 	item := q.remove()
 	q.mutex.Unlock()
 	return item
-}
-
-// DequeueOrDone retrieves the first element in the queue.
-// If ctx is cancelled while the queue is empty, it returns (zero, false).
-// If an element is available (or becomes available), it returns (element, true).
-func (q *Queue[T]) DequeueOrDone(ctx context.Context) (T, bool) {
-	// Spawn a waker goroutine: when ctx is cancelled, broadcast on the cond
-	// so that any goroutine blocked in cond.Wait() can re-check and exit.
-	stopWaker := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			q.mutex.Lock()
-			q.cond.Broadcast()
-			q.mutex.Unlock()
-		case <-stopWaker:
-		}
-	}()
-	defer close(stopWaker)
-
-	q.mutex.Lock()
-	for q.head == nil {
-		q.cond.Wait()
-		if ctx.Err() != nil {
-			q.mutex.Unlock()
-			var zero T
-			return zero, false
-		}
-	}
-	item := q.remove()
-	q.mutex.Unlock()
-	return item, true
 }
 
 func (q *Queue[T]) append(item T) {

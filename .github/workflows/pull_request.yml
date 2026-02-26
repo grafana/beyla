@@ -17,7 +17,7 @@ permissions:
 jobs:
   test:
     name: test
-    runs-on: ubuntu-x64
+    runs-on: ubuntu-latest
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

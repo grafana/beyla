@@ -44,7 +44,7 @@ permissions:
 jobs:
   test-matrix:
     name: "Build oats matrix"
-    runs-on: ubuntu-x64
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}

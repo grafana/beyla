@@ -25,7 +25,11 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if .Values.config.checksum }}
+        checksum/config: {{ tpl .Values.config.checksum $ }}
+        {{- else }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -34,3 +34,27 @@ tests:
           of: DaemonSet
       - notExists:
           path: spec.minReadySeconds
+
+  - it: should use checksum override when provided
+    template: daemon-set.yaml
+    set:
+      config:
+        checksum: "custom-sum"
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - equal:
+          path: spec.template.metadata.annotations.checksum/config
+          value: custom-sum
+
+  - it: should default checksum to configmap hash when override empty
+    template: daemon-set.yaml
+    set:
+      config:
+        checksum: ""
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - matchRegex:
+          path: spec.template.metadata.annotations.checksum/config
+          pattern: "^[a-f0-9]{64}$"

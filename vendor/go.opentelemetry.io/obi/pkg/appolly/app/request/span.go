@@ -88,6 +88,7 @@ const (
 	HTTPSubtypeAWSS3         = 3 // http + aws s3
 	HTTPSubtypeAWSSQS        = 4 // http + aws sqs
 	HTTPSubtypeSQLPP         = 5 // http + sql++ (couchbase, etc.)
+	HTTPSubtypeOpenAI        = 6 // http + OpenAI
 )
 
 //nolint:cyclop
@@ -226,6 +227,94 @@ type AWSSQS struct {
 	MessageID     string  `json:"messageId"`
 }
 
+type OpenAIUsage struct {
+	InputTokens      int `json:"input_tokens"`
+	OutputTokens     int `json:"output_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+}
+
+func (u *OpenAIUsage) GetInputTokens() int {
+	if u.InputTokens > 0 {
+		return u.InputTokens
+	}
+
+	return u.PromptTokens
+}
+
+func (u *OpenAIUsage) GetOutputTokens() int {
+	if u.OutputTokens > 0 {
+		return u.OutputTokens
+	}
+
+	return u.CompletionTokens
+}
+
+type OpenAIError struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+}
+
+type OpenAI struct {
+	OperationName    string          `json:"object"`
+	ResponseModel    string          `json:"model"`
+	Error            OpenAIError     `json:"error"`
+	ID               string          `json:"id"`
+	FrequencyPenalty float64         `json:"frequency_penalty"`
+	Temperature      float64         `json:"temperature"`
+	TopP             float64         `json:"top_p"`
+	Usage            OpenAIUsage     `json:"usage"`
+	Output           json.RawMessage `json:"output"`
+	Request          OpenAIInput
+	Choices          json.RawMessage `json:"choices"`
+	Items            json.RawMessage `json:"items"`
+	Metadata         json.RawMessage `json:"metadata"`
+	Data             json.RawMessage `json:"data"`
+}
+
+func (ai *OpenAI) GetOutput() string {
+	if len(ai.Output) > 0 {
+		return string(ai.Output)
+	}
+
+	if len(ai.Items) > 0 {
+		return string(ai.Items)
+	}
+
+	if len(ai.Data) > 0 {
+		return string(ai.Data)
+	}
+
+	return string(ai.Choices)
+}
+
+type OpenAIInput struct {
+	Input        string          `json:"input"`
+	Prompt       string          `json:"prompt"`
+	Model        string          `json:"model"`
+	Instructions string          `json:"instructions"`
+	Messages     json.RawMessage `json:"messages"`
+	Items        json.RawMessage `json:"items"`
+	Temperature  float64         `json:"temperature"`
+}
+
+func (air *OpenAIInput) GetInput() string {
+	if len(air.Input) > 0 {
+		return air.Input
+	}
+
+	if len(air.Prompt) > 0 {
+		return air.Prompt
+	}
+
+	if len(air.Items) > 0 {
+		return string(air.Items)
+	}
+
+	return string(air.Messages)
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters
@@ -268,6 +357,7 @@ type Span struct {
 	GraphQL           *GraphQL       `json:"-"`
 	Elasticsearch     *Elasticsearch `json:"-"`
 	AWS               *AWS           `json:"-"`
+	OpenAI            *OpenAI        `json:"-"`
 
 	// OverrideTraceName is set under some conditions, like spanmetrics reaching the maximum
 	// cardinality for trace names.
@@ -610,6 +700,15 @@ func HTTPSpanStatusCode(span *Span) string {
 
 	if span.Type == EventTypeHTTPClient {
 		if span.Status < 400 {
+			// this is possibly not needed, because in my experiments they
+			// respond with 429, but just to be correct according to the OTel
+			// GenAI spec: https://opentelemetry.io/docs/specs/semconv/gen-ai/openai/
+			if span.SubType == HTTPSubtypeOpenAI && span.OpenAI != nil {
+				if span.OpenAI.Error.Type != "" {
+					return StatusCodeError
+				}
+			}
+
 			return StatusCodeUnset
 		}
 	} else if span.Status < 500 {
@@ -761,6 +860,20 @@ func (s *Span) TraceName() string {
 				return dbOperationName + " " + s.Host + ":" + strconv.Itoa(s.HostPort)
 			default:
 				return dbOperationName
+			}
+		}
+
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
+			name := s.OpenAI.OperationName
+			if name != "" {
+				switch {
+				case s.OpenAI.Request.Model != "":
+					return name + " " + s.OpenAI.Request.Model
+				case s.OpenAI.ResponseModel != "":
+					return name + " " + s.OpenAI.ResponseModel
+				default:
+					return name
+				}
 			}
 		}
 

@@ -86,16 +86,36 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 			scheme = "http"
 		}
 	}
+
+	// Make sure the content length is non-zero
+	reqContentLen := req.ContentLength
+	if reqContentLen <= 0 {
+		reqContentLen = int64(event.Len)
+	}
+
+	// The response len can be -1 if we use chunked
+	// responses
+	respContentLen := resp.ContentLength
+	if respContentLen <= 0 {
+		respContentLen = int64(event.RespLen)
+	}
+
+	reqType := request.EventType(event.Type)
+	headerHost := req.Host
+	if headerHost == "" && reqType == request.EventTypeHTTPClient {
+		headerHost, _ = httpHostFromBuf(event.Buf[:])
+	}
+
 	httpSpan := request.Span{
-		Type:           request.EventType(event.Type),
+		Type:           reqType,
 		Method:         req.Method,
 		Path:           removeQuery(req.URL.String()),
 		Peer:           peer,
 		PeerPort:       int(event.ConnInfo.S_port),
 		Host:           host,
 		HostPort:       int(event.ConnInfo.D_port),
-		ContentLength:  req.ContentLength,
-		ResponseLength: resp.ContentLength,
+		ContentLength:  reqContentLen,
+		ResponseLength: respContentLen,
 		RequestStart:   int64(event.ReqMonotimeNs),
 		Start:          int64(event.StartMonotimeNs),
 		End:            int64(event.EndMonotimeNs),
@@ -109,7 +129,7 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
-		Statement: scheme + request.SchemeHostSeparator + req.Host,
+		Statement: scheme + request.SchemeHostSeparator + headerHost,
 	}
 
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
@@ -145,6 +165,13 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		}
 	}
 
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.OpenAI.Enabled {
+		span, ok := ebpfhttp.OpenAISpan(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	return httpSpan
 }
 
@@ -169,12 +196,15 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 		isClient                      = isClientEvent(event.Type)
 	)
 
+	slog.Debug("Event", "traceID", event.Tp.TraceId, "conn", event.ConnInfo, "buf", event.Buf[:])
+
 	if event.HasLargeBuffers == 1 {
 		b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeRequest, directionByPacketType(packetTypeRequest, isClient), event.ConnInfo)
 		if ok {
 			requestBuffer = b
 		} else {
 			slog.Debug("missing large buffer for HTTP request", "traceID", event.Tp.TraceId, "conn", event.ConnInfo, "packetType", packetTypeRequest)
+			requestBuffer = event.Buf[:]
 		}
 
 		b, ok = extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeResponse, directionByPacketType(packetTypeResponse, isClient), event.ConnInfo)

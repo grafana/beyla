@@ -28,6 +28,9 @@ type Config struct {
 	// InformerResyncPeriod is the time interval between complete resyncs of the informers
 	// nolint:undoc
 	InformerResyncPeriod time.Duration `yaml:"informer_resync_period" env:"BEYLA_K8S_CACHE_INFORMER_RESYNC_PERIOD"`
+	// SendTimeout is the maximum duration to wait to send an event before dropping the connection.
+	// nolint:undoc
+	SendTimeout time.Duration `yaml:"informer_send_timeout" env:"BEYLA_K8S_CACHE_INFORMER_SEND_TIMEOUT"`
 
 	InternalMetrics InternalMetricsConfig `yaml:"internal_metrics"`
 }
@@ -45,6 +48,7 @@ var DefaultConfig = Config{
 	Port:                 50055,
 	MaxConnections:       150,
 	InformerResyncPeriod: 30 * time.Minute,
+	SendTimeout:          10 * time.Second,
 	ProfilePort:          0,
 }
 

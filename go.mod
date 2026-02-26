@@ -63,6 +63,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
+	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.40.1 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.3 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.3 // indirect

@@ -152,6 +152,9 @@ var DefaultConfig = Config{
 						"/query/service",
 					},
 				},
+				OpenAI: config.OpenAIConfig{
+					Enabled: false,
+				},
 			},
 		},
 		MaxTransactionTime: 5 * time.Minute,

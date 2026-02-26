@@ -325,7 +325,11 @@ func getDefinitions(
 		},
 		Traces.Section: {
 			Attributes: map[attr.Name]Default{
-				attr.DBQueryText: false,
+				attr.DBQueryText:       false,
+				attr.GenAIInput:        false,
+				attr.GenAIOutput:       false,
+				attr.GenAIInstructions: false,
+				attr.GenAIMetadata:     false,
 			},
 		},
 		GPUCudaKernelLaunchCalls.Section: {

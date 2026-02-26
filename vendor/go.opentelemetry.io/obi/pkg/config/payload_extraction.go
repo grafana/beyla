@@ -8,7 +8,7 @@ type PayloadExtraction struct {
 }
 
 func (p PayloadExtraction) Enabled() bool {
-	return p.HTTP.GraphQL.Enabled || p.HTTP.Elasticsearch.Enabled || p.HTTP.AWS.Enabled || p.HTTP.SQLPP.Enabled
+	return p.HTTP.GraphQL.Enabled || p.HTTP.Elasticsearch.Enabled || p.HTTP.AWS.Enabled || p.HTTP.SQLPP.Enabled || p.HTTP.OpenAI.Enabled
 }
 
 type HTTPConfig struct {
@@ -20,6 +20,8 @@ type HTTPConfig struct {
 	AWS AWSConfig `yaml:"aws"`
 	// SQL++ payload extraction and parsing (Couchbase and other SQL++ databases)
 	SQLPP SQLPPConfig `yaml:"sqlpp"`
+	// OpenAI payload extraction
+	OpenAI OpenAIConfig `yaml:"openai"`
 }
 
 type GraphQLConfig struct {
@@ -43,4 +45,9 @@ type SQLPPConfig struct {
 	// EndpointPatterns specifies URL path patterns to detect SQL++ endpoints
 	// Example: ["/query/service", "/query"]
 	EndpointPatterns []string `yaml:"endpoint_patterns" env:"OTEL_EBPF_HTTP_SQLPP_ENDPOINT_PATTERNS"`
+}
+
+type OpenAIConfig struct {
+	// Enable OpenAI payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_OPENAI_ENABLED" validate:"boolean"`
 }

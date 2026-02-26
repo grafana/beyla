@@ -149,10 +149,13 @@ func (e *EBPFTracer) CudaInstrumentationEnabled() bool {
 }
 
 // Per-protocol data buffer size in bytes.
-// Max: 8192 bytes.
+// Max:
+// 64K bytes for HTTP.
+// 8K bytes for other protocols.
+//
 // Default: 0 (disabled).
 type EBPFBufferSizes struct {
-	HTTP     uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP" validate:"lte=8192"`
+	HTTP     uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP" validate:"lte=65536"`
 	MySQL    uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL" validate:"lte=8192"`
 	Kafka    uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=8192"`
 	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=8192"`

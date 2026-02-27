@@ -660,8 +660,7 @@ func (c *Config) otelNetO11yEnabled() bool {
 }
 
 func (c *Config) willUseTC() bool {
-	return c.EBPF.ContextPropagation.HasIPOptions() ||
-		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
+	return c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC
 }
 
 // Enabled checks if a given OBI feature is enabled according to the global configuration

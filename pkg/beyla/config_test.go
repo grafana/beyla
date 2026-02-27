@@ -649,10 +649,6 @@ func TestWillUseTC(t *testing.T) {
 	cfg = loadConfig(t, env)
 	assert.False(t, cfg.willUseTC())
 
-	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "ip"}
-	cfg = loadConfig(t, env)
-	assert.True(t, cfg.willUseTC())
-
 	env = envMap{"BEYLA_BPF_CONTEXT_PROPAGATION": "disabled", "BEYLA_NETWORK_SOURCE": "tc", "BEYLA_NETWORK_METRICS": "true"}
 	cfg = loadConfig(t, env)
 	assert.True(t, cfg.willUseTC())

@@ -5,6 +5,7 @@ package config // import "go.opentelemetry.io/obi/pkg/config"
 
 import (
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
@@ -20,10 +21,9 @@ type RedisDBCacheConfig struct {
 }
 
 const (
-	ContextPropagationDisabled  ContextPropagationMode = 0
-	ContextPropagationHeaders   ContextPropagationMode = 1 << 0 // HTTP headers
-	ContextPropagationTCP       ContextPropagationMode = 1 << 1 // TCP options
-	ContextPropagationIPOptions ContextPropagationMode = 1 << 2 // IP options (dangerous)
+	ContextPropagationDisabled ContextPropagationMode = 0
+	ContextPropagationHeaders  ContextPropagationMode = 1 << 0 // HTTP headers
+	ContextPropagationTCP      ContextPropagationMode = 1 << 1 // TCP options
 
 	// Convenience aliases
 	ContextPropagationAll         = ContextPropagationHeaders | ContextPropagationTCP
@@ -32,7 +32,6 @@ const (
 	StrContextPropagationHeaders  = "headers"
 	StrContextPropagationHTTP     = "http"
 	StrContextPropagationTCP      = "tcp"
-	StrContextPropagationIP       = "ip"
 )
 
 // EBPFTracer configuration for eBPF programs
@@ -65,7 +64,7 @@ type EBPFTracer struct {
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"OTEL_EBPF_BPF_HTTP_REQUEST_TIMEOUT" validate:"gte=0"`
 
 	// Enables distributed context propagation.
-	// Can be a combination of: headers, tcp, ip (e.g., "headers,tcp" or "all")
+	// Can be a combination of: headers, tcp (e.g., "headers,tcp" or "all")
 	ContextPropagation ContextPropagationMode `yaml:"context_propagation" env:"OTEL_EBPF_BPF_CONTEXT_PROPAGATION"`
 
 	// Skips checking the kernel version for bpf_loop functionality. Some modified kernels have this
@@ -171,11 +170,6 @@ func (m ContextPropagationMode) HasTCP() bool {
 	return m&ContextPropagationTCP != 0
 }
 
-// HasIPOptions returns true if IP options context propagation is enabled
-func (m ContextPropagationMode) HasIPOptions() bool {
-	return m&ContextPropagationIPOptions != 0
-}
-
 // IsEnabled returns true if any context propagation is enabled
 func (m ContextPropagationMode) IsEnabled() bool {
 	return m != ContextPropagationDisabled
@@ -205,10 +199,10 @@ func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
 			result |= ContextPropagationHeaders
 		case StrContextPropagationTCP:
 			result |= ContextPropagationTCP
-		case StrContextPropagationIP:
-			result |= ContextPropagationIPOptions
+		case "ip":
+			slog.Warn("context_propagation value 'ip' is deprecated and has no effect; IP options injection has been removed")
 		default:
-			return fmt.Errorf("invalid value for context_propagation: '%s' (valid: all, disabled, headers, tcp, ip)", part)
+			return fmt.Errorf("invalid value for context_propagation: '%s' (valid: all, disabled, headers, tcp)", part)
 		}
 	}
 
@@ -232,10 +226,6 @@ func (m ContextPropagationMode) MarshalText() ([]byte, error) {
 	if m.HasTCP() {
 		parts = append(parts, "tcp")
 	}
-	if m.HasIPOptions() {
-		parts = append(parts, "ip")
-	}
-
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("invalid context propagation mode: %d", m)
 	}
@@ -244,7 +234,7 @@ func (m ContextPropagationMode) MarshalText() ([]byte, error) {
 }
 
 func (ContextPropagationMode) JSONSchema() *jsonschema.Schema {
-	options := []string{StrContextPropagationHeaders, StrContextPropagationHTTP, StrContextPropagationTCP, StrContextPropagationIP}
+	options := []string{StrContextPropagationHeaders, StrContextPropagationHTTP, StrContextPropagationTCP}
 	optionsStr := strings.Join(options, "|")
 	OptionsRegexp := fmt.Sprintf("^(%s)(,(%s))*$", optionsStr, optionsStr)
 	return &jsonschema.Schema{
@@ -256,12 +246,12 @@ func (ContextPropagationMode) JSONSchema() *jsonschema.Schema {
 			},
 			{
 				Type:        "string",
-				Description: "List of propagation methods to enable (headers/http for HTTP headers, tcp for TCP options, ip for IP options), separated by commas",
-				Examples:    []any{"headers", "tcp", "ip", "headers,tcp", "headers,ip", "tcp,ip", "headers,tcp,ip"},
+				Description: "List of propagation methods to enable (headers/http for HTTP headers, tcp for TCP options), separated by commas",
+				Examples:    []any{"headers", "tcp", "headers,tcp"},
 				Pattern:     OptionsRegexp,
 			},
 		},
 		Title:       "Context Propagation Mode",
-		Description: "Configures distributed context propagation. Can be 'all' to enable all methods, 'disabled'/'' to disable, or a list of specific methods: 'headers' (or 'http') for HTTP headers, 'tcp' for TCP options, 'ip' for IP options.",
+		Description: "Configures distributed context propagation. Can be 'all' to enable all methods, 'disabled'/'' to disable, or a list of specific methods: 'headers' (or 'http') for HTTP headers, 'tcp' for TCP options.",
 	}
 }

@@ -3,20 +3,6 @@ name: Pull request K8s integration tests
 on:
   push:
     branches: ["main", "release-*"]
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "bpf/**"
-      - "internal/**"
-      - "pkg/**"
-      - "cmd/**"
-      - "vendor/**"
-      - "Makefile"
-      - "scripts/generate-integration-matrix.sh"
-      - "scripts/generate-obi-tests.sh"
-      - ".github/workflows/pull_request_k8s_integration_tests.yml"
-      - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
     paths:
@@ -82,48 +68,6 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
     steps:
-      - name: Check initial disk usage
-        run: df -h
-
-      - name: Free up disk space
-        run: |
-          # Remove Java (JDKs)
-          sudo rm -rf /usr/lib/jvm
-
-          # Remove .NET SDKs
-          sudo rm -rf /usr/share/dotnet
-
-          # Remove Swift toolchain
-          sudo rm -rf /usr/share/swift
-
-          # Remove Haskell (GHC)
-          sudo rm -rf /usr/local/.ghcup
-
-          # Remove Julia
-          sudo rm -rf /usr/local/julia*
-
-          # Remove Android SDKs
-          sudo rm -rf /usr/local/lib/android
-
-          # Remove Chromium (optional if not using for browser tests)
-          sudo rm -rf /usr/local/share/chromium
-
-          # Remove Microsoft/Edge and Google Chrome builds
-          sudo rm -rf /opt/microsoft /opt/google
-
-          # Remove Azure CLI
-          sudo rm -rf /opt/az
-
-          # Remove PowerShell
-          sudo rm -rf /usr/local/share/powershell
-
-          # Remove CodeQL (but keep hostedtoolcache for Go)
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-
-          docker system prune -af || true
-          docker builder prune -af || true
-          df -h
-
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false

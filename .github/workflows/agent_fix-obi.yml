@@ -204,6 +204,12 @@ jobs:
 
             ## Diagnostic patterns
 
+            **Test failures — sync before patch:**
+            When a Beyla test fails on an assertion, **do not** simply adjust the assertion to make it pass. First, locate the corresponding test in OBI (`.obi-src/`) and compare the failing test block with its upstream version:
+            - If the test block (or the specific sub-case / table entry within it) has been **removed** in OBI, the correct fix is to **remove the same block** from Beyla's copy of the test (applying the OBI→Beyla translation rules from `scripts/generate-obi-tests.sh`). Do not patch the assertion.
+            - If the test block still exists in OBI but the assertion is now wrong (e.g., a changed return value or behaviour), **then** adjust the assertion to match the new OBI behaviour.
+            The general principle is: Beyla's generated tests shadow OBI's tests. When OBI changes a test, Beyla's version should be updated to match — not worked around with a minimal assertion fix that hides the upstream intent.
+
             **Config struct parity (most common cause of timeouts):**
             Beyla mirrors OBI config structs and uses `pkg/helpers/config/convert.go` (`Convert()`) to copy between them. This converter **panics if the destination struct has an exported field the source does not have** (and vice versa). When OBI adds new config fields, Beyla's mirror must be updated with matching fields (`BEYLA_`-prefixed env tags, matching defaults). A startup panic in k8s-cache manifests as **test timeouts** — the cache process is dead and Beyla never receives K8s metadata, so tests hang rather than showing a panic.
 

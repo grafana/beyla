@@ -188,7 +188,8 @@ jobs:
             1. **Read `triage.md`** first — it is your sole source of CI failure context. Do not download CI logs or artifacts; triage has already extracted the relevant errors.
             2. **Identify what changed in OBI**: Triage will include old and new OBI submodule SHAs. Run `git -C .obi-src log OLD_SHA..NEW_SHA --oneline` and targeted diffs (`git -C .obi-src diff OLD_SHA..NEW_SHA -- <file>`) to see exactly what OBI changed. OBI CI passes upstream and Beyla main is stable, so **breaking changes come from these new OBI commits and/or updated vendor packages on the branch**. This OBI diff is the primary input for root cause analysis.
             3. **Analyse root causes** by cross-referencing the OBI changes with triage findings and Beyla source code. Look for a **common issue** affecting multiple workflows to minimise the number of changes needed.
-            4. **Write `plan.md`** with a clear, ordered implementation plan.
+            4. **Cross-reference symbol changes**: When OBI renames, removes, or changes the signature of an exported symbol (function, type, const, struct field), search the Beyla codebase for **all references** to that symbol — including test files, helper packages, and generated test scripts. List every call site that needs updating. Existing tests may reference removed or renamed symbols and must be updated in the plan alongside production code.
+            5. **Write `plan.md`** with a clear, ordered implementation plan.
 
             **Stay under ~25 tool calls.** Read triage.md, then open only the minimal set of source files needed to form the plan. Do not explore the repo broadly.
 

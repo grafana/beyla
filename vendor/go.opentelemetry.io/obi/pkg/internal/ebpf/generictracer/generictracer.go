@@ -6,9 +6,7 @@
 package generictracer // import "go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer"
 
 import (
-	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,7 +15,6 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/link"
 	"github.com/gavv/monotime"
 	"github.com/vishvananda/netlink"
 
@@ -502,7 +499,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 
 	for _, it := range p.Iters() {
 		if it.Program == p.bpfObjects.ObiIterTcp {
-			if err := p.runIterator(it); err != nil {
+			if err := it.Run(p.log); err != nil {
 				p.log.Error("error running TCP iterator", "error", err)
 			}
 		}
@@ -596,31 +593,6 @@ func (p *Tracer) watchForMisclassifedEvents(ctx context.Context) {
 			}
 		}
 	}
-}
-
-func (p *Tracer) runIterator(it *ebpfcommon.Iter) error {
-	p.log.Debug("Running iterator", "iterator", it.Program.String())
-
-	if it.Link == nil {
-		return errors.New("iterator link is nil")
-	}
-
-	rd, err := it.Link.(*link.Iter).Open()
-	if err != nil {
-		return fmt.Errorf("open iterator: %w", err)
-	}
-	defer rd.Close()
-
-	scanner := bufio.NewScanner(rd)
-	for scanner.Scan() {
-		p.log.Debug("Iterator output", "line", scanner.Text(), "iterator", it.Program.String())
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read iterator: %w", err)
-	}
-	p.log.Debug("Iterator finished", "iterator", it.Program.String())
-
-	return nil
 }
 
 // Cilium 0.19.0+ is adding a new private field to all the BpfConnectionInfoT

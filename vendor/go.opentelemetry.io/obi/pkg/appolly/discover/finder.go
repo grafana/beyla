@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
 	msgh "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -147,11 +146,6 @@ func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
 	// Enables tpinjector which handles context propagation via both HTTP headers (sk_msg) and TCP options (BPF_SOCK_OPS)
 	if cfg.EBPF.ContextPropagation.HasHeaders() || cfg.EBPF.ContextPropagation.HasTCP() {
 		tracers = append(tracers, tpinjector.New(cfg))
-	}
-
-	// Enables tctracer which handles context propagations via IP options only (TC egress/ingress)
-	if cfg.EBPF.ContextPropagation.HasIPOptions() {
-		tracers = append(tracers, tctracer.New(cfg))
 	}
 
 	// Enables log enricher which handles trace-log correlation

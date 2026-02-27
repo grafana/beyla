@@ -61,32 +61,52 @@ jobs:
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
-            --max-turns 100
+            --max-turns 75
             --allowedTools
             "Bash(cat:*),Bash(gh:*),Bash(grep:*),Bash(head:*),Bash(jq:*),
             Bash(ls:*),Bash(python3:*),Bash(tail:*),Bash(wc:*),
             Glob,Grep,LS,Read,Write,Task,TodoWrite"
           prompt: |
-            # Triage – extract CI failure clues only
+            # Extract CI failure context
 
             **Triggering PR**: #${{ github.event.pull_request.number }} — "${{ github.event.pull_request.title }}"
             **Repository**: beyla. OBI submodule is in `.obi-src`.
 
-            Your only job is to gather failure information for the next step. Do **not** make code changes or attempt to fix anything.
+            Your job is to **extract and record** failure information for the next step. Do **not** analyse root causes, suggest fixes, or make code changes. Present facts only — describe **what** failed and **what** the error output says, never **why**.
 
-            1. Use `gh` to list failed workflow runs and checks for this PR. Identify which jobs failed.
-            2. For each failing check, get the logs efficiently: use `gh run view` / `gh run download` or equivalent. Logs are large — use **grep**, **tail**, **head** to extract error messages and stack traces. Do not load entire log files into context.
-            3. If failing jobs produce artifacts, download them and inspect only what you need (again: grep/tail/head; artifacts often contain large logs — stay efficient).
-            4. Write a single file **`triage.md`** in the repository root with:
-               - For each failing check: name, workflow/job, and extracted error messages or clues with enough context to understand what went wrong.
-               - One short section per failure; keep each section focused.
-               - If this PR updates the OBI submodule: note the **old and new OBI commit SHAs** (from the PR branch: e.g. `git diff main -- .obi-src` or submodule pointer in the diff). The next step will use OBI history since the old SHA to guide porting.
+            ## Steps
 
-            **How to treat failures:**
-            - **Timeouts**: Treat CI job timeouts as indicative of an underlying issue — often a **process crash** rather than a logic bug. K8s integration tests run multiple containers; if a sidecar (e.g. k8s-cache) crashes on startup, the test will time out waiting for data that never arrives. When investigating timeouts, look for **panic traces**, **container restart counts**, and **CrashLoopBackOff** in logs, not only test-level errors. Record in triage.md the job name, any log tail, and whether any containers appear to have crashed. Exception: **RCU CPU stalls** in VM workflows are a known occurrence; note them and label as "RCU CPU stall (VM workflow, known class)" so the plan step can treat them differently if appropriate.
-            - **Stuck waits**: Some tests wait for metric or cache expiry. If a job times out or fails because that expiry never happens (test stuck waiting), treat it as a bug: note in triage.md that the test appears to be waiting for expiry that did not occur, so the next step can investigate (e.g. config, timeouts, or broken expiry logic).
+            1. **List failed/timed-out workflow runs** for this PR using `gh run list` and `gh pr checks`. Record every failed or timed-out job.
 
-            Output: **only** create/update **`triage.md`**. No other file changes. Focus on efficient tool use and minimal turns.
+            2. **Inspect workflow definitions**: For each failing workflow, read its YAML file under `.github/workflows/` to understand:
+               - Which steps run and in what order.
+               - Whether the workflow uploads **artifacts** (look for `actions/upload-artifact`). Note artifact names and what they contain.
+
+            3. **Extract failure context from run logs**: For each failing job, use `gh run view --log-failed` or download logs. Logs are large — use **grep**, **tail**, **head** to extract:
+               - Error messages, stack traces, panics.
+               - Timeout messages or hung-step indicators.
+               - Container crash indicators (CrashLoopBackOff, restart counts, OOMKilled).
+               - The specific step name that failed and its exit code.
+               - Do **not** load entire log files into context.
+
+            4. **Download and inspect artifacts**: If failing workflows upload artifacts and the artifacts exist for the failed run, download them with `gh run download` and grep/head/tail for errors, panics, failures, and timeouts. Artifacts often contain additional logs not visible in the run output.
+
+            5. **Record OBI submodule SHAs**: This PR likely moves the OBI submodule forward. Record the **old SHA** (on `main`) and **new SHA** (on this branch) using `git diff main -- .obi-src`. These SHAs are critical — the next step uses them to identify which OBI changes introduced breaking changes.
+
+            6. **Write `triage.md`** in the repo root with this structure per failing workflow:
+
+               ```
+               ## <Workflow Name> — <Job Name>
+               **Status**: failed | timed_out
+               **Failed step**: <step name> (exit code <N> | timeout)
+               **Artifacts inspected**: <list or "none produced" or "none available">
+               **Errors**:
+               <extracted error lines, stack traces, panics — with enough surrounding context>
+               ```
+
+               At the top of the file, include an **OBI SHAs** section if the submodule changed.
+
+            **Output**: Only create/update **`triage.md`**. No other file changes. No analysis. No root cause discussion.
         env:
           DISABLE_TELEMETRY: "1"
           DISABLE_ERROR_REPORTING: "1"
@@ -154,18 +174,23 @@ jobs:
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
-            --max-turns 35
+            --max-turns 30
             --allowedTools
             "Bash(cat:*),Bash(git:*),Bash(grep:*),Bash(head:*),Bash(ls:*),Bash(pwd:*),Bash(tail:*),Bash(wc:*),
             Glob,Grep,LS,Read,Write,Task,TodoWrite"
           prompt: |
-            # Plan – resolve CI failures (no code changes)
+            # Root cause analysis and implementation plan
 
             **Triggering PR**: #${{ github.event.pull_request.number }} — "${{ github.event.pull_request.title }}"
 
-            **Efficiency (stay under ~25 tool calls):** Read **triage.md** first and use it as the main source of truth. Only then open the minimal set of files or run 1–2 git commands (e.g. `git -C .obi-src log OLD..HEAD --oneline`) if triage gives OBI SHAs. Do not explore the repo broadly; do not open large log files, re-run tests, or download CI artifacts. Produce **plan.md** in one focused pass.
+            ## Process
 
-            **Inputs:** triage.md (repo root), and only the Beyla / `.obi-src` source files needed to turn triage into a concrete plan.
+            1. **Read `triage.md`** first — it is your sole source of CI failure context. Do not download CI logs or artifacts; triage has already extracted the relevant errors.
+            2. **Identify what changed in OBI**: Triage will include old and new OBI submodule SHAs. Run `git -C .obi-src log OLD_SHA..NEW_SHA --oneline` and targeted diffs (`git -C .obi-src diff OLD_SHA..NEW_SHA -- <file>`) to see exactly what OBI changed. OBI CI passes upstream and Beyla main is stable, so **breaking changes come from these new OBI commits and/or updated vendor packages on the branch**. This OBI diff is the primary input for root cause analysis.
+            3. **Analyse root causes** by cross-referencing the OBI changes with triage findings and Beyla source code. Look for a **common issue** affecting multiple workflows to minimise the number of changes needed.
+            4. **Write `plan.md`** with a clear, ordered implementation plan.
+
+            **Stay under ~25 tool calls.** Read triage.md, then open only the minimal set of source files needed to form the plan. Do not explore the repo broadly.
 
             ## Deductive reasoning — where changes MUST be
 
@@ -174,25 +199,37 @@ jobs:
             - **Test synchronisation rules** in `scripts/generate-obi-tests.sh` (BEHAVIORAL_TRANSFORMS, CODE_INJECTIONS)
             - **Beyla-specific test extensions** in `internal/test/beyla_extensions/`
 
-            **NEVER plan changes to `vendor/` or `.obi-src/`.** Those directories contain OBI code; if OBI CI passes, the code in those directories is correct by definition. Patching vendor files is always wrong.
+            **NEVER plan changes to `vendor/` or `.obi-src/`.** Those directories contain OBI code; if OBI CI passes, the code is correct by definition.
 
-            ## Critical pattern: configutil.Convert panics
+            ## Diagnostic patterns
 
-            Beyla mirrors OBI config structs with its own types and uses `pkg/helpers/config/convert.go` (`Convert()`) to copy between them. **This converter panics if the destination struct has an exported field that the source struct does not have.** When OBI adds new exported fields to a config struct, Beyla's corresponding mirror struct **must** be updated to add a matching field (with a Beyla-namespaced `env:` tag and a matching default value).
+            **Config struct parity (most common cause of timeouts):**
+            Beyla mirrors OBI config structs and uses `pkg/helpers/config/convert.go` (`Convert()`) to copy between them. This converter **panics if the destination struct has an exported field the source does not have** (and vice versa). When OBI adds new config fields, Beyla's mirror must be updated with matching fields (`BEYLA_`-prefixed env tags, matching defaults). A startup panic in k8s-cache manifests as **test timeouts** — the cache process is dead and Beyla never receives K8s metadata, so tests hang rather than showing a panic.
 
-            Known mirror-config pairs — check these first when OBI adds config fields:
+            Known mirror pairs — check these first:
             - `vendor/.../obi/pkg/kube/kubecache/config.go` (OBI) ↔ `cmd/k8s-cache/cfg/config.go` (Beyla)
             - `vendor/.../obi/pkg/obi/config.go` (OBI) ↔ `pkg/beyla/config.go` (Beyla), bridged via `pkg/beyla/config_obi.go`
 
-            To diagnose: compare every exported field in the OBI config struct at the new commit against the Beyla mirror. Any field present in OBI but absent in Beyla will cause a panic at startup. A startup panic in k8s-cache will manifest as **test timeouts** (not panics in the test output) because the cache process is dead and Beyla never receives K8s metadata.
+            To diagnose: compare every exported field in the OBI config struct against the Beyla mirror. Any mismatch will cause a panic at startup.
+
+            **Timeouts:** First check config struct parity (above). Then look for container crashes (panics, CrashLoopBackOff) in triage. A timeout waiting for data usually means a sidecar crashed on startup.
+
+            **RCU CPU stalls** in VM workflows are a known occurrence — note them but do not plan fixes unless there is a clear code cause.
+
+            **Stuck waits:** Tests waiting for metric/cache expiry that never occurs — investigate config, timeout values, or broken expiry logic in Beyla source.
 
             ## Scope
 
-            Port changes from OBI into Beyla. If triage lists old/new OBI SHAs, use `git -C .obi-src log` / `diff` between those SHAs to see what to port; otherwise infer from triage and a few targeted file reads. Do not plan edits to `internal/testgenerated` (generated); plan script or `scripts/generate-obi-tests.sh` (BEHAVIORAL_TRANSFORMS, CODE_INJECTIONS) or `pkg/beyla/config.go` / Go refactors instead. No test skipping; address failures at the source. Recommend upstream (OBI) changes in the plan if needed; code injections in the test generator are a last resort.
+            Port changes from OBI into Beyla. Do not plan edits to `internal/testgenerated/` (generated); plan changes to `scripts/generate-obi-tests.sh` or Go source instead. No test skipping — address failures at the source. Recommend upstream (OBI) changes if needed; code injections are a last resort.
 
-            **Triage rules:** Timeouts → first check for config struct parity (see above), then plan a fix. Note RCU CPU stall in VM workflows as known. Stuck metric/cache expiry → plan a fix for expiry or config.
+            ## Output
 
-            **Output:** Single file **plan.md** in repo root: (1) short summary of failures, (2) ordered list of concrete changes in Beyla only. No code changes.
+            Single file **`plan.md`** in repo root with:
+            1. **Summary**: Short description of failures and the common root cause(s) identified.
+            2. **Changes**: Ordered list of concrete file changes in Beyla only — each with file path, what to change, and why.
+            3. **Verification**: Which `make` targets or quick checks the implement step should run after editing (e.g. `make fmt lint`, `go vet ./...`).
+
+            No code changes. Only produce `plan.md`.
         env:
           DISABLE_TELEMETRY: "1"
           DISABLE_ERROR_REPORTING: "1"
@@ -275,41 +312,35 @@ jobs:
             mcp__github_file_ops__commit_changes,
             mcp__github_file_ops__create_or_update_file"
           prompt: |
-            # Implement – fix OBI CI (Beyla only)
+            # Implement fixes from plan
 
             **Triggering PR**: #${{ github.event.pull_request.number }} — "${{ github.event.pull_request.title }}"
 
-            Your only job is to implement the plan and push. Do **not** re-open large log files, re-download CI artifacts, or run the full test suite. Use only:
-            - **plan.md** (in repo root) from the previous step
-            - If you need extra context: **triage.md** from the first step
-            - Source code as needed (including `.obi-src` for reference; inspect OBI history from the submodule dir if the plan refers to porting from new OBI commits).
+            Triage and root cause analysis are already complete. Your only job is to **implement the plan and push**. Do not re-triage, re-analyse failures, download CI logs, or download artifacts.
 
-            **Scope:** Prefer porting changes from OBI into Beyla. The PR branch git diff shows the old and new OBI submodule SHAs; use `git -C .obi-src log OLD_SHA..HEAD` and diffs in `.obi-src` to see what changed in OBI and port the relevant fixes into Beyla.
+            ## Inputs
 
-            ## FORBIDDEN — never modify these directories
-            - **`vendor/`** — vendored OBI code. If OBI CI passes, vendor code is correct. Patching vendor files is always wrong and will be reverted.
-            - **`.obi-src/`** — the OBI submodule. Do not change or re-point it.
-            - **`internal/testgenerated/`** — generated output. Change scripts or extensions instead.
+            - **`plan.md`** (repo root) — your implementation spec. Follow it exactly, in order.
+            - **`triage.md`** (repo root) — reference only if plan.md directs you to it for additional context.
+            - Source code as needed, including `.obi-src/` for reference when porting OBI changes.
 
-            ## Common fix pattern: config struct parity
+            ## Forbidden directories — never modify
 
-            Beyla mirrors OBI config structs and uses `pkg/helpers/config/convert.go` to copy between them. **This converter panics at runtime if the destination has an exported field missing from the source.** When OBI adds new config fields, the fix is to add matching fields to Beyla's mirror config struct (with `BEYLA_`-prefixed env tags and matching defaults). Key file pairs:
-            - `vendor/.../obi/pkg/kube/kubecache/config.go` ↔ `cmd/k8s-cache/cfg/config.go`
-            - `vendor/.../obi/pkg/obi/config.go` ↔ `pkg/beyla/config.go` (via `pkg/beyla/config_obi.go`)
+            - **`vendor/`** — vendored OBI code; correct by definition if OBI CI passes.
+            - **`.obi-src/`** — the OBI submodule.
+            - **`internal/testgenerated/`** — generated output; change scripts or extensions instead.
 
-            **Approach (no test skipping):**
-            - **Address failures at the source.** Do not implement test skipping or disabling; fix the underlying cause so tests pass.
-            - **Upstream (OBI) changes:** If the plan recommends an upstream fix in OBI, say so in the PR comment and describe what should change in OBI; do not skip tests as a workaround.
-            - **Temporary patches:** Code injections in `scripts/generate-obi-tests.sh` (e.g. CODE_INJECTIONS) are a **last resort** only; prefer porting the proper fix from OBI into Beyla.
+            ## Process
 
-            Instructions:
-            1. Read **plan.md** and implement every item in Beyla only.
-            2. After editing, run **`make fmt lint`** (or at least **`make lint`**) as a quick static check.
-            3. Commit your changes and push to this PR branch using the commit signing API (no local git push). Post a concise PR comment: what failed, what you changed (file/line if useful), what was committed and pushed, and any recommended upstream (OBI) changes.
+            1. **Read `plan.md`** and implement every item in order.
+            2. **Run verification** as specified in plan.md (typically `make fmt lint` or `go vet ./...`). Fix any errors before committing.
+            3. **Commit and push** to this PR branch using the commit signing API (no local git push). Post a concise PR comment summarising: what files were changed, what was fixed, and any recommended upstream (OBI) changes noted in the plan.
 
-            Safety:
-            - Read-only git for inspect; use the provided tools to commit and push. Do not force-push or overwrite the submodule commit.
-            - Prefer fixes in the Beyla tree that work with the current OBI submodule commit.
+            ## Rules
+
+            - Do not skip or disable tests — fix the underlying cause.
+            - Prefer porting proper fixes from OBI into Beyla over code injections in `scripts/generate-obi-tests.sh`.
+            - Read-only git for inspection; use provided tools to commit and push. Do not force-push or change the submodule pointer.
         env:
           DISABLE_TELEMETRY: "1"
           DISABLE_ERROR_REPORTING: "1"

@@ -127,7 +127,7 @@ func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.rebuildValidPids()
 }
 
-func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
+func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 	if p.cfg.EBPF.TrackRequestHeaders ||
 		p.cfg.EBPF.ContextPropagation.IsEnabled() {
 		p.log.Info("Enabling trace information parsing", "bpf_loop_enabled", ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled))
@@ -140,7 +140,7 @@ func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
 
 	ebpfcommon.FixupSpec(spec, p.cfg.EBPF.OverrideBPFLoopEnabled)
 
-	return spec, err
+	return []*ebpfcommon.SpecBundle{{Spec: spec, Objects: &p.bpfObjects, Constants: p.constants()}}, nil
 }
 
 func (p *Tracer) SetupTailCalls() {
@@ -162,7 +162,7 @@ func (p *Tracer) SetupTailCalls() {
 	}
 }
 
-func (p *Tracer) Constants() map[string]any {
+func (p *Tracer) constants() map[string]any {
 	m := make(map[string]any, 2)
 
 	m["wakeup_data_bytes"] = uint32(p.cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
@@ -211,10 +211,6 @@ func (p *Tracer) Constants() map[string]any {
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
-
-func (p *Tracer) BpfObjects() any {
-	return &p.bpfObjects
-}
 
 func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)

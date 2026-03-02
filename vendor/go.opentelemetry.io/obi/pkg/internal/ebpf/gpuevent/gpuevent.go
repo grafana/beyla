@@ -86,33 +86,33 @@ func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.pidsFilter.BlockPID(pid, ns)
 }
 
-func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	return LoadBpf()
+func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
+	spec, err := LoadBpf()
+	if err != nil {
+		return nil, err
+	}
+
+	return []*ebpfcommon.SpecBundle{{Spec: spec, Objects: &p.bpfObjects, Constants: p.constants()}}, nil
 }
 
-func (p *Tracer) Constants() map[string]any {
-	m := make(map[string]any, 2)
-
+func (p *Tracer) constants() map[string]any {
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but
 	// for performance reasons we enable the PID based filtering in eBPF.
+	filterPids := int32(1)
 	if p.cfg.Discovery.BPFPidFilterOff {
-		m["filter_pids"] = int32(0)
-	} else {
-		m["filter_pids"] = int32(1)
+		filterPids = int32(0)
 	}
-	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
 
-	return m
+	return map[string]any{
+		"filter_pids": filterPids,
+		"g_bpf_debug": p.cfg.EBPF.BpfDebug,
+	}
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
-
-func (p *Tracer) BpfObjects() any {
-	return &p.bpfObjects
-}
 
 func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)

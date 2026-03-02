@@ -318,6 +318,27 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.DNSQuestionName:
 		getter = func(span *Span) attribute.KeyValue { return DNSQuestionName(span.Path) }
+	case attr.GenAIInput:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
+				return semconv.GenAIInputMessagesKey.String(s.OpenAI.Request.GetInput())
+			}
+			return semconv.GenAIInputMessagesKey.String("")
+		}
+	case attr.GenAIOutput:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
+				return semconv.GenAIOutputMessagesKey.String(s.OpenAI.GetOutput())
+			}
+			return semconv.GenAIOutputMessagesKey.String("")
+		}
+	case attr.GenAIInstructions:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
+				return semconv.GenAISystemInstructionsKey.String(s.OpenAI.Request.Instructions)
+			}
+			return semconv.GenAISystemInstructionsKey.String("")
+		}
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata
 	// because they are already attributes of the Resource instead of the attributes.

@@ -27,6 +27,10 @@ github.com/Microsoft/go-winio/pkg/guid
 # github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5
 ## explicit
 github.com/Nvveen/Gotty
+# github.com/andybalholm/brotli v1.2.0
+## explicit; go 1.22
+github.com/andybalholm/brotli
+github.com/andybalholm/brotli/matchfinder
 # github.com/aws/aws-sdk-go-v2 v1.40.1
 ## explicit; go 1.23
 github.com/aws/aws-sdk-go-v2/aws
@@ -895,7 +899,6 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/logger
 go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf
 go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager
-go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector
 go.opentelemetry.io/obi/pkg/internal/ebpf/watcher
 go.opentelemetry.io/obi/pkg/internal/fastelf

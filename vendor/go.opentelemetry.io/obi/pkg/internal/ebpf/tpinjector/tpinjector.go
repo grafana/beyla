@@ -29,6 +29,7 @@ type Tracer struct {
 	bpfObjects BpfObjects
 	closers    []io.Closer
 	log        *slog.Logger
+	iters      []*ebpfcommon.Iter
 }
 
 func New(cfg *obi.Config) *Tracer {
@@ -132,7 +133,23 @@ func (p *Tracer) SockOps() []ebpfcommon.SockOps {
 }
 
 func (p *Tracer) Iters() []*ebpfcommon.Iter {
-	return nil
+	if p.iters != nil {
+		return p.iters
+	}
+
+	major, minor := ebpfcommon.KernelVersion()
+
+	if major < 6 || (major == 6 && minor < 4) {
+		p.log.Warn("TCP socket iterator disabled: kernel versions < 6.4 have a locking bug " +
+			"in iter/tcp + sockhash that can cause an RCU stall and kernel panic. " +
+			"Existing connections at startup will not be tracked for context propagation.")
+		p.iters = []*ebpfcommon.Iter{}
+		return p.iters
+	}
+
+	p.iters = []*ebpfcommon.Iter{{Program: p.bpfObjects.ObiSkIterTcp}}
+
+	return p.iters
 }
 
 func (p *Tracer) Tracing() []*ebpfcommon.Tracing {
@@ -151,6 +168,12 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 
 func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("tpinjector started")
+
+	for _, it := range p.Iters() {
+		if err := it.Run(p.log); err != nil {
+			p.log.Error("error running iterator", "error", err)
+		}
+	}
 
 	<-ctx.Done()
 

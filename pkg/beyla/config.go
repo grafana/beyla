@@ -506,7 +506,7 @@ func (c *Config) willUseTC() bool {
 	// nolint:staticcheck
 	// remove after deleting ContextPropagationEnabled
 	return c.EBPF.ContextPropagation == obicfg.ContextPropagationAll ||
-		c.EBPF.ContextPropagation == obicfg.ContextPropagationIPOptions ||
+		c.EBPF.ContextPropagation == obicfg.ContextPropagationTCP ||
 		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == obi.EbpfSourceTC)
 }
 

@@ -198,6 +198,12 @@ const (
 
 	// Cloud
 	CloudRegion = Name(semconv.CloudRegionKey)
+
+	// GenAI
+	GenAIInput        = Name(semconv.GenAIInputMessagesKey)
+	GenAIInstructions = Name(semconv.GenAISystemInstructionsKey)
+	GenAIOutput       = Name(semconv.GenAIOutputMessagesKey)
+	GenAIMetadata     = Name("gen_ai.metadata")
 )
 
 // OBI specific GPU events

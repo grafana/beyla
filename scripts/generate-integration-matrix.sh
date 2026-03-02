@@ -12,7 +12,7 @@ TEST_TAGS="${1:-integration}"
 SEARCH_DIR="${2:-internal/test/integration}"
 PARTITIONS="${3:-5}"
 TEST_PATTERN="${4:-Test}"
-WEIGHTS_FILE="$SCRIPT_DIR/integration-test-weights.generated.json"
+WEIGHTS_FILE="${WEIGHTS_FILE:-$SCRIPT_DIR/integration-test-weights.generated.json}"
 
 # Get test names
 if [ -n "$TEST_TAGS" ]; then

@@ -8,6 +8,8 @@ OBI_MODULE ?= $(shell sh -c "echo $$(grep 'replace go.opentelemetry.io/obi =>' g
 
 CACHE_CMD ?= k8s-cache
 CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
+OCI_RUNTIME_CMD ?= oci-runtime
+OCI_RUNTIME_MAIN_GO_FILE ?= cmd/$(OCI_RUNTIME_CMD)/main.go
 
 GOOS ?= linux
 GOARCH ?= amd64
@@ -210,13 +212,16 @@ build: vendor-obi verify compile
 .PHONY: all
 all: vendor-obi build
 
-.PHONY: compile compile-cache
+.PHONY: compile compile-cache compile-oci-runtime
 compile:
 	@echo "### Compiling Beyla"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 compile-cache:
 	@echo "### Compiling Beyla K8s cache"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
+compile-oci-runtime:
+	@echo "### Compiling Beyla OCI runtime wrapper"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(OCI_RUNTIME_CMD) $(OCI_RUNTIME_MAIN_GO_FILE)
 
 .PHONY: debug
 debug:

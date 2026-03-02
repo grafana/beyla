@@ -1,0 +1,68 @@
+version: "3.9"
+
+# OCI runtime wrapper demo for plain Docker hosts.
+#
+# Prerequisites on the host:
+# 1) Docker runtime "beyla" is registered and points to beyla-oci-runtime.
+# 2) Docker daemon environment includes BEYLA_OCI_* variables (see ../OPERATIONS.md).
+# 3) BEYLA_OCI_DECISION_REPORT=stderr is recommended so you can see wrapper decisions.
+#
+# Demo behavior:
+# - injected-node: runtime=beyla + BEYLA_INJECT=true => selected by env-based opt-in policy.
+# - baseline-node: runtime=beyla but without opt-in selector => not mutated.
+# - trafficgen continuously calls both endpoints.
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.121.0
+    container_name: ocihook-demo-otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+
+  injected-node:
+    image: node:20-alpine
+    container_name: ocihook-demo-injected-node
+    runtime: beyla
+    environment:
+      BEYLA_INJECT: "true"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        node -e "require('http').createServer((req,res)=>{res.end('injected-node\\n')}).listen(8080,'0.0.0.0')"
+    ports:
+      - "18080:8080"
+
+  baseline-node:
+    image: node:20-alpine
+    container_name: ocihook-demo-baseline-node
+    runtime: beyla
+    # No BEYLA_INJECT env var here: this service should not be selected for mutation.
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        node -e "require('http').createServer((req,res)=>{res.end('baseline-node\\n')}).listen(8080,'0.0.0.0')"
+    ports:
+      - "18081:8080"
+
+  trafficgen:
+    image: curlimages/curl:8.12.1
+    container_name: ocihook-demo-trafficgen
+    depends_on:
+      - injected-node
+      - baseline-node
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        echo "starting traffic generator";
+        while true; do
+          curl -fsS http://injected-node:8080 >/dev/null || true;
+          curl -fsS http://baseline-node:8080 >/dev/null || true;
+          sleep 1;
+        done

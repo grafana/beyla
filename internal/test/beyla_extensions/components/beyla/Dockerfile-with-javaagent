@@ -1,7 +1,7 @@
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.26.0@sha256:c83e68f3ebb6943a2904fa66348867d108119890a2c6a2e6f07b38d0eb6c25c5 AS builder
+FROM golang:1.26.0@sha256:9edf71320ef8a791c4c33ec79f90496d641f306a91fb112d3d060d5c1cee4e20 AS builder
 
 ARG TARGETARCH
 
@@ -23,7 +23,7 @@ COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wra
 RUN make compile-for-coverage
 
 # Build the Java OBI agent
-FROM gradle:9.3.1-jdk21-noble@sha256:5f836f4642496f816f15d495b007e1912f36bf58fbea0247c0b761af438d7cf2 AS javaagent-builder
+FROM gradle:9.3.1-jdk21-noble@sha256:f3784cc59d7fbab1e0ddb09c4cd082f13e16d3fb8c50b7922b7aeae8e9507da5 AS javaagent-builder
 
 RUN apt update
 RUN apt install -y clang llvm
@@ -37,7 +37,7 @@ COPY .obi-src/pkg/internal/java .
 RUN ./gradlew build --no-daemon
 
 # Create final image from minimal + built binary
-FROM ubuntu@sha256:cd1dba651b3080c3686ecf4e3c4220f026b521fb76978881737d24f200828b2b
+FROM ubuntu@sha256:d1e2e92c075e5ca139d51a140fff46f84315c0fdce203eab2807c7e495eff4f9
 
 COPY --from=builder /src/bin/beyla /beyla
 COPY --from=javaagent-builder /build/build/obi-java-agent.jar /obi-java-agent.jar

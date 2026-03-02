@@ -12,7 +12,7 @@ jobs:
   vale:
     runs-on: ubuntu-latest
     container:
-      image: grafana/vale@sha256:698b568d8fb685dbe0fc57de4585b17c86a9d3a047ee6099bb18d6038ac4dc83
+      image: grafana/vale@sha256:28ccb1f2f41d097c10c67fdbc662c53a230385e59c8eef9297dc9a0e0dab158b
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:

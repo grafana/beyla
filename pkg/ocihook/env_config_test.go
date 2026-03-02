@@ -1,6 +1,10 @@
 package ocihook
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestConfigFromEnv_ParsesValues(t *testing.T) {
 	t.Setenv("BEYLA_OCI_MODE", "strict")
@@ -75,5 +79,30 @@ func TestConfigFromEnv_RejectsInvalidDecisionReport(t *testing.T) {
 	_, err := ConfigFromEnv()
 	if err == nil {
 		t.Fatalf("expected validation error for invalid decision report")
+	}
+}
+
+func TestConfigFromEnv_ReadsEnvFileFallback(t *testing.T) {
+	dir := t.TempDir()
+	envFile := filepath.Join(dir, "oci-runtime.env")
+	content := "" +
+		"BEYLA_OCI_SDK_PACKAGE_VERSION=v9.9.9\n" +
+		"BEYLA_OCI_HOST_INSTRUMENTATION_DIR=/var/lib/beyla/instrumentation\n" +
+		"BEYLA_OCI_DELEGATE_RUNTIME=/usr/bin/runc\n"
+	if err := os.WriteFile(envFile, []byte(content), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	t.Setenv("BEYLA_OCI_ENV_FILE", envFile)
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("unexpected error loading config from file fallback: %v", err)
+	}
+	if cfg.SDKPackageVersion != "v9.9.9" {
+		t.Fatalf("expected sdk version from env file, got %q", cfg.SDKPackageVersion)
+	}
+	if cfg.HostInstrumentationDir != "/var/lib/beyla/instrumentation" {
+		t.Fatalf("expected host instrumentation dir from env file, got %q", cfg.HostInstrumentationDir)
 	}
 }

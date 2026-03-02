@@ -2,6 +2,8 @@
 
 This guide covers installation, configuration lifecycle, upgrades, and rollback for `beyla-oci-runtime` in plain Docker hosts.
 
+If you prefer one-shot automated setup, use the bootstrap container in `bootstrap/README.md`.
+
 ## 1. Recommended Host Layout
 
 Use stable paths and separate binary/config/data concerns:
@@ -16,6 +18,7 @@ Use stable paths and separate binary/config/data concerns:
 Docker invokes the runtime wrapper as a child process. The wrapper inherits environment from the Docker daemon process.
 
 A practical setup is to provide env vars through a Docker systemd drop-in.
+The wrapper also supports direct fallback loading from `/etc/beyla/oci-runtime.env` if runtime process env propagation differs by host/runtime behavior.
 
 ### 2.1 Create env file
 

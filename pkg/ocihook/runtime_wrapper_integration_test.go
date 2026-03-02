@@ -44,6 +44,9 @@ func TestWrapperExecute_IntegrationMutatesSpecOnDisk(t *testing.T) {
 	mustContainIntegration(t, env, "OTEL_INJECTOR_CONFIG_FILE=/__otel_sdk_auto_instrumentation__/injector/otelinject.conf")
 	mustContainIntegration(t, env, "OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318")
 	mustContainIntegration(t, env, "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf")
+	mustContainIntegration(t, env, "OTEL_TRACES_EXPORTER=otlp")
+	mustContainIntegration(t, env, "OTEL_METRICS_EXPORTER=otlp")
+	mustContainIntegration(t, env, "OTEL_LOGS_EXPORTER=none")
 
 	if len(finalSpec.Mounts) != 1 {
 		t.Fatalf("expected one injected mount, got %d", len(finalSpec.Mounts))

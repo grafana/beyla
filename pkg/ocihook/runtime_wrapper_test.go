@@ -42,6 +42,29 @@ func TestParseBundleArg(t *testing.T) {
 	}
 }
 
+func TestFindCommandPos(t *testing.T) {
+	t.Run("command in first position", func(t *testing.T) {
+		pos := findCommandPos([]string{"create", "--bundle", "/tmp/b", "id1"})
+		if pos != 0 {
+			t.Fatalf("expected command position 0, got %d", pos)
+		}
+	})
+
+	t.Run("global flags before command", func(t *testing.T) {
+		pos := findCommandPos([]string{"--root", "/run/runc", "--log", "/tmp/runc.log", "create", "--bundle", "/tmp/b", "id1"})
+		if pos != 4 {
+			t.Fatalf("expected command position 4, got %d", pos)
+		}
+	})
+
+	t.Run("bundle flag before command", func(t *testing.T) {
+		pos := findCommandPos([]string{"--bundle", "/tmp/b", "create", "id1"})
+		if pos != 2 {
+			t.Fatalf("expected command position 2, got %d", pos)
+		}
+	})
+}
+
 func TestWrapperExecute_NoMutationOnNonMutatingCommand(t *testing.T) {
 	cfg := DefaultConfig()
 	w := NewWrapper(cfg)
@@ -66,6 +89,63 @@ func TestWrapperExecute_NoMutationOnNonMutatingCommand(t *testing.T) {
 	}
 	if !delegated {
 		t.Fatalf("expected delegate execution")
+	}
+}
+
+func TestWrapperExecute_MutatesWhenGlobalFlagsPrecedeCommand(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.SDKPackageVersion = "v0.1.0"
+	cfg.HostInstrumentationDir = "/var/lib/beyla/instrumentation"
+
+	w := NewWrapper(cfg)
+	w.loadSpec = func(string) (*Spec, error) {
+		return &Spec{
+			Annotations: map[string]string{cfg.Policy.OptInAnnotation: "true"},
+			Process:     &ProcessSpec{Env: []string{}},
+		}, nil
+	}
+
+	saved := false
+	w.saveSpec = func(string, *Spec) error {
+		saved = true
+		return nil
+	}
+	w.run = func(context.Context, string, []string) error { return nil }
+
+	args := []string{"--root", "/run/runc", "--log", "/tmp/runc.log", "create", "--bundle", "/tmp/bundle", "id1"}
+	if err := w.Execute(context.Background(), args); err != nil {
+		t.Fatalf("unexpected execute error: %v", err)
+	}
+	if !saved {
+		t.Fatalf("expected mutated spec to be saved when create command is present after global flags")
+	}
+}
+
+func TestWrapperExecute_MutatesWhenBundleFlagPrecedesCommand(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.SDKPackageVersion = "v0.1.0"
+	cfg.HostInstrumentationDir = "/var/lib/beyla/instrumentation"
+
+	w := NewWrapper(cfg)
+	w.loadSpec = func(string) (*Spec, error) {
+		return &Spec{
+			Process: &ProcessSpec{Env: []string{"BEYLA_INJECT=true"}},
+		}, nil
+	}
+
+	saved := false
+	w.saveSpec = func(string, *Spec) error {
+		saved = true
+		return nil
+	}
+	w.run = func(context.Context, string, []string) error { return nil }
+
+	args := []string{"--bundle", "/tmp/bundle", "create", "id1"}
+	if err := w.Execute(context.Background(), args); err != nil {
+		t.Fatalf("unexpected execute error: %v", err)
+	}
+	if !saved {
+		t.Fatalf("expected mutated spec to be saved when bundle flag precedes command")
 	}
 }
 

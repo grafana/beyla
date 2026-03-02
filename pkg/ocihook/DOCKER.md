@@ -69,3 +69,10 @@ The env-var selector is often easier to use on plain Docker hosts.
 - In `permissive` mode, mutation errors fall back to delegate runtime execution.
 - In `strict` mode, mutation/load/save failures stop container creation.
 - Existing non-Beyla `LD_PRELOAD` values are skipped by default.
+- `LD_PRELOAD` and `OTEL_INJECTOR_CONFIG_FILE` must point to the in-container
+  mount path (default: `/__otel_sdk_auto_instrumentation__/...`), not to host
+  filesystem paths under `/var/lib/...`.
+- The wrapper explicitly sets exporter defaults during mutation:
+  - `OTEL_TRACES_EXPORTER=otlp`
+  - `OTEL_METRICS_EXPORTER=otlp`
+  - `OTEL_LOGS_EXPORTER=none`

@@ -28,6 +28,8 @@ IMG_NAME ?= beyla
 # Container image creation
 VERSION ?= dev
 IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
+OCI_PAYLOAD_IMG ?= beyla-oci-payload:dev
+OCI_BOOTSTRAP_IMG ?= beyla-oci-bootstrap:dev
 
 # Override the value in `release-*` branches to a compatible version
 GEN_IMG_VERSION=latest
@@ -315,6 +317,13 @@ image-build: vendor-obi
 	$(call check_defined, IMG_ORG, Your Docker repository user name)
 	@echo "### Building the auto-instrumenter image"
 	$(OCI_BIN) buildx build --build-arg GEN_IMG="$(GEN_IMG)" --platform linux/amd64,linux/arm64 -t ${IMG} .
+
+.PHONY: oci-bootstrap-image
+oci-bootstrap-image: compile-oci-runtime
+	@echo "### Building OCI payload image (source of truth /dist)"
+	$(OCI_BIN) build -f pkg/webhook/image/Dockerfile -t $(OCI_PAYLOAD_IMG) pkg/webhook/image
+	@echo "### Building OCI one-shot bootstrap image"
+	$(OCI_BIN) build -f pkg/ocihook/bootstrap/Dockerfile --build-arg PAYLOAD_IMAGE=$(OCI_PAYLOAD_IMG) -t $(OCI_BOOTSTRAP_IMG) .
 
 .PHONY: dev-image-build
 dev-image-build: vendor-obi

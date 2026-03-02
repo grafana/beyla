@@ -29,6 +29,8 @@ Architecture and core wrapper skeleton are implemented.
 - Host installation and upgrades: `OPERATIONS.md`
 - Local end-to-end recipe: `E2E.md`
 - Docker Compose demo: `example/docker-compose.yml`
+- Demo validation script: `example/validate.sh`
+- One-shot bootstrap container: `bootstrap/README.md`
 - Ongoing context for AI handover: `AGENTS.md`
 
 ## Non-goals (Phase 1)

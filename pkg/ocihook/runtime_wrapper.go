@@ -85,6 +85,34 @@ func (w *Wrapper) Execute(ctx context.Context, args []string) (execErr error) {
 		if execErr != nil {
 			report.Error = execErr.Error()
 		}
+		if execErr != nil {
+			w.log.Error("wrapper execution failed",
+				"command", report.Command,
+				"bundle", report.Bundle,
+				"policyMatched", report.PolicyMatched,
+				"policyReason", report.PolicyReason,
+				"mutated", report.Mutated,
+				"mutationReason", report.MutationReason,
+				"saved", report.Saved,
+				"delegated", report.Delegated,
+				"finalStatus", report.FinalStatus,
+				"error", execErr,
+			)
+		} else {
+			// Emit one summary event at info level so operators can audit decisions
+			// without requiring debug verbosity.
+			w.log.Info("wrapper execution completed",
+				"command", report.Command,
+				"bundle", report.Bundle,
+				"policyMatched", report.PolicyMatched,
+				"policyReason", report.PolicyReason,
+				"mutated", report.Mutated,
+				"mutationReason", report.MutationReason,
+				"saved", report.Saved,
+				"delegated", report.Delegated,
+				"finalStatus", report.FinalStatus,
+			)
+		}
 		if err := w.report(w.cfg, report); err != nil {
 			w.log.Warn("failed to emit decision report", "error", err)
 		}
@@ -207,12 +235,19 @@ func (w *Wrapper) resolveInvocation(args []string) (string, string, error) {
 		return "", "", fmt.Errorf("missing OCI runtime command")
 	}
 
-	command := strings.TrimSpace(args[0])
+	cmdPos := findCommandPos(args)
+	if cmdPos < 0 {
+		cmdPos = 0
+	}
+
+	command := strings.TrimSpace(args[cmdPos])
 	if command == "" {
 		return "", "", fmt.Errorf("empty OCI runtime command")
 	}
 
-	bundleDir, err := parseBundleArg(args[1:])
+	// Parse bundle from the full argv. Some callers place flags before command,
+	// others after command. We must support both to reliably find config.json.
+	bundleDir, err := parseBundleArg(args)
 	if err != nil {
 		return "", "", err
 	}
@@ -224,6 +259,37 @@ func (w *Wrapper) resolveInvocation(args []string) (string, string, error) {
 	}
 
 	return command, filepath.Clean(bundleDir), nil
+}
+
+func findCommandPos(args []string) int {
+	// runc-style invocation commonly passes global flags before the command:
+	// e.g. --root ... --log ... create ...
+	// We look for the first known OCI runtime command token anywhere in argv.
+	known := map[string]struct{}{
+		"checkpoint": {},
+		"create":     {},
+		"delete":     {},
+		"events":     {},
+		"exec":       {},
+		"features":   {},
+		"kill":       {},
+		"list":       {},
+		"pause":      {},
+		"ps":         {},
+		"restore":    {},
+		"resume":     {},
+		"run":        {},
+		"spec":       {},
+		"start":      {},
+		"state":      {},
+		"update":     {},
+	}
+	for i, arg := range args {
+		if _, ok := known[strings.TrimSpace(arg)]; ok {
+			return i
+		}
+	}
+	return -1
 }
 
 func parseBundleArg(args []string) (string, error) {

@@ -17,6 +17,9 @@ const (
 	envOtelExporterEndpointName    = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	envOtelExporterProtocolName    = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	envOtelSemConvStabilityName    = "OTEL_SEMCONV_STABILITY_OPT_IN"
+	envOtelTracesExporterName      = "OTEL_TRACES_EXPORTER"
+	envOtelMetricsExporterName     = "OTEL_METRICS_EXPORTER"
+	envOtelLogsExporterName        = "OTEL_LOGS_EXPORTER"
 
 	envDotnetEnabledName = "DOTNET_AUTO_INSTRUMENTATION_AGENT_PATH_PREFIX"
 	envJavaEnabledName   = "JVM_AUTO_INSTRUMENTATION_AGENT_PATH"
@@ -74,6 +77,11 @@ func MutateSpec(spec *Spec, cfg Config) (MutationResult, error) {
 	if cfg.OTLPProtocol != "" {
 		mutated = setEnvIfChanged(envMap, &order, envOtelExporterProtocolName, cfg.OTLPProtocol, !cfg.OverrideOTEL) || mutated
 	}
+	// Keep exporter behavior explicit in the runtime path, mirroring webhook behavior.
+	// Users can still predefine these values and keep them when OverrideOTEL=false.
+	mutated = setEnvIfChanged(envMap, &order, envOtelTracesExporterName, "otlp", !cfg.OverrideOTEL) || mutated
+	mutated = setEnvIfChanged(envMap, &order, envOtelMetricsExporterName, "otlp", !cfg.OverrideOTEL) || mutated
+	mutated = setEnvIfChanged(envMap, &order, envOtelLogsExporterName, "none", !cfg.OverrideOTEL) || mutated
 	mutated = setEnvIfChanged(envMap, &order, envOtelSemConvStabilityName, "http", !cfg.OverrideOTEL) || mutated
 
 	for language, envName := range disabledSDKEnvVars(cfg.EnabledSDKs) {

@@ -11,6 +11,9 @@ version: "3.9"
 # - injected-node: runtime=beyla + BEYLA_INJECT=true => selected by env-based opt-in policy.
 # - baseline-node: runtime=beyla but without opt-in selector => not mutated.
 # - trafficgen continuously calls both endpoints.
+#
+# Validation helper:
+# - ./validate.sh
 
 services:
   otel-collector:
@@ -24,11 +27,15 @@ services:
       - "4318:4318" # OTLP HTTP
 
   injected-node:
-    image: node:20-alpine
+    image: node:20-bookworm-slim
     container_name: ocihook-demo-injected-node
     runtime: beyla
     environment:
       BEYLA_INJECT: "true"
+      # Keep OTLP destination explicit in the demo so telemetry reaches the
+      # local collector even if host-level BEYLA_OCI_OTLP_* is unset.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     command:
       - /bin/sh
       - -ec
@@ -38,7 +45,7 @@ services:
       - "18080:8080"
 
   baseline-node:
-    image: node:20-alpine
+    image: node:20-bookworm-slim
     container_name: ocihook-demo-baseline-node
     runtime: beyla
     # No BEYLA_INJECT env var here: this service should not be selected for mutation.

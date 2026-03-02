@@ -13,10 +13,12 @@ type Spec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 	Process     *ProcessSpec      `json:"process,omitempty"`
 	Mounts      []MountSpec       `json:"mounts,omitempty"`
+	extra       map[string]json.RawMessage
 }
 
 type ProcessSpec struct {
-	Env []string `json:"env,omitempty"`
+	Env   []string `json:"env,omitempty"`
+	extra map[string]json.RawMessage
 }
 
 type MountSpec struct {
@@ -24,6 +26,98 @@ type MountSpec struct {
 	Source      string   `json:"source,omitempty"`
 	Type        string   `json:"type,omitempty"`
 	Options     []string `json:"options,omitempty"`
+}
+
+func (s *Spec) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	s.extra = map[string]json.RawMessage{}
+	for k, v := range raw {
+		switch k {
+		case "annotations":
+			if err := json.Unmarshal(v, &s.Annotations); err != nil {
+				return err
+			}
+		case "process":
+			var p ProcessSpec
+			if err := json.Unmarshal(v, &p); err != nil {
+				return err
+			}
+			s.Process = &p
+		case "mounts":
+			if err := json.Unmarshal(v, &s.Mounts); err != nil {
+				return err
+			}
+		default:
+			s.extra[k] = v
+		}
+	}
+	return nil
+}
+
+func (s Spec) MarshalJSON() ([]byte, error) {
+	out := map[string]json.RawMessage{}
+	for k, v := range s.extra {
+		out[k] = v
+	}
+	if s.Annotations != nil {
+		b, err := json.Marshal(s.Annotations)
+		if err != nil {
+			return nil, err
+		}
+		out["annotations"] = b
+	}
+	if s.Process != nil {
+		b, err := json.Marshal(s.Process)
+		if err != nil {
+			return nil, err
+		}
+		out["process"] = b
+	}
+	if s.Mounts != nil {
+		b, err := json.Marshal(s.Mounts)
+		if err != nil {
+			return nil, err
+		}
+		out["mounts"] = b
+	}
+	return json.Marshal(out)
+}
+
+func (p *ProcessSpec) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	p.extra = map[string]json.RawMessage{}
+	for k, v := range raw {
+		switch k {
+		case "env":
+			if err := json.Unmarshal(v, &p.Env); err != nil {
+				return err
+			}
+		default:
+			p.extra[k] = v
+		}
+	}
+	return nil
+}
+
+func (p ProcessSpec) MarshalJSON() ([]byte, error) {
+	out := map[string]json.RawMessage{}
+	for k, v := range p.extra {
+		out[k] = v
+	}
+	if p.Env != nil {
+		b, err := json.Marshal(p.Env)
+		if err != nil {
+			return nil, err
+		}
+		out["env"] = b
+	}
+	return json.Marshal(out)
 }
 
 func LoadSpec(bundleDir string) (*Spec, error) {

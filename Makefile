@@ -393,6 +393,17 @@ k8s-integration-test-matrix-json:
 oats-integration-test-matrix-json:
 	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats
 
+.PHONY: beyla-integration-test-matrix-json
+beyla-integration-test-matrix-json:
+	@WEIGHTS_FILE=scripts/beyla-integration-test-weights.generated.json \
+		./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
+
+.PHONY: run-beyla-integration-test
+run-beyla-integration-test:
+	@echo "### Running Beyla integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
+
 .PHONY: integration-test
 integration-test: prereqs generate-obi-tests prepare-integration-test
 	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)

@@ -67,6 +67,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
@@ -79,7 +80,7 @@ jobs:
           cache: false
 
       - name: Generate files
-        run: make prereqs
+        run: make prereqs vendor-obi
 
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@v1.13.0

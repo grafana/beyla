@@ -29,8 +29,7 @@ type Tracer struct{}
 func New(_ ebpfcommon.ServiceFilter, _ *obi.Config, _ imetrics.Reporter) *Tracer { return nil }
 func (p *Tracer) AllowPID(_ app.PID, _ uint32, _ *svc.Attrs)                     {}
 func (p *Tracer) BlockPID(_ app.PID, _ uint32)                                   {}
-func (p *Tracer) Load() (*ebpf.CollectionSpec, error)                            { return nil, nil }
-func (p *Tracer) BpfObjects() any                                                { return nil }
+func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error)                   { return nil, nil }
 func (p *Tracer) AddCloser(_ ...io.Closer)                                       {}
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc                   { return nil }
 func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc                       { return nil }
@@ -47,7 +46,6 @@ func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                                
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                           { return false }
 func (p *Tracer) Run(_ context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 }
-func (p *Tracer) Constants() map[string]any                           { return nil }
 func (p *Tracer) SetupTailCalls()                                     {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                      {}

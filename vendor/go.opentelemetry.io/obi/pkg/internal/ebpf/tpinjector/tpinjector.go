@@ -23,13 +23,15 @@ import (
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfIter ../../../../bpf/tpinjector/sock_iter.c -- -I../../../../bpf -I../../../../bpf
 
 type Tracer struct {
-	cfg        *obi.Config
-	bpfObjects BpfObjects
-	closers    []io.Closer
-	log        *slog.Logger
-	iters      []*ebpfcommon.Iter
+	cfg            *obi.Config
+	bpfObjects     BpfObjects
+	bpfIterObjects BpfIterObjects
+	closers        []io.Closer
+	log            *slog.Logger
+	iters          []*ebpfcommon.Iter
 }
 
 func New(cfg *obi.Config) *Tracer {
@@ -45,29 +47,32 @@ func (p *Tracer) AllowPID(app.PID, uint32, *svc.Attrs) {}
 
 func (p *Tracer) BlockPID(app.PID, uint32) {}
 
-func (p *Tracer) Load() (*ebpf.CollectionSpec, error) {
-	return LoadBpf()
-}
-
-func (p *Tracer) SetupTailCalls() {
-}
-
-func (p *Tracer) Constants() map[string]any {
-	m := make(map[string]any, 3)
-
-	// The eBPF side does some basic filtering of events that do not belong to
-	// processes which we monitor. We filter more accurately in the userspace, but
-	// for performance reasons we enable the PID based filtering in eBPF.
-	// This must match httpfltr.go, otherwise we get partial events in userspace.
-	if p.cfg.Discovery.BPFPidFilterOff {
-		m["filter_pids"] = int32(0)
-	} else {
-		m["filter_pids"] = int32(1)
+func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
+	spec, err := LoadBpf()
+	if err != nil {
+		return nil, err
 	}
 
-	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
+	iterSpec, err := LoadBpfIter()
+	if err != nil {
+		return nil, err
+	}
 
-	// Set injection flags based on context propagation configuration
+	return []*ebpfcommon.SpecBundle{
+		{
+			Spec:      spec,
+			Objects:   &p.bpfObjects,
+			Constants: p.constants(),
+		},
+		{
+			Spec:      iterSpec,
+			Objects:   &p.bpfIterObjects,
+			Constants: p.iterConstants(),
+		},
+	}, nil
+}
+
+func (p *Tracer) constants() map[string]any {
 	flags := uint32(0)
 	if p.cfg.EBPF.ContextPropagation.HasHeaders() {
 		flags |= 1 // k_inject_http_headers
@@ -75,19 +80,31 @@ func (p *Tracer) Constants() map[string]any {
 	if p.cfg.EBPF.ContextPropagation.HasTCP() {
 		flags |= 2 // k_inject_tcp_options
 	}
-	m["inject_flags"] = flags
-	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
 
-	return m
+	filterPids := int32(1)
+	if p.cfg.Discovery.BPFPidFilterOff {
+		filterPids = 0
+	}
+
+	return map[string]any{
+		"filter_pids":          filterPids,
+		"max_transaction_time": uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds()),
+		"inject_flags":         flags,
+		"g_bpf_debug":          p.cfg.EBPF.BpfDebug,
+	}
 }
+
+func (p *Tracer) iterConstants() map[string]any {
+	return map[string]any{
+		"g_bpf_debug": p.cfg.EBPF.BpfDebug,
+	}
+}
+
+func (p *Tracer) SetupTailCalls() {}
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
-
-func (p *Tracer) BpfObjects() any {
-	return &p.bpfObjects
-}
 
 func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
@@ -147,7 +164,7 @@ func (p *Tracer) Iters() []*ebpfcommon.Iter {
 		return p.iters
 	}
 
-	p.iters = []*ebpfcommon.Iter{{Program: p.bpfObjects.ObiSkIterTcp}}
+	p.iters = []*ebpfcommon.Iter{{Program: p.bpfIterObjects.ObiSkIterTcp}}
 
 	return p.iters
 }
@@ -178,6 +195,7 @@ func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg
 	<-ctx.Done()
 
 	p.bpfObjects.Close()
+	p.bpfIterObjects.Close()
 
 	p.log.Debug("tpinjector terminated")
 }

@@ -1,27 +1,3 @@
-# Development version of the beyla Dockerfile that compiles for coverage
-# and allows retrieving coverage files.
-# The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.26.0@sha256:c83e68f3ebb6943a2904fa66348867d108119890a2c6a2e6f07b38d0eb6c25c5 AS builder
-
-ARG TARGETARCH
-
-ENV GOARCH=$TARGETARCH
-
-WORKDIR /src
-
-# Copy the go manifests and source
-COPY .git/ .git/
-COPY vendor/ vendor/
-COPY cmd/ cmd/
-COPY pkg/ pkg/
-COPY go.mod go.mod
-COPY go.sum go.sum
-COPY Makefile Makefile
-COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
-
-# Build
-RUN make compile-for-coverage
-
 # Build the Java OBI agent
 FROM gradle:9.3.1-jdk21-noble@sha256:5f836f4642496f816f15d495b007e1912f36bf58fbea0247c0b761af438d7cf2 AS javaagent-builder
 
@@ -36,11 +12,35 @@ COPY .obi-src/pkg/internal/java .
 # Build the project
 RUN ./gradlew build --no-daemon
 
+# Development version of the beyla Dockerfile that compiles for coverage
+# and allows retrieving coverage files.
+# The production-ready minimal image is in the project root's dockerfile.
+FROM golang:1.26.0@sha256:c83e68f3ebb6943a2904fa66348867d108119890a2c6a2e6f07b38d0eb6c25c5 AS builder
+
+ARG TARGETARCH
+
+ENV GOARCH=$TARGETARCH
+
+WORKDIR /src
+
+# Copy the go manifests and source
+COPY .git/ .git/
+COPY vendor/ vendor/
+COPY --from=javaagent-builder /build/build/obi-java-agent.jar vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
+COPY cmd/ cmd/
+COPY pkg/ pkg/
+COPY go.mod go.mod
+COPY go.sum go.sum
+COPY Makefile Makefile
+COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
+
+# Build
+RUN make compile-for-coverage
+
 # Create final image from minimal + built binary
 FROM ubuntu@sha256:cd1dba651b3080c3686ecf4e3c4220f026b521fb76978881737d24f200828b2b
 
 COPY --from=builder /src/bin/beyla /beyla
-COPY --from=javaagent-builder /build/build/obi-java-agent.jar /obi-java-agent.jar
 # Wrap the executable in a script that waits for the processes to end
 # in order to avoid issues when tearing down the container on kernels 6.14+.
 # https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/781

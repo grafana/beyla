@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   nginx:
-    image: nginx:latest@sha256:341bf0f3ce6c5277d6002cf6e1fb0319fa4252add24ab6a0e262e0056d313208
+    image: nginx:latest@sha256:0236ee02dcbce00b9bd83e0f5fbc51069e7e1161bd59d99885b3ae1734f3392e
     container_name: demo-nginx
     ports:
       - 3333:3330
@@ -130,7 +130,7 @@ services:
 
   # Grafana Agent
   agent:
-    image: grafana/agent@sha256:7a944ee1274e54b84fcadc4e1e53f88cfedb566d911fedd4cf1e9c695df8c989
+    image: grafana/agent@sha256:b0038b7fa776c3e3e3bc2b09b08c287e8041324217efa6f0c9a78a007bd63e95
     container_name: demo-agent
     command:
       - run
@@ -145,7 +145,7 @@ services:
 
   # Tempo
   tempo:
-    image: grafana/tempo@sha256:3e19e1a4bafd25d1c143f5d33ec6019933d4e2f9bc99d01b2db4d179eb7593ed
+    image: grafana/tempo@sha256:2289b8172156ba4b093d05a310f6d87db5160daeff1ef4abf8e1691882c0ed40
     container_name: demo-tempo
     command:
       - -config.file
@@ -159,7 +159,7 @@ services:
 
   # Mimir -config.file=config-mimir.yaml -server.grpc-listen-port=9096
   mimir:
-    image: grafana/mimir@sha256:1683362e049077adecb93ba6983dd2ef22282d21ff797e8b5f290028f6c34062
+    image: grafana/mimir@sha256:df4b7a5fefba96c19fa3e0b3d3ecceed32892ef49ae893ce37492cfe4f299645
     container_name: demo-mimir
     command:
       - -config.file=/etc/mimir/mimir-config.yaml
@@ -171,7 +171,7 @@ services:
       - "9096:9096"
 
   grafana:
-    image: grafana/grafana@sha256:9e1e77ade304069aee3196e9a4f210830e96e80ce9a2640891eccc324b152faf
+    image: grafana/grafana@sha256:b0ae311af06228bcfd4a620504b653db80f5b91e94dc3dc2a5b7dab202bcde20
     container_name: demo-grafana
     volumes:
       - ./configs/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml

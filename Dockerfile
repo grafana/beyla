@@ -44,7 +44,7 @@ RUN if [ -z "${DEV_OBI}" ]; then \
 RUN make compile
 
 # Build the Java OBI agent
-FROM gradle:9.3.1-jdk21-noble@sha256:5f836f4642496f816f15d495b007e1912f36bf58fbea0247c0b761af438d7cf2 AS javaagent-builder
+FROM gradle:9.3.1-jdk21-noble@sha256:f3784cc59d7fbab1e0ddb09c4cd082f13e16d3fb8c50b7922b7aeae8e9507da5 AS javaagent-builder
 
 WORKDIR /build
 

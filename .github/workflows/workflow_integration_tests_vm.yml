@@ -3,13 +3,6 @@ name: Pull request integration tests on VM
 on:
   push:
     branches: ["main", "release-*"]
-    paths:
-      - ".github/workflows/workflow_integration_tests_vm.yml"
-      - "bpf/**"
-      - "internal/**"
-      - "scripts/generate-integration-matrix.sh"
-      - "scripts/generate-obi-tests.sh"
-      - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
     paths:

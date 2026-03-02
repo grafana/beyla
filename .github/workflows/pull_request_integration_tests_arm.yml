@@ -52,7 +52,7 @@ jobs:
           #  2. TestMultiProcessAppCP
           #  3. TestMultiProcessAppCPHeadersOnly
           #  4. TestMultiProcessAppCPTCPOnly
-          #  5. TestMultiProcessAppCPIPOnly
+          #  5. TestMultiProcessAppCPNoIP_Beyla
           PARTITIONS: 5
           TEST_TAGS: integration
         run: |

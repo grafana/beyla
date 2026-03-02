@@ -39,14 +39,13 @@ jobs:
       - name: build matrix
         id: build-matrix
         env:
-          # 6 partitions, one for each of:
+          # 5 partitions, one for each of:
           #  1. TestMultiProcess
           #  2. TestMultiProcessAppCP
           #  3. TestMultiProcessAppCPHeadersOnly
           #  4. TestMultiProcessAppCPTCPOnly
-          #  5. TestMultiProcessAppCPIPOnly
-          #  6. TestMultiProcessAppCPNoIP
-          PARTITIONS: 6
+          #  5. TestMultiProcessAppCPNoIP_Beyla
+          PARTITIONS: 5
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
@@ -75,6 +74,45 @@ jobs:
             arch: "x86_64"
         test: ${{ fromJson(needs.vm-test-matrix.outputs.matrix).include }}
     steps:
+      - name: Free up disk space
+        run: |
+          # Remove Java (JDKs)
+          sudo rm -rf /usr/lib/jvm
+
+          # Remove .NET SDKs
+          sudo rm -rf /usr/share/dotnet
+
+          # Remove Swift toolchain
+          sudo rm -rf /usr/share/swift
+
+          # Remove Haskell (GHC)
+          sudo rm -rf /usr/local/.ghcup
+
+          # Remove Julia
+          sudo rm -rf /usr/local/julia*
+
+          # Remove Android SDKs
+          sudo rm -rf /usr/local/lib/android
+
+          # Remove Chromium (optional if not using for browser tests)
+          sudo rm -rf /usr/local/share/chromium
+
+          # Remove Microsoft/Edge and Google Chrome builds
+          sudo rm -rf /opt/microsoft /opt/google
+
+          # Remove Azure CLI
+          sudo rm -rf /opt/az
+
+          # Remove PowerShell
+          sudo rm -rf /usr/local/share/powershell
+
+          # Remove CodeQL (but keep hostedtoolcache for Go)
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+          docker system prune -af || true
+          docker builder prune -af || true
+          df -h
+
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
@@ -88,7 +126,15 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: "go.mod"
-          cache: false
+          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Generate files
         run: make prereqs vendor-obi
@@ -190,18 +236,16 @@ jobs:
 
       - name: Report coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
-        env:
-          ARCH: ${{ matrix.kernel.arch }}
-          KERNEL_VERSION: ${{ matrix.kernel.kernel-version }}
         with:
           files: ./testoutput/itest-covdata.txt
-          flags: integration-test-vm-${ARCH}-${KERNEL_VERSION}
+          flags: integration-test-vm-${{ matrix.kernel.arch }}-${{ matrix.kernel.kernel-version }}
+          name: vm-integration-test-coverage-${{ matrix.kernel.kernel-version }}-${{ matrix.kernel.arch }}-${{ matrix.test.id }}-${{ github.run_number }}
 
       - name: Upload integration test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: vm-test-logs-${{ github.run_number }}-${{ matrix.kernel.kernel-version }}-${{ matrix.test.id }}
+          name: vm-integration-test-logs-${{ matrix.kernel.kernel-version }}-${{ matrix.kernel.arch }}-${{ matrix.test.id }}-${{ github.run_number }}
           path: |
             testoutput/*.log
             testoutput/kind

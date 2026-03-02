@@ -18,6 +18,7 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -29,11 +30,23 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
+
+      - name: Login to DockerHub
+        if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          cache: false
           go-version-file: "go.mod"
+          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-
       - name: Run verification and unit tests
         run: make docker-generate verify cov-exclude-generated
       - id: get-codecov-token

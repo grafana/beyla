@@ -114,22 +114,35 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Login to DockerHub
+        if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: "go.mod"
-          cache: false
+          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-oats-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-oats-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Run oats tests
         env:
           MATRIX_BASENAME: ${{ matrix.basename }}
+          TESTCASE_TIMEOUT: 5m
         run: make oats-test-$MATRIX_BASENAME
 
       - name: Upload oats test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: Oats test logs - ${{ matrix.basename }}
+          name: oats-test-logs-${{ matrix.basename }}-${{ github.run_number }}
           path: internal/testgenerated/oats/${{ matrix.basename }}/build/*
 
       - name: Process coverage data
@@ -148,3 +161,4 @@ jobs:
         with:
           files: ./testoutput/itest-covdata.txt
           flags: oats-test
+          name: oats-test-coverage-${{ matrix.basename }}-${{ github.run_number }}

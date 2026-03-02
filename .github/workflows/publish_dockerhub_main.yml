@@ -41,8 +41,8 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
-          persist-credentials: "false"
-          submodules: "recursive"
+          persist-credentials: false
+          submodules: recursive
 
       - name: Login to DockerHub
         uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886

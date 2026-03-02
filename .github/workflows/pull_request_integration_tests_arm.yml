@@ -44,9 +44,15 @@ jobs:
       - name: Generate OBI tests
         run: make generate-obi-tests
 
-      - name: Build matrix
+      - name: build matrix
         id: build-matrix
         env:
+          # 5 partitions, one for each of:
+          #  1. TestMultiProcess
+          #  2. TestMultiProcessAppCP
+          #  3. TestMultiProcessAppCPHeadersOnly
+          #  4. TestMultiProcessAppCPTCPOnly
+          #  5. TestMultiProcessAppCPIPOnly
           PARTITIONS: 5
           TEST_TAGS: integration
         run: |
@@ -123,10 +129,18 @@ jobs:
         uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0 # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
         with:
           go-version-file: "go.mod"
-          cache: false
+          cache: true
+
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-integration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-integration-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Generate files
         run: make prereqs vendor-obi
@@ -154,13 +168,13 @@ jobs:
             exit 1
           fi
 
-          mkdir -p reports
+          mkdir -p /home/runner/reports
 
           ~/go/bin/gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="./internal/testgenerated/integration" -ftestname \
-              --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -tags=${TEST_TAGS} -timeout 30m \
+              --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
+              -- -count=1 -tags=${TEST_TAGS} -timeout 30m \
               -mod vendor \
               -run="^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration
 
@@ -180,20 +194,21 @@ jobs:
         with:
           files: ./testoutput/itest-covdata.txt
           flags: integration-test-arm
+          name: go-integration-test-arm-coverage-${{ matrix.id }}-${{ github.run_number }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: go-test-arm-reports-${{ github.run_number }}-${{ matrix.id }}
-          path: reports/*.log
+          name: go-integration-test-arm-reports-${{ matrix.id }}-${{ github.run_number }}
+          path: /home/runner/reports/*.log
           retention-days: 5
 
-      - name: Upload test logs
+      - name: Upload integration test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: go-test-arm-logs-${{ github.run_number }}-${{ matrix.id }}
+          name: go-integration-test-arm-logs-${{ matrix.id }}-${{ github.run_number }}
           path: |
             testoutput/*.log
             testoutput/kind

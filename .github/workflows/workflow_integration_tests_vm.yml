@@ -127,10 +127,18 @@ jobs:
         uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0 # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
         with:
           go-version-file: "go.mod"
-          cache: false
+          cache: true
+
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Generate files
         run: make prereqs vendor-obi
@@ -232,18 +240,16 @@ jobs:
 
       - name: Report coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
-        env:
-          ARCH: ${{ matrix.kernel.arch }}
-          KERNEL_VERSION: ${{ matrix.kernel.kernel-version }}
         with:
           files: ./testoutput/itest-covdata.txt
-          flags: integration-test-vm-${ARCH}-${KERNEL_VERSION}
+          flags: integration-test-vm-${{ matrix.kernel.arch }}-${{ matrix.kernel.kernel-version }}
+          name: vm-integration-test-coverage-${{ matrix.kernel.kernel-version }}-${{ matrix.kernel.arch }}-${{ matrix.test.id }}-${{ github.run_number }}
 
       - name: Upload integration test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: vm-test-logs-${{ github.run_number }}-${{ matrix.kernel.kernel-version }}-${{ matrix.test.id }}
+          name: vm-integration-test-logs-${{ matrix.kernel.kernel-version }}-${{ matrix.kernel.arch }}-${{ matrix.test.id }}-${{ github.run_number }}
           path: |
             testoutput/*.log
             testoutput/kind

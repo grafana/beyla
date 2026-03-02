@@ -184,7 +184,10 @@ func mapToEnv(m map[string]string, order []string) []string {
 
 func setEnvIfChanged(env map[string]string, order *[]string, key, value string, preserveIfPresent bool) bool {
 	current, exists := env[key]
-	if exists && preserveIfPresent {
+	// Preserve user-defined values, but allow filling empty placeholders.
+	// Some runtimes may pass keys with empty values; keeping them empty would
+	// unintentionally disable required injector env vars.
+	if exists && preserveIfPresent && current != "" {
 		return false
 	}
 	if exists && current == value {

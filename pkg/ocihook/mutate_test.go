@@ -108,6 +108,35 @@ func TestMutateSpec_IdempotentForSameVersion(t *testing.T) {
 	}
 }
 
+func TestMutateSpec_FillsEmptyInjectedEnvPlaceholders(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.SDKPackageVersion = "v0.0.7"
+	cfg.HostInstrumentationDir = "/var/lib/beyla/instrumentation"
+	cfg.OTLPEndpoint = "http://collector:4318"
+	cfg.OTLPProtocol = "http/protobuf"
+
+	spec := &Spec{Process: &ProcessSpec{Env: []string{
+		"LD_PRELOAD=",
+		"OTEL_INJECTOR_CONFIG_FILE=",
+		"BEYLA_INJECTOR_SDK_PKG_VERSION=",
+		"OTEL_TRACES_EXPORTER=",
+	}}}
+
+	res, err := MutateSpec(spec, cfg)
+	if err != nil {
+		t.Fatalf("unexpected mutate error: %v", err)
+	}
+	if !res.Mutated {
+		t.Fatalf("expected spec to be mutated")
+	}
+
+	env := strings.Join(spec.Process.Env, "\n")
+	mustContain(t, env, "LD_PRELOAD=/__otel_sdk_auto_instrumentation__/injector/libotelinject.so")
+	mustContain(t, env, "OTEL_INJECTOR_CONFIG_FILE=/__otel_sdk_auto_instrumentation__/injector/otelinject.conf")
+	mustContain(t, env, "BEYLA_INJECTOR_SDK_PKG_VERSION=v0.0.7")
+	mustContain(t, env, "OTEL_TRACES_EXPORTER=otlp")
+}
+
 func mustContain(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {

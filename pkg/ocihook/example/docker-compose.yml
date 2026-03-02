@@ -17,7 +17,7 @@ version: "3.9"
 
 services:
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.121.0
+    image: otel/opentelemetry-collector-contrib:0.146.1
     container_name: ocihook-demo-otel-collector
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
@@ -34,8 +34,8 @@ services:
       BEYLA_INJECT: "true"
       # Keep OTLP destination explicit in the demo so telemetry reaches the
       # local collector even if host-level BEYLA_OCI_OTLP_* is unset.
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     command:
       - /bin/sh
       - -ec

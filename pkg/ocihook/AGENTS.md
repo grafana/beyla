@@ -144,6 +144,10 @@ See `ARCHITECTURE.md` for detailed flow and phased plan.
    - switched demo Node images to `node:20-bookworm-slim`
    - added explicit injected-container OTLP endpoint/protocol
    - updated example docs to tail wrapper decisions from `docker.service`
+22. Fixed env mutation edge case for empty placeholder values:
+   - if an env var key exists with empty value, mutator now fills it with required injector value
+   - previously, `preserve-if-present` logic could preserve empty values and skip effective injection
+   - added unit test coverage for empty placeholder replacement
 
 ## Next Planned Steps
 
@@ -179,6 +183,7 @@ See `ARCHITECTURE.md` for detailed flow and phased plan.
 - 2026-03-02: Fixed OCI config round-trip field loss that caused `runc create` failures (`Cwd property must not be empty`).
 - 2026-03-02: Added explicit OTEL exporter defaults in `ocihook` mutator and info-level wrapper decision summaries for easier diagnostics.
 - 2026-03-02: Updated Compose demo defaults (glibc Node image + explicit OTLP endpoint/protocol) and documentation for wrapper decision log tailing.
+- 2026-03-02: Fixed mutator behavior for pre-existing empty env vars so injector keys are not left blank.
 
 ## Current Operational Snapshot (2026-03-02)
 

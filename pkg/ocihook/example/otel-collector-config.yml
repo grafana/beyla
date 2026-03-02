@@ -1,14 +1,38 @@
 receivers:
   otlp:
-    protocols:
-      grpc:
-      http:
-
+   protocols:
+     grpc:
+       endpoint: 0.0.0.0:4317
+     http:
+       endpoint: 0.0.0.0:4318
+       cors:
+         allowed_origins:
+           - http://*
 processors:
   batch:
 
 exporters:
-  debug:
+#  otlphttp/metrics:
+#    endpoint: http://127.0.0.1:9090/api/v1/otlp
+#    tls:
+#      insecure: true
+#  otlphttp/traces:
+#    endpoint: http://127.0.0.1:4418
+#    tls:
+#      insecure: true
+#  otlphttp/logs:
+#    endpoint: http://127.0.0.1:3100/otlp
+#    tls:
+#      insecure: true
+#  otlp/profiles:
+#    endpoint: http://127.0.0.1:4040
+#    tls:
+#      insecure: true
+  debug/metrics:
+    verbosity: detailed
+  debug/traces:
+    verbosity: detailed
+  debug/logs:
     verbosity: detailed
 
 service:
@@ -16,12 +40,15 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      #exporters: [otlphttp/traces]
+      exporters: [debug/traces]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+#      exporters: [otlphttp/metrics]
+      exporters: [debug/metrics]
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+#      exporters: [otlphttp/logs]
+      exporters: [debug/logs]

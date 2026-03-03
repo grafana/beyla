@@ -216,10 +216,10 @@ jobs:
         run: |
           set -euo pipefail
           for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
-            RC_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_RC_TAG}" --format '{{.Digest}}')
+            RC_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_RC_TAG}" | awk '/^Digest:/{print $2}')
             echo "${IMAGE}:${DOCKER_RC_TAG} digest: ${RC_DIGEST}"
             for TAG in "${DOCKER_PATCH_TAG}" "${DOCKER_MINOR_TAG}" "${DOCKER_MAJOR_TAG}"; do
-              STABLE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{.Digest}}')
+              STABLE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" | awk '/^Digest:/{print $2}')
               if [[ "${RC_DIGEST}" != "${STABLE_DIGEST}" ]]; then
                 echo "::error::Digest mismatch for ${IMAGE}:${TAG} (expected ${RC_DIGEST}, got ${STABLE_DIGEST})"
                 exit 1

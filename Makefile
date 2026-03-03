@@ -303,7 +303,7 @@ cov-exclude-generated-shard:
 
 .PHONY: unit-test-matrix-json
 unit-test-matrix-json:
-	@go list -mod vendor ./... | $(GOTESTSUM) tool ci-matrix --partitions $${PARTITIONS:-3} --timing-files=$(TEST_OUTPUT)/unit-test-shard-*.log
+	@go list -mod vendor ./... | grep -v /internal/testgenerated/ | $(GOTESTSUM) tool ci-matrix --partitions $${PARTITIONS:-3} --timing-files=$(TEST_OUTPUT)/unit-test-shard-*.log
 
 .PHONY: run-unit-test-shard
 run-unit-test-shard:

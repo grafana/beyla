@@ -79,10 +79,14 @@ jobs:
           RC_SHA=$(git rev-parse "refs/tags/${RC_TAG}^{commit}")
           echo "RC SHA:           ${RC_SHA}"
 
-          # Verify stable tag does NOT already exist
+          # If stable tag already exists, verify it points to the same commit (idempotent re-run)
           if git rev-parse "refs/tags/${STABLE_TAG}" >/dev/null 2>&1; then
-            echo "::error::Stable tag ${STABLE_TAG} already exists. Aborting to prevent overwrite."
-            exit 1
+            EXISTING_SHA=$(git rev-parse "refs/tags/${STABLE_TAG}^{commit}")
+            if [[ "${EXISTING_SHA}" != "${RC_SHA}" ]]; then
+              echo "::error::Stable tag ${STABLE_TAG} already exists at ${EXISTING_SHA}, but RC points to ${RC_SHA}. Aborting to prevent overwrite."
+              exit 1
+            fi
+            echo "::notice::Stable tag ${STABLE_TAG} already exists at the correct commit (idempotent re-run)"
           fi
 
           # Verify RC GitHub release exists and is a pre-release
@@ -166,11 +170,19 @@ jobs:
           RC_SHA: ${{ needs.validate.outputs.rc_sha }}
         run: |
           set -euo pipefail
-          echo "Creating tag ${STABLE_TAG} pointing to ${RC_SHA}"
-          gh api "repos/${{ github.repository }}/git/refs" \
-            -f "ref=refs/tags/${STABLE_TAG}" \
-            -f "sha=${RC_SHA}"
-          echo "Tag ${STABLE_TAG} created successfully"
+          EXISTING_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/${STABLE_TAG}" --jq '.object.sha' 2>/dev/null || echo "")
+          if [[ "${EXISTING_SHA}" == "${RC_SHA}" ]]; then
+            echo "Tag ${STABLE_TAG} already exists at ${RC_SHA}, skipping creation"
+          elif [[ -n "${EXISTING_SHA}" ]]; then
+            echo "::error::Tag ${STABLE_TAG} exists at ${EXISTING_SHA} but expected ${RC_SHA}"
+            exit 1
+          else
+            echo "Creating tag ${STABLE_TAG} pointing to ${RC_SHA}"
+            gh api "repos/${{ github.repository }}/git/refs" \
+              -f "ref=refs/tags/${STABLE_TAG}" \
+              -f "sha=${RC_SHA}"
+            echo "Tag ${STABLE_TAG} created successfully"
+          fi
 
       - name: Login to DockerHub
         uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
@@ -204,10 +216,10 @@ jobs:
         run: |
           set -euo pipefail
           for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
-            RC_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_RC_TAG}" --format '{{.Manifest.Digest}}')
+            RC_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_RC_TAG}" | awk '/^Digest:/{print $2}')
             echo "${IMAGE}:${DOCKER_RC_TAG} digest: ${RC_DIGEST}"
             for TAG in "${DOCKER_PATCH_TAG}" "${DOCKER_MINOR_TAG}" "${DOCKER_MAJOR_TAG}"; do
-              STABLE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{.Manifest.Digest}}')
+              STABLE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" | awk '/^Digest:/{print $2}')
               if [[ "${RC_DIGEST}" != "${STABLE_DIGEST}" ]]; then
                 echo "::error::Digest mismatch for ${IMAGE}:${TAG} (expected ${RC_DIGEST}, got ${STABLE_DIGEST})"
                 exit 1
@@ -275,16 +287,24 @@ jobs:
           HAS_ASSETS: ${{ steps.assets.outputs.has_assets }}
         run: |
           set -euo pipefail
-          gh release create "${STABLE_TAG}" \
-            --title "${STABLE_TAG}" \
-            --notes-file release-notes.txt \
-            --latest
+          if gh release view "${STABLE_TAG}" >/dev/null 2>&1; then
+            echo "Release ${STABLE_TAG} already exists, updating"
+            gh release edit "${STABLE_TAG}" \
+              --title "${STABLE_TAG}" \
+              --notes-file release-notes.txt \
+              --latest
+          else
+            gh release create "${STABLE_TAG}" \
+              --title "${STABLE_TAG}" \
+              --notes-file release-notes.txt \
+              --latest
+          fi
 
           if [[ "${HAS_ASSETS}" == "true" ]]; then
             for f in assets/beyla-linux-*.tar.gz; do
               if [[ -f "${f}" ]]; then
                 echo "Uploading asset: ${f}"
-                gh release upload "${STABLE_TAG}" "${f}"
+                gh release upload "${STABLE_TAG}" "${f}" --clobber
               fi
             done
           fi

@@ -1,0 +1,220 @@
+name: Promote patch to stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag to promote (e.g., v3.3.1)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run mode (validate only, make no changes)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: promote-patch-${{ inputs.version_tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version_tag: ${{ steps.derive.outputs.version_tag }}
+      docker_patch_tag: ${{ steps.derive.outputs.docker_patch_tag }}
+      docker_minor_tag: ${{ steps.derive.outputs.docker_minor_tag }}
+      docker_major_tag: ${{ steps.derive.outputs.docker_major_tag }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: 'false'
+
+      - name: Validate and derive tags
+        id: derive
+        env:
+          VERSION_TAG: ${{ inputs.version_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Validate tag format: vMAJOR.MINOR.PATCH (no pre-release suffix)
+          if [[ ! "${VERSION_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag format: ${VERSION_TAG}. Expected format: vX.Y.Z (e.g., v3.3.1)"
+            exit 1
+          fi
+
+          # Derive version components
+          VERSION="${VERSION_TAG#v}"
+          MAJOR="${VERSION%%.*}"
+          MINOR_PATCH="${VERSION#*.}"
+          MINOR="${MINOR_PATCH%%.*}"
+
+          # Docker image tags (no v prefix)
+          DOCKER_PATCH_TAG="${VERSION}"
+          DOCKER_MINOR_TAG="${MAJOR}.${MINOR}"
+          DOCKER_MAJOR_TAG="${MAJOR}"
+
+          echo "Version tag:      ${VERSION_TAG}"
+          echo "Docker patch tag: ${DOCKER_PATCH_TAG}"
+          echo "Docker tags:      ${DOCKER_PATCH_TAG}, ${DOCKER_MINOR_TAG}, ${DOCKER_MAJOR_TAG}, latest"
+
+          # Verify git tag exists
+          if ! git rev-parse "refs/tags/${VERSION_TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${VERSION_TAG} does not exist in git"
+            exit 1
+          fi
+
+          # Verify GitHub release exists
+          RELEASE_JSON=$(gh release view "${VERSION_TAG}" --json tagName,isPrerelease,isLatest 2>&1) || {
+            echo "::error::GitHub release for ${VERSION_TAG} not found"
+            exit 1
+          }
+
+          IS_PRERELEASE=$(echo "${RELEASE_JSON}" | jq -r '.isPrerelease')
+          IS_LATEST=$(echo "${RELEASE_JSON}" | jq -r '.isLatest')
+
+          # Idempotency: if already promoted, log and continue
+          if [[ "${IS_PRERELEASE}" != "true" ]] && [[ "${IS_LATEST}" == "true" ]]; then
+            echo "::notice::Release ${VERSION_TAG} is already marked as stable/latest (idempotent re-run)"
+          elif [[ "${IS_PRERELEASE}" != "true" ]]; then
+            echo "::warning::Release ${VERSION_TAG} is not a pre-release but also not latest. Will proceed to set as latest."
+          fi
+
+          # Set outputs
+          {
+            echo "version_tag=${VERSION_TAG}"
+            echo "docker_patch_tag=${DOCKER_PATCH_TAG}"
+            echo "docker_minor_tag=${DOCKER_MINOR_TAG}"
+            echo "docker_major_tag=${DOCKER_MAJOR_TAG}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Print promotion summary
+        env:
+          VERSION_TAG: ${{ steps.derive.outputs.version_tag }}
+          DOCKER_PATCH_TAG: ${{ steps.derive.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ steps.derive.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ steps.derive.outputs.docker_major_tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "## Promotion Summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| Version tag | \`${VERSION_TAG}\` |"
+            echo "| Docker source tag | \`${DOCKER_PATCH_TAG}\` |"
+            echo "| Docker new tags | \`latest\`, \`${DOCKER_MINOR_TAG}\`, \`${DOCKER_MAJOR_TAG}\` |"
+            echo "| Dry run | \`${DRY_RUN}\` |"
+            echo ""
+            if [[ "${DRY_RUN}" == "true" ]]; then
+              echo "> **Dry run mode:** No changes will be made."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  promote:
+    needs: validate
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      actions: write
+    steps:
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Re-tag Docker images
+        env:
+          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
+        run: |
+          set -euo pipefail
+          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
+            echo "Re-tagging ${IMAGE}:${DOCKER_PATCH_TAG} -> latest, ${DOCKER_MINOR_TAG}, ${DOCKER_MAJOR_TAG}"
+            docker buildx imagetools create \
+              --tag "${IMAGE}:latest" \
+              --tag "${IMAGE}:${DOCKER_MINOR_TAG}" \
+              --tag "${IMAGE}:${DOCKER_MAJOR_TAG}" \
+              "${IMAGE}:${DOCKER_PATCH_TAG}"
+          done
+
+      - name: Verify Docker image digests
+        env:
+          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
+        run: |
+          set -euo pipefail
+          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
+            SOURCE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_PATCH_TAG}" | awk '/^Digest:/{print $2}')
+            echo "${IMAGE}:${DOCKER_PATCH_TAG} digest: ${SOURCE_DIGEST}"
+            for TAG in "latest" "${DOCKER_MINOR_TAG}" "${DOCKER_MAJOR_TAG}"; do
+              PROMOTED_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" | awk '/^Digest:/{print $2}')
+              if [[ "${SOURCE_DIGEST}" != "${PROMOTED_DIGEST}" ]]; then
+                echo "::error::Digest mismatch for ${IMAGE}:${TAG} (expected ${SOURCE_DIGEST}, got ${PROMOTED_DIGEST})"
+                exit 1
+              fi
+              echo "Verified ${IMAGE}:${TAG} digest matches source"
+            done
+          done
+
+      - name: Update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_TAG: ${{ needs.validate.outputs.version_tag }}
+        run: |
+          set -euo pipefail
+          echo "Promoting ${VERSION_TAG} to stable/latest"
+          gh release edit "${VERSION_TAG}" \
+            --repo "${{ github.repository }}" \
+            --prerelease=false \
+            --latest
+          echo "GitHub release ${VERSION_TAG} updated to stable/latest"
+
+      - name: Trigger documentation publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_TAG: ${{ needs.validate.outputs.version_tag }}
+        run: |
+          set -euo pipefail
+          echo "Triggering documentation publish for ${VERSION_TAG}"
+          gh workflow run publish-technical-documentation-release.yml \
+            --repo "${{ github.repository }}" \
+            --ref "${VERSION_TAG}"
+          echo "Documentation workflow triggered"
+
+      - name: Print summary
+        env:
+          VERSION_TAG: ${{ needs.validate.outputs.version_tag }}
+          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
+        run: |
+          {
+            echo "## Promotion Complete"
+            echo ""
+            echo "### Docker Images"
+            echo "- \`grafana/beyla:${DOCKER_PATCH_TAG}\`, \`grafana/beyla:${DOCKER_MINOR_TAG}\`, \`grafana/beyla:${DOCKER_MAJOR_TAG}\`, \`grafana/beyla:latest\`"
+            echo "- \`grafana/beyla-k8s-cache:${DOCKER_PATCH_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MINOR_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MAJOR_TAG}\`, \`grafana/beyla-k8s-cache:latest\`"
+            echo ""
+            echo "### GitHub Release"
+            echo "- [${VERSION_TAG}](https://github.com/${{ github.repository }}/releases/tag/${VERSION_TAG}) marked as stable/latest"
+            echo ""
+            echo "### Documentation"
+            echo "- Technical documentation publish workflow triggered for \`${VERSION_TAG}\`"
+            echo ""
+            echo "### Manual Follow-up"
+            echo "- [ ] Update \`charts/beyla/Chart.yaml\` with new \`appVersion\` and \`version\` if needed"
+            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) if a new chart release is needed"
+          } >> "${GITHUB_STEP_SUMMARY}"

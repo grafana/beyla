@@ -41,6 +41,11 @@ RUN if [ -z "${DEV_OBI}" ]; then \
     make generate && \
     make copy-obi-vendor \
     ; fi
+# Allow the promote-rc-to-stable workflow to override the version baked into the binary.
+# When unset, the Makefile falls through to `git describe`.
+ARG RELEASE_VERSION
+ENV RELEASE_VERSION=${RELEASE_VERSION}
+
 RUN make compile
 
 # Build the Java OBI agent

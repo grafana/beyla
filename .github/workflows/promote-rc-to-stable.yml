@@ -90,7 +90,7 @@ jobs:
           fi
 
           # Verify RC GitHub release exists and is a pre-release
-          RELEASE_JSON=$(gh release view "${RC_TAG}" --json tagName,isPrerelease,assets 2>&1) || {
+          RELEASE_JSON=$(gh release view "${RC_TAG}" --json tagName,isPrerelease 2>&1) || {
             echo "::error::GitHub release for ${RC_TAG} not found"
             exit 1
           }
@@ -101,13 +101,13 @@ jobs:
             exit 1
           fi
 
-          # Verify binary assets exist on the RC release
-          for ARCH in amd64 arm64; do
-            EXPECTED="beyla-linux-${ARCH}-${RC_TAG}.tar.gz"
-            FOUND=$(echo "${RELEASE_JSON}" | jq -r --arg name "${EXPECTED}" '.assets[] | select(.name == $name) | .name')
-            if [[ -z "${FOUND}" ]]; then
-              echo "::warning::Expected asset ${EXPECTED} not found on release ${RC_TAG}. Binary assets will not be included in the stable release."
+          # Verify RC Docker images exist
+          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
+            if ! docker buildx imagetools inspect "${IMAGE}:${DOCKER_RC_TAG}" >/dev/null 2>&1; then
+              echo "::error::Docker image ${IMAGE}:${DOCKER_RC_TAG} not found"
+              exit 1
             fi
+            echo "Verified ${IMAGE}:${DOCKER_RC_TAG} exists"
           done
 
           # Set outputs
@@ -149,9 +149,172 @@ jobs:
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
-  promote:
+  # Build Docker images from source at the RC commit with the stable version string.
+  # This is a matrix job that builds each image/architecture combination on a native runner.
+  build-docker:
     needs: validate
     if: inputs.dry_run == false
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: grafana/beyla
+            file: Dockerfile
+            platform: linux/amd64
+            runner: ubuntu-latest
+            artifact_suffix: beyla-amd64
+          - image: grafana/beyla
+            file: Dockerfile
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: beyla-arm64
+          - image: grafana/beyla-k8s-cache
+            file: k8scache.Dockerfile
+            platform: linux/amd64
+            runner: ubuntu-latest
+            artifact_suffix: k8s-cache-amd64
+          - image: grafana/beyla-k8s-cache
+            file: k8scache.Dockerfile
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: k8s-cache-arm64
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ needs.validate.outputs.rc_sha }}
+          persist-credentials: 'false'
+          submodules: 'recursive'
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ./${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            RELEASE_VERSION=${{ needs.validate.outputs.stable_tag }}
+          outputs: type=image,"name=${{ matrix.image }}",push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          touch "${{ runner.temp }}/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: digests-${{ matrix.artifact_suffix }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Combine per-architecture digests into multi-arch manifests with stable version tags.
+  create-manifest:
+    needs: [validate, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      matrix:
+        include:
+          - image: grafana/beyla
+            artifact_prefix: beyla
+          - image: grafana/beyla-k8s-cache
+            artifact_prefix: k8s-cache
+    steps:
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Download amd64 digest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digests-${{ matrix.artifact_prefix }}-amd64
+          path: ${{ runner.temp }}/digests/amd64
+
+      - name: Download arm64 digest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digests-${{ matrix.artifact_prefix }}-arm64
+          path: ${{ runner.temp }}/digests/arm64
+
+      - name: Create manifest list and push
+        env:
+          IMAGE: ${{ matrix.image }}
+          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
+          DIGESTS_DIR: ${{ runner.temp }}/digests
+        run: |
+          AMD64_DIGEST=$(basename "${DIGESTS_DIR}"/amd64/*)
+          ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
+          docker buildx imagetools create \
+            -t "${IMAGE}:${DOCKER_PATCH_TAG}" \
+            -t "${IMAGE}:${DOCKER_MINOR_TAG}" \
+            -t "${IMAGE}:${DOCKER_MAJOR_TAG}" \
+            "${IMAGE}@sha256:${AMD64_DIGEST}" \
+            "${IMAGE}@sha256:${ARM64_DIGEST}"
+
+  # Build binary artifacts from source at the RC commit with the stable version string.
+  build-binaries:
+    needs: validate
+    if: inputs.dry_run == false
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ needs.validate.outputs.rc_sha }}
+          persist-credentials: 'false'
+
+      - name: Set up Go
+        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
+        with:
+          cache: false
+          go-version-file: 'go.mod'
+
+      - name: Build binary artifact
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.stable_tag }}
+        run: make artifact
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binary-linux-${{ matrix.arch }}
+          path: bin/beyla.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  # Create git tag, GitHub release, and upload binary assets.
+  release:
+    needs: [validate, create-manifest, build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -184,73 +347,28 @@ jobs:
             echo "Tag ${STABLE_TAG} created successfully"
           fi
 
-      - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+      - name: Download binary artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/binaries
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-
-      - name: Re-tag Docker images
+      - name: Rename binary artifacts
         env:
-          DOCKER_RC_TAG: ${{ needs.validate.outputs.docker_rc_tag }}
-          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
-          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
-          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
-        run: |
-          set -euo pipefail
-          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
-            echo "Re-tagging ${IMAGE}:${DOCKER_RC_TAG} -> ${DOCKER_PATCH_TAG}, ${DOCKER_MINOR_TAG}, ${DOCKER_MAJOR_TAG}"
-            docker buildx imagetools create \
-              --tag "${IMAGE}:${DOCKER_PATCH_TAG}" \
-              --tag "${IMAGE}:${DOCKER_MINOR_TAG}" \
-              --tag "${IMAGE}:${DOCKER_MAJOR_TAG}" \
-              "${IMAGE}:${DOCKER_RC_TAG}"
-          done
-
-      - name: Verify Docker image digests
-        env:
-          DOCKER_RC_TAG: ${{ needs.validate.outputs.docker_rc_tag }}
-          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
-          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
-          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
-        run: |
-          set -euo pipefail
-          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
-            RC_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_RC_TAG}" | awk '/^Digest:/{print $2}')
-            echo "${IMAGE}:${DOCKER_RC_TAG} digest: ${RC_DIGEST}"
-            for TAG in "${DOCKER_PATCH_TAG}" "${DOCKER_MINOR_TAG}" "${DOCKER_MAJOR_TAG}"; do
-              STABLE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" | awk '/^Digest:/{print $2}')
-              if [[ "${RC_DIGEST}" != "${STABLE_DIGEST}" ]]; then
-                echo "::error::Digest mismatch for ${IMAGE}:${TAG} (expected ${RC_DIGEST}, got ${STABLE_DIGEST})"
-                exit 1
-              fi
-              echo "Verified ${IMAGE}:${TAG} digest matches RC"
-            done
-          done
-
-      - name: Download and rename RC binary assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RC_TAG: ${{ needs.validate.outputs.rc_tag }}
           STABLE_TAG: ${{ needs.validate.outputs.stable_tag }}
+          BINARIES_DIR: ${{ runner.temp }}/binaries
         run: |
           set -euo pipefail
           mkdir -p assets
-          HAS_ASSETS=false
           for ARCH in amd64 arm64; do
-            RC_ASSET_NAME="beyla-linux-${ARCH}-${RC_TAG}.tar.gz"
-            STABLE_ASSET_NAME="beyla-linux-${ARCH}-${STABLE_TAG}.tar.gz"
-
-            if gh release download "${RC_TAG}" --pattern "${RC_ASSET_NAME}" --dir assets --clobber 2>/dev/null; then
-              mv "assets/${RC_ASSET_NAME}" "assets/${STABLE_ASSET_NAME}"
-              echo "Downloaded and renamed: ${RC_ASSET_NAME} -> ${STABLE_ASSET_NAME}"
-              HAS_ASSETS=true
+            SRC="${BINARIES_DIR}/binary-linux-${ARCH}/beyla.tar.gz"
+            DST="assets/beyla-linux-${ARCH}-${STABLE_TAG}.tar.gz"
+            if [[ -f "${SRC}" ]]; then
+              mv "${SRC}" "${DST}"
+              echo "Prepared: ${DST}"
             else
-              echo "::warning::Asset ${RC_ASSET_NAME} not found on release ${RC_TAG}, skipping"
+              echo "::warning::Binary artifact for linux/${ARCH} not found"
             fi
           done
-          echo "has_assets=${HAS_ASSETS}" >> "${GITHUB_OUTPUT}"
-        id: assets
 
       - name: Generate release notes
         id: release-notes
@@ -261,7 +379,6 @@ jobs:
           generated_submodule_link: open-telemetry/opentelemetry-ebpf-instrumentation
 
       - name: Prepare release notes
-        id: notes
         env:
           GH_TOKEN: ${{ github.token }}
           GENERATED_NOTES: ${{ steps.release-notes.outputs.release_notes }}
@@ -284,7 +401,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           STABLE_TAG: ${{ needs.validate.outputs.stable_tag }}
-          HAS_ASSETS: ${{ steps.assets.outputs.has_assets }}
         run: |
           set -euo pipefail
           if gh release view "${STABLE_TAG}" >/dev/null 2>&1; then
@@ -300,14 +416,12 @@ jobs:
               --latest
           fi
 
-          if [[ "${HAS_ASSETS}" == "true" ]]; then
-            for f in assets/beyla-linux-*.tar.gz; do
-              if [[ -f "${f}" ]]; then
-                echo "Uploading asset: ${f}"
-                gh release upload "${STABLE_TAG}" "${f}" --clobber
-              fi
-            done
-          fi
+          for f in assets/beyla-linux-*.tar.gz; do
+            if [[ -f "${f}" ]]; then
+              echo "Uploading asset: ${f}"
+              gh release upload "${STABLE_TAG}" "${f}" --clobber
+            fi
+          done
           echo "GitHub release ${STABLE_TAG} created successfully"
 
       - name: Print summary

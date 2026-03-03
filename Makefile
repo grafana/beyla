@@ -12,9 +12,14 @@ CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
 GOOS ?= linux
 GOARCH ?= amd64
 
-# RELEASE_VERSION will contain the tag name, or the branch name if current commit is not a tag
+# RELEASE_VERSION will contain the tag name, or the branch name if current commit is not a tag.
+# Both can be overridden via environment variables (used by the promote-rc-to-stable workflow).
+ifndef RELEASE_VERSION
 RELEASE_VERSION := $(shell git describe --all | cut -d/ -f2)
-RELEASE_REVISION := $(shell git rev-parse --short HEAD )
+endif
+ifndef RELEASE_REVISION
+RELEASE_REVISION := $(shell git rev-parse --short HEAD)
+endif
 BUILDINFO_PKG ?= github.com/grafana/beyla/v3/pkg/buildinfo
 TEST_OUTPUT ?= ./testoutput
 

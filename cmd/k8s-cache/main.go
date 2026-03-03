@@ -15,6 +15,7 @@ import (
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 
+	obibuildinfo "go.opentelemetry.io/obi/pkg/buildinfo"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/instrument"
@@ -106,4 +107,6 @@ func loadFromFile(configPath *string) *cfg.Config {
 
 func overrideOBIConfiguration() {
 	attr.VendorPrefix = "beyla"
+	obibuildinfo.Version = buildinfo.Version
+	obibuildinfo.Revision = buildinfo.Revision
 }

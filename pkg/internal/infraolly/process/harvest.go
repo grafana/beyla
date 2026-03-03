@@ -158,7 +158,7 @@ func (ps *Harvester) populateGauges(status *Status, process *linuxProcess) error
 	if ps.privileged {
 		status.FdCount, err = process.NumFDs()
 		if err != nil {
-			return err
+			ps.log.Debug("can't get file descriptor count for process", "pid", status.ID.ProcessID, "error", err)
 		}
 	}
 
@@ -182,7 +182,8 @@ func (ps *Harvester) populateIOCounters(status *Status, source *linuxProcess) er
 	}
 	ioCounters, err := source.IOCounters()
 	if err != nil {
-		return err
+		ps.log.Debug("can't get IO counters for process", "pid", source.pid, "error", err)
+		return nil
 	}
 	source.previousIOCounters = ioCounters
 	if ioCounters != nil {

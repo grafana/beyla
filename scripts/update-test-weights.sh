@@ -15,7 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WEIGHTS_FILE="$SCRIPT_DIR/integration-test-weights.generated.json"
+WEIGHTS_FILE="${WEIGHTS_FILE:-$SCRIPT_DIR/integration-test-weights.generated.json}"
 DEFAULT_WEIGHT=20
 
 if [ $# -lt 1 ]; then

@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  generate-and-checks:
-    name: Generate and checks
+  generate:
+    name: Generate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Grant specific permissions needed for DockerHub login via Vault OIDC
@@ -50,9 +50,6 @@ jobs:
       - name: Generate and vendor OBI
         run: make vendor-obi
 
-      - name: Run checks
-        run: make prereqs lint-dashboard
-
       - name: Upload generated BPF files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -65,7 +62,7 @@ jobs:
 
   lint:
     name: Lint
-    needs: generate-and-checks
+    needs: generate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -94,11 +91,11 @@ jobs:
           name: bpf-generated-${{ github.sha }}
 
       - name: Lint
-        run: make lint
+        run: make lint lint-dashboard
 
   unit-test:
     name: Unit test
-    needs: generate-and-checks
+    needs: generate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Grant specific permissions needed only for this job

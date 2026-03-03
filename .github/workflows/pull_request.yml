@@ -19,6 +19,8 @@ jobs:
     name: Generate
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
     # Grant specific permissions needed for DockerHub login via Vault OIDC
     permissions:
       contents: read
@@ -49,6 +51,15 @@ jobs:
 
       - name: Generate and vendor OBI
         run: make vendor-obi
+
+      - name: Build unit test matrix
+        id: build-matrix
+        env:
+          PARTITIONS: 3
+        run: |
+          make prereqs
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make unit-test-matrix-json >> $GITHUB_OUTPUT
 
       - name: Upload generated BPF files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -94,7 +105,7 @@ jobs:
         run: make lint lint-dashboard
 
   unit-test:
-    name: Unit test
+    name: "Unit test ${{ matrix.description }}"
     needs: generate
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -104,6 +115,9 @@ jobs:
       pull-requests: write
       # required for CODECOV token
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate.outputs.matrix) }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
@@ -130,10 +144,15 @@ jobs:
           name: bpf-generated-${{ github.sha }}
 
       - name: Run unit tests
-        run: make prereqs test
+        env:
+          MATRIX_ID: ${{ matrix.id }}
+          MATRIX_PACKAGES: ${{ matrix.packages }}
+        run: make prereqs run-unit-test-shard SHARD_ID="${MATRIX_ID}" UNIT_TEST_PACKAGES="${MATRIX_PACKAGES}"
 
       - name: Exclude generated files from coverage
-        run: make cov-exclude-generated
+        env:
+          MATRIX_ID: ${{ matrix.id }}
+        run: make cov-exclude-generated-shard SHARD_ID="${MATRIX_ID}"
 
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
@@ -147,5 +166,6 @@ jobs:
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         continue-on-error: true
         with:
-          files: ./testoutput/cover.txt
+          files: ./testoutput/cover-shard-${{ matrix.id }}.txt
           flags: unittests
+          name: go-unittests-coverage-shard-${{ matrix.id }}-${{ github.run_number }}

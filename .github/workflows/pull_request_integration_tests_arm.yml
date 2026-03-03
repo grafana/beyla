@@ -142,9 +142,6 @@ jobs:
       - name: Generate files
         run: make prereqs vendor-obi
 
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@v1.13.0
-
       - name: Check disk usage before tests
         run: df -h
 
@@ -167,7 +164,7 @@ jobs:
 
           mkdir -p /home/runner/reports
 
-          ~/go/bin/gotestsum \
+          ./bin/gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="./internal/testgenerated/integration" -ftestname \
               --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \

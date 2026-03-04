@@ -10,8 +10,6 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/cilium/ebpf"
-
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -52,18 +50,20 @@ func New(cfg *obi.Config, events chan<- Event) *Watcher {
 	}
 }
 
-func (p *Watcher) Load() (*ebpf.CollectionSpec, error) {
-	return LoadBpf()
-}
-
-func (p *Watcher) Constants() map[string]any {
-	return map[string]any{
-		"g_bpf_debug": p.cfg.EBPF.BpfDebug,
+func (p *Watcher) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
+	spec, err := LoadBpf()
+	if err != nil {
+		return nil, err
 	}
+	return []*ebpfcommon.SpecBundle{{
+		Spec:      spec,
+		Objects:   &p.bpfObjects,
+		Constants: p.constants(),
+	}}, nil
 }
 
-func (p *Watcher) BpfObjects() any {
-	return &p.bpfObjects
+func (p *Watcher) constants() map[string]any {
+	return map[string]any{"g_bpf_debug": p.cfg.EBPF.BpfDebug}
 }
 
 func (p *Watcher) AddCloser(c ...io.Closer) {

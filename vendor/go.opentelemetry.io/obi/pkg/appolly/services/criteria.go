@@ -57,6 +57,7 @@ type ProcessInfo struct {
 	Pid       app.PID
 	PPid      app.PID
 	ExePath   string
+	CmdArgs   string
 	OpenPorts []uint32
 }
 
@@ -170,6 +171,7 @@ type Selector interface {
 	GetLanguages() StringMatcher
 	// GetPIDs returns the list of target PIDs and true when this selector has PID criteria (analogous to OpenPorts).
 	GetPIDs() ([]app.PID, bool)
+	GetCmdArgs() StringMatcher
 	IsContainersOnly() bool
 	RangeMetadata() iter.Seq2[string, StringMatcher]
 	RangePodLabels() iter.Seq2[string, StringMatcher]

@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -123,6 +124,31 @@ type SockMsg struct {
 type Iter struct {
 	Program *ebpf.Program
 	Link    link.Link
+}
+
+func (it *Iter) Run(log *slog.Logger) error {
+	log.Debug("Running iterator", "iterator", it.Program.String())
+
+	if it.Link == nil {
+		return errors.New("iterator link is nil")
+	}
+
+	rd, err := it.Link.(*link.Iter).Open()
+	if err != nil {
+		return fmt.Errorf("open iterator: %w", err)
+	}
+	defer rd.Close()
+
+	scanner := bufio.NewScanner(rd)
+	for scanner.Scan() {
+		log.Debug("Iterator output", "line", scanner.Text(), "iterator", it.Program.String())
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read iterator: %w", err)
+	}
+
+	log.Debug("Iterator finished", "iterator", it.Program.String())
+	return nil
 }
 
 type Tracing struct {

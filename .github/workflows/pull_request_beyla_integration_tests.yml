@@ -1,4 +1,4 @@
-name: Pull request K8s integration tests
+name: Pull request Beyla integration tests
 
 on:
   push:
@@ -16,9 +16,7 @@ on:
       - "vendor/**"
       - "Makefile"
       - "scripts/generate-integration-matrix.sh"
-      - "scripts/generate-obi-tests.sh"
-      - ".github/workflows/pull_request_k8s_integration_tests.yml"
-      - ".obi-src/**"
+      - ".github/workflows/pull_request_beyla_integration_tests.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -30,36 +28,33 @@ permissions:
 
 jobs:
   test-matrix:
-    name: "Build integration k8s matrix"
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: "Build Beyla integration matrix"
+    runs-on: ubuntu-x64
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
-          submodules: true
 
-      - name: Generate OBI tests
-        run: make generate-obi-tests
-
-      - name: build matrix
+      - name: Build matrix
         id: build-matrix
+        env:
+          PARTITIONS: 1
+          TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          make k8s-integration-test-matrix-json >> $GITHUB_OUTPUT
+          make beyla-integration-test-matrix-json >> $GITHUB_OUTPUT
 
   test:
-    name: ${{ matrix.basename }}
+    name: ${{ matrix.description }}
     needs: test-matrix
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-x64
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
       pull-requests: write
-      # required for CODECOV token
+      # required for CODECOV token, Dockerhub access
       id-token: write
       checks: write
       # Required for uploading artifacts
@@ -67,46 +62,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
+    timeout-minutes: 30
     steps:
-      - name: Free up disk space
-        run: |
-          # Remove Java (JDKs)
-          sudo rm -rf /usr/lib/jvm
-
-          # Remove .NET SDKs
-          sudo rm -rf /usr/share/dotnet
-
-          # Remove Swift toolchain
-          sudo rm -rf /usr/share/swift
-
-          # Remove Haskell (GHC)
-          sudo rm -rf /usr/local/.ghcup
-
-          # Remove Julia
-          sudo rm -rf /usr/local/julia*
-
-          # Remove Android SDKs
-          sudo rm -rf /usr/local/lib/android
-
-          # Remove Chromium (optional if not using for browser tests)
-          sudo rm -rf /usr/local/share/chromium
-
-          # Remove Microsoft/Edge and Google Chrome builds
-          sudo rm -rf /opt/microsoft /opt/google
-
-          # Remove Azure CLI
-          sudo rm -rf /opt/az
-
-          # Remove PowerShell
-          sudo rm -rf /usr/local/share/powershell
-
-          # Remove CodeQL (but keep hostedtoolcache for Go)
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-
-          docker system prune -af || true
-          docker builder prune -af || true
-          df -h
-
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
@@ -120,15 +77,7 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
-      - name: Go build cache
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
-        with:
-          path: ~/.cache/go-build
-          key: go-build-k8s-integration-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
-          restore-keys: |
-            go-build-k8s-integration-race-${{ runner.os }}-${{ runner.arch }}-
+          cache: false
 
       - name: Generate files
         run: make prereqs vendor-obi
@@ -136,10 +85,7 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@v1.13.0
 
-      - name: Check disk usage before tests
-        run: df -h
-
-      - name: Run integration tests
+      - name: Run Beyla integration tests
         env:
           # zizmor template-injection fixes: pass data as env vars
           MATRIX_ID: ${{ matrix.id }}
@@ -156,15 +102,15 @@ jobs:
             exit 1
           fi
 
-          mkdir -p /home/runner/reports
+          mkdir -p reports
 
           ~/go/bin/gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
-              --packages="${MATRIX_TEST_PATTERN}" -ftestname \
-              --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -race -count=1 -tags=${TEST_TAGS} -timeout 30m \
+              --packages="./internal/test/integration" -ftestname \
+              --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
+              -- -race -tags=${TEST_TAGS} -timeout 30m \
               -mod vendor \
-              ${MATRIX_TEST_PATTERN}
+              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/test/integration
 
       - name: Process coverage data
         run: make itest-coverage-data
@@ -181,26 +127,21 @@ jobs:
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         with:
           files: ./testoutput/itest-covdata.txt
-          flags: k8s-integration-test
-          name: go-k8s-integration-test-coverage-${{ matrix.basename }}-${{ github.run_number }}
+          flags: beyla-integration-test
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: go-k8s-integration-test-reports-${{ matrix.basename }}-${{ github.run_number }}
-          path: /home/runner/reports/*.log
+          name: beyla-test-reports-${{ github.run_number }}-${{ matrix.id }}
+          path: reports/*.log
           retention-days: 5
 
       - name: Upload test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: go-k8s-integration-test-logs-${{ matrix.basename }}-${{ github.run_number }}
+          name: beyla-test-logs-${{ github.run_number }}-${{ matrix.id }}
           path: |
             testoutput/*.log
             testoutput/kind
-
-      - name: Check final disk usage
-        if: always()
-        run: df -h

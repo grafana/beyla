@@ -202,6 +202,9 @@ config:
   ## `kubectl create cm --from-file=beyla-config.yaml=<name-of-config-file> -n <namespace>`
   ## If empty, default configuration below is used.
   name: ""
+  # -- Optional checksum override for external configmap usage.
+  # -- Use `tpl` so parent charts can pass templated checksums.
+  checksum: ""
   # -- default value of beyla configuration
   data:
     # profile_port: 6060

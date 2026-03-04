@@ -3,20 +3,6 @@ name: Pull request integration tests
 on:
   push:
     branches: ["main", "release-*"]
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "bpf/**"
-      - "internal/**"
-      - "pkg/**"
-      - "cmd/**"
-      - "vendor/**"
-      - "Makefile"
-      - "scripts/generate-integration-matrix.sh"
-      - "scripts/generate-obi-tests.sh"
-      - ".github/workflows/pull_request_integration_tests.yml"
-      - ".obi-src/**"
   pull_request:
     branches: ["main", "release-*"]
     paths:
@@ -176,13 +162,13 @@ jobs:
             exit 1
           fi
 
-          mkdir -p reports
+          mkdir -p /home/runner/reports
 
           ~/go/bin/gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="./internal/testgenerated/integration" -ftestname \
-              --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -race -tags=${TEST_TAGS} -timeout 30m \
+              --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
+              -- -race -count=1 -tags=${TEST_TAGS} -timeout 30m \
               -mod vendor \
               -run="^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration
 
@@ -202,20 +188,21 @@ jobs:
         with:
           files: ./testoutput/itest-covdata.txt
           flags: integration-test
+          name: go-integration-test-coverage-${{ matrix.id }}-${{ github.run_number }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: go-test-reports-${{ github.run_number }}-${{ matrix.id }}
-          path: reports/*.log
+          name: go-integration-test-reports-${{ matrix.id }}-${{ github.run_number }}
+          path: /home/runner/reports/*.log
           retention-days: 5
 
       - name: Upload test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: go-test-logs-${{ github.run_number }}-${{ matrix.id }}
+          name: go-integration-test-logs-${{ matrix.id }}-${{ github.run_number }}
           path: |
             testoutput/*.log
             testoutput/kind

@@ -1,0 +1,337 @@
+name: Promote RC to stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      rc_tag:
+        description: 'RC tag to promote (e.g., v3.0.0-rc5)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run mode (validate only, make no changes)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: promote-rc-${{ inputs.rc_tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      rc_tag: ${{ steps.derive.outputs.rc_tag }}
+      stable_tag: ${{ steps.derive.outputs.stable_tag }}
+      rc_sha: ${{ steps.derive.outputs.rc_sha }}
+      docker_rc_tag: ${{ steps.derive.outputs.docker_rc_tag }}
+      docker_patch_tag: ${{ steps.derive.outputs.docker_patch_tag }}
+      docker_minor_tag: ${{ steps.derive.outputs.docker_minor_tag }}
+      docker_major_tag: ${{ steps.derive.outputs.docker_major_tag }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: 'false'
+
+      - name: Validate and derive tags
+        id: derive
+        env:
+          RC_TAG: ${{ inputs.rc_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Validate RC tag format: vMAJOR.MINOR.PATCH-rcN
+          if [[ ! "${RC_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
+            echo "::error::Invalid RC tag format: ${RC_TAG}. Expected format: vX.Y.Z-rcN (e.g., v3.0.0-rc5)"
+            exit 1
+          fi
+
+          # Derive stable tag by stripping -rcN suffix
+          STABLE_TAG="${RC_TAG%%-rc*}"
+          VERSION="${STABLE_TAG#v}"
+          MAJOR="${VERSION%%.*}"
+          MINOR_PATCH="${VERSION#*.}"
+          MINOR="${MINOR_PATCH%%.*}"
+
+          # Docker image tags (no v prefix)
+          DOCKER_RC_TAG="${RC_TAG#v}"
+          DOCKER_PATCH_TAG="${VERSION}"
+          DOCKER_MINOR_TAG="${MAJOR}.${MINOR}"
+          DOCKER_MAJOR_TAG="${MAJOR}"
+
+          echo "RC tag:           ${RC_TAG}"
+          echo "Stable tag:       ${STABLE_TAG}"
+          echo "Docker RC tag:    ${DOCKER_RC_TAG}"
+          echo "Docker tags:      ${DOCKER_PATCH_TAG}, ${DOCKER_MINOR_TAG}, ${DOCKER_MAJOR_TAG}"
+
+          # Verify RC tag exists in git
+          if ! git rev-parse "refs/tags/${RC_TAG}" >/dev/null 2>&1; then
+            echo "::error::RC tag ${RC_TAG} does not exist in git"
+            exit 1
+          fi
+          RC_SHA=$(git rev-parse "refs/tags/${RC_TAG}^{commit}")
+          echo "RC SHA:           ${RC_SHA}"
+
+          # If stable tag already exists, verify it points to the same commit (idempotent re-run)
+          if git rev-parse "refs/tags/${STABLE_TAG}" >/dev/null 2>&1; then
+            EXISTING_SHA=$(git rev-parse "refs/tags/${STABLE_TAG}^{commit}")
+            if [[ "${EXISTING_SHA}" != "${RC_SHA}" ]]; then
+              echo "::error::Stable tag ${STABLE_TAG} already exists at ${EXISTING_SHA}, but RC points to ${RC_SHA}. Aborting to prevent overwrite."
+              exit 1
+            fi
+            echo "::notice::Stable tag ${STABLE_TAG} already exists at the correct commit (idempotent re-run)"
+          fi
+
+          # Verify RC GitHub release exists and is a pre-release
+          RELEASE_JSON=$(gh release view "${RC_TAG}" --json tagName,isPrerelease,assets 2>&1) || {
+            echo "::error::GitHub release for ${RC_TAG} not found"
+            exit 1
+          }
+
+          IS_PRERELEASE=$(echo "${RELEASE_JSON}" | jq -r '.isPrerelease')
+          if [[ "${IS_PRERELEASE}" != "true" ]]; then
+            echo "::error::Release ${RC_TAG} is not marked as a pre-release"
+            exit 1
+          fi
+
+          # Verify binary assets exist on the RC release
+          for ARCH in amd64 arm64; do
+            EXPECTED="beyla-linux-${ARCH}-${RC_TAG}.tar.gz"
+            FOUND=$(echo "${RELEASE_JSON}" | jq -r --arg name "${EXPECTED}" '.assets[] | select(.name == $name) | .name')
+            if [[ -z "${FOUND}" ]]; then
+              echo "::warning::Expected asset ${EXPECTED} not found on release ${RC_TAG}. Binary assets will not be included in the stable release."
+            fi
+          done
+
+          # Set outputs
+          {
+            echo "rc_tag=${RC_TAG}"
+            echo "stable_tag=${STABLE_TAG}"
+            echo "rc_sha=${RC_SHA}"
+            echo "docker_rc_tag=${DOCKER_RC_TAG}"
+            echo "docker_patch_tag=${DOCKER_PATCH_TAG}"
+            echo "docker_minor_tag=${DOCKER_MINOR_TAG}"
+            echo "docker_major_tag=${DOCKER_MAJOR_TAG}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Print promotion summary
+        env:
+          RC_TAG: ${{ steps.derive.outputs.rc_tag }}
+          STABLE_TAG: ${{ steps.derive.outputs.stable_tag }}
+          RC_SHA: ${{ steps.derive.outputs.rc_sha }}
+          DOCKER_RC_TAG: ${{ steps.derive.outputs.docker_rc_tag }}
+          DOCKER_PATCH_TAG: ${{ steps.derive.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ steps.derive.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ steps.derive.outputs.docker_major_tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "## Promotion Summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| RC tag | \`${RC_TAG}\` |"
+            echo "| Stable tag | \`${STABLE_TAG}\` |"
+            echo "| Commit SHA | \`${RC_SHA}\` |"
+            echo "| Docker RC tag | \`${DOCKER_RC_TAG}\` |"
+            echo "| Docker stable tags | \`${DOCKER_PATCH_TAG}\`, \`${DOCKER_MINOR_TAG}\`, \`${DOCKER_MAJOR_TAG}\` |"
+            echo "| Dry run | \`${DRY_RUN}\` |"
+            echo ""
+            if [[ "${DRY_RUN}" == "true" ]]; then
+              echo "> **Dry run mode:** No changes will be made."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  promote:
+    needs: validate
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: 'false'
+          submodules: 'recursive'
+
+      - name: Create stable git tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_TAG: ${{ needs.validate.outputs.stable_tag }}
+          RC_SHA: ${{ needs.validate.outputs.rc_sha }}
+        run: |
+          set -euo pipefail
+          EXISTING_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/${STABLE_TAG}" --jq '.object.sha' 2>/dev/null || echo "")
+          if [[ "${EXISTING_SHA}" == "${RC_SHA}" ]]; then
+            echo "Tag ${STABLE_TAG} already exists at ${RC_SHA}, skipping creation"
+          elif [[ -n "${EXISTING_SHA}" ]]; then
+            echo "::error::Tag ${STABLE_TAG} exists at ${EXISTING_SHA} but expected ${RC_SHA}"
+            exit 1
+          else
+            echo "Creating tag ${STABLE_TAG} pointing to ${RC_SHA}"
+            gh api "repos/${{ github.repository }}/git/refs" \
+              -f "ref=refs/tags/${STABLE_TAG}" \
+              -f "sha=${RC_SHA}"
+            echo "Tag ${STABLE_TAG} created successfully"
+          fi
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@775874934ae5e0adbc55b3e7d3571d140bcc7886
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Re-tag Docker images
+        env:
+          DOCKER_RC_TAG: ${{ needs.validate.outputs.docker_rc_tag }}
+          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
+        run: |
+          set -euo pipefail
+          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
+            echo "Re-tagging ${IMAGE}:${DOCKER_RC_TAG} -> ${DOCKER_PATCH_TAG}, ${DOCKER_MINOR_TAG}, ${DOCKER_MAJOR_TAG}"
+            docker buildx imagetools create \
+              --tag "${IMAGE}:${DOCKER_PATCH_TAG}" \
+              --tag "${IMAGE}:${DOCKER_MINOR_TAG}" \
+              --tag "${IMAGE}:${DOCKER_MAJOR_TAG}" \
+              "${IMAGE}:${DOCKER_RC_TAG}"
+          done
+
+      - name: Verify Docker image digests
+        env:
+          DOCKER_RC_TAG: ${{ needs.validate.outputs.docker_rc_tag }}
+          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
+        run: |
+          set -euo pipefail
+          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
+            RC_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_RC_TAG}" | awk '/^Digest:/{print $2}')
+            echo "${IMAGE}:${DOCKER_RC_TAG} digest: ${RC_DIGEST}"
+            for TAG in "${DOCKER_PATCH_TAG}" "${DOCKER_MINOR_TAG}" "${DOCKER_MAJOR_TAG}"; do
+              STABLE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" | awk '/^Digest:/{print $2}')
+              if [[ "${RC_DIGEST}" != "${STABLE_DIGEST}" ]]; then
+                echo "::error::Digest mismatch for ${IMAGE}:${TAG} (expected ${RC_DIGEST}, got ${STABLE_DIGEST})"
+                exit 1
+              fi
+              echo "Verified ${IMAGE}:${TAG} digest matches RC"
+            done
+          done
+
+      - name: Download and rename RC binary assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC_TAG: ${{ needs.validate.outputs.rc_tag }}
+          STABLE_TAG: ${{ needs.validate.outputs.stable_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          HAS_ASSETS=false
+          for ARCH in amd64 arm64; do
+            RC_ASSET_NAME="beyla-linux-${ARCH}-${RC_TAG}.tar.gz"
+            STABLE_ASSET_NAME="beyla-linux-${ARCH}-${STABLE_TAG}.tar.gz"
+
+            if gh release download "${RC_TAG}" --pattern "${RC_ASSET_NAME}" --dir assets --clobber 2>/dev/null; then
+              mv "assets/${RC_ASSET_NAME}" "assets/${STABLE_ASSET_NAME}"
+              echo "Downloaded and renamed: ${RC_ASSET_NAME} -> ${STABLE_ASSET_NAME}"
+              HAS_ASSETS=true
+            else
+              echo "::warning::Asset ${RC_ASSET_NAME} not found on release ${RC_TAG}, skipping"
+            fi
+          done
+          echo "has_assets=${HAS_ASSETS}" >> "${GITHUB_OUTPUT}"
+        id: assets
+
+      - name: Generate release notes
+        id: release-notes
+        uses: mariomac/linked-release-notes@2a6d7503fe822c734f2b0b118f65c43a7df84202 # v0.0.7
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.validate.outputs.stable_tag }}
+          generated_submodule_link: open-telemetry/opentelemetry-ebpf-instrumentation
+
+      - name: Prepare release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GENERATED_NOTES: ${{ steps.release-notes.outputs.release_notes }}
+          RC_TAG: ${{ needs.validate.outputs.rc_tag }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${GENERATED_NOTES}" ]]; then
+            echo "${GENERATED_NOTES}" > release-notes.txt
+          else
+            # Fallback: use RC release notes with a promotion header
+            RC_BODY=$(gh release view "${RC_TAG}" --json body -q '.body' 2>/dev/null || echo "")
+            {
+              echo "Promoted from ${RC_TAG}"
+              echo ""
+              echo "${RC_BODY}"
+            } > release-notes.txt
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_TAG: ${{ needs.validate.outputs.stable_tag }}
+          HAS_ASSETS: ${{ steps.assets.outputs.has_assets }}
+        run: |
+          set -euo pipefail
+          if gh release view "${STABLE_TAG}" >/dev/null 2>&1; then
+            echo "Release ${STABLE_TAG} already exists, updating"
+            gh release edit "${STABLE_TAG}" \
+              --title "${STABLE_TAG}" \
+              --notes-file release-notes.txt \
+              --latest
+          else
+            gh release create "${STABLE_TAG}" \
+              --title "${STABLE_TAG}" \
+              --notes-file release-notes.txt \
+              --latest
+          fi
+
+          if [[ "${HAS_ASSETS}" == "true" ]]; then
+            for f in assets/beyla-linux-*.tar.gz; do
+              if [[ -f "${f}" ]]; then
+                echo "Uploading asset: ${f}"
+                gh release upload "${STABLE_TAG}" "${f}" --clobber
+              fi
+            done
+          fi
+          echo "GitHub release ${STABLE_TAG} created successfully"
+
+      - name: Print summary
+        env:
+          RC_TAG: ${{ needs.validate.outputs.rc_tag }}
+          STABLE_TAG: ${{ needs.validate.outputs.stable_tag }}
+          RC_SHA: ${{ needs.validate.outputs.rc_sha }}
+          DOCKER_PATCH_TAG: ${{ needs.validate.outputs.docker_patch_tag }}
+          DOCKER_MINOR_TAG: ${{ needs.validate.outputs.docker_minor_tag }}
+          DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
+        run: |
+          {
+            echo "## Promotion Complete"
+            echo ""
+            echo "### Git"
+            echo "- Tag \`${STABLE_TAG}\` created at commit \`${RC_SHA}\`"
+            echo "- [View release](https://github.com/${{ github.repository }}/releases/tag/${STABLE_TAG})"
+            echo ""
+            echo "### Docker Images"
+            echo "- \`grafana/beyla:${DOCKER_PATCH_TAG}\`, \`grafana/beyla:${DOCKER_MINOR_TAG}\`, \`grafana/beyla:${DOCKER_MAJOR_TAG}\`"
+            echo "- \`grafana/beyla-k8s-cache:${DOCKER_PATCH_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MINOR_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MAJOR_TAG}\`"
+            echo ""
+            echo "### Manual Follow-up"
+            echo "- [ ] Update \`charts/beyla/Chart.yaml\` with new \`appVersion\` and \`version\` if needed"
+            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) if a new chart release is needed"
+            echo "- [ ] Trigger [Technical docs workflow](https://github.com/${{ github.repository }}/actions/workflows/publish-technical-documentation-release.yml) if docs need publishing for this release"
+          } >> "${GITHUB_STEP_SUMMARY}"

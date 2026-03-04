@@ -550,20 +550,6 @@ type JavaConfig struct {
 	Debug                bool          `yaml:"debug" env:"OTEL_EBPF_JAVAAGENT_DEBUG"`
 	DebugInstrumentation bool          `yaml:"debug_instrumentation" env:"OTEL_EBPF_JAVAAGENT_DEBUG_INSTRUMENTATION"`
 	Timeout              time.Duration `yaml:"attach_timeout" env:"OTEL_EBPF_JAVAAGENT_ATTACH_TIMEOUT" validate:"gte=0"`
-	// agentPath specifies the path to the Java agent JAR file.
-	// Not settable via config file - only via --java-agent flag or OTEL_EBPF_JAVAAGENT_PATH env var.
-	// If empty, defaults to obi-java-agent.jar in the same directory as the OBI binary.
-	agentPath string
-}
-
-// SetAgentPath sets the Java agent JAR path at runtime (from flag or env var)
-func (j *JavaConfig) SetAgentPath(path string) {
-	j.agentPath = path
-}
-
-// GetAgentPath returns the Java agent JAR path
-func (j *JavaConfig) GetAgentPath() string {
-	return j.agentPath
 }
 
 type ConfigError string
@@ -660,8 +646,7 @@ func (c *Config) otelNetO11yEnabled() bool {
 }
 
 func (c *Config) willUseTC() bool {
-	return c.EBPF.ContextPropagation.HasIPOptions() ||
-		(c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC)
+	return c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC
 }
 
 // Enabled checks if a given OBI feature is enabled according to the global configuration

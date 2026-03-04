@@ -899,7 +899,6 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/logger
 go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf
 go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager
-go.opentelemetry.io/obi/pkg/internal/ebpf/tctracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector
 go.opentelemetry.io/obi/pkg/internal/ebpf/watcher
 go.opentelemetry.io/obi/pkg/internal/fastelf

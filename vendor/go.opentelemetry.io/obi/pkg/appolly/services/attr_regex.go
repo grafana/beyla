@@ -96,6 +96,8 @@ type RegexSelector struct {
 	// Language allows defining services to instrument based on the
 	// programming language they are written in.
 	Languages RegexpAttr `yaml:"languages"`
+	// CmdArgs allows matching by command line arguments
+	CmdArgs RegexpAttr `yaml:"cmd_args"`
 	// PathRegexp is deprecated but kept here for backwards compatibility with Beyla 1.0.x.
 
 	// Deprecated: Please use Path (exe_path YAML attribute)
@@ -199,6 +201,7 @@ func (a *RegexSelector) GetLanguages() StringMatcher            { return &a.Lang
 func (a *RegexSelector) GetPathRegexp() StringMatcher           { return &a.PathRegexp }
 func (a *RegexSelector) GetOpenPorts() *IntEnum                 { return &a.OpenPorts }
 func (a *RegexSelector) GetPIDs() ([]app.PID, bool)             { return a.pids() }
+func (a *RegexSelector) GetCmdArgs() StringMatcher              { return &a.CmdArgs }
 func (a *RegexSelector) IsContainersOnly() bool                 { return a.ContainersOnly }
 func (a *RegexSelector) MetricsConfig() perapp.SvcMetricsConfig { return a.Metrics }
 func (a *RegexSelector) RangeMetadata() iter.Seq2[string, StringMatcher] {

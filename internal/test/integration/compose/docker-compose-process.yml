@@ -2,19 +2,19 @@ version: "3.8"
 
 services:
   testserver-go:
-    image: ghcr.io/open-telemetry/obi-testimg:go-0.1.1
+    image: ghcr.io/open-telemetry/obi-testimg:go-0.1.1@sha256:ba91df37cecce4f22df1408c16ec5920df2da1fa9dad79a011c6fde5174ebdd8
     environment:
       LOG_LEVEL: DEBUG
     ports:
       - "8080:8080"
 
   testserver-python:
-    image: ghcr.io/open-telemetry/obi-testimg:python-0.1.1
+    image: ghcr.io/open-telemetry/obi-testimg:python-0.1.1@sha256:83790451337767ce21b8e6c21f9fae4a1a0d1261b65097f875fdb794c7c151fd
     ports:
       - "8380:8380"
 
   client:
-    image: ghcr.io/open-telemetry/obi-testimg:go-http-client-0.1.1
+    image: ghcr.io/open-telemetry/obi-testimg:go-http-client-0.1.0
     environment:
       TARGET_URL: "http://testserver-go:8080"
 
@@ -52,7 +52,7 @@ services:
 
   # OpenTelemetry Collector for Metrics. For Traces, we use directly Jaeger
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.104.0@sha256:e07e325e303e86f4a87a617491e921b579a92da6d404007394757ac910bf9587
+    image: otel/opentelemetry-collector-contrib:0.146.1@sha256:f6e429c1052ab50f85a7afa5f7e32f25931697751622b0e1f453d10f79a1df3c
     container_name: otelcol
     deploy:
       resources:

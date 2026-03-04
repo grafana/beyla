@@ -28,6 +28,7 @@ func (dc GlobDefinitionCriteria) Validate() error {
 			!dc[i].Path.IsSet() &&
 			!dc[i].Languages.IsSet() &&
 			len(dc[i].PIDs) == 0 &&
+			!dc[i].CmdArgs.IsSet() &&
 			len(dc[i].Metadata) == 0 &&
 			len(dc[i].PodLabels) == 0 &&
 			len(dc[i].PodAnnotations) == 0 {
@@ -95,6 +96,9 @@ type GlobAttributes struct {
 
 	// Path allows defining the regular expression matching the full executable path.
 	Path GlobAttr `yaml:"exe_path"`
+
+	// CmdArgs allows to limit by matching command line arguments
+	CmdArgs GlobAttr `yaml:"cmd_args"`
 
 	// Metadata stores other attributes, such as Kubernetes object metadata
 	Metadata MetadataGlobMap `yaml:",inline" mapstructure:",remain"`
@@ -192,6 +196,7 @@ func (ga *GlobAttributes) GetName() string                        { return ga.Na
 func (ga *GlobAttributes) GetNamespace() string                   { return ga.Namespace }
 func (ga *GlobAttributes) GetPath() StringMatcher                 { return &ga.Path }
 func (ga *GlobAttributes) GetLanguages() StringMatcher            { return &ga.Languages }
+func (ga *GlobAttributes) GetCmdArgs() StringMatcher              { return &ga.CmdArgs }
 func (ga *GlobAttributes) GetPathRegexp() StringMatcher           { return nilMatcher{} }
 func (ga *GlobAttributes) GetOpenPorts() *IntEnum                 { return &ga.OpenPorts }
 func (ga *GlobAttributes) GetPIDs() ([]app.PID, bool)             { return ga.pids() }

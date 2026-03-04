@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/shirou/gopsutil/v3/process"
 
@@ -214,7 +215,7 @@ func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a ser
 	if pids, ok := a.GetPIDs(); ok && len(pids) > 0 {
 		return pidInList(p.Pid, pids)
 	}
-	if !a.GetPath().IsSet() && !a.GetLanguages().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
+	if !a.GetPath().IsSet() && !a.GetLanguages().IsSet() && !a.GetCmdArgs().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
 		pids, hasPIDs := a.GetPIDs()
 		if !hasPIDs || len(pids) == 0 {
 			log.Debug("no Kube metadata, no local selection criteria. Ignoring")
@@ -223,6 +224,10 @@ func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a ser
 	}
 	if (a.GetPath().IsSet() || a.GetPathRegexp().IsSet()) && !m.matchByExecutable(p, a) {
 		log.Debug("executable path does not match", "path", a.GetPath(), "pathregexp", a.GetPathRegexp())
+		return false
+	}
+	if a.GetCmdArgs().IsSet() && !m.matchByCommandArgs(p, a) {
+		log.Debug("command line arguments do not match", "path", a.GetPath(), "commandline", a.GetCmdArgs())
 		return false
 	}
 	if a.GetOpenPorts().Len() > 0 && !m.matchByPort(p, a) {
@@ -274,6 +279,13 @@ func (m *Matcher) matchByExecutable(p *services.ProcessInfo, a services.Selector
 
 func (m *Matcher) matchByLanguage(actual *ProcessAttrs, a services.Selector) bool {
 	return a.GetLanguages().MatchString(actual.detectedType.String())
+}
+
+func (m *Matcher) matchByCommandArgs(p *services.ProcessInfo, a services.Selector) bool {
+	if a.GetCmdArgs().IsSet() {
+		return a.GetCmdArgs().MatchString(p.CmdArgs)
+	}
+	return false
 }
 
 func (m *Matcher) matchByAttributes(actual *ProcessAttrs, required services.Selector) bool {
@@ -511,10 +523,16 @@ var processInfo = func(pp ProcessAttrs) (*services.ProcessInfo, error) {
 			return nil, fmt.Errorf("can't read /proc/<pid>/fd information: %w", err)
 		}
 	}
+	cmdLine, err := proc.Cmdline()
+	// the command line includes the process name, let's get rid of it.
+	if err == nil {
+		_, cmdLine, _ = strings.Cut(cmdLine, " ")
+	}
 	return &services.ProcessInfo{
 		Pid:       app.PID(proc.Pid),
 		PPid:      app.PID(ppid),
 		ExePath:   exePath,
+		CmdArgs:   cmdLine,
 		OpenPorts: pp.openPorts,
 	}, nil
 }

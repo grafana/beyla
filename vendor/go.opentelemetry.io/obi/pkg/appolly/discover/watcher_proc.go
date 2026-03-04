@@ -59,6 +59,7 @@ type ProcessAttrs struct {
 	podAnnotations map[string]string
 	processAge     time.Duration
 	detectedType   svc.InstrumentableType
+	cmdArgs        string
 }
 
 func wplog() *slog.Logger {

@@ -235,18 +235,21 @@ compile-cache-for-coverage:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
 # Java agent targets
-JAVA_AGENT_DIR := .obi-src/pkg/internal/java
+JAVA_AGENT_DIR      := .obi-src/pkg/internal/java
+JAVA_AGENT_EMBED_DIR := vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded
 
 .PHONY: java-build
 java-build:
 	@echo "### Building Java agent"
+	mkdir -p $(JAVA_AGENT_EMBED_DIR)
 	cd $(JAVA_AGENT_DIR) && ./gradlew build
-	cp $(JAVA_AGENT_DIR)/build/$(JAVA_AGENT) bin/
+	cp $(JAVA_AGENT_DIR)/build/$(JAVA_AGENT) $(JAVA_AGENT_EMBED_DIR)/$(JAVA_AGENT)
 
 .PHONY: java-docker-build
 java-docker-build:
 	@echo "### Building Java agent with Docker"
-	$(OCI_BIN) build --output type=local,dest=./bin --target=export -f javaagent.Dockerfile .
+	mkdir -p $(JAVA_AGENT_EMBED_DIR)
+	$(OCI_BIN) build --output type=local,dest=$(JAVA_AGENT_EMBED_DIR) --target=export -f javaagent.Dockerfile .
 
 .PHONY: java-test
 java-test:
@@ -392,6 +395,17 @@ k8s-integration-test-matrix-json:
 .PHONY: oats-integration-test-matrix-json
 oats-integration-test-matrix-json:
 	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats
+
+.PHONY: beyla-integration-test-matrix-json
+beyla-integration-test-matrix-json:
+	@WEIGHTS_FILE=scripts/beyla-integration-test-weights.generated.json \
+		./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
+
+.PHONY: run-beyla-integration-test
+run-beyla-integration-test:
+	@echo "### Running Beyla integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
 
 .PHONY: integration-test
 integration-test: prereqs generate-obi-tests prepare-integration-test

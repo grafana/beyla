@@ -15,15 +15,15 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: test
+  generate:
+    name: Generate
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Grant specific permissions needed only for this job
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+    # Grant specific permissions needed for DockerHub login via Vault OIDC
     permissions:
       contents: read
-      pull-requests: write
-      # required for CODECOV token
       id-token: write
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -40,6 +40,7 @@ jobs:
         with:
           go-version-file: "go.mod"
           cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+
       - name: Go build cache
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
         with:
@@ -47,8 +48,112 @@ jobs:
           key: go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
           restore-keys: |
             go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-
-      - name: Run verification and unit tests
-        run: make docker-generate verify cov-exclude-generated
+
+      - name: Generate and vendor OBI
+        run: make vendor-obi
+
+      - name: Build unit test matrix
+        id: build-matrix
+        env:
+          PARTITIONS: 3
+        run: |
+          make prereqs
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make unit-test-matrix-json >> $GITHUB_OUTPUT
+
+      - name: Upload generated BPF files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          # prevent cache poisoning by using the SHA of the commit
+          name: bpf-generated-${{ github.sha }}
+          path: |
+            **/*_bpfel.go
+            **/*_bpfel.o
+          retention-days: 1
+
+  lint:
+    name: Lint
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: "go.mod"
+          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Download generated BPF files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: bpf-generated-${{ github.sha }}
+
+      - name: Lint
+        run: make lint lint-dashboard
+
+  unit-test:
+    name: "Unit test ${{ matrix.description }}"
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Grant specific permissions needed only for this job
+    permissions:
+      contents: read
+      pull-requests: write
+      # required for CODECOV token
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: "go.mod"
+          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+
+      - name: Go build cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Download generated BPF files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: bpf-generated-${{ github.sha }}
+
+      - name: Run unit tests
+        env:
+          MATRIX_ID: ${{ matrix.id }}
+          MATRIX_PACKAGES: ${{ matrix.packages }}
+        run: make prereqs run-unit-test-shard SHARD_ID="${MATRIX_ID}" UNIT_TEST_PACKAGES="${MATRIX_PACKAGES}"
+
+      - name: Exclude generated files from coverage
+        env:
+          MATRIX_ID: ${{ matrix.id }}
+        run: make cov-exclude-generated-shard SHARD_ID="${MATRIX_ID}"
+
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         continue-on-error: true
@@ -56,9 +161,11 @@ jobs:
           # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:token
+
       - name: Report coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         continue-on-error: true
         with:
-          file: ./testoutput/cover.txt
+          files: ./testoutput/cover-shard-${{ matrix.id }}.txt
           flags: unittests
+          name: go-unittests-coverage-shard-${{ matrix.id }}-${{ github.run_number }}

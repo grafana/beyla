@@ -102,6 +102,7 @@ GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
 GINKGO = $(TOOLS_DIR)/ginkgo
+GOTESTSUM = $(TOOLS_DIR)/gotestsum
 
 # Required for k8s-cache unit tests
 ENVTEST = $(TOOLS_DIR)/setup-envtest
@@ -134,6 +135,7 @@ prereqs: install-hooks bpf2go
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,latest)
+	$(call go-install-tool,$(GOTESTSUM),gotest.tools/gotestsum,v1.13.0)
 
 .PHONY: fmt
 fmt: prereqs
@@ -297,6 +299,24 @@ helm-docs:
 .PHONY: cov-exclude-generated
 cov-exclude-generated:
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/cover.all.txt > $(TEST_OUTPUT)/cover.txt
+
+.PHONY: cov-exclude-generated-shard
+cov-exclude-generated-shard:
+	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/cover-shard-$(SHARD_ID).all.txt > $(TEST_OUTPUT)/cover-shard-$(SHARD_ID).txt
+
+.PHONY: unit-test-matrix-json
+unit-test-matrix-json:
+	@go list -mod vendor ./... | grep -v /internal/testgenerated/ | $(GOTESTSUM) tool ci-matrix --partitions $${PARTITIONS:-3} --timing-files=$(TEST_OUTPUT)/unit-test-shard-*.log
+
+.PHONY: run-unit-test-shard
+run-unit-test-shard:
+	@echo "### Running unit test shard $(SHARD_ID)"
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" \
+	$(GOTESTSUM) \
+		--jsonfile=$(TEST_OUTPUT)/unit-test-shard-$(SHARD_ID).log \
+		-- -race -mod vendor -a -coverpkg=./... \
+		-coverprofile $(TEST_OUTPUT)/cover-shard-$(SHARD_ID).all.txt \
+		$(UNIT_TEST_PACKAGES)
 
 .PHONY: coverage-report
 coverage-report: cov-exclude-generated

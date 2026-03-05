@@ -197,14 +197,17 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v27.4.1+incompatible
+# github.com/docker/cli v29.2.0+incompatible
 ## explicit
 github.com/docker/cli/cli/compose/interpolation
 github.com/docker/cli/cli/compose/loader
 github.com/docker/cli/cli/compose/schema
 github.com/docker/cli/cli/compose/template
 github.com/docker/cli/cli/compose/types
+github.com/docker/cli/internal/lazyregexp
+github.com/docker/cli/internal/volumespec
 github.com/docker/cli/opts
+github.com/docker/cli/opts/swarmopts
 github.com/docker/cli/pkg/kvfile
 # github.com/docker/docker v28.5.2+incompatible
 ## explicit
@@ -231,7 +234,7 @@ github.com/docker/docker/api/types/versions
 github.com/docker/docker/api/types/volume
 github.com/docker/docker/client
 github.com/docker/docker/pkg/stdcopy
-# github.com/docker/go-connections v0.5.0
+# github.com/docker/go-connections v0.6.0
 ## explicit; go 1.18
 github.com/docker/go-connections/nat
 github.com/docker/go-connections/sockets
@@ -476,6 +479,31 @@ github.com/mitchellh/reflectwalk
 # github.com/moby/docker-image-spec v1.3.1
 ## explicit; go 1.18
 github.com/moby/docker-image-spec/specs-go/v1
+# github.com/moby/moby/api v1.53.0
+## explicit; go 1.24.0
+github.com/moby/moby/api/types
+github.com/moby/moby/api/types/blkiodev
+github.com/moby/moby/api/types/build
+github.com/moby/moby/api/types/checkpoint
+github.com/moby/moby/api/types/common
+github.com/moby/moby/api/types/container
+github.com/moby/moby/api/types/events
+github.com/moby/moby/api/types/image
+github.com/moby/moby/api/types/jsonstream
+github.com/moby/moby/api/types/mount
+github.com/moby/moby/api/types/network
+github.com/moby/moby/api/types/plugin
+github.com/moby/moby/api/types/registry
+github.com/moby/moby/api/types/storage
+github.com/moby/moby/api/types/swarm
+github.com/moby/moby/api/types/system
+github.com/moby/moby/api/types/volume
+# github.com/moby/moby/client v0.2.2
+## explicit; go 1.24.0
+github.com/moby/moby/client
+github.com/moby/moby/client/internal
+github.com/moby/moby/client/internal/timestamp
+github.com/moby/moby/client/pkg/versions
 # github.com/moby/spdystream v0.5.0
 ## explicit; go 1.13
 github.com/moby/spdystream
@@ -485,7 +513,7 @@ github.com/moby/spdystream/spdy
 # github.com/moby/sys/user v0.4.0
 ## explicit; go 1.17
 github.com/moby/sys/user
-# github.com/moby/term v0.5.0
+# github.com/moby/term v0.5.2
 ## explicit; go 1.18
 github.com/moby/term
 github.com/moby/term/windows
@@ -1249,9 +1277,6 @@ gopkg.in/evanphx/json-patch.v4
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0
-# gopkg.in/yaml.v2 v2.4.0
-## explicit; go 1.15
-gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3

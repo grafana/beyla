@@ -14,7 +14,7 @@ services:
       - "8380:8380"
 
   client:
-    image: ghcr.io/open-telemetry/obi-testimg:go-http-client-0.1.0
+    image: ghcr.io/open-telemetry/obi-testimg:go-http-client-0.1.0@sha256:6bacf54dbbbc7fca97ae64490b37142e915a06eeeda246865e31f10443612695
     environment:
       TARGET_URL: "http://testserver-go:8080"
 

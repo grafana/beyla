@@ -18,7 +18,7 @@ RUN case ${TARGETARCH} in \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/${INJECTOR_VERSION}/${INJECTOR_LIB}"
 
 # Get the Python SDK for glibc
-FROM python:3.14.3-trixie@sha256:d4be1c97d3cf8ca128c41cf90d2b10c2830117984dd5314c9e846e28a81533ce AS build-python-glibc
+FROM python:3.14.3-trixie@sha256:10c5cd782d36c531ce712844b404bb2b943cf7562ce5d2a9eede3c5363c0f45d AS build-python-glibc
 WORKDIR /operator-build
 COPY python/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -76,7 +76,7 @@ RUN case ${TARGETARCH} in \
 # Build the Node.js artifacts
 # The version is hardcoded in package.json and copied from the OTel Operator
 # TODO: Can we allow this to be configurable just like the JVM and .NET
-FROM node:20@sha256:94a5714e6b243bf37a1767e637996302fadd9443327f5bdbf0179758fe70cacd AS build-nodejs-sdk
+FROM node:20@sha256:65b74d0fb42134c49530a8c34e9f3e4a2fb8e1f99ac4a0eb4e6f314b426183a2 AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY node.js/package.json .

@@ -1,7 +1,7 @@
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.26.0@sha256:c83e68f3ebb6943a2904fa66348867d108119890a2c6a2e6f07b38d0eb6c25c5 AS builder
+FROM golang:1.26.0@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84 AS builder
 
 ARG TARGETARCH
 
@@ -23,7 +23,7 @@ COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wra
 RUN make compile-for-coverage
 
 # Create final image from minimal + built binary
-FROM ubuntu@sha256:cd1dba651b3080c3686ecf4e3c4220f026b521fb76978881737d24f200828b2b
+FROM ubuntu@sha256:d1e2e92c075e5ca139d51a140fff46f84315c0fdce203eab2807c7e495eff4f9
 
 COPY --from=builder /src/bin/beyla /beyla
 # Wrap the executable in a script that waits for the processes to end

@@ -1,5 +1,5 @@
 # Build the binary for the k8s-cache service
-FROM golang:1.26.0@sha256:c83e68f3ebb6943a2904fa66348867d108119890a2c6a2e6f07b38d0eb6c25c5 AS builder
+FROM golang:1.26.0@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84 AS builder
 
 ARG TARGETARCH
 ENV GOARCH=$TARGETARCH

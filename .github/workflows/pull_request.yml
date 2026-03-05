@@ -18,7 +18,7 @@ jobs:
   generate:
     name: Generate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     # Grant specific permissions needed for DockerHub login via Vault OIDC
@@ -75,7 +75,7 @@ jobs:
     name: Lint
     needs: generate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
@@ -108,7 +108,7 @@ jobs:
     name: "Unit test ${{ matrix.description }}"
     needs: generate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

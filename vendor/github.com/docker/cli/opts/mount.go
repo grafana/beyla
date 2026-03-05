@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	mounttypes "github.com/docker/docker/api/types/mount"
 	"github.com/docker/go-units"
-	"github.com/sirupsen/logrus"
+	mounttypes "github.com/moby/moby/api/types/mount"
 )
 
 // MountOpt is a Value type for parsing mounts
@@ -41,6 +40,13 @@ func (m *MountOpt) Set(value string) error {
 			mount.VolumeOptions.DriverConfig = &mounttypes.Driver{}
 		}
 		return mount.VolumeOptions
+	}
+
+	imageOptions := func() *mounttypes.ImageOptions {
+		if mount.ImageOptions == nil {
+			mount.ImageOptions = new(mounttypes.ImageOptions)
+		}
+		return mount.ImageOptions
 	}
 
 	bindOptions := func() *mounttypes.BindOptions {
@@ -81,8 +87,7 @@ func (m *MountOpt) Set(value string) error {
 				volumeOptions().NoCopy = true
 				continue
 			case "bind-nonrecursive":
-				bindOptions().NonRecursive = true
-				continue
+				return errors.New("bind-nonrecursive is deprecated, use bind-recursive=disabled instead")
 			default:
 				return fmt.Errorf("invalid field '%s' must be a key=value pair", field)
 			}
@@ -93,7 +98,7 @@ func (m *MountOpt) Set(value string) error {
 			mount.Type = mounttypes.Type(strings.ToLower(val))
 		case "source", "src":
 			mount.Source = val
-			if strings.HasPrefix(val, "."+string(filepath.Separator)) || val == "." {
+			if !filepath.IsAbs(val) && strings.HasPrefix(val, ".") {
 				if abs, err := filepath.Abs(val); err == nil {
 					mount.Source = abs
 				}
@@ -110,16 +115,12 @@ func (m *MountOpt) Set(value string) error {
 		case "bind-propagation":
 			bindOptions().Propagation = mounttypes.Propagation(strings.ToLower(val))
 		case "bind-nonrecursive":
-			bindOptions().NonRecursive, err = strconv.ParseBool(val)
-			if err != nil {
-				return fmt.Errorf("invalid value for %s: %s", key, val)
-			}
-			logrus.Warn("bind-nonrecursive is deprecated, use bind-recursive=disabled instead")
+			return errors.New("bind-nonrecursive is deprecated, use bind-recursive=disabled instead")
 		case "bind-recursive":
 			switch val {
 			case "enabled": // read-only mounts are recursively read-only if Engine >= v25 && kernel >= v5.12, otherwise writable
 				// NOP
-			case "disabled": // alias of bind-nonrecursive=true
+			case "disabled": // previously "bind-nonrecursive=true"
 				bindOptions().NonRecursive = true
 			case "writable": // conforms to the default read-only bind-mount of Docker v24; read-only mounts are recursively mounted but not recursively read-only
 				bindOptions().ReadOnlyNonRecursive = true
@@ -128,8 +129,7 @@ func (m *MountOpt) Set(value string) error {
 				// TODO: implicitly set propagation and error if the user specifies a propagation in a future refactor/UX polish pass
 				// https://github.com/docker/cli/pull/4316#discussion_r1341974730
 			default:
-				return fmt.Errorf("invalid value for %s: %s (must be \"enabled\", \"disabled\", \"writable\", or \"readonly\")",
-					key, val)
+				return fmt.Errorf(`invalid value for %s: %s (must be "enabled", "disabled", "writable", or "readonly")`, key, val)
 			}
 		case "volume-subpath":
 			volumeOptions().Subpath = val
@@ -147,6 +147,8 @@ func (m *MountOpt) Set(value string) error {
 				volumeOptions().DriverConfig.Options = make(map[string]string)
 			}
 			setValueOnMap(volumeOptions().DriverConfig.Options, val)
+		case "image-subpath":
+			imageOptions().Subpath = val
 		case "tmpfs-size":
 			sizeBytes, err := units.RAMInBytes(val)
 			if err != nil {
@@ -174,6 +176,9 @@ func (m *MountOpt) Set(value string) error {
 
 	if mount.VolumeOptions != nil && mount.Type != mounttypes.TypeVolume {
 		return fmt.Errorf("cannot mix 'volume-*' options with mount type '%s'", mount.Type)
+	}
+	if mount.ImageOptions != nil && mount.Type != mounttypes.TypeImage {
+		return fmt.Errorf("cannot mix 'image-*' options with mount type '%s'", mount.Type)
 	}
 	if mount.BindOptions != nil && mount.Type != mounttypes.TypeBind {
 		return fmt.Errorf("cannot mix 'bind-*' options with mount type '%s'", mount.Type)
@@ -203,7 +208,7 @@ func (m *MountOpt) Set(value string) error {
 }
 
 // Type returns the type of this option
-func (m *MountOpt) Type() string {
+func (*MountOpt) Type() string {
 	return "mount"
 }
 

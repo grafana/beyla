@@ -1,6 +1,7 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["config:best-practices", "helpers:pinGitHubActionDigestsToSemver"],
+  postUpdateOptions: ["gomodMassage"],
   ignorePaths: [
     // OBI submodule - managed by submodule updates, not Renovate
     ".obi-src/**",

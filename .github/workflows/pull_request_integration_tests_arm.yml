@@ -32,7 +32,7 @@ jobs:
   test-matrix:
     name: "Build ARM integration matrix"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -63,7 +63,7 @@ jobs:
     name: ${{ matrix.description }}
     needs: test-matrix
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

@@ -19,11 +19,11 @@ A version starts as a prerelease and is promoted to stable/latest only when it g
 
 - `bot_sync-obi-fork.yml`: continuously syncs Grafana OBI fork main with upstream.
 - `bot_sync-obi-submodule.yml`: weekly (Monday) update of Beyla `.obi-src` on `main`.
-- `release-train-prepare.yml`: cuts/updates OBI and Beyla release branches and regenerates artifacts.
+- [`release-train-prepare.yml`](../.github/workflows/release-train-prepare.yml): cuts/updates OBI and Beyla release branches and regenerates artifacts.
   - Manual dispatch after OBI fork is synced.
-- `release-train-tag.yml`: creates SemVer tags and prereleases in OBI and Beyla.
+- [`release-train-tag.yml`](../.github/workflows/release-train-tag.yml): creates SemVer tags and prereleases in OBI and Beyla.
   - Manual dispatch after release branch CI is green.
-- `promote-patch-to-stable.yml`: marks a prerelease as stable/latest and promotes Docker tags.
+- [`promote-patch-to-stable.yml`](../.github/workflows/promote-patch-to-stable.yml): marks a prerelease as stable/latest and promotes Docker tags.
 
 ## End-to-End Flow
 
@@ -35,7 +35,7 @@ A version starts as a prerelease and is promoted to stable/latest only when it g
 
 ### 2. Prepare release branches
 
-Run `release-train-prepare.yml`
+Run [`release-train-prepare.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-prepare.yml).
 
 Inputs:
 
@@ -63,7 +63,7 @@ Ensure both release branches are green:
 
 ### 4. Create tags and prereleases
 
-Run `release-train-tag.yml` with `version=vX.Y.Z`.
+Run [`release-train-tag.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-tag.yml) with `version=vX.Y.Z`.
 
 Inputs:
 
@@ -81,7 +81,7 @@ What it does:
 
 When the release train has validated a version in `prod`, run:
 
-- `promote-patch-to-stable.yml` with `version_tag=vX.Y.Z`.
+- [`promote-patch-to-stable.yml`](https://github.com/grafana/beyla/actions/workflows/promote-patch-to-stable.yml) with `version_tag=vX.Y.Z`.
 
 This marks the Beyla GitHub release as stable/latest and promotes Docker tags.
 

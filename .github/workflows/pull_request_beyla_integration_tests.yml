@@ -19,7 +19,7 @@ on:
       - ".github/workflows/pull_request_beyla_integration_tests.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow_ref }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 # Set restrictive permissions at workflow level

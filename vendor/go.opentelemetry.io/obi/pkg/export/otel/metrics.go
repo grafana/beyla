@@ -827,7 +827,7 @@ func otelMetricsAccepted(span *request.Span) bool {
 
 func otelSpanMetricsAccepted(span *request.Span) bool {
 	return span.Service.Features.AnySpanMetrics() &&
-		!span.Service.ExportsOTelMetricsSpan()
+		!span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
 }
 
 //nolint:cyclop

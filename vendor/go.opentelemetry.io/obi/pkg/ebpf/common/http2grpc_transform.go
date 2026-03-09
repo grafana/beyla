@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
 type BPFHTTP2Info BpfHttp2GrpcRequestT
@@ -544,16 +545,17 @@ func isLikelyHTTP2(data []uint8, eventLen int) bool {
 	return false
 }
 
-func isHTTP2(data []uint8, eventLen int) bool {
+func isHTTP2(data *largebuf.LargeBuffer, eventLen int) bool {
 	// Parsing HTTP2 frames with the Go HTTP2/gRPC parser is very expensive.
 	// Therefore, we replicate some of our HTTP2 frame reader from eBPF here to
 	// check if this payload even remotely looks like HTTP2/gRPC, e.g. we must
 	// find a resonably looking HTTP "headers" frame.
-	if !isLikelyHTTP2(data, eventLen) {
+	if !isLikelyHTTP2(data.UnsafeView(), eventLen) {
 		return false
 	}
 
-	framer := byteFramer(data)
+	dataReader := data.NewReader()
+	framer := http2.NewFramer(io.Discard, &dataReader)
 
 	for {
 		f, err := framer.ReadFrame()

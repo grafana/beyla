@@ -4,6 +4,7 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
 
@@ -30,129 +32,142 @@ const (
 	kPostgresBind    = byte('B')
 	kPostgresQuery   = byte('Q')
 	kPostgresCommand = byte('C')
+
+	// pgHeaderLen is the size of the Postgres message header:
+	// 1 byte type + 4 bytes length field.
+	pgHeaderLen = 5
 )
 
-func isPostgres(b []byte) bool {
+func isPostgres(b *largebuf.LargeBuffer) bool {
 	op, ok := isValidPostgresPayload(b)
 
 	return ok && (op == kPostgresQuery || op == kPostgresCommand || op == kPostgresBind)
 }
 
-func isPostgresBindCommand(b []byte) bool {
+func isPostgresBindCommand(b *largebuf.LargeBuffer) bool {
 	op, ok := isValidPostgresPayload(b)
 
 	return ok && (op == kPostgresBind)
 }
 
-func isPostgresQueryCommand(b []byte) bool {
+func isPostgresQueryCommand(b *largebuf.LargeBuffer) bool {
 	op, ok := isValidPostgresPayload(b)
 
 	return ok && (op == kPostgresQuery)
 }
 
-func isValidPostgresPayload(b []byte) (byte, bool) {
+func isValidPostgresPayload(b *largebuf.LargeBuffer) (byte, bool) {
 	// https://github.com/postgres/postgres/blob/master/src/interfaces/libpq/fe-protocol3.c#L97
-	if len(b) < 5 {
+	if b.Len() < pgHeaderLen {
 		return 0, false
 	}
 
-	size := int32(binary.BigEndian.Uint32(b[1:5]))
-	if size < 0 || size > 3000 {
+	op, err := b.U8At(0)
+	if err != nil {
 		return 0, false
 	}
 
-	return b[0], true
+	size, err := b.I32BEAt(1)
+	if err != nil || size < 0 || size > 3000 {
+		return 0, false
+	}
+
+	return op, true
+}
+
+// msgBodyReader returns a LargeBufferReader over the postgres message body (bytes after the
+// 5-byte header), bounded by the message size field. Returns an error if the buffer is too short.
+func msgBodyReader(b *largebuf.LargeBuffer) (largebuf.LargeBufferReader, error) {
+	size, err := b.I32BEAt(1)
+	if err != nil {
+		return largebuf.LargeBufferReader{}, errors.New("too short")
+	}
+
+	msgSize := min(1+int(size), b.Len())
+
+	if msgSize < pgHeaderLen {
+		return largebuf.LargeBufferReader{}, errors.New("too short")
+	}
+
+	body, err := b.UnsafeViewAt(pgHeaderLen, msgSize-pgHeaderLen)
+	if err != nil {
+		return largebuf.LargeBufferReader{}, err
+	}
+
+	return largebuf.NewLargeBufferFrom(body).NewReader(), nil
 }
 
 //nolint:cyclop
-func parsePostgresBindCommand(buf []byte) (string, string, []string, error) {
-	statement := []byte{}
-	portal := []byte{}
-	args := []string{}
-
-	size := min(int(binary.BigEndian.Uint32(buf[1:5])), len(buf))
-	ptr := 5
-
-	// parse statement, zero terminated string
-	for {
-		if ptr >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing statement")
-		}
-		b := buf[ptr]
-		ptr++
-
-		if b == 0 {
-			break
-		}
-		statement = append(statement, b)
+func parsePostgresBindCommand(b *largebuf.LargeBuffer) (string, string, []string, error) {
+	r, err := msgBodyReader(b)
+	if err != nil {
+		return "", "", nil, err
 	}
 
-	// parse portal, zero terminated string
-	for {
-		if ptr >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing portal")
-		}
-		b := buf[ptr]
-		ptr++
-
-		if b == 0 {
-			break
-		}
-		portal = append(portal, b)
+	stmtBytes, err := r.ReadCStr()
+	if err != nil {
+		return "", "", nil, errors.New("too short, while parsing statement")
 	}
 
-	if ptr+2 >= size {
-		return string(statement), string(portal), args, errors.New("too short, while parsing format codes")
+	portalBytes, err := r.ReadCStr()
+	if err != nil {
+		return "", "", nil, errors.New("too short, while parsing portal")
 	}
 
-	formats := int16(binary.BigEndian.Uint16(buf[ptr : ptr+2]))
-	ptr += 2
-	for i := 0; i < int(formats); i++ {
-		// ignore format codes
-		if ptr+2 >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing format codes")
+	// skip format codes: Int16 count + count*Int16 entries
+	formats, err := r.ReadI16BE()
+	if err != nil {
+		return "", "", nil, errors.New("too short, while parsing format codes")
+	}
+	if formats > 0 {
+		if err := r.Skip(2 * int(formats)); err != nil {
+			return "", "", nil, errors.New("too short, while parsing format codes")
 		}
-		ptr += 2
 	}
 
-	if ptr+2 >= size {
-		return string(statement), string(portal), args, errors.New("too short, while parsing format codes")
+	// parse parameter values: Int16 count + repeated (Int32 length + bytes)
+	params, err := r.ReadI16BE()
+	if err != nil {
+		return "", "", nil, errors.New("too short, while parsing params")
 	}
-
-	params := int16(binary.BigEndian.Uint16(buf[ptr : ptr+2]))
-	ptr += 2
-	for i := 0; i < int(params); i++ {
-		if ptr+4 >= size {
-			return string(statement), string(portal), args, errors.New("too short, while parsing params")
+	if params <= 0 {
+		return string(stmtBytes), string(portalBytes), nil, nil
+	}
+	args := make([]string, 0, int(params))
+	for range int(params) {
+		argLen, err := r.ReadI32BE()
+		if err != nil {
+			return "", "", nil, errors.New("too short, while parsing params")
 		}
-		argLen := int(binary.BigEndian.Uint32(buf[ptr : ptr+4]))
-		ptr += 4
-		arg := []byte{}
-		for range argLen {
-			if ptr >= size {
-				break
-			}
-			arg = append(arg, buf[ptr])
-			ptr++
+		if argLen < 0 {
+			// NULL parameter value (-1 in the protocol)
+			continue
+		}
+		n := min(int(argLen), r.Remaining())
+		arg, err := r.ReadN(n)
+		if err != nil {
+			return "", "", nil, errors.New("too short, while parsing params")
 		}
 		args = append(args, string(arg))
 	}
 
-	return string(statement), string(portal), args, nil
+	return string(stmtBytes), string(portalBytes), args, nil
 }
 
-func parsePosgresQueryCommand(buf []byte) (string, error) {
-	size := min(int(binary.BigEndian.Uint32(buf[1:5])), len(buf))
-	ptr := 5
-
-	if ptr > size {
-		return "", errors.New("too short")
+func parsePosgresQueryCommand(b *largebuf.LargeBuffer) ([]byte, error) {
+	r, err := msgBodyReader(b)
+	if err != nil {
+		return nil, err
 	}
-
-	return string(buf[ptr:size]), nil
+	body, err := r.ReadN(r.Remaining())
+	if err != nil {
+		return nil, errors.New("too short")
+	}
+	// Query messages are null-terminated in the Postgres wire protocol; strip the trailing null.
+	return bytes.TrimRight(body, "\x00"), nil
 }
 
-func postgresPreparedStatements(b []byte) (string, string, string) {
+func postgresPreparedStatements(b *largebuf.LargeBuffer) (string, string, string) {
 	var op, table, sql string
 	if isPostgresBindCommand(b) {
 		statement, portal, args, err := parsePostgresBindCommand(b)
@@ -171,14 +186,15 @@ func postgresPreparedStatements(b []byte) (string, string, string) {
 	} else if isPostgresQueryCommand(b) {
 		text, err := parsePosgresQueryCommand(b)
 		if err == nil {
-			query := asciiToUpper(text)
-			if strings.HasPrefix(query, "EXECUTE ") {
-				parts := strings.Split(text, " ")
-				op = parts[0]
-				if len(parts) > 1 {
-					table = parts[1]
+			if asciiIndexFold(text, sqlExecuteKeyword) == 0 {
+				op = "EXECUTE"
+				rest := text[len(sqlExecuteKeyword):]
+				if i := bytes.IndexByte(rest, ' '); i >= 0 {
+					table = string(rest[:i])
+				} else {
+					table = string(rest)
 				}
-				sql = text
+				sql = string(text)
 			}
 		}
 	}
@@ -192,7 +208,7 @@ type postgresMessage struct {
 }
 
 type postgresMessageIterator struct {
-	buf []byte
+	r   largebuf.LargeBufferReader
 	err error
 	eof bool
 }
@@ -202,19 +218,24 @@ func (it *postgresMessageIterator) isEOF() bool {
 }
 
 func (it *postgresMessageIterator) next() (msg postgresMessage) {
-	if it.err != nil || len(it.buf) == 0 {
+	if it.err != nil || it.r.Remaining() == 0 {
 		it.eof = true
 		return
 	}
-	if len(it.buf) < sqlprune.PostgresHdrSize {
+	if it.r.Remaining() < sqlprune.PostgresHdrSize {
 		it.err = errors.New("remaining buffer too short for message header")
 		return
 	}
 
-	msgType := sqlprune.SQLParseCommandID(request.DBPostgres, it.buf)
-	it.buf = it.buf[1:]
-	size := int32(binary.BigEndian.Uint32(it.buf[:4]))
-	it.buf = it.buf[4:]
+	// Read the 5-byte header (type byte + 4-byte size) atomically.
+	// SQLParseCommandID needs buf[0] as the type byte; it requires len(buf) >= PostgresHdrSize (5).
+	hdrBuf, err := it.r.ReadN(sqlprune.PostgresHdrSize)
+	if err != nil {
+		it.err = err
+		return
+	}
+	msgType := sqlprune.SQLParseCommandID(request.DBPostgres, hdrBuf)
+	size := int32(binary.BigEndian.Uint32(hdrBuf[1:5]))
 
 	if size < sqlprune.PostgresHdrSize-1 {
 		it.err = errors.New("malformed Postgres message")
@@ -222,38 +243,53 @@ func (it *postgresMessageIterator) next() (msg postgresMessage) {
 	}
 
 	payloadSize := size - sqlprune.PostgresHdrSize + 1
-	if len(it.buf) < int(payloadSize) {
-		it.err = fmt.Errorf("remaining buffer too short for message data: expected %d bytes, got %d", payloadSize, len(it.buf))
+	if it.r.Remaining() < int(payloadSize) {
+		it.err = fmt.Errorf("remaining buffer too short for message data: expected %d bytes, got %d", payloadSize, it.r.Remaining())
 		return
 	}
 
-	data := it.buf[:payloadSize]
-	it.buf = it.buf[payloadSize:]
+	// ReadN is safe: all uses of msg.data convert it to a Go string before the next
+	// it.next() call, so scratch overwrite between iterations is not a concern.
+	// Use empty non-nil slice for zero-length payloads to match []byte{} semantics.
+	data := []byte{}
+	if payloadSize > 0 {
+		data, err = it.r.ReadN(int(payloadSize))
+		if err != nil {
+			it.err = err
+			return
+		}
+	}
 
 	msg = postgresMessage{typ: msgType, data: data}
 	return
 }
 
-func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer []byte) (request.Span, error) {
+func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, error) {
 	var (
 		hasSpan         bool
 		op, table, stmt string
 		span            request.Span
 	)
 
-	if len(requestBuffer) < sqlprune.PostgresHdrSize+1 {
+	reqR := requestBuffer.NewReader()
+	respR := responseBuffer.NewReader()
+
+	if reqR.Remaining() < sqlprune.PostgresHdrSize+1 {
 		slog.Debug("Postgres request too short")
 		return span, errFallback
 	}
-	if len(responseBuffer) < sqlprune.PostgresHdrSize+1 {
+	if respR.Remaining() < sqlprune.PostgresHdrSize+1 {
 		slog.Debug("Postgres response too short")
 		return span, errFallback
 	}
 
+	// ReadN(remaining) for response — materialized once for sqlprune.SQLParseError.
+	respRaw, _ := respR.ReadN(respR.Remaining())
+
 	var (
 		msg      postgresMessage
-		it       = &postgresMessageIterator{buf: requestBuffer}
-		sqlError = sqlprune.SQLParseError(request.DBPostgres, responseBuffer)
+		it       = postgresMessageIterator{r: reqR}
+		sqlError = sqlprune.SQLParseError(request.DBPostgres, respRaw)
 	)
 
 Loop:
@@ -268,7 +304,7 @@ Loop:
 
 		switch msg.typ {
 		case "QUERY":
-			op, table, stmt = detectSQL(string(msg.data))
+			op, table, stmt = detectSQL(msg.data)
 			hasSpan = true
 			break Loop
 		case "PARSE":
@@ -276,7 +312,7 @@ Loop:
 			// in the request buffer.
 			stmtName := unix.ByteSliceToString(msg.data)
 			stmtNameLen := len(stmtName)
-			_, _, stmt = detectSQL(string(msg.data[stmtNameLen:]))
+			_, _, stmt = detectSQL(msg.data[stmtNameLen:])
 
 			parseCtx.postgresPreparedStatements.Add(postgresPreparedStatementsKey{
 				connInfo: event.ConnInfo,

@@ -6,10 +6,13 @@
 package attr // import "go.opentelemetry.io/obi/pkg/export/attributes/names"
 
 import (
+	"runtime/debug"
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
+
+	"go.opentelemetry.io/obi/pkg/buildinfo"
 )
 
 // Name of an attribute. This is the common internal representation of a metric attribute name,
@@ -96,9 +99,23 @@ const (
 // as custom metrics, since at the moment they don't follow any semantic convention for them.
 // This value can be overridden when OBI is vendored as a library (e.g. from the OTEL collector)
 var (
-	VendorPrefix  = "obi"
-	VendorSDKName = "opentelemetry-ebpf-instrumentation"
+	VendorPrefix           = "obi"
+	VendorSDKName          = "opentelemetry"
+	VendorSDKVersion       = "unknown"
+	TelemetryDistroName    = "opentelemetry-ebpf-instrumentation"
+	TelemetryDistroVersion = buildinfo.Version
 )
+
+func init() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, dep := range info.Deps {
+			if dep.Path == "go.opentelemetry.io/otel/sdk" {
+				VendorSDKVersion = dep.Version
+				return
+			}
+		}
+	}
+}
 
 var OBIIP = Name("obi.ip")
 

@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
 func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
@@ -19,7 +20,7 @@ func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 		return request.Span{}, true, err
 	}
 
-	info, ignore, err := ProcessKafkaRequest(event.Buf[:], nil)
+	info, ignore, err := ProcessKafkaRequest(largebuf.NewLargeBufferFrom(event.Buf[:]), nil)
 
 	if err == nil && !ignore {
 		return GoKafkaSaramaToSpan(event, info), false, nil

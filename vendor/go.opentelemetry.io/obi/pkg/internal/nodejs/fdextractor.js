@@ -16,7 +16,7 @@ net.Server.prototype.emit = orig.serverEmit;
 net.Socket.prototype.connect = orig.socketConnect;
 net.Socket.prototype.write = orig.socketWrite;
 
-const { AsyncLocalStorage } = require('async_hooks');
+const { AsyncLocalStorage, createHook } = require('async_hooks');
 
 const debug_enabled = false;
 
@@ -44,6 +44,8 @@ net.Server.prototype.emit = function (event, ...args) {
   return orig.serverEmit.call(this, event, ...args);
 };
 
+const pad4 = n => String(n).padStart(4, '0');
+
 function correlate(incomingFd, outFd, socket) {
   if (incomingFd < 0 || outFd < 0 || incomingFd === outFd) {
     return Promise.resolve();
@@ -57,8 +59,6 @@ function correlate(incomingFd, outFd, socket) {
       `[outgoing TCP] inFd:${incomingFd}, outFd:${outFd}, to=${addr}:${port}`,
     );
   }
-
-  const pad4 = n => String(n).padStart(4, '0');
 
   try {
     fs.accessSync(`/dev/null/obi/${pad4(incomingFd)}${pad4(outFd)}`)
@@ -101,3 +101,18 @@ net.Socket.prototype.write = function (data, ...rest) {
 
   return doWrite();
 };
+
+// Signal the BPF layer before each async callback so it can restore the correct
+// trace context for this request into traces_ctx_v1.
+// fs.accessSync is safe inside async_hooks callbacks: synchronous fs operations
+// do not create AsyncWrap objects and therefore do not re-trigger this hook.
+createHook({
+  before() {
+    const store = als.getStore();
+    if (store && store.incomingFd != null && store.incomingFd >= 0) {
+      try {
+        fs.accessSync(`/dev/null/obi-ctx/${pad4(store.incomingFd)}`);
+      } catch (_) {}
+    }
+  },
+}).enable();

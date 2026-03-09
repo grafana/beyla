@@ -32,9 +32,5 @@ bin/
 *__pycache__/
 beyla.sln
 
-*_bpfel.go
-*_bpfel.o
-*_bpfel.go.d
-
 # Generated OBI test suite (created by scripts/generate-obi-tests.sh)
 internal/testgenerated

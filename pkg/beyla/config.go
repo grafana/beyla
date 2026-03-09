@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obicfg "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
@@ -224,6 +225,7 @@ type Attributes struct {
 	InstanceID           obicfg.InstanceIDConfig       `yaml:"instance_id"`
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
+	MetadataRetry        meta.RetryConfig              `yaml:"metadata_retry"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
 
 	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain

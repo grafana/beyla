@@ -1,159 +1,120 @@
-# Process of making a new Beyla release based on the upstream OBI distribution
+# Beyla Release
 
-## Introduction
+## Overview
 
-Beyla's code was donated to OpenTelemetry and lives under the project [OpenTelemetry eBPF Instrumentation (OBI)](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation).
+Beyla embeds OBI as the `.obi-src` git submodule.
+The release process follows a weekly release train and Semantic Versioning only:
 
-This upstream code-base is still very much in active development and we still haven't met all
-criteria to make an initial release of the upstream project. At the same time Grafana Beyla is
-production supported product, which we offer to our users, therefore we'll need to continue making releases.
+- Version format: `vMAJOR.MINOR.PATCH`
+- No RC suffixes
+- `MINOR` bumps for each weekly train slot
+- `PATCH` bumps when multiple releases are needed in the same week
+- `MAJOR` bumps only for breaking Go API changes
+- Failed/abandoned versions are skipped (no retroactive patching)
 
-To ensure we have stable branches to make our Beyla releases, for the time being we have the following
-repository configuration and release process.
+Releases move through environments: `dev -> ops -> prod`.
+A version starts as a prerelease and is promoted to stable/latest only when it graduates.
 
-## Beyla main branch
+## Automation Workflows
 
-Beyla's main branch is always pinned to a specific hash of the upstream OpenTelemetry eBPF Instrumentation
-project. We use a git sub-module so we can build the eBPF binaries directly. Beyla's main branch closely
-tracks OBI's main branch and the hash is moved forward from time to time.
+- `bot_sync-obi-fork.yml`: continuously syncs Grafana OBI fork main with upstream.
+- `bot_sync-obi-submodule.yml`: weekly (Monday) update of Beyla `.obi-src` on `main`.
+- [`release-train-prepare.yml`](../.github/workflows/release-train-prepare.yml): cuts/updates OBI and Beyla release branches and regenerates artifacts.
+  - Manual dispatch after OBI fork is synced.
+- [`release-train-tag.yml`](../.github/workflows/release-train-tag.yml): creates SemVer tags and prereleases in OBI and Beyla.
+  - Manual dispatch after release branch CI is green.
+- [`promote-patch-to-stable.yml`](../.github/workflows/promote-patch-to-stable.yml): marks a prerelease as stable/latest and promotes Docker tags.
 
-## Beyla release branches
+## End-to-End Flow
 
-To have a stable OBI branch on which we base our Beyla releases, for now, we use [Grafana's fork of the OBI
-project](https://github.com/grafana/opentelemetry-ebpf-instrumentation). This repository main branch
-is synced directly from the OpenTelemetry upstream OBI repository, but it contains specific release branches
-with point in time code.
+### 1. Preconditions
 
-Below we have the general outline of the steps required to make a new Beyla release branch.
+- OBI fork is synced from upstream.
+- Beyla `main` is synced to latest intended OBI state.
+- CI on Beyla `main` is green.
 
-### Step 1: Sync the Grafana OBI version with the upstream
+### 2. Prepare release branches
 
-Make a PR from upstream OBI to Grafana OBI and merge the changes. This ensures that we have
-the latest upstream changes from OBI before we cut the release. If you want a specific hash
-then checkout that hash and manually push to the Grafana OBI main branch.
+Run [`release-train-prepare.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-prepare.yml).
 
-### Step 2: Create new release branch in Grafana OBI
+Inputs:
 
-To start the process we first need to make a new release branch in [Grafana's fork of the OBI
-project](https://github.com/grafana/opentelemetry-ebpf-instrumentation).
-After the branch is made, we preferably also make a tag and a release, which can follow any
-release numbering, e.g. v1.2.0.
+- `version` (optional): explicit `vMAJOR.MINOR.PATCH`.
+- `bump`: `auto` / `minor` / `patch` (used when `version` is empty).
+- `dry_run` (optional).
+- `skip_ci_check` (optional).
+- `skip_upstream_sync_check` (optional).
 
-If there are any OBI upstream changes that we consider perhaps too new and experimental to
-be shipped to our end users, we can perform changes to the newly cut release branch and
-adjust the code. We can also change defaults in this release, if the Grafana desired defaults should
-be different than the upstream OBI.
+What it does:
 
-### Step 3: Create a new Beyla release branch of main
+1. Resolves the OBI SHA pinned by Beyla `main`.
+2. Creates/updates OBI branch `release-vX.Y.Z` from that SHA.
+3. Runs OBI artifact generation (`make docker-generate`, `make java-build`) and pushes branch changes.
+4. Creates/updates Beyla branch `release-vX.Y.Z` from Beyla `main`.
+5. Points `.obi-src` to OBI `release-vX.Y.Z`.
+6. Runs Beyla artifact generation (`make vendor-obi`, `make java-build`) and pushes branch changes.
 
-Just as usual create a new release branch off main in Beyla's repo and make sure you
-follow the Beyla release naming schedule.
+### 3. Wait for release branch CI
 
-### Step 4: Point the release branch to the Grafana OBI release
+Ensure both release branches are green:
 
-The Beyla main repository sub-module points to the upstream OBI repository. We need
-to change that to make it point to the new Grafana OBI branch we cut.
+- `grafana/opentelemetry-ebpf-instrumentation:release-vX.Y.Z`
+- `grafana/beyla:release-vX.Y.Z`
 
-Beyla's main sub-module definition (`.gitmodules`) will look like this:
+### 4. Create tags and prereleases
 
-```
-[submodule "obi-src"]
-	path = .obi-src
-	url = https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation.git
-```
+Run [`release-train-tag.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-tag.yml) with `version=vX.Y.Z`.
 
-Check-out the release branch you just cut and edit the `.gitmodules` file to point
-it to the Grafana OBI branch, e.g. for branch `release-1.2`.
+Inputs:
 
-```
-[submodule "obi-src"]
-	path = .obi-src
-	url = https://github.com/grafana/opentelemetry-ebpf-instrumentation.git
-	branch = release-1.2
-```
+- `version` (required).
+- `dry_run` (optional).
+- `skip_ci_check` (optional).
 
-Run, to refresh the submodules:
+What it does:
 
-```
-git submodule sync
-```
+1. Verifies both `release-vX.Y.Z` branches exist (and are green unless skipped).
+2. Creates tag `vX.Y.Z` in OBI and Beyla at release branch heads.
+3. Creates prereleases in OBI and Beyla for `vX.Y.Z`.
 
-This may pull in unexpected files, so check the Git repository branch
-and remove any changes you have to other files than `.gitmodules` and `modules.txt`.
+### 5. Promote to stable/latest
 
-Next update the submodule:
+When the release train has validated a version in `prod`, run:
 
-```
-git submodule update --checkout --remote
-git add .
-```
+- [`promote-patch-to-stable.yml`](https://github.com/grafana/beyla/actions/workflows/promote-patch-to-stable.yml) with `version_tag=vX.Y.Z`.
 
-Commit your changes.
+This marks the Beyla GitHub release as stable/latest and promotes Docker tags.
 
-Run the following to update your local docker generate image
+## Failure Handling
 
-```
- make docker-generate
-```
+If a release fails in CI or in `dev/ops/prod`:
 
-We want to ship all Beyla releases with binaries so it can be embedded in Alloy.
-Edit your release branch `.gitignore` and remove the following exclusions:
+- Do not patch that failed release version.
+- Do not force-tag or re-open the abandoned version.
+- Continue with the next SemVer version in the next run.
 
-```
-*_bpfel.go
-*_bpfel.o
-```
+Skipping versions is expected behavior.
 
-Vendor the Grafana OBI to build the binaries:
+## Local Script (workflow backend)
 
-```
-make vendor-obi
-```
+The workflows use `scripts/release-train.sh`.
+You can run the same flow manually:
 
-Commit all your file changes and make a PR to the release branch to ensure your changes run clear with the Beyla release CI.
+```bash
+# Prepare branches (auto version)
+./scripts/release-train.sh prepare --beyla-repo grafana/beyla
 
-### Step 5: Release the new Beyla version
+# Prepare branches (explicit version)
+./scripts/release-train.sh prepare --version v4.3.0 --beyla-repo grafana/beyla
 
-Once all changes are made and tested, we can release the new Beyla version. This involves creating a new Git tag and pushing it to the Beyla repository. Checkout to the release branch and run the following commands:
-
-```
-git tag vX.Y.Z
-git push origin vX.Y.Z
+# Create tags and prereleases (after CI is green)
+./scripts/release-train.sh tag --version v4.3.0 --beyla-repo grafana/beyla
 ```
 
-Once the tag is pushed, we can create a new release in the Beyla repository.
+## Checking if an OBI PR shipped in Beyla
 
-## Fixes to the release branches
+Use:
 
-If we have to fix something to the Grafana OBI or Beyla release branches
-we do that just as usual. Make the PR first in the Grafana OBI release branch,
-merge the code, make a PR with the updated Grafana OBI branch in Beyla, get approval,
-pass CI and merge.
-
-All fixes are to be forward-ported to the upstream OBI repository, don't put
-fixes in the Grafana OBI main branch. If you want to update the Grafana OBI main
-branch with the fix, it must be first merged in upstream OBI and then you can sync
-the changes to the Grafana OBI main.
-
-## Checking if an OBI PR was released in Beyla
-
-Use [scripts/release-lookup.sh](../scripts/release-lookup.sh) to check if an OBI
-PR was releassed in Beyla.
-
-Example below to find if the OBI PR linked to this issue https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/995 was released in Beyla (it wasn't):
-
-```shell
-./scripts/release-lookup.sh --obi 995
-[info] Issue #995: Use HTTP Host header for service name resolution when K8s lookup fails (state: closed)
-[info] Found linked PR #997: fix: fallback to http host header for service graph
-
-OBI Issue #995 (PR #997) was not yet released as part of Beyla
-```
-
-Another example with https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/896:
-
-```shell
-❯ ./scripts/release-lookup.sh --obi 896
-
-OBI PR #896 was released as part of Beyla 2.8.0
+```bash
+./scripts/release-lookup.sh --obi <PR_OR_ISSUE_NUMBER>
 ```

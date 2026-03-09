@@ -1,0 +1,88 @@
+name: Release train tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag/release (vMAJOR.MINOR.PATCH)"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run mode (validate only)"
+        required: false
+        type: boolean
+        default: false
+      skip_ci_check:
+        description: "Skip CI-green checks on release branches"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-train-tag-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      release_branch: ${{ steps.tag.outputs.release_branch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Create tags and prereleases
+        id: tag
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          RELEASE_TRAIN_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          VERSION_INPUT: ${{ inputs.version }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          SKIP_CI_CHECK_INPUT: ${{ inputs.skip_ci_check }}
+        run: |
+          set -euo pipefail
+
+          cmd=(./scripts/release-train.sh tag
+            --version "${VERSION_INPUT}"
+            --beyla-repo "${{ github.repository }}"
+            --obi-repo "grafana/opentelemetry-ebpf-instrumentation")
+
+          if [[ "${DRY_RUN_INPUT}" == "true" ]]; then
+            cmd+=(--dry-run)
+          fi
+
+          if [[ "${SKIP_CI_CHECK_INPUT}" == "true" ]]; then
+            cmd+=(--skip-ci-check)
+          fi
+
+          echo "Running: ${cmd[*]}"
+          RELEASE_TRAIN_OUTPUT_FILE="$GITHUB_OUTPUT" "${cmd[@]}"
+
+      - name: Print summary
+        if: always()
+        run: |
+          {
+            echo "## Release Train Tag"
+            echo ""
+            echo "- Version: \`${{ steps.tag.outputs.version || 'n/a' }}\`"
+            echo "- Release branch: \`${{ steps.tag.outputs.release_branch || 'n/a' }}\`"
+            echo ""
+            echo "### Notes"
+            echo "- This creates SemVer tags and prereleases in OBI and Beyla."
+            echo "- Beyla release publication triggers release artifacts workflows."
+            echo "- Once promoted through the release train, run \`promote-patch-to-stable.yml\`."
+          } >> "$GITHUB_STEP_SUMMARY"

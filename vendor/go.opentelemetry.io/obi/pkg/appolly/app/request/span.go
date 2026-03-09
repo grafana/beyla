@@ -540,7 +540,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient:
+	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient:
 		return true
 	}
 
@@ -840,6 +840,10 @@ func (s *Span) isMetricsExportURL() bool {
 	default:
 		return false
 	}
+}
+
+func (s *Span) IsDNSSpan() bool {
+	return s.Type == EventTypeDNS
 }
 
 func (s *Span) isTracesExportURL() bool {

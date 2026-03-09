@@ -110,6 +110,12 @@ Vendor the Grafana OBI to build the binaries:
 make vendor-obi
 ```
 
+Build the OBI Java Agent 
+
+```
+make java-docker-build 
+```
+
 Commit all your file changes and make a PR to the release branch to ensure your changes run clear with the Beyla release CI.
 
 ### Step 5: Release the new Beyla version

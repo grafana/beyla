@@ -55,7 +55,7 @@ RUN apt install -y clang llvm
 COPY .obi-src/pkg/internal/java .
 
 # Build the project
-RUN ./gradlew build --no-daemon
+RUN gradle build --no-daemon
 
 # Create final image from minimal + built binary
 FROM scratch
@@ -64,7 +64,7 @@ LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
 
-COPY --from=javaagent-builder /build/build/obi-java-agent.jar .
+COPY --from=javaagent-builder /build/build/obi-java-agent.jar /src/vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
 COPY --from=builder /src/bin/beyla .
 COPY --from=builder /src/LICENSE .
 COPY --from=builder /src/NOTICE .

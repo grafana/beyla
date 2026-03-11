@@ -9,7 +9,7 @@ WORKDIR /build
 COPY .obi-src/pkg/internal/java .
 
 # Build the project
-RUN ./gradlew build --no-daemon
+RUN gradle build --no-daemon
 
 FROM scratch AS export
-COPY --from=builder /build/build/obi-java-agent.jar /obi-java-agent.jar
+COPY --from=builder /build/build/obi-java-agent.jar vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar

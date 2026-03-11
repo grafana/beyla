@@ -14,6 +14,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
 const (
@@ -108,50 +109,51 @@ func parseCGITable(b []byte) map[string]string {
 	return res
 }
 
-func maybeFastCGI(b []byte) bool {
-	if len(b) <= fastCGIRequestHeaderLen {
+func maybeFastCGI(b *largebuf.LargeBuffer) bool {
+	if b.Len() <= fastCGIRequestHeaderLen {
 		return false
 	}
-
-	methodPos := bytes.Index(b, []byte(requestMethodKey))
-
-	return methodPos >= 0
+	return bytes.Contains(b.UnsafeView(), []byte(requestMethodKey))
 }
 
-func parseHeader(b []byte) ([]byte, error) {
+func parseHeader(b *largebuf.LargeBuffer) ([]byte, error) {
+	r := b.NewReader()
 	for {
-		hdr, err := readFastCGIHeader(b)
+		if r.Remaining() < fastCGIRequestHeaderLen {
+			return nil, errors.New("payload too short")
+		}
+		hdrBytes, err := r.ReadN(fastCGIRequestHeaderLen)
+		if err != nil {
+			return nil, errors.New("payload too short")
+		}
+		hdr, err := readFastCGIHeader(hdrBytes)
 		if err != nil {
 			return nil, errors.New("payload too short")
 		}
 
 		if hdr.Type == fcgiFrameTypeParams {
-			if len(b) <= fastCGIRequestHeaderLen {
+			if r.Remaining() == 0 {
 				return nil, errors.New("payload too short")
 			}
-			b = b[fastCGIRequestHeaderLen:]
-			break
+			rest, _ := r.ReadN(r.Remaining())
+			return rest, nil
 		}
-		payloadOffset := int(fastCGIRequestHeaderLen + hdr.ContentLength + uint16(hdr.PaddingLength))
-		if len(b) <= payloadOffset {
+		payloadOffset := int(hdr.ContentLength) + int(hdr.PaddingLength)
+		if err := r.Skip(payloadOffset); err != nil {
 			return nil, errors.New("payload too short")
 		}
-		b = b[payloadOffset:]
 	}
-
-	return b, nil
 }
 
-func detectFastCGI(b, rb []byte) (string, string, int) {
-	var err error
-	b, err = parseHeader(b)
+func detectFastCGI(b, rb *largebuf.LargeBuffer) (string, string, int) {
+	raw, err := parseHeader(b)
 	if err != nil {
 		return "", "", -1
 	}
 
-	methodPos := bytes.Index(b, []byte(requestMethodKey))
+	methodPos := bytes.Index(raw, []byte(requestMethodKey))
 	if methodPos >= 0 {
-		kv := parseCGITable(b)
+		kv := parseCGITable(raw)
 
 		method, ok := kv[requestMethodKey]
 		if !ok {
@@ -162,17 +164,18 @@ func detectFastCGI(b, rb []byte) (string, string, int) {
 		// Translate the status code into HTTP, 200 OK, 500 ERR
 		status := 200
 
-		if len(rb) >= 2 {
-			if rb[1] == responseError {
+		rbRaw := rb.UnsafeView()
+		if len(rbRaw) >= 2 {
+			if rbRaw[1] == responseError {
 				status = 500
 			}
 
-			statusPos := bytes.Index(rb, []byte(responseStatusKey))
+			statusPos := bytes.Index(rbRaw, []byte(responseStatusKey))
 			if statusPos >= 0 {
-				rb = rb[statusPos+len(responseStatusKey):]
-				nextSpace := bytes.Index(rb, []byte(" "))
+				rbRaw = rbRaw[statusPos+len(responseStatusKey):]
+				nextSpace := bytes.Index(rbRaw, []byte(" "))
 				if nextSpace > 0 {
-					statusStr := string(rb[:nextSpace])
+					statusStr := string(rbRaw[:nextSpace])
 					if parsed, err := strconv.ParseInt(statusStr, 10, 32); err == nil {
 						status = int(parsed)
 					}

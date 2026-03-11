@@ -110,7 +110,7 @@ func hasN1QLVersion(resp *http.Response) bool {
 	}
 	contentType := resp.Header.Get("Content-Type")
 	// Split by semicolons to get individual parameters
-	iter := split.NewIterator(contentType, ";")
+	iter := split.NewStringIterator(contentType, ";")
 	for part, eof := iter.Next(); !eof; part, eof = iter.Next() {
 		part = strings.TrimSuffix(part, ";")
 		part = strings.TrimSpace(part)
@@ -134,7 +134,7 @@ func parseSQLPPTablePath(table string, hasQueryContext bool) (bucket, collection
 	}
 
 	// Count parts first
-	iter := split.NewIterator(table, ".")
+	iter := split.NewStringIterator(table, ".")
 	count := 0
 	for _, eof := iter.Next(); !eof; _, eof = iter.Next() {
 		count++
@@ -198,7 +198,7 @@ func parseSQLPPRequest(req *http.Request) (*sqlppRequest, error) {
 
 // extractFormValue extracts a value from form-encoded data
 func extractFormValue(data, key string) string {
-	iter := split.NewIterator(data, "&")
+	iter := split.NewStringIterator(data, "&")
 	for pair, eof := iter.Next(); !eof; pair, eof = iter.Next() {
 		pair = strings.TrimSuffix(pair, "&")
 		// Split by first "=" only (equivalent to SplitN with 2)

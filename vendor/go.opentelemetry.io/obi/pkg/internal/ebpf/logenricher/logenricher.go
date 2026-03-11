@@ -132,6 +132,20 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 		},
 	}
 
+	hasDoWritev, err := ebpfcommon.KernelHasSymbol(ebpfcommon.KSymDoWritev)
+	if err != nil {
+		p.log.Error("error checking kernel symbol availability", "sym", ebpfcommon.KSymDoWritev, "error", err)
+	}
+
+	if hasDoWritev {
+		m["do_writev"] = ebpfcommon.ProbeDesc{
+			Start:    p.bpfObjects.ObiKprobeDoWritev,
+			Required: false,
+		}
+	} else {
+		p.log.Warn("do_writev kernel symbol not available; writev()-based log writes won't be enriched")
+	}
+
 	hasPipeWrite, err := ebpfcommon.KernelHasSymbol(ebpfcommon.KSymPipeWrite)
 	if err != nil {
 		p.log.Error("error checking kernel symbol availability", "sym", ebpfcommon.KSymPipeWrite, "error", err)

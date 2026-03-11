@@ -16,28 +16,36 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 	"go.opentelemetry.io/obi/pkg/internal/split"
 )
 
-const minRedisFrameLen = 3
+const (
+	minRedisFrameLen = 3
+	redisDelim       = "\r\n"
+)
 
-var redisErrorCodes = [...]string{
-	"ERR ",
-	"WRONGTYPE ",
-	"MOVED ",
-	"ASK ",
-	"BUSY ",
-	"NOSCRIPT ",
-	"CLUSTERDOWN ",
-	"READONLY ",
+var redisDelimBytes = []byte(redisDelim)
+
+var redisErrors = [...]struct {
+	prefix []byte
+	code   string
+}{
+	{[]byte("ERR "), "ERR"},
+	{[]byte("WRONGTYPE "), "WRONGTYPE"},
+	{[]byte("MOVED "), "MOVED"},
+	{[]byte("ASK "), "ASK"},
+	{[]byte("BUSY "), "BUSY"},
+	{[]byte("NOSCRIPT "), "NOSCRIPT"},
+	{[]byte("CLUSTERDOWN "), "CLUSTERDOWN"},
+	{[]byte("READONLY "), "READONLY"},
 }
 
-func isRedis(buf []uint8) bool {
-	if len(buf) < minRedisFrameLen {
+func isRedis(buf *largebuf.LargeBuffer) bool {
+	if buf.Len() < minRedisFrameLen {
 		return false
 	}
-
-	return isRedisOp(buf)
+	return isRedisOp(buf.UnsafeView())
 }
 
 //nolint:cyclop
@@ -65,12 +73,12 @@ func isRedisOp(buf []uint8) bool {
 }
 
 func getRedisError(buf []uint8) (request.DBError, bool) {
-	description := strings.Trim(string(buf), "\r\n")
+	description := string(bytes.Trim(buf, "\r\n"))
 	errorCode := ""
 
-	for _, redisErrorCode := range redisErrorCodes {
-		if bytes.HasPrefix(buf, []byte(redisErrorCode)) {
-			errorCode = strings.TrimSpace(redisErrorCode)
+	for _, e := range redisErrors {
+		if bytes.HasPrefix(buf, e.prefix) {
+			errorCode = e.code
 			break
 		}
 	}
@@ -111,10 +119,8 @@ func isValidRedisChar(c byte) bool {
 		c == '.' || c == ' ' || c == '-' || c == '_'
 }
 
-func parseRedisRequest(buf string) (string, string, bool) {
-	const redisDelim = "\r\n"
-
-	lines := split.NewIterator(buf, redisDelim)
+func parseRedisRequest(buf []byte) (string, string, bool) {
+	lines := split.NewBytesIterator(buf, redisDelimBytes)
 
 	_, eof := lines.Next()
 
@@ -150,18 +156,18 @@ func parseRedisRequest(buf string) (string, string, bool) {
 			break
 		}
 
-		if line == redisDelim {
+		if bytes.Equal(line, redisDelimBytes) {
 			continue
 		}
 
 		if !read {
-			if isRedisOp([]uint8(line)) {
+			if isRedisOp(line) {
 				read = true
 			} else {
 				break
 			}
 		} else {
-			if isRedisOp([]uint8(line)) {
+			if isRedisOp(line) {
 				text.WriteString("; ")
 				continue
 			}
@@ -169,12 +175,12 @@ func parseRedisRequest(buf string) (string, string, bool) {
 				break
 			}
 
-			trimmed := strings.TrimSuffix(line, redisDelim)
+			trimmed := bytes.TrimSuffix(line, redisDelimBytes)
 
 			if op == "" {
-				op = trimmed
+				op = string(trimmed)
 			}
-			text.WriteString(trimmed)
+			text.Write(trimmed)
 			text.WriteString(" ")
 			read = false
 		}
@@ -183,17 +189,19 @@ func parseRedisRequest(buf string) (string, string, bool) {
 	return op, strings.TrimSpace(text.String()), true
 }
 
-func redisStatus(buf []byte) (request.DBError, int) {
-	status := 0
-	firstChar := buf[0]
-	if firstChar != '-' {
-		return request.DBError{}, status
+func redisStatus(buf *largebuf.LargeBuffer) (request.DBError, int) {
+	if buf.Len() == 0 {
+		return request.DBError{}, 0
 	}
-	dbError, isError := getRedisError(buf[1:])
+	data := buf.UnsafeView()
+	if data[0] != '-' {
+		return request.DBError{}, 0
+	}
+	dbError, isError := getRedisError(data[1:])
+	status := 0
 	if isError {
 		status = 1
 	}
-
 	return dbError, status
 }
 
@@ -202,8 +210,8 @@ func getRedisDB(connInfo BpfConnectionInfoT, op, text string, dbCache *simplelru
 		return -1, false
 	}
 	db, found := dbCache.Get(connInfo)
-	switch strings.ToUpper(op) {
-	case "SELECT":
+	switch {
+	case strings.EqualFold(op, "SELECT"):
 		// get db number from text after first space
 		if text != "" {
 			parts := strings.Split(text, " ")
@@ -213,7 +221,7 @@ func getRedisDB(connInfo BpfConnectionInfoT, op, text string, dbCache *simplelru
 				}
 			}
 		}
-	case "QUIT":
+	case strings.EqualFold(op, "QUIT"):
 		dbCache.Remove(connInfo)
 	}
 	return db, found
@@ -281,7 +289,7 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 		hostPort = int(event.Conn.D_port)
 	}
 
-	op, text, ok := parseRedisRequest(string(event.Buf[:]))
+	op, text, ok := parseRedisRequest(event.Buf[:])
 
 	if !ok {
 		// We know it's redis request here, it just didn't complete correctly

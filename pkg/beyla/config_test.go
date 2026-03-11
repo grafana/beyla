@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obiconfig "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export"
@@ -275,6 +276,7 @@ network:
 			RenameUnresolvedHosts:          "unresolved",
 			RenameUnresolvedHostsOutgoing:  "outgoing",
 			RenameUnresolvedHostsIncoming:  "incoming",
+			MetadataRetry:                  meta.DefaultRetryConfig,
 			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{

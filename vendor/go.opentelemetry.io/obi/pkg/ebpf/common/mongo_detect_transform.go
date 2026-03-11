@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
 type mongoSpanInfo struct {
@@ -359,17 +360,19 @@ func validateFlagBits(flagBits int32) error {
 	return nil
 }
 
-func mongoInfoFromEvent(event *TCPRequestInfo, requestBuffer []byte, responseBuffer []byte, mongoRequestCache PendingMongoDBRequests) *mongoSpanInfo {
+func mongoInfoFromEvent(event *TCPRequestInfo, requestBuffer *largebuf.LargeBuffer, responseBuffer *largebuf.LargeBuffer, mongoRequestCache PendingMongoDBRequests) *mongoSpanInfo {
 	if event.Direction == 0 {
 		return nil
 	}
+	reqRaw := requestBuffer.UnsafeView()
+	respRaw := responseBuffer.UnsafeView()
 	var mongoRequest *MongoRequestValue
 	var moreToCome bool
-	_, _, err := ProcessMongoEvent(requestBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, mongoRequestCache)
+	_, _, err := ProcessMongoEvent(reqRaw, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, mongoRequestCache)
 	if err != nil {
 		return nil
 	}
-	mongoRequest, moreToCome, err = ProcessMongoEvent(responseBuffer, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, mongoRequestCache)
+	mongoRequest, moreToCome, err = ProcessMongoEvent(respRaw, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, mongoRequestCache)
 	if err != nil || mongoRequest == nil || moreToCome {
 		return nil
 	}
@@ -547,11 +550,18 @@ func findIntInBson(doc bson.D, key string) (int, bool) {
 	if !found {
 		return 0, false
 	}
-	intValue, ok := value.(int) // MongoDB uses int32 for integer values
-	if !ok {
-		return 0, false
+
+	// bson.Unmarshal stores MongoDB int32 as Go int32 and int64 as Go int64.
+	switch v := value.(type) {
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case int:
+		return v, true
 	}
-	return intValue, true
+
+	return 0, false
 }
 
 func findDoubleInBson(doc bson.D, key string) (float64, bool) {
@@ -559,7 +569,7 @@ func findDoubleInBson(doc bson.D, key string) (float64, bool) {
 	if !found {
 		return 0, false
 	}
-	doubleValue, ok := value.(float64) // MongoDB uses int32 for integer values
+	doubleValue, ok := value.(float64) // MongoDB uses float64 (double) for floating-point values
 	if !ok {
 		return 0, false
 	}

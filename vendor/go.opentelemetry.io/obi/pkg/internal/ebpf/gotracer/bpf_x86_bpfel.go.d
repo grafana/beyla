@@ -51,11 +51,13 @@ pkg/internal/ebpf/gotracer/bpf_x86_bpfel.go: \
  bpf/gotracer/go_net.c \
  bpf/gotracer/go_nethttp.c \
  bpf/common/ringbuf.h \
+ bpf/common/event_defs.h \
  bpf/gotracer/go_str.h \
  bpf/maps/go_ongoing_http.h \
  bpf/maps/go_ongoing_http_client_requests.h \
  bpf/common/http_func_invocation.h \
  bpf/maps/tp_char_buf_mem.h \
+ bpf/common/scratch_mem.h \
  bpf/gotracer/go_sql.c \
  bpf/maps/go_sql.h \
  bpf/gotracer/go_grpc.c \
@@ -168,6 +170,8 @@ bpf/gotracer/go_nethttp.c:
 
 bpf/common/ringbuf.h:
 
+bpf/common/event_defs.h:
+
 bpf/gotracer/go_str.h:
 
 bpf/maps/go_ongoing_http.h:
@@ -177,6 +181,8 @@ bpf/maps/go_ongoing_http_client_requests.h:
 bpf/common/http_func_invocation.h:
 
 bpf/maps/tp_char_buf_mem.h:
+
+bpf/common/scratch_mem.h:
 
 bpf/gotracer/go_sql.c:
 

@@ -140,24 +140,54 @@ p.getByte(1 + 36 + 4)  → 42   (Data byte at offset 41)
 
 ### Prerequisites
 
-- JDK 8 or higher
-- Gradle 8.0+
+- Docker and GNU Make (recommended; no local Gradle install required), or
+- Local Gradle 9.x and JDK 17+ (for running Gradle locally)
+
+Note: the Java agent bytecode target is Java 8, but Gradle itself requires JDK 17+ to run.
 
 ### Build Commands
 
+Run these commands from the repository root.
+
+#### Option A: Local Gradle
+
+```bash
+# Build Java agent and copy it to pkg/internal/java/embedded/obi-java-agent.jar
+make java-build
+
+# Run Java tests
+make java-test
+
+# Check formatting
+make java-spotless-check
+
+# Apply formatting
+make java-spotless-apply
+```
+
+You can also run Gradle directly from `pkg/internal/java`:
+
 ```bash
 # Build all modules and distribution
-./gradlew build
+gradle build
 
 # Build only the agent
-./gradlew :agent:build
+gradle :agent:build
 
 # Build only the loader
-./gradlew :loader:build
+gradle :loader:build
 
 # Fix code formatting
-./gradlew spotlessApply
+gradle spotlessApply
 
+```
+
+#### Option B: Docker-only (no local Gradle)
+
+```bash
+# Build Java agent artifact using javaagent.Dockerfile and export it to:
+# pkg/internal/java/embedded/obi-java-agent.jar
+make java-docker-build
 ```
 
 The final agent JAR will be located at:
@@ -262,16 +292,16 @@ jattach <PID of Java program> load instrument false "/path/to/obi-java-agent.jar
 
 ```bash
 # Run all benchmarks
-./gradlew :agent:jmh
+gradle :agent:jmh
 
 # Run specific benchmark
-./gradlew :agent:jmh -Pjmh.includes=benchmarkFlattenDstByteBufferArray
+gradle :agent:jmh -Pjmh.includes=benchmarkFlattenDstByteBufferArray
 
 # Run with GC profiling
-./gradlew :agent:jmh -Pjmh.profilers=gc
+gradle :agent:jmh -Pjmh.profilers=gc
 
 # Run with memory allocation profiling
-./gradlew :agent:jmh -Pjmh.profilers=gc,stack
+gradle :agent:jmh -Pjmh.profilers=gc,stack
 ```
 
 ### Benchmark Results
@@ -292,13 +322,13 @@ flattenDstByteBufferArray                  direct           64    523.1
 
 ```bash
 # Run all tests
-./gradlew test
+gradle test
 
 # Run tests for specific module
-./gradlew :agent:test
+gradle :agent:test
 
 # Run specific test class
-./gradlew :agent:test --tests ByteBufferExtractorTest
+gradle :agent:test --tests ByteBufferExtractorTest
 ```
 
 ## 📝 License

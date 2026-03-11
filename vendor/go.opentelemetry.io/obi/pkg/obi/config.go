@@ -21,6 +21,7 @@ import (
 
 	"go.opentelemetry.io/collector/confmap"
 
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
@@ -235,6 +236,7 @@ var DefaultConfig = Config{
 			ResourceLabels:        kube.DefaultResourceLabels,
 		},
 		HostID:                         HostIDConfig{},
+		MetadataRetry:                  meta.DefaultRetryConfig,
 		RenameUnresolvedHosts:          "unresolved",
 		RenameUnresolvedHostsOutgoing:  "outgoing",
 		RenameUnresolvedHostsIncoming:  "incoming",
@@ -522,6 +524,7 @@ type Attributes struct {
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes ExtraGroupAttributesMap       `yaml:"extra_group_attributes"`
+	MetadataRetry        meta.RetryConfig              `yaml:"metadata_retry"`
 
 	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
 	// unresolved IP addresses to reduce cardinality.

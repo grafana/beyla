@@ -479,7 +479,7 @@ github.com/mitchellh/reflectwalk
 # github.com/moby/docker-image-spec v1.3.1
 ## explicit; go 1.18
 github.com/moby/docker-image-spec/specs-go/v1
-# github.com/moby/moby/api v1.53.0
+# github.com/moby/moby/api v1.54.0
 ## explicit; go 1.24.0
 github.com/moby/moby/api/types
 github.com/moby/moby/api/types/blkiodev
@@ -498,7 +498,7 @@ github.com/moby/moby/api/types/storage
 github.com/moby/moby/api/types/swarm
 github.com/moby/moby/api/types/system
 github.com/moby/moby/api/types/volume
-# github.com/moby/moby/client v0.2.2
+# github.com/moby/moby/client v0.3.0
 ## explicit; go 1.24.0
 github.com/moby/moby/client
 github.com/moby/moby/client/internal
@@ -939,6 +939,7 @@ go.opentelemetry.io/obi/pkg/internal/helpers/msg
 go.opentelemetry.io/obi/pkg/internal/helpers/sync
 go.opentelemetry.io/obi/pkg/internal/java
 go.opentelemetry.io/obi/pkg/internal/kube
+go.opentelemetry.io/obi/pkg/internal/largebuf
 go.opentelemetry.io/obi/pkg/internal/netolly/ebpf
 go.opentelemetry.io/obi/pkg/internal/netolly/export
 go.opentelemetry.io/obi/pkg/internal/netolly/flow

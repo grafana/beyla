@@ -500,7 +500,7 @@ type BpfMapSpecs struct {
 	SpanMem                        *ebpf.MapSpec `ebpf:"span_mem"`
 	SpanNames                      *ebpf.MapSpec `ebpf:"span_names"`
 	TempHeaderMemStore             *ebpf.MapSpec `ebpf:"temp_header_mem_store"`
-	TpCharBufMem                   *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
+	TpCharBufStorage               *ebpf.MapSpec `ebpf:"tp_char_buf_storage"`
 	TraceMap                       *ebpf.MapSpec `ebpf:"trace_map"`
 	TracesCtxV1                    *ebpf.MapSpec `ebpf:"traces_ctx_v1"`
 	TransportNewClientInvocations  *ebpf.MapSpec `ebpf:"transport_new_client_invocations"`
@@ -598,7 +598,7 @@ type BpfMaps struct {
 	SpanMem                        *ebpf.Map `ebpf:"span_mem"`
 	SpanNames                      *ebpf.Map `ebpf:"span_names"`
 	TempHeaderMemStore             *ebpf.Map `ebpf:"temp_header_mem_store"`
-	TpCharBufMem                   *ebpf.Map `ebpf:"tp_char_buf_mem"`
+	TpCharBufStorage               *ebpf.Map `ebpf:"tp_char_buf_storage"`
 	TraceMap                       *ebpf.Map `ebpf:"trace_map"`
 	TracesCtxV1                    *ebpf.Map `ebpf:"traces_ctx_v1"`
 	TransportNewClientInvocations  *ebpf.Map `ebpf:"transport_new_client_invocations"`
@@ -652,7 +652,7 @@ func (m *BpfMaps) Close() error {
 		m.SpanMem,
 		m.SpanNames,
 		m.TempHeaderMemStore,
-		m.TpCharBufMem,
+		m.TpCharBufStorage,
 		m.TraceMap,
 		m.TracesCtxV1,
 		m.TransportNewClientInvocations,

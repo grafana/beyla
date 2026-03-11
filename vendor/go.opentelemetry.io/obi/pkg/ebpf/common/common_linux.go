@@ -186,6 +186,7 @@ type KSym string
 const (
 	KSymPipeWrite     KSym = "pipe_write"
 	KSymAnonPipeWrite KSym = "anon_pipe_write"
+	KSymDoWritev      KSym = "do_writev"
 
 	// Stable symbol, used for testing
 	KSymTCPSendmsg KSym = "tcp_sendmsg"
@@ -201,6 +202,7 @@ var kSymsCache = struct {
 	syms: map[KSym]bool{
 		KSymPipeWrite:     false,
 		KSymAnonPipeWrite: false,
+		KSymDoWritev:      false,
 		KSymTCPSendmsg:    false,
 		KSymTestDummy:     false,
 	},

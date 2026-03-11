@@ -10,7 +10,7 @@ WORKDIR /build
 COPY .obi-src/pkg/internal/java .
 
 # Build the project
-RUN ./gradlew build --no-daemon
+RUN gradle build --no-daemon
 
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.

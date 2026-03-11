@@ -244,7 +244,7 @@ JAVA_AGENT_EMBED_DIR := vendor/go.opentelemetry.io/obi/pkg/internal/java/embedde
 java-build:
 	@echo "### Building Java agent"
 	mkdir -p $(JAVA_AGENT_EMBED_DIR)
-	cd $(JAVA_AGENT_DIR) && ./gradlew build
+	cd $(JAVA_AGENT_DIR) && gradle build
 	cp $(JAVA_AGENT_DIR)/build/$(JAVA_AGENT) $(JAVA_AGENT_EMBED_DIR)/$(JAVA_AGENT)
 
 .PHONY: java-docker-build
@@ -256,22 +256,22 @@ java-docker-build:
 .PHONY: java-test
 java-test:
 	@echo "### Testing Java agent"
-	cd $(JAVA_AGENT_DIR) && ./gradlew test
+	cd $(JAVA_AGENT_DIR) && gradle test
 
 .PHONY: java-spotless-check
 java-spotless-check:
 	@echo "### Checking Java code formatting"
-	cd $(JAVA_AGENT_DIR) && ./gradlew spotlessCheck
+	cd $(JAVA_AGENT_DIR) && gradle spotlessCheck
 
 .PHONY: java-spotless-apply
 java-spotless-apply:
 	@echo "### Formatting Java code"
-	cd $(JAVA_AGENT_DIR) && ./gradlew spotlessApply
+	cd $(JAVA_AGENT_DIR) && gradle spotlessApply
 
 .PHONY: java-clean
 java-clean:
 	@echo "### Cleaning Java agent build artifacts"
-	cd $(JAVA_AGENT_DIR) && ./gradlew clean
+	cd $(JAVA_AGENT_DIR) && gradle clean
 
 .PHONY: java-verify
 java-verify: java-spotless-check java-test java-build

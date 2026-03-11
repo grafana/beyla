@@ -83,6 +83,7 @@ func OverrideOBIGlobalConfig() {
 	obibuildinfo.Revision = buildinfo.Revision
 	attr.VendorPrefix = "beyla"
 	attr.VendorSDKName = "beyla"
+	attr.TelemetryDistroName = "beyla"
 	attr.OBIIP = "beyla.ip"
 	attributes.NetworkFlow = attributes.Name{
 		Section: "beyla.network.flow",

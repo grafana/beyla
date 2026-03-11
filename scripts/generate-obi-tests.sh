@@ -96,6 +96,7 @@ BEHAVIORAL_TRANSFORMS=(
     'Value: "go\.opentelemetry\.io/obi"|Value: "github.com/grafana/beyla"'
     '"value":"go\.opentelemetry\.io/obi"|"value":"github.com/grafana/beyla"'
     'opentelemetry-ebpf-instrumentation|beyla'
+    'Key: "telemetry\.sdk\.name", Type: "string", Value: "opentelemetry"|Key: "telemetry.sdk.name", Type: "string", Value: "beyla"'
 
     # --- K8s component paths ---
     'DockerfileOBI|DockerfileBeyla'

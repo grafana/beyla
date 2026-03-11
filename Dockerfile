@@ -55,7 +55,7 @@ RUN apt install -y clang llvm
 COPY .obi-src/pkg/internal/java .
 
 # Build the project
-RUN ./gradlew build --no-daemon
+RUN gradle build --no-daemon
 
 # Create final image from minimal + built binary
 FROM scratch

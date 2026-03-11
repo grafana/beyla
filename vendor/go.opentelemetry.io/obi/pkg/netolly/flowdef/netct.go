@@ -7,3 +7,10 @@ const (
 	DeduperNone      = "none"
 	DeduperFirstCome = "first_come"
 )
+
+type PortGuessPolicy string
+
+const (
+	PortGuessDisable = PortGuessPolicy("disable")
+	PortGuessOrdinal = PortGuessPolicy("ordinal")
+)

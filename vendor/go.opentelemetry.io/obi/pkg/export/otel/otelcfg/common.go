@@ -29,7 +29,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
-	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -108,9 +107,10 @@ func GetResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.K
 		// so the service is visible in the ServicesList
 		// This attribute also allows that App O11y plugin shows this app as a Go application.
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
-		// We set the SDK name as OBI, so we can distinguish OBI generated metrics from other SDKs
 		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
-		semconv.TelemetrySDKVersion(buildinfo.Version),
+		semconv.TelemetrySDKVersion(attr.VendorSDKVersion),
+		semconv.TelemetryDistroName(attr.TelemetryDistroName),
+		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion),
 		semconv.HostName(service.HostName),
 		semconv.HostID(nodeMeta.HostID),
 		semconv.OSTypeLinux,

@@ -126,6 +126,10 @@ type NetworkConfig struct {
 	// Sampling holds the rate at which packets should be sampled and sent to the target collector.
 	// E.g. if set to 100, one out of 100 packets, on average, will be sent to the target collector.
 	Sampling int `yaml:"sampling" env:"OTEL_EBPF_NETWORK_SAMPLING" validate:"omitempty,gt=0"`
+	// GuessPorts controls how OBI assigns server.port/client.port when the connection initiator is unknown.
+	// Accepted values are "ordinal" (assume highest port is client) and "disable"
+	// (default, do not guess and emit empty client/server port attributes for unknown-initiator flows).
+	GuessPorts flowdef.PortGuessPolicy `yaml:"guess_ports" env:"OTEL_EBPF_NETWORK_GUESS_PORTS" validate:"oneof=ordinal disable" jsonschema:"type=string,enum=ordinal,enum=disable"`
 	// ListenInterfaces specifies the mechanism used by the agent to listen for added or removed
 	// network interfaces. Accepted values are "watch" (default) or "poll".
 	// If the value is "watch", interfaces are traced immediately after they are created. This is
@@ -164,6 +168,7 @@ var DefaultNetworkConfig = NetworkConfig{
 	CacheActiveTimeout: 5 * time.Second,
 	Deduper:            flowdef.DeduperFirstCome,
 	Direction:          "both",
+	GuessPorts:         flowdef.PortGuessDisable,
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
 	ReverseDNS: flow.ReverseDNS{

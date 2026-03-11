@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -27,6 +28,7 @@ type NetPrometheusConfig struct {
 	Config      *PrometheusConfig
 	SelectorCfg *attributes.SelectorConfig
 	CommonCfg   *perapp.MetricsConfig
+	GuessPorts  flowdef.PortGuessPolicy
 }
 
 // Enabled returns whether the node needs to be activated
@@ -94,13 +96,15 @@ func newNetReporter(
 		promConnect: ctxInfo.Prometheus,
 		clock:       clock,
 	}
-
+	recordGettersConfig := ebpf.RecordGettersConfig{
+		PortGuessPolicy: cfg.GuessPorts,
+	}
 	var register []prometheus.Collector
 	log := slog.With("component", "prom.NetworkEndpoint")
 	if cfg.CommonCfg.Features.NetworkBytes() {
 		log.Debug("registering network flow bytes metric")
 		mr.flowAttrs = attributes.PrometheusGetters(
-			ebpf.RecordStringGetters,
+			ebpf.RecordStringGetters(recordGettersConfig),
 			provider.For(attributes.NetworkFlow))
 
 		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -113,7 +117,7 @@ func newNetReporter(
 	if cfg.CommonCfg.Features.NetworkInterZone() {
 		log.Debug("registering network inter-zone metric")
 		mr.interZoneAttrs = attributes.PrometheusGetters(
-			ebpf.RecordStringGetters,
+			ebpf.RecordStringGetters(recordGettersConfig),
 			provider.For(attributes.NetworkInterZone))
 
 		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{

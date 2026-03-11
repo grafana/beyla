@@ -9,30 +9,32 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
 const (
 	DirectionRequest  = "request"
 	DirectionResponse = "response"
+	DirectionUnknown  = "unknown"
 )
 
-func serverPort(r *Record) uint16 {
-	switch r.Metrics.Initiator {
-	case InitiatorDst:
-		return r.Id.SrcPort
-	case InitiatorSrc:
-		return r.Id.DstPort
-	default:
-		// guess it, assuming that ephemeral ports for clients would be usually higher
-		return min(r.Id.DstPort, r.Id.SrcPort)
-	}
+type RecordGettersConfig struct {
+	PortGuessPolicy flowdef.PortGuessPolicy
 }
 
 // RecordGetters returns the attributes.Getter function that returns the string value of a given
 // attribute name.
 //
 //nolint:cyclop
-func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValue], bool) {
+func RecordGetters(cfg RecordGettersConfig) attributes.NamedGetters[*Record, attribute.KeyValue] {
+	return recordGetters{cfg: cfg}.get
+}
+
+type recordGetters struct {
+	cfg RecordGettersConfig
+}
+
+func (r recordGetters) get(name attr.Name) (attributes.Getter[*Record, attribute.KeyValue], bool) {
 	var getter attributes.Getter[*Record, attribute.KeyValue]
 	switch name {
 	case attr.OBIIP:
@@ -47,7 +49,8 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 		}
 	case attr.NetworkProtocol:
 		getter = func(r *Record) attribute.KeyValue {
-			return attribute.String(string(attr.NetworkProtocol), transport.ApplicationPortToString(serverPort(r)))
+			return attribute.String(string(attr.NetworkProtocol),
+				transport.ApplicationPortToString(serverPort(r, serverPortOrdinalGuess)))
 		}
 	case attr.SrcAddress:
 		getter = func(r *Record) attribute.KeyValue {
@@ -72,20 +75,12 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 	case attr.Iface:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.Iface), r.Attrs.Interface) }
 	case attr.ClientPort:
+		guesser := r.cfg.clientPortGuesser()
 		getter = func(r *Record) attribute.KeyValue {
-			var clientPort uint16
-			switch r.Metrics.Initiator {
-			case InitiatorDst:
-				clientPort = r.Id.DstPort
-			case InitiatorSrc:
-				clientPort = r.Id.SrcPort
-			default:
-				// guess it, assuming that ephemeral ports for clients would be usually higher
-				clientPort = max(r.Id.DstPort, r.Id.SrcPort)
-			}
-			return attribute.Int(string(attr.ClientPort), int(clientPort))
+			return attribute.Int(string(attr.ClientPort), int(clientPort(r, guesser)))
 		}
 	case attr.Direction:
+		guesser := r.cfg.clientPortGuesser()
 		getter = func(r *Record) attribute.KeyValue {
 			var direction string
 			switch r.Metrics.Initiator {
@@ -94,18 +89,23 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 			case InitiatorSrc:
 				direction = DirectionRequest
 			default:
-				// guess it, assuming that ephemeral ports for clients would be usually higher
-				if r.Id.SrcPort > r.Id.DstPort {
+				// guess client port
+				clientPort := guesser(r)
+				switch clientPort {
+				case 0:
+					direction = DirectionUnknown
+				case r.Id.SrcPort:
 					direction = DirectionRequest
-				} else {
+				default:
 					direction = DirectionResponse
 				}
 			}
 			return attribute.String(string(attr.Direction), direction)
 		}
 	case attr.ServerPort:
+		guesser := r.cfg.serverPortGuesser()
 		getter = func(r *Record) attribute.KeyValue {
-			return attribute.Int(string(attr.ServerPort), int(serverPort(r)))
+			return attribute.Int(string(attr.ServerPort), int(serverPort(r, guesser)))
 		}
 	case attr.SrcZone:
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.SrcZone), r.Attrs.SrcZone) }
@@ -117,11 +117,16 @@ func RecordGetters(name attr.Name) (attributes.Getter[*Record, attribute.KeyValu
 	return getter, getter != nil
 }
 
-func RecordStringGetters(name attr.Name) (attributes.Getter[*Record, string], bool) {
-	if g, ok := RecordGetters(name); ok {
-		return func(r *Record) string { return g(r).Value.Emit() }, true
+func RecordStringGetters(
+	rgc RecordGettersConfig,
+) attributes.NamedGetters[*Record, string] {
+	otelGetters := RecordGetters(rgc)
+	return func(name attr.Name) (attributes.Getter[*Record, string], bool) {
+		if g, ok := otelGetters(name); ok {
+			return func(r *Record) string { return g(r).Value.Emit() }, true
+		}
+		return nil, false
 	}
-	return nil, false
 }
 
 func ifaceDirectionStr(direction uint8) string {

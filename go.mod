@@ -35,7 +35,7 @@ require (
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.146.1
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.146.1
 	go.opentelemetry.io/collector/pdata v1.52.0
-	go.opentelemetry.io/obi v0.5.0
+	go.opentelemetry.io/obi v0.6.0
 	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/sdk v1.40.0
 	go.opentelemetry.io/otel/sdk/metric v1.40.0
@@ -147,8 +147,8 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.53.0 // indirect
-	github.com/moby/moby/client v0.2.2 // indirect
+	github.com/moby/moby/api v1.54.0 // indirect
+	github.com/moby/moby/client v0.3.0 // indirect
 	github.com/moby/spdystream v0.5.0 // indirect
 	github.com/moby/sys/sequential v0.6.0 // indirect
 	github.com/moby/sys/user v0.4.0 // indirect

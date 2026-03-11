@@ -524,8 +524,8 @@ type BpfMapSpecs struct {
 	SslToPidTid                 *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
 	TcpConnectionMap            *ebpf.MapSpec `ebpf:"tcp_connection_map"`
 	TcpReqMem                   *ebpf.MapSpec `ebpf:"tcp_req_mem"`
-	TpCharBufMem                *ebpf.MapSpec `ebpf:"tp_char_buf_mem"`
-	TpInfoMem                   *ebpf.MapSpec `ebpf:"tp_info_mem"`
+	TpCharBufStorage            *ebpf.MapSpec `ebpf:"tp_char_buf_storage"`
+	TpInfoStorage               *ebpf.MapSpec `ebpf:"tp_info_storage"`
 	TraceMap                    *ebpf.MapSpec `ebpf:"trace_map"`
 	TracesCtxV1                 *ebpf.MapSpec `ebpf:"traces_ctx_v1"`
 	UpstreamInitArgs            *ebpf.MapSpec `ebpf:"upstream_init_args"`
@@ -646,8 +646,8 @@ type BpfMaps struct {
 	SslToPidTid                 *ebpf.Map `ebpf:"ssl_to_pid_tid"`
 	TcpConnectionMap            *ebpf.Map `ebpf:"tcp_connection_map"`
 	TcpReqMem                   *ebpf.Map `ebpf:"tcp_req_mem"`
-	TpCharBufMem                *ebpf.Map `ebpf:"tp_char_buf_mem"`
-	TpInfoMem                   *ebpf.Map `ebpf:"tp_info_mem"`
+	TpCharBufStorage            *ebpf.Map `ebpf:"tp_char_buf_storage"`
+	TpInfoStorage               *ebpf.Map `ebpf:"tp_info_storage"`
 	TraceMap                    *ebpf.Map `ebpf:"trace_map"`
 	TracesCtxV1                 *ebpf.Map `ebpf:"traces_ctx_v1"`
 	UpstreamInitArgs            *ebpf.Map `ebpf:"upstream_init_args"`
@@ -710,8 +710,8 @@ func (m *BpfMaps) Close() error {
 		m.SslToPidTid,
 		m.TcpConnectionMap,
 		m.TcpReqMem,
-		m.TpCharBufMem,
-		m.TpInfoMem,
+		m.TpCharBufStorage,
+		m.TpInfoStorage,
 		m.TraceMap,
 		m.TracesCtxV1,
 		m.UpstreamInitArgs,

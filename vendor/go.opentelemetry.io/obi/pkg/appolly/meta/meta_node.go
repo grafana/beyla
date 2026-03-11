@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/contrib/detectors/aws/ec2/v2"
 	"go.opentelemetry.io/contrib/detectors/azure/azurevm"
 	"go.opentelemetry.io/contrib/detectors/gcp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kube"
@@ -23,19 +24,17 @@ func nslog() *slog.Logger {
 	return slog.With("component", "meta.NodeMeta")
 }
 
-// TODO: make configurable
-const (
-	retryTimeout       = 30 * time.Second
-	retryStartInterval = 500 * time.Millisecond
-	retryMaxInterval   = 5 * time.Second
-)
-
 var connectionTimeout = 2 * time.Second
 
-// some attributes from the node need to be filtered out, because they are
-// going to be specified for each service instance
-var filterAttrs []attr.Name = []attr.Name{
-	attr.HostName,
+// some attributes from the node need to be filtered out, becausee ither
+// - they are not common to all the services and is going to be specified for each service instance
+// - they are explicitly added later in the exporters and we don't want duplications
+// - they are already added by the K8s store client, and we don't want duplications
+var filterAttrs = map[attr.Name]struct{}{
+	attr.HostName:                {},
+	attr.Name(semconv.OSTypeKey): {},
+	attr.K8sClusterName:          {},
+	attr.K8sNodeName:             {},
 }
 
 // host metadata is common to all the instrumented applications within a single
@@ -67,8 +66,10 @@ func NewNodeMeta(
 	ctx context.Context,
 	overrideHost string,
 	kubeInformer *kube.MetadataProvider,
+	retryCfg RetryConfig,
 ) NodeMeta {
 	return fetchEntries(ctx,
+		retryCfg,
 		// some fetchers will only retrieve the host name while others
 		// will retrieve also host attributes that will be merged
 		// in order of the priority below (the later the highest)
@@ -85,6 +86,7 @@ func NewNodeMeta(
 
 func fetchEntries(
 	ctx context.Context,
+	retryCfg RetryConfig,
 	fetchers ...fetcher,
 ) NodeMeta {
 	log := nslog()
@@ -95,7 +97,7 @@ func fetchEntries(
 	results := make([]NodeMeta, len(fetchers))
 	for i, fetch := range fetchers {
 		wg.Go(func() {
-			results[i] = backoffFetch(ctx, fetch, log.With("fetcher", i))
+			results[i] = backoffFetch(ctx, retryCfg, fetch, log.With("fetcher", i))
 		})
 	}
 	wg.Wait()
@@ -114,8 +116,8 @@ func fetchEntries(
 	return merged
 }
 
-func backoffFetch(ctx context.Context, fetch fetcher, log *slog.Logger) NodeMeta {
-	backoff := retryStartInterval
+func backoffFetch(ctx context.Context, retryCfg RetryConfig, fetch fetcher, log *slog.Logger) NodeMeta {
+	backoff := retryCfg.StartInterval
 	start := time.Now()
 	for {
 		entries, err := fetch(ctx)
@@ -123,7 +125,7 @@ func backoffFetch(ctx context.Context, fetch fetcher, log *slog.Logger) NodeMeta
 			return entries
 		}
 		// exponential backoff retry strategy
-		if time.Since(start) > retryTimeout {
+		if time.Since(start) > retryCfg.Timeout {
 			log.Debug("timeout reached while looking for metadata. Giving up", "error", err)
 			return NodeMeta{}
 		}
@@ -135,7 +137,7 @@ func backoffFetch(ctx context.Context, fetch fetcher, log *slog.Logger) NodeMeta
 			log.Debug("context canceled. Exiting")
 			return NodeMeta{}
 		}
-		backoff = min(backoff*2, retryMaxInterval)
+		backoff = min(backoff*2, retryCfg.MaxInterval)
 	}
 }
 
@@ -150,7 +152,7 @@ func (ns *NodeMeta) merge(src NodeMeta) {
 		keyPos[att.Key] = i
 	}
 	for _, entry := range src.Metadata {
-		if slices.Contains(filterAttrs, entry.Key) {
+		if _, ok := filterAttrs[entry.Key]; ok {
 			continue
 		}
 		if pos, ok := keyPos[entry.Key]; ok {

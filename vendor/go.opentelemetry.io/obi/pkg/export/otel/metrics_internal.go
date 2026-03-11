@@ -242,10 +242,13 @@ func (p *InternalMetricsReporter) InstrumentationError(processName, errorType st
 
 func newResourceInternal(nodeMeta *meta.NodeMeta) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(attr.VendorSDKName),
+		semconv.ServiceName(attr.TelemetryDistroName),
 		semconv.ServiceInstanceID(uuid.New().String()),
 		semconv.TelemetrySDKLanguageKey.String(semconv.TelemetrySDKLanguageGo.Value.AsString()),
 		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
+		semconv.TelemetrySDKVersion(attr.VendorSDKVersion),
+		semconv.TelemetryDistroName(attr.TelemetryDistroName),
+		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion),
 		semconv.HostID(nodeMeta.HostID),
 	}
 

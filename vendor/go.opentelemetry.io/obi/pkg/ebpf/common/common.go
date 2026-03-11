@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -174,7 +175,7 @@ type EBPFParseContext struct {
 	h2c                        *lru.Cache[uint64, h2Connection]
 	redisDBCache               *simplelru.LRU[BpfConnectionInfoT, int]
 	couchbaseBucketCache       *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]
-	largeBuffers               *expirable.LRU[largeBufferKey, *largeBuffer]
+	largeBuffers               *expirable.LRU[largeBufferKey, *largebuf.LargeBuffer]
 	mongoRequestCache          PendingMongoDBRequests
 	mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 	postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
@@ -213,7 +214,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 	)
 
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
-	largeBuffers := expirable.NewLRU[largeBufferKey, *largeBuffer](1024, nil, 5*time.Minute)
+	largeBuffers := expirable.NewLRU[largeBufferKey, *largebuf.LargeBuffer](1024, nil, 5*time.Minute)
 
 	if cfg != nil {
 		protocolDebug = cfg.ProtocolDebug
@@ -355,14 +356,6 @@ const (
 )
 
 func SupportsLogInjection(log *slog.Logger) bool {
-	kernelMajor, kernelMinor := KernelVersion()
-	log.Debug("Linux kernel version", "major", kernelMajor, "minor", kernelMinor)
-
-	if kernelMajor < 6 {
-		log.Info("log injection not supported: linux kernel version < 6", "kernelMajor", kernelMajor, "kernelMinor", kernelMinor)
-		return false
-	}
-
 	if !hasCapSysAdmin() {
 		log.Info("log injection not supported: missing CAP_SYS_ADMIN capability")
 		return false

@@ -3,7 +3,11 @@
 
 package kafkaparser // import "go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 
-import "errors"
+import (
+	"errors"
+
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
+)
 
 type ProduceTopic struct {
 	Name      string
@@ -14,12 +18,11 @@ type ProduceRequest struct {
 	Topics []*ProduceTopic
 }
 
-func ParseProduceRequest(pkt []byte, header *KafkaRequestHeader, offset Offset) (*ProduceRequest, error) {
-	offset, err := produceRequestSkipUntilTopics(pkt, header, offset)
-	if err != nil {
+func ParseProduceRequest(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*ProduceRequest, error) {
+	if err := produceRequestSkipUntilTopics(r, header); err != nil {
 		return nil, err
 	}
-	topics, err := parseProduceTopics(pkt, header, offset)
+	topics, err := parseProduceTopics(r, header)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +34,7 @@ func ParseProduceRequest(pkt []byte, header *KafkaRequestHeader, offset Offset) 
 	}, nil
 }
 
-func produceRequestSkipUntilTopics(pkt []byte, header *KafkaRequestHeader, offset Offset) (Offset, error) {
+func produceRequestSkipUntilTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
 	/*
 		Produce Request (Version: 3-12) => transactional_id acks timeout_ms [topic_data] _tagged_fields
 		  transactional_id => NULLABLE_STRING / COMPACT_NULLABLE_STRING
@@ -39,34 +42,28 @@ func produceRequestSkipUntilTopics(pkt []byte, header *KafkaRequestHeader, offse
 		  timeout_ms => INT32
 		  topic_data => Name [partition_data] _tagged_fields
 	*/
-	transactionIDSize, offset, err := readStringLength(pkt, header, offset, true)
+	transactionIDSize, err := readStringLength(r, header, true)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	offset, err = skipBytes(pkt, offset,
-		transactionIDSize+ // transactional_id
-			Int16Len+ // acks
+	return r.Skip(
+		transactionIDSize + // transactional_id
+			Int16Len + // acks
 			Int32Len, // timeout_ms
 	)
-	if err != nil {
-		return 0, err
-	}
-	return offset, nil
 }
 
-func parseProduceTopics(pkt []byte, header *KafkaRequestHeader, offset Offset) ([]*ProduceTopic, error) {
-	topicsLen, offset, err := readArrayLength(pkt, header, offset)
+func parseProduceTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader) ([]*ProduceTopic, error) {
+	topicsLen, err := readArrayLength(r, header)
 	if err != nil {
 		return nil, err
 	}
 	var topics []*ProduceTopic
-	var topic *ProduceTopic
-	// parse each topic
 	if topicsLen <= 0 {
 		return topics, nil
 	}
 	// read single topic for now, because skipping records is complicated
-	topic, _, err = parseProduceTopic(pkt, header, offset)
+	topic, err := parseProduceTopic(r, header)
 	if err != nil {
 		// return the Topics parsed so far, even if one topic failed
 		return topics, nil
@@ -74,34 +71,34 @@ func parseProduceTopics(pkt []byte, header *KafkaRequestHeader, offset Offset) (
 	if topic != nil {
 		topics = append(topics, topic)
 	}
-	return topics, err
+	return topics, nil
 }
 
-func parseProduceTopic(pkt []byte, header *KafkaRequestHeader, offset Offset) (*ProduceTopic, Offset, error) {
+func parseProduceTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*ProduceTopic, error) {
 	var topic ProduceTopic
 	/*
 	  Topics => topic [partitions] _tagged_fields
 	    topic => STRING / COMPACT_STRING
 	*/
-	topicName, offset, err := readString(pkt, header, offset, false)
+	topicName, err := readString(r, header, false)
 	if err != nil {
-		return nil, offset, err
+		return nil, err
 	}
 	topic.Name = topicName
-	partitionsLen, offset, err := readArrayLength(pkt, header, offset)
+	partitionsLen, err := readArrayLength(r, header)
 	if err != nil {
 		// return the topic even if partitions can't be read
-		return &topic, offset, nil
+		return &topic, nil
 	}
 	if partitionsLen != 1 {
-		// if more then 1 Partition, we just won't report Partition
-		return &topic, offset, nil
+		// if more than 1 Partition, we just won't report Partition
+		return &topic, nil
 	}
 	// read single Partition for now, because skipping records is complicated
-	firstPartition, offset, err := readInt32(pkt, offset)
+	firstPartition, err := readInt32(r)
 	if err != nil {
-		return &topic, offset, nil
+		return &topic, nil
 	}
 	topic.Partition = &firstPartition
-	return &topic, offset, nil
+	return &topic, nil
 }

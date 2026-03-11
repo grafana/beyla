@@ -83,15 +83,17 @@ const (
 	k8sKind            = "k8s_kind"
 	k8sOwnerName       = "k8s_owner_name"
 
-	spanNameKey          = "span_name"
-	statusCodeKey        = "status_code"
-	spanKindKey          = "span_kind"
-	serviceInstanceKey   = "instance"
-	serviceJobKey        = "job"
-	sourceKey            = "source"
-	telemetryLanguageKey = "telemetry_sdk_language"
-	telemetrySDKKey      = "telemetry_sdk_name"
-	telemetrySDKVersion  = "telemetry_sdk_version"
+	spanNameKey            = "span_name"
+	statusCodeKey          = "status_code"
+	spanKindKey            = "span_kind"
+	serviceInstanceKey     = "instance"
+	serviceJobKey          = "job"
+	sourceKey              = "source"
+	telemetryLanguageKey   = "telemetry_sdk_language"
+	telemetrySDKKey        = "telemetry_sdk_name"
+	telemetrySDKVersion    = "telemetry_sdk_version"
+	telemetryDistroNameKey = "telemetry_distro_name"
+	telemetryDistroVersion = "telemetry_distro_version"
 
 	// default values for the histogram configuration
 	// recommended values for native histogram migration
@@ -851,7 +853,7 @@ func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
 }
 
 func (r *metricsReporter) otelSpanMetricsObserved(span *request.Span) bool {
-	return span.Service.Features.AnySpanMetrics() && !span.Service.ExportsOTelMetricsSpan()
+	return span.Service.Features.AnySpanMetrics() && !span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
@@ -1114,6 +1116,8 @@ func labelNamesTargetInfo(kubeEnabled, dockerEnabled bool, nodeMeta *meta.NodeMe
 		telemetryLanguageKey,
 		telemetrySDKKey,
 		telemetrySDKVersion,
+		telemetryDistroNameKey,
+		telemetryDistroVersion,
 		sourceKey,
 		osTypeKey,
 	}
@@ -1146,7 +1150,9 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 		service.Job(),
 		service.SDKLanguage.String(),
 		attr.VendorSDKName,
-		buildinfo.Version,
+		attr.VendorSDKVersion,
+		attr.TelemetryDistroName,
+		attr.TelemetryDistroVersion,
 		attr.VendorPrefix,
 		"linux",
 	}

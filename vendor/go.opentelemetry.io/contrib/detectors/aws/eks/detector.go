@@ -14,7 +14,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -183,8 +183,8 @@ func (eksDetectorUtils) getContainerID() (string, error) {
 	}
 
 	// Retrieve containerID from file
-	splitData := strings.Split(strings.TrimSpace(string(fileData)), "\n")
-	for _, str := range splitData {
+	splitData := strings.SplitSeq(strings.TrimSpace(string(fileData)), "\n")
+	for str := range splitData {
 		if containerIDRegex.MatchString(str) {
 			return str[len(str)-containerIDLength:], nil
 		}

@@ -7,6 +7,7 @@ package ebpf // import "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 
 import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
 type SockFlowFetcher struct{}
@@ -24,7 +25,7 @@ func (s *SockFlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 }
 
 func NewSockFlowFetcher(
-	_, _ int,
+	_, _ int, _ flowdef.PortGuessPolicy,
 ) (*SockFlowFetcher, error) {
 	// avoids linter complaining
 	return nil, nil

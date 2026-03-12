@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
 type FlowFetcher struct{}
@@ -18,6 +19,7 @@ func NewFlowFetcher(
 	_, _ bool,
 	_ *tcmanager.InterfaceManager,
 	_ config.TCBackend,
+	_ flowdef.PortGuessPolicy,
 ) (*FlowFetcher, error) {
 	return nil, nil
 }

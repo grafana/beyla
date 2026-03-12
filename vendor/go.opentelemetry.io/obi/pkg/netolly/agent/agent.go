@@ -151,13 +151,13 @@ func newFetcher(cfg *obi.Config, alog *slog.Logger, ifaceManager *tcmanager.Inte
 	case obi.EbpfSourceSock:
 		alog.Info("using socket filter for collecting network events")
 
-		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.GuessPorts)
 	case obi.EbpfSourceTC:
 		alog.Info("using kernel Traffic Control for collecting network events")
 		ingress, egress := flowDirections(&cfg.NetworkFlows)
 
 		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows,
-			ingress, egress, ifaceManager, cfg.EBPF.TCBackend)
+			ingress, egress, ifaceManager, cfg.EBPF.TCBackend, cfg.NetworkFlows.GuessPorts)
 	}
 
 	return nil, errors.New("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")

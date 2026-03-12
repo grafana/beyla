@@ -38,6 +38,7 @@ import (
 	convenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -47,6 +48,7 @@ const (
 	// constants defined in flows.c as "volatile const"
 	constSampling      = "sampling"
 	constTraceMessages = "trace_messages"
+	constPortGuessing  = "port_guessing"
 	aggregatedFlowsMap = "aggregated_flows"
 	connInitiatorsMap  = "conn_initiators"
 	flowDirectionsMap  = "flow_directions"
@@ -75,6 +77,7 @@ func NewFlowFetcher(
 	ingress, egress bool,
 	ifaceManager *tcmanager.InterfaceManager,
 	tcBackend config.TCBackend,
+	portGuessPolicy flowdef.PortGuessPolicy,
 ) (*FlowFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -105,9 +108,15 @@ func NewFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
+	// numeric values defined in flows_common.h
+	portGuessing := uint8(0)
+	if portGuessPolicy == flowdef.PortGuessOrdinal {
+		portGuessing = 1
+	}
 	if err := convenience.RewriteConstants(spec, map[string]any{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
+		constPortGuessing:  portGuessing,
 		"g_bpf_debug":      true,
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)

@@ -144,7 +144,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.DBSystemName:
 		getter = func(span *Span) attribute.KeyValue {
 			switch span.Type {
-			case EventTypeSQLClient:
+			case EventTypeSQLClient, EventTypeSQLServer:
 				return DBSystemName(span.DBSystemName().Value.AsString())
 			case EventTypeRedisClient, EventTypeRedisServer:
 				return semconv.DBSystemNameRedis

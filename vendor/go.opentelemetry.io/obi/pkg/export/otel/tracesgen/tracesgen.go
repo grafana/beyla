@@ -270,7 +270,7 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.HTTPEnabled()
 	case request.EventTypeGRPC, request.EventTypeGRPCClient:
 		return is.GRPCEnabled()
-	case request.EventTypeSQLClient:
+	case request.EventTypeSQLClient, request.EventTypeSQLServer:
 		return is.SQLEnabled()
 	case request.EventTypeRedisClient, request.EventTypeRedisServer:
 		return is.RedisEnabled()
@@ -475,12 +475,14 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 		}
-	case request.EventTypeSQLClient:
+	case request.EventTypeSQLClient, request.EventTypeSQLServer:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
-			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
 			span.DBSystemName(), // We can distinguish in the future for MySQL, Postgres etc
+		}
+		if span.Type == request.EventTypeSQLClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
 		}
 		if _, ok := optionalAttrs[attr.DBQueryText]; ok {
 			attrs = append(attrs, request.DBQueryText(span.Statement))
@@ -628,7 +630,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer, request.EventTypeSQLServer:
 		return trace2.SpanKindServer
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeFailedConnect:
 		return trace2.SpanKindClient

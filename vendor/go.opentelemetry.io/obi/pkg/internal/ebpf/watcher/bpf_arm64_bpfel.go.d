@@ -8,7 +8,6 @@ pkg/internal/ebpf/watcher/bpf_arm64_bpfel.go: \
  bpf/common/sockaddr.h \
  bpf/bpfcore/bpf_endian.h \
  bpf/bpfcore/bpf_core_read.h \
- bpf/common/http_types.h \
  bpf/common/connection_info.h \
  bpf/common/egress_key.h \
  bpf/common/fd_info.h \
@@ -19,12 +18,7 @@ pkg/internal/ebpf/watcher/bpf_arm64_bpfel.go: \
  bpf/common/protocol_defs.h \
  bpf/logger/bpf_dbg.h \
  bpf/common/globals.h \
- bpf/common/pin_internal.h \
- bpf/common/http_buf_size.h \
- bpf/common/http_info.h \
- bpf/common/tp_info.h \
- bpf/common/map_sizing.h \
- bpf/common/msg_buffer.h
+ bpf/common/pin_internal.h
 
 bpf/bpfcore/vmlinux.h:
 
@@ -41,8 +35,6 @@ bpf/common/sockaddr.h:
 bpf/bpfcore/bpf_endian.h:
 
 bpf/bpfcore/bpf_core_read.h:
-
-bpf/common/http_types.h:
 
 bpf/common/connection_info.h:
 
@@ -65,14 +57,4 @@ bpf/logger/bpf_dbg.h:
 bpf/common/globals.h:
 
 bpf/common/pin_internal.h:
-
-bpf/common/http_buf_size.h:
-
-bpf/common/http_info.h:
-
-bpf/common/tp_info.h:
-
-bpf/common/map_sizing.h:
-
-bpf/common/msg_buffer.h:
 

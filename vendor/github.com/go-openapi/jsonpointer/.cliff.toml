@@ -78,7 +78,7 @@ body = """
 ### People who contributed to this release
   {% endif %}
   {%- for contributor in github.contributors | filter(attribute="username") | sort(attribute="username") %}
-    {%- if contributor.username != "dependabot[bot]" %}
+    {%- if contributor.username != "dependabot[bot]" and contributor.username != "github-actions[bot]" %}
 * [@{{ contributor.username }}](https://github.com/{{ contributor.username }})
     {%- endif %}
   {%- endfor %}
@@ -91,7 +91,7 @@ body = """
   {%- endif %}
 
   {%- for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
-    {%- if contributor.username != "dependabot[bot]" %}
+    {%- if contributor.username != "dependabot[bot]" and contributor.username != "github-actions[bot]" %}
 * @{{ contributor.username }} made their first contribution
       {%- if contributor.pr_number %}
   in [#{{ contributor.pr_number }}]({{ self::remote_url() }}/pull/{{ contributor.pr_number }}) \

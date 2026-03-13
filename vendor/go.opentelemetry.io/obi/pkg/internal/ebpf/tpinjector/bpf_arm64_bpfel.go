@@ -96,6 +96,8 @@ type BpfHttpInfoT struct {
 	Len             uint32
 	RespLen         uint32
 	TaskTid         uint32
+	LbReqBytes      uint32
+	LbResBytes      uint32
 	Status          uint16
 	Buf             [256]uint8
 	HasLargeBuffers uint8
@@ -148,6 +150,8 @@ type BpfTcpReqT struct {
 	ExtraId         uint64
 	ReqLen          uint32
 	RespLen         uint32
+	LbReqBytes      uint32
+	LbResBytes      uint32
 	Pad2            [4]uint8
 	Buf             [256]uint8
 	Rbuf            [128]uint8

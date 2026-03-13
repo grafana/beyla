@@ -68,9 +68,8 @@ type BpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type BpfMapSpecs struct {
-	DebugEvents  *ebpf.MapSpec `ebpf:"debug_events"`
-	MsgBufferMem *ebpf.MapSpec `ebpf:"msg_buffer_mem"`
-	WatchEvents  *ebpf.MapSpec `ebpf:"watch_events"`
+	DebugEvents *ebpf.MapSpec `ebpf:"debug_events"`
+	WatchEvents *ebpf.MapSpec `ebpf:"watch_events"`
 }
 
 // BpfVariableSpecs contains global variables before they are loaded into the kernel.
@@ -82,9 +81,7 @@ type BpfVariableSpecs struct {
 	G_bpfLoopEnabled        *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
 	Ip4ip6Prefix            *ebpf.VariableSpec `ebpf:"ip4ip6_prefix"`
-	Unused                  *ebpf.VariableSpec `ebpf:"unused"`
 	Unused2                 *ebpf.VariableSpec `ebpf:"unused_2"`
-	UnusedHttp2             *ebpf.VariableSpec `ebpf:"unused_http2"`
 }
 
 // BpfObjects contains all objects after they have been loaded into the kernel.
@@ -107,15 +104,13 @@ func (o *BpfObjects) Close() error {
 //
 // It can be passed to LoadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type BpfMaps struct {
-	DebugEvents  *ebpf.Map `ebpf:"debug_events"`
-	MsgBufferMem *ebpf.Map `ebpf:"msg_buffer_mem"`
-	WatchEvents  *ebpf.Map `ebpf:"watch_events"`
+	DebugEvents *ebpf.Map `ebpf:"debug_events"`
+	WatchEvents *ebpf.Map `ebpf:"watch_events"`
 }
 
 func (m *BpfMaps) Close() error {
 	return _BpfClose(
 		m.DebugEvents,
-		m.MsgBufferMem,
 		m.WatchEvents,
 	)
 }
@@ -129,9 +124,7 @@ type BpfVariables struct {
 	G_bpfLoopEnabled        *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`
 	Ip4ip6Prefix            *ebpf.Variable `ebpf:"ip4ip6_prefix"`
-	Unused                  *ebpf.Variable `ebpf:"unused"`
 	Unused2                 *ebpf.Variable `ebpf:"unused_2"`
-	UnusedHttp2             *ebpf.Variable `ebpf:"unused_http2"`
 }
 
 // BpfPrograms contains all programs after they have been loaded into the kernel.

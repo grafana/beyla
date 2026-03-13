@@ -131,6 +131,10 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		peer, hostname             string
 		peerPort, hostPort, status int
 	)
+	spanType := request.EventTypeSQLClient
+	if trace.IsServer {
+		spanType = request.EventTypeSQLServer
+	}
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(&trace.ConnInfo).reqHostInfo()
@@ -143,7 +147,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 	}
 
 	return request.Span{
-		Type:          request.EventTypeSQLClient,
+		Type:          spanType,
 		Method:        op,
 		Path:          table,
 		Peer:          peer,

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package flow // import "go.opentelemetry.io/obi/pkg/internal/netolly/flow"
+package rdns // import "go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
-	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/pipe"
 	"go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp"
 	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -27,7 +27,7 @@ const (
 )
 
 func rdlog() *slog.Logger {
-	return slog.With("component", "flow.ReverseDNS")
+	return slog.With("component", "rdns.ReverseDNS")
 }
 
 var netLookupAddr = net.LookupAddr
@@ -36,18 +36,21 @@ var netLookupAddr = net.LookupAddr
 // from the documentation. This means that it does not impact in the overall OBI performance.
 type ReverseDNS struct {
 	// Type of ReverseDNS. Values are "none" (default), "local" and "ebpf"
-	Type string `yaml:"type" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE" validate:"oneof=none local ebpf" jsonschema:"type=string,enum=none,enum=local,enum=ebpf"`
+	// It also accepts OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE for backwards-compatibility
+	Type string `yaml:"type" env:"OTEL_EBPF_REVERSE_DNS_TYPE,expand" envDefault:"${OTEL_EBPF_NETWORK_REVERSE_DNS_TYPE}" validate:"oneof=none local ebpf" jsonschema:"type=string,enum=none,enum=local,enum=ebpf"`
 
 	// CacheLen only applies to the "local" and "ebpf" ReverseDNS type. It
 	// specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
-	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_LEN" validate:"gte=0"`
+	// It also accepts OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_LEN for backwards-compatibility
+	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_REVERSE_DNS_CACHE_LEN,expand" envDefault:"${OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_LEN}" validate:"gte=0"`
 
 	// CacheTTL only applies to the "local" and "ebpf" ReverseDNS type. It
 	// specifies the time-to-live of a cached IP->hostname entry. After the
 	// cached entry becomes older than this time, the IP->hostname entry will be looked
 	// up again.
-	CacheTTL time.Duration `yaml:"cache_expiry" env:"OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_TTL" validate:"gte=0"`
+	// It also accepts OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_TTL for backwards-compatibility
+	CacheTTL time.Duration `yaml:"cache_expiry" env:"OTEL_EBPF_REVERSE_DNS_CACHE_TTL,expand" envDefault:"${OTEL_EBPF_NETWORK_REVERSE_DNS_CACHE_TTL}" validate:"gte=0"`
 }
 
 func (r ReverseDNS) Enabled() bool {
@@ -55,7 +58,7 @@ func (r ReverseDNS) Enabled() bool {
 	return rdType == ReverseDNSLocalLookup || rdType == ReverseDNSEBPF
 }
 
-func ReverseDNSProvider(cfg *ReverseDNS, input, output *msg.Queue[[]*ebpf.Record]) swarm.InstanceFunc {
+func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs, input, output *msg.Queue[[]T]) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.Bypass(input, output)
@@ -65,23 +68,24 @@ func ReverseDNSProvider(cfg *ReverseDNS, input, output *msg.Queue[[]*ebpf.Record
 			return nil, err
 		}
 		// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
-		cache := expirable.NewLRU[ebpf.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
+		cache := expirable.NewLRU[pipe.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
 
 		log := rdlog()
-		in := input.Subscribe(msg.SubscriberName("flow.ReverseDNS"))
+		in := input.Subscribe(msg.SubscriberName("rdns.ReverseDNS"))
 		return func(_ context.Context) {
 			defer output.Close()
 			log.Debug("starting reverse DNS node")
-			for flows := range in {
-				for _, flow := range flows {
-					if flow.Attrs.SrcName == "" {
-						flow.Attrs.SrcName = optGetName(log, cache, flow.Id.SrcIp.In6U.U6Addr8)
+			for items := range in {
+				for _, item := range items {
+					a := attrs(item)
+					if a.SrcName == "" {
+						a.SrcName = optGetName(log, cache, a.SrcAddr)
 					}
-					if flow.Attrs.DstName == "" {
-						flow.Attrs.DstName = optGetName(log, cache, flow.Id.DstIp.In6U.U6Addr8)
+					if a.DstName == "" {
+						a.DstName = optGetName(log, cache, a.DstAddr)
 					}
 				}
-				output.Send(flows)
+				output.Send(items)
 			}
 		}, nil
 	}
@@ -103,7 +107,7 @@ func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS) error {
 	return nil
 }
 
-func optGetName(log *slog.Logger, cache *expirable.LRU[ebpf.IPAddr, string], ip ebpf.IPAddr) string {
+func optGetName(log *slog.Logger, cache *expirable.LRU[pipe.IPAddr, string], ip pipe.IPAddr) string {
 	if host, ok := cache.Get(ip); ok {
 		return host
 	}

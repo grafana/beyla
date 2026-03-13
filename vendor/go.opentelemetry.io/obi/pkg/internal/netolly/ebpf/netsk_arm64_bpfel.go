@@ -146,6 +146,7 @@ type NetSkVariableSpecs struct {
 	G_bpfLoopEnabled        *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
 	Ip4in6                  *ebpf.VariableSpec `ebpf:"ip4in6"`
+	PortGuessing            *ebpf.VariableSpec `ebpf:"port_guessing"`
 	Sampling                *ebpf.VariableSpec `ebpf:"sampling"`
 	TraceMessages           *ebpf.VariableSpec `ebpf:"trace_messages"`
 	UnusedFlowId            *ebpf.VariableSpec `ebpf:"unused_flow_id"`
@@ -199,6 +200,7 @@ type NetSkVariables struct {
 	G_bpfLoopEnabled        *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`
 	Ip4in6                  *ebpf.Variable `ebpf:"ip4in6"`
+	PortGuessing            *ebpf.Variable `ebpf:"port_guessing"`
 	Sampling                *ebpf.Variable `ebpf:"sampling"`
 	TraceMessages           *ebpf.Variable `ebpf:"trace_messages"`
 	UnusedFlowId            *ebpf.Variable `ebpf:"unused_flow_id"`

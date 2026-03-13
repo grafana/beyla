@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -33,6 +34,7 @@ type NetMetricsConfig struct {
 	Metrics     *otelcfg.MetricsConfig
 	CommonCfg   *perapp.MetricsConfig
 	SelectorCfg *attributes.SelectorConfig
+	GuessPorts  flowdef.PortGuessPolicy
 }
 
 func (mc *NetMetricsConfig) Enabled() bool {
@@ -131,6 +133,9 @@ func newMetricsExporter(
 		clock:     clock,
 		expireTTL: cfg.Metrics.TTL,
 	}
+	recordGettersConfig := ebpf.RecordGettersConfig{
+		PortGuessPolicy: cfg.GuessPorts,
+	}
 	if cfg.CommonCfg.Features.NetworkBytes() {
 		log := log.With("metricFamily", "FlowBytes")
 		bytesMetric, err := ebpfEvents.Int64Counter(attributes.NetworkFlow.OTEL,
@@ -144,7 +149,7 @@ func newMetricsExporter(
 
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
-			ebpf.RecordGetters,
+			ebpf.RecordGetters(recordGettersConfig),
 			attrProv.For(attributes.NetworkFlow))
 
 		nme.flowBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
@@ -162,7 +167,7 @@ func newMetricsExporter(
 		}
 		log.Debug("restricting attributes not in this list", "attributes", cfg.SelectorCfg.SelectionCfg)
 		attrs := attributes.OpenTelemetryGetters(
-			ebpf.RecordGetters,
+			ebpf.RecordGetters(recordGettersConfig),
 			attrProv.For(attributes.NetworkInterZone))
 
 		nme.interZoneBytes = NewExpirer[*ebpf.Record, metric2.Int64Counter, float64](ctx, bytesMetric, attrs, clock.Time, cfg.Metrics.TTL)
@@ -180,7 +185,7 @@ func (me *netMetricsExporter) Do(ctx context.Context) {
 				flowBytes, attrs := me.flowBytes.ForRecord(v)
 				flowBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}
-			if me.interZoneBytes != nil && v.Attrs.SrcZone != v.Attrs.DstZone {
+			if me.interZoneBytes != nil && v.CommonAttrs.SrcZone != v.CommonAttrs.DstZone {
 				izBytes, attrs := me.interZoneBytes.ForRecord(v)
 				izBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}

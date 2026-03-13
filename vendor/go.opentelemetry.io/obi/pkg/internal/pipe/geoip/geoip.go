@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package flow // import "go.opentelemetry.io/obi/pkg/internal/netolly/flow"
+package geoip // import "go.opentelemetry.io/obi/pkg/internal/pipe/geoip"
 
 import (
 	"context"
@@ -15,26 +15,31 @@ import (
 	"github.com/oschwald/maxminddb-golang"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/pipe"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
 // GeoIP is currently experimental. It is kept disabled by default and will be hidden
-// from the documentation. This means that it does not impact in the overall Beyla performance.
+// from the documentation. This means that it does not impact in the overall OBI performance.
 type GeoIP struct {
 	IPInfo      IPInfoConfig  `yaml:"ipinfo"`
 	MaxMindInfo MaxMindConfig `yaml:"maxmind"`
-	CacheLen    int           `yaml:"cache_len" env:"OTEL_EBPF_NETWORK_GEOIP_CACHE_LEN" validate:"gte=0"`
-	CacheTTL    time.Duration `yaml:"cache_expiry" env:"OTEL_EBPF_NETWORK_GEOIP_CACHE_TTL" validate:"gte=0"`
+	// It also accepts OTEL_EBPF_NETWORK_GEOIP_CACHE_LEN for backwards-compatibility
+	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_GEOIP_CACHE_LEN,expand" envDefault:"${OTEL_EBPF_NETWORK_GEOIP_CACHE_LEN}" validate:"gte=0"`
+	// It also accepts OTEL_EBPF_NETWORK_GEOIP_CACHE_TTL for backwards-compatibility
+	CacheTTL time.Duration `yaml:"cache_expiry" env:"OTEL_EBPF_GEOIP_CACHE_TTL,expand" envDefault:"${OTEL_EBPF_NETWORK_GEOIP_CACHE_TTL}" validate:"gte=0"`
 }
 
 type IPInfoConfig struct {
-	Path string `yaml:"path" env:"OTEL_EBPF_NETWORK_GEOIP_IPINFO_PATH"`
+	// It also accepts OTEL_EBPF_NETWORK_GEOIP_IPINFO_PATH for backwards-compatibility
+	Path string `yaml:"path" env:"OTEL_EBPF_GEOIP_IPINFO_PATH,expand" envDefault:"${OTEL_EBPF_NETWORK_GEOIP_IPINFO_PATH}"`
 }
 type MaxMindConfig struct {
-	CountryPath string `yaml:"country_path" env:"OTEL_EBPF_NETWORK_GEOIP_MAXMIND_COUNTRY_PATH"`
-	ASNPath     string `yaml:"asn_path" env:"OTEL_EBPF_NETWORK_GEOIP_MAXMIND_ASN_PATH"`
+	// It also accepts OTEL_EBPF_NETWORK_GEOIP_MAXMIND_COUNTRY_PATH for backwards-compatibility
+	CountryPath string `yaml:"country_path" env:"OTEL_EBPF_GEOIP_MAXMIND_COUNTRY_PATH,expand" envDefault:"${OTEL_EBPF_NETWORK_GEOIP_MAXMIND_COUNTRY_PATH}"`
+	// It also accepts OTEL_EBPF_NETWORK_GEOIP_MAXMIND_ASN_PATH for backwards-compatibility
+	ASNPath string `yaml:"asn_path" env:"OTEL_EBPF_GEOIP_MAXMIND_ASN_PATH,expand" envDefault:"${OTEL_EBPF_NETWORK_GEOIP_MAXMIND_ASN_PATH}"`
 }
 
 type ipInfo struct {
@@ -47,10 +52,10 @@ func (g GeoIP) Enabled() bool {
 }
 
 func geoiplog() *slog.Logger {
-	return slog.With("component", "flow.GeoIP")
+	return slog.With("component", "pipe.GeoIP")
 }
 
-func GeoIPProvider(cfg *GeoIP, input, output *msg.Queue[[]*ebpf.Record]) swarm.InstanceFunc {
+func GeoIPProvider[T any](cfg *GeoIP, attrs func(T) *pipe.CommonAttrs, input, output *msg.Queue[[]T]) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.Bypass(input, output)
@@ -61,9 +66,9 @@ func GeoIPProvider(cfg *GeoIP, input, output *msg.Queue[[]*ebpf.Record]) swarm.I
 		}
 
 		log := geoiplog()
-		in := input.Subscribe(msg.SubscriberName("flow.GeoIP"))
-		cache := expirable.NewLRU[ebpf.IPAddr, ipInfo](cfg.CacheLen, nil, cfg.CacheTTL)
-		cachedLookup := func(addr *ebpf.IPAddr) (ipInfo, error) {
+		in := input.Subscribe(msg.SubscriberName("pipe.GeoIP"))
+		cache := expirable.NewLRU[pipe.IPAddr, ipInfo](cfg.CacheLen, nil, cfg.CacheTTL)
+		cachedLookup := func(addr *pipe.IPAddr) (ipInfo, error) {
 			info, ok := cache.Get(*addr)
 			if ok {
 				return info, nil
@@ -86,25 +91,26 @@ func GeoIPProvider(cfg *GeoIP, input, output *msg.Queue[[]*ebpf.Record]) swarm.I
 		return func(_ context.Context) {
 			defer output.Close()
 			log.Debug("starting GeoIP node")
-			for flows := range in {
-				for _, flow := range flows {
-					srcInfo, err := cachedLookup(flow.Id.SrcIP())
+			for items := range in {
+				for _, item := range items {
+					a := attrs(item)
+					srcInfo, err := cachedLookup(&a.SrcAddr)
 					if err != nil {
 						failureLogFn("failed to perform geoip lookup for source", "err", err)
 					}
-					dstInfo, err := cachedLookup(flow.Id.DstIP())
+					dstInfo, err := cachedLookup(&a.DstAddr)
 					if err != nil {
 						failureLogFn("failed to perform geoip lookup for destination", "err", err)
 					}
-					if flow.Attrs.Metadata == nil {
-						flow.Attrs.Metadata = map[attr.Name]string{}
+					if a.Metadata == nil {
+						a.Metadata = map[attr.Name]string{}
 					}
-					flow.Attrs.Metadata[attr.SrcCountry] = srcInfo.Country
-					flow.Attrs.Metadata[attr.DstCountry] = dstInfo.Country
-					flow.Attrs.Metadata[attr.SrcASN] = srcInfo.ASN
-					flow.Attrs.Metadata[attr.DstASN] = dstInfo.ASN
+					a.Metadata[attr.SrcCountry] = srcInfo.Country
+					a.Metadata[attr.DstCountry] = dstInfo.Country
+					a.Metadata[attr.SrcASN] = srcInfo.ASN
+					a.Metadata[attr.DstASN] = dstInfo.ASN
 				}
-				output.Send(flows)
+				output.Send(items)
 			}
 		}, nil
 	}

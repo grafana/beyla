@@ -14,12 +14,18 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/export"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
-	"go.opentelemetry.io/obi/pkg/internal/netolly/transform/k8s"
-	"go.opentelemetry.io/obi/pkg/netolly/cidr"
+	"go.opentelemetry.io/obi/pkg/internal/pipe"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/cidr"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/decorate"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/geoip"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
+
+func recordAttrs(r *ebpf.Record) *pipe.CommonAttrs { return &r.CommonAttrs }
 
 // mockable functions for testing
 var newMapTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
@@ -64,19 +70,30 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	kubeDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "kubeDecoratedFlows")
 	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,
+		recordAttrs,
 		dedupedEBPFFlows, kubeDecoratedFlows), swarm.WithID("K8sMetadataDecorator"))
 
 	dnsDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dnsDecoratedFlows")
-	swi.Add(flow.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, kubeDecoratedFlows, dnsDecoratedFlows),
+	swi.Add(rdns.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, recordAttrs,
+		kubeDecoratedFlows, dnsDecoratedFlows),
 		swarm.WithID("ReverseDNS"))
 
 	geoIPDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "geoIPDecoratedFlows")
-	swi.Add(flow.GeoIPProvider(&f.cfg.NetworkFlows.GeoIP,
+	swi.Add(geoip.GeoIPProvider(&f.cfg.NetworkFlows.GeoIP,
+		recordAttrs,
 		dnsDecoratedFlows, geoIPDecoratedFlows), swarm.WithID("GeoIPDecorator"))
 
 	cidrDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "cidrDecoratedFlows")
-	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs, geoIPDecoratedFlows, cidrDecoratedFlows),
+	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs,
+		recordAttrs,
+		geoIPDecoratedFlows, cidrDecoratedFlows),
 		swarm.WithID("CIDRDecorator"))
+
+	commonDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "commonDecoratedFlows")
+	swi.Add(decorate.Decorate(f.agentIP,
+		recordAttrs,
+		cidrDecoratedFlows, commonDecoratedFlows),
+		swarm.WithID("CommonFlowDecorator"))
 
 	decoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "decoratedFlows")
 	swi.Add(func(_ context.Context) (swarm.RunFunc, error) {
@@ -88,15 +105,23 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 				return ""
 			}
 		}
-		return flow.Decorate(f.agentIP, ifaceNamer, cidrDecoratedFlows, decoratedFlows), nil
+		return flow.Decorate(ifaceNamer, commonDecoratedFlows, decoratedFlows), nil
 	}, swarm.WithID("FlowDecorator"))
 
 	filteredFlows := f.ctxInfo.OverrideNetExportQueue
 	if filteredFlows == nil {
 		filteredFlows = msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "filteredFlows")
 	}
-	swi.Add(filter.ByAttribute(f.cfg.Filters.Network, nil, selectorCfg.ExtraGroupAttributesCfg, ebpf.RecordStringGetters, decoratedFlows, filteredFlows),
-		swarm.WithID("AttributeFilter"))
+	swi.Add(filter.ByAttribute(
+		f.cfg.Filters.Network,
+		nil,
+		selectorCfg.ExtraGroupAttributesCfg,
+		ebpf.RecordStringGetters(ebpf.RecordGettersConfig{
+			PortGuessPolicy: f.cfg.NetworkFlows.GuessPorts,
+		}),
+		decoratedFlows,
+		filteredFlows,
+	), swarm.WithID("AttributeFilter"))
 
 	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
 	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
@@ -105,12 +130,14 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		Metrics:     &f.cfg.OTELMetrics,
 		SelectorCfg: selectorCfg,
 		CommonCfg:   &f.cfg.Metrics,
+		GuessPorts:  f.cfg.NetworkFlows.GuessPorts,
 	}, filteredFlows), swarm.WithID("OTelExporter"))
 
 	swi.Add(prom.NetPrometheusEndpoint(f.ctxInfo, &prom.NetPrometheusConfig{
 		Config:      &f.cfg.Prometheus,
 		SelectorCfg: selectorCfg,
 		CommonCfg:   &f.cfg.Metrics,
+		GuessPorts:  f.cfg.NetworkFlows.GuessPorts,
 	}, filteredFlows), swarm.WithID("PrometheusExporter"))
 
 	swi.Add(swarm.DirectInstance(export.FlowPrinterProvider(f.cfg.NetworkFlows.Print, filteredFlows)),

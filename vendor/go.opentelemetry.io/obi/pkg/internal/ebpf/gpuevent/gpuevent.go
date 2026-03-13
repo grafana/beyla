@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
@@ -208,16 +207,15 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.GpuEvents,
-		ebpfEventContext.CommonPIDsFilter,
 		p.processCudaEvent,
+		ebpfEventContext.CommonPIDsFilter.Filter,
 		p.log,
 		p.metrics,
-		eventsChan,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, eventsChan)
 }
 
-func (p *Tracer) processCudaEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *Tracer) processCudaEvent(record *ringbuf.Record) (request.Span, bool, error) {
 	if len(record.RawSample) == 0 {
 		return request.Span{}, true, errors.New("invalid ringbuffer record size")
 	}

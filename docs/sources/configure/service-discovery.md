@@ -117,7 +117,7 @@ discovery:
     - container_name: "my-app-*"
 ```
 
-This example discovers all processes running in containers whose names contain "testserver" or start with "my-app-".
+This example discovers all processes running in containers whose names contain `testserver` or start with `my-app-`.
 
 If you specify other selectors in the same `instrument` entry, the processes must match all the selector properties.
 

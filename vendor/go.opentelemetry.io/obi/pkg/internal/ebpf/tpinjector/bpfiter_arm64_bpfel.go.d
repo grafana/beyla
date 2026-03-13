@@ -8,7 +8,6 @@ pkg/internal/ebpf/tpinjector/bpfiter_arm64_bpfel.go: \
  bpf/bpfcore/bpf_endian.h \
  bpf/common/protocol_defs.h \
  bpf/logger/bpf_dbg.h \
- bpf/bpfcore/bpf_tracing.h \
  bpf/common/globals.h \
  bpf/common/pin_internal.h \
  bpf/maps/sock_dir.h
@@ -28,8 +27,6 @@ bpf/bpfcore/bpf_endian.h:
 bpf/common/protocol_defs.h:
 
 bpf/logger/bpf_dbg.h:
-
-bpf/bpfcore/bpf_tracing.h:
 
 bpf/common/globals.h:
 

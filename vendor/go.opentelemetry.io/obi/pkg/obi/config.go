@@ -156,6 +156,15 @@ var DefaultConfig = Config{
 				OpenAI: config.OpenAIConfig{
 					Enabled: false,
 				},
+				Enrichment: config.EnrichmentConfig{
+					Enabled: false,
+					Policy: config.HTTPParsingPolicy{
+						DefaultAction:     config.HTTPParsingActionExclude,
+						MatchOrder:        config.HTTPParsingMatchOrderFirstMatchWins,
+						ObfuscationString: "***",
+					},
+					Rules: []config.HTTPParsingRule{},
+				},
 			},
 		},
 		MaxTransactionTime: 5 * time.Minute,

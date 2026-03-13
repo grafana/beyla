@@ -471,7 +471,6 @@ type BpfMapSpecs struct {
 	IncomingTraceMap               *ebpf.MapSpec `ebpf:"incoming_trace_map"`
 	KafkaRequests                  *ebpf.MapSpec `ebpf:"kafka_requests"`
 	MptrToRootTid                  *ebpf.MapSpec `ebpf:"mptr_to_root_tid"`
-	MsgBufferMem                   *ebpf.MapSpec `ebpf:"msg_buffer_mem"`
 	Newproc1                       *ebpf.MapSpec `ebpf:"newproc1"`
 	OngoingClientConnections       *ebpf.MapSpec `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines              *ebpf.MapSpec `ebpf:"ongoing_goroutines"`
@@ -569,7 +568,6 @@ type BpfMaps struct {
 	IncomingTraceMap               *ebpf.Map `ebpf:"incoming_trace_map"`
 	KafkaRequests                  *ebpf.Map `ebpf:"kafka_requests"`
 	MptrToRootTid                  *ebpf.Map `ebpf:"mptr_to_root_tid"`
-	MsgBufferMem                   *ebpf.Map `ebpf:"msg_buffer_mem"`
 	Newproc1                       *ebpf.Map `ebpf:"newproc1"`
 	OngoingClientConnections       *ebpf.Map `ebpf:"ongoing_client_connections"`
 	OngoingGoroutines              *ebpf.Map `ebpf:"ongoing_goroutines"`
@@ -623,7 +621,6 @@ func (m *BpfMaps) Close() error {
 		m.IncomingTraceMap,
 		m.KafkaRequests,
 		m.MptrToRootTid,
-		m.MsgBufferMem,
 		m.Newproc1,
 		m.OngoingClientConnections,
 		m.OngoingGoroutines,

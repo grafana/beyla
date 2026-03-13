@@ -232,12 +232,7 @@ func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn) error {
 	return nil
 }
 
-func (i *NodeInjector) injectFile() error {
-	conn, err := connectWait("127.0.0.1", 9229, 5*time.Second, 200*time.Millisecond)
-	if err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
-	}
-
+func (i *NodeInjector) injectViaConn(conn net.Conn) error {
 	wsURL, err := i.requestDebuggerURL(conn)
 	if err != nil {
 		conn.Close()
@@ -253,8 +248,4 @@ func (i *NodeInjector) injectFile() error {
 	}
 
 	return i.injectFileWS(wsConn)
-}
-
-func (i *NodeInjector) inject(pid int) error {
-	return withNetNS(pid, func() error { return i.injectFile() })
 }

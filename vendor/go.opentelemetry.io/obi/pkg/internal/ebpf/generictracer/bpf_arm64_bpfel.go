@@ -175,6 +175,8 @@ type BpfHttpInfoT struct {
 	Len             uint32
 	RespLen         uint32
 	TaskTid         uint32
+	LbReqBytes      uint32
+	LbResBytes      uint32
 	Status          uint16
 	Buf             [256]uint8
 	HasLargeBuffers uint8
@@ -321,6 +323,8 @@ type BpfTcpReqT struct {
 	ExtraId         uint64
 	ReqLen          uint32
 	RespLen         uint32
+	LbReqBytes      uint32
+	LbResBytes      uint32
 	Pad2            [4]uint8
 	Buf             [256]uint8
 	Rbuf            [128]uint8
@@ -470,66 +474,63 @@ type BpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type BpfMapSpecs struct {
-	AcceptedConnections         *ebpf.MapSpec `ebpf:"accepted_connections"`
-	ActiveAcceptArgs            *ebpf.MapSpec `ebpf:"active_accept_args"`
-	ActiveConnectArgs           *ebpf.MapSpec `ebpf:"active_connect_args"`
-	ActiveRecvArgs              *ebpf.MapSpec `ebpf:"active_recv_args"`
-	ActiveSendArgs              *ebpf.MapSpec `ebpf:"active_send_args"`
-	ActiveSendSockArgs          *ebpf.MapSpec `ebpf:"active_send_sock_args"`
-	ActiveSslConnections        *ebpf.MapSpec `ebpf:"active_ssl_connections"`
-	ActiveSslReadArgs           *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
-	ActiveSslWriteArgs          *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
-	ActiveUnixSocks             *ebpf.MapSpec `ebpf:"active_unix_socks"`
-	CloneMap                    *ebpf.MapSpec `ebpf:"clone_map"`
-	ConnectionMetaMem           *ebpf.MapSpec `ebpf:"connection_meta_mem"`
-	CpSupportConnectInfo        *ebpf.MapSpec `ebpf:"cp_support_connect_info"`
-	DebugEvents                 *ebpf.MapSpec `ebpf:"debug_events"`
-	Events                      *ebpf.MapSpec `ebpf:"events"`
-	FdMap                       *ebpf.MapSpec `ebpf:"fd_map"`
-	FdToConnection              *ebpf.MapSpec `ebpf:"fd_to_connection"`
-	GrpcFramesCtxMem            *ebpf.MapSpec `ebpf:"grpc_frames_ctx_mem"`
-	Http2InfoMem                *ebpf.MapSpec `ebpf:"http2_info_mem"`
-	HttpInfoMem                 *ebpf.MapSpec `ebpf:"http_info_mem"`
-	HttpLargeBuffersStorage     *ebpf.MapSpec `ebpf:"http_large_buffers_storage"`
-	IncomingTraceMap            *ebpf.MapSpec `ebpf:"incoming_trace_map"`
-	IovecMem                    *ebpf.MapSpec `ebpf:"iovec_mem"`
-	JavaTasks                   *ebpf.MapSpec `ebpf:"java_tasks"`
-	JumpTable                   *ebpf.MapSpec `ebpf:"jump_table"`
-	KafkaLargeBuffersStorage    *ebpf.MapSpec `ebpf:"kafka_large_buffers_storage"`
-	KafkaOngoingRequests        *ebpf.MapSpec `ebpf:"kafka_ongoing_requests"`
-	KafkaState                  *ebpf.MapSpec `ebpf:"kafka_state"`
-	ListeningPorts              *ebpf.MapSpec `ebpf:"listening_ports"`
-	MsgBufferMem                *ebpf.MapSpec `ebpf:"msg_buffer_mem"`
-	MsgBuffers                  *ebpf.MapSpec `ebpf:"msg_buffers"`
-	MysqlLargeBuffersStorage    *ebpf.MapSpec `ebpf:"mysql_large_buffers_storage"`
-	MysqlState                  *ebpf.MapSpec `ebpf:"mysql_state"`
-	NginxUpstream               *ebpf.MapSpec `ebpf:"nginx_upstream"`
-	NodejsFdMap                 *ebpf.MapSpec `ebpf:"nodejs_fd_map"`
-	OngoingHttp                 *ebpf.MapSpec `ebpf:"ongoing_http"`
-	OngoingHttp2Connections     *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
-	OngoingHttp2Grpc            *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
-	OngoingTcpReq               *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
-	OutgoingTraceMap            *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
-	PidCache                    *ebpf.MapSpec `ebpf:"pid_cache"`
-	PidTidToConn                *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
-	PostgresLargeBuffersStorage *ebpf.MapSpec `ebpf:"postgres_large_buffers_storage"`
-	ProtocolArgsMem             *ebpf.MapSpec `ebpf:"protocol_args_mem"`
-	ProtocolCache               *ebpf.MapSpec `ebpf:"protocol_cache"`
-	PumaTaskConnections         *ebpf.MapSpec `ebpf:"puma_task_connections"`
-	PumaWorkerTasks             *ebpf.MapSpec `ebpf:"puma_worker_tasks"`
-	ServerTraces                *ebpf.MapSpec `ebpf:"server_traces"`
-	ServerTracesAux             *ebpf.MapSpec `ebpf:"server_traces_aux"`
-	SockPids                    *ebpf.MapSpec `ebpf:"sock_pids"`
-	SslToConn                   *ebpf.MapSpec `ebpf:"ssl_to_conn"`
-	SslToPidTid                 *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
-	TcpConnectionMap            *ebpf.MapSpec `ebpf:"tcp_connection_map"`
-	TcpReqMem                   *ebpf.MapSpec `ebpf:"tcp_req_mem"`
-	TpCharBufStorage            *ebpf.MapSpec `ebpf:"tp_char_buf_storage"`
-	TpInfoStorage               *ebpf.MapSpec `ebpf:"tp_info_storage"`
-	TraceMap                    *ebpf.MapSpec `ebpf:"trace_map"`
-	TracesCtxV1                 *ebpf.MapSpec `ebpf:"traces_ctx_v1"`
-	UpstreamInitArgs            *ebpf.MapSpec `ebpf:"upstream_init_args"`
-	ValidPids                   *ebpf.MapSpec `ebpf:"valid_pids"`
+	AcceptedConnections     *ebpf.MapSpec `ebpf:"accepted_connections"`
+	ActiveAcceptArgs        *ebpf.MapSpec `ebpf:"active_accept_args"`
+	ActiveConnectArgs       *ebpf.MapSpec `ebpf:"active_connect_args"`
+	ActiveRecvArgs          *ebpf.MapSpec `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.MapSpec `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.MapSpec `ebpf:"active_send_sock_args"`
+	ActiveSslConnections    *ebpf.MapSpec `ebpf:"active_ssl_connections"`
+	ActiveSslReadArgs       *ebpf.MapSpec `ebpf:"active_ssl_read_args"`
+	ActiveSslWriteArgs      *ebpf.MapSpec `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks         *ebpf.MapSpec `ebpf:"active_unix_socks"`
+	CloneMap                *ebpf.MapSpec `ebpf:"clone_map"`
+	ConnectionMetaMem       *ebpf.MapSpec `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo    *ebpf.MapSpec `ebpf:"cp_support_connect_info"`
+	DebugEvents             *ebpf.MapSpec `ebpf:"debug_events"`
+	Events                  *ebpf.MapSpec `ebpf:"events"`
+	FdMap                   *ebpf.MapSpec `ebpf:"fd_map"`
+	FdToConnection          *ebpf.MapSpec `ebpf:"fd_to_connection"`
+	GrpcFramesCtxMem        *ebpf.MapSpec `ebpf:"grpc_frames_ctx_mem"`
+	Http2InfoMem            *ebpf.MapSpec `ebpf:"http2_info_mem"`
+	HttpInfoMem             *ebpf.MapSpec `ebpf:"http_info_mem"`
+	IncomingTraceMap        *ebpf.MapSpec `ebpf:"incoming_trace_map"`
+	IovecMem                *ebpf.MapSpec `ebpf:"iovec_mem"`
+	JavaTasks               *ebpf.MapSpec `ebpf:"java_tasks"`
+	JumpTable               *ebpf.MapSpec `ebpf:"jump_table"`
+	KafkaOngoingRequests    *ebpf.MapSpec `ebpf:"kafka_ongoing_requests"`
+	KafkaState              *ebpf.MapSpec `ebpf:"kafka_state"`
+	ListeningPorts          *ebpf.MapSpec `ebpf:"listening_ports"`
+	MsgBufferMem            *ebpf.MapSpec `ebpf:"msg_buffer_mem"`
+	MsgBuffers              *ebpf.MapSpec `ebpf:"msg_buffers"`
+	MysqlState              *ebpf.MapSpec `ebpf:"mysql_state"`
+	NginxUpstream           *ebpf.MapSpec `ebpf:"nginx_upstream"`
+	NodejsFdMap             *ebpf.MapSpec `ebpf:"nodejs_fd_map"`
+	OngoingHttp             *ebpf.MapSpec `ebpf:"ongoing_http"`
+	OngoingHttp2Connections *ebpf.MapSpec `ebpf:"ongoing_http2_connections"`
+	OngoingHttp2Grpc        *ebpf.MapSpec `ebpf:"ongoing_http2_grpc"`
+	OngoingTcpReq           *ebpf.MapSpec `ebpf:"ongoing_tcp_req"`
+	OutgoingTraceMap        *ebpf.MapSpec `ebpf:"outgoing_trace_map"`
+	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
+	PidTidToConn            *ebpf.MapSpec `ebpf:"pid_tid_to_conn"`
+	ProtocolArgsMem         *ebpf.MapSpec `ebpf:"protocol_args_mem"`
+	ProtocolCache           *ebpf.MapSpec `ebpf:"protocol_cache"`
+	PumaTaskConnections     *ebpf.MapSpec `ebpf:"puma_task_connections"`
+	PumaWorkerTasks         *ebpf.MapSpec `ebpf:"puma_worker_tasks"`
+	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
+	ServerTracesAux         *ebpf.MapSpec `ebpf:"server_traces_aux"`
+	SockPids                *ebpf.MapSpec `ebpf:"sock_pids"`
+	SslToConn               *ebpf.MapSpec `ebpf:"ssl_to_conn"`
+	SslToPidTid             *ebpf.MapSpec `ebpf:"ssl_to_pid_tid"`
+	TcpConnectionMap        *ebpf.MapSpec `ebpf:"tcp_connection_map"`
+	TcpLargeBuffersStorage  *ebpf.MapSpec `ebpf:"tcp_large_buffers_storage"`
+	TcpReqMem               *ebpf.MapSpec `ebpf:"tcp_req_mem"`
+	TpCharBufStorage        *ebpf.MapSpec `ebpf:"tp_char_buf_storage"`
+	TpInfoStorage           *ebpf.MapSpec `ebpf:"tp_info_storage"`
+	TraceMap                *ebpf.MapSpec `ebpf:"trace_map"`
+	TracesCtxV1             *ebpf.MapSpec `ebpf:"traces_ctx_v1"`
+	UpstreamInitArgs        *ebpf.MapSpec `ebpf:"upstream_init_args"`
+	ValidPids               *ebpf.MapSpec `ebpf:"valid_pids"`
 }
 
 // BpfVariableSpecs contains global variables before they are loaded into the kernel.
@@ -555,18 +556,18 @@ type BpfVariableSpecs struct {
 	G_bpfLoopEnabled         *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled  *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
 	HighRequestVolume        *ebpf.VariableSpec `ebpf:"high_request_volume"`
-	HttpBufferSize           *ebpf.VariableSpec `ebpf:"http_buffer_size"`
+	HttpMaxCapturedBytes     *ebpf.VariableSpec `ebpf:"http_max_captured_bytes"`
 	Ip4ip6Prefix             *ebpf.VariableSpec `ebpf:"ip4ip6_prefix"`
-	KafkaBufferSize          *ebpf.VariableSpec `ebpf:"kafka_buffer_size"`
+	KafkaMaxCapturedBytes    *ebpf.VariableSpec `ebpf:"kafka_max_captured_bytes"`
 	MaxTransactionTime       *ebpf.VariableSpec `ebpf:"max_transaction_time"`
-	MysqlBufferSize          *ebpf.VariableSpec `ebpf:"mysql_buffer_size"`
+	MysqlMaxCapturedBytes    *ebpf.VariableSpec `ebpf:"mysql_max_captured_bytes"`
 	NgxConnectionS_fd        *ebpf.VariableSpec `ebpf:"ngx_connection_s_fd"`
 	NgxConnectionS_sockaddr  *ebpf.VariableSpec `ebpf:"ngx_connection_s_sockaddr"`
 	NgxHttpRequestS_conn     *ebpf.VariableSpec `ebpf:"ngx_http_request_s_conn"`
 	NgxHttpRequestS_upstream *ebpf.VariableSpec `ebpf:"ngx_http_request_s_upstream"`
 	NgxHttpRevS_conn         *ebpf.VariableSpec `ebpf:"ngx_http_rev_s_conn"`
 	NgxHttpUpstreamS_conn    *ebpf.VariableSpec `ebpf:"ngx_http_upstream_s_conn"`
-	PostgresBufferSize       *ebpf.VariableSpec `ebpf:"postgres_buffer_size"`
+	PostgresMaxCapturedBytes *ebpf.VariableSpec `ebpf:"postgres_max_captured_bytes"`
 	Unused                   *ebpf.VariableSpec `ebpf:"unused"`
 	UnusedHttp2              *ebpf.VariableSpec `ebpf:"unused_http2"`
 	WakeupDataBytes          *ebpf.VariableSpec `ebpf:"wakeup_data_bytes"`
@@ -592,66 +593,63 @@ func (o *BpfObjects) Close() error {
 //
 // It can be passed to LoadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type BpfMaps struct {
-	AcceptedConnections         *ebpf.Map `ebpf:"accepted_connections"`
-	ActiveAcceptArgs            *ebpf.Map `ebpf:"active_accept_args"`
-	ActiveConnectArgs           *ebpf.Map `ebpf:"active_connect_args"`
-	ActiveRecvArgs              *ebpf.Map `ebpf:"active_recv_args"`
-	ActiveSendArgs              *ebpf.Map `ebpf:"active_send_args"`
-	ActiveSendSockArgs          *ebpf.Map `ebpf:"active_send_sock_args"`
-	ActiveSslConnections        *ebpf.Map `ebpf:"active_ssl_connections"`
-	ActiveSslReadArgs           *ebpf.Map `ebpf:"active_ssl_read_args"`
-	ActiveSslWriteArgs          *ebpf.Map `ebpf:"active_ssl_write_args"`
-	ActiveUnixSocks             *ebpf.Map `ebpf:"active_unix_socks"`
-	CloneMap                    *ebpf.Map `ebpf:"clone_map"`
-	ConnectionMetaMem           *ebpf.Map `ebpf:"connection_meta_mem"`
-	CpSupportConnectInfo        *ebpf.Map `ebpf:"cp_support_connect_info"`
-	DebugEvents                 *ebpf.Map `ebpf:"debug_events"`
-	Events                      *ebpf.Map `ebpf:"events"`
-	FdMap                       *ebpf.Map `ebpf:"fd_map"`
-	FdToConnection              *ebpf.Map `ebpf:"fd_to_connection"`
-	GrpcFramesCtxMem            *ebpf.Map `ebpf:"grpc_frames_ctx_mem"`
-	Http2InfoMem                *ebpf.Map `ebpf:"http2_info_mem"`
-	HttpInfoMem                 *ebpf.Map `ebpf:"http_info_mem"`
-	HttpLargeBuffersStorage     *ebpf.Map `ebpf:"http_large_buffers_storage"`
-	IncomingTraceMap            *ebpf.Map `ebpf:"incoming_trace_map"`
-	IovecMem                    *ebpf.Map `ebpf:"iovec_mem"`
-	JavaTasks                   *ebpf.Map `ebpf:"java_tasks"`
-	JumpTable                   *ebpf.Map `ebpf:"jump_table"`
-	KafkaLargeBuffersStorage    *ebpf.Map `ebpf:"kafka_large_buffers_storage"`
-	KafkaOngoingRequests        *ebpf.Map `ebpf:"kafka_ongoing_requests"`
-	KafkaState                  *ebpf.Map `ebpf:"kafka_state"`
-	ListeningPorts              *ebpf.Map `ebpf:"listening_ports"`
-	MsgBufferMem                *ebpf.Map `ebpf:"msg_buffer_mem"`
-	MsgBuffers                  *ebpf.Map `ebpf:"msg_buffers"`
-	MysqlLargeBuffersStorage    *ebpf.Map `ebpf:"mysql_large_buffers_storage"`
-	MysqlState                  *ebpf.Map `ebpf:"mysql_state"`
-	NginxUpstream               *ebpf.Map `ebpf:"nginx_upstream"`
-	NodejsFdMap                 *ebpf.Map `ebpf:"nodejs_fd_map"`
-	OngoingHttp                 *ebpf.Map `ebpf:"ongoing_http"`
-	OngoingHttp2Connections     *ebpf.Map `ebpf:"ongoing_http2_connections"`
-	OngoingHttp2Grpc            *ebpf.Map `ebpf:"ongoing_http2_grpc"`
-	OngoingTcpReq               *ebpf.Map `ebpf:"ongoing_tcp_req"`
-	OutgoingTraceMap            *ebpf.Map `ebpf:"outgoing_trace_map"`
-	PidCache                    *ebpf.Map `ebpf:"pid_cache"`
-	PidTidToConn                *ebpf.Map `ebpf:"pid_tid_to_conn"`
-	PostgresLargeBuffersStorage *ebpf.Map `ebpf:"postgres_large_buffers_storage"`
-	ProtocolArgsMem             *ebpf.Map `ebpf:"protocol_args_mem"`
-	ProtocolCache               *ebpf.Map `ebpf:"protocol_cache"`
-	PumaTaskConnections         *ebpf.Map `ebpf:"puma_task_connections"`
-	PumaWorkerTasks             *ebpf.Map `ebpf:"puma_worker_tasks"`
-	ServerTraces                *ebpf.Map `ebpf:"server_traces"`
-	ServerTracesAux             *ebpf.Map `ebpf:"server_traces_aux"`
-	SockPids                    *ebpf.Map `ebpf:"sock_pids"`
-	SslToConn                   *ebpf.Map `ebpf:"ssl_to_conn"`
-	SslToPidTid                 *ebpf.Map `ebpf:"ssl_to_pid_tid"`
-	TcpConnectionMap            *ebpf.Map `ebpf:"tcp_connection_map"`
-	TcpReqMem                   *ebpf.Map `ebpf:"tcp_req_mem"`
-	TpCharBufStorage            *ebpf.Map `ebpf:"tp_char_buf_storage"`
-	TpInfoStorage               *ebpf.Map `ebpf:"tp_info_storage"`
-	TraceMap                    *ebpf.Map `ebpf:"trace_map"`
-	TracesCtxV1                 *ebpf.Map `ebpf:"traces_ctx_v1"`
-	UpstreamInitArgs            *ebpf.Map `ebpf:"upstream_init_args"`
-	ValidPids                   *ebpf.Map `ebpf:"valid_pids"`
+	AcceptedConnections     *ebpf.Map `ebpf:"accepted_connections"`
+	ActiveAcceptArgs        *ebpf.Map `ebpf:"active_accept_args"`
+	ActiveConnectArgs       *ebpf.Map `ebpf:"active_connect_args"`
+	ActiveRecvArgs          *ebpf.Map `ebpf:"active_recv_args"`
+	ActiveSendArgs          *ebpf.Map `ebpf:"active_send_args"`
+	ActiveSendSockArgs      *ebpf.Map `ebpf:"active_send_sock_args"`
+	ActiveSslConnections    *ebpf.Map `ebpf:"active_ssl_connections"`
+	ActiveSslReadArgs       *ebpf.Map `ebpf:"active_ssl_read_args"`
+	ActiveSslWriteArgs      *ebpf.Map `ebpf:"active_ssl_write_args"`
+	ActiveUnixSocks         *ebpf.Map `ebpf:"active_unix_socks"`
+	CloneMap                *ebpf.Map `ebpf:"clone_map"`
+	ConnectionMetaMem       *ebpf.Map `ebpf:"connection_meta_mem"`
+	CpSupportConnectInfo    *ebpf.Map `ebpf:"cp_support_connect_info"`
+	DebugEvents             *ebpf.Map `ebpf:"debug_events"`
+	Events                  *ebpf.Map `ebpf:"events"`
+	FdMap                   *ebpf.Map `ebpf:"fd_map"`
+	FdToConnection          *ebpf.Map `ebpf:"fd_to_connection"`
+	GrpcFramesCtxMem        *ebpf.Map `ebpf:"grpc_frames_ctx_mem"`
+	Http2InfoMem            *ebpf.Map `ebpf:"http2_info_mem"`
+	HttpInfoMem             *ebpf.Map `ebpf:"http_info_mem"`
+	IncomingTraceMap        *ebpf.Map `ebpf:"incoming_trace_map"`
+	IovecMem                *ebpf.Map `ebpf:"iovec_mem"`
+	JavaTasks               *ebpf.Map `ebpf:"java_tasks"`
+	JumpTable               *ebpf.Map `ebpf:"jump_table"`
+	KafkaOngoingRequests    *ebpf.Map `ebpf:"kafka_ongoing_requests"`
+	KafkaState              *ebpf.Map `ebpf:"kafka_state"`
+	ListeningPorts          *ebpf.Map `ebpf:"listening_ports"`
+	MsgBufferMem            *ebpf.Map `ebpf:"msg_buffer_mem"`
+	MsgBuffers              *ebpf.Map `ebpf:"msg_buffers"`
+	MysqlState              *ebpf.Map `ebpf:"mysql_state"`
+	NginxUpstream           *ebpf.Map `ebpf:"nginx_upstream"`
+	NodejsFdMap             *ebpf.Map `ebpf:"nodejs_fd_map"`
+	OngoingHttp             *ebpf.Map `ebpf:"ongoing_http"`
+	OngoingHttp2Connections *ebpf.Map `ebpf:"ongoing_http2_connections"`
+	OngoingHttp2Grpc        *ebpf.Map `ebpf:"ongoing_http2_grpc"`
+	OngoingTcpReq           *ebpf.Map `ebpf:"ongoing_tcp_req"`
+	OutgoingTraceMap        *ebpf.Map `ebpf:"outgoing_trace_map"`
+	PidCache                *ebpf.Map `ebpf:"pid_cache"`
+	PidTidToConn            *ebpf.Map `ebpf:"pid_tid_to_conn"`
+	ProtocolArgsMem         *ebpf.Map `ebpf:"protocol_args_mem"`
+	ProtocolCache           *ebpf.Map `ebpf:"protocol_cache"`
+	PumaTaskConnections     *ebpf.Map `ebpf:"puma_task_connections"`
+	PumaWorkerTasks         *ebpf.Map `ebpf:"puma_worker_tasks"`
+	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
+	ServerTracesAux         *ebpf.Map `ebpf:"server_traces_aux"`
+	SockPids                *ebpf.Map `ebpf:"sock_pids"`
+	SslToConn               *ebpf.Map `ebpf:"ssl_to_conn"`
+	SslToPidTid             *ebpf.Map `ebpf:"ssl_to_pid_tid"`
+	TcpConnectionMap        *ebpf.Map `ebpf:"tcp_connection_map"`
+	TcpLargeBuffersStorage  *ebpf.Map `ebpf:"tcp_large_buffers_storage"`
+	TcpReqMem               *ebpf.Map `ebpf:"tcp_req_mem"`
+	TpCharBufStorage        *ebpf.Map `ebpf:"tp_char_buf_storage"`
+	TpInfoStorage           *ebpf.Map `ebpf:"tp_info_storage"`
+	TraceMap                *ebpf.Map `ebpf:"trace_map"`
+	TracesCtxV1             *ebpf.Map `ebpf:"traces_ctx_v1"`
+	UpstreamInitArgs        *ebpf.Map `ebpf:"upstream_init_args"`
+	ValidPids               *ebpf.Map `ebpf:"valid_pids"`
 }
 
 func (m *BpfMaps) Close() error {
@@ -676,18 +674,15 @@ func (m *BpfMaps) Close() error {
 		m.GrpcFramesCtxMem,
 		m.Http2InfoMem,
 		m.HttpInfoMem,
-		m.HttpLargeBuffersStorage,
 		m.IncomingTraceMap,
 		m.IovecMem,
 		m.JavaTasks,
 		m.JumpTable,
-		m.KafkaLargeBuffersStorage,
 		m.KafkaOngoingRequests,
 		m.KafkaState,
 		m.ListeningPorts,
 		m.MsgBufferMem,
 		m.MsgBuffers,
-		m.MysqlLargeBuffersStorage,
 		m.MysqlState,
 		m.NginxUpstream,
 		m.NodejsFdMap,
@@ -698,7 +693,6 @@ func (m *BpfMaps) Close() error {
 		m.OutgoingTraceMap,
 		m.PidCache,
 		m.PidTidToConn,
-		m.PostgresLargeBuffersStorage,
 		m.ProtocolArgsMem,
 		m.ProtocolCache,
 		m.PumaTaskConnections,
@@ -709,6 +703,7 @@ func (m *BpfMaps) Close() error {
 		m.SslToConn,
 		m.SslToPidTid,
 		m.TcpConnectionMap,
+		m.TcpLargeBuffersStorage,
 		m.TcpReqMem,
 		m.TpCharBufStorage,
 		m.TpInfoStorage,
@@ -742,18 +737,18 @@ type BpfVariables struct {
 	G_bpfLoopEnabled         *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled  *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`
 	HighRequestVolume        *ebpf.Variable `ebpf:"high_request_volume"`
-	HttpBufferSize           *ebpf.Variable `ebpf:"http_buffer_size"`
+	HttpMaxCapturedBytes     *ebpf.Variable `ebpf:"http_max_captured_bytes"`
 	Ip4ip6Prefix             *ebpf.Variable `ebpf:"ip4ip6_prefix"`
-	KafkaBufferSize          *ebpf.Variable `ebpf:"kafka_buffer_size"`
+	KafkaMaxCapturedBytes    *ebpf.Variable `ebpf:"kafka_max_captured_bytes"`
 	MaxTransactionTime       *ebpf.Variable `ebpf:"max_transaction_time"`
-	MysqlBufferSize          *ebpf.Variable `ebpf:"mysql_buffer_size"`
+	MysqlMaxCapturedBytes    *ebpf.Variable `ebpf:"mysql_max_captured_bytes"`
 	NgxConnectionS_fd        *ebpf.Variable `ebpf:"ngx_connection_s_fd"`
 	NgxConnectionS_sockaddr  *ebpf.Variable `ebpf:"ngx_connection_s_sockaddr"`
 	NgxHttpRequestS_conn     *ebpf.Variable `ebpf:"ngx_http_request_s_conn"`
 	NgxHttpRequestS_upstream *ebpf.Variable `ebpf:"ngx_http_request_s_upstream"`
 	NgxHttpRevS_conn         *ebpf.Variable `ebpf:"ngx_http_rev_s_conn"`
 	NgxHttpUpstreamS_conn    *ebpf.Variable `ebpf:"ngx_http_upstream_s_conn"`
-	PostgresBufferSize       *ebpf.Variable `ebpf:"postgres_buffer_size"`
+	PostgresMaxCapturedBytes *ebpf.Variable `ebpf:"postgres_max_captured_bytes"`
 	Unused                   *ebpf.Variable `ebpf:"unused"`
 	UnusedHttp2              *ebpf.Variable `ebpf:"unused_http2"`
 	WakeupDataBytes          *ebpf.Variable `ebpf:"wakeup_data_bytes"`

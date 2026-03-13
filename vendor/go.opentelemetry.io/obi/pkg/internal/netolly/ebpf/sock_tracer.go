@@ -36,6 +36,7 @@ import (
 
 	convenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -54,6 +55,7 @@ type SockFlowFetcher struct {
 
 func NewSockFlowFetcher(
 	sampling, cacheMaxSize int,
+	portGuessPolicy flowdef.PortGuessPolicy,
 ) (*SockFlowFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -84,9 +86,15 @@ func NewSockFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
+	// numeric values defined in flows_common.h
+	portGuessing := uint8(0)
+	if portGuessPolicy == flowdef.PortGuessOrdinal {
+		portGuessing = 1
+	}
 	if err := convenience.RewriteConstants(spec, map[string]any{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
+		constPortGuessing:  portGuessing,
 		"g_bpf_debug":      true,
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)

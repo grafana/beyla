@@ -85,7 +85,6 @@ type BpfMapSpecs struct {
 	LogEnricherPids     *ebpf.MapSpec `ebpf:"log_enricher_pids"`
 	LogEventStorage     *ebpf.MapSpec `ebpf:"log_event_storage"`
 	LogEvents           *ebpf.MapSpec `ebpf:"log_events"`
-	MsgBufferMem        *ebpf.MapSpec `ebpf:"msg_buffer_mem"`
 	PathResolverScratch *ebpf.MapSpec `ebpf:"path_resolver_scratch"`
 	PidFd               *ebpf.MapSpec `ebpf:"pid_fd"`
 	TracesCtxV1         *ebpf.MapSpec `ebpf:"traces_ctx_v1"`
@@ -100,10 +99,7 @@ type BpfVariableSpecs struct {
 	G_bpfHeaderPropagation  *ebpf.VariableSpec `ebpf:"g_bpf_header_propagation"`
 	G_bpfLoopEnabled        *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
-	Ip4ip6Prefix            *ebpf.VariableSpec `ebpf:"ip4ip6_prefix"`
 	LogEventUnused          *ebpf.VariableSpec `ebpf:"log_event__unused"`
-	Unused                  *ebpf.VariableSpec `ebpf:"unused"`
-	UnusedHttp2             *ebpf.VariableSpec `ebpf:"unused_http2"`
 }
 
 // BpfObjects contains all objects after they have been loaded into the kernel.
@@ -130,7 +126,6 @@ type BpfMaps struct {
 	LogEnricherPids     *ebpf.Map `ebpf:"log_enricher_pids"`
 	LogEventStorage     *ebpf.Map `ebpf:"log_event_storage"`
 	LogEvents           *ebpf.Map `ebpf:"log_events"`
-	MsgBufferMem        *ebpf.Map `ebpf:"msg_buffer_mem"`
 	PathResolverScratch *ebpf.Map `ebpf:"path_resolver_scratch"`
 	PidFd               *ebpf.Map `ebpf:"pid_fd"`
 	TracesCtxV1         *ebpf.Map `ebpf:"traces_ctx_v1"`
@@ -143,7 +138,6 @@ func (m *BpfMaps) Close() error {
 		m.LogEnricherPids,
 		m.LogEventStorage,
 		m.LogEvents,
-		m.MsgBufferMem,
 		m.PathResolverScratch,
 		m.PidFd,
 		m.TracesCtxV1,
@@ -159,10 +153,7 @@ type BpfVariables struct {
 	G_bpfHeaderPropagation  *ebpf.Variable `ebpf:"g_bpf_header_propagation"`
 	G_bpfLoopEnabled        *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfTraceparentEnabled *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`
-	Ip4ip6Prefix            *ebpf.Variable `ebpf:"ip4ip6_prefix"`
 	LogEventUnused          *ebpf.Variable `ebpf:"log_event__unused"`
-	Unused                  *ebpf.Variable `ebpf:"unused"`
-	UnusedHttp2             *ebpf.Variable `ebpf:"unused_http2"`
 }
 
 // BpfPrograms contains all programs after they have been loaded into the kernel.

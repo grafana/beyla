@@ -32,6 +32,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -671,12 +672,20 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
+	parseContext := ebpfcommon.NewEBPFParseContext(p.cfg, eventsChan, p.pidsFilter)
 	ebpfcommon.SharedRingbuf(
 		ebpfEventContext,
-		ebpfcommon.NewEBPFParseContext(p.cfg, eventsChan, p.pidsFilter),
 		p.cfg,
-		p.pidsFilter,
 		p.bpfObjects.Events,
+		func(record *ringbuf.Record) (request.Span, bool, error) {
+			s, ignore, err := ebpfcommon.ReadBPFTraceAsSpan(parseContext, p.cfg, record, p.pidsFilter)
+			if !ignore && err == nil && !s.IsValid() {
+				return s, true, nil
+			}
+			return s, ignore, err
+		},
+		p.pidsFilter.Filter,
+		slog.With("component", "ringbuf.Tracer"),
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

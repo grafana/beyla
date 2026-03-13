@@ -108,6 +108,8 @@ type BpfHttpInfoT struct {
 	Len             uint32
 	RespLen         uint32
 	TaskTid         uint32
+	LbReqBytes      uint32
+	LbResBytes      uint32
 	Status          uint16
 	Buf             [256]uint8
 	HasLargeBuffers uint8
@@ -367,6 +369,8 @@ type BpfTcpReqT struct {
 	ExtraId         uint64
 	ReqLen          uint32
 	RespLen         uint32
+	LbReqBytes      uint32
+	LbResBytes      uint32
 	Pad2            [4]uint8
 	Buf             [256]uint8
 	Rbuf            [128]uint8
@@ -435,8 +439,7 @@ type BpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type BpfMapSpecs struct {
-	DebugEvents  *ebpf.MapSpec `ebpf:"debug_events"`
-	MsgBufferMem *ebpf.MapSpec `ebpf:"msg_buffer_mem"`
+	DebugEvents *ebpf.MapSpec `ebpf:"debug_events"`
 }
 
 // BpfVariableSpecs contains global variables before they are loaded into the kernel.
@@ -482,14 +485,12 @@ func (o *BpfObjects) Close() error {
 //
 // It can be passed to LoadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type BpfMaps struct {
-	DebugEvents  *ebpf.Map `ebpf:"debug_events"`
-	MsgBufferMem *ebpf.Map `ebpf:"msg_buffer_mem"`
+	DebugEvents *ebpf.Map `ebpf:"debug_events"`
 }
 
 func (m *BpfMaps) Close() error {
 	return _BpfClose(
 		m.DebugEvents,
-		m.MsgBufferMem,
 	)
 }
 

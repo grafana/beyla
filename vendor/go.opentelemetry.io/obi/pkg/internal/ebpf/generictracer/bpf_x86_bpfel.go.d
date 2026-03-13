@@ -8,37 +8,35 @@ pkg/internal/ebpf/generictracer/bpf_x86_bpfel.go: \
  bpf/bpfcore/bpf_tracing.h \
  bpf/common/common.h \
  bpf/bpfcore/utils.h \
- bpf/pid/pid_helpers.h \
- bpf/bpfcore/bpf_core_read.h \
- bpf/pid/types/pid_info.h \
- bpf/pid/types/pid_key.h \
- bpf/common/http_types.h \
  bpf/common/connection_info.h \
  bpf/common/egress_key.h \
  bpf/common/fd_info.h \
+ bpf/pid/types/pid_key.h \
+ bpf/pid/pid_helpers.h \
+ bpf/bpfcore/bpf_core_read.h \
+ bpf/pid/types/pid_info.h \
  bpf/common/protocol_defs.h \
  bpf/logger/bpf_dbg.h \
  bpf/common/globals.h \
  bpf/common/pin_internal.h \
+ bpf/common/http_types.h \
  bpf/common/http_buf_size.h \
  bpf/common/http_info.h \
  bpf/common/tp_info.h \
- bpf/common/map_sizing.h \
- bpf/common/msg_buffer.h \
  bpf/common/iov_iter.h \
- bpf/common/protocol_http2.h \
- bpf/maps/ongoing_http2_connections.h \
- bpf/generictracer/types/http2_conn_info_data.h \
+ bpf/common/msg_buffer.h \
  bpf/common/sock_port_ns.h \
  bpf/common/sockaddr.h \
  bpf/bpfcore/bpf_endian.h \
  bpf/common/ssl_connection.h \
  bpf/maps/active_ssl_connections.h \
+ bpf/common/map_sizing.h \
  bpf/common/ssl_helpers.h \
  bpf/maps/active_ssl_read_args.h \
  bpf/common/ssl_args.h \
  bpf/maps/active_ssl_write_args.h \
  bpf/maps/ssl_to_conn.h \
+ bpf/common/tc_common.h \
  bpf/common/tcp_info.h \
  bpf/generictracer/dns.h \
  bpf/common/ringbuf.h \
@@ -48,17 +46,10 @@ pkg/internal/ebpf/generictracer/bpf_x86_bpfel.go: \
  bpf/common/tracing.h \
  bpf/maps/trace_map.h \
  bpf/common/trace_map_key.h \
- bpf/maps/incoming_trace_map.h \
- bpf/maps/outgoing_trace_map.h \
  bpf/common/trace_parent.h \
  bpf/common/runtime.h \
  bpf/maps/active_unix_socks.h \
  bpf/maps/clone_map.h \
- bpf/pid/pid.h \
- bpf/pid/maps/pid_cache.h \
- bpf/pid/maps/map_sizing.h \
- bpf/pid/maps/valid_pids.h \
- bpf/pid/types/pid_data.h \
  bpf/maps/cp_support_connect_info.h \
  bpf/common/cp_support_data.h \
  bpf/common/trace_key.h \
@@ -74,26 +65,32 @@ pkg/internal/ebpf/generictracer/bpf_x86_bpfel.go: \
  bpf/generictracer/k_tracer_defs.h \
  bpf/common/protocol_http.h \
  bpf/maps/ongoing_http.h \
- bpf/common/send_args.h \
- bpf/common/tc_common.h \
  bpf/generictracer/k_tracer_tailcall.h \
  bpf/generictracer/protocol_common.h \
+ bpf/common/large_buffers.h \
+ bpf/common/scratch_mem.h \
  bpf/generictracer/maps/connection_meta_mem.h \
  bpf/generictracer/maps/iovec_mem.h \
  bpf/generictracer/maps/listening_ports.h \
  bpf/generictracer/maps/protocol_args_mem.h \
+ bpf/generictracer/maps/protocol_cache.h \
+ bpf/maps/sock_pids.h \
+ bpf/generictracer/k_send_receive.h \
  bpf/generictracer/protocol_http.h \
  bpf/bpfcore/bpf_builtins.h \
  bpf/bpfcore/compiler.h \
- bpf/common/large_buffers.h \
- bpf/common/scratch_mem.h \
  bpf/common/trace_lifecycle.h \
+ bpf/maps/incoming_trace_map.h \
+ bpf/maps/outgoing_trace_map.h \
  bpf/shared/obi_ctx.h \
  bpf/generictracer/maps/http_info_mem.h \
  bpf/maps/accepted_connections.h \
  bpf/maps/tp_info_mem.h \
  bpf/maps/tp_char_buf_mem.h \
- bpf/generictracer/maps/protocol_cache.h \
+ bpf/generictracer/maps/active_send_args.h \
+ bpf/common/send_args.h \
+ bpf/generictracer/maps/active_send_sock_args.h \
+ bpf/generictracer/k_unix_sock.h \
  bpf/generictracer/protocol_tcp.h \
  bpf/maps/ongoing_tcp_req.h \
  bpf/generictracer/protocol_kafka.h \
@@ -102,21 +99,23 @@ pkg/internal/ebpf/generictracer/bpf_x86_bpfel.go: \
  bpf/common/strings.h \
  bpf/generictracer/protocol_postgres.h \
  bpf/generictracer/maps/tcp_req_mem.h \
- bpf/maps/sock_pids.h \
- bpf/generictracer/k_send_receive.h \
  bpf/generictracer/maps/active_recv_args.h \
- bpf/generictracer/maps/active_send_args.h \
- bpf/generictracer/maps/active_send_sock_args.h \
- bpf/generictracer/k_unix_sock.h \
+ bpf/pid/pid.h \
+ bpf/pid/maps/pid_cache.h \
+ bpf/pid/maps/map_sizing.h \
+ bpf/pid/maps/valid_pids.h \
+ bpf/pid/types/pid_data.h \
  bpf/generictracer/maps/active_accept_args.h \
  bpf/generictracer/maps/active_connect_args.h \
  bpf/generictracer/maps/tcp_connection_map.h \
  bpf/generictracer/protocol_http2.h \
  bpf/generictracer/http2_grpc.h \
+ bpf/generictracer/types/http2_conn_info_data.h \
  bpf/generictracer/maps/grpc_frames_ctx_mem.h \
  bpf/generictracer/types/grpc_frames_ctx.h \
  bpf/generictracer/maps/http2_info_mem.h \
  bpf/generictracer/maps/ongoing_http2_grpc.h \
+ bpf/maps/ongoing_http2_connections.h \
  bpf/generictracer/ssl_defs.h \
  bpf/generictracer/maps/pid_tid_to_conn.h \
  bpf/generictracer/maps/ssl_to_pid_tid.h \
@@ -145,21 +144,19 @@ bpf/common/common.h:
 
 bpf/bpfcore/utils.h:
 
-bpf/pid/pid_helpers.h:
-
-bpf/bpfcore/bpf_core_read.h:
-
-bpf/pid/types/pid_info.h:
-
-bpf/pid/types/pid_key.h:
-
-bpf/common/http_types.h:
-
 bpf/common/connection_info.h:
 
 bpf/common/egress_key.h:
 
 bpf/common/fd_info.h:
+
+bpf/pid/types/pid_key.h:
+
+bpf/pid/pid_helpers.h:
+
+bpf/bpfcore/bpf_core_read.h:
+
+bpf/pid/types/pid_info.h:
 
 bpf/common/protocol_defs.h:
 
@@ -169,23 +166,17 @@ bpf/common/globals.h:
 
 bpf/common/pin_internal.h:
 
+bpf/common/http_types.h:
+
 bpf/common/http_buf_size.h:
 
 bpf/common/http_info.h:
 
 bpf/common/tp_info.h:
 
-bpf/common/map_sizing.h:
-
-bpf/common/msg_buffer.h:
-
 bpf/common/iov_iter.h:
 
-bpf/common/protocol_http2.h:
-
-bpf/maps/ongoing_http2_connections.h:
-
-bpf/generictracer/types/http2_conn_info_data.h:
+bpf/common/msg_buffer.h:
 
 bpf/common/sock_port_ns.h:
 
@@ -197,6 +188,8 @@ bpf/common/ssl_connection.h:
 
 bpf/maps/active_ssl_connections.h:
 
+bpf/common/map_sizing.h:
+
 bpf/common/ssl_helpers.h:
 
 bpf/maps/active_ssl_read_args.h:
@@ -206,6 +199,8 @@ bpf/common/ssl_args.h:
 bpf/maps/active_ssl_write_args.h:
 
 bpf/maps/ssl_to_conn.h:
+
+bpf/common/tc_common.h:
 
 bpf/common/tcp_info.h:
 
@@ -225,10 +220,6 @@ bpf/maps/trace_map.h:
 
 bpf/common/trace_map_key.h:
 
-bpf/maps/incoming_trace_map.h:
-
-bpf/maps/outgoing_trace_map.h:
-
 bpf/common/trace_parent.h:
 
 bpf/common/runtime.h:
@@ -236,16 +227,6 @@ bpf/common/runtime.h:
 bpf/maps/active_unix_socks.h:
 
 bpf/maps/clone_map.h:
-
-bpf/pid/pid.h:
-
-bpf/pid/maps/pid_cache.h:
-
-bpf/pid/maps/map_sizing.h:
-
-bpf/pid/maps/valid_pids.h:
-
-bpf/pid/types/pid_data.h:
 
 bpf/maps/cp_support_connect_info.h:
 
@@ -277,13 +258,13 @@ bpf/common/protocol_http.h:
 
 bpf/maps/ongoing_http.h:
 
-bpf/common/send_args.h:
-
-bpf/common/tc_common.h:
-
 bpf/generictracer/k_tracer_tailcall.h:
 
 bpf/generictracer/protocol_common.h:
+
+bpf/common/large_buffers.h:
+
+bpf/common/scratch_mem.h:
 
 bpf/generictracer/maps/connection_meta_mem.h:
 
@@ -293,17 +274,23 @@ bpf/generictracer/maps/listening_ports.h:
 
 bpf/generictracer/maps/protocol_args_mem.h:
 
+bpf/generictracer/maps/protocol_cache.h:
+
+bpf/maps/sock_pids.h:
+
+bpf/generictracer/k_send_receive.h:
+
 bpf/generictracer/protocol_http.h:
 
 bpf/bpfcore/bpf_builtins.h:
 
 bpf/bpfcore/compiler.h:
 
-bpf/common/large_buffers.h:
-
-bpf/common/scratch_mem.h:
-
 bpf/common/trace_lifecycle.h:
+
+bpf/maps/incoming_trace_map.h:
+
+bpf/maps/outgoing_trace_map.h:
 
 bpf/shared/obi_ctx.h:
 
@@ -315,7 +302,13 @@ bpf/maps/tp_info_mem.h:
 
 bpf/maps/tp_char_buf_mem.h:
 
-bpf/generictracer/maps/protocol_cache.h:
+bpf/generictracer/maps/active_send_args.h:
+
+bpf/common/send_args.h:
+
+bpf/generictracer/maps/active_send_sock_args.h:
+
+bpf/generictracer/k_unix_sock.h:
 
 bpf/generictracer/protocol_tcp.h:
 
@@ -333,17 +326,17 @@ bpf/generictracer/protocol_postgres.h:
 
 bpf/generictracer/maps/tcp_req_mem.h:
 
-bpf/maps/sock_pids.h:
-
-bpf/generictracer/k_send_receive.h:
-
 bpf/generictracer/maps/active_recv_args.h:
 
-bpf/generictracer/maps/active_send_args.h:
+bpf/pid/pid.h:
 
-bpf/generictracer/maps/active_send_sock_args.h:
+bpf/pid/maps/pid_cache.h:
 
-bpf/generictracer/k_unix_sock.h:
+bpf/pid/maps/map_sizing.h:
+
+bpf/pid/maps/valid_pids.h:
+
+bpf/pid/types/pid_data.h:
 
 bpf/generictracer/maps/active_accept_args.h:
 
@@ -355,6 +348,8 @@ bpf/generictracer/protocol_http2.h:
 
 bpf/generictracer/http2_grpc.h:
 
+bpf/generictracer/types/http2_conn_info_data.h:
+
 bpf/generictracer/maps/grpc_frames_ctx_mem.h:
 
 bpf/generictracer/types/grpc_frames_ctx.h:
@@ -362,6 +357,8 @@ bpf/generictracer/types/grpc_frames_ctx.h:
 bpf/generictracer/maps/http2_info_mem.h:
 
 bpf/generictracer/maps/ongoing_http2_grpc.h:
+
+bpf/maps/ongoing_http2_connections.h:
 
 bpf/generictracer/ssl_defs.h:
 

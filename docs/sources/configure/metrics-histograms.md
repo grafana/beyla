@@ -74,6 +74,6 @@ These default values are UNSTABLE and may change if Prometheus or OpenTelemetry 
 
 ## Use native histograms and exponential histograms
 
-For Prometheus, you enable [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) by [enabling the `native-histograms` feature in your Prometheus collector](https://prometheus.io/docs/prometheus/latest/feature_flags/#native-histograms).
+For Prometheus, you enable [native histograms](https://prometheus.io/docs/specs/native_histograms/) with the `--enable-feature=native-histograms` feature flag (Prometheus <= 3.8.0) or with the `scrape_native_histograms` config setting (Prometheus >= 3.8.0).
 
 For OpenTelemetry, you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually. Set the standard [OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION](https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/otlp/#additional-configuration) environment variable. See the `histogram_aggregation` section in the [OTEL metrics exporter](../export-data/) section for more information.

@@ -145,7 +145,7 @@ services:
 
   # Tempo
   tempo:
-    image: grafana/tempo@sha256:7e0dcbbde76f31a49d0e43adf88f32a649f6c05b643a6cc16d61edc877b12386
+    image: grafana/tempo@sha256:f221e7763488c61f9f231a767075afe8f90c0ecb451dc8e82c26d9535c339008
     container_name: demo-tempo
     command:
       - -config.file

@@ -35,6 +35,7 @@ You can override the service name, namespace, and other configurations per servi
 | `open_ports`           | Selects the process to instrument by the port it has open (listens to). Refer to [open ports](#open-ports).                              | string                   | (unset)                  |
 | `exe_path`             | Selects the processes to instrument by their executable name path. Refer to [executable path](#executable-path).                         | string (glob)            | (unset)                  |
 | `containers_only`      | Selects processes to instrument which are running in an OCI container. Refer to [containers only](#containers-only).                     | boolean                  | false                    |
+| `container_name`       | Filter services by OCI container name. Refer to [Container name](#container-name).                                                       | string (glob)            | (unset)                  |
 | `k8s_namespace`        | Filter services by Kubernetes namespace. Refer to [K8s namespace](#k8s-namespace).                                                       | string (glob)            | (unset)                  |
 | `k8s_pod_name`         | Filter services by Kubernetes Pod. Refer to [K8s Pod name](#k8s-pod-name).                                                               | string (glob)            | (unset)                  |
 | `k8s_deployment_name`  | Filter services by Kubernetes Deployment. Refer to [K8s deployment name](#k8s-deployment-name).                                          | string (glob)            | (unset)                  |
@@ -100,6 +101,23 @@ If you specify other selectors in the same `instrument` entry, the processes mus
 ### Containers only
 
 Selects processes to instrument which are running in an OCI container. To perform this check, Beyla inspects the process network namespace and matches it against its own network namespace. If Beyla doesn't have enough permissions to perform the network namespace inspection, it ignores this option.
+
+If you specify other selectors in the same `instrument` entry, the processes must match all the selector properties.
+
+### Container name
+
+This selector property limits the instrumentation to the applications running in OCI containers (such as Docker) with a name matching the provided glob pattern.
+
+For example:
+
+```yaml
+discovery:
+  instrument:
+    - container_name: "*testserver*"
+    - container_name: "my-app-*"
+```
+
+This example discovers all processes running in containers whose names contain "testserver" or start with "my-app-".
 
 If you specify other selectors in the same `instrument` entry, the processes must match all the selector properties.
 

@@ -11,7 +11,6 @@ import (
 	"log/slog"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -92,16 +91,15 @@ func (p *Watcher) Run(ctx context.Context) {
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.WatchEvents,
-		&ebpfcommon.IdentityPidsFilter{},
 		p.processWatchEvent,
-		p.log,
 		nil,
+		p.log,
 		nil,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, nil)
 }
 
-func (p *Watcher) processWatchEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *Watcher) processWatchEvent(record *ringbuf.Record) (request.Span, bool, error) {
 	var flags uint64
 	var event BPFWatchInfo
 

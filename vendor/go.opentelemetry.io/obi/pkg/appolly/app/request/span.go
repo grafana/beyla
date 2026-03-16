@@ -362,6 +362,12 @@ type Span struct {
 	AWS               *AWS           `json:"-"`
 	OpenAI            *OpenAI        `json:"-"`
 
+	// RequestHeaders stores extracted HTTP request headers based on enrichment rules.
+	// Keys are canonical header names, values are all header values (possibly obfuscated).
+	RequestHeaders map[string][]string `json:"requestHeaders,omitempty"`
+	// ResponseHeaders stores extracted HTTP response headers based on enrichment rules.
+	ResponseHeaders map[string][]string `json:"responseHeaders,omitempty"`
+
 	// OverrideTraceName is set under some conditions, like spanmetrics reaching the maximum
 	// cardinality for trace names.
 	OverrideTraceName string `json:"-"`
@@ -399,6 +405,7 @@ func spanAttributes(s *Span) SpanAttributes {
 			attrs["graphqlOperationName"] = s.GraphQL.OperationName
 			attrs["graphqlOperationType"] = s.GraphQL.OperationType
 		}
+		addHeaderAttributes(attrs, s)
 		return attrs
 	case EventTypeHTTPClient:
 		attrs := SpanAttributes{
@@ -447,6 +454,7 @@ func spanAttributes(s *Span) SpanAttributes {
 				attrs["errorDescription"] = s.DBError.Description
 			}
 		}
+		addHeaderAttributes(attrs, s)
 		return attrs
 	case EventTypeGRPC:
 		return SpanAttributes{
@@ -534,6 +542,15 @@ func spanAttributes(s *Span) SpanAttributes {
 	}
 
 	return SpanAttributes{}
+}
+
+func addHeaderAttributes(attrs SpanAttributes, s *Span) {
+	for name, values := range s.RequestHeaders {
+		attrs["http.request.header."+strings.ToLower(name)] = strings.Join(values, ", ")
+	}
+	for name, values := range s.ResponseHeaders {
+		attrs["http.response.header."+strings.ToLower(name)] = strings.Join(values, ", ")
+	}
 }
 
 func (s *Span) SQLErrorDescription() string {

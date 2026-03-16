@@ -24,16 +24,9 @@ package ebpf // import "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 import (
 	"encoding/binary"
 	"io"
-	"net"
 
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/internal/pipe"
 )
-
-// IPAddr encodes v4 and v6 IPs with a fixed length.
-// IPv4 addresses are encoded as IPv6 addresses with prefix ::ffff/96
-// as described in https://datatracker.ietf.org/doc/html/rfc4038#section-4.2
-// (same behavior as Go's net.IP type)
-type IPAddr [net.IPv6len]uint8
 
 // Record contains accumulated metrics from a flow, with extra metadata
 // that is added from the user space
@@ -43,26 +36,14 @@ type IPAddr [net.IPv6len]uint8
 type Record struct {
 	NetFlowRecordT
 
-	// Attrs of the flow record: source/destination, Interface, OBI IP, etc...
-	Attrs RecordAttrs
+	// Attrs of the flow record: source/destination, OBI IP, etc...
+	CommonAttrs pipe.CommonAttrs
+
+	NetAttrs NetAttrs
 }
 
-type RecordAttrs struct {
-	// SrcName and DstName might be set from several sources along the processing/decoration pipeline:
-	// - K8s entity
-	// - Host name
-	// - IP
-	SrcName string
-	DstName string
-
-	// SrcZone and DstZone represent the Cloud availability zones of the source and destination
-	SrcZone string
-	DstZone string
-
+type NetAttrs struct {
 	Interface string
-	// OBIIP provides information about the source of the flow (the Agent that traced it)
-	OBIIP    string
-	Metadata map[attr.Name]string
 }
 
 func NewRecord(
@@ -73,6 +54,10 @@ func NewRecord(
 		NetFlowRecordT: NetFlowRecordT{
 			Id:      key,
 			Metrics: metrics,
+		},
+		CommonAttrs: pipe.CommonAttrs{
+			SrcAddr: pipe.IPAddr(key.SrcIp.In6U.U6Addr8),
+			DstAddr: pipe.IPAddr(key.DstIp.In6U.U6Addr8),
 		},
 	}
 }
@@ -91,32 +76,6 @@ func (fm *NetFlowMetrics) Accumulate(src *NetFlowMetrics) {
 	fm.Bytes += src.Bytes
 	fm.Packets += src.Packets
 	fm.Flags |= src.Flags
-}
-
-// SrcIP is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) SrcIP() *IPAddr {
-	return (*IPAddr)(&fi.SrcIp.In6U.U6Addr8)
-}
-
-// DstIP is never null. Returned as pointer for efficiency.
-func (fi *NetFlowId) DstIP() *IPAddr {
-	return (*IPAddr)(&fi.DstIp.In6U.U6Addr8)
-}
-
-// IP returns the net.IP equivalent object
-func (ia *IPAddr) IP() net.IP {
-	return ia[:]
-}
-
-// IntEncodeV4 encodes an IPv4 address as an integer (in network encoding, big endian).
-// It assumes that the passed IP is already IPv4. Otherwise it would just encode the
-// last 4 bytes of an IPv6 address
-func (ia *IPAddr) IntEncodeV4() uint32 {
-	return binary.BigEndian.Uint32(ia[net.IPv6len-net.IPv4len : net.IPv6len])
-}
-
-func (ia *IPAddr) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + ia.IP().String() + `"`), nil
 }
 
 // ReadFrom reads a Record from a binary source, in LittleEndian order

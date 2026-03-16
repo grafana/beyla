@@ -174,7 +174,7 @@ jobs:
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
-            --max-turns 60
+            --max-turns 100
             --allowedTools
             "Bash(cat:*),Bash(git:*),Bash(grep:*),Bash(head:*),Bash(ls:*),Bash(pwd:*),Bash(tail:*),Bash(wc:*),
             Glob,Grep,LS,Read,Write,Task,TodoWrite"

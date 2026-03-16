@@ -107,10 +107,12 @@ func contains(slice []string, value string) bool {
 	return slices.Contains(slice, value)
 }
 
-func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string) {
+func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string, types ...elf.SymType) {
+	if len(types) == 0 {
+		types = []elf.SymType{elf.STT_FUNC}
+	}
 	for _, s := range syms {
-		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
-			// Symbol not associated with a function or other executable code.
+		if !slices.Contains(types, elf.ST_TYPE(s.Info)) {
 			continue
 		}
 		if !contains(symbolNames, s.Name) {
@@ -136,21 +138,21 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, sy
 	}
 }
 
-func FindExeSymbols(f *elf.File, symbolNames []string) (map[string]Sym, error) {
+func FindExeSymbols(f *elf.File, symbolNames []string, types ...elf.SymType) (map[string]Sym, error) {
 	addresses := map[string]Sym{}
 	syms, err := f.Symbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	collectSymbols(f, syms, addresses, symbolNames)
+	collectSymbols(f, syms, addresses, symbolNames, types...)
 
 	dynsyms, err := f.DynamicSymbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	collectSymbols(f, dynsyms, addresses, symbolNames)
+	collectSymbols(f, dynsyms, addresses, symbolNames, types...)
 
 	return addresses, nil
 }

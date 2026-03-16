@@ -946,8 +946,13 @@ go.opentelemetry.io/obi/pkg/internal/netolly/export
 go.opentelemetry.io/obi/pkg/internal/netolly/flow
 go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport
 go.opentelemetry.io/obi/pkg/internal/netolly/ifaces
-go.opentelemetry.io/obi/pkg/internal/netolly/transform/k8s
 go.opentelemetry.io/obi/pkg/internal/nodejs
+go.opentelemetry.io/obi/pkg/internal/pipe
+go.opentelemetry.io/obi/pkg/internal/pipe/cidr
+go.opentelemetry.io/obi/pkg/internal/pipe/decorate
+go.opentelemetry.io/obi/pkg/internal/pipe/geoip
+go.opentelemetry.io/obi/pkg/internal/pipe/rdns
+go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s
 go.opentelemetry.io/obi/pkg/internal/procs
 go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
@@ -968,7 +973,6 @@ go.opentelemetry.io/obi/pkg/kube/kubecache/meta/cni
 go.opentelemetry.io/obi/pkg/kube/kubecache/service
 go.opentelemetry.io/obi/pkg/kube/kubeflags
 go.opentelemetry.io/obi/pkg/netolly/agent
-go.opentelemetry.io/obi/pkg/netolly/cidr
 go.opentelemetry.io/obi/pkg/netolly/flowdef
 go.opentelemetry.io/obi/pkg/obi
 go.opentelemetry.io/obi/pkg/pipe/global

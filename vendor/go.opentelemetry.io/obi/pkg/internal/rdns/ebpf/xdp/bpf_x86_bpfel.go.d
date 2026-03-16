@@ -7,7 +7,6 @@ pkg/internal/rdns/ebpf/xdp/bpf_x86_bpfel.go: \
  bpf/bpfcore/bpf_endian.h \
  bpf/logger/bpf_dbg.h \
  bpf/bpfcore/bpf_core_read.h \
- bpf/bpfcore/bpf_tracing.h \
  bpf/common/globals.h \
  bpf/common/pin_internal.h
 
@@ -24,8 +23,6 @@ bpf/bpfcore/bpf_endian.h:
 bpf/logger/bpf_dbg.h:
 
 bpf/bpfcore/bpf_core_read.h:
-
-bpf/bpfcore/bpf_tracing.h:
 
 bpf/common/globals.h:
 

@@ -46,19 +46,22 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 
 	chunk := record.RawSample[hdrSize : hdrSize+event.Len]
 
+	initFunc := func(b []byte) {
+		lb := largebuf.NewLargeBuffer()
+		lb.AppendChunk(b)
+		parseCtx.largeBuffers.Add(key, lb)
+	}
+
 	switch event.Action {
 	case largeBufferActionInit:
-		lb := largebuf.NewLargeBuffer()
-		lb.AppendChunk(chunk)
-		parseCtx.largeBuffers.Add(key, lb)
-
+		initFunc(chunk)
 	case largeBufferActionAppend:
 		lb, ok := parseCtx.largeBuffers.Get(key)
 		if !ok {
-			return request.Span{}, true, nil
+			initFunc(chunk)
+		} else {
+			lb.AppendChunk(chunk)
 		}
-		lb.AppendChunk(chunk)
-
 	default:
 		return request.Span{}, true, fmt.Errorf("invalid large buffer action: %d", event.Action)
 	}

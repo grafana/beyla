@@ -29,6 +29,7 @@ var (
 	grpcOneSevenSeven   = version.Must(version.NewVersion("1.77.0"))
 	http2ZeroFortyFive  = version.Must(version.NewVersion("0.45.0"))
 	mongoOneThirteenOne = version.Must(version.NewVersion("1.13.1"))
+	pqOneElevenZero     = version.Must(version.NewVersion("1.11.0"))
 )
 
 const (
@@ -114,6 +115,11 @@ const (
 	MongoOneThirteenOne
 	// database/sql stdlib
 	DriverConnCiPos
+	// lib/pq driver
+	PqConnCfgPos
+	PqConfigHostPos
+	PqOneElevenZero
+	PqConnTypeOffset
 	// mysql driver
 	MySQLConnCfgPos
 	MySQLConfigAddrPos
@@ -445,6 +451,18 @@ var structMembers = map[string]structInfo{
 			"ci": DriverConnCiPos,
 		},
 	},
+	"github.com/lib/pq.conn": {
+		lib: "github.com/lib/pq",
+		fields: map[string]GoOffset{
+			"cfg": PqConnCfgPos,
+		},
+	},
+	"github.com/lib/pq.Config": {
+		lib: "github.com/lib/pq",
+		fields: map[string]GoOffset{
+			"Host": PqConfigHostPos,
+		},
+	},
 	"github.com/go-sql-driver/mysql.mysqlConn": {
 		lib: "github.com/go-sql-driver/mysql",
 		fields: map[string]GoOffset{
@@ -554,6 +572,18 @@ func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]str
 					fieldOffsets[HTTP2ZeroFortyFive] = uint64(1)
 				} else {
 					fieldOffsets[HTTP2ZeroFortyFive] = uint64(0)
+				}
+			} else {
+				log.Debug("can't parse version for", "library", lib)
+			}
+		case "github.com/lib/pq":
+			ver = cleanLibVersion(ver, true, lib, log)
+
+			if v, err := version.NewVersion(ver); err == nil {
+				if v.GreaterThanOrEqual(pqOneElevenZero) {
+					fieldOffsets[PqOneElevenZero] = uint64(1)
+				} else {
+					fieldOffsets[PqOneElevenZero] = uint64(0)
 				}
 			} else {
 				log.Debug("can't parse version for", "library", lib)

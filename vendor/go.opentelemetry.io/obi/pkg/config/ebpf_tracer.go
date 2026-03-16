@@ -47,7 +47,7 @@ type EBPFTracer struct {
 	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
 	WakeupLen int `yaml:"wakeup_len" env:"OTEL_EBPF_BPF_WAKEUP_LEN" validate:"gte=0"`
 
-	// BatchLength allows specifying how many traces will be batched at the initial
+	// BatchLength allows specifying how many items (traces/metrics) will be batched at the initial
 	// stage before being forwarded to the next stage
 	// Must be at least 1
 	BatchLength int `yaml:"batch_length" env:"OTEL_EBPF_BPF_BATCH_LENGTH" validate:"gt=0"`
@@ -147,17 +147,15 @@ func (e *EBPFTracer) CudaInstrumentationEnabled() bool {
 	return false
 }
 
-// Per-protocol data buffer size in bytes.
-// Max:
-// 64K bytes for HTTP.
-// 8K bytes for other protocols.
+// Per-protocol maximum bytes to capture per request per direction, sent to userspace via large buffer events.
+// The lte=65536 ceiling must match the k_large_buf_max_*_captured_bytes constants in bpf/common/large_buffers.h.
 //
 // Default: 0 (disabled).
 type EBPFBufferSizes struct {
 	HTTP     uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP" validate:"lte=65536"`
-	MySQL    uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL" validate:"lte=8192"`
-	Kafka    uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=8192"`
-	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=8192"`
+	MySQL    uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL" validate:"lte=65536"`
+	Kafka    uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=65536"`
+	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=65536"`
 }
 
 // HasHeaders returns true if HTTP headers context propagation is enabled

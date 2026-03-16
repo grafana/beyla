@@ -163,7 +163,7 @@ func (r *netMetricsReporter) observeFlowBytes(flow *ebpf.Record) {
 }
 
 func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
-	if r.interZone == nil || flow.Attrs.SrcZone == flow.Attrs.DstZone {
+	if r.interZone == nil || flow.CommonAttrs.SrcZone == flow.CommonAttrs.DstZone {
 		return
 	}
 	r.interZone.WithLabelValues(labelValues(flow, r.interZoneAttrs)...).

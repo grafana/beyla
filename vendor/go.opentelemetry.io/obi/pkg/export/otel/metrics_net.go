@@ -185,7 +185,7 @@ func (me *netMetricsExporter) Do(ctx context.Context) {
 				flowBytes, attrs := me.flowBytes.ForRecord(v)
 				flowBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}
-			if me.interZoneBytes != nil && v.Attrs.SrcZone != v.Attrs.DstZone {
+			if me.interZoneBytes != nil && v.CommonAttrs.SrcZone != v.CommonAttrs.DstZone {
 				izBytes, attrs := me.interZoneBytes.ForRecord(v)
 				izBytes.Add(ctx, int64(v.Metrics.Bytes), metric2.WithAttributeSet(attrs))
 			}

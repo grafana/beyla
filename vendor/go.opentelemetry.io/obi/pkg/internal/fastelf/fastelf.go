@@ -317,6 +317,10 @@ func (ctx *ElfContext) Close() error {
 
 func (ctx *ElfContext) HasSymbol(symbol string) bool {
 	for _, sec := range ctx.Sections {
+		if sec == nil {
+			continue
+		}
+
 		if sec.Type != SHT_SYMTAB && sec.Type != SHT_DYNSYM {
 			continue
 		}
@@ -326,6 +330,10 @@ func (ctx *ElfContext) HasSymbol(symbol string) bool {
 		}
 
 		strtab := ctx.Sections[sec.Link]
+
+		if strtab == nil {
+			continue
+		}
 
 		if int(strtab.Offset) >= len(ctx.Data) {
 			continue
@@ -374,7 +382,7 @@ func (ctx *ElfContext) shstrtabData() []byte {
 
 	shstrtab := ctx.Sections[ctx.Hdr.Shstrndx]
 
-	if int(shstrtab.Offset) >= len(ctx.Data) {
+	if shstrtab == nil || int(shstrtab.Offset) >= len(ctx.Data) {
 		return nil
 	}
 
@@ -389,6 +397,10 @@ func (ctx *ElfContext) section(sectionName string) *Elf64_Shdr {
 	}
 
 	for _, sec := range ctx.Sections {
+		if sec == nil {
+			continue
+		}
+
 		if GetCStringUnsafe(shstrtabData, sec.Name) == sectionName {
 			return sec
 		}

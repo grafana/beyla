@@ -6,6 +6,7 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -185,9 +186,17 @@ type EBPFParseContext struct {
 	dnsEvents                  *expirable.LRU[dnsparser.DNSId, *request.Span]
 }
 
+// sharedForwarder is implemented by ringBufForwarder[T] so that
+// EBPFEventContext.SharedRingBuffer can hold a type safe reference
+// without being generic itself.
+// This interface with a simple method is preferred to the any type.
+type sharedForwarder interface {
+	AlreadyForwarded(ctx context.Context)
+}
+
 type EBPFEventContext struct {
 	CommonPIDsFilter ServiceFilter
-	SharedRingBuffer *ringBufForwarder
+	SharedRingBuffer sharedForwarder
 	EBPFMaps         map[string]*ebpf.Map
 	RingBufLock      sync.Mutex
 	MapsLock         sync.Mutex

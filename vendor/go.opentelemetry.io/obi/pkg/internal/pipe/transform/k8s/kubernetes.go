@@ -19,7 +19,7 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-package k8s // import "go.opentelemetry.io/obi/pkg/internal/netolly/transform/k8s"
+package k8s // import "go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s"
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
-	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/pipe"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -57,11 +57,12 @@ const alreadyLoggedIPsCacheLen = 256
 
 func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator") }
 
-func MetadataDecoratorProvider(
+func MetadataDecoratorProvider[T any](
 	ctx context.Context,
 	cfg *transform.KubernetesDecorator,
 	k8sInformer *kube.MetadataProvider,
-	input, output *msg.Queue[[]*ebpf.Record],
+	attrs func(T) *pipe.CommonAttrs,
+	input, output *msg.Queue[[]T],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		if !k8sInformer.IsKubeEnabled() {
@@ -71,18 +72,27 @@ func MetadataDecoratorProvider(
 		if err != nil {
 			return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 		}
-		var decorate func([]*ebpf.Record) []*ebpf.Record
 		if cfg.DropExternal {
-			log().Debug("will drop external flows")
-			decorate = nt.decorateMightDrop
-		} else {
-			decorate = nt.decorateNoDrop
+			log().Debug("will drop external items")
 		}
 		in := input.Subscribe(msg.SubscriberName("k8s.MetadataDecorator"))
 		return func(ctx context.Context) {
 			defer output.Close()
-			swarms.ForEachInput(ctx, in, log().Debug, func(flows []*ebpf.Record) {
-				output.Send(decorate(flows))
+			swarms.ForEachInput(ctx, in, log().Debug, func(items []T) {
+				if cfg.DropExternal {
+					out := make([]T, 0, len(items))
+					for _, item := range items {
+						if nt.transform(attrs(item)) {
+							out = append(out, item)
+						}
+					}
+					output.Send(out)
+				} else {
+					for _, item := range items {
+						nt.transform(attrs(item))
+					}
+					output.Send(items)
+				}
 			})
 		}, nil
 	}
@@ -95,41 +105,24 @@ type decorator struct {
 	clusterName      string
 }
 
-func (n *decorator) decorateNoDrop(flows []*ebpf.Record) []*ebpf.Record {
-	for _, flow := range flows {
-		n.transform(flow)
-	}
-	return flows
-}
-
-func (n *decorator) decorateMightDrop(flows []*ebpf.Record) []*ebpf.Record {
-	out := make([]*ebpf.Record, 0, len(flows))
-	for _, flow := range flows {
-		if n.transform(flow) {
-			out = append(out, flow)
-		}
-	}
-	return out
-}
-
-func (n *decorator) transform(flow *ebpf.Record) bool {
-	if flow.Attrs.Metadata == nil {
-		flow.Attrs.Metadata = map[attr.Name]string{}
+func (n *decorator) transform(a *pipe.CommonAttrs) bool {
+	if a.Metadata == nil {
+		a.Metadata = map[attr.Name]string{}
 	}
 	if n.clusterName != "" {
-		flow.Attrs.Metadata[(attr.K8sClusterName)] = n.clusterName
+		a.Metadata[(attr.K8sClusterName)] = n.clusterName
 	}
-	srcOk := n.decorate(flow, attrPrefixSrc, flow.Id.SrcIP().IP().String())
-	dstOk := n.decorate(flow, attrPrefixDst, flow.Id.DstIP().IP().String())
+	srcOk := n.decorate(a, attrPrefixSrc, a.SrcAddr.IP().String())
+	dstOk := n.decorate(a, attrPrefixDst, a.DstAddr.IP().String())
 	return srcOk && dstOk
 }
 
-// decorate the flow with Kube metadata. Returns false if there is no metadata found for such IP
-func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
+// decorate the item with Kube metadata. Returns false if there is no metadata found for such IP
+func (n *decorator) decorate(a *pipe.CommonAttrs, prefix, ip string) bool {
 	cachedObj := n.store.ObjectMetaByIP(ip)
 	if cachedObj == nil {
 		if n.log.Enabled(context.TODO(), slog.LevelDebug) {
-			// avoid spoofing the debug logs with the same message for each flow whose IP can't be decorated
+			// avoid spoofing the debug logs with the same message for each item whose IP can't be decorated
 			if !n.alreadyLoggedIPs.Contains(ip) {
 				n.alreadyLoggedIPs.Add(ip, struct{}{})
 				n.log.Debug("Can't find kubernetes info for IP", "ip", ip)
@@ -143,34 +136,34 @@ func (n *decorator) decorate(flow *ebpf.Record, prefix, ip string) bool {
 		ownerName, ownerKind = owner.Name, owner.Kind
 	}
 
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixType)] = meta.Kind
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ownerName
-	flow.Attrs.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ownerKind
+	a.Metadata[attr.Name(prefix+attrSuffixNs)] = meta.Namespace
+	a.Metadata[attr.Name(prefix+attrSuffixName)] = meta.Name
+	a.Metadata[attr.Name(prefix+attrSuffixType)] = meta.Kind
+	a.Metadata[attr.Name(prefix+attrSuffixOwnerName)] = ownerName
+	a.Metadata[attr.Name(prefix+attrSuffixOwnerType)] = ownerKind
 
-	n.nodeLabels(flow, prefix, meta)
+	n.nodeLabels(a, prefix, meta)
 
 	// decorate other names from metadata, if required
 	if prefix == attrPrefixDst {
-		if flow.Attrs.DstName == "" {
-			flow.Attrs.DstName = meta.Name
+		if a.DstName == "" {
+			a.DstName = meta.Name
 		}
 	} else {
-		if flow.Attrs.SrcName == "" {
-			flow.Attrs.SrcName = meta.Name
+		if a.SrcName == "" {
+			a.SrcName = meta.Name
 		}
 	}
 	return true
 }
 
-func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.ObjectMeta) {
+func (n *decorator) nodeLabels(a *pipe.CommonAttrs, prefix string, meta *informer.ObjectMeta) {
 	var nodeLabels map[string]string
 	// add any other ownership label (they might be several, e.g. replicaset and deployment)
 	if meta.Pod != nil && meta.Pod.HostIp != "" {
-		flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
+		a.Metadata[attr.Name(prefix+attrSuffixHostIP)] = meta.Pod.HostIp
 		if host := n.store.ObjectMetaByIP(meta.Pod.HostIp); host != nil {
-			flow.Attrs.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Meta.Name
+			a.Metadata[attr.Name(prefix+attrSuffixHostName)] = host.Meta.Name
 			nodeLabels = host.Meta.Labels
 		}
 	} else if meta.Kind == "Node" {
@@ -181,9 +174,9 @@ func (n *decorator) nodeLabels(flow *ebpf.Record, prefix string, meta *informer.
 		// clusters this information is inferred from Node annotations
 		if zone, ok := nodeLabels[cloudZoneLabel]; ok {
 			if prefix == attrPrefixDst {
-				flow.Attrs.DstZone = zone
+				a.DstZone = zone
 			} else {
-				flow.Attrs.SrcZone = zone
+				a.SrcZone = zone
 			}
 		}
 	}

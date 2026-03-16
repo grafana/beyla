@@ -258,6 +258,27 @@ func loadKubeconfig(kubeConfigPath string) (*rest.Config, error) {
 	return config, nil
 }
 
+// transformFunc creates a cache.TransformFunc that attempts to convert the input to type T.
+// If the conversion is successful, it calls the convert function, which creates the indexable
+// entity. If the input has already been transformed/stored/deleted or is stale, it is ignored.
+func transformFunc[T any](typeName string, convert func(T) (any, error)) cache.TransformFunc {
+	return func(i any) (any, error) {
+		if obj, ok := i.(T); ok {
+			return convert(obj)
+		}
+		// it's Ok. The K8s library just informed from an entity
+		// that has been previously transformed/stored/deleted
+		if pi, ok := i.(*indexableEntity); ok {
+			return pi, nil
+		}
+		// let's forward the stale object to the event handler
+		if stale, ok := i.(cache.DeletedFinalStateUnknown); ok {
+			return stale, nil
+		}
+		return nil, fmt.Errorf("was expecting a %s. Got: %T", typeName, i)
+	}
+}
+
 // the transformed objects that are stored in the Informers' cache require to embed an ObjectMeta
 // instances. Since the informer's cache is only used to list the stored objects, we just need
 // something that is unique. We can get rid of many fields for memory saving in big clusters with
@@ -277,22 +298,7 @@ func (inf *Informers) initPodInformer(ctx context.Context, informerFactory infor
 
 	// Transform any *v1.Pod instance into a *PodInfo instance to save space
 	// in the informer's cache
-	if err := pods.SetTransform(func(i any) (any, error) {
-		pod, ok := i.(*v1.Pod)
-		if !ok {
-			// it's Ok. The K8s library just informed from an entity
-			// that has been previously transformed/stored/deleted
-			if pi, ok := i.(*indexableEntity); ok {
-				return pi, nil
-			}
-			// let's forward the stale object to the event handler
-			if obj, stale := i.(cache.DeletedFinalStateUnknown); stale {
-				return obj, nil
-			}
-			return nil, fmt.Errorf("was expecting a *v1.Pod. Got: %T", i)
-		}
-		return inf.podToIndexableEntity(pod)
-	}); err != nil {
+	if err := pods.SetTransform(transformFunc("*v1.Pod", inf.podToIndexableEntity)); err != nil {
 		return fmt.Errorf("can't set pods transform: %w", err)
 	}
 
@@ -385,6 +391,49 @@ func (inf *Informers) podToIndexableEntity(pod *v1.Pod) (any, error) {
 	}, nil
 }
 
+func nodeToIndexableEntity(node *v1.Node) (any, error) {
+	ips := make([]string, 0, len(node.Status.Addresses))
+	for _, address := range node.Status.Addresses {
+		ip := net.ParseIP(address.Address)
+		if ip != nil {
+			ips = append(ips, ip.String())
+		}
+	}
+	// CNI-dependent logic (must work regardless of whether the CNI is installed)
+	ips = cni.AddOvnIPs(ips, node)
+
+	return &indexableEntity{
+		ObjectMeta: minimalIndex(&node.ObjectMeta),
+		EncodedMeta: &informer.ObjectMeta{
+			Name:            node.Name,
+			Namespace:       node.Namespace,
+			Labels:          node.Labels,
+			Ips:             ips,
+			Kind:            typeNode,
+			StatusTimeEpoch: objLastUpdateTime(&node.ObjectMeta, nil, node.Status.Conditions),
+		},
+	}, nil
+}
+
+func serviceToIndexableEntity(svc *v1.Service) (any, error) {
+	var ips []string
+	if svc.Spec.ClusterIP != v1.ClusterIPNone {
+		ips = svc.Spec.ClusterIPs
+	}
+	return &indexableEntity{
+		ObjectMeta: minimalIndex(&svc.ObjectMeta),
+		EncodedMeta: &informer.ObjectMeta{
+			Name:            svc.Name,
+			Namespace:       svc.Namespace,
+			Labels:          svc.Labels,
+			Ips:             ips,
+			Kind:            typeService,
+			Annotations:     svc.Annotations,
+			StatusTimeEpoch: objLastUpdateTime(&svc.ObjectMeta, nil, nil),
+		},
+	}, nil
+}
+
 func envToMap(kc kubernetes.Interface, objMeta metav1.ObjectMeta, containerEnv []v1.EnvVar) map[string]string {
 	envMap := map[string]string{}
 	for _, envV := range containerEnv {
@@ -429,43 +478,7 @@ func (inf *Informers) initNodeIPInformer(ctx context.Context, informerFactory in
 	nodes := informerFactory.Core().V1().Nodes().Informer()
 	// Transform any *v1.Node instance into an *indexableEntity instance to save space
 	// in the informer's cache
-	if err := nodes.SetTransform(func(i any) (any, error) {
-		node, ok := i.(*v1.Node)
-		// todo: move to generic function
-		if !ok {
-			// it's Ok. The K8s library just informed from an entity
-			// that has been previously transformed/stored
-			if pi, ok := i.(*indexableEntity); ok {
-				return pi, nil
-			}
-			// let's forward the stale object to the event handler
-			if obj, stale := i.(cache.DeletedFinalStateUnknown); stale {
-				return obj, nil
-			}
-			return nil, fmt.Errorf("was expecting a *v1.Node. Got: %T", i)
-		}
-		ips := make([]string, 0, len(node.Status.Addresses))
-		for _, address := range node.Status.Addresses {
-			ip := net.ParseIP(address.Address)
-			if ip != nil {
-				ips = append(ips, ip.String())
-			}
-		}
-		// CNI-dependent logic (must work regardless of whether the CNI is installed)
-		ips = cni.AddOvnIPs(ips, node)
-
-		return &indexableEntity{
-			ObjectMeta: minimalIndex(&node.ObjectMeta),
-			EncodedMeta: &informer.ObjectMeta{
-				Name:            node.Name,
-				Namespace:       node.Namespace,
-				Labels:          node.Labels,
-				Ips:             ips,
-				Kind:            typeNode,
-				StatusTimeEpoch: objLastUpdateTime(&node.ObjectMeta, nil, node.Status.Conditions),
-			},
-		}, nil
-	}); err != nil {
+	if err := nodes.SetTransform(transformFunc("*v1.Node", nodeToIndexableEntity)); err != nil {
 		return fmt.Errorf("can't set nodes transform: %w", err)
 	}
 
@@ -482,37 +495,7 @@ func (inf *Informers) initServiceIPInformer(ctx context.Context, informerFactory
 	services := informerFactory.Core().V1().Services().Informer()
 	// Transform any *v1.Service instance into a *indexableEntity instance to save space
 	// in the informer's cache
-	if err := services.SetTransform(func(i any) (any, error) {
-		svc, ok := i.(*v1.Service)
-		if !ok {
-			// it's Ok. The K8s library just informed from an entity
-			// that has been previously transformed/stored
-			if pi, ok := i.(*indexableEntity); ok {
-				return pi, nil
-			}
-			// let's forward the stale object to the event handler
-			if obj, stale := i.(cache.DeletedFinalStateUnknown); stale {
-				return obj, nil
-			}
-			return nil, fmt.Errorf("was expecting a *v1.Service. Got: %T", i)
-		}
-		var ips []string
-		if svc.Spec.ClusterIP != v1.ClusterIPNone {
-			ips = svc.Spec.ClusterIPs
-		}
-		return &indexableEntity{
-			ObjectMeta: minimalIndex(&svc.ObjectMeta),
-			EncodedMeta: &informer.ObjectMeta{
-				Name:            svc.Name,
-				Namespace:       svc.Namespace,
-				Labels:          svc.Labels,
-				Ips:             ips,
-				Kind:            typeService,
-				Annotations:     svc.Annotations,
-				StatusTimeEpoch: objLastUpdateTime(&svc.ObjectMeta, nil, nil),
-			},
-		}, nil
-	}); err != nil {
+	if err := services.SetTransform(transformFunc("*v1.Service", serviceToIndexableEntity)); err != nil {
 		return fmt.Errorf("can't set services transform: %w", err)
 	}
 

@@ -12,7 +12,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -78,16 +77,15 @@ func (p *BPFLogger) Run(ctx context.Context) {
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.DebugEvents,
-		&ebpfcommon.IdentityPidsFilter{},
 		p.processLogEvent,
-		p.log,
 		nil,
+		p.log,
 		nil,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, nil)
 }
 
-func (p *BPFLogger) processLogEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *BPFLogger) processLogEvent(record *ringbuf.Record) (request.Span, bool, error) {
 	event, err := ebpfcommon.ReinterpretCast[BPFLogInfo](record.RawSample)
 
 	if err == nil {

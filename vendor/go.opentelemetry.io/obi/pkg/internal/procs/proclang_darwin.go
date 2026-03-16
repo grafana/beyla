@@ -14,6 +14,6 @@ func FindProcLanguage(_ app.PID) svc.InstrumentableType {
 	return svc.InstrumentableGeneric
 }
 
-func FindExeSymbols(_ *elf.File, _ []string) (map[string]Sym, error) {
+func FindExeSymbols(_ *elf.File, _ []string, _ ...elf.SymType) (map[string]Sym, error) {
 	return nil, nil
 }

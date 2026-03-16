@@ -1261,6 +1261,34 @@
           }
         ]
       }
+    },
+    "github.com/lib/pq.Config": {
+      "Host": {
+        "versions": {
+          "oldest": "1.11.0",
+          "newest": "1.11.2"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.11.0"
+          }
+        ]
+      }
+    },
+    "github.com/lib/pq.conn": {
+      "cfg": {
+        "versions": {
+          "oldest": "1.11.0",
+          "newest": "1.11.2"
+        },
+        "offsets": [
+          {
+            "offset": 576,
+            "since": "1.11.0"
+          }
+        ]
+      }
     }
   }
 }

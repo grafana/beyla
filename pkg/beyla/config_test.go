@@ -30,7 +30,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
-	"go.opentelemetry.io/obi/pkg/netolly/cidr"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 
@@ -119,7 +118,7 @@ network:
 	nc := obi.DefaultNetworkConfig
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
-	nc.CIDRs = cidr.Definitions{"10.244.0.0/16"}
+	nc.CIDRs = []string{"10.244.0.0/16"}
 
 	nsNamespaceAttr := services.NewRegexp(".")
 	nsPodNameAttr := services.NewGlob("*")
@@ -170,6 +169,14 @@ network:
 						EndpointPatterns: []string{
 							"/query/service",
 						},
+					},
+					Enrichment: obiconfig.EnrichmentConfig{
+						Policy: obiconfig.HTTPParsingPolicy{
+							DefaultAction:     obiconfig.HTTPParsingActionExclude,
+							MatchOrder:        obiconfig.HTTPParsingMatchOrderFirstMatchWins,
+							ObfuscationString: "***",
+						},
+						Rules: []obiconfig.HTTPParsingRule{},
 					},
 				},
 			},

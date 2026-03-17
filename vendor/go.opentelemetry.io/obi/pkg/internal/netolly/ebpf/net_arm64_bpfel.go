@@ -81,6 +81,14 @@ type NetFlowRecordT struct {
 	Pad     [4]uint8
 }
 
+type NetPacketCount NetPacketCountT
+
+type NetPacketCountT struct {
+	_       structs.HostLayout
+	Total   uint64
+	Ignored uint64
+}
+
 // LoadNet returns the embedded CollectionSpec for Net.
 func LoadNet() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_NetBytes)
@@ -136,6 +144,7 @@ type NetMapSpecs struct {
 	DebugEvents     *ebpf.MapSpec `ebpf:"debug_events"`
 	DirectFlows     *ebpf.MapSpec `ebpf:"direct_flows"`
 	FlowDirections  *ebpf.MapSpec `ebpf:"flow_directions"`
+	FlowPacketStats *ebpf.MapSpec `ebpf:"flow_packet_stats"`
 }
 
 // NetVariableSpecs contains global variables before they are loaded into the kernel.
@@ -180,6 +189,7 @@ type NetMaps struct {
 	DebugEvents     *ebpf.Map `ebpf:"debug_events"`
 	DirectFlows     *ebpf.Map `ebpf:"direct_flows"`
 	FlowDirections  *ebpf.Map `ebpf:"flow_directions"`
+	FlowPacketStats *ebpf.Map `ebpf:"flow_packet_stats"`
 }
 
 func (m *NetMaps) Close() error {
@@ -189,6 +199,7 @@ func (m *NetMaps) Close() error {
 		m.DebugEvents,
 		m.DirectFlows,
 		m.FlowDirections,
+		m.FlowPacketStats,
 	)
 }
 

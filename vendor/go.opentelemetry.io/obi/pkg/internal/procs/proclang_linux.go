@@ -159,6 +159,10 @@ func FindExeSymbols(f *elf.File, symbolNames []string, types ...elf.SymType) (ma
 
 func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 	for _, sec := range ctx.Sections {
+		if sec == nil {
+			continue
+		}
+
 		if sec.Type != fastelf.SHT_SYMTAB && sec.Type != fastelf.SHT_DYNSYM {
 			continue
 		}
@@ -169,7 +173,7 @@ func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 
 		strtab := ctx.Sections[sec.Link]
 
-		if int(strtab.Offset) >= len(ctx.Data) {
+		if strtab == nil || int(strtab.Offset) >= len(ctx.Data) {
 			continue
 		}
 

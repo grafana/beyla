@@ -30,10 +30,13 @@ import (
 	"net"
 	"time"
 
+	cebpf "github.com/cilium/ebpf"
+
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
+	"go.opentelemetry.io/obi/pkg/netip"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -45,14 +48,6 @@ const (
 	directionIngress = "ingress"
 	directionEgress  = "egress"
 	directionBoth    = "both"
-
-	ipTypeAny  = "any"
-	ipTypeIPV4 = "ipv4"
-	ipTypeIPV6 = "ipv6"
-
-	ipIfaceExternal    = "external"
-	ipIfaceLocal       = "local"
-	ipIfaceNamedPrefix = "name:"
 )
 
 func alog() *slog.Logger {
@@ -117,6 +112,8 @@ type ebpfFlowFetcher interface {
 
 	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
 	ReadRingBuf() (ringbuf.Record, error)
+
+	FlowPacketStatsMap() *cebpf.Map
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
@@ -131,7 +128,7 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Flows, error) {
 
 	alog.Debug("acquiring Agent IP")
 
-	agentIP, err := fetchAgentIP(&cfg.NetworkFlows)
+	agentIP, err := netip.FetchAgentIP(cfg.NetworkFlows.AgentIP, string(cfg.NetworkFlows.AgentIPIface), cfg.NetworkFlows.AgentIPType)
 	if err != nil {
 		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
 	}
@@ -206,7 +203,7 @@ func flowsAgent(
 		return iface
 	}
 
-	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
+	mapTracer := flow.NewMapTracer(ctxInfo, fetcher, cfg.NetworkFlows.CacheActiveTimeout)
 	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
 
 	return &Flows{

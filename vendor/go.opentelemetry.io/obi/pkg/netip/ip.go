@@ -19,14 +19,12 @@
 // This implementation is a derivation of the code in
 // https://github.com/netobserv/netobserv-ebpf-agent/tree/release-1.4
 
-package agent // import "go.opentelemetry.io/obi/pkg/netolly/agent"
+package netip // import "go.opentelemetry.io/obi/pkg/netip"
 
 import (
 	"fmt"
 	"net"
 	"strings"
-
-	"go.opentelemetry.io/obi/pkg/obi"
 )
 
 // dependencies that can be injected from testing
@@ -39,39 +37,39 @@ var (
 	}
 )
 
-// fetchAgentIP guesses the non-loopback IP address of the Agent host, according to the
+// FetchAgentIP guesses the non-loopback IP address of the Agent host, according to the
 // user-provided configuration:
-//   - If OBIIP is provided, this value is used whatever is the real IP of the Agent.
-//   - AgentIPIface specifies which interface this function should look into in order to pickup an address.
-//   - AgentIPType specifies which type of IP address should the agent pickup ("any" to pickup whichever
+//   - If agentIP is provided, this value is used whatever is the real IP of the Agent.
+//   - agentIPIface specifies which interface this function should look into in order to pickup an address.
+//   - agentIPType specifies which type of IP address should the agent pickup ("any" to pickup whichever
 //     ipv4 or ipv6 address is found first)
-func fetchAgentIP(cfg *obi.NetworkConfig) (net.IP, error) {
-	if cfg.AgentIP != "" {
-		if ip := net.ParseIP(cfg.AgentIP); ip != nil {
+func FetchAgentIP(agentIP string, agentIPIface string, agentIPType string) (net.IP, error) {
+	if agentIP != "" {
+		if ip := net.ParseIP(agentIP); ip != nil {
 			return ip, nil
 		}
-		return nil, fmt.Errorf("can't parse provided IP %v", cfg.AgentIP)
+		return nil, fmt.Errorf("can't parse provided IP %v", agentIP)
 	}
 
-	if cfg.AgentIPType != ipTypeAny &&
-		cfg.AgentIPType != ipTypeIPV6 &&
-		cfg.AgentIPType != ipTypeIPV4 {
+	if agentIPType != IPTypeAny &&
+		agentIPType != IPTypeIPV6 &&
+		agentIPType != IPTypeIPV4 {
 		return nil, fmt.Errorf("invalid IP type %q. Valid values are: %s, %s or %s",
-			cfg.AgentIPType, ipTypeIPV4, ipTypeIPV6, ipTypeAny)
+			agentIPType, IPTypeIPV4, IPTypeIPV6, IPTypeAny)
 	}
 
-	switch cfg.AgentIPIface {
-	case ipIfaceLocal:
-		return fromLocal(cfg.AgentIPType)
-	case ipIfaceExternal:
-		return fromExternal(cfg.AgentIPType)
+	switch agentIPIface {
+	case IPIfaceLocal:
+		return fromLocal(agentIPType)
+	case IPIfaceExternal:
+		return fromExternal(agentIPType)
 	default:
-		if !strings.HasPrefix(string(cfg.AgentIPIface), ipIfaceNamedPrefix) {
+		if !strings.HasPrefix(agentIPIface, IPIfaceNamedPrefix) {
 			return nil, fmt.Errorf(
 				"invalid IP interface %q. Valid values are: %s, %s or %s<iface_name>",
-				cfg.AgentIPIface, ipIfaceLocal, ipIfaceExternal, ipIfaceNamedPrefix)
+				agentIPIface, IPIfaceLocal, IPIfaceExternal, IPIfaceNamedPrefix)
 		}
-		return fromInterface(string(cfg.AgentIPIface[len(ipIfaceNamedPrefix):]), cfg.AgentIPType)
+		return fromInterface(agentIPIface[len(IPIfaceNamedPrefix):], agentIPType)
 	}
 }
 
@@ -106,7 +104,7 @@ func fromExternal(ipType string) (net.IP, error) {
 	// This will just establish an external dialer where we can pickup the external
 	// host address
 	addrStr := "8.8.8.8:80"
-	if ipType == ipTypeIPV6 {
+	if ipType == IPTypeIPV6 {
 		addrStr = "[2001:4860:4860::8888]:80"
 	}
 	conn, err := dial("udp", addrStr)
@@ -138,11 +136,11 @@ func getIP(pip net.IP, ipType string) (net.IP, bool) {
 		return nil, false
 	}
 	switch ipType {
-	case ipTypeIPV4:
+	case IPTypeIPV4:
 		if ip := pip.To4(); ip != nil {
 			return ip, true
 		}
-	case ipTypeIPV6:
+	case IPTypeIPV6:
 		// as any IP4 address can be converted to IP6, we only return any
 		// address that can be converted to IP6 but not to IP4
 		if ip := pip.To16(); ip != nil && pip.To4() == nil {

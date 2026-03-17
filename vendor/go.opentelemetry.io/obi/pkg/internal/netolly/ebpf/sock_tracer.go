@@ -40,7 +40,7 @@ import (
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 NetSk ../../../../bpf/netolly/flows_sock.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t -type flow_record_t -type packet_count_t -target amd64,arm64 NetSk ../../../../bpf/netolly/flows_sock.c -- -I../../../../bpf
 
 // SockFlowFetcher reads and forwards the Flows from the eBPF kernel space with a socket filter implementation.
 // It provides access both to flows that are aggregated in the kernel space (via PerfCPU hashmap)
@@ -136,6 +136,10 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
+func (m *SockFlowFetcher) FlowPacketStatsMap() *ebpf.Map {
+	return m.objects.FlowPacketStats
+}
+
 // Close any resources that are taken up by the socket filter, the filter itself and some maps.
 func (m *SockFlowFetcher) Close() error {
 	m.log.Debug("unregistering eBPF objects")
@@ -150,32 +154,12 @@ func (m *SockFlowFetcher) Close() error {
 		}
 	}
 	if m.objects != nil {
-		errs = append(errs, m.closeObjects()...)
+		if err := m.objects.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		m.objects = nil
 	}
-	if len(errs) == 0 {
-		return nil
-	}
-
-	var errStrings []string
-	for _, err := range errs {
-		errStrings = append(errStrings, err.Error())
-	}
-	return errors.New(`errors: "` + strings.Join(errStrings, `", "`) + `"`)
-}
-
-func (m *SockFlowFetcher) closeObjects() []error {
-	var errs []error
-	if err := m.objects.ObiSocketFilter.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.AggregatedFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.DirectFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	m.objects = nil
-	return errs
+	return errors.Join(errs...)
 }
 
 func (m *SockFlowFetcher) ReadRingBuf() (ringbuf.Record, error) {

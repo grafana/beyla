@@ -81,6 +81,14 @@ type NetSkFlowRecordT struct {
 	Pad     [4]uint8
 }
 
+type NetSkPacketCount NetSkPacketCountT
+
+type NetSkPacketCountT struct {
+	_       structs.HostLayout
+	Total   uint64
+	Ignored uint64
+}
+
 // LoadNetSk returns the embedded CollectionSpec for NetSk.
 func LoadNetSk() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_NetSkBytes)
@@ -135,6 +143,7 @@ type NetSkMapSpecs struct {
 	DebugEvents     *ebpf.MapSpec `ebpf:"debug_events"`
 	DirectFlows     *ebpf.MapSpec `ebpf:"direct_flows"`
 	FlowDirections  *ebpf.MapSpec `ebpf:"flow_directions"`
+	FlowPacketStats *ebpf.MapSpec `ebpf:"flow_packet_stats"`
 }
 
 // NetSkVariableSpecs contains global variables before they are loaded into the kernel.
@@ -179,6 +188,7 @@ type NetSkMaps struct {
 	DebugEvents     *ebpf.Map `ebpf:"debug_events"`
 	DirectFlows     *ebpf.Map `ebpf:"direct_flows"`
 	FlowDirections  *ebpf.Map `ebpf:"flow_directions"`
+	FlowPacketStats *ebpf.Map `ebpf:"flow_packet_stats"`
 }
 
 func (m *NetSkMaps) Close() error {
@@ -188,6 +198,7 @@ func (m *NetSkMaps) Close() error {
 		m.DebugEvents,
 		m.DirectFlows,
 		m.FlowDirections,
+		m.FlowPacketStats,
 	)
 }
 

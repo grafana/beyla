@@ -91,7 +91,7 @@ type GlobAttributes struct {
 	// programming language they are written in. Use lowercase names, e.g. java,go
 	Languages GlobAttr `yaml:"languages"`
 
-	// PIDs allows selecting processes by PID. When non-empty, the process PID must be in this list (in addition to any path/port criteria).
+	// PIDs allows selecting processes by PID (static from config). When non-empty, the process PID must be in this list.
 	PIDs []uint32 `yaml:"target_pids"`
 
 	// Path allows defining the regular expression matching the full executable path.

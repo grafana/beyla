@@ -317,6 +317,8 @@ jobs:
             Bash(sort:*),Bash(tail:*),Bash(uniq:*),Bash(wc:*),
             Edit,MultiEdit,Glob,Grep,LS,Read,Write,Task,TodoWrite,
             mcp__github_file_ops__commit_files,
+            mcp__github_file_ops__delete_files,
+            mcp__github_file_ops__update_claude_comment,
             mcp__github_file_ops__create_or_update_file"
           prompt: |
             # Implement fixes from plan

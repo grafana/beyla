@@ -28,6 +28,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
+// Swappable in tests so attacher tests don't depend on memlock permissions.
+var removeMemlock = rlimit.RemoveMemlock
+
 // traceAttacher creates the available trace.Tracer implementations (Go HTTP tracer, GRPC tracer, Generic tracer...)
 // for each received Instrumentable process and forwards an ebpf.ProcessTracer instance ready to run and start
 // instrumenting the executable
@@ -411,7 +414,7 @@ func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 }
 
 func (ta *traceAttacher) init() error {
-	if err := rlimit.RemoveMemlock(); err != nil {
+	if err := removeMemlock(); err != nil {
 		return fmt.Errorf("removing memory lock: %w", err)
 	}
 	return nil

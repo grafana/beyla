@@ -64,4 +64,8 @@ type ContextInfo struct {
 type AppO11y struct {
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool
+	// DynamicPIDSelector, when set, is the runtime PID set used for discovery. The caller creates it
+	// (e.g. discover.NewDynamicPIDSelector()), passes it via instrumenter.WithDynamicPIDSelector, and
+	// calls AddPIDs/RemovePIDs/GetPIDs on it directly. The instrumenter does not implement an updater interface.
+	DynamicPIDSelector any
 }

@@ -6,6 +6,8 @@
 package ebpf // import "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 
 import (
+	"github.com/cilium/ebpf"
+
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
@@ -34,4 +36,8 @@ func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 
 func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
 	return nil
+}
+
+func (m *FlowFetcher) FlowPacketStatsMap() *ebpf.Map {
+	panic("this is never going to be executed")
 }

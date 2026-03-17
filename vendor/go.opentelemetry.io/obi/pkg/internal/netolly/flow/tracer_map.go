@@ -27,9 +27,13 @@ import (
 	"sync"
 	"time"
 
+	cebpf "github.com/cilium/ebpf"
 	"github.com/gavv/monotime"
 
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -46,14 +50,17 @@ type MapTracer struct {
 	// manages the access to the eviction routines, avoiding two evictions happening at the same time
 	evictionCond   *sync.Cond
 	lastEvictionNs uint64
+	imetrics       imetrics.Reporter
 }
 
 type mapFetcher interface {
 	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
+	FlowPacketStatsMap() *cebpf.Map
 }
 
-func NewMapTracer(fetcher mapFetcher, evictionTimeout time.Duration) *MapTracer {
+func NewMapTracer(ctxInfo *global.ContextInfo, fetcher mapFetcher, evictionTimeout time.Duration) *MapTracer {
 	return &MapTracer{
+		imetrics:        ctxInfo.Metrics,
 		mapFetcher:      fetcher,
 		evictionTimeout: evictionTimeout,
 		lastEvictionNs:  uint64(monotime.Now()),
@@ -69,10 +76,14 @@ func (m *MapTracer) Flush() {
 
 func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	return func(ctx context.Context) {
+		mtlog := mtlog()
+		packetStats, err := NewPacketStats(m.mapFetcher.FlowPacketStatsMap())
+		if err != nil {
+			mtlog.Warn("Can't setup metric: "+attr.VendorPrefix+"_network_dropped_flow_bytes", "err", err)
+		}
 		defer out.MarkCloseable()
 		evictionTicker := time.NewTicker(m.evictionTimeout)
 		go m.evictionSynchronization(ctx, out)
-		mtlog := mtlog()
 		for {
 			select {
 			case <-ctx.Done():
@@ -82,6 +93,12 @@ func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 			case <-evictionTicker.C:
 				mtlog.Debug("triggering flow eviction on timer")
 				m.Flush()
+
+				if count, err := packetStats.Count(); err != nil {
+					mtlog.Debug("Can't retrieve internal network packet stats", "err", err)
+				} else {
+					m.imetrics.BPFPacketStats(count.Total, count.Ignored)
+				}
 			}
 		}
 	}

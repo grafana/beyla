@@ -972,6 +972,7 @@ go.opentelemetry.io/obi/pkg/kube/kubecache/meta
 go.opentelemetry.io/obi/pkg/kube/kubecache/meta/cni
 go.opentelemetry.io/obi/pkg/kube/kubecache/service
 go.opentelemetry.io/obi/pkg/kube/kubeflags
+go.opentelemetry.io/obi/pkg/netip
 go.opentelemetry.io/obi/pkg/netolly/agent
 go.opentelemetry.io/obi/pkg/netolly/flowdef
 go.opentelemetry.io/obi/pkg/obi

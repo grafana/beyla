@@ -42,6 +42,11 @@ type InternalMetricsReporter struct {
 	bpfMapMaxEntries                 instrument.Int64Gauge
 	bpfInternalMetricsScrapeInterval time.Duration
 	informerLag                      instrument.Float64Histogram
+	// used for calculating deltas from an absolute value
+	totalPackets          uint64
+	totalIgnoredPackets   uint64
+	bpfPacketCount        instrument.Int64Counter
+	bpfIgnoredPacketCount instrument.Int64Counter
 }
 
 func imlog() *slog.Logger {
@@ -172,6 +177,24 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		return nil, err
 	}
 
+	bpfIgnoredPacketCount, err := meter.Int64Counter(
+		attr.VendorPrefix+".bpf.network.ignored.packets.total",
+		instrument.WithDescription("How many network packets have been internally ignored due to collisions in the internal eBPF cache"),
+		instrument.WithUnit("{packet}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	bpfPacketCount, err := meter.Int64Counter(
+		attr.VendorPrefix+".bpf.network.packets.total",
+		instrument.WithDescription("How many network packets have been internally accounted"),
+		instrument.WithUnit("{packet}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &InternalMetricsReporter{
 		ctx:                              ctx,
 		tracerFlushes:                    tracerFlushes,
@@ -188,6 +211,8 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		bpfMapMaxEntries:                 bpfMapMaxEntries,
 		bpfInternalMetricsScrapeInterval: internalMetrics.BpfMetricScrapeInterval,
 		informerLag:                      informerLag,
+		bpfPacketCount:                   bpfPacketCount,
+		bpfIgnoredPacketCount:            bpfIgnoredPacketCount,
 	}, nil
 }
 
@@ -312,4 +337,10 @@ func (p *InternalMetricsReporter) BpfInternalMetricsScrapeInterval() time.Durati
 
 func (p *InternalMetricsReporter) InformerLag(seconds float64) {
 	p.informerLag.Record(p.ctx, seconds)
+}
+
+func (p *InternalMetricsReporter) BPFPacketStats(count, ignored uint64) {
+	p.bpfPacketCount.Add(p.ctx, int64(count-p.totalPackets))
+	p.bpfIgnoredPacketCount.Add(p.ctx, int64(ignored-p.totalIgnoredPackets))
+	p.totalPackets, p.totalIgnoredPackets = count, ignored
 }

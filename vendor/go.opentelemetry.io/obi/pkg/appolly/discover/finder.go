@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -42,6 +43,7 @@ func NewProcessFinder(
 
 type processFinderStartConfig struct {
 	enrichedProcessEvents *msg.Queue[[]Event[ProcessAttrs]]
+	dynamicPIDSelector    *DynamicPIDSelector
 }
 
 // ProcessFinderStartOpt allows overriding some internal behavior of ProcessFinder.Start method.
@@ -57,6 +59,15 @@ func WithEnrichedProcessEvents(enrichedProcessEvents *msg.Queue[[]Event[ProcessA
 	}
 }
 
+// WithDynamicPIDSelector supplies the OBI dynamic PID set. Caller can pass discover.NewDynamicPIDSelector()
+// and add PIDs via the selector. When non-nil, the finder wires it to the matcher and removed-PID
+// notifications are used for synthetic deletes.
+func WithDynamicPIDSelector(selector *DynamicPIDSelector) ProcessFinderStartOpt {
+	return func(cfg *processFinderStartConfig) {
+		cfg.dynamicPIDSelector = selector
+	}
+}
+
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
 func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOpt) (<-chan Event[*ebpf.Instrumentable], error) {
@@ -67,10 +78,16 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 
 	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, "tracerEvents")
 
+	configCriteria := FindingCriteria(pf.cfg, startConfig.dynamicPIDSelector != nil)
+
 	swi := swarm.Instancer{}
 	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "processEvents")
 
-	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents)),
+	var addedPIDsCh <-chan []app.PID
+	if startConfig.dynamicPIDSelector != nil {
+		addedPIDsCh = startConfig.dynamicPIDSelector.AddedPIDsNotify()
+	}
+	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, addedPIDsCh)),
 		swarm.WithID("ProcessWatcher"))
 
 	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "kubeEnrichedEvents")
@@ -96,7 +113,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	), swarm.WithID("LanguageDecoratorProvider"))
 
 	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, "criteriaFilteredEvents")
-	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents),
+	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicPIDSelector),
 		swarm.WithID("CriteriaMatcher"))
 
 	executableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "executableTypes")

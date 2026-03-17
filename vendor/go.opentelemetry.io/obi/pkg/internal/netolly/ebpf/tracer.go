@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
@@ -42,7 +41,7 @@ import (
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 Net ../../../../bpf/netolly/flows.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t -type flow_record_t -type packet_count_t -target amd64,arm64 Net ../../../../bpf/netolly/flows.c -- -I../../../../bpf
 
 const (
 	// constants defined in flows.c as "volatile const"
@@ -178,37 +177,16 @@ func (m *FlowFetcher) Close() error {
 	}
 
 	if m.objects != nil {
-		errs = append(errs, m.closeObjects()...)
+		if err := m.objects.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		m.objects = nil
 	}
-
-	var errStrings []string
-	for _, err := range errs {
-		errStrings = append(errStrings, err.Error())
-	}
-
-	if len(errs) > 0 {
-		return errors.New(`errors: "` + strings.Join(errStrings, `", "`) + `"`)
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
-func (m *FlowFetcher) closeObjects() []error {
-	var errs []error
-	if err := m.objects.ObiEgressFlowParse.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.ObiIngressFlowParse.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.AggregatedFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.DirectFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	m.objects = nil
-	return errs
+func (m *FlowFetcher) FlowPacketStatsMap() *ebpf.Map {
+	return m.objects.FlowPacketStats
 }
 
 func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {

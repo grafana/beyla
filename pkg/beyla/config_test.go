@@ -287,7 +287,7 @@ network:
 			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{
-			Unmatch:                   transform.UnmatchHeuristic,
+			Unmatch:                   transform.UnmatchLowCardinality,
 			WildcardChar:              "*",
 			MaxPathSegmentCardinality: 10,
 		},

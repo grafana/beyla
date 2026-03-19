@@ -79,6 +79,8 @@ func DefaultConfig() *Config {
 		{InstrumentableType: svc.InstrumentablePython},
 	}
 
+	def.Routes.Unmatch = transform.UnmatchLowCardinality
+
 	if !slices.Contains(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name") {
 		def.OTELMetrics.ExtraSpanResourceLabels = append(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name")
 	}

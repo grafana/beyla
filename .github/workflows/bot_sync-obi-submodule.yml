@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: sync-obi-submodule-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 # Set restrictive permissions at workflow level

@@ -125,6 +125,12 @@ type EBPFTracer struct {
 
 	// BPF path used to pin eBPF maps
 	BPFFSPath string `yaml:"bpf_fs_path" env:"OTEL_EBPF_BPF_FS_PATH"`
+
+	// ForceBPFMapReader forces the PerCPU HashMap operation of the Network Flows reader.
+	// The system will always try "batch", which is more efficient, but legacy systems like RHEL8-based will fallback to
+	// "legacy" (the slowest, more resource-consuming iterate&delete approach).
+	//nolint:undoc
+	ForceBPFMapReader EBPFMapReader `yaml:"force_bpf_map_reader" env:"OTEL_EBPF_FORCE_BPF_MAP_READER" validate:"oneof=0 1 2" jsonschema:"type=string,enum=auto,enum=batch,enum=legacy"`
 }
 
 var nvidiaSMIExistsFunc = nvidiaSMIExists

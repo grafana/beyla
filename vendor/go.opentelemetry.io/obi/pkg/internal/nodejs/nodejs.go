@@ -75,10 +75,23 @@ func (i *NodeInjector) injectFile(pid int, elfFile *elf.File) error {
 		conn.Close()
 	}
 
-	if elfFile != nil && hasUserSIGUSR1Handler(pid, elfFile) {
-		i.log.Warn("Node.js process has a custom SIGUSR1 handler, skipping agent injection. "+
-			"Node.js trace correlation will not work", "pid", pid)
-		return nil
+	if elfFile != nil {
+		switch hasUserSIGUSR1Handler(pid, elfFile) {
+		case signalCheckFound:
+			i.log.Warn("Node.js process has a custom SIGUSR1 handler, skipping agent injection. "+
+				"Node.js trace correlation will not work", "pid", pid)
+			return nil
+		case signalCheckFailed:
+			// Symbol-based detection failed (e.g. stripped binary with dynamic libuv).
+			// Fall back to scanning the application's source files for quoted SIGUSR1 references.
+			if sourceHasSIGUSR1Reference(pid) {
+				i.log.Warn("Node.js source files reference SIGUSR1, skipping agent injection. "+
+					"Node.js trace correlation will not work", "pid", pid)
+				return nil
+			}
+		case signalCheckNotFound:
+			// No handler detected, safe to proceed.
+		}
 	}
 
 	if err := syscall.Kill(pid, syscall.SIGUSR1); err != nil {

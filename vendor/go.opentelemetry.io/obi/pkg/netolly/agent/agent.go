@@ -110,7 +110,7 @@ type Flows struct {
 type ebpfFlowFetcher interface {
 	io.Closer
 
-	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
+	LookupAndDeleteMap() map[ebpf.NetFlowId]*ebpf.NetFlowMetrics
 	ReadRingBuf() (ringbuf.Record, error)
 
 	FlowPacketStatsMap() *cebpf.Map
@@ -148,13 +148,13 @@ func newFetcher(cfg *obi.Config, alog *slog.Logger, ifaceManager *tcmanager.Inte
 	case obi.EbpfSourceSock:
 		alog.Info("using socket filter for collecting network events")
 
-		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.GuessPorts)
+		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.GuessPorts, cfg.EBPF.ForceBPFMapReader)
 	case obi.EbpfSourceTC:
 		alog.Info("using kernel Traffic Control for collecting network events")
 		ingress, egress := flowDirections(&cfg.NetworkFlows)
 
 		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows,
-			ingress, egress, ifaceManager, cfg.EBPF.TCBackend, cfg.NetworkFlows.GuessPorts)
+			ingress, egress, ifaceManager, cfg.EBPF.TCBackend, cfg.NetworkFlows.GuessPorts, cfg.EBPF.ForceBPFMapReader)
 	}
 
 	return nil, errors.New("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")

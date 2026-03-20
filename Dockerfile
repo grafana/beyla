@@ -32,8 +32,8 @@ COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
 
-# OBI's Makefile doesn't let to override BPF2GO env var: temporary hack until we can
-ENV TOOLS_DIR=/go/bin
+# Point make to the pre-installed bpf2go binary in the generator image
+ENV BPF2GO=/go/bin/bpf2go
 
 # Build
 RUN if [ -z "${DEV_OBI}" ]; then \

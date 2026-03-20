@@ -12,7 +12,7 @@ import (
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/require"
 
-	obipkg "go.opentelemetry.io/obi/pkg/obi"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
 	"github.com/grafana/beyla/v3/internal/testgenerated/integration/components/promtest"
@@ -37,7 +37,7 @@ func testConfig() *ti.TestConfig {
 // kprobeTracesEnabled returns true if the kernel version is high enough to
 // support kprobe-based distributed traces (>= 5.17).
 func kprobeTracesEnabled() bool {
-	major, minor := obipkg.KernelVersion()
+	major, minor := ebpfcommon.KernelVersion()
 
 	return major > 5 || (major == 5 && minor >= 17)
 }

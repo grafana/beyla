@@ -96,7 +96,7 @@ __check_defined = \
 
 # prereqs binary dependencies
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
-BPF2GO = $(TOOLS_DIR)/bpf2go
+BPF2GO ?= $(TOOLS_DIR)/bpf2go
 GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind

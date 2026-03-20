@@ -341,6 +341,47 @@ func (e *RouteExtractor) extractNextJSRoutesFromManifest(dir string) error {
 	return nil
 }
 
+// ScanJSFileLines opens a JS/TS file and calls fn for each non-empty,
+// non-comment line (trimmed). The callback receives the trimmed line and
+// returns true to stop scanning early, or false to continue.
+func ScanJSFileLines(path string, fn func(line string) bool) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	inBlockComment := false
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if inBlockComment {
+			if strings.Contains(line, "*/") {
+				inBlockComment = false
+			}
+			continue
+		}
+
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "/*") {
+			if !strings.Contains(line, "*/") {
+				inBlockComment = true
+			}
+			continue
+		}
+
+		if fn(line) {
+			return nil
+		}
+	}
+
+	return scanner.Err()
+}
+
 func (e *RouteExtractor) scanFile(filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -424,37 +465,10 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 }
 
 func (e *RouteExtractor) ScanDirectory(root string) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	return WalkJSFiles(root, func(path string) error {
+		if err := e.scanFile(path); err != nil {
+			e.log.Debug("error processing file", "file", path, "error", err)
 		}
-
-		e.log.Debug("scanning", "path", path, "name", info.Name())
-
-		// Skip node_modules, .git, and other common dirs
-		if info.IsDir() {
-			name := info.Name()
-			// skip the nested root directory in the original /proc/<pid>/root
-			if name == "root" && path != root {
-				return filepath.SkipDir
-			}
-
-			// check if the list of directories hits any known dirs for nodejs or linux
-			// we should be avoiding
-			if _, ok := skipDirs[name]; ok {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Only scan JS/TS file types
-		ext := filepath.Ext(path)
-		if ext == ".js" || ext == ".ts" || ext == ".mjs" || ext == ".cjs" {
-			if err := e.scanFile(path); err != nil {
-				e.log.Debug("error processing file", "file", path, "error", err)
-			}
-		}
-
 		return nil
 	})
 }
@@ -555,16 +569,19 @@ func (e *RouteExtractor) GetHarvestedRoutes() []string {
 }
 
 func (e *RouteExtractor) FirstArg(args []string) string {
-	firstArg := ""
+	return FirstArg(args)
+}
+
+// FirstArg returns the first non-flag argument from a Node.js command line,
+// skipping flags (starting with '-') and the "inspect" keyword.
+func FirstArg(args []string) string {
 	for _, a := range args {
 		if a == "" || a[0] == '-' || a == "inspect" {
 			continue
 		}
-		firstArg = a
-		break
+		return a
 	}
-
-	return firstArg
+	return ""
 }
 
 // testing
@@ -574,24 +591,69 @@ var (
 	cwdForPID     = ebpfcommon.CWDForPID
 )
 
-func ExtractNodejsRoutes(pid app.PID) (*RouteHarvesterResult, error) {
+// FindNodeJSAppDir locates the root directory of a Node.js application by
+// reading its command line and working directory from /proc.
+func FindNodeJSAppDir(pid app.PID) (string, error) {
 	rootDir := rootDirForPID(pid)
 	_, args, err := cmdlineForPID(pid)
 	if err != nil {
-		return nil, fmt.Errorf("error finding cmd line, error %w", err)
+		return "", fmt.Errorf("error finding cmd line: %w", err)
 	}
 	workdir, err := cwdForPID(pid)
 	if err != nil {
-		return nil, fmt.Errorf("error finding cwd, error %w", err)
+		return "", fmt.Errorf("error finding cwd: %w", err)
 	}
-	jsExtractor := NewRouteExtractor()
 
-	firstArg := jsExtractor.FirstArg(args)
+	firstArg := FirstArg(args)
 
 	dir := FindScriptDirectory(rootDir, firstArg, workdir)
 	if dir == "" {
-		return nil, fmt.Errorf("failed to find script directory for pid %d, script %s, cwd %s", pid, firstArg, workdir)
+		return "", fmt.Errorf("failed to find script directory for pid %d, script %s, cwd %s", pid, firstArg, workdir)
 	}
+	return dir, nil
+}
+
+// WalkJSFiles walks a directory tree, skipping known non-application directories
+// (node_modules, .git, system dirs, etc.), and calls fn for each JS/TS source
+// file found (.js, .ts, .mjs, .cjs). The callback can return filepath.SkipAll
+// to stop the walk early.
+func WalkJSFiles(root string, fn func(path string) error) error {
+	return filepath.Walk(root, newJSFileWalker(root, fn))
+}
+
+func newJSFileWalker(root string, fn func(path string) error) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			name := info.Name()
+			if name == "root" && path != root {
+				return filepath.SkipDir
+			}
+			if _, ok := skipDirs[name]; ok {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		ext := filepath.Ext(path)
+		if ext == ".js" || ext == ".ts" || ext == ".mjs" || ext == ".cjs" {
+			return fn(path)
+		}
+
+		return nil
+	}
+}
+
+func ExtractNodejsRoutes(pid app.PID) (*RouteHarvesterResult, error) {
+	dir, err := FindNodeJSAppDir(pid)
+	if err != nil {
+		return nil, err
+	}
+
+	jsExtractor := NewRouteExtractor()
 
 	if err := jsExtractor.extractNextJSRoutesFromManifest(dir); err != nil {
 		jsExtractor.log.Debug("error extracting next.js routes",

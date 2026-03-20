@@ -38,20 +38,20 @@ const (
 // signal handles) from the process's memory. If any node in the tree has signum == 10,
 // the process has a custom SIGUSR1 handler and it is NOT safe to send SIGUSR1.
 //
-// Returns true if a custom handler is detected, false if safe to proceed.
-// Returns false on any error (fail-open: if we can't determine, attempt injection).
-func hasUserSIGUSR1Handler(pid int, elfFile *elf.File) bool {
+// Returns signalCheckFound if a handler is detected, signalCheckNotFound if no handler,
+// or signalCheckFailed if the detection could not be performed (e.g. stripped symbols).
+func hasUserSIGUSR1Handler(pid int, elfFile *elf.File) signalCheckResult {
 	if elfFile.Class != elf.ELFCLASS64 {
-		return false
+		return signalCheckFailed
 	}
 
 	syms, err := procs.FindExeSymbols(elfFile, []string{"uv__signal_tree"}, elf.STT_OBJECT)
 	if err != nil {
-		return false
+		return signalCheckFailed
 	}
 	sym, ok := syms["uv__signal_tree"]
 	if !ok {
-		return false
+		return signalCheckFailed
 	}
 	symVAddr := sym.Off
 
@@ -62,7 +62,7 @@ func hasUserSIGUSR1Handler(pid int, elfFile *elf.File) bool {
 	if elfFile.Type == elf.ET_DYN {
 		base, err := findExeBaseAddr(pid)
 		if err != nil {
-			return false
+			return signalCheckFailed
 		}
 		runtimeAddr = base + symVAddr
 	}
@@ -70,16 +70,22 @@ func hasUserSIGUSR1Handler(pid int, elfFile *elf.File) bool {
 	memPath := fmt.Sprintf("/proc/%d/mem", pid)
 	mem, err := os.Open(memPath)
 	if err != nil {
-		return false
+		return signalCheckFailed
 	}
 	defer mem.Close()
 
 	rootPtr, err := readPtr(mem, int64(runtimeAddr), elfFile.ByteOrder)
-	if err != nil || rootPtr == 0 {
-		return false
+	if err != nil {
+		return signalCheckFailed
+	}
+	if rootPtr == 0 {
+		return signalCheckNotFound
 	}
 
-	return walkTreeForSignal(mem, rootPtr, sigusr1, elfFile.ByteOrder)
+	if walkTreeForSignal(mem, rootPtr, sigusr1, elfFile.ByteOrder) {
+		return signalCheckFound
+	}
+	return signalCheckNotFound
 }
 
 // findExeBaseAddr reads /proc/<pid>/maps to find the base virtual address

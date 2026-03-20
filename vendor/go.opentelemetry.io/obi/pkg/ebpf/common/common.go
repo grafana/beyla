@@ -80,8 +80,6 @@ const (
 
 var IntegrityModeOverride = false
 
-var ActiveNamespaces = make(map[uint32]uint32)
-
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
 type ProbeDesc struct {

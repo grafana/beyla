@@ -45,6 +45,7 @@ type Feature uint
 const (
 	FeatureAppO11y = Feature(1 << iota)
 	FeatureNetO11y
+	FeatureStatsO11y
 )
 
 // DefaultConfig loads OBI's default configuration, and converts it to Beyla's Config type,
@@ -415,7 +416,8 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Injector.Webhook.Enabled() {
+	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) &&
+		!c.Enabled(FeatureStatsO11y) && !c.Injector.Webhook.Enabled() {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
 	if c.EBPF.BatchLength == 0 {
@@ -442,6 +444,15 @@ func (c *Config) Validate() error {
 			" metrics exporter: grafana, otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
 			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
 			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
+	}
+
+	if c.Enabled(FeatureStatsO11y) && !c.Grafana.OTLP.MetricsEnabled() &&
+		!c.OTELMetrics.EndpointEnabled() && !c.Prometheus.EndpointEnabled() &&
+		!c.Stats.Print {
+		return ConfigError("enabling stat metrics requires to enable at least the OpenTelemetry" +
+			" metrics exporter: grafana, otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
+			" purposes, you can also set BEYLA_STATS_PRINT_STATS=true")
 	}
 
 	if !c.TracePrinter.Valid() {
@@ -508,6 +519,14 @@ func (c *Config) otelNetO11yEnabled() bool {
 	return (c.OTELMetrics.EndpointEnabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.Features.AnyNetwork()
 }
 
+func (c *Config) promStatsO11yEnabled() bool {
+	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
+func (c *Config) otelStatsO11yEnabled() bool {
+	return (c.OTELMetrics.EndpointEnabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.Features.StatMetrics()
+}
+
 func (c *Config) willUseTC() bool {
 	// nolint:staticcheck
 	// remove after deleting ContextPropagationEnabled
@@ -524,6 +543,8 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureAppO11y:
 		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
 			c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
+	case FeatureStatsO11y:
+		return c.promStatsO11yEnabled() || c.otelStatsO11yEnabled()
 	}
 	return false
 }

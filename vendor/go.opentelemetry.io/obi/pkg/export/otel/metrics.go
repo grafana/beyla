@@ -103,9 +103,10 @@ type MetricsReporter struct {
 	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryCopies        []attributes.Field[*request.Span, attribute.KeyValue]
 	attrDNSLookupDuration      []attributes.Field[*request.Span, attribute.KeyValue]
-	userAttribSelection        attributes.Selection
-	input                      <-chan []request.Span
-	processEvents              <-chan exec.ProcessEvent
+
+	userAttribSelection attributes.Selection
+	input               <-chan []request.Span
+	processEvents       <-chan exec.ProcessEvent
 
 	log *slog.Logger
 

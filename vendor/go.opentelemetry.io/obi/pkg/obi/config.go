@@ -64,6 +64,7 @@ type Feature uint
 const (
 	FeatureAppO11y = Feature(1 << iota)
 	FeatureNetO11y
+	FeatureStatsO11y
 )
 
 const (
@@ -257,6 +258,7 @@ var DefaultConfig = Config{
 		MaxPathSegmentCardinality: 10,
 	},
 	NetworkFlows: DefaultNetworkConfig,
+	Stats:        DefaultStatsConfig,
 	Discovery: services.DiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
@@ -297,6 +299,7 @@ type Config struct {
 
 	// NetworkFlows configuration for Network Observability feature
 	NetworkFlows NetworkConfig `yaml:"network"`
+	Stats        StatsConfig   `yaml:"stats"`
 
 	Filters filter.AttributesConfig `yaml:"filter"`
 
@@ -593,11 +596,11 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
-		return ConfigError("at least one of 'network' or 'application' features must be enabled. " +
-			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network* or application*" +
-			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application' environment variable " +
-			"or 'meter_provider: { features: [network,application] }' in the YAML configuration file. ")
+	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Enabled(FeatureStatsO11y) {
+		return ConfigError("at least one of 'network', 'application' or 'stats' features must be enabled. " +
+			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network*, application* or stats*" +
+			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application,stats' environment variable " +
+			"or 'meter_provider: { features: [network,application,stats] }' in the YAML configuration file. ")
 	}
 
 	if c.willUseTC() {
@@ -616,6 +619,14 @@ func (c *Config) Validate() error {
 			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
 			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EBPF_PROMETHEUS_PORT environment variables. For debugging" +
 			" purposes, you can also set OTEL_EBPF_NETWORK_PRINT_FLOWS=true")
+	}
+
+	if c.Enabled(FeatureStatsO11y) && !c.OTELMetrics.EndpointEnabled() &&
+		!c.Prometheus.EndpointEnabled() && !c.Stats.Print {
+		return ConfigError("enabling stat metrics requires to enable at least the OpenTelemetry" +
+			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EBPF_PROMETHEUS_PORT environment variables. For debugging" +
+			" purposes, you can also set OTEL_EBPF_STATS_PRINT_STATS=true")
 	}
 
 	if !c.TracePrinter.Valid() {
@@ -657,6 +668,14 @@ func (c *Config) otelNetO11yEnabled() bool {
 	return c.OTELMetrics.EndpointEnabled() && c.Metrics.Features.AnyNetwork()
 }
 
+func (c *Config) promStatsO11yEnabled() bool {
+	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
+func (c *Config) otelStatsO11yEnabled() bool {
+	return c.OTELMetrics.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
 func (c *Config) willUseTC() bool {
 	return c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC
 }
@@ -669,6 +688,8 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureAppO11y:
 		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || len(c.Discovery.Instrument) > 0 ||
 			c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.TargetPIDs.Len() > 0
+	case FeatureStatsO11y:
+		return c.promStatsO11yEnabled() || c.otelStatsO11yEnabled()
 	}
 	return false
 }

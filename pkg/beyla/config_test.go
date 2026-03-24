@@ -195,6 +195,7 @@ network:
 			},
 		},
 		NetworkFlows: nc,
+		Stats:        obi.DefaultStatsConfig,
 		Metrics: perapp.MetricsConfig{
 			Features: export.FeatureApplicationRED | export.FeatureNetwork,
 		},

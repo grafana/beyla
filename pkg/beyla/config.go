@@ -536,13 +536,17 @@ func (c *Config) willUseTC() bool {
 }
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration
+func (c *Config) appO11yEnabled() bool {
+	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
+		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
+}
+
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
-		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
-			c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
+		return c.appO11yEnabled()
 	case FeatureStatsO11y:
 		return c.promStatsO11yEnabled() || c.otelStatsO11yEnabled()
 	}

@@ -95,6 +95,8 @@ type Config struct {
 
 	// NetworkFlows configuration for Network Observability feature
 	NetworkFlows obi.NetworkConfig `yaml:"network"`
+	// Stats configuration for Stats Observability feature
+	Stats obi.StatsConfig `yaml:"stats"`
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud

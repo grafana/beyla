@@ -23,6 +23,7 @@ const (
 	// zero value.
 	FeatureEmpty Features = 1 << iota
 	FeatureNetwork
+	FeatureStats
 	FeatureNetworkInterZone
 	FeatureApplicationRED
 	FeatureSpanLegacy
@@ -37,6 +38,7 @@ const (
 // FeatureMapper stays public so any extension package can add and remove feature
 // definitions before loading them.
 var FeatureMapper = map[string]Features{
+	"stats":                     FeatureStats,
 	"network":                   FeatureNetwork,
 	"network_inter_zone":        FeatureNetworkInterZone,
 	"application":               FeatureApplicationRED,
@@ -170,6 +172,10 @@ func (f Features) SpanSizes() bool {
 
 func (f Features) NetworkBytes() bool {
 	return f.any(FeatureNetwork)
+}
+
+func (f Features) StatMetrics() bool {
+	return f.any(FeatureStats)
 }
 
 func (f Features) NetworkInterZone() bool {

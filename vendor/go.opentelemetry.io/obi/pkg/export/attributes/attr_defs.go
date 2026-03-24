@@ -34,6 +34,8 @@ const (
 	GroupHost
 	GroupMessaging
 	GroupNetGeoIP
+	GroupStats
+	GroupStatsKube
 )
 
 func (e *AttrGroups) Has(groups AttrGroups) bool {
@@ -105,6 +107,24 @@ func getDefinitions(
 		extraGroupAttributes[GroupNet],
 	)
 
+	// stat metrics attributes
+	statsAttributes := NewAttrReportGroup(
+		false,
+		nil,
+		map[attr.Name]Default{
+			attr.OBIIP:      false,
+			attr.SrcAddress: true,
+			attr.DstAddress: true,
+			attr.SrcPort:    false,
+			attr.DstPort:    false,
+			attr.SrcName:    false,
+			attr.DstName:    false,
+			attr.SrcZone:    false,
+			attr.DstZone:    false,
+		},
+		extraGroupAttributes[GroupStats],
+	)
+
 	// attributes to be reported exclusively for network metrics when
 	// kubernetes metadata is enabled
 	networkKubeAttributes := NewAttrReportGroup(
@@ -130,6 +150,30 @@ func getDefinitions(
 		extraGroupAttributes[GroupNetKube],
 	)
 
+	// attributes to be reported exclusively for stat metrics when
+	// kubernetes metadata is enabled
+	statsKubeAttributes := NewAttrReportGroup(
+		!kubeEnabled,
+		nil,
+		map[attr.Name]Default{
+			attr.K8sSrcOwnerName: true,
+			attr.K8sSrcOwnerType: true,
+			attr.K8sSrcNamespace: true,
+			attr.K8sDstOwnerName: true,
+			attr.K8sDstOwnerType: true,
+			attr.K8sDstNamespace: true,
+			attr.K8sClusterName:  true,
+			attr.K8sSrcName:      false,
+			attr.K8sSrcType:      false,
+			attr.K8sSrcNodeIP:    false,
+			attr.K8sSrcNodeName:  false,
+			attr.K8sDstName:      false,
+			attr.K8sDstType:      false,
+			attr.K8sDstNodeIP:    false,
+			attr.K8sDstNodeName:  false,
+		},
+		extraGroupAttributes[GroupStatsKube],
+	)
 	// network CIDR attributes are only enabled if the CIDRs configuration
 	// is defined
 	networkCIDR := NewAttrReportGroup(
@@ -365,6 +409,11 @@ func getDefinitions(
 				attr.ErrorType:       true,
 			},
 		},
+		StatTCPRtt.Section: {
+			SubGroups:  []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+
 		// span and service graph metrics don't yet implement attribute selection,
 		// but their values can still be filtered, so we list them here just to
 		// make the filter recognize its attributes

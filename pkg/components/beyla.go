@@ -22,8 +22,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/netolly/agent"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
-	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
+	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/export/otel"

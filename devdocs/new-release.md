@@ -29,10 +29,10 @@ Example used in this document:
 - `bot_sync-obi-submodule.yml`: weekly (Monday) update of Beyla `.obi-src` on `main`.
 - [`release-train-prepare.yml`](../.github/workflows/release-train-prepare.yml): creates or updates OBI and Beyla release branches and regenerates artifacts.
   - Manual dispatch after OBI fork is synced.
-  - The current automation assumes the same version string in both repos.
+  - Supports separate Beyla and OBI versions.
 - [`release-train-tag.yml`](../.github/workflows/release-train-tag.yml): creates GitHub prereleases and SemVer tags in OBI and Beyla.
   - Manual dispatch after release branch CI is green.
-  - The current automation assumes the same version string in both repos.
+  - Supports separate Beyla and OBI versions.
 - [`promote-patch-to-stable.yml`](../.github/workflows/promote-patch-to-stable.yml): marks a prerelease as stable/latest and promotes Docker tags.
 
 ## End-to-End Flow
@@ -46,9 +46,8 @@ Example used in this document:
 
 ### 2. Create release branches
 
-Run [`release-train-prepare.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-prepare.yml),
-or do the same work manually. For a split-version release such as Beyla
-`v3.0.0` and OBI `v1.0.0`, use the manual steps below.
+Run [`release-train-prepare.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-prepare.yml)
+with separate Beyla and OBI versions, or do the same work manually.
 
 Step outcome:
 
@@ -119,9 +118,8 @@ Ensure both release branches are green:
 ### 4. Create prereleases and tags
 
 Run [`release-train-tag.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-tag.yml)
-with `version=v3.0.0`, or do the same work manually after both release branches
-are green. For a split-version release such as Beyla `v3.0.0` and OBI
-`v1.0.0`, use the manual steps below.
+with the Beyla and OBI versions, or do the same work manually after both
+release branches are green.
 
 Step outcome:
 
@@ -199,7 +197,7 @@ Skipping versions is expected behavior.
 The workflows above use `scripts/release-train.sh` under the hood, but the
 commands shown in each step are the manual `git`/`make`/`gh` equivalents.
 Use the manual path when Beyla and OBI are intentionally released with
-different version numbers.
+different version numbers, or when you want to inspect each step directly.
 
 ## Checking if an OBI PR shipped in Beyla
 

@@ -1,10 +1,14 @@
-name: Release train tag
+name: Create GitHub prereleases and tags
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to tag/release (vMAJOR.MINOR.PATCH)"
+      beyla_version:
+        description: "Beyla version to prerelease/tag (vMAJOR.MINOR.PATCH)"
+        required: true
+        type: string
+      obi_version:
+        description: "OBI version to prerelease/tag (vMAJOR.MINOR.PATCH)"
         required: true
         type: string
       dry_run:
@@ -19,7 +23,7 @@ on:
         default: false
 
 concurrency:
-  group: release-train-tag-${{ inputs.version }}
+  group: release-train-tag-${{ inputs.beyla_version }}-${{ inputs.obi_version }}
   cancel-in-progress: false
 
 permissions: {}
@@ -31,8 +35,10 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      version: ${{ steps.tag.outputs.version }}
-      release_branch: ${{ steps.tag.outputs.release_branch }}
+      beyla_version: ${{ steps.tag.outputs.beyla_version }}
+      obi_version: ${{ steps.tag.outputs.obi_version }}
+      beyla_release_branch: ${{ steps.tag.outputs.beyla_release_branch }}
+      obi_release_branch: ${{ steps.tag.outputs.obi_release_branch }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -45,19 +51,21 @@ jobs:
         with:
           github_app: grafana-beyla-bot
 
-      - name: Create tags and prereleases
+      - name: Create prereleases and tags
         id: tag
         env:
           GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           RELEASE_TRAIN_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
-          VERSION_INPUT: ${{ inputs.version }}
+          BEYLA_VERSION_INPUT: ${{ inputs.beyla_version }}
+          OBI_VERSION_INPUT: ${{ inputs.obi_version }}
           DRY_RUN_INPUT: ${{ inputs.dry_run }}
           SKIP_CI_CHECK_INPUT: ${{ inputs.skip_ci_check }}
         run: |
           set -euo pipefail
 
           cmd=(./scripts/release-train.sh tag
-            --version "${VERSION_INPUT}"
+            --beyla-version "${BEYLA_VERSION_INPUT}"
+            --obi-version "${OBI_VERSION_INPUT}"
             --beyla-repo "${{ github.repository }}"
             --obi-repo "grafana/opentelemetry-ebpf-instrumentation")
 
@@ -76,13 +84,15 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Release Train Tag"
+            echo "## Create GitHub prereleases and tags"
             echo ""
-            echo "- Version: \`${{ steps.tag.outputs.version || 'n/a' }}\`"
-            echo "- Release branch: \`${{ steps.tag.outputs.release_branch || 'n/a' }}\`"
+            echo "- Beyla version: \`${{ steps.tag.outputs.beyla_version || 'n/a' }}\`"
+            echo "- Beyla release branch: \`${{ steps.tag.outputs.beyla_release_branch || 'n/a' }}\`"
+            echo "- OBI version: \`${{ steps.tag.outputs.obi_version || 'n/a' }}\`"
+            echo "- OBI release branch: \`${{ steps.tag.outputs.obi_release_branch || 'n/a' }}\`"
             echo ""
             echo "### Notes"
-            echo "- This creates SemVer tags and prereleases in OBI and Beyla."
+            echo "- This creates the requested tags and prereleases in OBI and Beyla."
             echo "- Beyla release publication triggers release artifacts workflows."
             echo "- Once promoted through the release train, run \`promote-patch-to-stable.yml\`."
           } >> "$GITHUB_STEP_SUMMARY"

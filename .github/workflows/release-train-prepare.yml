@@ -3,8 +3,12 @@ name: Create release branches with binaries
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Optional explicit version (vMAJOR.MINOR.PATCH)"
+      beyla_version:
+        description: "Optional explicit Beyla version (vMAJOR.MINOR.PATCH)"
+        required: false
+        type: string
+      obi_version:
+        description: "Optional explicit OBI version (vMAJOR.MINOR.PATCH)"
         required: false
         type: string
       bump:
@@ -45,8 +49,10 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      version: ${{ steps.prepare.outputs.version }}
-      release_branch: ${{ steps.prepare.outputs.release_branch }}
+      beyla_version: ${{ steps.prepare.outputs.beyla_version }}
+      obi_version: ${{ steps.prepare.outputs.obi_version }}
+      beyla_release_branch: ${{ steps.prepare.outputs.beyla_release_branch }}
+      obi_release_branch: ${{ steps.prepare.outputs.obi_release_branch }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -74,12 +80,13 @@ jobs:
         with:
           github_app: grafana-beyla-bot
 
-      - name: Prepare release train branches
+      - name: Create release branches and artifacts
         id: prepare
         env:
           GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           RELEASE_TRAIN_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
-          VERSION_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || '' }}
+          BEYLA_VERSION_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.beyla_version || '' }}
+          OBI_VERSION_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.obi_version || '' }}
           BUMP_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.bump || 'auto' }}
           DRY_RUN_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
           SKIP_CI_CHECK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_ci_check || 'false' }}
@@ -92,8 +99,12 @@ jobs:
             --obi-repo "grafana/opentelemetry-ebpf-instrumentation"
             --bump "${BUMP_INPUT}")
 
-          if [[ -n "${VERSION_INPUT}" ]]; then
-            cmd+=(--version "${VERSION_INPUT}")
+          if [[ -n "${BEYLA_VERSION_INPUT}" ]]; then
+            cmd+=(--beyla-version "${BEYLA_VERSION_INPUT}")
+          fi
+
+          if [[ -n "${OBI_VERSION_INPUT}" ]]; then
+            cmd+=(--obi-version "${OBI_VERSION_INPUT}")
           fi
 
           if [[ "${DRY_RUN_INPUT:-false}" == "true" ]]; then
@@ -115,13 +126,15 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Release Train Prepare"
+            echo "## Create release branches with binaries"
             echo ""
-            echo "- Version: \`${{ steps.prepare.outputs.version || 'n/a' }}\`"
-            echo "- Release branch: \`${{ steps.prepare.outputs.release_branch || 'n/a' }}\`"
+            echo "- Beyla version: \`${{ steps.prepare.outputs.beyla_version || 'n/a' }}\`"
+            echo "- Beyla release branch: \`${{ steps.prepare.outputs.beyla_release_branch || 'n/a' }}\`"
+            echo "- OBI version: \`${{ steps.prepare.outputs.obi_version || 'n/a' }}\`"
+            echo "- OBI release branch: \`${{ steps.prepare.outputs.obi_release_branch || 'n/a' }}\`"
             echo ""
             echo "### Next"
-            echo "- Wait for CI to become green on OBI+Beyla release branches."
-            echo "- Run \`release-train-tag.yml\` with the same version."
+            echo "- Wait for CI to become green on both release branches."
+            echo "- Run \`release-train-tag.yml\` with the Beyla and OBI versions."
             echo "- After release-train graduation, run \`promote-patch-to-stable.yml\`."
           } >> "$GITHUB_STEP_SUMMARY"

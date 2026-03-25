@@ -4,7 +4,7 @@
 #
 # Commands:
 #   prepare  - Cut/update release branches in OBI and Beyla
-#   tag      - Create vX.Y.Z tags and prereleases in OBI and Beyla
+#   tag      - Create tags and prereleases in OBI and Beyla
 #
 # Notes:
 #   - Versions must be SemVer tags: vMAJOR.MINOR.PATCH
@@ -20,7 +20,8 @@ BEYLA_MAIN_BRANCH="main"
 OBI_MAIN_BRANCH="main"
 
 COMMAND=""
-VERSION=""
+BEYLA_VERSION=""
+OBI_VERSION=""
 BUMP_MODE="auto"
 DRY_RUN=false
 SKIP_CI_CHECK=false
@@ -66,7 +67,8 @@ Commands:
   tag                     Tag OBI+Beyla and create prereleases
 
 Common options:
-  --version <vX.Y.Z>      Explicit release version
+  --beyla-version <vX.Y.Z>
+  --obi-version <vX.Y.Z>
   --beyla-repo <owner/repo>
   --obi-repo <owner/repo>
   --dry-run               Validate and print actions, without pushing/tags/releases
@@ -83,14 +85,14 @@ Prepare-only options:
                           Skip verification that grafana OBI main includes upstream OBI main
 
 Examples:
-  # Auto compute the next release version and cut release branches
+  # Auto compute the next release versions and cut release branches
   ./scripts/release-train.sh prepare
 
-  # Force a specific version
-  ./scripts/release-train.sh prepare --version v4.3.0
+  # Force specific versions
+  ./scripts/release-train.sh prepare --beyla-version v4.3.0 --obi-version v1.0.0
 
   # After CI is green, create tags and prereleases
-  ./scripts/release-train.sh tag --version v4.3.0
+  ./scripts/release-train.sh tag --beyla-version v4.3.0 --obi-version v1.0.0
 EOF
 }
 
@@ -326,27 +328,26 @@ resolve_obi_sha_from_beyla_main() {
 }
 
 latest_semver_tag_from_repo() {
-    git -C "$BEYLA_DIR" tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
+    local repo_dir="$1"
+    git -C "$repo_dir" tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
         | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
         | sort -V \
         | tail -n 1
 }
 
 tag_epoch_from_repo() {
-    local tag="$1"
-    git -C "$BEYLA_DIR" for-each-ref --format='%(creatordate:unix)' "refs/tags/${tag}" | head -n 1
+    local repo_dir="$1"
+    local tag="$2"
+    git -C "$repo_dir" for-each-ref --format='%(creatordate:unix)' "refs/tags/${tag}" | head -n 1
 }
 
-determine_prepare_version() {
-    if [[ -n "$VERSION" ]]; then
-        validate_semver_tag "$VERSION"
-        log_info "Using explicit version: ${VERSION}"
-        return
-    fi
+auto_compute_next_version() {
+    local repo_dir="$1"
+    local repo_slug="$2"
 
     local latest_tag
-    latest_tag="$(latest_semver_tag_from_repo)"
-    [[ -n "$latest_tag" ]] || die "Could not auto-compute version: no SemVer tags found. Use --version."
+    latest_tag="$(latest_semver_tag_from_repo "$repo_dir")"
+    [[ -n "$latest_tag" ]] || die "Could not auto-compute version for ${repo_slug}: no SemVer tags found. Use --beyla-version or --obi-version."
 
     validate_semver_tag "$latest_tag"
 
@@ -358,10 +359,10 @@ determine_prepare_version() {
         auto)
             select_date_bin
             local latest_epoch week_epoch
-            latest_epoch="$(tag_epoch_from_repo "$latest_tag")"
+            latest_epoch="$(tag_epoch_from_repo "$repo_dir" "$latest_tag")"
             week_epoch="$(week_start_epoch_utc)"
             if [[ -z "$latest_epoch" ]]; then
-                die "Could not determine timestamp for latest tag ${latest_tag}"
+                die "Could not determine timestamp for latest tag ${latest_tag} in ${repo_slug}"
             fi
             if (( latest_epoch >= week_epoch )); then
                 effective_bump="patch"
@@ -389,8 +390,33 @@ determine_prepare_version() {
             ;;
     esac
 
-    VERSION="v${major}.${minor}.${patch}"
-    log_info "Auto-computed version: ${VERSION} (from ${latest_tag}, bump=${effective_bump})"
+    printf "v%s.%s.%s" "$major" "$minor" "$patch"
+}
+
+resolve_prepare_versions() {
+    if [[ -n "$BEYLA_VERSION" ]]; then
+        validate_semver_tag "$BEYLA_VERSION"
+        log_info "Using explicit Beyla version: ${BEYLA_VERSION}"
+    else
+        BEYLA_VERSION="$(auto_compute_next_version "$BEYLA_DIR" "$BEYLA_REPO")"
+        log_info "Auto-computed Beyla version: ${BEYLA_VERSION}"
+    fi
+
+    if [[ -n "$OBI_VERSION" ]]; then
+        validate_semver_tag "$OBI_VERSION"
+        log_info "Using explicit OBI version: ${OBI_VERSION}"
+    else
+        OBI_VERSION="$(auto_compute_next_version "$OBI_DIR" "$OBI_REPO")"
+        log_info "Auto-computed OBI version: ${OBI_VERSION}"
+    fi
+}
+
+resolve_tag_versions() {
+    [[ -n "$BEYLA_VERSION" ]] || die "--beyla-version is required for the tag command."
+    [[ -n "$OBI_VERSION" ]] || die "--obi-version is required for the tag command."
+
+    validate_semver_tag "$BEYLA_VERSION"
+    validate_semver_tag "$OBI_VERSION"
 }
 
 checkout_or_create_release_branch() {
@@ -570,17 +596,21 @@ prepare_command() {
     obi_sha="$(resolve_obi_sha_from_beyla_main)"
     log_info "OBI SHA pinned in ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}: ${obi_sha}"
 
-    determine_prepare_version
-    validate_semver_tag "$VERSION"
-    local release_branch="release-${VERSION}"
+    resolve_prepare_versions
+    local beyla_release_branch="release-${BEYLA_VERSION}"
+    local obi_release_branch="release-${OBI_VERSION}"
 
-    prepare_obi_branch "$VERSION" "$release_branch" "$obi_sha"
-    prepare_beyla_branch "$VERSION" "$release_branch" "$obi_sha"
+    prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha"
+    prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch" "$obi_sha"
 
-    log_info "Release train prepared: version=${VERSION}, branch=${release_branch}"
+    log_info "Release branches prepared: beyla_version=${BEYLA_VERSION}, beyla_branch=${beyla_release_branch}, obi_version=${OBI_VERSION}, obi_branch=${obi_release_branch}"
 
-    set_output "version" "$VERSION"
-    set_output "release_branch" "$release_branch"
+    set_output "version" "$BEYLA_VERSION"
+    set_output "release_branch" "$beyla_release_branch"
+    set_output "beyla_version" "$BEYLA_VERSION"
+    set_output "obi_version" "$OBI_VERSION"
+    set_output "beyla_release_branch" "$beyla_release_branch"
+    set_output "obi_release_branch" "$obi_release_branch"
     set_output "obi_sha" "$obi_sha"
     set_output "beyla_repo" "$BEYLA_REPO"
     set_output "obi_repo" "$OBI_REPO"
@@ -592,10 +622,9 @@ tag_command() {
     require_cmd jq
     ensure_gh_auth
 
-    [[ -n "$VERSION" ]] || die "--version is required for the tag command."
-    validate_semver_tag "$VERSION"
-
-    local release_branch="release-${VERSION}"
+    resolve_tag_versions
+    local beyla_release_branch="release-${BEYLA_VERSION}"
+    local obi_release_branch="release-${OBI_VERSION}"
 
     setup_workspace
 
@@ -604,33 +633,37 @@ tag_command() {
     set_git_identity "$BEYLA_DIR"
     set_git_identity "$OBI_DIR"
 
-    ensure_release_branch_exists "$OBI_DIR" "$OBI_REPO" "$release_branch"
+    ensure_release_branch_exists "$OBI_DIR" "$OBI_REPO" "$obi_release_branch"
     local obi_checked_sha
-    obi_checked_sha=$(git -C "$OBI_DIR" rev-parse "origin/${release_branch}")
+    obi_checked_sha=$(git -C "$OBI_DIR" rev-parse "origin/${obi_release_branch}")
 
-    ensure_release_branch_exists "$BEYLA_DIR" "$BEYLA_REPO" "$release_branch"
+    ensure_release_branch_exists "$BEYLA_DIR" "$BEYLA_REPO" "$beyla_release_branch"
     local beyla_checked_sha
-    beyla_checked_sha=$(git -C "$BEYLA_DIR" rev-parse "origin/${release_branch}")
+    beyla_checked_sha=$(git -C "$BEYLA_DIR" rev-parse "origin/${beyla_release_branch}")
 
     if [[ "$SKIP_CI_CHECK" == "true" ]]; then
         log_warn "Skipping CI checks for release branches."
     else
-        check_ci_green "$OBI_REPO" "$obi_checked_sha" "${OBI_REPO}:${release_branch}@${obi_checked_sha:0:12}"
-        check_ci_green "$BEYLA_REPO" "$beyla_checked_sha" "${BEYLA_REPO}:${release_branch}@${beyla_checked_sha:0:12}"
+        check_ci_green "$OBI_REPO" "$obi_checked_sha" "${OBI_REPO}:${obi_release_branch}@${obi_checked_sha:0:12}"
+        check_ci_green "$BEYLA_REPO" "$beyla_checked_sha" "${BEYLA_REPO}:${beyla_release_branch}@${beyla_checked_sha:0:12}"
     fi
 
     local obi_target_sha
-    obi_target_sha="$(ensure_tag_on_sha "$OBI_DIR" "$OBI_REPO" "$VERSION" "$obi_checked_sha")"
-    ensure_prerelease_exists "$OBI_REPO" "$VERSION" "$obi_target_sha" "Release train candidate ${VERSION}"
+    obi_target_sha="$(ensure_tag_on_sha "$OBI_DIR" "$OBI_REPO" "$OBI_VERSION" "$obi_checked_sha")"
+    ensure_prerelease_exists "$OBI_REPO" "$OBI_VERSION" "$obi_target_sha" "Release train candidate ${OBI_VERSION}"
 
     local beyla_target_sha
-    beyla_target_sha="$(ensure_tag_on_sha "$BEYLA_DIR" "$BEYLA_REPO" "$VERSION" "$beyla_checked_sha")"
-    ensure_prerelease_exists "$BEYLA_REPO" "$VERSION" "$beyla_target_sha" "Release train candidate ${VERSION}"
+    beyla_target_sha="$(ensure_tag_on_sha "$BEYLA_DIR" "$BEYLA_REPO" "$BEYLA_VERSION" "$beyla_checked_sha")"
+    ensure_prerelease_exists "$BEYLA_REPO" "$BEYLA_VERSION" "$beyla_target_sha" "Release train candidate ${BEYLA_VERSION}"
 
-    log_info "Release train tags and prereleases prepared for ${VERSION}"
+    log_info "Release tags and prereleases prepared: beyla_version=${BEYLA_VERSION}, obi_version=${OBI_VERSION}"
 
-    set_output "version" "$VERSION"
-    set_output "release_branch" "$release_branch"
+    set_output "version" "$BEYLA_VERSION"
+    set_output "release_branch" "$beyla_release_branch"
+    set_output "beyla_version" "$BEYLA_VERSION"
+    set_output "obi_version" "$OBI_VERSION"
+    set_output "beyla_release_branch" "$beyla_release_branch"
+    set_output "obi_release_branch" "$obi_release_branch"
     set_output "beyla_target_sha" "$beyla_target_sha"
     set_output "obi_target_sha" "$obi_target_sha"
 }
@@ -666,13 +699,22 @@ parse_args() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --version=*)
-                VERSION="${1#*=}"
+            --beyla-version=*)
+                BEYLA_VERSION="${1#*=}"
                 shift
                 ;;
-            --version)
+            --beyla-version)
                 require_option_value "$1" "${2:-}"
-                VERSION="${2:-}"
+                BEYLA_VERSION="${2:-}"
+                shift 2
+                ;;
+            --obi-version=*)
+                OBI_VERSION="${1#*=}"
+                shift
+                ;;
+            --obi-version)
+                require_option_value "$1" "${2:-}"
+                OBI_VERSION="${2:-}"
                 shift 2
                 ;;
             --bump=*)

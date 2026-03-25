@@ -1,0 +1,214 @@
+name: Publish inject-sdk-image (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semver to publish (for example 0.1.3). Leave empty to publish the next patch version."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: publish-inject-sdk-image-${{ github.event.inputs.version || 'auto' }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/grafana/beyla/inject-sdk-image
+  PACKAGE_NAME: beyla%2Finject-sdk-image
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve target version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if versions=$(
+            gh api \
+              --paginate \
+              --slurp \
+              -H "Accept: application/vnd.github+json" \
+              "/orgs/grafana/packages/container/${PACKAGE_NAME}/versions"
+          ); then
+            :
+          else
+            versions='[]'
+          fi
+
+          existing_tags=$(
+            jq -r '
+              [
+                .[]?[]
+                | .metadata.container.tags[]?
+                | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
+              ] | unique[]
+            ' <<< "${versions}"
+          )
+
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            if [[ ! "${INPUT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Invalid version '${INPUT_VERSION}'. Expected format X.Y.Z"
+              exit 1
+            fi
+
+            if grep -Fxq "${INPUT_VERSION}" <<< "${existing_tags}"; then
+              echo "::error::Version '${INPUT_VERSION}' already exists in GHCR"
+              exit 1
+            fi
+
+            VERSION="${INPUT_VERSION}"
+            echo "Using version from workflow input: ${VERSION}"
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          latest=$(
+            jq -r '
+              [
+                .[]?[]
+                | .metadata.container.tags[]?
+                | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
+              ]
+              | unique
+              | sort_by(split(".") | map(tonumber))
+              | last // empty
+            ' <<< "${versions}"
+          )
+
+          if [[ -z "${latest}" ]]; then
+            VERSION="0.0.1"
+            echo "No existing semver tags found in GHCR. Defaulting to ${VERSION}"
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          IFS='.' read -r major minor patch <<< "${latest}"
+          VERSION="${major}.${minor}.$((patch + 1))"
+
+          echo "Latest published version: ${latest}"
+          echo "Next patch version: ${VERSION}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: resolve-version
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            artifact_suffix: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: arm64
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: ./pkg/webhook/image
+          file: ./pkg/webhook/image/Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,"name=${{ env.IMAGE_NAME }}",push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          touch "${{ runner.temp }}/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: digests-inject-sdk-image-${{ matrix.artifact_suffix }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  create-manifest:
+    needs:
+      - resolve-version
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Download amd64 digest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digests-inject-sdk-image-amd64
+          path: ${{ runner.temp }}/digests/amd64
+
+      - name: Download arm64 digest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digests-inject-sdk-image-arm64
+          path: ${{ runner.temp }}/digests/arm64
+
+      - name: Create manifest list and push
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          DIGESTS_DIR: ${{ runner.temp }}/digests
+        run: |
+          AMD64_DIGEST=$(basename "${DIGESTS_DIR}"/amd64/*)
+          ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
+          docker buildx imagetools create \
+            -t "${IMAGE_NAME}:${VERSION}" \
+            "${IMAGE_NAME}@sha256:${AMD64_DIGEST}" \
+            "${IMAGE_NAME}@sha256:${ARM64_DIGEST}"
+
+      - name: Summarize published tag
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          {
+            echo "## inject-sdk-image published"
+            echo
+            echo "- Image: \`${IMAGE_NAME}\`"
+            echo "- Version: \`${VERSION}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

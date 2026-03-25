@@ -569,8 +569,10 @@ adjust_oats_compose_paths() {
 rewrite_oats_go_mod() {
     echo "  Rewriting OATs go.mod files..."
     find "$OATS_DEST" -name "go.mod" -type f | while read -r modfile; do
-        # Rewrite module path: OBI → Beyla convention (no /v3 for standalone test modules)
-        sed_i -e "s|module ${OBI_MODULE}/internal/test/oats|module github.com/grafana/beyla/internal/testgenerated/oats|g" "$modfile"
+        # Rewrite all OBI oats module references (module declarations, require, and replace
+        # directives) to the Beyla module path. Use ${BEYLA_MODULE} (with /v3) to match
+        # the Go import transforms applied to .go files by transform_oats_go_files().
+        sed_i -e "s|${OBI_MODULE}/internal/test/oats|${BEYLA_MODULE}/internal/testgenerated/oats|g" "$modfile"
     done
 }
 

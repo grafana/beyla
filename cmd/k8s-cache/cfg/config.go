@@ -14,22 +14,16 @@ import (
 // Config options of the Kubernetes Cache service. Check the "DefaultConfig" variable for a view of the default values.
 type Config struct {
 	// LogLevel can be one of: debug, info, warn, error
-	// nolint:undoc
 	LogLevel string `yaml:"log_level" env:"BEYLA_K8S_CACHE_LOG_LEVEL"`
 	// Port where the service is going to listen to
-	// nolint:undoc
 	Port int `yaml:"port" env:"BEYLA_K8S_CACHE_PORT"`
 	// MaxConnection is the maximum number of concurrent clients that the service can handle at the same time
-	// nolint:undoc
 	MaxConnections int `yaml:"max_connections" env:"BEYLA_K8S_CACHE_MAX_CONNECTIONS"`
 	// ProfilePort is the port where the pprof server is going to listen to. 0 (default) means disabled
-	// nolint:undoc
 	ProfilePort int `yaml:"profile_port" env:"BEYLA_K8S_CACHE_PROFILE_PORT"`
 	// InformerResyncPeriod is the time interval between complete resyncs of the informers
-	// nolint:undoc
 	InformerResyncPeriod time.Duration `yaml:"informer_resync_period" env:"BEYLA_K8S_CACHE_INFORMER_RESYNC_PERIOD"`
 	// SendTimeout is the maximum duration to wait to send an event before dropping the connection.
-	// nolint:undoc
 	SendTimeout time.Duration `yaml:"informer_send_timeout" env:"BEYLA_K8S_CACHE_INFORMER_SEND_TIMEOUT"`
 
 	InternalMetrics InternalMetricsConfig `yaml:"internal_metrics"`
@@ -37,9 +31,7 @@ type Config struct {
 
 // mimic InternalMetricsConfig in .obi-src/pkg/kubecache/config.go
 type InternalMetricsConfig struct {
-	//nolint:undoc
 	Port int `yaml:"port,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT"`
-	//nolint:undoc
 	Path string `yaml:"path,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 

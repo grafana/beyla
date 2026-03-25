@@ -108,7 +108,6 @@ type Config struct {
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes *transform.RoutesConfig `yaml:"routes"`
-	// nolint:undoc
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
 	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
@@ -118,7 +117,6 @@ type Config struct {
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	// Deprecated: Use BEYLA_AUTO_TARGET_EXE
-	//nolint:undoc
 	Exec services.RegexpAttr `yaml:"executable_name" env:"BEYLA_EXECUTABLE_NAME"`
 
 	// AutoTargetExe selects the executable to instrument matching a Glob against the executable path.
@@ -133,7 +131,6 @@ type Config struct {
 	// TargetPIDs selects processes by PID for instrumentation. When non-empty, only these PIDs are
 	// instrumented. Accepts YAML list (target_pids: [1234, 5678]), single number, or env
 	// BEYLA_TARGET_PID=1234,5678. Alternative to Exec or AutoTargetExe when PIDs are known.
-	//nolint:undoc
 	TargetPIDs services.IntEnum `yaml:"target_pids" env:"BEYLA_TARGET_PID"`
 
 	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
@@ -146,11 +143,9 @@ type Config struct {
 	// Using env and envDefault is a trick to get the value either from one of either variables.
 	// Deprecated: Service name should be set in the instrumentation target (env vars, kube metadata...)
 	// as this is a reminiscence of past times when we only supported one executable per instance.
-	//nolint:undoc
 	ServiceName string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${BEYLA_SERVICE_NAME}"`
 	// Deprecated: Service namespace should be set in the instrumentation target (env vars, kube metadata...)
 	// as this is a reminiscence of past times when we only supported one executable per instance.
-	//nolint:undoc
 	ServiceNamespace string `yaml:"service_namespace" env:"BEYLA_SERVICE_NAMESPACE"`
 
 	// Discovery configuration
@@ -169,13 +164,9 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	// nolint:undoc
 	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
-	// nolint:undoc
 	ChannelSendTimeout time.Duration `yaml:"channel_send_timeout" env:"BEYLA_CHANNEL_SEND_TIMEOUT"`
-	// nolint:undoc
 	ChannelSendTimeoutPanic bool `yaml:"channel_send_timeout_panic" env:"BEYLA_CHANNEL_SEND_TIMEOUT_PANIC"`
-	// nolint:undoc
 	ProfilePort     int                            `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
 	InternalMetrics imetrics.InternalMetricsConfig `yaml:"internal_metrics"`
 
@@ -187,22 +178,17 @@ type Config struct {
 	TracesReceiver TracesReceiverConfig `yaml:"-"`
 
 	// LogConfig enables the logging of the configuration on startup.
-	// nolint:undoc
 	LogConfig obi.LogConfigOption `yaml:"log_config" env:"BEYLA_LOG_CONFIG"`
 
-	// nolint:undoc
 	NodeJS obi.NodeJSConfig `yaml:"nodejs"`
 
-	// nolint:undoc
 	Java obi.JavaConfig `yaml:"javaagent"`
 
 	// Topology enables extra topology-related features, such as inter-cluster connection spans.
-	// nolint:undoc
 	Topology spanscfg.Topology `yaml:"topology"`
 
 	// Experimental support for OpenTelemetry SDK injection, by using the OpenTelemetry Injector
 	// WARNING: This is purely experimental and undocumented feature and can be removed in the future without warning.
-	// nolint:undoc
 	Injector SDKInject `yaml:"injector"`
 
 	// cached equivalent for the OBI conversion
@@ -236,23 +222,18 @@ type Attributes struct {
 	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
 	// unresolved IP addresses to reduce cardinality.
 	// Set this value to the empty string to disable this feature.
-	// nolint:undoc
 	RenameUnresolvedHosts string `yaml:"rename_unresolved_hosts" env:"BEYLA_RENAME_UNRESOLVED_HOSTS"`
-	// nolint:undoc
 	RenameUnresolvedHostsOutgoing string `yaml:"rename_unresolved_hosts_outgoing" env:"BEYLA_RENAME_UNRESOLVED_HOSTS_OUTGOING"`
-	// nolint:undoc
 	RenameUnresolvedHostsIncoming string `yaml:"rename_unresolved_hosts_incoming" env:"BEYLA_RENAME_UNRESOLVED_HOSTS_INCOMING"`
 
 	// MetricSpanNameAggregationLimit works PER SERVICE and only relates to span_metrics.
 	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.
 	// If the value <= 0, it is disabled.
-	// nolint:undoc
 	MetricSpanNameAggregationLimit int `yaml:"metric_span_names_limit" env:"BEYLA_METRIC_SPAN_NAMES_LIMIT"`
 }
 
 type HostIDConfig struct {
 	// Override allows overriding the reported host.id in Beyla
-	// nolint:undoc
 	Override string `yaml:"override" env:"BEYLA_HOST_ID"`
 }
 
@@ -262,52 +243,39 @@ type HostIDConfig struct {
 // For SDK instrumentation on Kubernetes, use the OpenTelemetry Operator instead.
 type SDKInject struct {
 	// OTel SDK instrumentation criteria
-	// nolint:undoc
 	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
 	// Webhook configuration for a mutating admission controller
-	// nolint:undoc
 	Webhook WebhookConfig `yaml:"webhook"`
 	// Option to disable automatic bouncing of pods, it will be
 	// a responsibility of the end-user to bounce the pods to be instrumented
-	// nolint:undoc
 	NoAutoRestart bool `yaml:"disable_auto_restart"`
 	// The host path volume directory which gets mounted into pods
-	// nolint:undoc
 	HostPathVolumeDir string `yaml:"host_path_volume"`
 	// The mutator will set the version on pods if this value is set
 	// This is used to let Beyla upgrade already instrumented services
 	// If the version doesn't match we still bounce existing pods
-	// nolint:undoc
 	SDKPkgVersion string `yaml:"sdk_package_version"`
 	// The host mount path where the SDK copy init container copies the files.
 	// This is the root path, sdk_version is appended on top
-	// nolint:undoc
 	HostMountPath string `yaml:"host_mount_path"`
 	// Tells Beyla that it should delete old SDK versions on the
 	// host mount volume. Default true.
-	// nolint:undoc
 	ManageSDKVersions bool `yaml:"manage_sdk_versions"`
 	// Default sampler configuration for SDK instrumentation
 	// This is used when no sampler is specified in the selector
-	// nolint:undoc
 	DefaultSampler *services.SamplerConfig `yaml:"sampler"`
 	// Propagators configuration for SDK instrumentation
 	// Common values: tracecontext, baggage, b3, b3multi, jaeger, xray
-	// nolint:undoc
 	Propagators []string `yaml:"propagators"`
 	// Export configuration for SDK instrumentation
 	// Controls which signals (traces, metrics, logs) should be exported from injected SDKs
-	// nolint:undoc
 	Export SDKExport `yaml:"export"`
 	// Resource attributes related settings
-	// nolint:undoc
 	Resources SDKResource `yaml:"resources"`
 	// List of enabled SDK auto-instrumentations. Can be used to disable specific
 	// language instrumentations.
-	// nolint:undoc
 	EnabledSDKs []servicesextra.InstrumentableType `yaml:"enabled_sdks"`
 	// Enables injection debugging
-	// nolint:undoc
 	Debug bool `yaml:"debug"`
 }
 
@@ -317,16 +285,13 @@ type SDKInject struct {
 type SDKExport struct {
 	// Traces enables trace export from injected SDKs via OTLP
 	// Defaults to true (enabled) when not explicitly set
-	// nolint:undoc
 	Traces *bool `yaml:"traces" env:"BEYLA_SDK_EXPORT_TRACES"`
 	// Metrics enables metric export from injected SDKs via OTLP
 	// Defaults to true (enabled) when not explicitly set
 	// Note: SDKs can only export via OTLP, not Prometheus scraping
-	// nolint:undoc
 	Metrics *bool `yaml:"metrics" env:"BEYLA_SDK_EXPORT_METRICS"`
 	// Logs enables log export from injected SDKs via OTLP
 	// Defaults to false (disabled) when not explicitly set
-	// nolint:undoc
 	Logs *bool `yaml:"logs" env:"BEYLA_SDK_EXPORT_LOGS"`
 }
 
@@ -363,12 +328,10 @@ type SDKResource struct {
 	// Attributes defines attributes that are added to the resource.
 	// For example environment: dev
 	// +optional
-	// nolint:undoc
 	Attributes map[string]string `yaml:"resourceAttributes" env:"BEYLA_RESOURCE_ATTRIBUTES"`
 
 	// AddK8sUIDAttributes defines whether K8s UID attributes should be collected (e.g. k8s.deployment.uid).
 	// +optional
-	// nolint:undoc
 	AddK8sUIDAttributes bool `yaml:"addK8sUIDAttributes" env:"BEYLA_RESOURCE_ADD_K8S_UID_ATTRIBUTES"`
 
 	// UseLabelsForResourceAttributes defines whether to use common labels for resource attributes:
@@ -376,26 +339,20 @@ type SDKResource struct {
 	//   - `app.kubernetes.io/instance` becomes `service.name`
 	//   - `app.kubernetes.io/name` becomes `service.name`
 	//   - `app.kubernetes.io/version` becomes `service.version`
-	// nolint:undoc
 	UseLabelsForResourceAttributes bool `yaml:"useLabelsForResourceAttributes,omitempty" env:"BEYLA_RESOURCE_USE_LABELS_FOR_RESOURCE_ATTRIBUTES"`
 }
 
 // WebhookConfig contains the configuration for the mutating webhook
 type WebhookConfig struct {
 	// Enable enables the mutating webhook server
-	// nolint:undoc
 	Enable bool `yaml:"enable" env:"BEYLA_WEBHOOK_ENABLE"`
 	// Port is the port the webhook server listens on
-	// nolint:undoc
 	Port int `yaml:"port" env:"BEYLA_WEBHOOK_LISTEN_PORT"`
 	// CertPath is the path to the TLS certificate file
-	// nolint:undoc
 	CertPath string `yaml:"cert_path" env:"BEYLA_WEBHOOK_CERT_PATH"`
 	// KeyPath is the path to the TLS key file
-	// nolint:undoc
 	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
 	// Timeout is the time we wait for the TLS webhook to get initialized
-	// nolint:undoc
 	Timeout time.Duration `yaml:"timeout" env:"BEYLA_WEBHOOK_TIMEOUT"`
 }
 

@@ -40,7 +40,6 @@ type CollectConfig struct {
 	RunMode RunMode
 
 	// Interval between harvests
-	// nolint:undoc
 	Interval time.Duration `yaml:"interval" env:"BEYLA_PROCESSES_INTERVAL"`
 }
 

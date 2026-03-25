@@ -1,0 +1,140 @@
+name: Create release branches with binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      beyla_version:
+        description: "Optional explicit Beyla version (vMAJOR.MINOR.PATCH)"
+        required: false
+        type: string
+      obi_version:
+        description: "Optional explicit OBI version (vMAJOR.MINOR.PATCH)"
+        required: false
+        type: string
+      bump:
+        description: "Auto version strategy when version is empty"
+        required: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - minor
+          - patch
+      dry_run:
+        description: "Dry run mode (no pushes/commits/releases)"
+        required: false
+        type: boolean
+        default: false
+      skip_ci_check:
+        description: "Skip CI-green check on beyla main"
+        required: false
+        type: boolean
+        default: false
+      skip_upstream_sync_check:
+        description: "Skip OBI fork/upstream sync check"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-train-prepare
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      beyla_version: ${{ steps.prepare.outputs.beyla_version }}
+      obi_version: ${{ steps.prepare.outputs.obi_version }}
+      beyla_release_branch: ${{ steps.prepare.outputs.beyla_release_branch }}
+      obi_release_branch: ${{ steps.prepare.outputs.obi_release_branch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Java
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Login to DockerHub
+        uses: grafana/shared-workflows/actions/dockerhub-login@081a366728379fd0426b9cfef190e9a21c2d5418 # dockerhub-login/v1.0.3
+
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Create release branches and artifacts
+        id: prepare
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          RELEASE_TRAIN_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          BEYLA_VERSION_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.beyla_version || '' }}
+          OBI_VERSION_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.obi_version || '' }}
+          BUMP_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.bump || 'auto' }}
+          DRY_RUN_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+          SKIP_CI_CHECK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_ci_check || 'false' }}
+          SKIP_UPSTREAM_SYNC_CHECK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_upstream_sync_check || 'false' }}
+        run: |
+          set -euo pipefail
+
+          cmd=(./scripts/release-train.sh prepare
+            --beyla-repo "${{ github.repository }}"
+            --obi-repo "grafana/opentelemetry-ebpf-instrumentation"
+            --bump "${BUMP_INPUT}")
+
+          if [[ -n "${BEYLA_VERSION_INPUT}" ]]; then
+            cmd+=(--beyla-version "${BEYLA_VERSION_INPUT}")
+          fi
+
+          if [[ -n "${OBI_VERSION_INPUT}" ]]; then
+            cmd+=(--obi-version "${OBI_VERSION_INPUT}")
+          fi
+
+          if [[ "${DRY_RUN_INPUT:-false}" == "true" ]]; then
+            cmd+=(--dry-run)
+          fi
+
+          if [[ "${SKIP_CI_CHECK_INPUT:-false}" == "true" ]]; then
+            cmd+=(--skip-ci-check)
+          fi
+
+          if [[ "${SKIP_UPSTREAM_SYNC_CHECK_INPUT:-false}" == "true" ]]; then
+            cmd+=(--skip-upstream-sync-check)
+          fi
+
+          echo "Running: ${cmd[*]}"
+          RELEASE_TRAIN_OUTPUT_FILE="$GITHUB_OUTPUT" "${cmd[@]}"
+
+      - name: Print summary
+        if: always()
+        run: |
+          {
+            echo "## Create release branches with binaries"
+            echo ""
+            echo "- Beyla version: \`${{ steps.prepare.outputs.beyla_version || 'n/a' }}\`"
+            echo "- Beyla release branch: \`${{ steps.prepare.outputs.beyla_release_branch || 'n/a' }}\`"
+            echo "- OBI version: \`${{ steps.prepare.outputs.obi_version || 'n/a' }}\`"
+            echo "- OBI release branch: \`${{ steps.prepare.outputs.obi_release_branch || 'n/a' }}\`"
+            echo ""
+            echo "### Next"
+            echo "- Wait for CI to become green on both release branches."
+            echo "- Run \`release-train-tag.yml\` with the Beyla and OBI versions."
+            echo "- After release-train graduation, run \`promote-patch-to-stable.yml\`."
+          } >> "$GITHUB_STEP_SUMMARY"

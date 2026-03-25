@@ -43,6 +43,12 @@ type PrometheusReporter struct {
 	bpfMapMaxEntries                 *prometheus.GaugeVec
 	bpfInternalMetricsScrapeInterval time.Duration
 	informerLag                      prometheus.Histogram
+
+	// used for calculating deltas from an absolute value
+	totalPackets          uint64
+	totalIgnoredPackets   uint64
+	bpfPacketCount        prometheus.Counter
+	bpfIgnoredPacketCount prometheus.Counter
 }
 
 func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
@@ -123,37 +129,37 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			NativeHistogramMaxExemplars:     20,
 			NativeHistogramMinResetDuration: 10 * time.Minute,
 		}),
+		bpfIgnoredPacketCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: attr.VendorPrefix + "_bpf_network_ignored_packets_total",
+			Help: "How many network packets have been internally ignored due to collisions in the internal eBPF cache",
+		}),
+		bpfPacketCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: attr.VendorPrefix + "_bpf_network_packets_total",
+			Help: "How many network packets have been internally accounted",
+		}),
+	}
+	metrics := []prometheus.Collector{
+		pr.tracerFlushes,
+		pr.otelMetricExports,
+		pr.otelMetricExportErrs,
+		pr.otelTraceExports,
+		pr.otelTraceExportErrs,
+		pr.prometheusRequests,
+		pr.instrumentedProcesses,
+		pr.instrumentationErrors,
+		pr.avoidedServices,
+		pr.buildInfo,
+		pr.bpfProbeLatencies,
+		pr.bpfMapEntries,
+		pr.bpfMapMaxEntries,
+		pr.informerLag,
+		pr.bpfPacketCount,
+		pr.bpfIgnoredPacketCount,
 	}
 	if registry != nil {
-		registry.MustRegister(pr.tracerFlushes,
-			pr.otelMetricExports,
-			pr.otelMetricExportErrs,
-			pr.otelTraceExports,
-			pr.otelTraceExportErrs,
-			pr.prometheusRequests,
-			pr.instrumentedProcesses,
-			pr.instrumentationErrors,
-			pr.avoidedServices,
-			pr.buildInfo,
-			pr.bpfProbeLatencies,
-			pr.bpfMapEntries,
-			pr.bpfMapMaxEntries,
-			pr.informerLag)
+		registry.MustRegister(metrics...)
 	} else {
-		manager.Register(cfg.Prometheus.Port, cfg.Prometheus.Path,
-			pr.tracerFlushes,
-			pr.otelMetricExports,
-			pr.otelMetricExportErrs,
-			pr.otelTraceExports,
-			pr.otelTraceExportErrs,
-			pr.prometheusRequests,
-			pr.instrumentedProcesses,
-			pr.instrumentationErrors,
-			pr.avoidedServices,
-			pr.buildInfo,
-			pr.bpfProbeLatencies,
-			pr.bpfMapEntries,
-			pr.bpfMapMaxEntries)
+		manager.Register(cfg.Prometheus.Port, cfg.Prometheus.Path, metrics...)
 	}
 
 	return pr
@@ -232,4 +238,10 @@ func (p *PrometheusReporter) BpfInternalMetricsScrapeInterval() time.Duration {
 
 func (p *PrometheusReporter) InformerLag(seconds float64) {
 	p.informerLag.Observe(seconds)
+}
+
+func (p *PrometheusReporter) BPFPacketStats(count, ignored uint64) {
+	p.bpfPacketCount.Add(float64(count - p.totalPackets))
+	p.bpfIgnoredPacketCount.Add(float64(ignored - p.totalIgnoredPackets))
+	p.totalPackets, p.totalIgnoredPackets = count, ignored
 }

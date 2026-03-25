@@ -14,7 +14,7 @@ jobs:
     container:
       image: grafana/vale@sha256:28ccb1f2f41d097c10c67fdbc662c53a230385e59c8eef9297dc9a0e0dab158b
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - uses: grafana/writers-toolkit/vale-action@f49dd90f007967990095ac2d18c5bdf37b412a5f # vale-action/v1

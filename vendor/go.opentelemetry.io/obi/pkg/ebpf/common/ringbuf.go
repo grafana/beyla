@@ -13,7 +13,6 @@ import (
 
 	"github.com/cilium/ebpf"
 
-	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
@@ -39,94 +38,114 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 	return ringbuf.NewReader(rb)
 }
 
-type ringBufForwarder struct {
+// RecordParserFunc reads one ring buffer record and returns (item, ignore, err).
+type RecordParserFunc[T any] func(*ringbuf.Record) (T, bool, error)
+
+// BatchFilterFunc is an optional batch-level filter applied at flush time (nil = identity).
+type BatchFilterFunc[T any] func([]T) []T
+
+// ringBufForwarder[T] handles the common loop: read -> parse -> batch -> flush
+// it's generic so it can be used for both request.Span (appolly) and ebpf.Record (statsolly)
+type ringBufForwarder[T any] struct {
 	cfg        *config.EBPFTracer
 	logger     *slog.Logger
 	ringbuffer *ebpf.Map
 	closers    []io.Closer
-	spans      []request.Span
-	spansLen   int
+	items      []T
+	itemsLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	reader     func(*EBPFParseContext, *config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error)
-	// filter the input spans, eliminating these from processes whose PID
+
+	// parse reads one record and returns (item, ignore, err).
+	// Callers close over whatever context they need (parse ctx, filter, etc.)
+	parse RecordParserFunc[T]
+
+	// filter is optional batch-level filter applied at flush time (nil = identity)
+	// in appolly, filter the input spans, eliminating these from processes whose PID
 	// belong to a process that does not match the discovery policies
-	filter       ServiceFilter
-	metrics      imetrics.Reporter
-	parseContext *EBPFParseContext
-	lastReadAt   time.Time
+	filter BatchFilterFunc[T]
+
+	// metrics is optional (nil = no-op)
+	metrics    imetrics.Reporter
+	lastReadAt time.Time
 }
 
-// SharedRingbuf returns a function reads HTTPRequestTraces from an input ring buffer, accumulates them into an
-// internal buffer, and forwards them to an output events channel, previously converted to request.Span
-// instances.
-func SharedRingbuf(
+// AlreadyForwarded is used in the case when a second tracer tries to set up the
+// shared ring buffer and so it blocks until the context is cancelled
+func (rbf *ringBufForwarder[T]) AlreadyForwarded(ctx context.Context) {
+	<-ctx.Done()
+}
+
+// SharedRingbuf returns a function that reads events from a shared input ring buffer,
+// accumulates them into an internal buffer, and forwards them to an output events channel.
+// If the shared ring buffer forwarder already exists, subsequent calls return a no-op
+// that simply waits for context cancellation.
+func SharedRingbuf[T any](
 	eventContext *EBPFEventContext,
-	parseContext *EBPFParseContext,
 	cfg *config.EBPFTracer,
-	filter ServiceFilter,
 	ringbuffer *ebpf.Map,
+	parse RecordParserFunc[T],
+	filter BatchFilterFunc[T], // nil = no batch filter
+	logger *slog.Logger,
 	metrics imetrics.Reporter,
-) func(context.Context, []io.Closer, *msg.Queue[[]request.Span]) {
+) func(context.Context, []io.Closer, *msg.Queue[[]T]) {
 	eventContext.RingBufLock.Lock()
 	defer eventContext.RingBufLock.Unlock()
 
-	log := slog.With("component", "ringbuf.Tracer")
-
 	if eventContext.SharedRingBuffer != nil {
-		log.Debug("reusing ringbuf forwarder")
-		return eventContext.SharedRingBuffer.alreadyForwarded
+		logger.Debug("reusing ringbuf forwarder")
+		sf := eventContext.SharedRingBuffer
+		return func(ctx context.Context, _ []io.Closer, _ *msg.Queue[[]T]) {
+			sf.AlreadyForwarded(ctx)
+		}
 	}
 
-	rbf := ringBufForwarder{
-		cfg: cfg, logger: log, ringbuffer: ringbuffer,
-		closers: nil, reader: ReadBPFTraceAsSpan,
+	rbf := ringBufForwarder[T]{
+		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
+		closers: nil, parse: parse,
 		filter: filter, metrics: metrics,
-		parseContext: parseContext,
 	}
 	eventContext.SharedRingBuffer = &rbf
-	return eventContext.SharedRingBuffer.sharedReadAndForward
+	return rbf.sharedReadAndForward
 }
 
-func ForwardRingbuf(
+func ForwardRingbuf[T any](
 	cfg *config.EBPFTracer,
 	ringbuffer *ebpf.Map,
-	filter ServiceFilter,
-	reader func(*EBPFParseContext, *config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
+	parse RecordParserFunc[T],
+	filter BatchFilterFunc[T], // nil = no batch filter
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
-	spansChan *msg.Queue[[]request.Span],
 	closers ...io.Closer,
-) func(context.Context, *msg.Queue[[]request.Span]) {
-	rbf := ringBufForwarder{
+) func(context.Context, *msg.Queue[[]T]) {
+	rbf := ringBufForwarder[T]{
 		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
-		closers: closers, reader: reader,
+		closers: closers, parse: parse,
 		filter: filter, metrics: metrics,
-		parseContext: NewEBPFParseContext(cfg, spansChan, filter),
 	}
 	return rbf.readAndForward
 }
 
-func (rbf *ringBufForwarder) sharedReadAndForward(ctx context.Context, closers []io.Closer, spansChan *msg.Queue[[]request.Span]) {
+func (rbf *ringBufForwarder[T]) sharedReadAndForward(ctx context.Context, closers []io.Closer, out *msg.Queue[[]T]) {
 	rbf.logger.Debug("start reading and forwarding")
-	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
+	// BPF will send each measured item via Ring Buffer, so we listen for them from the
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
 	if err != nil {
 		rbf.logger.Error("creating perf reader. Exiting", "error", err)
 		return
 	}
-	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
-	rbf.spansLen = 0
+	rbf.items = make([]T, rbf.cfg.BatchLength)
+	rbf.itemsLen = 0
 
 	// If the underlying context is closed, it closes the objects we have allocated for this bpf program
 	go rbf.bgListenSharedContextCancelation(ctx, closers, eventsReader)
-	rbf.readAndForwardInner(ctx, eventsReader, spansChan)
+	rbf.readAndForwardInner(ctx, eventsReader, out)
 }
 
-func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan *msg.Queue[[]request.Span]) {
+func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, out *msg.Queue[[]T]) {
 	rbf.logger.Debug("start reading and forwarding")
-	// BPF will send each measured trace via Ring Buffer, so we listen for them from the
+	// BPF will send each measured item via Ring Buffer, so we listen for them from the
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
 	if err != nil {
@@ -136,16 +155,16 @@ func (rbf *ringBufForwarder) readAndForward(ctx context.Context, spansChan *msg.
 	rbf.closers = append(rbf.closers, eventsReader)
 	defer rbf.closeAllResources()
 
-	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
-	rbf.spansLen = 0
+	rbf.items = make([]T, rbf.cfg.BatchLength)
+	rbf.itemsLen = 0
 
 	// If the underlying context is closed, it closes the events reader
 	// so the function can exit.
 	go rbf.bgListenContextCancelation(ctx, eventsReader)
-	rbf.readAndForwardInner(ctx, eventsReader, spansChan)
+	rbf.readAndForwardInner(ctx, eventsReader, out)
 }
 
-func (rbf *ringBufForwarder) flushOnAvailableBytes(ctx context.Context, eventsReader ringBufReader) {
+func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, eventsReader ringBufReader) {
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
 
@@ -163,11 +182,11 @@ func (rbf *ringBufForwarder) flushOnAvailableBytes(ctx context.Context, eventsRe
 	}
 }
 
-func (rbf *ringBufForwarder) readAndForwardInner(ctx context.Context, eventsReader ringBufReader, spansChan *msg.Queue[[]request.Span]) {
+func (rbf *ringBufForwarder[T]) readAndForwardInner(ctx context.Context, eventsReader ringBufReader, out *msg.Queue[[]T]) {
 	// Forwards periodically on timeout, if the batch is not full
 	if rbf.cfg.BatchTimeout > 0 {
 		rbf.ticker = time.NewTicker(rbf.cfg.BatchTimeout)
-		go rbf.bgFlushOnTimeout(ctx, spansChan)
+		go rbf.bgFlushOnTimeout(ctx, out)
 	}
 
 	// Ensure we periodically flush any pending bytes
@@ -201,18 +220,14 @@ func (rbf *ringBufForwarder) readAndForwardInner(ctx context.Context, eventsRead
 			rbf.logger.Error("error reading from perf reader", "error", err)
 			continue
 		}
-		rbf.processAndForward(record, spansChan)
+		rbf.processAndForward(ctx, record, out)
 	}
 }
 
-func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ []io.Closer, _ *msg.Queue[[]request.Span]) {
-	<-ctx.Done()
-}
-
-func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan *msg.Queue[[]request.Span]) {
+func (rbf *ringBufForwarder[T]) processAndForward(ctx context.Context, record ringbuf.Record, out *msg.Queue[[]T]) {
 	rbf.access.Lock()
 	defer rbf.access.Unlock()
-	s, ignore, err := rbf.reader(rbf.parseContext, rbf.cfg, &record, rbf.filter)
+	item, ignore, err := rbf.parse(&record)
 	if err != nil {
 		rbf.logger.Debug("error parsing perf event", "error", err)
 		return
@@ -220,31 +235,31 @@ func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan 
 	if ignore {
 		return
 	}
-	if !s.IsValid() {
-		rbf.logger.Debug("invalid span", "span", s)
-		return
-	}
-	rbf.spans[rbf.spansLen] = s
-	// we need to decorate each span with the tracer's service name
-	// if this information is not forwarded from eBPF
-	rbf.spansLen++
-	if rbf.spansLen == rbf.cfg.BatchLength {
-		rbf.logger.Debug("submitting traces after batch is full", "len", rbf.spansLen)
-		rbf.flushEvents(spansChan)
+	rbf.items[rbf.itemsLen] = item
+	rbf.itemsLen++
+	if rbf.itemsLen == rbf.cfg.BatchLength {
+		rbf.logger.Debug("submitting batch (full)", "len", rbf.itemsLen)
+		rbf.flushEvents(ctx, out)
 		if rbf.ticker != nil {
 			rbf.ticker.Reset(rbf.cfg.BatchTimeout)
 		}
 	}
 }
 
-func (rbf *ringBufForwarder) flushEvents(spansChan *msg.Queue[[]request.Span]) {
-	rbf.metrics.TracerFlush(rbf.spansLen)
-	spansChan.Send(rbf.filter.Filter(rbf.spans[:rbf.spansLen]))
-	rbf.spans = make([]request.Span, rbf.cfg.BatchLength)
-	rbf.spansLen = 0
+func (rbf *ringBufForwarder[T]) flushEvents(ctx context.Context, out *msg.Queue[[]T]) {
+	if rbf.metrics != nil {
+		rbf.metrics.TracerFlush(rbf.itemsLen)
+	}
+	batch := rbf.items[:rbf.itemsLen]
+	if rbf.filter != nil {
+		batch = rbf.filter(batch)
+	}
+	out.SendCtx(ctx, batch)
+	rbf.items = make([]T, rbf.cfg.BatchLength)
+	rbf.itemsLen = 0
 }
 
-func (rbf *ringBufForwarder) bgFlushOnTimeout(ctx context.Context, spansChan *msg.Queue[[]request.Span]) {
+func (rbf *ringBufForwarder[T]) bgFlushOnTimeout(ctx context.Context, out *msg.Queue[[]T]) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -252,22 +267,22 @@ func (rbf *ringBufForwarder) bgFlushOnTimeout(ctx context.Context, spansChan *ms
 
 		case <-rbf.ticker.C:
 			rbf.access.Lock()
-			if rbf.spansLen > 0 {
-				rbf.logger.Debug("submitting traces on timeout", "len", rbf.spansLen)
-				rbf.flushEvents(spansChan)
+			if rbf.itemsLen > 0 {
+				rbf.logger.Debug("submitting items on timeout", "len", rbf.itemsLen)
+				rbf.flushEvents(ctx, out)
 			}
 			rbf.access.Unlock()
 		}
 	}
 }
 
-func (rbf *ringBufForwarder) bgListenContextCancelation(ctx context.Context, eventsReader ringBufReader) {
+func (rbf *ringBufForwarder[T]) bgListenContextCancelation(ctx context.Context, eventsReader ringBufReader) {
 	<-ctx.Done()
 	rbf.logger.Debug("context is cancelled. Closing events reader")
 	_ = eventsReader.Close()
 }
 
-func (rbf *ringBufForwarder) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer, eventsReader ringBufReader) {
+func (rbf *ringBufForwarder[T]) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer, eventsReader ringBufReader) {
 	<-ctx.Done()
 	rbf.logger.Debug("context is cancelled. Closing eBPF resources", "len", len(closers))
 	// Often there are hundreds of closers, and don't have time to sequentially close within the
@@ -288,10 +303,10 @@ func (rbf *ringBufForwarder) bgListenSharedContextCancelation(ctx context.Contex
 	rbf.logger.Debug("the eBPF resources are closed")
 }
 
-func (rbf *ringBufForwarder) closeAllResources() {
+func (rbf *ringBufForwarder[T]) closeAllResources() {
 	rbf.logger.Debug("closing eBPF resources", "len", len(rbf.closers))
 	// Often there are hundreds of closers, and don't have time to sequentially close within the
-	// shutdowm grace period. Closing them in parallel
+	// shutdown grace period. Closing them in parallel
 	wg := sync.WaitGroup{}
 	wg.Add(len(rbf.closers))
 	for i := range rbf.closers {

@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -196,10 +197,10 @@ func (p *Tracer) constants() map[string]any {
 		m["disable_black_box_cp"] = uint32(0)
 	}
 
-	m["http_buffer_size"] = p.cfg.EBPF.BufferSizes.HTTP
-	m["mysql_buffer_size"] = p.cfg.EBPF.BufferSizes.MySQL
-	m["kafka_buffer_size"] = p.cfg.EBPF.BufferSizes.Kafka
-	m["postgres_buffer_size"] = p.cfg.EBPF.BufferSizes.Postgres
+	m["http_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.HTTP
+	m["mysql_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.MySQL
+	m["kafka_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Kafka
+	m["postgres_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Postgres
 	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
 
 	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
@@ -503,12 +504,20 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 
 	p.log.Info("Launching p.Tracer")
 
+	cfg := &p.cfg.EBPF
 	ebpfcommon.SharedRingbuf(
 		ebpfEventContext,
-		parseContext,
-		&p.cfg.EBPF,
-		p.pidsFilter,
+		cfg,
 		p.bpfObjects.Events,
+		func(record *ringbuf.Record) (request.Span, bool, error) {
+			s, ignore, err := ebpfcommon.ReadBPFTraceAsSpan(parseContext, cfg, record, p.pidsFilter)
+			if !ignore && err == nil && !s.IsValid() {
+				return s, true, nil
+			}
+			return s, ignore, err
+		},
+		p.pidsFilter.Filter,
+		p.log,
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }

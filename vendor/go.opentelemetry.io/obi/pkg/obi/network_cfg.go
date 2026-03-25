@@ -28,8 +28,9 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/invopop/jsonschema"
 
-	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
-	"go.opentelemetry.io/obi/pkg/netolly/cidr"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/cidr"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/geoip"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
@@ -126,6 +127,10 @@ type NetworkConfig struct {
 	// Sampling holds the rate at which packets should be sampled and sent to the target collector.
 	// E.g. if set to 100, one out of 100 packets, on average, will be sent to the target collector.
 	Sampling int `yaml:"sampling" env:"OTEL_EBPF_NETWORK_SAMPLING" validate:"omitempty,gt=0"`
+	// GuessPorts controls how OBI assigns server.port/client.port when the connection initiator is unknown.
+	// Accepted values are "ordinal" (assume highest port is client) and "disable"
+	// (default, do not guess and emit empty client/server port attributes for unknown-initiator flows).
+	GuessPorts flowdef.PortGuessPolicy `yaml:"guess_ports" env:"OTEL_EBPF_NETWORK_GUESS_PORTS" validate:"oneof=ordinal disable" jsonschema:"type=string,enum=ordinal,enum=disable"`
 	// ListenInterfaces specifies the mechanism used by the agent to listen for added or removed
 	// network interfaces. Accepted values are "watch" (default) or "poll".
 	// If the value is "watch", interfaces are traced immediately after they are created. This is
@@ -136,13 +141,13 @@ type NetworkConfig struct {
 	// ListenInterfaces value is set to "poll".
 	ListenPollPeriod time.Duration `yaml:"listen_poll_period" env:"OTEL_EBPF_NETWORK_LISTEN_POLL_PERIOD" validate:"gte=0"`
 
-	GeoIP flow.GeoIP `yaml:"geo_ip"`
+	GeoIP geoip.GeoIP `yaml:"geo_ip"`
 
 	// ReverseDNS allows flows that haven't been previously decorated with any source/destination name
 	// to override the name with the network hostname of the source and destination IPs.
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
-	ReverseDNS flow.ReverseDNS `yaml:"reverse_dns"`
+	ReverseDNS rdns.ReverseDNS `yaml:"reverse_dns"`
 	// Print the network flows in the Standard Output, if true
 	Print bool `yaml:"print_flows" env:"OTEL_EBPF_NETWORK_PRINT_FLOWS" validate:"boolean"`
 
@@ -164,14 +169,15 @@ var DefaultNetworkConfig = NetworkConfig{
 	CacheActiveTimeout: 5 * time.Second,
 	Deduper:            flowdef.DeduperFirstCome,
 	Direction:          "both",
+	GuessPorts:         flowdef.PortGuessDisable,
 	ListenInterfaces:   "watch",
 	ListenPollPeriod:   10 * time.Second,
-	ReverseDNS: flow.ReverseDNS{
-		Type:     flow.ReverseDNSNone,
+	ReverseDNS: rdns.ReverseDNS{
+		Type:     rdns.ReverseDNSNone,
 		CacheLen: 256,
 		CacheTTL: time.Hour,
 	},
-	GeoIP: flow.GeoIP{
+	GeoIP: geoip.GeoIP{
 		CacheLen: 512,
 		CacheTTL: time.Hour,
 	},

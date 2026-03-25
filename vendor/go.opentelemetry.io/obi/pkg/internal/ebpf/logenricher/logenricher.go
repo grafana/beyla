@@ -28,7 +28,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
@@ -130,6 +129,20 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 			Start:    p.bpfObjects.ObiKprobeKsysWrite,
 			Required: true,
 		},
+	}
+
+	hasDoWritev, err := ebpfcommon.KernelHasSymbol(ebpfcommon.KSymDoWritev)
+	if err != nil {
+		p.log.Error("error checking kernel symbol availability", "sym", ebpfcommon.KSymDoWritev, "error", err)
+	}
+
+	if hasDoWritev {
+		m["do_writev"] = ebpfcommon.ProbeDesc{
+			Start:    p.bpfObjects.ObiKprobeDoWritev,
+			Required: false,
+		}
+	} else {
+		p.log.Warn("do_writev kernel symbol not available; writev()-based log writes won't be enriched")
 	}
 
 	hasPipeWrite, err := ebpfcommon.KernelHasSymbol(ebpfcommon.KSymPipeWrite)
@@ -266,7 +279,7 @@ func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.log.Debug("block pid: namespaced pids not found in internal cache, removing only the given pid", "pid", pid, "ns", ns)
 }
 
-func (p *Tracer) Run(ctx context.Context, eventCtx *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("starting")
 
 	p.ctx = ctx
@@ -274,10 +287,9 @@ func (p *Tracer) Run(ctx context.Context, eventCtx *ebpfcommon.EBPFEventContext,
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.LogEvents,
-		eventCtx.CommonPIDsFilter,
 		p.handleLogEvent,
-		p.log,
 		nil,
+		p.log,
 		nil,
 		append(p.closers, &p.bpfObjects)...,
 	)(ctx, nil)
@@ -289,7 +301,7 @@ func (p *Tracer) Required() bool {
 	return false
 }
 
-func (p *Tracer) handleLogEvent(_ *ebpfcommon.EBPFParseContext, _ *config.EBPFTracer, record *ringbuf.Record, _ ebpfcommon.ServiceFilter) (request.Span, bool, error) {
+func (p *Tracer) handleLogEvent(record *ringbuf.Record) (request.Span, bool, error) {
 	hdrSize := uint32(unsafe.Offsetof(BpfLogEventT{}.Log)) // Remove `log` placeholder
 
 	event, err := ebpfcommon.ReinterpretCast[BpfLogEventT](record.RawSample)

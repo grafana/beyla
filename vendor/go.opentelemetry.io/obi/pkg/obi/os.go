@@ -20,10 +20,6 @@ const minKernMaj, minKernMin = 4, 18
 
 var kernelVersion = ebpfcommon.KernelVersion
 
-func KernelVersion() (major, minor int) {
-	return kernelVersion()
-}
-
 // CheckOSSupport returns an error if the running operating system does not support
 // the minimum required Beyla features.
 func CheckOSSupport() error {
@@ -103,6 +99,15 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 			testAndSet(caps, capError, unix.CAP_PERFMON)
 			testAndSet(caps, capError, unix.CAP_NET_ADMIN)
 		}
+	}
+
+	// Note: these should be the minimum caps needed to run statsolly right now.
+	// As metrics are added in the future, this list may change depending on
+	// the probe used to calculate the metric.
+	if config.Enabled(FeatureStatsO11y) {
+		testAndSet(caps, capError, unix.CAP_SYS_PTRACE)
+		testAndSet(caps, capError, unix.CAP_PERFMON)
+		testAndSet(caps, capError, unix.CAP_NET_RAW)
 	}
 }
 

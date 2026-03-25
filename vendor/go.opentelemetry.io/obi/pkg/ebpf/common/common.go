@@ -6,6 +6,7 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -77,8 +79,6 @@ const (
 )
 
 var IntegrityModeOverride = false
-
-var ActiveNamespaces = make(map[uint32]uint32)
 
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
@@ -174,7 +174,7 @@ type EBPFParseContext struct {
 	h2c                        *lru.Cache[uint64, h2Connection]
 	redisDBCache               *simplelru.LRU[BpfConnectionInfoT, int]
 	couchbaseBucketCache       *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]
-	largeBuffers               *expirable.LRU[largeBufferKey, *largeBuffer]
+	largeBuffers               *expirable.LRU[largeBufferKey, *largebuf.LargeBuffer]
 	mongoRequestCache          PendingMongoDBRequests
 	mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 	postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
@@ -184,9 +184,17 @@ type EBPFParseContext struct {
 	dnsEvents                  *expirable.LRU[dnsparser.DNSId, *request.Span]
 }
 
+// sharedForwarder is implemented by ringBufForwarder[T] so that
+// EBPFEventContext.SharedRingBuffer can hold a type safe reference
+// without being generic itself.
+// This interface with a simple method is preferred to the any type.
+type sharedForwarder interface {
+	AlreadyForwarded(ctx context.Context)
+}
+
 type EBPFEventContext struct {
 	CommonPIDsFilter ServiceFilter
-	SharedRingBuffer *ringBufForwarder
+	SharedRingBuffer sharedForwarder
 	EBPFMaps         map[string]*ebpf.Map
 	RingBufLock      sync.Mutex
 	MapsLock         sync.Mutex
@@ -213,7 +221,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 	)
 
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
-	largeBuffers := expirable.NewLRU[largeBufferKey, *largeBuffer](1024, nil, 5*time.Minute)
+	largeBuffers := expirable.NewLRU[largeBufferKey, *largebuf.LargeBuffer](1024, nil, 5*time.Minute)
 
 	if cfg != nil {
 		protocolDebug = cfg.ProtocolDebug
@@ -355,14 +363,6 @@ const (
 )
 
 func SupportsLogInjection(log *slog.Logger) bool {
-	kernelMajor, kernelMinor := KernelVersion()
-	log.Debug("Linux kernel version", "major", kernelMajor, "minor", kernelMinor)
-
-	if kernelMajor < 6 {
-		log.Info("log injection not supported: linux kernel version < 6", "kernelMajor", kernelMajor, "kernelMinor", kernelMinor)
-		return false
-	}
-
 	if !hasCapSysAdmin() {
 		log.Info("log injection not supported: missing CAP_SYS_ADMIN capability")
 		return false

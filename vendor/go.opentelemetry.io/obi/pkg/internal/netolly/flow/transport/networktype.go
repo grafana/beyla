@@ -4,9 +4,7 @@
 package transport // import "go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport"
 
 import (
-	"fmt"
 	"strconv"
-	"strings"
 )
 
 // NetworkType value stores the L3 network protocol (IPv4, IPV6....)
@@ -27,15 +25,4 @@ func (p NetworkType) String() string {
 		return "ipv6"
 	}
 	return strconv.Itoa(int(p))
-}
-
-// ParseNetworkType returns the NetworkType enum from the provided string
-func ParseNetworkType(str string) (NetworkType, error) {
-	switch strings.ToLower(str) {
-	case "ipv4":
-		return IPv4, nil
-	case "ipv6":
-		return IPv6, nil
-	}
-	return 0, fmt.Errorf("unknown protocol %q", str)
 }

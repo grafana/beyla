@@ -5,6 +5,8 @@ package kafkaparser // import "go.opentelemetry.io/obi/pkg/internal/ebpf/kafkapa
 
 import (
 	"errors"
+
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
 const partitionLen = // 26
@@ -25,12 +27,11 @@ type MetadataResponse struct {
 	Topics []*MetadataTopic
 }
 
-func ParseMetadataResponse(pkt []byte, header *KafkaRequestHeader, offset int) (*MetadataResponse, error) {
-	offset, err := metadataResponseSkipUntilTopics(pkt, header, offset)
-	if err != nil {
+func ParseMetadataResponse(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*MetadataResponse, error) {
+	if err := metadataResponseSkipUntilTopics(r, header); err != nil {
 		return nil, err
 	}
-	topics, err := parseMetadataTopics(pkt, header, offset)
+	topics, err := parseMetadataTopics(r, header)
 	if err != nil {
 		return nil, err
 	}
@@ -42,73 +43,61 @@ func ParseMetadataResponse(pkt []byte, header *KafkaRequestHeader, offset int) (
 	}, nil
 }
 
-func metadataResponseSkipUntilTopics(pkt []byte, header *KafkaRequestHeader, offset Offset) (Offset, error) {
-	var err error
-	offset, err = skipBytes(pkt, offset, Int32Len) // throttle_time_ms
-	if err != nil {
-		return 0, err
+func metadataResponseSkipUntilTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	if err := r.Skip(Int32Len); err != nil { // throttle_time_ms
+		return err
 	}
-	offset, err = skipMetadataResponseBrokers(pkt, header, offset)
-	if err != nil {
-		return 0, err
+	if err := skipMetadataResponseBrokers(r, header); err != nil {
+		return err
 	}
 
-	clusterIDLen, offset, err := readStringLength(pkt, header, offset, true)
+	clusterIDLen, err := readStringLength(r, header, true)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	offset, err = skipBytes(pkt, offset, clusterIDLen+Int32Len) // cluster_id + controller_id
-	if err != nil {
-		return 0, err
-	}
-	return offset, nil
+	return r.Skip(clusterIDLen + Int32Len) // cluster_id + controller_id
 }
 
-func skipMetadataResponseBrokers(pkt []byte, header *KafkaRequestHeader, offset Offset) (Offset, error) {
-	brokersLen, offset, err := readArrayLength(pkt, header, offset)
+func skipMetadataResponseBrokers(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	brokersLen, err := readArrayLength(r, header)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	for range brokersLen {
-		offset, err = skipBytes(pkt, offset, Int32Len) // node_id
-		if err != nil {
-			return 0, err
+		if err = r.Skip(Int32Len); err != nil { // node_id
+			return err
 		}
 		var hostLen int
-		hostLen, offset, err = readStringLength(pkt, header, offset, false)
+		hostLen, err = readStringLength(r, header, false)
 		if err != nil {
-			return 0, err
+			return err
 		}
-		offset, err = skipBytes(pkt, offset, hostLen+Int32Len) // host + port
-		if err != nil {
-			return 0, err
+		if err = r.Skip(hostLen + Int32Len); err != nil { // host + port
+			return err
 		}
 		var rackLen int
-		rackLen, offset, err = readStringLength(pkt, header, offset, true)
+		rackLen, err = readStringLength(r, header, true)
 		if err != nil {
-			return 0, err
+			return err
 		}
-		offset, err = skipBytes(pkt, offset, rackLen) // rack
-		if err != nil {
-			return 0, err
+		if err = r.Skip(rackLen); err != nil { // rack
+			return err
 		}
-		offset, err = skipTaggedFields(pkt, header, offset)
-		if err != nil {
-			return 0, err
+		if err = skipTaggedFields(r, header); err != nil {
+			return err
 		}
 	}
-	return offset, nil
+	return nil
 }
 
-func parseMetadataTopics(pkt []byte, header *KafkaRequestHeader, offset int) ([]*MetadataTopic, error) {
-	topicsLen, offset, err := readArrayLength(pkt, header, offset)
+func parseMetadataTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader) ([]*MetadataTopic, error) {
+	topicsLen, err := readArrayLength(r, header)
 	if err != nil {
 		return nil, err
 	}
 	var topics []*MetadataTopic
-	var topic *MetadataTopic
 	for i := range topicsLen {
-		topic, offset, err = parseMetadataTopic(pkt, header, offset, i == topicsLen-1)
+		topic, err := parseMetadataTopic(r, header, i == topicsLen-1)
 		if err != nil {
 			// return the Topics parsed so far, even if one topic failed
 			return topics, nil
@@ -117,10 +106,10 @@ func parseMetadataTopics(pkt []byte, header *KafkaRequestHeader, offset int) ([]
 			topics = append(topics, topic)
 		}
 	}
-	return topics, err
+	return topics, nil
 }
 
-func parseMetadataTopic(pkt []byte, header *KafkaRequestHeader, offset int, isLast bool) (*MetadataTopic, int, error) {
+func parseMetadataTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader, isLast bool) (*MetadataTopic, error) {
 	var topic MetadataTopic
 	/*
 	  Metadata Response (Version: 10, 11, 12 and 13)
@@ -139,39 +128,36 @@ func parseMetadataTopic(pkt []byte, header *KafkaRequestHeader, offset int, isLa
 	      offline_replicas => INT32
 	    topic_authorized_operations => INT32
 	*/
-	offset, err := skipBytes(pkt, offset, Int16Len) // error_code
-	if err != nil {
-		return nil, offset, err
+	if err := r.Skip(Int16Len); err != nil { // error_code
+		return nil, err
 	}
-	isNullable := header.APIVersion >= 12
-	topicName, offset, err := readString(pkt, header, offset, isNullable)
+	isNullable := header.APIVersion() >= 12
+	topicName, err := readString(r, header, isNullable)
 	if err != nil {
-		return nil, offset, err
+		return nil, err
 	}
 	topic.Name = topicName
-	topicUUID, offset, err := readUUID(pkt, offset)
+	topicUUID, err := readUUID(r)
 	if err != nil {
-		return nil, offset, err
+		return nil, err
 	}
 	topic.UUID = *topicUUID
 	// optimization: no need to continue reading if this is the last topic
 	if isLast {
-		return &topic, offset, nil
+		return &topic, nil
 	}
-	partitionsCount, offset, err := readArrayLength(pkt, header, offset)
+	partitionsCount, err := readArrayLength(r, header)
 	if err != nil {
-		return nil, offset, err
+		return nil, err
 	}
-	offset, err = skipBytes(pkt, offset, (partitionsCount*partitionLen)+ // partitions
-		Int32Len, // topic_authorized_operations
-	)
-	if err != nil {
+	skipBytes := partitionsCount*partitionLen + // partitions
+		Int32Len // topic_authorized_operations
+	if err = r.Skip(skipBytes); err != nil {
 		// if we can't read partitions, we can still return the topic
-		return &topic, offset, nil
+		return &topic, nil
 	}
-	offset, err = skipTaggedFields(pkt, header, offset)
-	if err != nil {
-		return &topic, offset, nil
+	if err = skipTaggedFields(r, header); err != nil {
+		return &topic, nil
 	}
-	return &topic, offset, nil
+	return &topic, nil
 }

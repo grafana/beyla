@@ -1,5 +1,5 @@
 # Build the Java OBI agent
-FROM gradle:9.3.1-jdk21-noble@sha256:f3784cc59d7fbab1e0ddb09c4cd082f13e16d3fb8c50b7922b7aeae8e9507da5 AS javaagent-builder
+FROM gradle:9.4.0-jdk21-noble@sha256:33ad0e6350d1004ac7def68c4510f62e4d181dbf7e376089ef57175c0400496e AS javaagent-builder
 
 RUN apt update
 RUN apt install -y clang llvm
@@ -10,12 +10,12 @@ WORKDIR /build
 COPY .obi-src/pkg/internal/java .
 
 # Build the project
-RUN ./gradlew build --no-daemon
+RUN gradle build --no-daemon
 
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.26.0@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84 AS builder
+FROM golang:1.26.1@sha256:c42e4d75186af6a44eb4159dcfac758ef1c05a7011a0052fe8a8df016d8e8fb9 AS builder
 
 ARG TARGETARCH
 

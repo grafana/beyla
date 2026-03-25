@@ -1,5 +1,5 @@
 # Build the autoinstrumenter binary
-ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:latest@sha256:b00857fa2cf0c69a7b4c07a079e84ba8b130d26efe8365cc88eb32ec62ea63f7
+ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.11@sha256:c9a11deeda1de354aa334817f693efbf5ccee15dcd18caee6a9b221eed0e5773
 
 FROM $GEN_IMG AS builder
 
@@ -32,8 +32,8 @@ COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
 
-# OBI's Makefile doesn't let to override BPF2GO env var: temporary hack until we can
-ENV TOOLS_DIR=/go/bin
+# Point make to the pre-installed bpf2go binary in the generator image
+ENV BPF2GO=/go/bin/bpf2go
 
 # Build
 RUN if [ -z "${DEV_OBI}" ]; then \
@@ -44,7 +44,7 @@ RUN if [ -z "${DEV_OBI}" ]; then \
 RUN make compile
 
 # Build the Java OBI agent
-FROM gradle:9.3.1-jdk21-noble@sha256:f3784cc59d7fbab1e0ddb09c4cd082f13e16d3fb8c50b7922b7aeae8e9507da5 AS javaagent-builder
+FROM gradle:9.4.0-jdk21-noble@sha256:33ad0e6350d1004ac7def68c4510f62e4d181dbf7e376089ef57175c0400496e AS javaagent-builder
 
 WORKDIR /build
 
@@ -55,7 +55,7 @@ RUN apt install -y clang llvm
 COPY .obi-src/pkg/internal/java .
 
 # Build the project
-RUN ./gradlew build --no-daemon
+RUN gradle build --no-daemon
 
 # Create final image from minimal + built binary
 FROM scratch
@@ -64,7 +64,7 @@ LABEL maintainer="Grafana Labs <hello@grafana.com>"
 
 WORKDIR /
 
-COPY --from=javaagent-builder /build/build/obi-java-agent.jar .
+COPY --from=javaagent-builder /build/build/obi-java-agent.jar /src/vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
 COPY --from=builder /src/bin/beyla .
 COPY --from=builder /src/LICENSE .
 COPY --from=builder /src/NOTICE .

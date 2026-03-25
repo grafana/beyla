@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/netolly/agent"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
+	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
@@ -43,6 +44,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
+	stats := cfg.Enabled(beyla.FeatureStatsO11y)
 	webhookEnabled := cfg.Injector.Webhook.Enabled()
 
 	// if one of nodes fail, the other should stop
@@ -61,6 +63,15 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 		g.Go(func() error {
 			if err := setupNetO11y(ctx, ctxInfo, cfg); err != nil {
 				return fmt.Errorf("setupNetO11y: %w", err)
+			}
+			return nil
+		})
+	}
+
+	if stats {
+		g.Go(func() error {
+			if err := setupStatsO11y(ctx, ctxInfo, cfg); err != nil {
+				return fmt.Errorf("setupStatsO11y: %w", err)
 			}
 			return nil
 		})
@@ -123,6 +134,23 @@ func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 	if err != nil {
 		slog.Debug("can't run network metrics capture", "error", err)
 		return fmt.Errorf("can't run network metrics capture: %w", err)
+	}
+
+	return nil
+}
+
+func setupStatsO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
+	slog.Info("starting Beyla in Stat metrics mode")
+	sa, err := statsagent.StatsAgent(ctxInfo, cfg.AsOBI())
+	if err != nil {
+		slog.Debug("can't start stat metrics capture", "error", err)
+		return fmt.Errorf("can't start stat metrics capture: %w", err)
+	}
+
+	err = sa.Run(ctx)
+	if err != nil {
+		slog.Debug("can't run stat metrics capture", "error", err)
+		return fmt.Errorf("can't run stat metrics capture: %w", err)
 	}
 
 	return nil
@@ -243,6 +271,7 @@ func buildCommonContextInfo(
 		ctx,
 		config.Attributes.HostID.Override,
 		ctxInfo.K8sInformer,
+		config.Attributes.MetadataRetry,
 	)
 
 	ctxInfo.DockerMetadata = docker.NewStore()

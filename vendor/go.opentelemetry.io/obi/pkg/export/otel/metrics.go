@@ -103,9 +103,10 @@ type MetricsReporter struct {
 	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryCopies        []attributes.Field[*request.Span, attribute.KeyValue]
 	attrDNSLookupDuration      []attributes.Field[*request.Span, attribute.KeyValue]
-	userAttribSelection        attributes.Selection
-	input                      <-chan []request.Span
-	processEvents              <-chan exec.ProcessEvent
+
+	userAttribSelection attributes.Selection
+	input               <-chan []request.Span
+	processEvents       <-chan exec.ProcessEvent
 
 	log *slog.Logger
 
@@ -779,6 +780,9 @@ func (mr *MetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribut
 		semconv.ServiceNamespace(service.UID.Namespace),
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
 		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
+		semconv.TelemetrySDKVersion(attr.VendorSDKVersion),
+		semconv.TelemetryDistroName(attr.TelemetryDistroName),
+		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion),
 		request.SourceMetric(attr.VendorPrefix),
 		semconv.OSTypeKey.String("linux"),
 	}
@@ -827,7 +831,7 @@ func otelMetricsAccepted(span *request.Span) bool {
 
 func otelSpanMetricsAccepted(span *request.Span) bool {
 	return span.Service.Features.AnySpanMetrics() &&
-		!span.Service.ExportsOTelMetricsSpan()
+		!span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
 }
 
 //nolint:cyclop

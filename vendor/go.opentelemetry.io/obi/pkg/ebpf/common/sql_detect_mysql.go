@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
 
@@ -31,10 +32,6 @@ const kMySQLPrepare = uint8(0x16)
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
 const kMySQLExecute = uint8(0x17)
 
-func isMySQL(b []byte) bool {
-	return isValidMySQLPayload(b)
-}
-
 func readMySQLHeader(b []byte) mySQLHdr {
 	hdr := mySQLHdr{}
 
@@ -45,62 +42,64 @@ func readMySQLHeader(b []byte) mySQLHdr {
 	return hdr
 }
 
-func isValidMySQLPayload(b []byte) bool {
-	// the header is at least 5 bytes
-	if len(b) < 6 {
+func isMySQL(b *largebuf.LargeBuffer) bool {
+	// 4-byte header (3-byte length + 1-byte sequence ID) + command byte + at least 1 payload byte
+	if b.Len() < 6 {
 		return false
 	}
 
-	hdr := readMySQLHeader(b)
-	if hdr.length == 0 {
+	length, err := b.U32LEAt(0)
+	if err != nil {
+		return false
+	}
+	length &= 0x00ffffff // remove the sequence id from the length
+	if length == 0 {
+		return false
+	}
+	command, err := b.U8At(4)
+	if err != nil {
 		return false
 	}
 
-	return hdr.command == kMySQLQuery || hdr.command == kMySQLPrepare || hdr.command == kMySQLExecute
+	return command == kMySQLQuery || command == kMySQLPrepare || command == kMySQLExecute
 }
 
 func mysqlPreparedStatements(b []byte) (string, string, string) {
-	text := string(b)
-	query := asciiToUpper(text)
-	execIdx := strings.Index(query, "EXECUTE ")
+	execIdx := asciiIndexFold(b, sqlExecuteKeyword)
 	if execIdx < 0 {
 		return "", "", ""
 	}
 
-	if execIdx >= len(text) {
-		return "", "", ""
-	}
-
-	text = text[execIdx:]
-
+	text := string(b[execIdx:])
 	parts := strings.Split(text, " ")
 	op := parts[0]
 	var table string
 	if len(parts) > 1 {
 		table = parts[1]
 	}
-	sql := text
 
-	return op, table, sql
+	return op, table, text
 }
 
-func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer []byte) (request.Span, error) {
+func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, error) {
 	var (
 		op, table, stmt string
 		span            request.Span
 	)
 
-	if len(requestBuffer) < sqlprune.MySQLHdrSize+1 {
+	if requestBuffer.Len() < sqlprune.MySQLHdrSize+1 {
 		slog.Debug("MySQL request too short")
 		return span, errFallback
 	}
-	if len(responseBuffer) < sqlprune.MySQLHdrSize+1 {
+	if responseBuffer.Len() < sqlprune.MySQLHdrSize+1 {
 		slog.Debug("MySQL response too short")
 		return span, errFallback
 	}
+	reqRaw := requestBuffer.UnsafeView()
+	respRaw := responseBuffer.UnsafeView()
 
-	sqlCommand := sqlprune.SQLParseCommandID(request.DBMySQL, requestBuffer)
-	sqlError := sqlprune.SQLParseError(request.DBMySQL, responseBuffer)
+	sqlCommand := sqlprune.SQLParseCommandID(request.DBMySQL, reqRaw)
+	sqlError := sqlprune.SQLParseError(request.DBMySQL, respRaw)
 
 	switch sqlCommand {
 	case "STMT_PREPARE":
@@ -111,13 +110,13 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 
 		// On the PREPARE command, the statement ID is the first 4 bytes after the header and command ID
 		// in the response buffer.
-		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, responseBuffer)
+		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, respRaw)
 		if stmtID == 0 {
 			slog.Debug("MySQL PREPARE command with invalid statement ID")
 			return span, errFallback
 		}
 
-		_, _, stmt = detectSQL(string(requestBuffer[sqlprune.MySQLHdrSize+1:]))
+		_, _, stmt = detectSQL(reqRaw[sqlprune.MySQLHdrSize+1:])
 		parseCtx.mysqlPreparedStatements.Add(mysqlPreparedStatementsKey{
 			connInfo: event.ConnInfo,
 			stmtID:   stmtID,
@@ -127,7 +126,7 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 	case "STMT_EXECUTE":
 		// On the EXECUTE command, the statement ID is the first 4 bytes after the header and command ID
 		// in the request buffer.
-		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, requestBuffer)
+		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, reqRaw)
 		if stmtID == 0 {
 			slog.Debug("MySQL EXECUTE command with invalid statement ID")
 			return span, errFallback
@@ -144,9 +143,9 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 		}
 		op, table = sqlprune.SQLParseOperationAndTable(stmt)
 	case "QUERY":
-		op, table, stmt = detectSQL(string(requestBuffer[sqlprune.MySQLHdrSize+1:]))
+		op, table, stmt = detectSQL(reqRaw[sqlprune.MySQLHdrSize+1:])
 	default:
-		slog.Debug("MySQL command ID unhandled", "commandID", requestBuffer[sqlprune.MySQLHdrSize])
+		slog.Debug("MySQL command ID unhandled", "commandID", reqRaw[sqlprune.MySQLHdrSize])
 		return span, errFallback
 	}
 

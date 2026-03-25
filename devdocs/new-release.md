@@ -113,8 +113,30 @@ You can run the same flow manually:
 
 ## Checking if an OBI PR shipped in Beyla
 
-Use:
+Use [scripts/release-lookup.sh](../scripts/release-lookup.sh) to check whether an
+OBI PR or issue shipped in Beyla:
 
 ```bash
 ./scripts/release-lookup.sh --obi <PR_OR_ISSUE_NUMBER>
+```
+
+Example below to find if the OBI PR linked to this issue
+https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/995
+was released in Beyla (it wasn't):
+
+```shell
+./scripts/release-lookup.sh --obi 995
+[info] Issue #995: Use HTTP Host header for service name resolution when K8s lookup fails (state: closed)
+[info] Found linked PR #997: fix: fallback to http host header for service graph
+
+OBI Issue #995 (PR #997) was not yet released as part of Beyla
+```
+
+Another example with
+https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/896:
+
+```shell
+./scripts/release-lookup.sh --obi 896
+
+OBI PR #896 was released as part of Beyla 2.8.0
 ```

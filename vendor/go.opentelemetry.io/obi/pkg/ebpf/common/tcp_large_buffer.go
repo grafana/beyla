@@ -9,18 +9,14 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
-type (
-	largeBufferKey struct {
-		traceID               [16]uint8
-		packetType, direction uint8
-		connInfo              BpfConnectionInfoT
-	}
-	largeBuffer struct {
-		buf []byte
-	}
-)
+type largeBufferKey struct {
+	traceID               [16]uint8
+	packetType, direction uint8
+	connInfo              BpfConnectionInfoT
+}
 
 const (
 	largeBufferActionInit = iota
@@ -43,22 +39,29 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 	}
 
 	if parseCtx.protocolDebug {
-		fmt.Printf(">>> LargeBufferAppend: (packet=%d direction=%d action=%d size=%d)\n%s\n", event.PacketType, event.Direction, event.Action, event.Len, string(record.RawSample[hdrSize:hdrSize+event.Len]))
+		fmt.Printf(">>> LargeBufferAppend: (packet=%d direction=%d action=%d size=%d)\n%s\n",
+			event.PacketType, event.Direction, event.Action, event.Len,
+			string(record.RawSample[hdrSize:hdrSize+event.Len]))
+	}
+
+	chunk := record.RawSample[hdrSize : hdrSize+event.Len]
+
+	initFunc := func(b []byte) {
+		lb := largebuf.NewLargeBuffer()
+		lb.AppendChunk(b)
+		parseCtx.largeBuffers.Add(key, lb)
 	}
 
 	switch event.Action {
 	case largeBufferActionInit:
-		newBuffer := make([]byte, event.Len)
-		copy(newBuffer, record.RawSample[hdrSize:])
-		parseCtx.largeBuffers.Add(key, &largeBuffer{
-			buf: newBuffer,
-		})
+		initFunc(chunk)
 	case largeBufferActionAppend:
 		lb, ok := parseCtx.largeBuffers.Get(key)
 		if !ok {
-			return request.Span{}, true, nil
+			initFunc(chunk)
+		} else {
+			lb.AppendChunk(chunk)
 		}
-		lb.buf = append(lb.buf, record.RawSample[hdrSize:hdrSize+event.Len]...)
 	default:
 		return request.Span{}, true, fmt.Errorf("invalid large buffer action: %d", event.Action)
 	}
@@ -66,7 +69,12 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 	return request.Span{}, true, nil
 }
 
-func extractTCPLargeBuffer(parseCtx *EBPFParseContext, traceID [16]uint8, packetType, direction uint8, connInfo BpfConnectionInfoT) ([]byte, bool) {
+func extractTCPLargeBuffer(
+	parseCtx *EBPFParseContext,
+	traceID [16]uint8,
+	packetType, direction uint8,
+	connInfo BpfConnectionInfoT,
+) (*largebuf.LargeBuffer, bool) {
 	key := largeBufferKey{
 		traceID:    traceID,
 		packetType: packetType,
@@ -74,18 +82,20 @@ func extractTCPLargeBuffer(parseCtx *EBPFParseContext, traceID [16]uint8, packet
 		connInfo:   connInfo,
 	}
 
-	//nolint:gocritic
-	if lb, ok := parseCtx.largeBuffers.Get(key); ok {
+	lb, ok := parseCtx.largeBuffers.Get(key)
+	if !ok {
 		if parseCtx.protocolDebug {
-			fmt.Printf("<<< LargeBufferExtract: (packet=%d direction=%d len=%d)\n%s\n", key.packetType, key.direction, len(lb.buf), string(lb.buf))
+			fmt.Printf("<<< LargeBufferExtract: not found! (packet=%d direction=%d)\n", key.packetType, key.direction)
 		}
-		parseCtx.largeBuffers.Remove(key)
-		return lb.buf, true
-	} else {
-		if parseCtx.protocolDebug {
-			fmt.Printf("<<< LargeBufferExtract: not found!(packet=%d direction=%d)\n", key.packetType, key.direction)
-		}
+		return nil, false
 	}
 
-	return nil, false
+	if parseCtx.protocolDebug {
+		fmt.Printf("<<< LargeBufferExtract: (packet=%d direction=%d len=%d)\n%s\n",
+			key.packetType, key.direction, lb.Len(), lb.UnsafeView())
+	}
+
+	parseCtx.largeBuffers.Remove(key)
+
+	return lb, true
 }

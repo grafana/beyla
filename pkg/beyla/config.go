@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	obimeta "go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obicfg "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
@@ -44,6 +45,7 @@ type Feature uint
 const (
 	FeatureAppO11y = Feature(1 << iota)
 	FeatureNetO11y
+	FeatureStatsO11y
 )
 
 // DefaultConfig loads OBI's default configuration, and converts it to Beyla's Config type,
@@ -78,6 +80,8 @@ func DefaultConfig() *Config {
 		{InstrumentableType: svc.InstrumentablePython},
 	}
 
+	def.Routes.Unmatch = transform.UnmatchLowCardinality
+
 	if !slices.Contains(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name") {
 		def.OTELMetrics.ExtraSpanResourceLabels = append(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name")
 	}
@@ -92,6 +96,8 @@ type Config struct {
 
 	// NetworkFlows configuration for Network Observability feature
 	NetworkFlows obi.NetworkConfig `yaml:"network"`
+	// Stats configuration for Stats Observability feature
+	Stats obi.StatsConfig `yaml:"stats"`
 
 	// Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below
 	// for a simpler submission of OTEL metrics to Grafana Cloud
@@ -225,6 +231,7 @@ type Attributes struct {
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes map[string][]attr.Name        `yaml:"extra_group_attributes"`
+	MetadataRetry        obimeta.RetryConfig           `yaml:"metadata_retry"`
 
 	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
 	// unresolved IP addresses to reduce cardinality.
@@ -409,7 +416,8 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Injector.Webhook.Enabled() {
+	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) &&
+		!c.Enabled(FeatureStatsO11y) && !c.Injector.Webhook.Enabled() {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
 	if c.EBPF.BatchLength == 0 {
@@ -436,6 +444,15 @@ func (c *Config) Validate() error {
 			" metrics exporter: grafana, otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
 			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
 			" purposes, you can also set BEYLA_NETWORK_PRINT_FLOWS=true")
+	}
+
+	if c.Enabled(FeatureStatsO11y) && !c.Grafana.OTLP.MetricsEnabled() &&
+		!c.OTELMetrics.EndpointEnabled() && !c.Prometheus.EndpointEnabled() &&
+		!c.Stats.Print {
+		return ConfigError("enabling stat metrics requires to enable at least the OpenTelemetry" +
+			" metrics exporter: grafana, otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or BEYLA_PROMETHEUS_PORT environment variables. For debugging" +
+			" purposes, you can also set BEYLA_STATS_PRINT_STATS=true")
 	}
 
 	if !c.TracePrinter.Valid() {
@@ -502,6 +519,14 @@ func (c *Config) otelNetO11yEnabled() bool {
 	return (c.OTELMetrics.EndpointEnabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.Features.AnyNetwork()
 }
 
+func (c *Config) promStatsO11yEnabled() bool {
+	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
+func (c *Config) otelStatsO11yEnabled() bool {
+	return (c.OTELMetrics.EndpointEnabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.Features.StatMetrics()
+}
+
 func (c *Config) willUseTC() bool {
 	// nolint:staticcheck
 	// remove after deleting ContextPropagationEnabled
@@ -511,13 +536,19 @@ func (c *Config) willUseTC() bool {
 }
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration
+func (c *Config) appO11yEnabled() bool {
+	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
+		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
+}
+
 func (c *Config) Enabled(feature Feature) bool {
 	switch feature {
 	case FeatureNetO11y:
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
-		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
-			c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
+		return c.appO11yEnabled()
+	case FeatureStatsO11y:
+		return c.promStatsO11yEnabled() || c.otelStatsO11yEnabled()
 	}
 	return false
 }

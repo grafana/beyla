@@ -30,10 +30,13 @@ import (
 	"net"
 	"time"
 
+	cebpf "github.com/cilium/ebpf"
+
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
+	"go.opentelemetry.io/obi/pkg/netip"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -45,14 +48,6 @@ const (
 	directionIngress = "ingress"
 	directionEgress  = "egress"
 	directionBoth    = "both"
-
-	ipTypeAny  = "any"
-	ipTypeIPV4 = "ipv4"
-	ipTypeIPV6 = "ipv6"
-
-	ipIfaceExternal    = "external"
-	ipIfaceLocal       = "local"
-	ipIfaceNamedPrefix = "name:"
 )
 
 func alog() *slog.Logger {
@@ -115,8 +110,10 @@ type Flows struct {
 type ebpfFlowFetcher interface {
 	io.Closer
 
-	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
+	LookupAndDeleteMap() map[ebpf.NetFlowId]*ebpf.NetFlowMetrics
 	ReadRingBuf() (ringbuf.Record, error)
+
+	FlowPacketStatsMap() *cebpf.Map
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
@@ -131,7 +128,7 @@ func FlowsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Flows, error) {
 
 	alog.Debug("acquiring Agent IP")
 
-	agentIP, err := fetchAgentIP(&cfg.NetworkFlows)
+	agentIP, err := netip.FetchAgentIP(cfg.NetworkFlows.AgentIP, string(cfg.NetworkFlows.AgentIPIface), cfg.NetworkFlows.AgentIPType)
 	if err != nil {
 		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
 	}
@@ -151,13 +148,13 @@ func newFetcher(cfg *obi.Config, alog *slog.Logger, ifaceManager *tcmanager.Inte
 	case obi.EbpfSourceSock:
 		alog.Info("using socket filter for collecting network events")
 
-		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows)
+		return ebpf.NewSockFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows, cfg.NetworkFlows.GuessPorts, cfg.EBPF.ForceBPFMapReader)
 	case obi.EbpfSourceTC:
 		alog.Info("using kernel Traffic Control for collecting network events")
 		ingress, egress := flowDirections(&cfg.NetworkFlows)
 
 		return ebpf.NewFlowFetcher(cfg.NetworkFlows.Sampling, cfg.NetworkFlows.CacheMaxFlows,
-			ingress, egress, ifaceManager, cfg.EBPF.TCBackend)
+			ingress, egress, ifaceManager, cfg.EBPF.TCBackend, cfg.NetworkFlows.GuessPorts, cfg.EBPF.ForceBPFMapReader)
 	}
 
 	return nil, errors.New("unknown network configuration eBPF source specified, allowed options are [tc, socket_filter]")
@@ -206,7 +203,7 @@ func flowsAgent(
 		return iface
 	}
 
-	mapTracer := flow.NewMapTracer(fetcher, cfg.NetworkFlows.CacheActiveTimeout)
+	mapTracer := flow.NewMapTracer(ctxInfo, fetcher, cfg.NetworkFlows.CacheActiveTimeout)
 	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.NetworkFlows.CacheActiveTimeout)
 
 	return &Flows{

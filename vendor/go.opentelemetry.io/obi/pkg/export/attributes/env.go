@@ -12,7 +12,7 @@ import (
 type VarHandler func(k string, v string)
 
 func ParseOTELResourceVariable(envVar string, handler VarHandler) {
-	variables := split.NewIterator(envVar, ",")
+	variables := split.NewStringIterator(envVar, ",")
 
 	for {
 		variable, eof := variables.Next()

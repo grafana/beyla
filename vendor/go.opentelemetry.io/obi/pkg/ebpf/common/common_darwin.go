@@ -16,10 +16,6 @@ func HasHostPidAccess() bool {
 	return true
 }
 
-func HasHostNetworkAccess() (bool, error) {
-	return false, nil
-}
-
 func FindNetworkNamespace(_ app.PID) (string, error) {
 	return "", nil
 }

@@ -21,7 +21,7 @@ on:
       - ".obi-src/**"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: k8s-integration-tests-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 # Set restrictive permissions at workflow level
@@ -32,11 +32,11 @@ jobs:
   test-matrix:
     name: "Build integration k8s matrix"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           submodules: true
@@ -54,7 +54,7 @@ jobs:
     name: ${{ matrix.basename }}
     needs: test-matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -107,7 +107,7 @@ jobs:
           docker builder prune -af || true
           df -h
 
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           submodules: true
@@ -117,7 +117,7 @@ jobs:
         uses: grafana/shared-workflows/actions/dockerhub-login@fa12a1486d937f2a2fba2f0a615356ee3053695e
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: "go.mod"
           cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity

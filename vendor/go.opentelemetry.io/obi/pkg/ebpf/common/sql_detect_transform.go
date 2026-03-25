@@ -4,15 +4,13 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
-	"math"
-	"strings"
-
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
 
-func sqlKind(b []byte) request.SQLKind {
+func sqlKind(b *largebuf.LargeBuffer) request.SQLKind {
 	if isPostgres(b) {
 		return request.DBPostgres
 	} else if isMySQL(b) {
@@ -30,21 +28,6 @@ func validSQL(op, table string, sqlKind request.SQLKind) bool {
 	return op != "" && (sqlKind != request.DBGeneric || table != "")
 }
 
-// when the input string is invalid unicode (might happen with the ringbuffer
-// data), strings.ToUpper might return a string larger than the input string,
-// and might cause some later out of bound errors.
-func asciiToUpper(input string) string {
-	out := make([]byte, len(input))
-	for i := range input {
-		if input[i] >= 'a' && input[i] <= 'z' {
-			out[i] = input[i] - byte('a') + byte('A')
-		} else {
-			out[i] = input[i]
-		}
-	}
-	return string(out)
-}
-
 func isASCII(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
@@ -58,39 +41,84 @@ func isASCII(s string) bool {
 	return true
 }
 
-func detectSQLPayload(useHeuristics bool, b []byte) (string, string, string, request.SQLKind) {
-	sqlKind := sqlKind(b)
-	if !useHeuristics {
-		if sqlKind == request.DBGeneric {
-			return "", "", "", sqlKind
+func toLowerASCII(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + ('a' - 'A')
+	}
+	return c
+}
+
+// equalFoldASCII reports whether a and b are equal under ASCII case-folding.
+func equalFoldASCII(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		ca := toLowerASCII(a[i])
+		cb := toLowerASCII(b[i])
+		if ca != cb {
+			return false
 		}
 	}
-	op, table, sql := detectSQL(string(b))
+	return true
+}
+
+// asciiIndexFold returns the index of the first occurrence of substr in s,
+// matching ASCII letters case-insensitively. Returns -1 if not found.
+func asciiIndexFold(s, substr []byte) int {
+	n := len(substr)
+	if n == 0 || len(s) < n {
+		return -1
+	}
+	for i := 0; i <= len(s)-n; i++ {
+		if equalFoldASCII(s[i:i+n], substr) {
+			return i
+		}
+	}
+	return -1
+}
+
+var sqlKeywords = [][]byte{
+	[]byte("SELECT"), []byte("UPDATE"), []byte("DELETE"),
+	[]byte("INSERT"), []byte("ALTER"), []byte("CREATE"), []byte("DROP"),
+}
+
+var sqlExecuteKeyword = []byte("EXECUTE ")
+
+func detectSQLPayload(useHeuristics bool, b *largebuf.LargeBuffer) (string, string, string, request.SQLKind) {
+	sqlKind := sqlKind(b)
+
+	if !useHeuristics && sqlKind == request.DBGeneric {
+		return "", "", "", sqlKind
+	}
+
+	view := b.UnsafeView()
+
+	op, table, sql := detectSQL(view)
+
 	if !validSQL(op, table, sqlKind) {
 		switch sqlKind {
 		case request.DBPostgres:
 			op, table, sql = postgresPreparedStatements(b)
 		case request.DBMySQL:
-			op, table, sql = mysqlPreparedStatements(b)
+			op, table, sql = mysqlPreparedStatements(view)
 		}
 	}
 
 	return op, table, sql, sqlKind
 }
 
-func detectSQL(buf string) (string, string, string) {
-	b := asciiToUpper(buf)
-	minIdx := math.MaxInt
-	for _, q := range []string{"SELECT", "UPDATE", "DELETE", "INSERT", "ALTER", "CREATE", "DROP"} {
-		i := strings.Index(b, q)
-		if i >= 0 && i < minIdx {
+func detectSQL(buf []byte) (string, string, string) {
+	minIdx := -1
+	for _, q := range sqlKeywords {
+		i := asciiIndexFold(buf, q)
+		if i >= 0 && (minIdx < 0 || i < minIdx) {
 			minIdx = i
 		}
 	}
 
-	if minIdx < math.MaxInt && minIdx < len(b) {
-		sql := cstr([]uint8(buf[minIdx:]))
-
+	if minIdx >= 0 {
+		sql := cstr(buf[minIdx:])
 		op, table := sqlprune.SQLParseOperationAndTable(sql)
 		return op, table, sql
 	}
@@ -103,6 +131,10 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 		peer, hostname             string
 		peerPort, hostPort, status int
 	)
+	spanType := request.EventTypeSQLClient
+	if trace.IsServer {
+		spanType = request.EventTypeSQLServer
+	}
 
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(&trace.ConnInfo).reqHostInfo()
@@ -115,7 +147,7 @@ func TCPToSQLToSpan(trace *TCPRequestInfo, op, table, sql string, kind request.S
 	}
 
 	return request.Span{
-		Type:          request.EventTypeSQLClient,
+		Type:          spanType,
 		Method:        op,
 		Path:          table,
 		Peer:          peer,

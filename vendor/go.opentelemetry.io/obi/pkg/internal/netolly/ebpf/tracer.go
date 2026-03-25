@@ -29,24 +29,26 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/gavv/monotime"
 
 	"go.opentelemetry.io/obi/pkg/config"
 	convenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t  -type flow_record_t -target amd64,arm64 Net ../../../../bpf/netolly/flows.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type flow_metrics_t -type flow_id_t -type flow_record_t -type packet_count_t -target amd64,arm64 Net ../../../../bpf/netolly/flows.c -- -I../../../../bpf
 
 const (
 	// constants defined in flows.c as "volatile const"
 	constSampling      = "sampling"
 	constTraceMessages = "trace_messages"
+	constPortGuessing  = "port_guessing"
 	aggregatedFlowsMap = "aggregated_flows"
 	connInitiatorsMap  = "conn_initiators"
 	flowDirectionsMap  = "flow_directions"
@@ -65,9 +67,9 @@ type FlowFetcher struct {
 	objects       *NetObjects
 	ringbufReader *ringbuf.Reader
 	tcManager     tcmanager.TCManager
-	cacheMaxSize  int
 	enableIngress bool
 	enableEgress  bool
+	flowMapReader flowMapReader
 }
 
 func NewFlowFetcher(
@@ -75,7 +77,10 @@ func NewFlowFetcher(
 	ingress, egress bool,
 	ifaceManager *tcmanager.InterfaceManager,
 	tcBackend config.TCBackend,
+	portGuessPolicy flowdef.PortGuessPolicy,
+	forceBPFMapReader config.EBPFMapReader,
 ) (*FlowFetcher, error) {
+	startTime := uint64(monotime.Now())
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
 		tlog.Warn("can't remove mem lock. The agent could not be able to start eBPF programs",
@@ -105,9 +110,15 @@ func NewFlowFetcher(
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
 	}
+	// numeric values defined in flows_common.h
+	portGuessing := uint8(0)
+	if portGuessPolicy == flowdef.PortGuessOrdinal {
+		portGuessing = 1
+	}
 	if err := convenience.RewriteConstants(spec, map[string]any{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
+		constPortGuessing:  portGuessing,
 		"g_bpf_debug":      true,
 	}); err != nil {
 		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
@@ -138,9 +149,9 @@ func NewFlowFetcher(
 		objects:       &objects,
 		ringbufReader: flows,
 		tcManager:     tcManager,
-		cacheMaxSize:  cacheMaxSize,
 		enableIngress: ingress,
 		enableEgress:  egress,
+		flowMapReader: chooseMapReader(forceBPFMapReader, objects.AggregatedFlows, cacheMaxSize, startTime),
 	}
 
 	// errors are not critical for this tracer
@@ -169,70 +180,26 @@ func (m *FlowFetcher) Close() error {
 	}
 
 	if m.objects != nil {
-		errs = append(errs, m.closeObjects()...)
+		if err := m.objects.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		m.objects = nil
 	}
-
-	var errStrings []string
-	for _, err := range errs {
-		errStrings = append(errStrings, err.Error())
-	}
-
-	if len(errs) > 0 {
-		return errors.New(`errors: "` + strings.Join(errStrings, `", "`) + `"`)
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
-func (m *FlowFetcher) closeObjects() []error {
-	var errs []error
-	if err := m.objects.ObiEgressFlowParse.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.ObiIngressFlowParse.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.AggregatedFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := m.objects.DirectFlows.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	m.objects = nil
-	return errs
+func (m *FlowFetcher) FlowPacketStatsMap() *ebpf.Map {
+	return m.objects.FlowPacketStats
 }
 
 func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 	return m.ringbufReader.Read()
 }
 
-// LookupAndDeleteMap reads all the entries from the eBPF map and removes them from it.
-// It returns a map where the key
-// For synchronization purposes, we get/delete a whole snapshot of the flows map.
-// This way we avoid missing packets that could be updated on the
-// ebpf side while we process/aggregate them here
-// Changing this method invocation by BatchLookupAndDelete could improve performance
-// TODO: detect whether BatchLookupAndDelete is supported (Kernel>=5.6) and use it selectively
-// Supported Lookup/Delete operations by kernel: https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md
-// Race conditions here causes that some flows are lost in high-load scenarios
-func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId][]NetFlowMetrics {
-	flowMap := m.objects.AggregatedFlows
-
-	iterator := flowMap.Iterate()
-	flows := make(map[NetFlowId][]NetFlowMetrics, m.cacheMaxSize)
-
-	id := NetFlowId{}
-	var metrics []NetFlowMetrics
-	// Changing Iterate+Delete by LookupAndDelete would prevent some possible race conditions
-	// TODO: detect whether LookupAndDelete is supported (Kernel>=4.20) and use it selectively
-	for iterator.Next(&id, &metrics) {
-		if err := flowMap.Delete(id); err != nil {
-			m.log.Debug("couldn't delete flow entry", "flowId", id, "error", err)
-		}
-		// We observed that eBFP PerCPU map might insert multiple times the same key in the map
-		// (probably due to race conditions) so we need to re-join metrics again at userspace
-		// TODO: instrument how many times the keys are is repeated in the same eviction
-		flows[id] = append(flows[id], metrics...)
+func (m *FlowFetcher) LookupAndDeleteMap() map[NetFlowId]*NetFlowMetrics {
+	flows, err := m.flowMapReader.lookupAndDeleteMap()
+	if err != nil {
+		m.log.Error("failed to read flows from eBPF map", "error", err)
 	}
 	return flows
 }

@@ -5,6 +5,7 @@ pkg/internal/ebpf/logenricher/bpf_x86_bpfel.go: \
  bpf/bpfcore/bpf_core_read.h \
  bpf/bpfcore/bpf_helpers.h \
  bpf/bpfcore/bpf_helper_defs.h \
+ bpf/bpfcore/compiler.h \
  bpf/common/iov_iter.h \
  bpf/bpfcore/utils.h \
  bpf/bpfcore/bpf_tracing.h \
@@ -19,7 +20,6 @@ pkg/internal/ebpf/logenricher/bpf_x86_bpfel.go: \
  bpf/logenricher/types.h \
  bpf/shared/obi_ctx.h \
  bpf/bpfcore/bpf_builtins.h \
- bpf/bpfcore/compiler.h \
  bpf/common/tp_info.h \
  bpf/logenricher/maps/path_resolver_scratch.h \
  bpf/logenricher/maps/log_enricher_pids.h \
@@ -36,6 +36,8 @@ bpf/bpfcore/bpf_core_read.h:
 bpf/bpfcore/bpf_helpers.h:
 
 bpf/bpfcore/bpf_helper_defs.h:
+
+bpf/bpfcore/compiler.h:
 
 bpf/common/iov_iter.h:
 
@@ -64,8 +66,6 @@ bpf/logenricher/types.h:
 bpf/shared/obi_ctx.h:
 
 bpf/bpfcore/bpf_builtins.h:
-
-bpf/bpfcore/compiler.h:
 
 bpf/common/tp_info.h:
 

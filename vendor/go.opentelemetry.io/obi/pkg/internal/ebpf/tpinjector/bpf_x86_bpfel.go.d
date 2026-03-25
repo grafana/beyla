@@ -40,6 +40,9 @@ pkg/internal/ebpf/tpinjector/bpf_x86_bpfel.go: \
  bpf/maps/active_ssl_connections.h \
  bpf/common/tc_common.h \
  bpf/common/trace_parent.h \
+ bpf/common/python_task.h \
+ bpf/maps/python_context_task.h \
+ bpf/maps/python_task_state.h \
  bpf/common/runtime.h \
  bpf/maps/active_unix_socks.h \
  bpf/common/trace_helpers.h \
@@ -59,6 +62,7 @@ pkg/internal/ebpf/tpinjector/bpf_x86_bpfel.go: \
  bpf/maps/nodejs_fd_map.h \
  bpf/maps/puma_tasks.h \
  bpf/common/puma_task_id.h \
+ bpf/maps/python_thread_state.h \
  bpf/maps/server_traces.h \
  bpf/maps/incoming_trace_map.h \
  bpf/maps/msg_buffers.h \
@@ -152,6 +156,12 @@ bpf/common/tc_common.h:
 
 bpf/common/trace_parent.h:
 
+bpf/common/python_task.h:
+
+bpf/maps/python_context_task.h:
+
+bpf/maps/python_task_state.h:
+
 bpf/common/runtime.h:
 
 bpf/maps/active_unix_socks.h:
@@ -189,6 +199,8 @@ bpf/maps/nodejs_fd_map.h:
 bpf/maps/puma_tasks.h:
 
 bpf/common/puma_task_id.h:
+
+bpf/maps/python_thread_state.h:
 
 bpf/maps/server_traces.h:
 

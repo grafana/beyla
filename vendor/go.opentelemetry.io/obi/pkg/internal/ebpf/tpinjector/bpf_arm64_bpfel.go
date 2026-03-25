@@ -134,6 +134,26 @@ type BpfPumaTaskIdT struct {
 	Pad1 uint32
 }
 
+type BpfPythonContextTaskT struct {
+	_       structs.HostLayout
+	Task    uint64
+	Version uint64
+}
+
+type BpfPythonTaskStateT struct {
+	_       structs.HostLayout
+	Parent  uint64
+	Version uint64
+	Conn    BpfConnectionInfoPartT
+}
+
+type BpfPythonThreadStateT struct {
+	_              structs.HostLayout
+	CurrentTask    uint64
+	CurrentContext uint64
+	InflightTask   uint64
+}
+
 type BpfTcpReqT struct {
 	_               structs.HostLayout
 	Flags           uint8
@@ -277,6 +297,9 @@ type BpfMapSpecs struct {
 	PidCache                *ebpf.MapSpec `ebpf:"pid_cache"`
 	PumaTaskConnections     *ebpf.MapSpec `ebpf:"puma_task_connections"`
 	PumaWorkerTasks         *ebpf.MapSpec `ebpf:"puma_worker_tasks"`
+	PythonContextTask       *ebpf.MapSpec `ebpf:"python_context_task"`
+	PythonTaskState         *ebpf.MapSpec `ebpf:"python_task_state"`
+	PythonThreadState       *ebpf.MapSpec `ebpf:"python_thread_state"`
 	ServerTraces            *ebpf.MapSpec `ebpf:"server_traces"`
 	ServerTracesAux         *ebpf.MapSpec `ebpf:"server_traces_aux"`
 	SkTpInfoPidMap          *ebpf.MapSpec `ebpf:"sk_tp_info_pid_map"`
@@ -353,6 +376,9 @@ type BpfMaps struct {
 	PidCache                *ebpf.Map `ebpf:"pid_cache"`
 	PumaTaskConnections     *ebpf.Map `ebpf:"puma_task_connections"`
 	PumaWorkerTasks         *ebpf.Map `ebpf:"puma_worker_tasks"`
+	PythonContextTask       *ebpf.Map `ebpf:"python_context_task"`
+	PythonTaskState         *ebpf.Map `ebpf:"python_task_state"`
+	PythonThreadState       *ebpf.Map `ebpf:"python_thread_state"`
 	ServerTraces            *ebpf.Map `ebpf:"server_traces"`
 	ServerTracesAux         *ebpf.Map `ebpf:"server_traces_aux"`
 	SkTpInfoPidMap          *ebpf.Map `ebpf:"sk_tp_info_pid_map"`
@@ -387,6 +413,9 @@ func (m *BpfMaps) Close() error {
 		m.PidCache,
 		m.PumaTaskConnections,
 		m.PumaWorkerTasks,
+		m.PythonContextTask,
+		m.PythonTaskState,
+		m.PythonThreadState,
 		m.ServerTraces,
 		m.ServerTracesAux,
 		m.SkTpInfoPidMap,

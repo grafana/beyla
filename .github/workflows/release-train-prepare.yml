@@ -1,4 +1,4 @@
-name: Release train prepare
+name: Create release branches with binaries
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Release train tag
+name: Create GitHub Pre-releases
 
 on:
   workflow_dispatch:

@@ -107,7 +107,7 @@ type Config struct {
 
 	Attributes Attributes `yaml:"attributes"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes *transform.RoutesConfig `yaml:"routes"`
+	Routes       *transform.RoutesConfig       `yaml:"routes"`
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
 	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
@@ -164,11 +164,11 @@ type Config struct {
 	// From this comment, the properties below will remain undocumented, as they
 	// are useful for development purposes. They might be helpful for customer support.
 
-	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
-	ChannelSendTimeout time.Duration `yaml:"channel_send_timeout" env:"BEYLA_CHANNEL_SEND_TIMEOUT"`
-	ChannelSendTimeoutPanic bool `yaml:"channel_send_timeout_panic" env:"BEYLA_CHANNEL_SEND_TIMEOUT_PANIC"`
-	ProfilePort     int                            `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
-	InternalMetrics imetrics.InternalMetricsConfig `yaml:"internal_metrics"`
+	ChannelBufferLen        int                            `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
+	ChannelSendTimeout      time.Duration                  `yaml:"channel_send_timeout" env:"BEYLA_CHANNEL_SEND_TIMEOUT"`
+	ChannelSendTimeoutPanic bool                           `yaml:"channel_send_timeout_panic" env:"BEYLA_CHANNEL_SEND_TIMEOUT_PANIC"`
+	ProfilePort             int                            `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	InternalMetrics         imetrics.InternalMetricsConfig `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,
 	// "application_process" features are enabled
@@ -222,7 +222,7 @@ type Attributes struct {
 	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
 	// unresolved IP addresses to reduce cardinality.
 	// Set this value to the empty string to disable this feature.
-	RenameUnresolvedHosts string `yaml:"rename_unresolved_hosts" env:"BEYLA_RENAME_UNRESOLVED_HOSTS"`
+	RenameUnresolvedHosts         string `yaml:"rename_unresolved_hosts" env:"BEYLA_RENAME_UNRESOLVED_HOSTS"`
 	RenameUnresolvedHostsOutgoing string `yaml:"rename_unresolved_hosts_outgoing" env:"BEYLA_RENAME_UNRESOLVED_HOSTS_OUTGOING"`
 	RenameUnresolvedHostsIncoming string `yaml:"rename_unresolved_hosts_incoming" env:"BEYLA_RENAME_UNRESOLVED_HOSTS_INCOMING"`
 

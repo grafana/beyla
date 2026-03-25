@@ -31,7 +31,7 @@ type Config struct {
 
 // mimic InternalMetricsConfig in .obi-src/pkg/kubecache/config.go
 type InternalMetricsConfig struct {
-	Port int `yaml:"port,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT"`
+	Port int    `yaml:"port,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT"`
 	Path string `yaml:"path,omitempty" env:"BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 

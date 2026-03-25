@@ -99,12 +99,33 @@ run_cmd() {
     "$@"
 }
 
+run_git_remote_cmd() {
+    if [[ -n "$RELEASE_TRAIN_TOKEN" ]]; then
+        local auth_b64
+        auth_b64="$(printf 'x-access-token:%s' "$RELEASE_TRAIN_TOKEN" | base64 | tr -d '\n')"
+        log_info "+ git [auth] $*"
+        git -c "http.https://github.com/.extraheader=Authorization: Basic ${auth_b64}" "$@"
+        return
+    fi
+
+    run_cmd git "$@"
+}
+
 run_write_cmd() {
     if [[ "$DRY_RUN" == "true" ]]; then
         log_info "[dry-run] $*"
         return 0
     fi
     run_cmd "$@"
+}
+
+run_write_git_remote_cmd() {
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[dry-run] git $*"
+        return 0
+    fi
+
+    run_git_remote_cmd "$@"
 }
 
 require_cmd() {
@@ -187,13 +208,18 @@ cleanup_workspace() {
 
 trap cleanup_workspace EXIT
 
-configure_push_remote() {
+normalize_origin_remote() {
     local repo_dir="$1"
     local repo_slug="$2"
-    if [[ -z "$RELEASE_TRAIN_TOKEN" ]]; then
+
+    local desired_url="https://github.com/${repo_slug}.git"
+    local current_url
+    current_url="$(git -C "$repo_dir" remote get-url origin)"
+    if [[ "$current_url" == "$desired_url" ]]; then
         return
     fi
-    git -C "$repo_dir" remote set-url origin "https://x-access-token:${RELEASE_TRAIN_TOKEN}@github.com/${repo_slug}.git"
+
+    run_cmd git -C "$repo_dir" remote set-url origin "$desired_url"
 }
 
 clone_repo() {
@@ -201,13 +227,12 @@ clone_repo() {
     local target_dir="$2"
 
     if [[ -d "$target_dir/.git" ]]; then
-        run_cmd git -C "$target_dir" fetch --prune --tags origin
+        normalize_origin_remote "$target_dir" "$repo_slug"
     else
-        run_cmd git clone "https://github.com/${repo_slug}.git" "$target_dir"
+        run_git_remote_cmd clone "https://github.com/${repo_slug}.git" "$target_dir"
     fi
 
-    configure_push_remote "$target_dir" "$repo_slug"
-    run_cmd git -C "$target_dir" fetch --prune --tags origin
+    run_git_remote_cmd -C "$target_dir" fetch --prune --tags origin
 }
 
 set_git_identity() {
@@ -231,10 +256,14 @@ check_ci_green() {
     log_info "Checking CI for ${label} (${sha:0:12})"
 
     local checks_json
-    checks_json=$(gh api -H "Accept: application/vnd.github+json" "repos/${repo_slug}/commits/${sha}/check-runs?per_page=100")
+    checks_json=$(
+        gh api --paginate -H "Accept: application/vnd.github+json" \
+            "repos/${repo_slug}/commits/${sha}/check-runs?per_page=100" \
+            | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
+    )
 
     local total_checks
-    total_checks=$(jq -r '.total_count // (.check_runs | length)' <<< "$checks_json")
+    total_checks=$(jq -r '.check_runs | length' <<< "$checks_json")
 
     if [[ "$total_checks" != "0" ]]; then
         local non_green_count
@@ -271,14 +300,17 @@ check_obi_fork_sync() {
         run_cmd git -C "$OBI_DIR" remote add upstream "https://github.com/${UPSTREAM_OBI_REPO}.git"
     fi
 
-    run_cmd git -C "$OBI_DIR" fetch upstream "$OBI_MAIN_BRANCH"
+    if ! run_git_remote_cmd -C "$OBI_DIR" fetch upstream "$OBI_MAIN_BRANCH"; then
+        log_warn "Could not fetch ${UPSTREAM_OBI_REPO}:${OBI_MAIN_BRANCH}; skipping informational sync check."
+        return
+    fi
 
     if git -C "$OBI_DIR" merge-base --is-ancestor "upstream/${OBI_MAIN_BRANCH}" "origin/${OBI_MAIN_BRANCH}"; then
         log_info "OBI fork main contains upstream/${OBI_MAIN_BRANCH}"
         return
     fi
 
-    die "OBI fork ${OBI_REPO}:${OBI_MAIN_BRANCH} is behind ${UPSTREAM_OBI_REPO}:${OBI_MAIN_BRANCH}. Sync the fork before cutting a release."
+    log_warn "OBI fork ${OBI_REPO}:${OBI_MAIN_BRANCH} is behind ${UPSTREAM_OBI_REPO}:${OBI_MAIN_BRANCH}; release will still use the OBI SHA pinned in ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}."
 }
 
 resolve_obi_sha_from_beyla_main() {
@@ -366,7 +398,7 @@ checkout_or_create_release_branch() {
     local base_branch="$2"
     local release_branch="$3"
 
-    run_cmd git -C "$repo_dir" fetch --prune origin
+    run_git_remote_cmd -C "$repo_dir" fetch --prune origin
 
     if git -C "$repo_dir" show-ref --verify --quiet "refs/remotes/origin/${release_branch}"; then
         run_cmd git -C "$repo_dir" checkout -B "$release_branch" "origin/${release_branch}"
@@ -380,7 +412,7 @@ prepare_obi_branch() {
     local release_branch="$2"
     local obi_sha="$3"
 
-    run_cmd git -C "$OBI_DIR" fetch --prune origin
+    run_git_remote_cmd -C "$OBI_DIR" fetch --prune origin
 
     if git -C "$OBI_DIR" show-ref --verify --quiet "refs/remotes/origin/${release_branch}"; then
         log_info "OBI branch ${release_branch} already exists; reusing it."
@@ -403,27 +435,21 @@ prepare_obi_branch() {
         log_info "No OBI artifact changes to commit."
     fi
 
-    run_write_cmd git -C "$OBI_DIR" push -u origin "$release_branch"
+    run_write_git_remote_cmd -C "$OBI_DIR" push -u origin "$release_branch"
 }
 
 prepare_beyla_branch() {
     local version="$1"
     local release_branch="$2"
+    local obi_sha="$3"
 
     checkout_or_create_release_branch "$BEYLA_DIR" "$BEYLA_MAIN_BRANCH" "$release_branch"
 
     run_cmd git -C "$BEYLA_DIR" submodule sync --recursive
     run_cmd git -C "$BEYLA_DIR" submodule update --init --recursive
 
-    run_cmd git -C "$BEYLA_DIR/.obi-src" fetch --prune origin
-    if git -C "$BEYLA_DIR/.obi-src" show-ref --verify --quiet "refs/remotes/origin/${release_branch}"; then
-        run_cmd git -C "$BEYLA_DIR/.obi-src" checkout -B "$release_branch" "origin/${release_branch}"
-    elif [[ "$DRY_RUN" == "true" ]]; then
-        log_warn "OBI release branch ${release_branch} not found in submodule remote (expected in dry-run). Using local fallback branch."
-        run_cmd git -C "$BEYLA_DIR/.obi-src" checkout -B "$release_branch"
-    else
-        die "OBI release branch ${release_branch} not found in submodule remote."
-    fi
+    run_git_remote_cmd -C "$BEYLA_DIR/.obi-src" fetch --prune origin
+    run_cmd git -C "$BEYLA_DIR/.obi-src" checkout "$obi_sha"
 
     run_write_cmd git -C "$BEYLA_DIR" add .obi-src
     if ! git -C "$BEYLA_DIR" diff --cached --quiet; then
@@ -442,7 +468,7 @@ prepare_beyla_branch() {
         log_info "No Beyla release artifact changes to commit."
     fi
 
-    run_write_cmd git -C "$BEYLA_DIR" push -u origin "$release_branch"
+    run_write_git_remote_cmd -C "$BEYLA_DIR" push -u origin "$release_branch"
 }
 
 ensure_release_branch_exists() {
@@ -450,7 +476,7 @@ ensure_release_branch_exists() {
     local repo_slug="$2"
     local release_branch="$3"
 
-    run_cmd git -C "$repo_dir" fetch --prune --tags origin
+    run_git_remote_cmd -C "$repo_dir" fetch --prune --tags origin
     if ! git -C "$repo_dir" show-ref --verify --quiet "refs/remotes/origin/${release_branch}"; then
         die "Branch ${release_branch} not found in ${repo_slug}"
     fi
@@ -481,7 +507,7 @@ ensure_tag_on_sha() {
     fi
 
     if [[ "$tag_created" == "true" ]]; then
-        run_write_cmd git -C "$repo_dir" push origin "refs/tags/${version}"
+        run_write_git_remote_cmd -C "$repo_dir" push origin "refs/tags/${version}"
     fi
 
     echo "$target_sha"
@@ -549,7 +575,7 @@ prepare_command() {
     local release_branch="release-${VERSION}"
 
     prepare_obi_branch "$VERSION" "$release_branch" "$obi_sha"
-    prepare_beyla_branch "$VERSION" "$release_branch"
+    prepare_beyla_branch "$VERSION" "$release_branch" "$obi_sha"
 
     log_info "Release train prepared: version=${VERSION}, branch=${release_branch}"
 
@@ -630,6 +656,14 @@ parse_args() {
             ;;
     esac
 
+    require_option_value() {
+        local opt_name="$1"
+        local opt_value="${2:-}"
+        if [[ $# -lt 2 || -z "$opt_value" ]]; then
+            die "Option ${opt_name} requires a value."
+        fi
+    }
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --version=*)
@@ -637,6 +671,7 @@ parse_args() {
                 shift
                 ;;
             --version)
+                require_option_value "$1" "${2:-}"
                 VERSION="${2:-}"
                 shift 2
                 ;;
@@ -645,6 +680,7 @@ parse_args() {
                 shift
                 ;;
             --bump)
+                require_option_value "$1" "${2:-}"
                 BUMP_MODE="${2:-}"
                 shift 2
                 ;;
@@ -653,6 +689,7 @@ parse_args() {
                 shift
                 ;;
             --beyla-repo)
+                require_option_value "$1" "${2:-}"
                 BEYLA_REPO="${2:-}"
                 shift 2
                 ;;
@@ -661,6 +698,7 @@ parse_args() {
                 shift
                 ;;
             --obi-repo)
+                require_option_value "$1" "${2:-}"
                 OBI_REPO="${2:-}"
                 shift 2
                 ;;
@@ -669,6 +707,7 @@ parse_args() {
                 shift
                 ;;
             --workdir)
+                require_option_value "$1" "${2:-}"
                 WORKDIR="${2:-}"
                 shift 2
                 ;;

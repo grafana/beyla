@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -21,6 +22,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	v2 "github.com/containers/common/pkg/cgroupv2"
+	"github.com/hashicorp/go-version"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 
@@ -150,6 +152,17 @@ func (i *instrumenter) uprobeModules(p Tracer, pid app.PID, maps []*procfs.ProcM
 	modules := map[uint64]*uprobeModule{}
 
 	for lib, pMap := range p.UProbes() {
+		baseLib, selected, err := matchVersionedUprobeLibrary(lib, maps)
+		if err != nil {
+			log.Warn("invalid version annotation for uprobe library", "lib", lib, "error", err)
+			continue
+		}
+		if !selected {
+			log.Debug("skipping version-mismatched uprobe library", "lib", lib)
+			continue
+		}
+
+		lib = baseLib
 		log.Debug("finding library", "lib", lib)
 		libMap := procs.LibPath(lib, maps)
 		instrPath := exePath
@@ -189,6 +202,88 @@ func (i *instrumenter) uprobeModules(p Tracer, pid app.PID, maps []*procfs.ProcM
 	}
 
 	return modules
+}
+
+// matchVersionedUprobeLibrary reports whether a (possibly annotated) library name should be
+// instrumented for the given process.
+func matchVersionedUprobeLibrary(name string, maps []*procfs.ProcMap) (string, bool, error) {
+	baseName, constraints, hasConstraint, err := parseVersionAnnotation(name)
+	if err != nil {
+		return "", false, err
+	}
+
+	if !hasConstraint {
+		return baseName, true, nil
+	}
+
+	libMap := procs.LibPath(baseName, maps)
+	if libMap == nil {
+		return baseName, false, nil
+	}
+
+	libVersion, ok := versionFromPath(libMap.Pathname)
+	if !ok {
+		return baseName, false, nil
+	}
+
+	return baseName, constraints.Check(libVersion), nil
+}
+
+// parseVersionAnnotation splits a library name that optionally carries a version constraint
+// in square brackets, e.g. "_asyncio[>= 3.12]" → baseName="_asyncio", constraint=">=3.12".
+// A name without brackets is returned unchanged with hasConstraint=false.
+func parseVersionAnnotation(name string) (string, version.Constraints, bool, error) {
+	start := strings.LastIndex(name, "[")
+	if start < 0 || !strings.HasSuffix(name, "]") {
+		return name, nil, false, nil
+	}
+
+	baseName := name[:start]
+	if baseName == "" {
+		return "", nil, false, fmt.Errorf("missing base name in %q", name)
+	}
+
+	rawConstraint := strings.TrimSpace(name[start+1 : len(name)-1])
+	if rawConstraint == "" {
+		return "", nil, false, fmt.Errorf("missing version constraint in %q", name)
+	}
+
+	constraints, err := version.NewConstraint(rawConstraint)
+	if err != nil {
+		return "", nil, false, err
+	}
+
+	return baseName, constraints, true, nil
+}
+
+// versionRe matches numeric version strings, with or without dots (e.g. "3.11", "311", "3").
+var versionRe = regexp.MustCompile(`\d+(?:\.\d+)*`)
+
+// versionFromPath extracts the first recognizable version from a library path by scanning
+// each path component from right (most specific) to left (least specific). Dotted versions
+// (e.g. "3.11" from "python3.11/") are prioritized over plain numbers (e.g. "311" from
+// "cpython-311")
+func versionFromPath(path string) (*version.Version, bool) {
+	components := strings.Split(path, string(filepath.Separator))
+	var dotted, plain []string
+
+	for i := len(components) - 1; i >= 0; i-- {
+		for _, m := range versionRe.FindAllString(components[i], -1) {
+			if strings.Contains(m, ".") {
+				dotted = append(dotted, m)
+			} else {
+				plain = append(plain, m)
+			}
+		}
+	}
+
+	for _, candidate := range append(dotted, plain...) {
+		if v, err := version.NewVersion(candidate); err == nil {
+			return v, true
+		}
+	}
+
+	return nil, false
 }
 
 func resolveExePath(pid app.PID) (string, uint64, error) {

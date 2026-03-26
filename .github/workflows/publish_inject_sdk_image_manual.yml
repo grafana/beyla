@@ -10,7 +10,7 @@ on:
 
 permissions:
   contents: read
-  packages: read
+  packages: write
 
 concurrency:
   group: publish-inject-sdk-image-${{ github.event.inputs.version || 'auto' }}

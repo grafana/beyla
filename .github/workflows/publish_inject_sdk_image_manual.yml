@@ -115,6 +115,16 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.resolve-version.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
@@ -122,7 +132,7 @@ jobs:
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1 # v3.5.0
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
       - name: Build and push
@@ -132,7 +142,8 @@ jobs:
           file: ./pkg/webhook/image/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ needs.resolve-version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
       - name: Summarize published tag
         env:

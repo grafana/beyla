@@ -18,6 +18,7 @@ on:
       - "scripts/generate-integration-matrix.sh"
       - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_k8s_integration_tests.yml"
+      - ".obi-src"
       - ".obi-src/**"
 
 concurrency:

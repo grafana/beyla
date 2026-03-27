@@ -10,11 +10,36 @@ keywords:
 
 # Configure Beyla Prometheus and OpenTelemetry metrics histograms
 
-You can configure Beyla Prometheus and OpenTelemetry metrics histograms. You can also choose to use native histograms and exponential histograms.
+By default, Beyla uses [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram)
+for Prometheus and [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram)
+for OpenTelemetry. These formats provide higher precision and lower cardinality than explicit-bucket histograms without requiring manual bucket configuration.
+
+You can override this behavior by configuring explicit bucket boundaries.
+
+## Native histograms (Prometheus)
+
+Beyla emits Prometheus metrics using [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) by default. No bucket configuration is required on the Beyla side.
+
+To receive native histograms, your Prometheus collector must have the [`native-histograms` feature flag enabled](https://prometheus.io/docs/prometheus/latest/feature_flags/#native-histograms).
+
+If you need to revert to explicit-bucket histograms, set the bucket boundaries explicitly under `prometheus_export.buckets` as described in the [Override histogram buckets](#override-histogram-buckets) section below.
+
+## Exponential histograms (OpenTelemetry)
+
+Beyla uses [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for OpenTelemetry metrics by default. This is controlled by the `histogram_aggregation` option in the `otel_metrics_export` section, which defaults to `base2_exponential_bucket_histogram`.
+
+To revert to explicit-bucket histograms, set `histogram_aggregation` to `explicit_bucket_histogram` (or set the `OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION` environment variable):
+
+```yaml
+otel_metrics_export:
+  histogram_aggregation: explicit_bucket_histogram
+```
+
+See the `histogram_aggregation` option in the [OTEL metrics exporter](../export-data/) section for more information.
 
 ## Override histogram buckets
 
-You can override the histogram bucket boundaries for OpenTelemetry and Prometheus metrics exporters by setting the `buckets` YAML configuration option:
+You can override the histogram bucket boundaries for OpenTelemetry and Prometheus metrics exporters by setting the `buckets` YAML configuration option. Setting explicit buckets also switches the exporter from native/exponential to explicit-bucket mode for the affected histograms.
 
 YAML section: `otel_metrics_export.buckets`
 
@@ -22,6 +47,7 @@ For example:
 
 ```yaml
 otel_metrics_export:
+  histogram_aggregation: explicit_bucket_histogram
   buckets:
     duration_histogram: [0, 1, 2]
 ```
@@ -71,9 +97,3 @@ If you leave the value unset, Beyla uses these default bucket boundaries:
 ```
 
 These default values are UNSTABLE and may change if Prometheus or OpenTelemetry semantic conventions recommend different bucket boundaries.
-
-## Use native histograms and exponential histograms
-
-For Prometheus, you enable [native histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) by [enabling the `native-histograms` feature in your Prometheus collector](https://prometheus.io/docs/prometheus/latest/feature_flags/#native-histograms).
-
-For OpenTelemetry, you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually. Set the standard [OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION](https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/otlp/#additional-configuration) environment variable. See the `histogram_aggregation` section in the [OTEL metrics exporter](../export-data/) section for more information.

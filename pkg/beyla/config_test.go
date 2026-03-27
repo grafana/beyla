@@ -55,7 +55,6 @@ otel_metrics_export:
   endpoint: localhost:3030
   buckets:
     duration_histogram: [0, 1, 2]
-  histogram_aggregation: base2_exponential_bucket_histogram
 prometheus_export:
   ttl: 1s
   buckets:
@@ -244,7 +243,6 @@ network:
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: export.Buckets{
-				DurationHistogram:     export.DefaultBuckets.DurationHistogram,
 				RequestSizeHistogram:  []float64{0, 10, 20, 22},
 				ResponseSizeHistogram: []float64{0, 10, 20, 22},
 			},

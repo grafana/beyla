@@ -90,6 +90,7 @@ const (
 	HTTPSubtypeAWSSQS        = 4 // http + aws sqs
 	HTTPSubtypeSQLPP         = 5 // http + sql++ (couchbase, etc.)
 	HTTPSubtypeOpenAI        = 6 // http + OpenAI
+	HTTPSubtypeAnthropic     = 7 // http + Anthropic
 )
 
 //nolint:cyclop
@@ -230,6 +231,11 @@ type AWSSQS struct {
 	MessageID     string  `json:"messageId"`
 }
 
+type GenAI struct {
+	OpenAI    *VendorOpenAI
+	Anthropic *VendorAnthropic
+}
+
 type OpenAIUsage struct {
 	InputTokens      int `json:"input_tokens"`
 	OutputTokens     int `json:"output_tokens"`
@@ -259,7 +265,7 @@ type OpenAIError struct {
 	Type    string `json:"type"`
 }
 
-type OpenAI struct {
+type VendorOpenAI struct {
 	OperationName    string          `json:"object"`
 	ResponseModel    string          `json:"model"`
 	Error            OpenAIError     `json:"error"`
@@ -276,7 +282,7 @@ type OpenAI struct {
 	Data             json.RawMessage `json:"data"`
 }
 
-func (ai *OpenAI) GetOutput() string {
+func (ai *VendorOpenAI) GetOutput() string {
 	if len(ai.Output) > 0 {
 		return string(ai.Output)
 	}
@@ -316,6 +322,45 @@ func (air *OpenAIInput) GetInput() string {
 	}
 
 	return string(air.Messages)
+}
+
+type VendorAnthropic struct {
+	Input  AnthropicRequest
+	Output AnthropicResponse
+}
+
+type AnthropicRequest struct {
+	MaxTokens int             `json:"max_tokens"`
+	Messages  json.RawMessage `json:"messages"`
+	Model     string          `json:"model"`
+	Stream    bool            `json:"stream"`
+	System    string          `json:"system"`
+	Tools     json.RawMessage `json:"tools"`
+}
+
+type AnthropicResponse struct {
+	Model        string          `json:"model"`
+	ID           string          `json:"id"`
+	Type         string          `json:"type"`
+	Role         string          `json:"role"`
+	Content      json.RawMessage `json:"content"`
+	StopReason   string          `json:"stop_reason"`
+	StopSequence *string         `json:"stop_sequence"`
+	Usage        AnthropicUsage  `json:"usage"`
+	Error        *AnthropicError `json:"error,omitempty"`
+	RequestID    string          `json:"request_id"`
+}
+
+type AnthropicUsage struct {
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	ServiceTier  string `json:"service_tier"`
+	InferenceGeo string `json:"inference_geo"`
+}
+
+type AnthropicError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }
 
 // Span contains the information being submitted by the following nodes in the graph.
@@ -360,7 +405,7 @@ type Span struct {
 	GraphQL           *GraphQL       `json:"-"`
 	Elasticsearch     *Elasticsearch `json:"-"`
 	AWS               *AWS           `json:"-"`
-	OpenAI            *OpenAI        `json:"-"`
+	GenAI             *GenAI         `json:"-"`
 
 	// RequestHeaders stores extracted HTTP request headers based on enrichment rules.
 	// Keys are canonical header names, values are all header values (possibly obfuscated).
@@ -723,8 +768,11 @@ func HTTPSpanStatusCode(span *Span) string {
 			// this is possibly not needed, because in my experiments they
 			// respond with 429, but just to be correct according to the OTel
 			// GenAI spec: https://opentelemetry.io/docs/specs/semconv/gen-ai/openai/
-			if span.SubType == HTTPSubtypeOpenAI && span.OpenAI != nil {
-				if span.OpenAI.Error.Type != "" {
+			if span.GenAI != nil {
+				if span.GenAI.OpenAI != nil && span.GenAI.OpenAI.Error.Type != "" {
+					return StatusCodeError
+				}
+				if span.GenAI.Anthropic != nil && span.GenAI.Anthropic.Output.Error != nil && span.GenAI.Anthropic.Output.Error.Type != "" {
 					return StatusCodeError
 				}
 			}
@@ -883,14 +931,28 @@ func (s *Span) TraceName() string {
 			}
 		}
 
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
-			name := s.OpenAI.OperationName
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
+			name := s.GenAI.OpenAI.OperationName
 			if name != "" {
 				switch {
-				case s.OpenAI.Request.Model != "":
-					return name + " " + s.OpenAI.Request.Model
-				case s.OpenAI.ResponseModel != "":
-					return name + " " + s.OpenAI.ResponseModel
+				case s.GenAI.OpenAI.Request.Model != "":
+					return name + " " + s.GenAI.OpenAI.Request.Model
+				case s.GenAI.OpenAI.ResponseModel != "":
+					return name + " " + s.GenAI.OpenAI.ResponseModel
+				default:
+					return name
+				}
+			}
+		}
+
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
+			name := s.GenAI.Anthropic.Output.Type
+			if name != "" {
+				switch {
+				case s.GenAI.Anthropic.Input.Model != "":
+					return name + " " + s.GenAI.Anthropic.Input.Model
+				case s.GenAI.Anthropic.Output.Model != "":
+					return name + " " + s.GenAI.Anthropic.Output.Model
 				default:
 					return name
 				}

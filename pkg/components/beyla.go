@@ -256,15 +256,16 @@ func buildCommonContextInfo(
 	}
 
 	ctxInfo.K8sInformer = kube.NewMetadataProvider(kube.MetadataConfig{
-		Enable:              config.Attributes.Kubernetes.Enable,
-		KubeConfigPath:      config.Attributes.Kubernetes.KubeconfigPath,
-		SyncTimeout:         config.Attributes.Kubernetes.InformersSyncTimeout,
-		ResyncPeriod:        config.Attributes.Kubernetes.InformersResyncPeriod,
-		DisabledInformers:   config.Attributes.Kubernetes.DisableInformers,
-		MetaCacheAddr:       config.Attributes.Kubernetes.MetaCacheAddress,
-		ResourceLabels:      resourceLabels,
-		RestrictLocalNode:   config.Attributes.Kubernetes.MetaRestrictLocalNode,
-		ServiceNameTemplate: templ,
+		Enable:                   config.Attributes.Kubernetes.Enable,
+		KubeConfigPath:           config.Attributes.Kubernetes.KubeconfigPath,
+		SyncTimeout:              config.Attributes.Kubernetes.InformersSyncTimeout,
+		ReconnectInitialInterval: config.Attributes.Kubernetes.ReconnectInitialInterval,
+		ResyncPeriod:             config.Attributes.Kubernetes.InformersResyncPeriod,
+		DisabledInformers:        config.Attributes.Kubernetes.DisableInformers,
+		MetaCacheAddr:            config.Attributes.Kubernetes.MetaCacheAddress,
+		ResourceLabels:           resourceLabels,
+		RestrictLocalNode:        config.Attributes.Kubernetes.MetaRestrictLocalNode,
+		ServiceNameTemplate:      templ,
 	}, ctxInfo.Metrics)
 
 	ctxInfo.NodeMeta = meta.NewNodeMeta(

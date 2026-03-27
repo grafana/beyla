@@ -45,7 +45,7 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 		slog.Debug("failed to parse OpenAI request", "error", err)
 	}
 
-	var parsedResponse request.OpenAI
+	var parsedResponse request.VendorOpenAI
 	if err := json.Unmarshal(respB, &parsedResponse); err != nil {
 		slog.Debug("failed to parse OpenAI response", "error", err)
 	}
@@ -53,7 +53,9 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	parsedResponse.Request = parsedRequest
 
 	baseSpan.SubType = request.HTTPSubtypeOpenAI
-	baseSpan.OpenAI = &parsedResponse
+	baseSpan.GenAI = &request.GenAI{
+		OpenAI: &parsedResponse,
+	}
 
 	return *baseSpan, true
 }

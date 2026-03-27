@@ -91,7 +91,10 @@ type Tracer interface {
 	// inserted as the Go function start and end probes
 	GoProbes() map[string][]*ebpfcommon.ProbeDesc
 	// UProbes returns a map with the module name mapping to the uprobes that need to be
-	// tapped into. Start matches uprobe, End matches uretprobe
+	// tapped into. Start matches uprobe, End matches uretprobe.
+	// The module name key may carry a version constraint in square brackets, which causes
+	// the entry to be selected only when the library's version satisfies the constraint.
+	// See matchVersionedUprobeLibrary for how selection is performed.
 	UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter

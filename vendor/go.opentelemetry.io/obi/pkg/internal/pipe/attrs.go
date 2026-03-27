@@ -17,8 +17,8 @@ import (
 type IPAddr [net.IPv6len]uint8
 
 type CommonAttrs struct {
-	SrcPort int
-	DstPort int
+	SrcPort uint16
+	DstPort uint16
 
 	SrcAddr IPAddr
 	DstAddr IPAddr

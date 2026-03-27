@@ -137,6 +137,7 @@ network:
 		ChannelSendTimeoutPanic: true,
 
 		LogLevel:        "INFO",
+		LogFormat:       "text",
 		ShutdownTimeout: 30 * time.Second,
 		EnforceSysCaps:  false,
 		TracePrinter:    "json",

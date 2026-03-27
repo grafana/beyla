@@ -35,23 +35,27 @@ func klog() *slog.Logger {
 }
 
 type KubernetesDecorator struct {
-	Enable kubeflags.EnableFlag `yaml:"enable" env:"OTEL_EBPF_KUBE_METADATA_ENABLE"`
+	Enable kubeflags.EnableFlag `yaml:"enable" env:"OTEL_EBPF_KUBE_METADATA_ENABLE" validate:"oneof=true false autodetect"`
 
 	// ClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
 	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.
 	ClusterName string `yaml:"cluster_name" env:"OTEL_EBPF_KUBE_CLUSTER_NAME"`
 
 	// KubeconfigPath is optional. If unset, it will look in the usual location.
-	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG"`
+	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG" validate:"omitempty,filepath"`
 
-	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT"`
+	// InformersSyncTimeout is the timeout for waiting for informers to sync on startup.
+	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT" validate:"gt=0"`
+
+	// ReconnectInitialInterval is the time to wait before reconnecting to the Kubernetes API after a connection loss.
+	ReconnectInitialInterval time.Duration `yaml:"reconnect_initial_interval" env:"OTEL_EBPF_KUBE_RECONNECT_INITIAL_INTERVAL" validate:"gte=0"`
 
 	// InformersResyncPeriod defaults to 30m. Higher values will reduce the load on the Kube API.
-	InformersResyncPeriod time.Duration `yaml:"informers_resync_period" env:"OTEL_EBPF_KUBE_INFORMERS_RESYNC_PERIOD"`
+	InformersResyncPeriod time.Duration `yaml:"informers_resync_period" env:"OTEL_EBPF_KUBE_INFORMERS_RESYNC_PERIOD" validate:"gte=0"`
 
 	// DropExternal will drop, in NetO11y component, any flow where the source or destination
 	// IPs are not matched to any kubernetes entity, assuming they are cluster-external
-	DropExternal bool `yaml:"drop_external" env:"OTEL_EBPF_NETWORK_DROP_EXTERNAL"`
+	DropExternal bool `yaml:"drop_external" env:"OTEL_EBPF_NETWORK_DROP_EXTERNAL" validate:"boolean"`
 
 	// DisableInformers allows selectively disabling some informers. Accepted value is a list
 	// that might contain node or service. Disabling any of them
@@ -65,7 +69,7 @@ type KubernetesDecorator struct {
 
 	// MetaRestrictLocalNode will download only the metadata from the Pods that are located in the same
 	// node as the OBI instance. It will also restrict the Node information to the local node.
-	MetaRestrictLocalNode bool `yaml:"meta_restrict_local_node" env:"OTEL_EBPF_KUBE_META_RESTRICT_LOCAL_NODE"`
+	MetaRestrictLocalNode bool `yaml:"meta_restrict_local_node" env:"OTEL_EBPF_KUBE_META_RESTRICT_LOCAL_NODE" validate:"boolean"`
 
 	// MetaSourceLabels allows OBI overriding the service name and namespace of an application from
 	// the given labels.

@@ -62,7 +62,7 @@ type deduperCache struct {
 }
 
 type entry struct {
-	key        *ebpf.NetFlowId
+	key        ebpf.NetFlowId
 	ifIndex    uint32
 	expiryTime time.Time
 }
@@ -93,14 +93,14 @@ func DeduperProvider(dd *Deduper, input, output *msg.Queue[[]*ebpf.Record]) swar
 				cache.removeExpired()
 				fwd := make([]*ebpf.Record, 0, len(records))
 				for _, record := range records {
-					if cache.isDupe(&record.Id) {
+					if cache.isDupe(record.FlowID()) {
 						continue
 					}
 					// Before forwarding, unset the non-common fields of deduplicate flows.
 					// These values are not relevant after deduplication and keeping them
 					// would unnecessarily increase cardinality, as they could chaotically
 					// contain the different interfaces.
-					record.Id.IfIndex = ebpf.InterfaceUnset
+					record.SetIfIndexUnset()
 
 					fwd = append(fwd, record)
 				}
@@ -114,8 +114,8 @@ func DeduperProvider(dd *Deduper, input, output *msg.Queue[[]*ebpf.Record]) swar
 
 // isDupe returns whether the passed record has been already checked for duplicate for
 // another interface
-func (c *deduperCache) isDupe(key *ebpf.NetFlowId) bool {
-	rk := *key
+func (c *deduperCache) isDupe(key ebpf.NetFlowId) bool {
+	rk := key
 	// zeroes fields from key that should be ignored from the flow comparison
 	rk.IfIndex = 0
 	// If a flow has been accounted previously, whatever its interface was,
@@ -131,7 +131,7 @@ func (c *deduperCache) isDupe(key *ebpf.NetFlowId) bool {
 	// The flow has not been accounted previously (or was forgotten after expiration)
 	// so we register it for that concrete interface
 	e := entry{
-		key:        &rk,
+		key:        rk,
 		ifIndex:    key.IfIndex,
 		expiryTime: timeNow().Add(c.expire),
 	}
@@ -146,7 +146,7 @@ func (c *deduperCache) removeExpired() {
 	for ele != nil && now.After(ele.Value.(*entry).expiryTime) {
 		evicted++
 		c.entries.Remove(ele)
-		delete(c.ifaces, *ele.Value.(*entry).key)
+		delete(c.ifaces, ele.Value.(*entry).key)
 		ele = c.entries.Back()
 	}
 	if evicted > 0 {

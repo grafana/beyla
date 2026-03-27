@@ -29,11 +29,11 @@ func StatGetters(name attr.Name) (attributes.Getter[*Stat, attribute.KeyValue], 
 		}
 	case attr.SrcPort:
 		getter = func(s *Stat) attribute.KeyValue {
-			return attribute.Int(string(attr.SrcPort), s.CommonAttrs.SrcPort)
+			return attribute.Int(string(attr.SrcPort), int(s.CommonAttrs.SrcPort))
 		}
 	case attr.DstPort:
 		getter = func(s *Stat) attribute.KeyValue {
-			return attribute.Int(string(attr.DstPort), s.CommonAttrs.DstPort)
+			return attribute.Int(string(attr.DstPort), int(s.CommonAttrs.DstPort))
 		}
 	case attr.SrcName:
 		getter = func(s *Stat) attribute.KeyValue { return attribute.String(string(attr.SrcName), s.CommonAttrs.SrcName) }

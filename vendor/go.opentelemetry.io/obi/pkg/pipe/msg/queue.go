@@ -149,11 +149,19 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 		return
 	}
 
-	// this can happen in dead paths (which are valid for disabled pipeline branches),
-	// exiting early to save timeout management
+	// Subscribe appends to q.dsts under q.mt. Snapshot the subscriber list here so this Send
+	// iterates a stable copy: concurrent Subscribe is safe and we avoid racing on the slice
+	// header. Do not hold the mutex while writing to subscriber channels (Send can block).
+	q.mt.Lock()
 	if len(q.dsts) == 0 {
+		q.mt.Unlock()
+		// this can happen in dead paths (which are valid for disabled pipeline branches),
+		// exiting early to save timeout management
 		return
 	}
+	dsts := make([]dst[T], len(q.dsts))
+	copy(dsts, q.dsts)
+	q.mt.Unlock()
 
 	if q.cfg.panicOnTimeout {
 		// instead of directly panicking in sendTimeout, we first warn at 90% sendTimeout,
@@ -163,7 +171,7 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 		q.sendTimeout.Reset(q.cfg.sendTimeout)
 	}
 	var blocked []dst[T]
-	for _, d := range q.dsts {
+	for _, d := range dsts {
 		select {
 		case <-ctx.Done():
 			return
@@ -235,9 +243,10 @@ func withRawOpts(opts subscribeOpts) SubscribeOpt {
 // It's important to notice that, if Subscribe is invoked after Send, the sent message
 // will be lost.
 // Concurrent invocations to Subscribe and Bypass are thread-safe between them, so you can be
-// sure that any subscriber will get its own effective channel. But invocations to Subscribe are not
-// thread-safe with the Send method. This means that concurrent invocations to Subscribe and Send might
-// result in few initial lost messages.
+// sure that any subscriber will get its own effective channel. Send snapshots the subscriber list
+// under the same mutex as Subscribe, so concurrent Subscribe and Send do not race; a Send may still
+// not deliver to a subscriber that Subscribe'd immediately after the snapshot (that subscriber
+// misses that message).
 func (q *Queue[T]) Subscribe(options ...SubscribeOpt) <-chan T {
 	q.assertNotClosed()
 	q.mt.Lock()

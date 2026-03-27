@@ -77,6 +77,8 @@ BEHAVIORAL_TRANSFORMS=(
     # --- Identity values (where "obi" is a config value or assertion, not a name) ---
     'HOSTNAME: "obi"|HOSTNAME: "beyla"'
     'value: "obi"|value: "beyla"'
+    # service.instance.id regex assertion (Go backtick literal)
+    '`\^obi:\\d+\$\$`|`\^beyla:\\d+\$\$`'
     '/var/run/obi|/var/run/beyla'
     '"source":[ ]*"obi"|"source": "beyla"'
 
@@ -126,6 +128,13 @@ CODE_INJECTIONS=(
     'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
     # Temporarily skip flaky traceparent extraction test
     '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
+    # Skip CP multiprocess tests if kprobes are not supported on this kernel.
+    # TestMultiProcessAppCP (CP=all)
+    'OTEL_EBPF_BPF_CONTEXT_PROPAGATION=all`|if !kprobeTracesEnabled() { t.Skip("kprobe-based context propagation not reliable on this kernel") }'
+    # TestMultiProcessAppCPHeadersOnly (CP=headers)
+    'OTEL_EBPF_BPF_CONTEXT_PROPAGATION=headers`|if !kprobeTracesEnabled() { t.Skip("kprobe-based context propagation not reliable on this kernel") }'
+    # TestMultiProcessAppCPTCPOnly (CP=tcp)
+    'OTEL_EBPF_BPF_CONTEXT_PROPAGATION=tcp`|if !kprobeTracesEnabled() { t.Skip("kprobe-based context propagation not reliable on this kernel") }'
 )
 
 # =============================================================================

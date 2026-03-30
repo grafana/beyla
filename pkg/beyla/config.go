@@ -151,7 +151,8 @@ type Config struct {
 	// Discovery configuration
 	Discovery servicesextra.BeylaDiscoveryConfig `yaml:"discovery"`
 
-	LogLevel string `yaml:"log_level" env:"BEYLA_LOG_LEVEL"`
+	LogLevel  string        `yaml:"log_level"  env:"BEYLA_LOG_LEVEL"`
+	LogFormat obi.LogFormat `yaml:"log_format" env:"BEYLA_LOG_FORMAT"`
 
 	// Timeout for a graceful shutdown
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"BEYLA_SHUTDOWN_TIMEOUT"`

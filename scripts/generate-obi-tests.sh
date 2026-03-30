@@ -504,6 +504,21 @@ ensure_otherinstance_has_service_version() {
     fi
 }
 
+ensure_netolly_basic_guess_ports() {
+    # The plain netolly manifest omits guess_ports, relying on eBPF TCP-SYN tracking
+    # to identify server_port.  In Beyla's test environment (appolly + netolly eBPF
+    # programs loaded together), the connInitiatorsMap (capped at CacheMaxFlows=20)
+    # fills up before the pinger SYN is seen, leaving direction=unknown and
+    # server_port=0.  Add guess_ports: ordinal to mirror the other netolly manifests
+    # and make the test robust.
+    local file="$OBI_DEST/k8s/manifests/06-obi-netolly.yml"
+    [[ -f "$file" ]] || return 0
+    if ! grep -q 'guess_ports:' "$file"; then
+        awk '/^      protocols:/ { print "      guess_ports: ordinal" } { print }' \
+            "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    fi
+}
+
 apply_behavioral_transforms() {
     local jobs="$1"
     echo "  Applying OBI → Beyla behavioral transforms..."
@@ -644,6 +659,7 @@ generate() {
     apply_behavioral_transforms "$jobs"
     ensure_daemonset_process_metrics_enabled
     ensure_otherinstance_has_service_version
+    ensure_netolly_basic_guess_ports
     cleanup_and_inject_build_tags "$jobs"
 
     # -----------------------------------------------------------------

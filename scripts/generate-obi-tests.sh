@@ -77,6 +77,8 @@ BEHAVIORAL_TRANSFORMS=(
     # --- Identity values (where "obi" is a config value or assertion, not a name) ---
     'HOSTNAME: "obi"|HOSTNAME: "beyla"'
     'value: "obi"|value: "beyla"'
+    # service.instance.id regex assertion (Go backtick literal)§§
+    '`\^obi:\\d+\$\$`|`\^beyla:\\d+\$\$`'
     '/var/run/obi|/var/run/beyla'
     '"source":[ ]*"obi"|"source": "beyla"'
 

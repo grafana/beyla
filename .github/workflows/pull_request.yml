@@ -62,7 +62,7 @@ jobs:
           make unit-test-matrix-json >> $GITHUB_OUTPUT
 
       - name: Upload generated BPF files
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           # prevent cache poisoning by using the SHA of the commit
           name: bpf-generated-${{ github.sha }}
@@ -97,7 +97,7 @@ jobs:
             go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Download generated BPF files
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bpf-generated-${{ github.sha }}
 
@@ -139,7 +139,7 @@ jobs:
             go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Download generated BPF files
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bpf-generated-${{ github.sha }}
 

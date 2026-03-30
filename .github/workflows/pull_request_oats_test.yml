@@ -133,6 +133,12 @@ jobs:
           restore-keys: |
             go-build-oats-${{ runner.os }}-${{ runner.arch }}-
 
+      - name: Generate and vendor OBI
+        run: make vendor-obi
+
+      - name: Verify Beyla compiles
+        run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
+
       - name: Run oats tests
         env:
           MATRIX_BASENAME: ${{ matrix.basename }}

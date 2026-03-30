@@ -84,6 +84,9 @@ jobs:
       - name: Generate files
         run: make prereqs vendor-obi
 
+      - name: Verify Beyla compiles
+        run: docker build -f internal/test/integration/components/beyla/Dockerfile .
+
       - name: Run Beyla integration tests
         env:
           # zizmor template-injection fixes: pass data as env vars

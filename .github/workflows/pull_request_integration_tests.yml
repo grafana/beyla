@@ -140,6 +140,9 @@ jobs:
       - name: Generate files
         run: make prereqs vendor-obi
 
+      - name: Verify Beyla compiles
+        run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
+
       - name: Check disk usage before tests
         run: df -h
 

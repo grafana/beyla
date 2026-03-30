@@ -49,6 +49,13 @@ const (
 	LogLevelError LogLevel = "ERROR"
 )
 
+type LogFormat string
+
+const (
+	LogFormatText LogFormat = "text"
+	LogFormatJSON LogFormat = "json"
+)
+
 // CustomValidations is a map of tag:function for custom validations
 type CustomValidations map[string]validator.Func
 
@@ -111,6 +118,7 @@ var DefaultConfig = Config{
 	ChannelSendTimeout:      time.Minute,
 	ChannelSendTimeoutPanic: false,
 	LogLevel:                LogLevelInfo,
+	LogFormat:               LogFormatText,
 	ShutdownTimeout:         10 * time.Second,
 	EnforceSysCaps:          false,
 	EBPF: config.EBPFTracer{
@@ -154,8 +162,13 @@ var DefaultConfig = Config{
 						"/query/service",
 					},
 				},
-				OpenAI: config.OpenAIConfig{
-					Enabled: false,
+				GenAI: config.GenAIConfig{
+					OpenAI: config.OpenAIConfig{
+						Enabled: false,
+					},
+					Anthropic: config.AnthropicConfig{
+						Enabled: false,
+					},
 				},
 				Enrichment: config.EnrichmentConfig{
 					Enabled: false,
@@ -240,10 +253,11 @@ var DefaultConfig = Config{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
-			Enable:                kubeflags.EnabledDefault,
-			InformersSyncTimeout:  30 * time.Second,
-			InformersResyncPeriod: 30 * time.Minute,
-			ResourceLabels:        kube.DefaultResourceLabels,
+			Enable:                   kubeflags.EnabledDefault,
+			InformersSyncTimeout:     30 * time.Second,
+			ReconnectInitialInterval: 5 * time.Second,
+			InformersResyncPeriod:    30 * time.Minute,
+			ResourceLabels:           kube.DefaultResourceLabels,
 		},
 		HostID:                         HostIDConfig{},
 		MetadataRetry:                  meta.DefaultRetryConfig,
@@ -355,6 +369,8 @@ type Config struct {
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
 
 	LogLevel LogLevel `yaml:"log_level" env:"OTEL_EBPF_LOG_LEVEL"`
+
+	LogFormat LogFormat `yaml:"log_format" env:"OTEL_EBPF_LOG_FORMAT"`
 
 	// Timeout for a graceful shutdown
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"OTEL_EBPF_SHUTDOWN_TIMEOUT"`
@@ -607,10 +623,6 @@ func (c *Config) Validate() error {
 		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
 			return ConfigError("Cilium compatibility error: " + err.Error())
 		}
-	}
-
-	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
-		return ConfigError("OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")
 	}
 
 	if c.Enabled(FeatureNetO11y) && !c.OTELMetrics.EndpointEnabled() &&

@@ -82,7 +82,7 @@ func allower(allowed []string) (func(r *ebpf.Record) bool, error) {
 		return nil, fmt.Errorf("in network protocols: %w", err)
 	}
 	return func(r *ebpf.Record) bool {
-		_, ok := allow[transport.Protocol(r.Id.TransportProtocol)]
+		_, ok := allow[transport.Protocol(r.NetAttrs.TransportProtocol)]
 		return ok
 	}, nil
 }
@@ -93,7 +93,7 @@ func excluder(excluded []string) (func(r *ebpf.Record) bool, error) {
 		return nil, fmt.Errorf("in network excluded protocols: %w", err)
 	}
 	return func(r *ebpf.Record) bool {
-		_, excluded := exclude[transport.Protocol(r.Id.TransportProtocol)]
+		_, excluded := exclude[transport.Protocol(r.NetAttrs.TransportProtocol)]
 		return !excluded
 	}, nil
 }

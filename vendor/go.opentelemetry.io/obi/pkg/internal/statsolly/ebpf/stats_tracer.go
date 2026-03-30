@@ -10,11 +10,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
+
+	"go.opentelemetry.io/obi/pkg/config"
+	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 )
 
 type StatsTCPRtt StatsTcpRttT
@@ -32,7 +35,7 @@ func tlog() *slog.Logger {
 	return slog.With("component", "ebpf.StatFetcher")
 }
 
-func NewStatsFetcher() (*StatsFetcher, error) {
+func NewStatsFetcher(cfg *config.EBPFTracer) (*StatsFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
 		tlog.Warn("can't remove mem lock. The agent could not be able to start eBPF programs",
@@ -45,16 +48,12 @@ func NewStatsFetcher() (*StatsFetcher, error) {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Debug events map is unsupported due to pinning
-	spec.Maps["debug_events"] = &ebpf.MapSpec{
-		Name:       "dummy_map",
-		Type:       ebpf.RingBuf,
-		Pinning:    ebpf.PinNone,
-		MaxEntries: uint32(os.Getpagesize()),
-	}
-
-	if err := spec.LoadAndAssign(&objects, nil); err != nil {
-		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+	sharedMaps := map[string]*ebpf.Map{}
+	var mu sync.Mutex
+	if err := ebpfconvenience.LoadSpec(spec, &objects, map[string]any{
+		"g_bpf_debug": cfg.BpfDebug,
+	}, sharedMaps, &mu, ""); err != nil {
+		return nil, fmt.Errorf("loading stats eBPF spec: %w", err)
 	}
 
 	ktc, err := link.Kprobe("tcp_close", objects.ObiKprobeTcpCloseSrtt, nil)

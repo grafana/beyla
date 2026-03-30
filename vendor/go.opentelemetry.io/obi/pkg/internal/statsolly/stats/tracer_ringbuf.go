@@ -77,14 +77,14 @@ func readTCPRttIntoStat(record *ringbuf.Record) (ebpf.Stat, error) {
 	}
 
 	var srcAddr, dstAddr pipe.IPAddr
-	destinationPort := 0
+	var destinationPort uint16
 	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
 		srcAddr = pipe.IPAddr(event.Conn.S_addr)
 		dstAddr = pipe.IPAddr(event.Conn.D_addr)
-		destinationPort = int(event.Conn.D_port)
+		destinationPort = event.Conn.D_port
 	}
 
-	sourcePort := int(event.Conn.S_port)
+	sourcePort := event.Conn.S_port
 	return ebpf.Stat{
 		Type: ebpf.StatTypeTCPRtt,
 		TCPRtt: &ebpf.TCPRtt{

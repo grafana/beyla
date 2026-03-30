@@ -21,7 +21,7 @@ const minKernMaj, minKernMin = 4, 18
 var kernelVersion = ebpfcommon.KernelVersion
 
 // CheckOSSupport returns an error if the running operating system does not support
-// the minimum required Beyla features.
+// the minimum required OBI features.
 func CheckOSSupport() error {
 	major, minor := kernelVersion()
 	if major < minKernMaj || (major == minKernMaj && minor < minKernMin) {

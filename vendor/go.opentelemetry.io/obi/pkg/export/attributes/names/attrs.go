@@ -221,6 +221,7 @@ const (
 	GenAIInstructions = Name(semconv.GenAISystemInstructionsKey)
 	GenAIOutput       = Name(semconv.GenAIOutputMessagesKey)
 	GenAIMetadata     = Name("gen_ai.metadata")
+	GenAITools        = Name(semconv.GenAIToolDefinitionsKey)
 )
 
 // OBI specific GPU events

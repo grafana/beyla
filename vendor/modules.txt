@@ -711,7 +711,7 @@ go.opentelemetry.io/collector/internal/statusutil
 # go.opentelemetry.io/collector/client v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/client
-# go.opentelemetry.io/collector/component v1.53.0
+# go.opentelemetry.io/collector/component v1.54.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/component
 # go.opentelemetry.io/collector/config/configauth v1.53.0
@@ -818,16 +818,17 @@ go.opentelemetry.io/collector/extension/extensionmiddleware
 # go.opentelemetry.io/collector/extension/xextension v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/extension/xextension/storage
-# go.opentelemetry.io/collector/featuregate v1.53.0
+# go.opentelemetry.io/collector/featuregate v1.54.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/featuregate
 # go.opentelemetry.io/collector/internal/componentalias v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/internal/componentalias
-# go.opentelemetry.io/collector/pdata v1.53.0
+# go.opentelemetry.io/collector/pdata v1.54.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/pdata/internal
 go.opentelemetry.io/collector/pdata/internal/json
+go.opentelemetry.io/collector/pdata/internal/metadata
 go.opentelemetry.io/collector/pdata/internal/otelgrpc
 go.opentelemetry.io/collector/pdata/internal/otlp
 go.opentelemetry.io/collector/pdata/internal/proto

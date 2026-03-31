@@ -26,6 +26,7 @@ func aflog() *slog.Logger {
 type AttributesConfig struct {
 	Application AttributeFamilyConfig `yaml:"application"`
 	Network     AttributeFamilyConfig `yaml:"network"`
+	Stats       AttributeFamilyConfig `yaml:"stats"`
 }
 
 // AttributeFamilyConfig maps, for a given record, each attribute with its MatchDefinition

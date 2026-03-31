@@ -121,7 +121,6 @@ type DiscoveryConfig struct {
 	DefaultOtlpGRPCPort int `yaml:"default_otlp_grpc_port" env:"OTEL_EBPF_DEFAULT_OTLP_GRPC_PORT"`
 
 	// Min process age to be considered for discovery.
-	//nolint:undoc
 	MinProcessAge time.Duration `yaml:"min_process_age" env:"OTEL_EBPF_MIN_PROCESS_AGE"`
 
 	// Disables generation of span metrics of services which are already instrumented
@@ -135,7 +134,6 @@ type DiscoveryConfig struct {
 
 	// Executable paths for which we don't run language detection and cannot be
 	// selected using the path or language selection criteria
-	//nolint:undoc
 	ExcludedLinuxSystemPaths []string `yaml:"excluded_linux_system_paths"`
 }
 

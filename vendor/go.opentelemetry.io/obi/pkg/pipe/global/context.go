@@ -13,7 +13,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
-	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	netebpf "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	statsebpf "go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
@@ -51,7 +52,13 @@ type ContextInfo struct {
 	// to connect your own network exporters outside the OBI code base. If left unset, OBI will
 	// create its own private queue.
 	// This is useful when OBI runs in vendored mode
-	OverrideNetExportQueue *msg.Queue[[]*ebpf.Record]
+	OverrideNetExportQueue *msg.Queue[[]*netebpf.Record]
+
+	// OverrideStatsExportQueue allows overriding the output queue of the stat exporter
+	// to connect your own stat exporters outside the OBI code base. If left unset, OBI will
+	// create its own private queue.
+	// This is useful when OBI runs in vendored mode
+	OverrideStatsExportQueue *msg.Queue[[]*statsebpf.Stat]
 
 	// ExtraResourceAttributes allows extending (or overriding) the reported resource attributes in the traces exporters
 	ExtraResourceAttributes []attribute.KeyValue

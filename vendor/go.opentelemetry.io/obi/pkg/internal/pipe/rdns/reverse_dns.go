@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
+	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/pipe"
 	"go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp"
 	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
@@ -58,13 +59,13 @@ func (r ReverseDNS) Enabled() bool {
 	return rdType == ReverseDNSLocalLookup || rdType == ReverseDNSEBPF
 }
 
-func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs, input, output *msg.Queue[[]T]) swarm.InstanceFunc {
+func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs, ebpfCfg *config.EBPFTracer, input, output *msg.Queue[[]T]) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if !cfg.Enabled() {
 			return swarm.Bypass(input, output)
 		}
 
-		if err := checkEBPFReverseDNS(ctx, cfg); err != nil {
+		if err := checkEBPFReverseDNS(ctx, cfg, ebpfCfg); err != nil {
 			return nil, err
 		}
 		// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
@@ -92,14 +93,14 @@ func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs,
 }
 
 // changes reverse DNS method according to the provided configuration
-func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS) error {
+func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS, ebpfCfg *config.EBPFTracer) error {
 	if cfg.Type == ReverseDNSEBPF {
 		// overriding netLookupAddr by an eBPF-based alternative
 		dnsCache, err := store.NewInMemory(cfg.CacheLen)
 		if err != nil {
 			return fmt.Errorf("initializing eBPF-based reverse DNS cache: %w", err)
 		}
-		if err := xdp.StartDNSPacketInspector(ctx, dnsCache); err != nil {
+		if err := xdp.StartDNSPacketInspector(ctx, dnsCache, ebpfCfg); err != nil {
 			return fmt.Errorf("starting eBPF-based reverse DNS: %w", err)
 		}
 		netLookupAddr = dnsCache.GetHostnames

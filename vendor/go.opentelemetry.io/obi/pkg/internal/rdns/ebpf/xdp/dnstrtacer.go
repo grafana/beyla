@@ -7,14 +7,20 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strings"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 
+	"go.opentelemetry.io/obi/pkg/config"
 	convenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+)
+
+const (
+	// const defined in bpf/common/globals.h as "volatile const"
+	gBpfDebug = "g_bpf_debug"
 )
 
 // tracer represents the main structure for DNS response tracking.
@@ -46,29 +52,19 @@ func (t *tracer) Close() error {
 // newTracer creates and initializes a new DNS response tracer.
 // It loads the BPF program, attaches it to network interfaces, and sets up the ring buffer.
 // Returns an error if any step fails.
-func newTracer() (*tracer, error) {
+func newTracer(ebpfCfg *config.EBPFTracer) (*tracer, error) {
 	objects := BpfObjects{}
 	spec, err := LoadBpf()
 	if err != nil {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	// Debug events map is unsupported due to pinning
-	spec.Maps["debug_events"] = &ebpf.MapSpec{
-		Name:       "dummy_map",
-		Type:       ebpf.RingBuf,
-		Pinning:    ebpf.PinNone,
-		MaxEntries: uint32(os.Getpagesize()),
-	}
-
-	if err := convenience.RewriteConstants(spec, map[string]any{
-		"g_bpf_debug": true,
-	}); err != nil {
-		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
-	}
-
-	if err := spec.LoadAndAssign(&objects, nil); err != nil {
-		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+	sharedMaps := map[string]*ebpf.Map{}
+	var mu sync.Mutex
+	if err := convenience.LoadSpec(spec, &objects, map[string]any{
+		gBpfDebug: ebpfCfg.BpfDebug,
+	}, sharedMaps, &mu, ""); err != nil {
+		return nil, err
 	}
 
 	tracer := tracer{bpfObjects: &objects}

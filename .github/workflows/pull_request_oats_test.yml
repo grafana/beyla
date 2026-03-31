@@ -18,6 +18,7 @@ on:
       - "scripts/generate-dir-matrix.sh"
       - "scripts/generate-obi-tests.sh"
       - ".github/workflows/pull_request_oats_test.yml"
+      - ".obi-src"
       - ".obi-src/**"
 
 concurrency:
@@ -131,6 +132,12 @@ jobs:
           key: go-build-oats-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
           restore-keys: |
             go-build-oats-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Generate and vendor OBI
+        run: make vendor-obi
+
+      - name: Verify Beyla compiles
+        run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
 
       - name: Run oats tests
         env:

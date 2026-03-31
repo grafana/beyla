@@ -13,7 +13,7 @@ import (
 // configuration of metrics.
 type MetricsConfig struct {
 	// Features of metrics that can be exported. Accepted values: application, network,
-	// application_span, application_service_graph, ...
+	// application_span, application_service_graph, stats, ...
 	// envDefault is provided to avoid breaking changes
 	Features export.Features `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}" envSeparator:","`
 }

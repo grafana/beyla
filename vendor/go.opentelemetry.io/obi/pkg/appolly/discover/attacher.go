@@ -268,7 +268,7 @@ func (ta *traceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tr
 	}
 
 	ta.commonTracersLoaded = true
-	tracers = append(tracers, newCommonTracersGroup(ta.Cfg)...)
+	tracers = append(tracers, newCommonTracersGroup(ta.Cfg, ta.Metrics, ta.EbpfEventContext.CommonPIDsFilter)...)
 
 	return tracers
 }

@@ -23,9 +23,8 @@ func NewFlowFetcher(
 	_, _ int,
 	_, _ bool,
 	_ *tcmanager.InterfaceManager,
-	_ config.TCBackend,
 	_ flowdef.PortGuessPolicy,
-	_ config.EBPFMapReader,
+	_ *config.EBPFTracer,
 ) (*FlowFetcher, error) {
 	return nil, nil
 }

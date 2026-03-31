@@ -45,7 +45,7 @@ type RecordParserFunc[T any] func(*ringbuf.Record) (T, bool, error)
 type BatchFilterFunc[T any] func([]T) []T
 
 // ringBufForwarder[T] handles the common loop: read -> parse -> batch -> flush
-// it's generic so it can be used for both request.Span (appolly) and others
+// it's generic so it can be used for both request.Span (appolly) and ebpf.Record (statsolly)
 type ringBufForwarder[T any] struct {
 	cfg        *config.EBPFTracer
 	logger     *slog.Logger

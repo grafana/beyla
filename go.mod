@@ -140,7 +140,7 @@ require (
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/knadh/koanf/providers/confmap v1.0.0 // indirect
-	github.com/knadh/koanf/v2 v2.3.2 // indirect
+	github.com/knadh/koanf/v2 v2.3.3 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -192,8 +192,8 @@ require (
 	go.opentelemetry.io/collector/config/configmiddleware v1.53.0 // indirect
 	go.opentelemetry.io/collector/config/confignet v1.53.0 // indirect
 	go.opentelemetry.io/collector/config/configtelemetry v0.147.0 // indirect
-	go.opentelemetry.io/collector/confmap v1.53.0 // indirect
-	go.opentelemetry.io/collector/confmap/xconfmap v0.147.0 // indirect
+	go.opentelemetry.io/collector/confmap v1.54.0 // indirect
+	go.opentelemetry.io/collector/confmap/xconfmap v0.148.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror/xconsumererror v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.147.0 // indirect
@@ -204,7 +204,7 @@ require (
 	go.opentelemetry.io/collector/extension/extensionauth v1.53.0 // indirect
 	go.opentelemetry.io/collector/extension/extensionmiddleware v0.147.0 // indirect
 	go.opentelemetry.io/collector/extension/xextension v0.147.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.53.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.54.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.147.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.147.0 // indirect
 	go.opentelemetry.io/collector/pdata/xpdata v0.147.0 // indirect

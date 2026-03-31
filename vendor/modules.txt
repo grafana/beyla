@@ -453,7 +453,7 @@ github.com/knadh/koanf/maps
 # github.com/knadh/koanf/providers/confmap v1.0.0
 ## explicit; go 1.23.0
 github.com/knadh/koanf/providers/confmap
-# github.com/knadh/koanf/v2 v2.3.2
+# github.com/knadh/koanf/v2 v2.3.3
 ## explicit; go 1.23.0
 github.com/knadh/koanf/v2
 # github.com/leodido/go-urn v1.4.0
@@ -733,7 +733,7 @@ go.opentelemetry.io/collector/config/configmiddleware
 # go.opentelemetry.io/collector/config/confignet v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/confignet
-# go.opentelemetry.io/collector/config/configopaque v1.53.0
+# go.opentelemetry.io/collector/config/configopaque v1.54.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configopaque
 # go.opentelemetry.io/collector/config/configoptional v1.53.0
@@ -748,13 +748,14 @@ go.opentelemetry.io/collector/config/configtelemetry
 # go.opentelemetry.io/collector/config/configtls v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configtls
-# go.opentelemetry.io/collector/confmap v1.53.0
+# go.opentelemetry.io/collector/confmap v1.54.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/confmap
 go.opentelemetry.io/collector/confmap/internal
 go.opentelemetry.io/collector/confmap/internal/mapstructure
+go.opentelemetry.io/collector/confmap/internal/metadata
 go.opentelemetry.io/collector/confmap/internal/third_party/composehook
-# go.opentelemetry.io/collector/confmap/xconfmap v0.147.0
+# go.opentelemetry.io/collector/confmap/xconfmap v0.148.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/confmap/xconfmap
 # go.opentelemetry.io/collector/consumer v1.53.0
@@ -818,7 +819,7 @@ go.opentelemetry.io/collector/extension/extensionmiddleware
 # go.opentelemetry.io/collector/extension/xextension v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/extension/xextension/storage
-# go.opentelemetry.io/collector/featuregate v1.53.0
+# go.opentelemetry.io/collector/featuregate v1.54.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/featuregate
 # go.opentelemetry.io/collector/internal/componentalias v0.147.0

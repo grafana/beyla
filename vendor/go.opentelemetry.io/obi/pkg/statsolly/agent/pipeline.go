@@ -55,7 +55,7 @@ func (s *Stats) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		statAttrs, ebpfStats, kubeDecoratedStats), swarm.WithID("K8sMetadataDecorator"))
 
 	dnsDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "dnsDecoratedStats")
-	swi.Add(rdns.ReverseDNSProvider(&s.cfg.Stats.ReverseDNS, statAttrs, kubeDecoratedStats, dnsDecoratedStats),
+	swi.Add(rdns.ReverseDNSProvider(&s.cfg.Stats.ReverseDNS, statAttrs, &s.cfg.EBPF, kubeDecoratedStats, dnsDecoratedStats),
 		swarm.WithID("ReverseDNS"))
 
 	geoIPDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "geoIPDecoratedStats")

@@ -320,24 +320,40 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(span *Span) attribute.KeyValue { return DNSQuestionName(span.Path) }
 	case attr.GenAIInput:
 		getter = func(s *Span) attribute.KeyValue {
-			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
-				return semconv.GenAIInputMessagesKey.String(s.OpenAI.Request.GetInput())
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
+				return semconv.GenAIInputMessagesKey.String(s.GenAI.OpenAI.Request.GetInput())
+			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
+				return semconv.GenAIInputMessagesKey.String(string(s.GenAI.Anthropic.Input.Messages))
 			}
 			return semconv.GenAIInputMessagesKey.String("")
 		}
 	case attr.GenAIOutput:
 		getter = func(s *Span) attribute.KeyValue {
-			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
-				return semconv.GenAIOutputMessagesKey.String(s.OpenAI.GetOutput())
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
+				return semconv.GenAIOutputMessagesKey.String(s.GenAI.OpenAI.GetOutput())
+			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
+				return semconv.GenAIOutputMessagesKey.String(string(s.GenAI.Anthropic.Output.Content))
 			}
 			return semconv.GenAIOutputMessagesKey.String("")
 		}
 	case attr.GenAIInstructions:
 		getter = func(s *Span) attribute.KeyValue {
-			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.OpenAI != nil {
-				return semconv.GenAISystemInstructionsKey.String(s.OpenAI.Request.Instructions)
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
+				return semconv.GenAISystemInstructionsKey.String(s.GenAI.OpenAI.Request.Instructions)
+			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
+				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Anthropic.Input.System)
 			}
 			return semconv.GenAISystemInstructionsKey.String("")
+		}
+	case attr.GenAITools:
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
+				return semconv.GenAIToolDefinitionsKey.String(string(s.GenAI.Anthropic.Input.Tools))
+			}
+			return semconv.GenAIToolDefinitionsKey.String("")
 		}
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata

@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,8 +31,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-const PinInternal = ebpf.PinType(100)
-
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 type instrumenter struct {
@@ -45,74 +42,15 @@ type instrumenter struct {
 	processName string
 }
 
-func roundToNearestMultiple(x, n uint32) uint32 {
-	if x < n {
-		return n
-	}
-
-	if x%n == 0 {
-		return x
-	}
-
-	return (x + n/2) / n * n
-}
-
-// RingBuf map types must be a multiple of os.Getpagesize()
-func alignMaxEntriesIfRingBuf(m *ebpf.MapSpec) {
-	if m.Type == ebpf.RingBuf {
-		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, uint32(os.Getpagesize()))
-	}
-}
-
-// sets up internal maps and ensures sane max entries values
-func resolveMaps(eventContext *common.EBPFEventContext, spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
-	collOpts := ebpf.CollectionOptions{MapReplacements: map[string]*ebpf.Map{}}
-
-	eventContext.MapsLock.Lock()
-	defer eventContext.MapsLock.Unlock()
-
-	for k, v := range spec.Maps {
-		alignMaxEntriesIfRingBuf(v)
-
-		if v.Pinning != PinInternal {
-			continue
-		}
-
-		v.Pinning = ebpf.PinNone
-		internalMap := eventContext.EBPFMaps[k]
-
-		var err error
-
-		if internalMap == nil {
-			internalMap, err = ebpf.NewMap(v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load shared map: %w", err)
-			}
-
-			eventContext.EBPFMaps[k] = internalMap
-			runtime.SetFinalizer(internalMap, (*ebpf.Map).Close)
-		}
-
-		collOpts.MapReplacements[k] = internalMap
-	}
-
-	return &collOpts, nil
-}
-
 func loadSpec(eventContext *common.EBPFEventContext, bundle *common.SpecBundle, otelBPFFSPath string, idx int) error {
-	if err := ebpfconvenience.RewriteConstants(bundle.Spec, bundle.Constants); err != nil {
-		return fmt.Errorf("rewriting BPF constants for spec %d: %w", idx, err)
-	}
-
-	collOpts, err := resolveMaps(eventContext, bundle.Spec)
-	if err != nil {
-		return fmt.Errorf("resolving maps for spec %d: %w", idx, err)
-	}
-
-	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
-	collOpts.Maps = ebpf.MapOptions{PinPath: otelBPFFSPath}
-
-	if err := bundle.Spec.LoadAndAssign(bundle.Objects, collOpts); err != nil {
+	if err := ebpfconvenience.LoadSpec(
+		bundle.Spec,
+		bundle.Objects,
+		bundle.Constants,
+		eventContext.EBPFMaps,
+		&eventContext.MapsLock,
+		otelBPFFSPath,
+	); err != nil {
 		return fmt.Errorf("loading spec %d: %w", idx, err)
 	}
 

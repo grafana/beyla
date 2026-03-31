@@ -71,14 +71,22 @@ jobs:
             exit 1
           fi
 
-          # Verify GitHub release exists
-          RELEASE_JSON=$(gh release view "${VERSION_TAG}" --json tagName,isPrerelease,isLatest 2>&1) || {
+          # Verify GitHub release exists (gh release view --json has no isLatest; use API for latest)
+          if ! RELEASE_JSON=$(gh release view "${VERSION_TAG}" \
+            --repo "${{ github.repository }}" \
+            --json tagName,isPrerelease 2>/dev/null); then
             echo "::error::GitHub release for ${VERSION_TAG} not found"
             exit 1
-          }
+          fi
 
           IS_PRERELEASE=$(echo "${RELEASE_JSON}" | jq -r '.isPrerelease')
-          IS_LATEST=$(echo "${RELEASE_JSON}" | jq -r '.isLatest')
+          IS_LATEST=false
+          if LATEST_JSON=$(gh api "repos/${{ github.repository }}/releases/latest" 2>/dev/null); then
+            LATEST_TAG=$(echo "${LATEST_JSON}" | jq -r '.tag_name')
+            if [[ "${LATEST_TAG}" == "${VERSION_TAG}" ]]; then
+              IS_LATEST=true
+            fi
+          fi
 
           # Idempotency: if already promoted, log and continue
           if [[ "${IS_PRERELEASE}" != "true" ]] && [[ "${IS_LATEST}" == "true" ]]; then

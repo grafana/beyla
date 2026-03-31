@@ -10,6 +10,5 @@ const (
 )
 
 type Topology struct {
-	// nolint:undoc
 	Spans []TopologyEnum `yaml:"spans" env:"BEYLA_TOPOLOGY_SPANS"`
 }

@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
@@ -28,8 +29,8 @@ type storage interface {
 }
 
 // StartDNSPacketInspector in a backgound goroutine
-func StartDNSPacketInspector(ctx context.Context, storage storage) error {
-	tracer, err := newTracer()
+func StartDNSPacketInspector(ctx context.Context, storage storage, ebpfCfg *config.EBPFTracer) error {
+	tracer, err := newTracer(ebpfCfg)
 	if err != nil {
 		return fmt.Errorf("instantiating XDP tracer: %w", err)
 	}

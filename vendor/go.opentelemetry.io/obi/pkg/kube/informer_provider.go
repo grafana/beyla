@@ -44,15 +44,16 @@ func klog() *slog.Logger {
 }
 
 type MetadataConfig struct {
-	Enable              kubeflags.EnableFlag
-	DisabledInformers   []string
-	KubeConfigPath      string
-	SyncTimeout         time.Duration
-	ResyncPeriod        time.Duration
-	MetaCacheAddr       string
-	ResourceLabels      ResourceLabels
-	RestrictLocalNode   bool
-	ServiceNameTemplate *template.Template
+	Enable                   kubeflags.EnableFlag
+	DisabledInformers        []string
+	KubeConfigPath           string
+	SyncTimeout              time.Duration
+	ReconnectInitialInterval time.Duration
+	ResyncPeriod             time.Duration
+	MetaCacheAddr            string
+	ResourceLabels           ResourceLabels
+	RestrictLocalNode        bool
+	ServiceNameTemplate      *template.Template
 }
 
 type MetadataProvider struct {
@@ -298,9 +299,10 @@ func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Infor
 // each OBI instance connects to the Kube API informer on each node, which would overload the Kube API
 func (mp *MetadataProvider) initRemoteInformerCacheClient(ctx context.Context) *cacheSvcClient {
 	client := &cacheSvcClient{
-		address:      mp.cfg.MetaCacheAddr,
-		BaseNotifier: meta.NewBaseNotifier(klog()),
-		syncTimeout:  mp.cfg.SyncTimeout,
+		address:                  mp.cfg.MetaCacheAddr,
+		BaseNotifier:             meta.NewBaseNotifier(klog()),
+		syncTimeout:              mp.cfg.SyncTimeout,
+		reconnectInitialInterval: mp.cfg.ReconnectInitialInterval,
 	}
 	client.Start(ctx)
 	return client

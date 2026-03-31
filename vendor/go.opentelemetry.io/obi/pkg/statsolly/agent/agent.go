@@ -14,6 +14,7 @@ import (
 
 	ciliumebpf "github.com/cilium/ebpf"
 
+	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	stats "go.opentelemetry.io/obi/pkg/internal/statsolly/stats"
 	"go.opentelemetry.io/obi/pkg/netip"
@@ -97,7 +98,7 @@ func StatsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Stats, error) {
 	}
 	alog.Debug("agent IP: " + agentIP.String())
 
-	statsFetcher, err = newFetcher()
+	statsFetcher, err = newFetcher(&cfg.EBPF)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +106,8 @@ func StatsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Stats, error) {
 	return statsAgent(ctxInfo, cfg, statsFetcher, agentIP)
 }
 
-func newFetcher() (ebpFetcher, error) {
-	return ebpf.NewStatsFetcher()
+func newFetcher(cfg *config.EBPFTracer) (ebpFetcher, error) {
+	return ebpf.NewStatsFetcher(cfg)
 }
 
 // statsAgent is a private constructor with injectable dependencies, usable for tests

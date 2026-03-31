@@ -11,6 +11,7 @@ on:
       - "internal/**"
       - "scripts/generate-integration-matrix.sh"
       - "scripts/generate-obi-tests.sh"
+      - ".obi-src"
       - ".obi-src/**"
 
 concurrency:

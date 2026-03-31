@@ -78,7 +78,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 
 	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, "tracerEvents")
 
-	configCriteria := FindingCriteria(pf.cfg, startConfig.dynamicPIDSelector != nil)
+	configCriteria := FindingCriteria(pf.cfg)
 
 	swi := swarm.Instancer{}
 	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "processEvents")
@@ -115,6 +115,8 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, "criteriaFilteredEvents")
 	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicPIDSelector),
 		swarm.WithID("CriteriaMatcher"))
+	swi.Add(dynamicMatcherProvider(langEnrichedEvents, criteriaFilteredEvents, startConfig.dynamicPIDSelector),
+		swarm.WithID("DynamicMatcher"))
 
 	executableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "executableTypes")
 	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes),
@@ -155,7 +157,7 @@ func (pf *ProcessFinder) Done() <-chan error {
 // discovery pipeline
 
 // the common tracer group should get loaded for any tracer group, only once
-func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
+func newCommonTracersGroup(cfg *obi.Config, metrics imetrics.Reporter, pidFilter ebpfcommon.ServiceFilter) []ebpf.Tracer {
 	var tracers []ebpf.Tracer
 
 	// Add tracers based on configuration
@@ -173,6 +175,11 @@ func newCommonTracersGroup(cfg *obi.Config) []ebpf.Tracer {
 		}
 	}
 
+	// Enables GPU tracer
+	if cfg.EBPF.CudaInstrumentationEnabled() {
+		tracers = append(tracers, gpuevent.New(pidFilter, cfg, metrics))
+	}
+
 	return tracers
 }
 
@@ -181,15 +188,5 @@ func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metr
 }
 
 func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {
-	var tracers []ebpf.Tracer
-
-	// Add tracers based on configuration
-	tracers = append(tracers, generictracer.New(pidFilter, cfg, metrics))
-
-	// Enables GPU tracer
-	if cfg.EBPF.CudaInstrumentationEnabled() {
-		tracers = append(tracers, gpuevent.New(pidFilter, cfg, metrics))
-	}
-
-	return tracers
+	return []ebpf.Tracer{generictracer.New(pidFilter, cfg, metrics)}
 }

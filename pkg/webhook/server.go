@@ -160,7 +160,7 @@ func (s *Server) establishInitialProcessState() error {
 	}
 	s.initialState = initialState
 
-	if s.cfg.Injector.ManageSDKVersions {
+	if !s.cfg.Injector.UsesImageVolume() && s.cfg.Injector.ManageSDKVersions {
 		oldestSDK := s.scanner.OldestSDKVersion()
 		// we could be downgrading the SDK, check if the oldest version is not
 		// newer than what we are launching with now

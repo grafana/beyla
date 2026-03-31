@@ -32,7 +32,7 @@ func (s *SockFlowFetcher) FlowPacketStatsMap() *ebpf.Map {
 }
 
 func NewSockFlowFetcher(
-	_, _ int, _ flowdef.PortGuessPolicy, _ config.EBPFMapReader,
+	_, _ int, _ flowdef.PortGuessPolicy, _ *config.EBPFTracer,
 ) (*SockFlowFetcher, error) {
 	// avoids linter complaining
 	return nil, nil

@@ -41,7 +41,7 @@ func Decorate(ifaceNamer InterfaceNamer, input *msg.Queue[[]*ebpf.Record], outpu
 		defer output.Close()
 		swarms.ForEachInput(ctx, in, nil, func(flows []*ebpf.Record) {
 			for _, flow := range flows {
-				flow.NetAttrs.Interface = ifaceNamer(int(flow.Id.IfIndex))
+				flow.NetAttrs.Interface = ifaceNamer(int(flow.NetAttrs.IfIndex))
 			}
 			output.Send(flows)
 		})

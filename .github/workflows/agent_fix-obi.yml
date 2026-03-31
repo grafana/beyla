@@ -311,10 +311,10 @@ jobs:
           claude_args: >-
             --max-turns 100
             --allowedTools
-            "Bash(cat:*),Bash(date:*),Bash(echo:*),Bash(gh:*),
+            "Bash(bash:*),Bash(cat:*),Bash(date:*),Bash(echo:*),Bash(gh:*),
             Bash(git:*),Bash(go:*),Bash(grep:*),Bash(head:*),Bash(jq:*),
             Bash(ls:*),Bash(make:*),Bash(python3:*),Bash(pwd:*),
-            Bash(sort:*),Bash(tail:*),Bash(uniq:*),Bash(wc:*),
+            Bash(sh:*),Bash(sort:*),Bash(tail:*),Bash(uniq:*),Bash(wc:*),
             Edit,MultiEdit,Glob,Grep,LS,Read,Write,Task,TodoWrite,
             mcp__github_file_ops__commit_files,
             mcp__github_file_ops__delete_files,

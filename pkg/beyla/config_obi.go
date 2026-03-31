@@ -94,4 +94,9 @@ func OverrideOBIGlobalConfig() {
 		Prom:    "beyla_network_inter_zone_bytes_total",
 		OTEL:    "beyla.network.inter.zone.bytes",
 	}
+	attributes.StatTCPRtt = attributes.Name{
+		Section: "beyla.stat.tcp.rtt",
+		Prom:    "beyla_stat_tcp_rtt_seconds",
+		OTEL:    "beyla.stat.tcp.rtt",
+	}
 }

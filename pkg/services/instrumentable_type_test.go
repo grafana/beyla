@@ -175,7 +175,6 @@ func TestInstrumentableType_MarshalText(t *testing.T) {
 
 func TestInstrumentableType_YAML(t *testing.T) {
 	type Config struct {
-		// nolint:undoc
 		SDKs []InstrumentableType `yaml:"sdks"`
 	}
 

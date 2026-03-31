@@ -74,7 +74,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		dedupedEBPFFlows, kubeDecoratedFlows), swarm.WithID("K8sMetadataDecorator"))
 
 	dnsDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dnsDecoratedFlows")
-	swi.Add(rdns.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, recordAttrs,
+	swi.Add(rdns.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, recordAttrs, &f.cfg.EBPF,
 		kubeDecoratedFlows, dnsDecoratedFlows),
 		swarm.WithID("ReverseDNS"))
 

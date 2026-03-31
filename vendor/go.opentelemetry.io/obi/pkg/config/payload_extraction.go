@@ -22,7 +22,7 @@ func (p PayloadExtraction) Enabled() bool {
 		p.HTTP.Elasticsearch.Enabled ||
 		p.HTTP.AWS.Enabled ||
 		p.HTTP.SQLPP.Enabled ||
-		p.HTTP.OpenAI.Enabled ||
+		p.HTTP.GenAI.Enabled() ||
 		p.HTTP.Enrichment.Enabled
 }
 
@@ -35,8 +35,8 @@ type HTTPConfig struct {
 	AWS AWSConfig `yaml:"aws"`
 	// SQL++ payload extraction and parsing (Couchbase and other SQL++ databases)
 	SQLPP SQLPPConfig `yaml:"sqlpp"`
-	// OpenAI payload extraction
-	OpenAI OpenAIConfig `yaml:"openai"`
+	// GenAI payload extraction
+	GenAI GenAIConfig `yaml:"genai"`
 	// Enrichment configures HTTP header and payload extraction with policy-based rules
 	Enrichment EnrichmentConfig `yaml:"enrichment"`
 }
@@ -64,9 +64,25 @@ type SQLPPConfig struct {
 	EndpointPatterns []string `yaml:"endpoint_patterns" env:"OTEL_EBPF_HTTP_SQLPP_ENDPOINT_PATTERNS"`
 }
 
+type GenAIConfig struct {
+	// OpenAI payload extraction and parsing
+	OpenAI OpenAIConfig `yaml:"openai"`
+	// Anthropic payload extraction and parsing
+	Anthropic AnthropicConfig `yaml:"anthropic"`
+}
+
+func (g *GenAIConfig) Enabled() bool {
+	return g.Anthropic.Enabled || g.OpenAI.Enabled
+}
+
 type OpenAIConfig struct {
 	// Enable OpenAI payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_OPENAI_ENABLED" validate:"boolean"`
+}
+
+type AnthropicConfig struct {
+	// Enable Anthropic payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_ANTHROPIC_ENABLED" validate:"boolean"`
 }
 
 // EnrichmentConfig configures HTTP header and payload extraction with policy-based rules.

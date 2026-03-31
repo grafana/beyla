@@ -28,7 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
@@ -52,6 +52,9 @@ const (
 	aggregatedFlowsMap = "aggregated_flows"
 	connInitiatorsMap  = "conn_initiators"
 	flowDirectionsMap  = "flow_directions"
+
+	// const defined in bpf/common/globals.h as "volatile const"
+	gBpfDebug = "g_bpf_debug"
 )
 
 func tlog() *slog.Logger {
@@ -76,9 +79,8 @@ func NewFlowFetcher(
 	sampling, cacheMaxSize int,
 	ingress, egress bool,
 	ifaceManager *tcmanager.InterfaceManager,
-	tcBackend config.TCBackend,
 	portGuessPolicy flowdef.PortGuessPolicy,
-	forceBPFMapReader config.EBPFMapReader,
+	cfg *config.EBPFTracer,
 ) (*FlowFetcher, error) {
 	startTime := uint64(monotime.Now())
 	tlog := tlog()
@@ -98,14 +100,6 @@ func NewFlowFetcher(
 	spec.Maps[flowDirectionsMap].MaxEntries = uint32(cacheMaxSize)
 	spec.Maps[connInitiatorsMap].MaxEntries = uint32(cacheMaxSize)
 
-	// Debug events map is unsupported due to pinning
-	spec.Maps["debug_events"] = &ebpf.MapSpec{
-		Name:       "dummy_map",
-		Type:       ebpf.RingBuf,
-		Pinning:    ebpf.PinNone,
-		MaxEntries: uint32(os.Getpagesize()),
-	}
-
 	traceMsgs := 0
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1
@@ -115,16 +109,15 @@ func NewFlowFetcher(
 	if portGuessPolicy == flowdef.PortGuessOrdinal {
 		portGuessing = 1
 	}
-	if err := convenience.RewriteConstants(spec, map[string]any{
+	sharedMaps := map[string]*ebpf.Map{}
+	var mu sync.Mutex
+	if err := convenience.LoadSpec(spec, &objects, map[string]any{
 		constSampling:      uint32(sampling),
 		constTraceMessages: uint8(traceMsgs),
 		constPortGuessing:  portGuessing,
-		"g_bpf_debug":      true,
-	}); err != nil {
-		return nil, fmt.Errorf("rewriting BPF constants definition: %w", err)
-	}
-	if err := spec.LoadAndAssign(&objects, nil); err != nil {
-		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+		gBpfDebug:          cfg.BpfDebug,
+	}, sharedMaps, &mu, ""); err != nil {
+		return nil, fmt.Errorf("loading netolly eBPF spec: %w", err)
 	}
 
 	// read events from igress+egress ringbuffer
@@ -133,7 +126,7 @@ func NewFlowFetcher(
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
 
-	tcManager := tcmanager.NewTCManager(tcBackend)
+	tcManager := tcmanager.NewTCManager(cfg.TCBackend)
 	tcManager.SetInterfaceManager(ifaceManager)
 
 	if egress {
@@ -151,7 +144,7 @@ func NewFlowFetcher(
 		tcManager:     tcManager,
 		enableIngress: ingress,
 		enableEgress:  egress,
-		flowMapReader: chooseMapReader(forceBPFMapReader, objects.AggregatedFlows, cacheMaxSize, startTime),
+		flowMapReader: chooseMapReader(cfg.ForceBPFMapReader, objects.AggregatedFlows, cacheMaxSize, startTime),
 	}
 
 	// errors are not critical for this tracer

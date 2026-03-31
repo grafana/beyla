@@ -137,6 +137,7 @@ network:
 		ChannelSendTimeoutPanic: true,
 
 		LogLevel:        "INFO",
+		LogFormat:       obi.LogFormatText,
 		ShutdownTimeout: 30 * time.Second,
 		EnforceSysCaps:  false,
 		TracePrinter:    "json",
@@ -195,6 +196,7 @@ network:
 			},
 		},
 		NetworkFlows: nc,
+		Stats:        obi.DefaultStatsConfig,
 		Metrics: perapp.MetricsConfig{
 			Features: export.FeatureApplicationRED | export.FeatureNetwork,
 		},
@@ -262,11 +264,12 @@ network:
 				HostnameDNSResolution: true,
 			},
 			Kubernetes: transform.KubernetesDecorator{
-				KubeconfigPath:        "/foo/bar",
-				Enable:                kubeflags.EnabledTrue,
-				InformersSyncTimeout:  30 * time.Second,
-				InformersResyncPeriod: 30 * time.Minute,
-				ResourceLabels:        metaSources,
+				KubeconfigPath:           "/foo/bar",
+				Enable:                   kubeflags.EnabledTrue,
+				InformersSyncTimeout:     30 * time.Second,
+				ReconnectInitialInterval: 5 * time.Second,
+				InformersResyncPeriod:    30 * time.Minute,
+				ResourceLabels:           metaSources,
 			},
 			HostID: HostIDConfig{
 				Override: "the-host-id",
@@ -287,7 +290,7 @@ network:
 			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{
-			Unmatch:                   transform.UnmatchHeuristic,
+			Unmatch:                   transform.UnmatchLowCardinality,
 			WildcardChar:              "*",
 			MaxPathSegmentCardinality: 10,
 		},

@@ -205,7 +205,6 @@ func (r *PeriodicReader) collectAndExport(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
-	// TODO (#3047): Use a sync.Pool or persistent pointer instead of allocating rm every Collect.
 	rm := r.rmPool.Get().(*sdkmetricdata.ResourceMetrics)
 	err := r.Collect(ctx, rm)
 	if err == nil {
@@ -229,7 +228,6 @@ func (r *PeriodicReader) Collect(ctx context.Context, rm *sdkmetricdata.Resource
 	if rm == nil {
 		return errors.New("periodic reader: *metricdata.ResourceMetrics is nil")
 	}
-	// TODO (#3047): When collect is updated to accept output as param, pass rm.
 	return r.collect(ctx, r.sdkProducer.Load(), rm)
 }
 

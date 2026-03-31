@@ -40,10 +40,12 @@ type instrumentedTracesExporter struct {
 }
 
 func (ie *instrumentedTracesExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	// Count must be taken before handing off to the next exporter, to prevent panics.
+	n := td.SpanCount()
 	if err := ie.Traces.ConsumeTraces(ctx, td); err != nil {
 		ie.internal.OTELTraceExportError(err)
 		return err
 	}
-	ie.internal.OTELTraceExport(td.SpanCount())
+	ie.internal.OTELTraceExport(n)
 	return nil
 }

@@ -95,23 +95,6 @@ func FindNetworkNamespace(pid app.PID) (string, error) {
 	return string(buf[:n]), nil
 }
 
-func HasHostNetworkAccess() (bool, error) {
-	// Get the network namespace of the current process
-	containerNS, err := FindNetworkNamespace(app.PID(goos.Getpid()))
-	if err != nil {
-		return false, err
-	}
-
-	// Get the network namespace of the host process (PID 1)
-	hostNS, err := FindNetworkNamespace(1)
-	if err != nil {
-		return false, err
-	}
-
-	// Compare the network namespaces
-	return containerNS == hostNS, nil
-}
-
 func RootDirectoryForPID(pid app.PID) string {
 	return filepath.Join("/proc", strconv.Itoa(int(pid)), "root")
 }

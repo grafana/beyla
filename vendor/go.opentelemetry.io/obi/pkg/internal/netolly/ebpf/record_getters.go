@@ -41,11 +41,11 @@ func (r recordGetters) get(name attr.Name) (attributes.Getter[*Record, attribute
 		getter = func(r *Record) attribute.KeyValue { return attribute.String(string(attr.OBIIP), r.CommonAttrs.OBIIP) }
 	case attr.Transport:
 		getter = func(r *Record) attribute.KeyValue {
-			return attribute.String(string(attr.Transport), transport.Protocol(r.Id.TransportProtocol).String())
+			return attribute.String(string(attr.Transport), transport.Protocol(r.NetAttrs.TransportProtocol).String())
 		}
 	case attr.NetworkType:
 		getter = func(r *Record) attribute.KeyValue {
-			return attribute.String(string(attr.NetworkType), transport.NetworkType(r.Id.EthProtocol).String())
+			return attribute.String(string(attr.NetworkType), transport.NetworkType(r.NetAttrs.EthProtocol).String())
 		}
 	case attr.NetworkProtocol:
 		getter = func(r *Record) attribute.KeyValue {
@@ -61,9 +61,13 @@ func (r recordGetters) get(name attr.Name) (attributes.Getter[*Record, attribute
 			return attribute.String(string(attr.DstAddress), r.CommonAttrs.DstAddr.IP().String())
 		}
 	case attr.SrcPort:
-		getter = func(r *Record) attribute.KeyValue { return attribute.Int(string(attr.SrcPort), int(r.Id.SrcPort)) }
+		getter = func(r *Record) attribute.KeyValue {
+			return attribute.Int(string(attr.SrcPort), int(r.CommonAttrs.SrcPort))
+		}
 	case attr.DstPort:
-		getter = func(r *Record) attribute.KeyValue { return attribute.Int(string(attr.DstPort), int(r.Id.DstPort)) }
+		getter = func(r *Record) attribute.KeyValue {
+			return attribute.Int(string(attr.DstPort), int(r.CommonAttrs.DstPort))
+		}
 	case attr.SrcName:
 		getter = func(r *Record) attribute.KeyValue {
 			return attribute.String(string(attr.SrcName), r.CommonAttrs.SrcName)
@@ -100,7 +104,7 @@ func (r recordGetters) get(name attr.Name) (attributes.Getter[*Record, attribute
 				switch clientPort {
 				case 0:
 					direction = DirectionUnknown
-				case r.Id.SrcPort:
+				case r.CommonAttrs.SrcPort:
 					direction = DirectionRequest
 				default:
 					direction = DirectionResponse

@@ -28,7 +28,6 @@ import (
 	"time"
 
 	cebpf "github.com/cilium/ebpf"
-	"github.com/gavv/monotime"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -48,13 +47,13 @@ type MapTracer struct {
 	mapFetcher      mapFetcher
 	evictionTimeout time.Duration
 	// manages the access to the eviction routines, avoiding two evictions happening at the same time
-	evictionCond   *sync.Cond
-	lastEvictionNs uint64
-	imetrics       imetrics.Reporter
+	evictionCond *sync.Cond
+	imetrics     imetrics.Reporter
+	log          *slog.Logger
 }
 
 type mapFetcher interface {
-	LookupAndDeleteMap() map[ebpf.NetFlowId][]ebpf.NetFlowMetrics
+	LookupAndDeleteMap() map[ebpf.NetFlowId]*ebpf.NetFlowMetrics
 	FlowPacketStatsMap() *cebpf.Map
 }
 
@@ -63,8 +62,8 @@ func NewMapTracer(ctxInfo *global.ContextInfo, fetcher mapFetcher, evictionTimeo
 		imetrics:        ctxInfo.Metrics,
 		mapFetcher:      fetcher,
 		evictionTimeout: evictionTimeout,
-		lastEvictionNs:  uint64(monotime.Now()),
 		evictionCond:    sync.NewCond(&sync.Mutex{}),
+		log:             mtlog(),
 	}
 }
 
@@ -76,10 +75,9 @@ func (m *MapTracer) Flush() {
 
 func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	return func(ctx context.Context) {
-		mtlog := mtlog()
 		packetStats, err := NewPacketStats(m.mapFetcher.FlowPacketStatsMap())
 		if err != nil {
-			mtlog.Warn("Can't setup metric: "+attr.VendorPrefix+"_network_dropped_flow_bytes", "err", err)
+			m.log.Warn("Can't setup metric: "+attr.VendorPrefix+"_network_dropped_flow_bytes", "err", err)
 		}
 		defer out.MarkCloseable()
 		evictionTicker := time.NewTicker(m.evictionTimeout)
@@ -88,14 +86,14 @@ func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 			select {
 			case <-ctx.Done():
 				evictionTicker.Stop()
-				mtlog.Debug("exiting trace loop due to context cancellation")
+				m.log.Debug("exiting trace loop due to context cancellation")
 				return
 			case <-evictionTicker.C:
-				mtlog.Debug("triggering flow eviction on timer")
+				m.log.Debug("triggering flow eviction on timer")
 				m.Flush()
 
 				if count, err := packetStats.Count(); err != nil {
-					mtlog.Debug("Can't retrieve internal network packet stats", "err", err)
+					m.log.Debug("Can't retrieve internal network packet stats", "err", err)
 				} else {
 					m.imetrics.BPFPacketStats(count.Total, count.Ignored)
 				}
@@ -110,17 +108,16 @@ func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 func (m *MapTracer) evictionSynchronization(ctx context.Context, out *msg.Queue[[]*ebpf.Record]) {
 	// flow eviction loop. It just keeps waiting for eviction until someone triggers the
 	// evictionCond.Broadcast signal
-	mtlog := mtlog()
 	for {
 		// make sure we only evict once at a time, even if there are multiple eviction signals
 		m.evictionCond.L.Lock()
 		m.evictionCond.Wait()
 		select {
 		case <-ctx.Done():
-			mtlog.Debug("context canceled. Stopping goroutine before evicting flows")
+			m.log.Debug("context canceled. Stopping goroutine before evicting flows")
 			return
 		default:
-			mtlog.Debug("evictionSynchronization signal received")
+			m.log.Debug("evictionSynchronization signal received")
 			m.evictFlows(ctx, out)
 		}
 		m.evictionCond.L.Unlock()
@@ -128,45 +125,16 @@ func (m *MapTracer) evictionSynchronization(ctx context.Context, out *msg.Queue[
 }
 
 func (m *MapTracer) evictFlows(ctx context.Context, forwardFlows *msg.Queue[[]*ebpf.Record]) {
-	var forwardingFlows []*ebpf.Record
-	laterFlowNs := uint64(0)
-	for flowKey, flowMetrics := range m.mapFetcher.LookupAndDeleteMap() {
-		aggregatedMetrics := m.aggregate(flowMetrics)
-		// we ignore metrics that haven't been aggregated (e.g. all the mapped values are ignored)
-		if aggregatedMetrics.EndMonoTimeNs == 0 {
-			continue
-		}
-		// If it iterated an entry that do not have updated flows
-		if aggregatedMetrics.EndMonoTimeNs > laterFlowNs {
-			laterFlowNs = aggregatedMetrics.EndMonoTimeNs
-		}
-		forwardingFlows = append(forwardingFlows, ebpf.NewRecord(flowKey, aggregatedMetrics))
+	flowsMap := m.mapFetcher.LookupAndDeleteMap()
+	forwardingFlows := make([]*ebpf.Record, 0, len(flowsMap))
+	for flowKey, aggregatedMetrics := range flowsMap {
+		forwardingFlows = append(forwardingFlows, ebpf.NewRecord(flowKey, *aggregatedMetrics))
 	}
-	m.lastEvictionNs = laterFlowNs
-	mtlog := mtlog()
 	select {
 	case <-ctx.Done():
-		mtlog.Debug("skipping flow eviction as agent is being stopped")
+		m.log.Debug("skipping flow eviction as agent is being stopped")
 	default:
-		forwardFlows.Send(forwardingFlows)
+		forwardFlows.SendCtx(ctx, forwardingFlows)
 	}
-	mtlog.Debug("flows evicted", "len", len(forwardingFlows))
-}
-
-func (m *MapTracer) aggregate(metrics []ebpf.NetFlowMetrics) ebpf.NetFlowMetrics {
-	if len(metrics) == 0 {
-		mtlog().Warn("invoked aggregate with no values")
-		return ebpf.NetFlowMetrics{}
-	}
-	aggr := ebpf.NetFlowMetrics{}
-	for _, mt := range metrics {
-		// eBPF hashmap values are not zeroed when the entry is removed. That causes that we
-		// might receive entries from previous collect-eviction timeslots.
-		// We need to check the flow time and discard old flows.
-		if mt.StartMonoTimeNs <= m.lastEvictionNs || mt.EndMonoTimeNs <= m.lastEvictionNs {
-			continue
-		}
-		aggr.Accumulate(&mt)
-	}
-	return aggr
+	m.log.Debug("flows evicted", "len", len(forwardingFlows))
 }

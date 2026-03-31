@@ -4,7 +4,6 @@
 package sqlprune // import "go.opentelemetry.io/obi/pkg/internal/sqlprune"
 
 import (
-	"reflect"
 	"strings"
 
 	"github.com/xwb1989/sqlparser"
@@ -92,49 +91,6 @@ func SQLParseOperationAndTable(query string) (string, string) {
 	}
 
 	return operation, strings.Join(tables, ",")
-}
-
-func getTableNames(v reflect.Value, tables []string, level int, isTable bool) []string {
-	switch v.Kind() {
-	case reflect.Struct:
-		if v.Type().Name() == "TableIdent" {
-			// if this is a TableIdent struct, extract the table name
-			tableName := v.FieldByName("v").String()
-			if tableName != "" && isTable {
-				tables = append(tables, tableName)
-			}
-		} else {
-			// otherwise enumerate all fields of the struct and process further
-			for i := 0; i < v.NumField(); i++ {
-				tables = getTableNames(reflect.Indirect(v.Field(i)), tables, level+1, isTable)
-			}
-		}
-	case reflect.Array, reflect.Slice:
-		for i := 0; i < v.Len(); i++ {
-			// enumerate all elements of an array/slice and process further
-			tables = getTableNames(reflect.Indirect(v.Index(i)), tables, level+1, isTable)
-		}
-	case reflect.Interface:
-		if v.Type().Name() == "SimpleTableExpr" {
-			isTable = true
-		}
-		// get the actual object that satisfies an interface and process further
-		tables = getTableNames(reflect.Indirect(reflect.ValueOf(v.Interface())), tables, level+1, isTable)
-	}
-
-	return tables
-}
-
-func SQLParseOperationAndTableNEW(query string) (string, string) {
-	stmt, err := sqlparser.Parse(query)
-	if err != nil {
-		return SQLParseOperationAndTable(query)
-	}
-
-	var tables []string
-	tables = getTableNames(reflect.Indirect(reflect.ValueOf(stmt)), tables, 0, false)
-
-	return "SELECT", tables[0]
 }
 
 func SQLParseError(kind request.SQLKind, buf []uint8) *request.SQLError {

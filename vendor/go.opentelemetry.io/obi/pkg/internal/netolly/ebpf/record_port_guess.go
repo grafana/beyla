@@ -10,20 +10,20 @@ func noGuess(_ *Record) uint16 { return 0 }
 
 func serverPortOrdinalGuess(r *Record) uint16 {
 	// assuming that ephemeral ports for clients would be usually higher
-	return min(r.Id.DstPort, r.Id.SrcPort)
+	return min(r.CommonAttrs.DstPort, r.CommonAttrs.SrcPort)
 }
 
 func clientPortOrdinalGuess(r *Record) uint16 {
 	// assuming that ephemeral ports for clients would be usually higher
-	return max(r.Id.DstPort, r.Id.SrcPort)
+	return max(r.CommonAttrs.DstPort, r.CommonAttrs.SrcPort)
 }
 
 func serverPort(r *Record, guess portGuesser) uint16 {
 	switch r.Metrics.Initiator {
 	case InitiatorDst:
-		return r.Id.SrcPort
+		return r.CommonAttrs.SrcPort
 	case InitiatorSrc:
-		return r.Id.DstPort
+		return r.CommonAttrs.DstPort
 	default:
 		return guess(r)
 	}
@@ -32,9 +32,9 @@ func serverPort(r *Record, guess portGuesser) uint16 {
 func clientPort(r *Record, guess portGuesser) uint16 {
 	switch r.Metrics.Initiator {
 	case InitiatorDst:
-		return r.Id.DstPort
+		return r.CommonAttrs.DstPort
 	case InitiatorSrc:
-		return r.Id.SrcPort
+		return r.CommonAttrs.SrcPort
 	default:
 		return guess(r)
 	}

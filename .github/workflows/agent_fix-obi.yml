@@ -7,7 +7,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  group: "fix-obi-${{ github.event.pull_request.number || github.ref }}"
   cancel-in-progress: true
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
           cache: false
@@ -140,7 +140,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
           cache: false
@@ -270,7 +270,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
           cache: false
@@ -311,10 +311,10 @@ jobs:
           claude_args: >-
             --max-turns 100
             --allowedTools
-            "Bash(cat:*),Bash(date:*),Bash(echo:*),Bash(gh:*),
+            "Bash(bash:*),Bash(cat:*),Bash(date:*),Bash(echo:*),Bash(gh:*),
             Bash(git:*),Bash(go:*),Bash(grep:*),Bash(head:*),Bash(jq:*),
             Bash(ls:*),Bash(make:*),Bash(python3:*),Bash(pwd:*),
-            Bash(sort:*),Bash(tail:*),Bash(uniq:*),Bash(wc:*),
+            Bash(sh:*),Bash(sort:*),Bash(tail:*),Bash(uniq:*),Bash(wc:*),
             Edit,MultiEdit,Glob,Grep,LS,Read,Write,Task,TodoWrite,
             mcp__github_file_ops__commit_files,
             mcp__github_file_ops__delete_files,

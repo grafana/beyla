@@ -144,7 +144,7 @@ In addition to the configuration documented in this article, the component suppo
 otel_traces_export:
   endpoint: http://jaeger:4317
   protocol: grpc
-  instrumentations: ["http, "sql"]
+  instrumentations: ["http", "sql"]
 ```
 
 | YAML<p>environment variable</p>                                                       | Description                                                                                                                                                                                                                                                                                               | Type            | Default                  |

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"strings"
+
 	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -177,6 +179,22 @@ func (s *Server) establishInitialProcessState() error {
 
 func (s *Server) getInitialState(ctx context.Context) error {
 	provider := s.ctxInfo.K8sInformer
+
+	if s.cfg.Injector.UsesImageVolume() {
+		kubeClient, err := provider.KubeClient()
+		if err != nil {
+			return fmt.Errorf("can't get kubernetes client: %w", err)
+		}
+		serverVersion, err := kubeClient.Discovery().ServerVersion()
+		if err != nil {
+			return fmt.Errorf("can't get kubernetes server version: %w", err)
+		}
+		k8sVersion := fmt.Sprintf("v%s.%s.0", serverVersion.Major, strings.TrimRight(serverVersion.Minor, "+"))
+		if semver.Compare(k8sVersion, "v1.31.0") < 0 {
+			return fmt.Errorf("image volume mounts require Kubernetes 1.31 or later, found %s.%s", serverVersion.Major, serverVersion.Minor)
+		}
+	}
+
 	store, err := provider.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)

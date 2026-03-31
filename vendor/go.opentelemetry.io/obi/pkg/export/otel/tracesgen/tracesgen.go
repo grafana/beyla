@@ -443,8 +443,8 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			attrs = append(attrs, request.AWSSQSQueueURL(sqs.QueueURL))
 		}
 
-		if span.SubType == request.HTTPSubtypeOpenAI && span.OpenAI != nil {
-			ai := span.OpenAI
+		if span.SubType == request.HTTPSubtypeOpenAI && span.GenAI != nil && span.GenAI.OpenAI != nil {
+			ai := span.GenAI.OpenAI
 			attrs = append(attrs, semconv.GenAIProviderNameOpenAI)
 			attrs = append(attrs, semconv.GenAIOperationNameKey.String(ai.OperationName))
 			attrs = append(attrs, semconv.GenAIResponseID(ai.ID))
@@ -486,6 +486,42 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			if ai.Error.Type != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Error.Type))
 				attrs = append(attrs, semconv.ErrorMessage(ai.Error.Message))
+			}
+		}
+
+		if span.SubType == request.HTTPSubtypeAnthropic && span.GenAI != nil && span.GenAI.Anthropic != nil {
+			ai := span.GenAI.Anthropic
+			attrs = append(attrs, semconv.GenAIProviderNameAnthropic)
+			attrs = append(attrs, semconv.GenAIOperationNameKey.String(ai.Output.Type))
+			if ai.Output.Error != nil && ai.Output.Error.Type != "" {
+				attrs = append(attrs, semconv.GenAIResponseID(ai.Output.RequestID))
+			} else {
+				attrs = append(attrs, semconv.GenAIResponseID(ai.Output.ID))
+			}
+			attrs = append(attrs, semconv.GenAIRequestModel(ai.Input.Model))
+			attrs = append(attrs, semconv.GenAIResponseModel(ai.Output.Model))
+			attrs = append(attrs, semconv.GenAIUsageInputTokens(ai.Output.Usage.InputTokens))
+			attrs = append(attrs, semconv.GenAIUsageOutputTokens(ai.Output.Usage.OutputTokens))
+			if _, ok := optionalAttrs[attr.GenAIInput]; ok {
+				attrs = append(attrs, semconv.GenAIInputMessagesKey.String(string(ai.Input.Messages)))
+			}
+			if _, ok := optionalAttrs[attr.GenAIOutput]; ok {
+				attrs = append(attrs, semconv.GenAIOutputMessagesKey.String(string(ai.Output.Content)))
+			}
+			if _, ok := optionalAttrs[attr.GenAIInstructions]; ok {
+				if ai.Input.System != "" {
+					attrs = append(attrs, semconv.GenAISystemInstructionsKey.String(ai.Input.System))
+				}
+			}
+			if _, ok := optionalAttrs[attr.GenAIMetadata]; ok {
+				if len(ai.Input.Tools) > 0 {
+					attrs = append(attrs, semconv.GenAIToolDefinitionsKey.String(string(ai.Input.Tools)))
+				}
+			}
+			// add error info
+			if ai.Output.Error != nil && ai.Output.Error.Type != "" {
+				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Type))
+				attrs = append(attrs, semconv.ErrorMessage(ai.Output.Error.Message))
 			}
 		}
 

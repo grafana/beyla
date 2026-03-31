@@ -17,6 +17,9 @@ import (
 type IPAddr [net.IPv6len]uint8
 
 type CommonAttrs struct {
+	SrcPort uint16
+	DstPort uint16
+
 	SrcAddr IPAddr
 	DstAddr IPAddr
 	// SrcName and DstName might be set from several sources along the processing/decoration pipeline:

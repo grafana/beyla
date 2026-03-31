@@ -34,16 +34,35 @@ import (
 // in pkg/internal/netolly/ebpf/record_getters.go and getDefinitions in
 // pkg/export/attributes/attr_defs.go
 type Record struct {
-	NetFlowRecordT
+	// NOTE: id is unexported to prevent accidental use of its some fields,
+	// which are duplicated in CommonAttrs to be aligned with statsolly.
+	// Use FlowID() to access for dedup.
+	id      NetFlowId
+	Metrics NetFlowMetrics
 
 	// Attrs of the flow record: source/destination, OBI IP, etc...
 	CommonAttrs pipe.CommonAttrs
 
+	// Attrs related only to netolly
 	NetAttrs NetAttrs
 }
 
 type NetAttrs struct {
-	Interface string
+	Interface         string
+	IfIndex           uint32
+	TransportProtocol uint8
+	EthProtocol       uint16
+}
+
+// FlowID returns the eBPF flow ID, used as the deduplication map key.
+func (r *Record) FlowID() NetFlowId {
+	return r.id
+}
+
+// SetIfIndexUnset marks the interface index as unset (post-deduplication).
+func (r *Record) SetIfIndexUnset() {
+	r.id.IfIndex = InterfaceUnset
+	r.NetAttrs.IfIndex = InterfaceUnset
 }
 
 func NewRecord(
@@ -51,13 +70,18 @@ func NewRecord(
 	metrics NetFlowMetrics,
 ) *Record {
 	return &Record{
-		NetFlowRecordT: NetFlowRecordT{
-			Id:      key,
-			Metrics: metrics,
-		},
+		id:      key,
+		Metrics: metrics,
 		CommonAttrs: pipe.CommonAttrs{
+			SrcPort: key.SrcPort,
+			DstPort: key.DstPort,
 			SrcAddr: pipe.IPAddr(key.SrcIp.In6U.U6Addr8),
 			DstAddr: pipe.IPAddr(key.DstIp.In6U.U6Addr8),
+		},
+		NetAttrs: NetAttrs{
+			IfIndex:           key.IfIndex,
+			TransportProtocol: key.TransportProtocol,
+			EthProtocol:       key.EthProtocol,
 		},
 	}
 }

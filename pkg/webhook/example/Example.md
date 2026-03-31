@@ -62,6 +62,14 @@ on your localhost, the exported traces and metrics will directly reach it.
 kubectl apply -f beyla.yaml
 ```
 
+If your Kubernetes version is >= 1.31, then use the much better approach with
+direct OCI image volume mounts:
+
+```sh
+kubectl apply -f beyla_image.yaml
+```
+
+
 ### 2. Install the sample apps
 
 ```sh
@@ -93,7 +101,7 @@ After this point you should see some traces appear in your Tempo in LGTM.
 I usually delete the prior deployments and install fresh, like this:
 ```sh
 kubectl delete -f apps.yaml
-kubectl delete -f beyla.yaml
+kubectl delete -f beyla.yaml (or kubectl delete -f beyla_image.yaml)
 ```
 
 Then once you build a new Beyla docker image, you must load this new image to kind again with:

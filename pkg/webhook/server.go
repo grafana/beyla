@@ -190,6 +190,7 @@ func (s *Server) getInitialState(ctx context.Context) error {
 			return fmt.Errorf("can't get kubernetes server version: %w", err)
 		}
 		k8sVersion := fmt.Sprintf("v%s.%s.0", serverVersion.Major, strings.TrimRight(serverVersion.Minor, "+"))
+		s.logger.Info("found Kubernetes version", "version", k8sVersion)
 		if semver.Compare(k8sVersion, "v1.31.0") < 0 {
 			return fmt.Errorf("image volume mounts require Kubernetes 1.31 or later, found %s.%s", serverVersion.Major, serverVersion.Minor)
 		}

@@ -1066,6 +1066,54 @@ func TestOwnersFrom(t *testing.T) {
 	}
 }
 
+func TestPodMutator_BuildVolumeDefinition(t *testing.T) {
+	tests := []struct {
+		name     string
+		injector beyla.SDKInject
+		check    func(t *testing.T, vol corev1.Volume)
+	}{
+		{
+			name: "image volume when ImageVolumePath is set",
+			injector: beyla.SDKInject{
+				ImageVolumePath: "my-registry/sdk-image:v1.0.0",
+			},
+			check: func(t *testing.T, vol corev1.Volume) {
+				assert.Equal(t, injectVolumeName, vol.Name)
+				assert.NotNil(t, vol.VolumeSource.Image)
+				assert.Nil(t, vol.VolumeSource.HostPath)
+				assert.Equal(t, "my-registry/sdk-image:v1.0.0", vol.VolumeSource.Image.Reference)
+				assert.Equal(t, corev1.PullIfNotPresent, vol.VolumeSource.Image.PullPolicy)
+			},
+		},
+		{
+			name: "hostPath volume when ImageVolumePath is empty",
+			injector: beyla.SDKInject{
+				HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+				SDKPkgVersion:     "v0.0.3",
+			},
+			check: func(t *testing.T, vol corev1.Volume) {
+				assert.Equal(t, injectVolumeName, vol.Name)
+				assert.Nil(t, vol.VolumeSource.Image)
+				assert.NotNil(t, vol.VolumeSource.HostPath)
+				assert.Equal(t, "/var/lib/beyla/instrumentation/v0.0.3", vol.VolumeSource.HostPath.Path)
+				assert.NotNil(t, vol.VolumeSource.HostPath.Type)
+				assert.Equal(t, corev1.HostPathDirectoryOrCreate, *vol.VolumeSource.HostPath.Type)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := &PodMutator{
+				cfg:    &beyla.Config{Injector: tt.injector},
+				logger: slog.Default(),
+			}
+			vol := pm.buildVolumeDefinition()
+			tt.check(t, vol)
+		})
+	}
+}
+
 func TestProcessMetadata(t *testing.T) {
 	tests := []struct {
 		name             string

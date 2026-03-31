@@ -338,7 +338,7 @@ func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.Obj
 }
 
 func (pm *PodMutator) buildVolumeDefinition() corev1.Volume {
-	if pm.cfg.Injector.ImageVolumePath != "" {
+	if pm.cfg.Injector.UsesImageVolume() {
 		// Use image volume path directly if the configuration
 		// specifies this mode. Supported on k8s 1.31+
 		return corev1.Volume{

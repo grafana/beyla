@@ -1,6 +1,7 @@
 package beyla
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log/slog"
@@ -250,6 +251,8 @@ type SDKInject struct {
 	// Option to disable automatic bouncing of pods, it will be
 	// a responsibility of the end-user to bounce the pods to be instrumented
 	NoAutoRestart bool `yaml:"disable_auto_restart"`
+	// OCI image mount instead of host volume, supported on k8s 1.31+
+	ImageVolumePath string `yaml:"image_volume_path"`
 	// The host path volume directory which gets mounted into pods
 	HostPathVolumeDir string `yaml:"host_path_volume"`
 	// The mutator will set the version on pods if this value is set
@@ -278,6 +281,43 @@ type SDKInject struct {
 	EnabledSDKs []servicesextra.InstrumentableType `yaml:"enabled_sdks"`
 	// Enables injection debugging
 	Debug bool `yaml:"debug"`
+}
+
+func (s *SDKInject) Validate() error {
+	if s.ImageVolumePath != "" {
+		if s.HostMountPath != "" {
+			return ConfigError("image_volume_path and host_mount_path are mutually exclusive, use image_volume_path on k8s 1.31+ and host_mount_path on older versions")
+		}
+
+		if s.SDKPkgVersion != "" {
+			return ConfigError("image_volume_path and sdk_package_version are mutually exclusive, use image_volume_path on k8s 1.31+ and sdk_package_version with host mount paths on older versions")
+		}
+	} else {
+		if s.SDKPkgVersion == "" {
+			return ConfigError("sdk_package_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
+		} else if !semver.IsValid(s.SDKPkgVersion) {
+			return ConfigError("sdk_package_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
+		}
+
+		if s.ManageSDKVersions && s.HostMountPath == "" {
+			return ConfigError("host_mount_path must be supplied for the Injector component otherwise we cannot clean-up stale SDK versions")
+		}
+	}
+
+	return nil
+}
+
+func (s *SDKInject) PackageVersion() string {
+	if s.ImageVolumePath != "" {
+		h := sha256.Sum224([]byte(s.ImageVolumePath))
+		return fmt.Sprintf("%x", h) // 56 chars, fits in 63-char label limit
+	}
+
+	return s.SDKPkgVersion
+}
+
+func (s *SDKInject) UsesImageVolume() bool {
+	return s.ImageVolumePath != ""
 }
 
 // SDKExport defines which telemetry signals should be exported from injected SDKs.
@@ -455,14 +495,8 @@ func (c *Config) Validate() error {
 			return ConfigError(fmt.Sprintf("unsupported OTEL traces export protocol %s", proto))
 		}
 
-		if c.Injector.SDKPkgVersion == "" {
-			return ConfigError("sdk_package_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
-		} else if !semver.IsValid(c.Injector.SDKPkgVersion) {
-			return ConfigError("sdk_package_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
-		}
-
-		if c.Injector.HostMountPath == "" {
-			return ConfigError("host_mount_path must be supplied for the Injector component otherwise we cannot clean-up stale SDK versions")
+		if err := c.Injector.Validate(); err != nil {
+			return err
 		}
 	}
 

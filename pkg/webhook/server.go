@@ -65,12 +65,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	}, nil
 }
 
-// Start starts the webhook server
-func (s *Server) Start(ctx context.Context) error {
-	if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
-		return fmt.Errorf("webhook TLS not ready: %w", err)
-	}
-
+func (s *Server) makeHTTPServer() *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mutate", s.mutator.HandleMutate)
 	mux.HandleFunc("/health", s.mutator.HealthCheck)
@@ -89,6 +84,17 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	server.TLSConfig = tlsConfig
+
+	return server
+}
+
+// Start starts the webhook server
+func (s *Server) Start(ctx context.Context) error {
+	if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
+		return fmt.Errorf("webhook TLS not ready: %w", err)
+	}
+
+	server := s.makeHTTPServer()
 
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
 
@@ -115,6 +121,10 @@ func (s *Server) Start(ctx context.Context) error {
 		close(errChan)
 	}()
 
+	return s.waitForCancellation(ctx, server, errChan)
+}
+
+func (s *Server) waitForCancellation(ctx context.Context, server *http.Server, errChan chan error) error {
 	// Wait for context cancellation or server error
 	select {
 	case <-ctx.Done():

@@ -8,7 +8,7 @@
 #
 # Notes:
 #   - Versions must be SemVer tags: vMAJOR.MINOR.PATCH
-#   - Release branch naming is: release-vMAJOR.MINOR.PATCH
+#   - Release branch naming is: release-MAJOR.MINOR.PATCH (no "v" prefix)
 #   - Run from any directory (the script uses temporary clones)
 
 set -euo pipefail
@@ -159,6 +159,11 @@ set_output() {
 validate_semver_tag() {
     local tag="$1"
     [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Invalid SemVer tag: $tag (expected vMAJOR.MINOR.PATCH)"
+}
+
+version_without_v() {
+    local tag="$1"
+    echo "${tag#v}"
 }
 
 parse_semver() {
@@ -465,6 +470,29 @@ checkout_or_create_release_branch() {
     fi
 }
 
+uncomment_bpfel_in_gitignore() {
+    local repo_dir="$1"
+    local gitignore="${repo_dir}/.gitignore"
+
+    if [[ ! -f "$gitignore" ]]; then
+        log_warn "No .gitignore found in ${repo_dir}; skipping bpfel uncomment."
+        return
+    fi
+
+    if ! grep -q '^\*_bpfel\.' "$gitignore"; then
+        log_info "No active bpfel gitignore rules found in ${repo_dir}; skipping."
+        return
+    fi
+
+    log_info "Commenting out bpfel exclusions in ${gitignore} for release branch"
+    sed -i.bak \
+        -e 's/^\(\*_bpfel\.go\)$/#\1/' \
+        -e 's/^\(\*_bpfel\.o\)$/#\1/' \
+        -e 's/^\(\*_bpfel\.go\.d\)$/#\1/' \
+        "$gitignore"
+    rm -f "${gitignore}.bak"
+}
+
 prepare_obi_branch() {
     local version="$1"
     local release_branch="$2"
@@ -482,6 +510,8 @@ prepare_obi_branch() {
         run_cmd git -C "$OBI_DIR" checkout "$obi_sha"
         run_cmd git -C "$OBI_DIR" checkout -B "$release_branch"
     fi
+
+    uncomment_bpfel_in_gitignore "$OBI_DIR"
 
     run_write_cmd make -C "$OBI_DIR" docker-generate
     run_write_cmd make -C "$OBI_DIR" java-build
@@ -515,6 +545,8 @@ prepare_beyla_branch() {
     else
         log_info "No Beyla submodule pointer change to commit."
     fi
+
+    uncomment_bpfel_in_gitignore "$BEYLA_DIR"
 
     run_write_cmd make -C "$BEYLA_DIR" vendor-obi
     run_write_cmd make -C "$BEYLA_DIR" java-build
@@ -629,8 +661,8 @@ prepare_command() {
     log_info "OBI SHA pinned in ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}: ${obi_sha}"
 
     resolve_prepare_versions
-    local beyla_release_branch="release-${BEYLA_VERSION}"
-    local obi_release_branch="release-${OBI_VERSION}"
+    local beyla_release_branch="release-$(version_without_v "$BEYLA_VERSION")"
+    local obi_release_branch="release-$(version_without_v "$OBI_VERSION")"
 
     prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha"
     prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch" "$obi_sha"
@@ -655,8 +687,8 @@ tag_command() {
     ensure_gh_auth
 
     resolve_tag_versions
-    local beyla_release_branch="release-${BEYLA_VERSION}"
-    local obi_release_branch="release-${OBI_VERSION}"
+    local beyla_release_branch="release-$(version_without_v "$BEYLA_VERSION")"
+    local obi_release_branch="release-$(version_without_v "$OBI_VERSION")"
 
     setup_workspace
 

@@ -1079,10 +1079,10 @@ func TestPodMutator_BuildVolumeDefinition(t *testing.T) {
 			},
 			check: func(t *testing.T, vol corev1.Volume) {
 				assert.Equal(t, injectVolumeName, vol.Name)
-				assert.NotNil(t, vol.VolumeSource.Image)
-				assert.Nil(t, vol.VolumeSource.HostPath)
-				assert.Equal(t, "my-registry/sdk-image:v1.0.0", vol.VolumeSource.Image.Reference)
-				assert.Equal(t, corev1.PullIfNotPresent, vol.VolumeSource.Image.PullPolicy)
+				assert.NotNil(t, vol.Image)
+				assert.Nil(t, vol.HostPath)
+				assert.Equal(t, "my-registry/sdk-image:v1.0.0", vol.Image.Reference)
+				assert.Equal(t, corev1.PullIfNotPresent, vol.Image.PullPolicy)
 			},
 		},
 		{
@@ -1093,11 +1093,11 @@ func TestPodMutator_BuildVolumeDefinition(t *testing.T) {
 			},
 			check: func(t *testing.T, vol corev1.Volume) {
 				assert.Equal(t, injectVolumeName, vol.Name)
-				assert.Nil(t, vol.VolumeSource.Image)
-				assert.NotNil(t, vol.VolumeSource.HostPath)
-				assert.Equal(t, "/var/lib/beyla/instrumentation/v0.0.3", vol.VolumeSource.HostPath.Path)
-				assert.NotNil(t, vol.VolumeSource.HostPath.Type)
-				assert.Equal(t, corev1.HostPathDirectoryOrCreate, *vol.VolumeSource.HostPath.Type)
+				assert.Nil(t, vol.Image)
+				assert.NotNil(t, vol.HostPath)
+				assert.Equal(t, "/var/lib/beyla/instrumentation/v0.0.3", vol.HostPath.Path)
+				assert.NotNil(t, vol.HostPath.Type)
+				assert.Equal(t, corev1.HostPathDirectoryOrCreate, *vol.HostPath.Type)
 			},
 		},
 	}

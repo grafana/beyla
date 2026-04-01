@@ -9,9 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
-
 	"strings"
+	"time"
 
 	"golang.org/x/mod/semver"
 

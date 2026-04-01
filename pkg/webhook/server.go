@@ -92,7 +92,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
 
-	s.checkImageVolumeSupport(s.ctxInfo.K8sInformer)
+	if err := s.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
+		return err
+	}
 
 	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
 		s.logger.Info("starting initial state scanning")

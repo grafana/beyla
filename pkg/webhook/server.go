@@ -92,6 +92,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
 
+	s.checkImageVolumeSupport(s.ctxInfo.K8sInformer)
+
 	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
 		s.logger.Info("starting initial state scanning")
 		go func() {
@@ -176,9 +178,7 @@ func (s *Server) establishInitialProcessState() error {
 	return nil
 }
 
-func (s *Server) getInitialState(ctx context.Context) error {
-	provider := s.ctxInfo.K8sInformer
-
+func (s *Server) checkImageVolumeSupport(provider *kube.MetadataProvider) error {
 	if s.cfg.Injector.UsesImageVolume() {
 		kubeClient, err := provider.KubeClient()
 		if err != nil {
@@ -195,6 +195,11 @@ func (s *Server) getInitialState(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func (s *Server) getInitialState(ctx context.Context) error {
+	provider := s.ctxInfo.K8sInformer
 	store, err := provider.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)

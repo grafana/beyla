@@ -134,7 +134,7 @@ prereqs: install-hooks bpf2go
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses/v2,v2.0.1)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
-	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,latest)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,v0.0.0-20260305142021-f9589b9f2b9d) # pin for Go 1.25.8 compatibility
 	$(call go-install-tool,$(GOTESTSUM),gotest.tools/gotestsum,v1.13.0)
 
 .PHONY: fmt

@@ -1,4 +1,4 @@
-FROM gradle:9.4.0-jdk21-noble@sha256:33ad0e6350d1004ac7def68c4510f62e4d181dbf7e376089ef57175c0400496e AS builder
+FROM gradle:9.4.1-jdk21-noble@sha256:7ca3db170906c970153cd3a576ddb42ec3cedc4e6f1dbb2228547e286fa5c3b4 AS builder
 
 RUN apt update
 RUN apt install -y clang llvm

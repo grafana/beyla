@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.15.0](https://img.shields.io/badge/Version-1.15.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 3.6.0](https://img.shields.io/badge/AppVersion-3.6.0-informational?style=flat-square)
+![Version: 1.16.0](https://img.shields.io/badge/Version-1.16.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 3.6.0](https://img.shields.io/badge/AppVersion-3.6.0-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -46,7 +46,8 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | image.registry | string | `"docker.io"` | Beyla image registry (defaults to docker.io) |
 | image.repository | string | `"grafana/beyla"` | Beyla image repository. |
 | image.tag | string | `nil` | Beyla image tag. When empty, the Chart's appVersion is used. |
-| k8sCache | object | `{"annotations":{},"env":{},"envValueFrom":{},"image":{"digest":null,"pullPolicy":"IfNotPresent","pullSecrets":[],"registry":"docker.io","repository":"grafana/beyla-k8s-cache","tag":null},"internalMetrics":{"path":"/metrics","port":0,"portName":"metrics"},"podAnnotations":{},"podLabels":{},"profilePort":0,"replicas":0,"resources":{},"service":{"annotations":{},"labels":{},"name":"beyla-k8s-cache","port":50055}}` | Options to deploy the Kubernetes metadata cache as a separate service |
+| k8sCache | object | `{"affinity":{},"annotations":{},"env":{},"envValueFrom":{},"image":{"digest":null,"pullPolicy":"IfNotPresent","pullSecrets":[],"registry":"docker.io","repository":"grafana/beyla-k8s-cache","tag":null},"internalMetrics":{"path":"/metrics","port":0,"portName":"metrics"},"nodeSelector":{},"podAnnotations":{},"podLabels":{},"profilePort":0,"replicas":0,"resources":{},"service":{"annotations":{},"labels":{},"name":"beyla-k8s-cache","port":50055},"tolerations":[]}` | Options to deploy the Kubernetes metadata cache as a separate service |
+| k8sCache.affinity | object | `{}` | used for scheduling of cache pods based on affinity rules |
 | k8sCache.annotations | object | `{}` | Deployment annotations. |
 | k8sCache.env | object | `{}` | extra environment variables |
 | k8sCache.envValueFrom | object | `{}` | extra environment variables to be set from resources such as k8s configMaps/secrets |
@@ -56,6 +57,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | k8sCache.image.registry | string | `"docker.io"` | K8s Cache image registry (defaults to docker.io) |
 | k8sCache.image.repository | string | `"grafana/beyla-k8s-cache"` | K8s Cache image repository. |
 | k8sCache.image.tag | string | `nil` | K8s Cache image tag. When empty, the Chart's appVersion is used. |
+| k8sCache.nodeSelector | object | `{}` | The nodeSelector field allows user to constrain which nodes cache pods are scheduled to based on labels on the node |
 | k8sCache.podAnnotations | object | `{}` | Adds custom annotations to the Beyla Kube Cache Pods. |
 | k8sCache.podLabels | object | `{}` | Adds custom labels to the Beyla Kube Cache Pods. |
 | k8sCache.profilePort | int | `0` | Enables the profile port for the Beyla cache |
@@ -64,6 +66,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | k8sCache.service.labels | object | `{}` | Service labels. |
 | k8sCache.service.name | string | `"beyla-k8s-cache"` | Name of both the Service and Deployment |
 | k8sCache.service.port | int | `50055` | Port of the Kubernetes metadata cache service. |
+| k8sCache.tolerations | list | `[]` | Tolerations allow cache pods to be scheduled on nodes with specific taints |
 | minReadySeconds | int | `0` | Minimum number of seconds for which a newly created DaemonSet pod should be ready without any of its containers crashing, for it to be considered available. ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#min-ready-seconds |
 | nameOverride | string | `""` | Overrides the chart's name |
 | namespaceOverride | string | `""` | Override the deployment namespace |

@@ -260,17 +260,35 @@ check_ci_green() {
 
     log_info "Checking CI for ${label} (${sha:0:12})"
 
-    local checks_json
-    # The API returns check-runs from every workflow suite (including re-runs),
-    # so the same check name can appear multiple times.  GitHub's UI only shows
-    # the latest run per name; we replicate that by deduplicating on .name and
-    # keeping the entry with the highest .id (most recent).
-    checks_json=$(
+    # Build a set of check-suite IDs from push-triggered workflow runs.
+    # The commit may also have check-runs from schedule or workflow_dispatch
+    # triggered suites (e.g. cron jobs, release workflows) which are not part
+    # of the commit's push CI and should be excluded — matching GitHub UI behavior.
+    local push_suite_ids
+    push_suite_ids=$(
+        gh api --paginate -H "Accept: application/vnd.github+json" \
+            "repos/${repo_slug}/actions/runs?head_sha=${sha}&event=push&per_page=100" \
+            | jq -s '[ map(.workflow_runs // []) | add // [] | .[].check_suite_id ]'
+    )
+
+    # Fetch all check-runs once, then filter and deduplicate.
+    local all_checks_json
+    all_checks_json=$(
         gh api --paginate -H "Accept: application/vnd.github+json" \
             "repos/${repo_slug}/commits/${sha}/check-runs?per_page=100" \
-            | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}' \
-            | jq '{check_runs: [.check_runs | group_by(.name) | .[] | sort_by(.id) | last]}'
+            | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
     )
+
+    # Keep only check-runs from push-triggered suites or from non-Actions apps
+    # (e.g. socket-security, codecov).  Then deduplicate by name keeping the
+    # most recent entry (highest .id), matching GitHub's UI behavior.
+    local checks_json
+    checks_json=$(jq --argjson push_suites "$push_suite_ids" \
+        '{check_runs: [.check_runs[] | select(
+            .app.slug != "github-actions" or
+            (.check_suite.id as $id | $push_suites | index($id))
+        )]}' <<< "$all_checks_json" \
+        | jq '{check_runs: [.check_runs | group_by(.name) | .[] | sort_by(.id) | last]}')
 
     if [[ -n "$exclude_check_name" ]]; then
         log_info "Excluding self check-run: ${exclude_check_name}"

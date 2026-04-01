@@ -261,10 +261,15 @@ check_ci_green() {
     log_info "Checking CI for ${label} (${sha:0:12})"
 
     local checks_json
+    # The API returns check-runs from every workflow suite (including re-runs),
+    # so the same check name can appear multiple times.  GitHub's UI only shows
+    # the latest run per name; we replicate that by deduplicating on .name and
+    # keeping the entry with the highest .id (most recent).
     checks_json=$(
         gh api --paginate -H "Accept: application/vnd.github+json" \
             "repos/${repo_slug}/commits/${sha}/check-runs?per_page=100" \
-            | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
+            | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}' \
+            | jq '{check_runs: [.check_runs | group_by(.name) | .[] | sort_by(.id) | last]}'
     )
 
     if [[ -n "$exclude_check_name" ]]; then

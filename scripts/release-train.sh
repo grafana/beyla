@@ -26,6 +26,7 @@ BUMP_MODE="auto"
 DRY_RUN=false
 SKIP_CI_CHECK=false
 SKIP_UPSTREAM_SYNC_CHECK=false
+EXCLUDE_CHECK_NAME=""
 WORKDIR=""
 
 RELEASE_TRAIN_TOKEN="${RELEASE_TRAIN_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -73,6 +74,7 @@ Common options:
   --obi-repo <owner/repo>
   --dry-run               Validate and print actions, without pushing/tags/releases
   --skip-ci-check         Skip CI-green checks (main for prepare, release branch for tag)
+  --exclude-check <name>  Exclude a check-run by name (e.g. the calling job itself)
   --workdir <path>        Reuse a workspace directory (default: temporary directory)
   --help, -h              Show this help message
 
@@ -247,6 +249,7 @@ check_ci_green() {
     local repo_slug="$1"
     local ref="$2"
     local label="$3"
+    local exclude_check_name="${4:-}"
 
     require_cmd jq
 
@@ -263,6 +266,12 @@ check_ci_green() {
             "repos/${repo_slug}/commits/${sha}/check-runs?per_page=100" \
             | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
     )
+
+    if [[ -n "$exclude_check_name" ]]; then
+        log_info "Excluding self check-run: ${exclude_check_name}"
+        checks_json=$(jq --arg name "$exclude_check_name" \
+            '{check_runs: [.check_runs[] | select(.name != $name)]}' <<< "$checks_json")
+    fi
 
     local total_checks
     total_checks=$(jq -r '.check_runs | length' <<< "$checks_json")
@@ -583,7 +592,7 @@ prepare_command() {
     if [[ "$SKIP_CI_CHECK" == "true" ]]; then
         log_warn "Skipping CI check for ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}"
     else
-        check_ci_green "$BEYLA_REPO" "$BEYLA_MAIN_BRANCH" "${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}"
+        check_ci_green "$BEYLA_REPO" "$BEYLA_MAIN_BRANCH" "${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}" "$EXCLUDE_CHECK_NAME"
     fi
 
     if [[ "$SKIP_UPSTREAM_SYNC_CHECK" == "true" ]]; then
@@ -644,8 +653,8 @@ tag_command() {
     if [[ "$SKIP_CI_CHECK" == "true" ]]; then
         log_warn "Skipping CI checks for release branches."
     else
-        check_ci_green "$OBI_REPO" "$obi_checked_sha" "${OBI_REPO}:${obi_release_branch}@${obi_checked_sha:0:12}"
-        check_ci_green "$BEYLA_REPO" "$beyla_checked_sha" "${BEYLA_REPO}:${beyla_release_branch}@${beyla_checked_sha:0:12}"
+        check_ci_green "$OBI_REPO" "$obi_checked_sha" "${OBI_REPO}:${obi_release_branch}@${obi_checked_sha:0:12}" "$EXCLUDE_CHECK_NAME"
+        check_ci_green "$BEYLA_REPO" "$beyla_checked_sha" "${BEYLA_REPO}:${beyla_release_branch}@${beyla_checked_sha:0:12}" "$EXCLUDE_CHECK_NAME"
     fi
 
     local obi_target_sha
@@ -760,6 +769,15 @@ parse_args() {
             --skip-ci-check)
                 SKIP_CI_CHECK=true
                 shift
+                ;;
+            --exclude-check=*)
+                EXCLUDE_CHECK_NAME="${1#*=}"
+                shift
+                ;;
+            --exclude-check)
+                require_option_value "$1" "${2:-}"
+                EXCLUDE_CHECK_NAME="${2:-}"
+                shift 2
                 ;;
             --skip-upstream-sync-check)
                 SKIP_UPSTREAM_SYNC_CHECK=true

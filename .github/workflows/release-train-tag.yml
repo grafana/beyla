@@ -67,7 +67,8 @@ jobs:
             --beyla-version "${BEYLA_VERSION_INPUT}"
             --obi-version "${OBI_VERSION_INPUT}"
             --beyla-repo "${{ github.repository }}"
-            --obi-repo "grafana/opentelemetry-ebpf-instrumentation")
+            --obi-repo "grafana/opentelemetry-ebpf-instrumentation"
+            --exclude-check "${{ github.job }}")
 
           if [[ "${DRY_RUN_INPUT}" == "true" ]]; then
             cmd+=(--dry-run)

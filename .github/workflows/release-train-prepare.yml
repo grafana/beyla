@@ -97,7 +97,8 @@ jobs:
           cmd=(./scripts/release-train.sh prepare
             --beyla-repo "${{ github.repository }}"
             --obi-repo "grafana/opentelemetry-ebpf-instrumentation"
-            --bump "${BUMP_INPUT}")
+            --bump "${BUMP_INPUT}"
+            --exclude-check "${{ github.job }}")
 
           if [[ -n "${BEYLA_VERSION_INPUT}" ]]; then
             cmd+=(--beyla-version "${BEYLA_VERSION_INPUT}")

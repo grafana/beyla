@@ -47,6 +47,7 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 		Type:           request.EventType(trace.Type),
 		Method:         method,
 		Path:           path,
+		FullPath:       path,
 		Route:          pattern,
 		Peer:           peer,
 		PeerPort:       int(trace.Conn.S_port),

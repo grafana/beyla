@@ -287,11 +287,12 @@ func readRetMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.F
 	return status, grpc, ok
 }
 
-func http2InfoToSpan(info *BPFHTTP2Info, method, path, peer, host string, status int, protocol Protocol) request.Span {
+func http2InfoToSpan(info *BPFHTTP2Info, method, path, fullPath, peer, host string, status int, protocol Protocol) request.Span {
 	return request.Span{
 		Type:          info.eventType(protocol),
 		Method:        method,
 		Path:          removeQuery(path),
+		FullPath:      fullPath,
 		Peer:          peer,
 		PeerPort:      int(info.ConnInfo.S_port),
 		Host:          host,
@@ -401,6 +402,7 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			rok := false
 			method, path, contentType, ok := readMetaFrame(parseContext, connID, framer, ff)
+			fullPath := path
 			if pos := strings.Index(path, "?"); pos >= 0 {
 				path = path[:pos]
 			}
@@ -441,7 +443,7 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 				peer = source
 			}
 
-			return http2InfoToSpan(event, method, path, peer, host, status, eventType), false, nil
+			return http2InfoToSpan(event, method, path, fullPath, peer, host, status, eventType), false, nil
 		}
 	}
 

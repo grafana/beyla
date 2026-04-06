@@ -44,6 +44,12 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 	requestBuffer, responseBuffer := getBuffers(parseCtx, event)
 
 	if cfg.ProtocolDebug {
+		slog.Debug("ReadTCPRequestIntoSpan: received TCP event",
+			"pid", event.Pid.UserPid,
+			"ns", event.Pid.Ns,
+			"protocol", event.ProtocolType,
+			"reqLen", event.Len,
+			"respLen", event.RespLen)
 		fmt.Printf("[>] %v\n", requestBuffer.UnsafeView())
 		fmt.Printf("[<] %v\n", responseBuffer.UnsafeView())
 	}
@@ -135,6 +141,16 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 		}
 	}
 
+	// Request-only events are emitted on socket close.
+	// They might contain requests like memcached with noreply that we haven't seen the response for.
+	if responseBuffer.Len() == 0 {
+		requestReader := requestBuffer.NewReader()
+		if ops, ok := parseMemcachedExplicitNoreply(&requestReader); ok {
+			emitMemcachedNoreplySpans(parseCtx, event, ops)
+			return request.Span{}, true, nil
+		}
+	}
+
 	switch {
 	case isRedis(requestBuffer) && isRedis(responseBuffer):
 		op, text, ok := parseRedisRequest(requestBuffer.UnsafeView())
@@ -161,6 +177,21 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 			}
 			return TCPToRedisToSpan(event, op, text, status, db, redisErr), false, nil
 		}
+	case isMemcached(requestBuffer, responseBuffer):
+		span, err := ProcessPossibleMemcachedEvent(parseCtx, event, requestBuffer, responseBuffer)
+		if errors.Is(err, errIgnore) {
+			return request.Span{}, true, nil
+		}
+		if err != nil {
+			return request.Span{}, true, fmt.Errorf("failed to handle Memcached event: %w", err)
+		}
+		return span, false, nil
+	// must come before MQTT: the MQTT heuristic can match the HTTP/2 connection preface,
+	// silently dropping packets that should be re-routed as HTTP/2
+	case isHTTP2(requestBuffer, int(event.Len)) || isHTTP2(responseBuffer, int(event.RespLen)):
+		evCopy := *event
+		MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
+		return request.Span{}, true, nil // ignore for now, next event will be parsed
 	case isMQTT(requestBuffer) || isMQTT(responseBuffer):
 		m, ignore, err := ProcessPossibleMQTTEvent(event, requestBuffer, responseBuffer)
 		if ignore && err == nil {
@@ -172,21 +203,13 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 		// MQTT heuristic matched but full parsing failed - ignore the packet
 		slog.Debug("MQTT heuristic detection failed, ignoring", "error", err)
 	default:
-		// Kafka and gRPC can look very similar in terms of bytes. We can mistake one for another.
-		// We try gRPC first because it's more reliable in detecting false gRPC sequences.
-		if isHTTP2(requestBuffer, int(event.Len)) || isHTTP2(responseBuffer, int(event.RespLen)) {
-			evCopy := *event
-			MisclassifiedEvents <- MisclassifiedEvent{EventType: EventTypeKHTTP2, TCPInfo: &evCopy}
-			return request.Span{}, true, nil // ignore for now, next event will be parsed
-		} else {
-			// we should not arrive here, leave it for completeness
-			k, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, parseCtx.kafkaTopicUUIDToName)
-			if ignore && err == nil {
-				return request.Span{}, true, nil // parsed kafka event, but we don't want to create a span for it
-			}
-			if err == nil {
-				return TCPToKafkaToSpan(event, k), false, nil
-			}
+		// Kafka can arrive here for packets the kernel couldn't classify (e.g. OBI attached mid-connection).
+		k, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, parseCtx.kafkaTopicUUIDToName)
+		if ignore && err == nil {
+			return request.Span{}, true, nil // parsed kafka event, but we don't want to create a span for it
+		}
+		if err == nil {
+			return TCPToKafkaToSpan(event, k), false, nil
 		}
 	}
 

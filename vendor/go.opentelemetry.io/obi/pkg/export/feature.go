@@ -186,7 +186,20 @@ func (f Features) BPF() bool {
 	return f.any(FeatureEBPF)
 }
 
-// InvalidSpanMetricsConfig is used to make sure that you can't define both legacy and OTEL span metrics at the same time
+// InvalidSpanMetricsConfig is used to make sure that you can't define both legacy and OTEL span metrics at the same time.
+// It returns false when FeatureAll is set (e.g. via "*" or "all"), because the user didn't explicitly
+// pick both conflicting formats. In that case, the caller should resolve the conflict automatically.
 func (f Features) InvalidSpanMetricsConfig() bool {
-	return f.has(FeatureSpanLegacy | FeatureSpanOTel)
+	return f.has(FeatureSpanLegacy|FeatureSpanOTel) && !f.has(FeatureAll)
+}
+
+// ResolveSpanMetricsConflict checks if both span metric formats are enabled (e.g. via "*" or "all")
+// and resolves the conflict by disabling the legacy format in favor of OTel.
+// Returns true if a resolution was applied.
+func (f *Features) ResolveSpanMetricsConflict() bool {
+	if f.has(FeatureSpanLegacy | FeatureSpanOTel) {
+		*f = Features(maps.Bits(*f) &^ maps.Bits(FeatureSpanLegacy))
+		return true
+	}
+	return false
 }

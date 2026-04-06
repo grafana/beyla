@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/buildinfo"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -140,6 +141,12 @@ type PrometheusConfig struct {
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 
+	// ExemplarFilter controls when exemplars are attached to metrics.
+	// Accepted values: "always_on", "always_off", "trace_based".
+	// Defaults to "always_off": do not attach exemplars.
+	// This mimics the OTEL_METRICS_EXEMPLAR_FILTER specification.
+	ExemplarFilter string `yaml:"exemplar_filter" env:"OTEL_EBPF_PROMETHEUS_EXEMPLAR_FILTER"`
+
 	// Registry is only used for embedding OBI within third-party collectors.
 	// It must be nil when OBI runs as standalone
 	Registry *prometheus.Registry `yaml:"-"`
@@ -205,6 +212,9 @@ type metricsReporter struct {
 	attrCudaMemoryCopies       []attributes.Field[*request.Span, string]
 	attrSvcGraph               []attributes.Field[*request.Span, string]
 	attrDNSLookupDuration      []attributes.Field[*request.Span, string]
+	attrGenAIClientDuration    []attributes.Field[*request.Span, string]
+	attrGenAIInputTokenUsage   []attributes.Field[*request.Span, string]
+	attrGenAIOutputTokenUsage  []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency           *Expirer[prometheus.Histogram]
@@ -231,12 +241,18 @@ type metricsReporter struct {
 	// dns related metrics
 	dnsLookupDuration *Expirer[prometheus.Histogram]
 
+	// genAI related metrics
+	genAIClientDuration *Expirer[prometheus.Histogram]
+	genAITokenUsage     *Expirer[prometheus.Histogram]
+
 	promConnect *connector.PrometheusManager
 
 	clock   *expire.CachedClock
 	ctxInfo *global.ContextInfo
 
 	is instrumentations.InstrumentationSelection
+
+	shouldAddExemplar func(*request.Span) bool
 
 	kubeEnabled   bool
 	dockerEnabled bool
@@ -382,6 +398,19 @@ func newReporter(
 			attrsProvider.For(attributes.DNSLookupDuration))
 	}
 
+	var attrGenAIClientDuration []attributes.Field[*request.Span, string]
+	var attrGenAIInputTokenUsage []attributes.Field[*request.Span, string]
+	var attrGenAIOutputTokenUsage []attributes.Field[*request.Span, string]
+
+	if is.GenAIEnabled() {
+		attrGenAIClientDuration = attributes.PrometheusGetters(attributeGetters,
+			attrsProvider.For(attributes.GenAIClientOperationDuration))
+		attrGenAIInputTokenUsage = attributes.PrometheusGetters(attributeGetters,
+			attrsProvider.For(attributes.GenAIClientInputTokenUsage))
+		attrGenAIOutputTokenUsage = attributes.PrometheusGetters(attributeGetters,
+			attrsProvider.For(attributes.GenAIClientOutputTokenUsage))
+	}
+
 	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
 	dockerEnabled := ctxInfo.DockerMetadata.IsEnabled(ctx)
 
@@ -394,6 +423,7 @@ func newReporter(
 	}
 
 	clock := expire.NewCachedClock(timeNow)
+
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
@@ -413,6 +443,7 @@ func newReporter(
 		clock:                      clock,
 		is:                         is,
 		promConnect:                ctxInfo.Prometheus,
+		shouldAddExemplar:          exemplarFilter(cfg.ExemplarFilter),
 		attrHTTPDuration:           attrHTTPDuration,
 		attrHTTPClientDuration:     attrHTTPClientDuration,
 		attrGRPCDuration:           attrGRPCDuration,
@@ -431,6 +462,9 @@ func newReporter(
 		attrCudaKernelBlockSize:    attrCudaKernelBlockSize,
 		attrCudaMemoryCopies:       attrCudaMemoryCopies,
 		attrDNSLookupDuration:      attrDNSLookupDuration,
+		attrGenAIClientDuration:    attrGenAIClientDuration,
+		attrGenAIInputTokenUsage:   attrGenAIInputTokenUsage,
+		attrGenAIOutputTokenUsage:  attrGenAIOutputTokenUsage,
 		attrSvcGraph:               attrSvcGraph,
 		obiInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + buildInfoSuffix,
@@ -689,6 +723,27 @@ func newReporter(
 				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 			}, labelNames(attrDNSLookupDuration)).MetricVec, clock.Time, cfg.TTL)
 		}),
+		genAIClientDuration: optionalHistogramProvider(is.GenAIEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.GenAIClientOperationDuration.Prom,
+				Help:                            "measures the time taken to perform a GenAI client request",
+				Buckets:                         cfg.Buckets.GenAIClientDurationHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrGenAIClientDuration)).MetricVec, clock.Time, cfg.TTL)
+		}),
+		// We make only one metric series, the input and output have the same name and attribute keys
+		genAITokenUsage: optionalHistogramProvider(is.GenAIEnabled(), func() *Expirer[prometheus.Histogram] {
+			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:                            attributes.GenAIClientInputTokenUsage.Prom,
+				Help:                            "number of input and output tokens used for a GenAI client request",
+				Buckets:                         cfg.Buckets.GenAITokenUsageHistogram,
+				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+			}, labelNames(attrGenAIInputTokenUsage)).MetricVec, clock.Time, cfg.TTL)
+		}),
 	}
 
 	// testing aid
@@ -735,6 +790,11 @@ func newReporter(
 
 		if is.DNSEnabled() {
 			registeredMetrics = append(registeredMetrics, mr.dnsLookupDuration)
+		}
+
+		if is.GenAIEnabled() {
+			registeredMetrics = append(registeredMetrics, mr.genAIClientDuration)
+			registeredMetrics = append(registeredMetrics, mr.genAITokenUsage)
 		}
 	}
 
@@ -860,6 +920,58 @@ func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
 	return span.InternalSignal() || request.IgnoreMetrics(span)
 }
 
+func exemplarFilter(filter string) func(*request.Span) bool {
+	switch filter {
+	default:
+		mlog().Warn("invalid Prometheus' exemplar_filter value. Defaulting to always_off", "filter", filter)
+		fallthrough
+	case "always_off":
+		return func(*request.Span) bool {
+			return false
+		}
+	case "trace_based":
+		return func(span *request.Span) bool {
+			return span.TraceFlags&ebpfcommon.TPFlagSampled != 0 && span.TraceID.IsValid()
+		}
+	case "always_on":
+		return func(span *request.Span) bool {
+			return span.TraceID.IsValid()
+		}
+	}
+}
+
+// traceExemplar returns prometheus labels with trace and span IDs for exemplar reporting.
+func traceExemplar(span *request.Span) prometheus.Labels {
+	return prometheus.Labels{
+		"traceID": span.TraceID.String(),
+		"spanID":  span.SpanID.String(),
+	}
+}
+
+// observeHistogram observes a value into a histogram, attaching an exemplar when applicable.
+func (r *metricsReporter) observeHistogram(h prometheus.Histogram, value float64, span *request.Span) {
+	if r.shouldAddExemplar(span) {
+		if observer, ok := h.(prometheus.ExemplarObserver); ok {
+			observer.ObserveWithExemplar(value, traceExemplar(span))
+			return
+		}
+	}
+
+	h.Observe(value)
+}
+
+// addCounter adds a value to a counter, attaching an exemplar when applicable.
+func (r *metricsReporter) addCounter(c prometheus.Counter, value float64, span *request.Span) {
+	if r.shouldAddExemplar(span) {
+		if adder, ok := c.(prometheus.ExemplarAdder); ok {
+			adder.AddWithExemplar(value, traceExemplar(span))
+			return
+		}
+	}
+
+	c.Add(value)
+}
+
 //nolint:cyclop
 func (r *metricsReporter) observe(span *request.Span) {
 	if r.otelSpanFiltered(span) {
@@ -879,112 +991,77 @@ func (r *metricsReporter) observe(span *request.Span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if r.is.HTTPEnabled() {
-				r.httpDuration.WithLabelValues(
-					labelValues(span, r.attrHTTPDuration)...,
-				).Metric.Observe(duration)
-				r.httpRequestSize.WithLabelValues(
-					labelValues(span, r.attrHTTPRequestSize)...,
-				).Metric.Observe(float64(span.RequestBodyLength()))
-				r.httpResponseSize.WithLabelValues(
-					labelValues(span, r.attrHTTPResponseSize)...,
-				).Metric.Observe(float64(span.ResponseBodyLength()))
+				r.observeHistogram(r.httpDuration.WithLabelValues(labelValues(span, r.attrHTTPDuration)...).Metric, duration, span)
+				r.observeHistogram(r.httpRequestSize.WithLabelValues(labelValues(span, r.attrHTTPRequestSize)...).Metric, float64(span.RequestBodyLength()), span)
+				r.observeHistogram(r.httpResponseSize.WithLabelValues(labelValues(span, r.attrHTTPResponseSize)...).Metric, float64(span.ResponseBodyLength()), span)
 			}
 		case request.EventTypeHTTPClient:
 			// HTTP client subtypes that are database calls get recorded as db client metrics
-			if r.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch) {
-				r.dbClientDuration.WithLabelValues(
-					labelValues(span, r.attrDBClientDuration)...,
-				).Metric.Observe(duration)
-			} else if r.is.HTTPEnabled() {
-				r.httpClientDuration.WithLabelValues(
-					labelValues(span, r.attrHTTPClientDuration)...,
-				).Metric.Observe(duration)
-				r.httpClientRequestSize.WithLabelValues(
-					labelValues(span, r.attrHTTPClientRequestSize)...,
-				).Metric.Observe(float64(span.RequestBodyLength()))
-				r.httpClientResponseSize.WithLabelValues(
-					labelValues(span, r.attrHTTPClientResponseSize)...,
-				).Metric.Observe(float64(span.ResponseBodyLength()))
+			switch {
+			case r.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch):
+				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
+			case r.is.GenAIEnabled() && (span.SubType == request.HTTPSubtypeAnthropic || span.SubType == request.HTTPSubtypeOpenAI):
+				r.observeHistogram(r.genAIClientDuration.WithLabelValues(labelValues(span, r.attrGenAIClientDuration)...).Metric, duration, span)
+				r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIInputTokenUsage)...).Metric, float64(span.GenAIInputTokens()), span)
+				r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIOutputTokenUsage)...).Metric, float64(span.GenAIOutputTokens()), span)
+			default:
+				if r.is.HTTPEnabled() {
+					r.observeHistogram(r.httpClientDuration.WithLabelValues(labelValues(span, r.attrHTTPClientDuration)...).Metric, duration, span)
+					r.observeHistogram(r.httpClientRequestSize.WithLabelValues(labelValues(span, r.attrHTTPClientRequestSize)...).Metric, float64(span.RequestBodyLength()), span)
+					r.observeHistogram(r.httpClientResponseSize.WithLabelValues(labelValues(span, r.attrHTTPClientResponseSize)...).Metric, float64(span.ResponseBodyLength()), span)
+				}
 			}
 		case request.EventTypeGRPC:
 			if r.is.GRPCEnabled() {
-				r.grpcDuration.WithLabelValues(
-					labelValues(span, r.attrGRPCDuration)...,
-				).Metric.Observe(duration)
+				r.observeHistogram(r.grpcDuration.WithLabelValues(labelValues(span, r.attrGRPCDuration)...).Metric, duration, span)
 			}
 		case request.EventTypeGRPCClient:
 			if r.is.GRPCEnabled() {
-				r.grpcClientDuration.WithLabelValues(
-					labelValues(span, r.attrGRPCClientDuration)...,
-				).Metric.Observe(duration)
+				r.observeHistogram(r.grpcClientDuration.WithLabelValues(labelValues(span, r.attrGRPCClientDuration)...).Metric, duration, span)
 			}
-		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient, request.EventTypeCouchbaseClient:
+		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
 			if r.is.DBEnabled() {
-				r.dbClientDuration.WithLabelValues(
-					labelValues(span, r.attrDBClientDuration)...,
-				).Metric.Observe(duration)
+				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
 			}
 		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 			if r.is.KafkaEnabled() {
 				switch span.Method {
 				case request.MessagingPublish:
-					r.msgPublishDuration.WithLabelValues(
-						labelValues(span, r.attrMsgPublishDuration)...,
-					).Metric.Observe(duration)
+					r.observeHistogram(r.msgPublishDuration.WithLabelValues(labelValues(span, r.attrMsgPublishDuration)...).Metric, duration, span)
 				case request.MessagingProcess:
-					r.msgProcessDuration.WithLabelValues(
-						labelValues(span, r.attrMsgProcessDuration)...,
-					).Metric.Observe(duration)
+					r.observeHistogram(r.msgProcessDuration.WithLabelValues(labelValues(span, r.attrMsgProcessDuration)...).Metric, duration, span)
 				}
 			}
 		case request.EventTypeMQTTClient, request.EventTypeMQTTServer:
 			if r.is.MQTTEnabled() {
 				switch span.Method {
 				case request.MessagingPublish:
-					r.msgPublishDuration.WithLabelValues(
-						labelValues(span, r.attrMsgPublishDuration)...,
-					).Metric.Observe(duration)
+					r.observeHistogram(r.msgPublishDuration.WithLabelValues(labelValues(span, r.attrMsgPublishDuration)...).Metric, duration, span)
 				case request.MessagingProcess:
-					r.msgProcessDuration.WithLabelValues(
-						labelValues(span, r.attrMsgProcessDuration)...,
-					).Metric.Observe(duration)
+					r.observeHistogram(r.msgProcessDuration.WithLabelValues(labelValues(span, r.attrMsgProcessDuration)...).Metric, duration, span)
 				}
 			}
 		case request.EventTypeGPUCudaKernelLaunch:
 			if r.is.GPUEnabled() {
-				r.cudaKernelCallsTotal.WithLabelValues(
-					labelValues(span, r.attrCudaKernelCalls)...,
-				).Metric.Add(1)
-				r.cudaKernelGridSize.WithLabelValues(
-					labelValues(span, r.attrCudaKernelGridSize)...,
-				).Metric.Observe(float64(span.ContentLength))
-				r.cudaKernelBlockSize.WithLabelValues(
-					labelValues(span, r.attrCudaKernelBlockSize)...,
-				).Metric.Observe(float64(span.SubType))
+				r.addCounter(r.cudaKernelCallsTotal.WithLabelValues(labelValues(span, r.attrCudaKernelCalls)...).Metric, 1, span)
+				r.observeHistogram(r.cudaKernelGridSize.WithLabelValues(labelValues(span, r.attrCudaKernelGridSize)...).Metric, float64(span.ContentLength), span)
+				r.observeHistogram(r.cudaKernelBlockSize.WithLabelValues(labelValues(span, r.attrCudaKernelBlockSize)...).Metric, float64(span.SubType), span)
 			}
 		case request.EventTypeGPUCudaGraphLaunch:
 			if r.is.GPUEnabled() {
-				r.cudaGraphCallsTotal.WithLabelValues(
-					labelValues(span, r.attrCudaKernelCalls)...,
-				).Metric.Add(1)
+				r.addCounter(r.cudaGraphCallsTotal.WithLabelValues(labelValues(span, r.attrCudaKernelCalls)...).Metric, 1, span)
 			}
 		case request.EventTypeGPUCudaMalloc:
 			if r.is.GPUEnabled() {
-				r.cudaMemoryAllocsTotal.WithLabelValues(
-					labelValues(span, r.attrCudaMemoryAllocs)...,
-				).Metric.Add(float64(span.ContentLength))
+				r.addCounter(r.cudaMemoryAllocsTotal.WithLabelValues(labelValues(span, r.attrCudaMemoryAllocs)...).Metric, float64(span.ContentLength), span)
 			}
 		case request.EventTypeGPUCudaMemcpy:
 			if r.is.GPUEnabled() {
-				r.cudaMemoryCopySize.WithLabelValues(
-					labelValues(span, r.attrCudaMemoryCopies)...,
-				).Metric.Observe(float64(span.ContentLength))
+				r.observeHistogram(r.cudaMemoryCopySize.WithLabelValues(labelValues(span, r.attrCudaMemoryCopies)...).Metric, float64(span.ContentLength), span)
 			}
 		case request.EventTypeDNS:
 			if r.is.DNSEnabled() {
-				r.dnsLookupDuration.WithLabelValues(
-					labelValues(span, r.attrDNSLookupDuration)...,
-				).Metric.Observe(duration)
+				r.observeHistogram(r.dnsLookupDuration.WithLabelValues(labelValues(span, r.attrDNSLookupDuration)...).Metric, duration, span)
 			}
 		}
 	}
@@ -992,14 +1069,14 @@ func (r *metricsReporter) observe(span *request.Span) {
 	if r.otelSpanMetricsObserved(span) {
 		if span.Service.Features.SpanMetrics() {
 			lv := r.labelValuesSpans(span)
-			r.spanMetricsLatency.WithLabelValues(lv...).Metric.Observe(duration)
-			r.spanMetricsCallsTotal.WithLabelValues(lv...).Metric.Add(1)
+			r.observeHistogram(r.spanMetricsLatency.WithLabelValues(lv...).Metric, duration, span)
+			r.addCounter(r.spanMetricsCallsTotal.WithLabelValues(lv...).Metric, 1, span)
 		}
 
 		if span.Service.Features.SpanSizes() {
 			lv := r.labelValuesSpans(span)
-			r.spanMetricsRequestSizeTotal.WithLabelValues(lv...).Metric.Add(float64(span.RequestBodyLength()))
-			r.spanMetricsResponseSizeTotal.WithLabelValues(lv...).Metric.Add(float64(span.ResponseBodyLength()))
+			r.addCounter(r.spanMetricsRequestSizeTotal.WithLabelValues(lv...).Metric, float64(span.RequestBodyLength()), span)
+			r.addCounter(r.spanMetricsResponseSizeTotal.WithLabelValues(lv...).Metric, float64(span.ResponseBodyLength()), span)
 		}
 
 		if span.Service.Features.ServiceGraph() {
@@ -1007,19 +1084,19 @@ func (r *metricsReporter) observe(span *request.Span) {
 				lvg := labelValuesSvcGraph(span, r.attrSvcGraph, &r.pidsTracker)
 
 				if span.IsClientSpan() {
-					r.serviceGraphClient.WithLabelValues(lvg...).Metric.Observe(duration)
+					r.observeHistogram(r.serviceGraphClient.WithLabelValues(lvg...).Metric, duration, span)
 					// If we managed to resolve the remote name only, we check to see
 					// we are not instrumenting the server service, then and only then,
 					// we generate client span count for service graph total
 					if otel.ClientSpanToUninstrumentedService(&r.pidsTracker, span) {
-						r.serviceGraphTotal.WithLabelValues(lvg...).Metric.Add(1)
+						r.addCounter(r.serviceGraphTotal.WithLabelValues(lvg...).Metric, 1, span)
 					}
 				} else {
-					r.serviceGraphServer.WithLabelValues(lvg...).Metric.Observe(duration)
-					r.serviceGraphTotal.WithLabelValues(lvg...).Metric.Add(1)
+					r.observeHistogram(r.serviceGraphServer.WithLabelValues(lvg...).Metric, duration, span)
+					r.addCounter(r.serviceGraphTotal.WithLabelValues(lvg...).Metric, 1, span)
 				}
 				if request.SpanStatusCode(span) == request.StatusCodeError {
-					r.serviceGraphFailed.WithLabelValues(lvg...).Metric.Add(1)
+					r.addCounter(r.serviceGraphFailed.WithLabelValues(lvg...).Metric, 1, span)
 				}
 			}
 		}

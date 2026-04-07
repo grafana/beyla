@@ -342,7 +342,6 @@ func GenerateConnectSpans(
 	resourceAttrs = append(resourceAttrs, otelcfg.ResourceAttrsFromEnv(&span.Service)...)
 	// Override OBI library name by Beyla
 	resourceAttrsMap := tracesgen.AttrsToMap(resourceAttrs)
-	resourceAttrsMap.PutStr(string(semconv.OTelLibraryNameKey), ReporterName)
 	resourceAttrsMap.PutStr(string(semconv.OTelScopeNameKey), ReporterName)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
 

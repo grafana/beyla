@@ -27,7 +27,7 @@ func LanguageDecoratorProvider(
 	input, output *msg.Queue[[]Event[ProcessAttrs]],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		instrumentableCache, _ := lru.New[uint64, svc.InstrumentableType](1000)
+		instrumentableCache, _ := lru.New[cacheKey, svc.InstrumentableType](1000)
 		ld := languageDecorator{
 			in:           input.Subscribe(msg.SubscriberName("LanguageDecorator")),
 			out:          output,
@@ -42,7 +42,7 @@ func LanguageDecoratorProvider(
 type languageDecorator struct {
 	in           <-chan []Event[ProcessAttrs]
 	out          *msg.Queue[[]Event[ProcessAttrs]]
-	typeCache    *lru.Cache[uint64, svc.InstrumentableType]
+	typeCache    *lru.Cache[cacheKey, svc.InstrumentableType]
 	log          *slog.Logger
 	ignoredPaths []string
 }
@@ -67,15 +67,16 @@ func (ld *languageDecorator) decorateEvent(ev *Event[ProcessAttrs]) {
 		if ld.isIgnoredPath(exePath) {
 			return
 		}
-		if ino, err := _findInodeForPID(ev.Obj.pid); err == nil {
-			if t, ok := ld.typeCache.Get(ino); ok {
+		if dev, ino, err := _findInodeForPID(ev.Obj.pid); err == nil {
+			key := cacheKey{Dev: dev, Ino: ino}
+			if t, ok := ld.typeCache.Get(key); ok {
 				ev.Obj.detectedType = t
 				return
 			}
 			t := _findProcLanguage(ev.Obj.pid)
 			ev.Obj.detectedType = t
 			ld.log.Debug("detected type", "pid", ev.Obj.pid, "type", t)
-			ld.typeCache.Add(ino, t)
+			ld.typeCache.Add(key, t)
 		}
 	}
 }

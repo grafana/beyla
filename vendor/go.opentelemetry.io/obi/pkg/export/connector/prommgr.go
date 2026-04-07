@@ -82,7 +82,10 @@ func (pm *PrometheusManager) StartHTTP(ctx context.Context) {
 		mux := http.NewServeMux()
 		for path, registry := range paths {
 			log.With("port", port, "path", path).Info("opening prometheus scrape endpoint")
-			promHandler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry})
+			promHandler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{
+				Registry:          registry,
+				EnableOpenMetrics: true,
+			})
 			promHandler = wrapDebugHandler(log, promHandler)
 			promHandler = wrapInstrumentedHandler(pm.metrics, port, path, promHandler)
 			mux.Handle(path, promHandler)

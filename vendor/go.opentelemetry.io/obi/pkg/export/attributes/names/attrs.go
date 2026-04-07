@@ -180,6 +180,12 @@ const (
 	ServiceName      = Name(semconv.ServiceNameKey)
 	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
 
+	// TODO: replace by semconv.ServicePeerNameKey and semconv.ServicePeerNamespaceKey
+	// when we update to OTEL semconv library 1.40 or with {server|client}.service.{name|namespace}
+	// if this is issue is approved https://github.com/open-telemetry/semantic-conventions/issues/3472
+	ServicePeerName      = Name("service.peer.name")
+	ServicePeerNamespace = Name("service.peer.namespace")
+
 	HostID      = Name(semconv.HostIDKey)
 	HostImageID = Name(semconv.HostImageIDKey)
 	HostName    = Name(semconv.HostNameKey)
@@ -233,4 +239,19 @@ const (
 // DNS events
 const (
 	DNSQuestionName = Name(semconv.DNSQuestionNameKey)
+)
+
+// GenAI events
+
+const (
+	GenAIOperationName = Name(semconv.GenAIOperationNameKey)
+	GenAIProviderName  = Name(semconv.GenAIProviderNameKey)
+	// With GenAI events, it's the first time we have a single event produce two separate metrics: input->tokens, output->tokens.
+	// All of our current metrics have one set of attributes and a value for that. These two attributes are internal and they
+	// map to semconv.GenAITokenTypeKey when they are generated in metrics. The span_getter.go code will generate
+	// semconv.GenAITokenTypeKey with "input" string and semconv.GenAITokenTypeKey with "output" string.
+	GenAITokenTypeInput  = Name(semconv.GenAITokenTypeKey)
+	GenAITokenTypeOutput = Name("gen_ai.token.type_output")
+	GenAIRequestModel    = Name(semconv.GenAIRequestModelKey)
+	GenAIResponseModel   = Name(semconv.GenAIResponseModelKey)
 )

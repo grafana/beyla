@@ -14,6 +14,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/netns"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
@@ -53,7 +54,7 @@ func (i *NodeInjector) NewExecutable(ie *ebpf.Instrumentable) {
 }
 
 func (i *NodeInjector) attachAgent(pid int, elfFile *elf.File) error {
-	return withNetNS(pid, func() error {
+	return netns.WithNetNS(pid, func() error {
 		return i.injectFile(pid, elfFile)
 	})
 }

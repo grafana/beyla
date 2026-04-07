@@ -34,17 +34,15 @@ func dynamicMatcherProvider(
 		return swarm.DirectInstance(emptyFunc)
 	}
 
-	return swarm.DirectInstance(func(ctx context.Context) {
-		dynamicMatcher := &DynamicMatcher{
-			Log:                slog.With("component", "discover.DynamicMatcher"),
-			DynamicPIDSelector: dynamicPIDs.AsSelector(),
-			Input:              input.Subscribe(msg.SubscriberName("discover.DynamicMatcher")),
-			Output:             output,
-			ProcessHistory:     map[app.PID]ProcessMatch{},
-			RemovedPIDsNotify:  dynamicPIDs.RemovedNotify(),
-		}
-		dynamicMatcher.Run(ctx)
-	})
+	dynamicMatcher := &DynamicMatcher{
+		Log:                slog.With("component", "discover.DynamicMatcher"),
+		DynamicPIDSelector: dynamicPIDs.AsSelector(),
+		Input:              input.Subscribe(msg.SubscriberName("discover.DynamicMatcher")),
+		Output:             output,
+		ProcessHistory:     map[app.PID]ProcessMatch{},
+		RemovedPIDsNotify:  dynamicPIDs.RemovedNotify(),
+	}
+	return swarm.DirectInstance(dynamicMatcher.Run)
 }
 
 func (m *DynamicMatcher) Run(ctx context.Context) {

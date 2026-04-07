@@ -20,6 +20,7 @@ type FileInfo struct {
 	ELF            *elf.File
 	Pid            app.PID
 	Ppid           app.PID
+	Dev            uint64
 	Ino            uint64
 	Ns             uint32
 }

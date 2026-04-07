@@ -80,9 +80,9 @@ var (
 		OTEL:    "db.client.operation.duration",
 	}
 	MessagingPublishDuration = Name{
-		Section: "messaging.publish.duration",
-		Prom:    "messaging_publish_duration_seconds",
-		OTEL:    "messaging.publish.duration",
+		Section: "messaging.client.operation.duration",
+		Prom:    "messaging_client_operation_duration_seconds",
+		OTEL:    "messaging.client.operation.duration",
 	}
 	MessagingProcessDuration = Name{
 		Section: "messaging.process.duration",
@@ -128,6 +128,21 @@ var (
 		Section: "obi.stat.tcp.rtt",
 		Prom:    "obi_stat_tcp_rtt_seconds",
 		OTEL:    "obi.stat.tcp.rtt",
+	}
+	GenAIClientInputTokenUsage = Name{
+		Section: "gen_ai.client.token.usage.input",
+		Prom:    "gen_ai_client_token_usage",
+		OTEL:    "gen_ai.client.token.usage",
+	}
+	GenAIClientOutputTokenUsage = Name{
+		Section: "gen_ai.client.token.usage.output",
+		Prom:    "gen_ai_client_token_usage",
+		OTEL:    "gen_ai.client.token.usage",
+	}
+	GenAIClientOperationDuration = Name{
+		Section: "gen_ai.client.operation.duration",
+		Prom:    "gen_ai_client_operation_duration_seconds",
+		OTEL:    "gen_ai.client.operation.duration",
 	}
 )
 

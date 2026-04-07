@@ -50,6 +50,8 @@ const (
 	EventTypeFailedConnect
 	EventTypeDNS
 	EventTypeCouchbaseClient
+	EventTypeMemcachedClient
+	EventTypeMemcachedServer
 	EventTypeSQLServer
 )
 
@@ -140,6 +142,10 @@ func (t EventType) String() string {
 		return "DNS"
 	case EventTypeCouchbaseClient:
 		return "CouchbaseClient"
+	case EventTypeMemcachedClient:
+		return "MemcachedClient"
+	case EventTypeMemcachedServer:
+		return "MemcachedServer"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -373,6 +379,7 @@ type Span struct {
 	Flags             uint8          `json:"-"`
 	Method            string         `json:"-"`
 	Path              string         `json:"-"`
+	FullPath          string         `json:"-"`
 	Route             string         `json:"-"`
 	Peer              string         `json:"peer"`
 	PeerPort          int            `json:"peerPort,string"`
@@ -695,7 +702,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient:
+	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return true
 	}
 
@@ -718,7 +725,7 @@ func SpanStatusCode(span *Span) string {
 		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
-	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient:
+	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer:
 		if span.Status != 0 {
 			return StatusCodeError
 		}
@@ -739,7 +746,7 @@ func SpanStatusCode(span *Span) string {
 
 func SpanStatusMessage(span *Span) string {
 	switch span.Type {
-	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient:
+	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer:
 		if span.Status != 0 && span.DBError.Description != "" {
 			return span.DBError.Description
 		}
@@ -833,9 +840,9 @@ func (s *Span) ResponseBodyLength() int64 {
 // ServiceGraphKind returns the Kind string representation that is compliant with service graph metrics specification
 func (s *Span) ServiceGraphKind() string {
 	switch s.Type {
-	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeRedisServer, EventTypeSQLServer:
+	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeRedisServer, EventTypeMemcachedServer, EventTypeSQLServer:
 		return "SPAN_KIND_SERVER"
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient:
+	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "SPAN_KIND_CLIENT"
 	case EventTypeKafkaClient, EventTypeMQTTClient:
 		switch s.Method {
@@ -852,7 +859,7 @@ func (s *Span) ServiceGraphKind() string {
 // See: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector
 func (s *Span) ServiceGraphConnectionType() string {
 	switch s.Type {
-	case EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeCouchbaseClient:
+	case EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "database"
 	case EventTypeKafkaClient, EventTypeMQTTClient:
 		return "messaging_system"
@@ -979,6 +986,11 @@ func (s *Span) TraceName() string {
 	case EventTypeRedisClient, EventTypeRedisServer:
 		if s.Method == "" {
 			return "REDIS"
+		}
+		return s.Method
+	case EventTypeMemcachedClient, EventTypeMemcachedServer:
+		if s.Method == "" {
+			return "MEMCACHED"
 		}
 		return s.Method
 	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer:
@@ -1164,4 +1176,88 @@ func (s *Span) DBSystemName() attribute.KeyValue {
 func (s *Span) HasOriginalHost() bool {
 	schemeHost := strings.Split(s.Statement, SchemeHostSeparator)
 	return len(schemeHost) > 1 && schemeHost[1] != ""
+}
+
+func (s *Span) GenAIInputTokens() int {
+	if s.GenAI == nil {
+		return 0
+	}
+
+	if s.GenAI.OpenAI != nil {
+		return s.GenAI.OpenAI.Usage.GetInputTokens()
+	}
+
+	if s.GenAI.Anthropic != nil {
+		return s.GenAI.Anthropic.Output.Usage.InputTokens
+	}
+
+	return 0
+}
+
+func (s *Span) GenAIOutputTokens() int {
+	if s.GenAI == nil {
+		return 0
+	}
+
+	if s.GenAI.OpenAI != nil {
+		return s.GenAI.OpenAI.Usage.GetOutputTokens()
+	}
+
+	if s.GenAI.Anthropic != nil {
+		return s.GenAI.Anthropic.Output.Usage.OutputTokens
+	}
+
+	return 0
+}
+
+func (s *Span) GenAIOperationName() string {
+	if s.GenAI == nil {
+		return ""
+	}
+	if s.GenAI.OpenAI != nil {
+		return s.GenAI.OpenAI.OperationName
+	}
+	if s.GenAI.Anthropic != nil {
+		return s.GenAI.Anthropic.Output.Type
+	}
+	return ""
+}
+
+func (s *Span) GenAIProviderName() string {
+	if s.GenAI == nil {
+		return ""
+	}
+	if s.GenAI.OpenAI != nil {
+		return semconv.GenAIProviderNameOpenAI.Value.AsString()
+	}
+	if s.GenAI.Anthropic != nil {
+		return semconv.GenAIProviderNameAnthropic.Value.AsString()
+	}
+	return ""
+}
+
+func (s *Span) GenAIRequestModel() string {
+	if s.GenAI == nil {
+		return ""
+	}
+	if s.GenAI.OpenAI != nil {
+		return s.GenAI.OpenAI.Request.Model
+	}
+	if s.GenAI.Anthropic != nil {
+		return s.GenAI.Anthropic.Input.Model
+	}
+	return ""
+}
+
+func (s *Span) GenAIResponseModel() string {
+	if s.GenAI == nil {
+		return ""
+	}
+	if s.GenAI.OpenAI != nil {
+		return s.GenAI.OpenAI.ResponseModel
+	}
+	if s.GenAI.Anthropic != nil {
+		return s.GenAI.Anthropic.Output.Model
+	}
+	return ""
 }

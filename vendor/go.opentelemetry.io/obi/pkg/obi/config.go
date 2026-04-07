@@ -65,7 +65,7 @@ const (
 
 const ReporterLRUSize = 256
 
-// Features that can be enabled in OBI (can be at the same time): App O11y and/or Net O11y
+// Features that can be enabled in OBI (can be at the same time): App O11y and/or Net O11y and/or Stats O11y
 type Feature uint
 
 const (
@@ -227,6 +227,7 @@ var DefaultConfig = Config{
 			instrumentations.InstrumentationMQTT,
 			instrumentations.InstrumentationMongo,
 			instrumentations.InstrumentationCouchbase,
+			instrumentations.InstrumentationMemcached,
 			// no traces for DNS and GPU by default
 		},
 	},
@@ -652,10 +653,14 @@ func (c *Config) Validate() error {
 			" otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
-	if c.Enabled(FeatureAppO11y) &&
-		((c.Prometheus.EndpointEnabled() || c.OTELMetrics.EndpointEnabled()) && c.Metrics.Features.InvalidSpanMetricsConfig()) {
-		return ConfigError("you can only enable one format of span metrics," +
-			" application_span or application_span_otel")
+	if c.Enabled(FeatureAppO11y) && (c.Prometheus.EndpointEnabled() || c.OTELMetrics.EndpointEnabled()) {
+		if c.Metrics.Features.InvalidSpanMetricsConfig() {
+			return ConfigError("you can only enable one format of span metrics," +
+				" application_span or application_span_otel")
+		}
+		if c.Metrics.Features.ResolveSpanMetricsConflict() {
+			slog.Warn("application_span and application_span_otel cannot be used together, application_span_otel is selected automatically")
+		}
 	}
 
 	if len(c.Routes.WildcardChar) > 1 {

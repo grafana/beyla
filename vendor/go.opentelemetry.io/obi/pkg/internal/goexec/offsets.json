@@ -260,7 +260,7 @@
       "config": {
         "versions": {
           "oldest": "5.0.0",
-          "newest": "5.8.0"
+          "newest": "5.9.1"
         },
         "offsets": [
           {
@@ -274,12 +274,40 @@
       "Host": {
         "versions": {
           "oldest": "5.0.0",
-          "newest": "5.8.0"
+          "newest": "5.9.1"
         },
         "offsets": [
           {
             "offset": 0,
             "since": "5.0.0"
+          }
+        ]
+      }
+    },
+    "github.com/lib/pq.Config": {
+      "Host": {
+        "versions": {
+          "oldest": "1.11.0",
+          "newest": "1.12.3"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.11.0"
+          }
+        ]
+      }
+    },
+    "github.com/lib/pq.conn": {
+      "cfg": {
+        "versions": {
+          "oldest": "1.11.0",
+          "newest": "1.12.3"
+        },
+        "offsets": [
+          {
+            "offset": 576,
+            "since": "1.11.0"
           }
         ]
       }
@@ -452,7 +480,7 @@
       "delegate": {
         "versions": {
           "oldest": "1.10.0",
-          "newest": "1.42.0"
+          "newest": "1.43.0"
         },
         "offsets": [
           {
@@ -470,7 +498,7 @@
       "fr": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.51.0"
+          "newest": "0.52.0"
         },
         "offsets": [
           {
@@ -510,7 +538,7 @@
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.51.0"
+          "newest": "0.52.0"
         },
         "offsets": [
           {
@@ -538,7 +566,7 @@
       "tconn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.51.0"
+          "newest": "0.52.0"
         },
         "offsets": [
           {
@@ -552,7 +580,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.51.0"
+          "newest": "0.52.0"
         },
         "offsets": [
           {
@@ -566,7 +594,7 @@
       "Fields": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.51.0"
+          "newest": "0.52.0"
         },
         "offsets": [
           {
@@ -580,7 +608,7 @@
       "conn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.51.0"
+          "newest": "0.52.0"
         },
         "offsets": [
           {
@@ -594,7 +622,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.51.0"
+          "newest": "0.52.0"
         },
         "offsets": [
           {
@@ -622,7 +650,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -636,7 +664,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -650,7 +678,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -662,7 +690,7 @@
       "st": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -680,7 +708,7 @@
       "id": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -696,7 +724,7 @@
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -720,7 +748,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -738,7 +766,7 @@
       "buf": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -754,7 +782,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -770,7 +798,7 @@
       "offset": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -788,7 +816,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -808,7 +836,7 @@
       "scheme": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -834,7 +862,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.79.2"
+          "newest": "1.80.0"
         },
         "offsets": [
           {
@@ -1258,34 +1286,6 @@
           {
             "offset": 0,
             "since": "1.17.0"
-          }
-        ]
-      }
-    },
-    "github.com/lib/pq.Config": {
-      "Host": {
-        "versions": {
-          "oldest": "1.11.0",
-          "newest": "1.11.2"
-        },
-        "offsets": [
-          {
-            "offset": 0,
-            "since": "1.11.0"
-          }
-        ]
-      }
-    },
-    "github.com/lib/pq.conn": {
-      "cfg": {
-        "versions": {
-          "oldest": "1.11.0",
-          "newest": "1.11.2"
-        },
-        "offsets": [
-          {
-            "offset": 576,
-            "since": "1.11.0"
           }
         ]
       }

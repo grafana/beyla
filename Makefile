@@ -500,8 +500,8 @@ oats-test-mongo: oats-prereq
 
 .PHONY: oats-test-memcached
 oats-test-memcached: oats-prereq
-	mkdir -p internal/test/oats/memcached/$(TEST_OUTPUT)/run
-	cd internal/test/oats/memcached && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+	mkdir -p internal/testgenerated/oats/memcached/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/memcached && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test-ai
 oats-test-ai: oats-prereq

@@ -207,9 +207,11 @@ network:
 			MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
 			Buckets: export.Buckets{
-				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  export.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: export.DefaultBuckets.ResponseSizeHistogram,
+				DurationHistogram:            []float64{0, 1, 2},
+				RequestSizeHistogram:         export.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram:        export.DefaultBuckets.ResponseSizeHistogram,
+				GenAITokenUsageHistogram:     export.DefaultBuckets.GenAITokenUsageHistogram,
+				GenAIClientDurationHistogram: export.DefaultBuckets.GenAIClientDurationHistogram,
 			},
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
@@ -234,6 +236,7 @@ network:
 				instrumentations.InstrumentationMQTT,
 				instrumentations.InstrumentationMongo,
 				instrumentations.InstrumentationCouchbase,
+				instrumentations.InstrumentationMemcached,
 				// no traces for DNS and GPU by default
 			},
 		},
@@ -245,9 +248,11 @@ network:
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: export.Buckets{
-				DurationHistogram:     export.DefaultBuckets.DurationHistogram,
-				RequestSizeHistogram:  []float64{0, 10, 20, 22},
-				ResponseSizeHistogram: []float64{0, 10, 20, 22},
+				DurationHistogram:            export.DefaultBuckets.DurationHistogram,
+				RequestSizeHistogram:         []float64{0, 10, 20, 22},
+				ResponseSizeHistogram:        []float64{0, 10, 20, 22},
+				GenAITokenUsageHistogram:     export.DefaultBuckets.GenAITokenUsageHistogram,
+				GenAIClientDurationHistogram: export.DefaultBuckets.GenAIClientDurationHistogram,
 			},
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},

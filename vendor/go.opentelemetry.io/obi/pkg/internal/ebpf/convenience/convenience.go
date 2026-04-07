@@ -6,6 +6,7 @@ package ebpfconvenience // import "go.opentelemetry.io/obi/pkg/internal/ebpf/con
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -99,6 +100,75 @@ func LoadSpec(spec *ebpf.CollectionSpec, objects any, constants map[string]any, 
 	}
 
 	return nil
+}
+
+const (
+	MaxMapEntries       uint32 = 1 << 24
+	MinMapEntries       uint32 = 64
+	MinResizableMapSize uint32 = 64
+)
+
+// isResizableMapType returns true for map types where scaling MaxEntries
+// is meaningful. Excludes special map types whose MaxEntries has fixed
+// semantics (e.g. ProgramArray entries are tail-call slots, not data).
+func isResizableMapType(t ebpf.MapType) bool {
+	switch t {
+	case ebpf.ProgramArray, ebpf.PerfEventArray, ebpf.CGroupArray,
+		ebpf.ArrayOfMaps, ebpf.HashOfMaps,
+		ebpf.DevMap, ebpf.SockMap, ebpf.CPUMap, ebpf.XSKMap, ebpf.SockHash,
+		ebpf.DevMapHash, ebpf.ReusePortSockArray:
+		return false
+	default:
+		return true
+	}
+}
+
+// SetupMapSizes scales all resizable maps in the spec by globalScaleFactor.
+// If globalScaleFactor > 0, sizes are doubled that many times (left shift).
+// If globalScaleFactor < 0, sizes are halved that many times (right shift).
+// Maps already pinned on bpffs (at bpffsPinPath) are skipped.
+func SetupMapSizes(spec *ebpf.CollectionSpec, globalScaleFactor int, bpffsPinPath string) {
+	if globalScaleFactor == 0 {
+		return
+	}
+
+	for name, mSpec := range spec.Maps {
+		if !isResizableMapType(mSpec.Type) {
+			continue
+		}
+
+		if mSpec.MaxEntries < MinResizableMapSize {
+			continue
+		}
+
+		if bpffsPinPath != "" && mSpec.Pinning == ebpf.PinByName {
+			mapPath := filepath.Join(bpffsPinPath, name)
+			if _, err := os.Stat(mapPath); err == nil {
+				continue
+			}
+		}
+
+		oldEntries := mSpec.MaxEntries
+		var newEntries uint32
+
+		if globalScaleFactor > 0 {
+			newEntries = oldEntries << uint32(globalScaleFactor)
+			if newEntries < oldEntries {
+				newEntries = MaxMapEntries
+			}
+		} else {
+			newEntries = oldEntries >> uint32(-globalScaleFactor)
+		}
+
+		if newEntries < MinMapEntries && oldEntries >= MinMapEntries {
+			newEntries = MinMapEntries
+		}
+		if newEntries > MaxMapEntries {
+			newEntries = MaxMapEntries
+		}
+
+		mSpec.MaxEntries = newEntries
+	}
 }
 
 // MissingConstantsError is returned by [ebpf.CollectionSpec.RewriteConstants].

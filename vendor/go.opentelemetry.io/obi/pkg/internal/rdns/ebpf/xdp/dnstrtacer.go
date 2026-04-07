@@ -59,6 +59,8 @@ func newTracer(ebpfCfg *config.EBPFTracer) (*tracer, error) {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
+	convenience.SetupMapSizes(spec, ebpfCfg.MapsConfig.GlobalScaleFactor, "")
+
 	sharedMaps := map[string]*ebpf.Map{}
 	var mu sync.Mutex
 	if err := convenience.LoadSpec(spec, &objects, map[string]any{

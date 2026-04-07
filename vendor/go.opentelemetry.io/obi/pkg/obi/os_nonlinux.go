@@ -5,7 +5,7 @@
 
 package obi // import "go.opentelemetry.io/obi/pkg/obi"
 
-func CheckOSSupport() error {
+var CheckOSSupport = func() error {
 	return nil
 }
 

@@ -57,6 +57,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) attribute.KeyValue { return HTTPUrlPath(s.Path) }
+	case attr.HTTPURLScheme:
+		getter = func(s *Span) attribute.KeyValue { return HTTPUrlScheme(HTTPScheme(s)) }
 	case attr.ClientAddr:
 		getter = func(s *Span) attribute.KeyValue { return ClientAddr(PeerAsClient(s)) }
 	case attr.ServerAddr:
@@ -148,6 +150,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return DBSystemName(span.DBSystemName().Value.AsString())
 			case EventTypeRedisClient, EventTypeRedisServer:
 				return semconv.DBSystemNameRedis
+			case EventTypeMemcachedClient, EventTypeMemcachedServer:
+				return semconv.DBSystemNameMemcached
 			case EventTypeMongoClient:
 				return semconv.DBSystemNameMongoDB
 			case EventTypeCouchbaseClient:
@@ -169,6 +173,12 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if span.Type == EventTypeDNS && span.Status != int(dnsparser.RCodeSuccess) {
 				return ErrorType(dnsparser.RCode(span.Status).String())
 			} else if SpanStatusCode(span) == StatusCodeError {
+				switch span.Type {
+				case EventTypeMemcachedClient, EventTypeMemcachedServer:
+					if span.DBError.ErrorCode != "" {
+						return ErrorType(span.DBError.ErrorCode)
+					}
+				}
 				return ErrorType("error")
 			}
 			return ErrorType("")
@@ -201,10 +211,15 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.MessagingOpName:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
+			switch {
+			case span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil:
 				return MessagingOperationName(span.AWS.SQS.OperationName)
+			case span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer ||
+				span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer:
+				return MessagingOperationName(span.Method)
+			default:
+				return MessagingOperationName("")
 			}
-			return MessagingOperationName("")
 		}
 	case attr.MessagingOpType:
 		getter = func(span *Span) attribute.KeyValue {
@@ -354,6 +369,30 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return semconv.GenAIToolDefinitionsKey.String(string(s.GenAI.Anthropic.Input.Tools))
 			}
 			return semconv.GenAIToolDefinitionsKey.String("")
+		}
+	case attr.GenAIOperationName:
+		getter = func(s *Span) attribute.KeyValue {
+			return semconv.GenAIOperationNameKey.String(s.GenAIOperationName())
+		}
+	case attr.GenAIProviderName:
+		getter = func(s *Span) attribute.KeyValue {
+			return semconv.GenAIProviderNameKey.String(s.GenAIProviderName())
+		}
+	case attr.GenAITokenTypeInput:
+		getter = func(_ *Span) attribute.KeyValue {
+			return semconv.GenAITokenTypeKey.String("input")
+		}
+	case attr.GenAITokenTypeOutput:
+		getter = func(_ *Span) attribute.KeyValue {
+			return semconv.GenAITokenTypeKey.String("output")
+		}
+	case attr.GenAIRequestModel:
+		getter = func(s *Span) attribute.KeyValue {
+			return semconv.GenAIRequestModelKey.String(s.GenAIRequestModel())
+		}
+	case attr.GenAIResponseModel:
+		getter = func(s *Span) attribute.KeyValue {
+			return semconv.GenAIResponseModelKey.String(s.GenAIResponseModel())
 		}
 	}
 	// default: unlike the Prometheus getters, we don't check here for service name nor k8s metadata

@@ -100,6 +100,9 @@ func NewFlowFetcher(
 	spec.Maps[flowDirectionsMap].MaxEntries = uint32(cacheMaxSize)
 	spec.Maps[connInitiatorsMap].MaxEntries = uint32(cacheMaxSize)
 
+	// Apply global map scaling factor
+	convenience.SetupMapSizes(spec, cfg.MapsConfig.GlobalScaleFactor, "")
+
 	traceMsgs := 0
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {
 		traceMsgs = 1

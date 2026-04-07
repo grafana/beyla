@@ -34,6 +34,14 @@ const (
 	StrContextPropagationTCP      = "tcp"
 )
 
+type MapsConfig struct {
+	// GlobalScaleFactor scales map sizes in powers of two:
+	//   > 0: grows size (2x per step)
+	//   < 0: shrinks size (1/2 per step)
+	//   = 0: no change
+	GlobalScaleFactor int `yaml:"global_scale_factor" validate:"gte=-3,lte=3"`
+}
+
 // EBPFTracer configuration for eBPF programs
 type EBPFTracer struct {
 	// Enables logging of eBPF program events
@@ -130,6 +138,9 @@ type EBPFTracer struct {
 	// The system will always try "batch", which is more efficient, but legacy systems like RHEL8-based will fallback to
 	// "legacy" (the slowest, more resource-consuming iterate&delete approach).
 	ForceBPFMapReader EBPFMapReader `yaml:"force_bpf_map_reader" env:"OTEL_EBPF_FORCE_BPF_MAP_READER" validate:"oneof=0 1 2" jsonschema:"type=string,enum=auto,enum=batch,enum=legacy"`
+
+	// eBPF map configurations
+	MapsConfig MapsConfig `yaml:"maps_config"`
 }
 
 var nvidiaSMIExistsFunc = nvidiaSMIExists

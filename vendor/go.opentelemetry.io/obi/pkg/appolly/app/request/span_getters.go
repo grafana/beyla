@@ -57,6 +57,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) attribute.KeyValue { return HTTPUrlPath(s.Path) }
+	case attr.HTTPURLScheme:
+		getter = func(s *Span) attribute.KeyValue { return HTTPUrlScheme(HTTPScheme(s)) }
 	case attr.ClientAddr:
 		getter = func(s *Span) attribute.KeyValue { return ClientAddr(PeerAsClient(s)) }
 	case attr.ServerAddr:

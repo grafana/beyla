@@ -150,6 +150,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.ReqHeaderPtrPos,
 		goexec.IoWriterBufPtrPos,
 		goexec.IoWriterNPos,
+		goexec.IoWriterWrPos,
 		goexec.CcNextStreamIDPos,
 		goexec.CcNextStreamIDVendoredPos,
 		goexec.CcFramerPos,

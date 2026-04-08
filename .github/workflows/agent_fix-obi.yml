@@ -11,8 +11,67 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  wait-for-ci:
+    name: Wait for CI completion
+    if: >
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'agent/fix-obi' &&
+      github.event.pull_request.head.repo.id == github.repository_id
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      id-token: write
+    timeout-minutes: 120
+    steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Wait for all CI checks to complete
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          EXCLUDED_WORKFLOWS="Fix OBI submodule CI|CI Supervisor: Rerun flaky failures"
+
+          echo "Waiting for all CI checks on PR #${PR_NUMBER} to complete..."
+          echo "Excluding workflows matching: ${EXCLUDED_WORKFLOWS}"
+
+          CHECKS_SEEN=0
+          while true; do
+            # Get all workflow runs for the PR's head SHA
+            HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
+            RUNS_JSON=$(gh run list --repo "$REPO" --commit "$HEAD_SHA" --json workflowName,status --limit 100)
+
+            # Filter out excluded workflows and count pending/total
+            TOTAL=$(echo "$RUNS_JSON" | jq --arg excl "$EXCLUDED_WORKFLOWS" '[.[] | select(.workflowName | test($excl) | not)] | length')
+            PENDING=$(echo "$RUNS_JSON" | jq --arg excl "$EXCLUDED_WORKFLOWS" '[.[] | select((.workflowName | test($excl) | not) and .status != "completed")] | length')
+
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "No CI checks found yet. Waiting 60s..."
+              sleep 60
+              continue
+            fi
+
+            CHECKS_SEEN=1
+            if [ "$PENDING" -eq 0 ]; then
+              echo "All ${TOTAL} CI checks have completed."
+              break
+            fi
+
+            echo "${PENDING} of ${TOTAL} checks still pending. Waiting 60s..."
+            sleep 60
+          done
+
   triage:
     name: Triage CI failures
+    needs: wait-for-ci
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
@@ -353,3 +412,28 @@ jobs:
         env:
           DISABLE_TELEMETRY: "1"
           DISABLE_ERROR_REPORTING: "1"
+
+  cleanup:
+    name: Remove agent label
+    needs: implement
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      id-token: write
+    timeout-minutes: 5
+    steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Remove agent/fix-obi label
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Removing agent/fix-obi label from PR #${PR_NUMBER} to allow re-triggering"
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi" || true

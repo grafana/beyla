@@ -1,0 +1,180 @@
+name: "CI Supervisor: Rerun flaky failures"
+
+on: # zizmor: ignore[dangerous-triggers] no code checkout; GITHUB_TOKEN used for all ops except label addition
+  workflow_run:
+    workflows:
+      - "Pull request checks"
+      - "Pull request integration tests"
+      - "Pull request Beyla integration tests"
+      - "Pull request K8s integration tests"
+      - "Pull request integration tests ARM"
+      - "PR OATS test"
+      - "Check third-party licenses"
+      - "Test Docker build"
+      - "Documentation CI"
+    types: [completed]
+
+# Set restrictive permissions at workflow level
+permissions: {}
+
+concurrency:
+  group: "supervisor-${{ github.event.workflow_run.id }}"
+  cancel-in-progress: false
+
+jobs:
+  evaluate-and-rerun:
+    name: Evaluate failed checks
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.id == github.event.workflow_run.repository.id
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: write
+    timeout-minutes: 5
+    outputs:
+      should-label: ${{ steps.evaluate.outputs.should_label }}
+      pr-number: ${{ steps.evaluate.outputs.pr_number }}
+      label-count: ${{ steps.evaluate.outputs.label_count }}
+      max-label-runs: ${{ steps.evaluate.outputs.max_label_runs }}
+    steps:
+      - name: Evaluate and rerun flaky failures
+        id: evaluate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # --- Resolve the associated PR ---
+          PR_NUMBER=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR associated with run ${RUN_ID}. Exiting."
+            exit 0
+          fi
+          # Validate PR number is a positive integer
+          if ! echo "$PR_NUMBER" | grep -qE '^[0-9]+$'; then
+            echo "Invalid PR number: ${PR_NUMBER}. Exiting."
+            exit 1
+          fi
+          echo "PR #${PR_NUMBER} -- workflow: ${WORKFLOW_NAME}"
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+
+          # --- Get run details ---
+          RUN_JSON=$(gh run view "$RUN_ID" --repo "$REPO" --json attempt,jobs,name)
+          ATTEMPT=$(echo "$RUN_JSON" | jq -r '.attempt')
+          echo "Current attempt: ${ATTEMPT}"
+
+          # --- Check attempt limit first ---
+          VERDICT="rerun"
+          REASON=""
+          if [ "$ATTEMPT" -ge 3 ]; then
+            VERDICT="skip"
+            REASON="Maximum re-run attempts reached (attempt ${ATTEMPT} of 3)"
+          fi
+
+          # --- Build job summary table ---
+          JOBS_TABLE=""
+
+          while IFS=$'\t' read -r job_name job_conclusion job_started job_completed; do
+            # Calculate duration
+            duration="unknown"
+            if [ -n "$job_started" ] && [ -n "$job_completed" ] && [ "$job_started" != "null" ] && [ "$job_completed" != "null" ]; then
+              start_epoch=$(date -d "$job_started" +%s 2>/dev/null || echo "0")
+              end_epoch=$(date -d "$job_completed" +%s 2>/dev/null || echo "0")
+              if [ "$start_epoch" -gt 0 ] && [ "$end_epoch" -gt 0 ]; then
+                duration_min=$(( (end_epoch - start_epoch) / 60 ))
+                duration="${duration_min}m"
+              fi
+            fi
+
+            job_verdict="flaky"
+
+            # Check for unrecoverable: Lint failure in "Pull request checks"
+            if [ "$WORKFLOW_NAME" = "Pull request checks" ] && echo "$job_name" | grep -qi "lint"; then
+              job_verdict="unrecoverable (lint failure)"
+              if [ "$VERDICT" != "skip" ]; then
+                VERDICT="skip"
+                REASON="Lint job failed in '${WORKFLOW_NAME}' -- compile-level problem, re-run will not help"
+              fi
+            fi
+
+            JOBS_TABLE="${JOBS_TABLE}| ${job_name} | ${job_conclusion} | ${duration} | ${job_verdict} |
+          "
+          done < <(echo "$RUN_JSON" | jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | [.name, .conclusion, .startedAt, .completedAt] | @tsv')
+
+          if [ -z "$JOBS_TABLE" ]; then
+            echo "No failed or timed-out jobs found. Exiting."
+            exit 0
+          fi
+
+          # --- Take action ---
+          SHOULD_LABEL="false"
+          if [ "$VERDICT" = "rerun" ]; then
+            ACTION_LINE="Re-running failed jobs (attempt $((ATTEMPT + 1)) of 3)"
+            echo "Re-running failed jobs for run ${RUN_ID}..."
+            gh run rerun "$RUN_ID" --repo "$REPO" --failed
+          else
+            ACTION_LINE="NOT re-running. Reason: ${REASON}"
+            echo "Skipping re-run: ${REASON}"
+
+            # Check if we should add agent/fix-obi label for automated PRs
+            MAX_AGENT_RUNS=5
+            HAS_AUTOMATED=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "automated-pr")')
+            HAS_AGENT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "agent/fix-obi")')
+            AGENT_LABEL_COUNT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments --jq '[.comments[] | select(.author.login == "grafana-beyla-bot" or .author.login == "github-actions[bot]") | .body | select(contains("Added `agent/fix-obi` label"))] | length')
+            echo "agent/fix-obi has been added ${AGENT_LABEL_COUNT}/${MAX_AGENT_RUNS} times"
+            echo "label_count=${AGENT_LABEL_COUNT}" >> "$GITHUB_OUTPUT"
+            echo "max_label_runs=${MAX_AGENT_RUNS}" >> "$GITHUB_OUTPUT"
+
+            if [ "$HAS_AUTOMATED" = "true" ] && [ "$HAS_AGENT" = "false" ]; then
+              if [ "$AGENT_LABEL_COUNT" -ge "$MAX_AGENT_RUNS" ]; then
+                echo "Maximum agent/fix-obi attempts (${MAX_AGENT_RUNS}) reached -- not relabelling"
+                ACTION_LINE="${ACTION_LINE}
+          Agent fix limit reached (${AGENT_LABEL_COUNT}/${MAX_AGENT_RUNS} runs). Manual intervention required."
+              else
+                SHOULD_LABEL="true"
+                ACTION_LINE="${ACTION_LINE}
+          Added \`agent/fix-obi\` label to trigger agentic fix workflow ($((AGENT_LABEL_COUNT + 1))/${MAX_AGENT_RUNS})."
+              fi
+            fi
+          fi
+
+          echo "should_label=${SHOULD_LABEL}" >> "$GITHUB_OUTPUT"
+
+          # --- Post PR comment (using GITHUB_TOKEN -- no secrets needed) ---
+          COMMENT_BODY="### CI Supervisor: ${WORKFLOW_NAME} (attempt ${ATTEMPT})
+
+          | Job | Conclusion | Duration | Verdict |
+          |-----|-----------|----------|---------|
+          ${JOBS_TABLE}
+          **Action**: ${ACTION_LINE}"
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT_BODY"
+          echo "Posted audit comment on PR #${PR_NUMBER}"
+
+  add-agent-label:
+    name: Add agent/fix-obi label
+    needs: evaluate-and-rerun
+    if: needs.evaluate-and-rerun.outputs.should-label == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    timeout-minutes: 5
+    steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Add label to trigger agent workflow
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          PR_NUMBER: ${{ needs.evaluate-and-rerun.outputs.pr-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Adding agent/fix-obi label to PR #${PR_NUMBER}"
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"

@@ -82,7 +82,6 @@ func DefaultConfig() *Config {
 	}
 	// Overrides histogram configuration to use exponential/native histograms by default
 	def.OTELMetrics.HistogramAggregation = otelcfg.HistogramAggregationExponential
-	def.Prometheus.Buckets = export.Buckets{}
 
 	def.Routes.Unmatch = transform.UnmatchLowCardinality
 

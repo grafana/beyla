@@ -38,20 +38,48 @@ jobs:
         run: |
           set -euo pipefail
 
-          EXCLUDED_WORKFLOWS="Fix OBI submodule CI|CI Supervisor: Rerun flaky failures"
+          # Exact names to exclude (our own workflow and the supervisor)
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures"]'
 
           echo "Waiting for all CI checks on PR #${PR_NUMBER} to complete..."
-          echo "Excluding workflows matching: ${EXCLUDED_WORKFLOWS}"
 
-          CHECKS_SEEN=0
           while true; do
-            # Get all workflow runs for the PR's head SHA
             HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
-            RUNS_JSON=$(gh run list --repo "$REPO" --commit "$HEAD_SHA" --json workflowName,status --limit 100)
 
-            # Filter out excluded workflows and count pending/total
-            TOTAL=$(echo "$RUNS_JSON" | jq --arg excl "$EXCLUDED_WORKFLOWS" '[.[] | select(.workflowName | test($excl) | not)] | length')
-            PENDING=$(echo "$RUNS_JSON" | jq --arg excl "$EXCLUDED_WORKFLOWS" '[.[] | select((.workflowName | test($excl) | not) and .status != "completed")] | length')
+            # Build set of check-suite IDs from pull_request-triggered workflow runs.
+            # This excludes schedule/workflow_dispatch/push runs that share the same SHA,
+            # matching the approach in scripts/release-train.sh:check_ci_green().
+            PR_SUITE_IDS=$(
+              gh api --paginate -H "Accept: application/vnd.github+json" \
+                "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+                | jq -s '[ map(.workflow_runs // []) | add // [] | .[].check_suite_id ]'
+            )
+
+            # Fetch all check-runs, filter to PR suites + non-Actions apps, deduplicate by name.
+            ALL_CHECKS=$(
+              gh api --paginate -H "Accept: application/vnd.github+json" \
+                "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" \
+                | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
+            )
+
+            CHECKS_JSON=$(
+              echo "$ALL_CHECKS" \
+                | jq --argjson pr_suites "$PR_SUITE_IDS" --argjson excluded "$EXCLUDED_NAMES" \
+                  '{check_runs: [
+                    .check_runs[]
+                    | select(
+                        .app.slug != "github-actions"
+                        or (.check_suite.id as $id | $pr_suites | index($id))
+                      )
+                    | select(
+                        (.name as $n | $excluded | index($n)) | not
+                      )
+                  ]}' \
+                | jq '{check_runs: [.check_runs | group_by(.name) | .[] | sort_by(.id) | last]}'
+            )
+
+            TOTAL=$(echo "$CHECKS_JSON" | jq '.check_runs | length')
+            PENDING=$(echo "$CHECKS_JSON" | jq '[.check_runs[] | select(.status != "completed")] | length')
 
             if [ "$TOTAL" -eq 0 ]; then
               echo "No CI checks found yet. Waiting 60s..."
@@ -59,9 +87,15 @@ jobs:
               continue
             fi
 
-            CHECKS_SEEN=1
             if [ "$PENDING" -eq 0 ]; then
               echo "All ${TOTAL} CI checks have completed."
+
+              # Log any non-green checks for visibility
+              NON_GREEN=$(echo "$CHECKS_JSON" | jq -r '[.check_runs[] | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
+              if [ "$NON_GREEN" -gt 0 ]; then
+                echo "Warning: ${NON_GREEN} check(s) are not green:"
+                echo "$CHECKS_JSON" | jq -r '.check_runs[] | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | "  - \(.name): \(.conclusion // "none")"'
+              fi
               break
             fi
 

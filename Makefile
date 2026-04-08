@@ -134,7 +134,7 @@ prereqs: install-hooks bpf2go
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses/v2,v2.0.1)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
-	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,latest)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,v0.0.0-20260305142021-f9589b9f2b9d) # pin for Go 1.25.8 compatibility
 	$(call go-install-tool,$(GOTESTSUM),gotest.tools/gotestsum,v1.13.0)
 
 .PHONY: fmt
@@ -289,7 +289,7 @@ test-privileged:
 .PHONY: helm-unittest
 helm-unittest:
 	@echo "### Running Helm chart unit tests"
-	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps -u "$$(id -u)" helmunittest/helm-unittest -f charts/beyla/tests/unit/*.yaml charts/beyla
+	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps -u "$$(id -u)" helmunittest/helm-unittest -f 'tests/unit/*.yaml' charts/beyla
 
 .PHONY: helm-docs
 helm-docs:
@@ -498,13 +498,18 @@ oats-test-mongo: oats-prereq
 	mkdir -p internal/testgenerated/oats/mongo/$(TEST_OUTPUT)/run
 	cd internal/testgenerated/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+.PHONY: oats-test-memcached
+oats-test-memcached: oats-prereq
+	mkdir -p internal/testgenerated/oats/memcached/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/memcached && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
 .PHONY: oats-test-ai
 oats-test-ai: oats-prereq
 	mkdir -p internal/testgenerated/oats/ai/$(TEST_OUTPUT)/run
 	cd internal/testgenerated/oats/ai && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-ai
+oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug

@@ -315,6 +315,13 @@ func getQueueConfig(cfg otelcfg.TracesConfig) configoptional.Optional[exporterhe
 	if cfg.MaxQueueSize > 0 {
 		batchSet = true
 		batchCfg.MaxSize = int64(cfg.MaxQueueSize)
+		// Queue capacity must be at least 2x max batch size to prevent "element size too large"
+		// errors and permanent data loss. We use a 4x multiplier to provide headroom for
+		// transient latency spikes, ensuring brief collector slowdowns don't immediately
+		// back-pressure the eBPF reader.
+		if minQueue := int64(cfg.MaxQueueSize) * 4; queueConfig.QueueSize < minQueue {
+			queueConfig.QueueSize = minQueue
+		}
 	}
 	if cfg.BatchTimeout > 0 {
 		batchSet = true

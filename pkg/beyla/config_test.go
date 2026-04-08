@@ -55,11 +55,14 @@ otel_metrics_export:
   endpoint: localhost:3030
   buckets:
     duration_histogram: [0, 1, 2]
+  histogram_aggregation: base2_exponential_bucket_histogram
 prometheus_export:
   ttl: 1s
   buckets:
     request_size_histogram: [0, 10, 20, 22]
     response_size_histogram: [0, 10, 20, 22]
+    gen_ai_client_token_usage_histogram: [1, 2, 3, 4]
+    gen_ai_client_operation_duration_histogram: [5, 6, 7, 8]
 attributes:
   kubernetes:
     kubeconfig_path: /foo/bar
@@ -206,9 +209,11 @@ network:
 			MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
 			Buckets: export.Buckets{
-				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  export.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: export.DefaultBuckets.ResponseSizeHistogram,
+				DurationHistogram:            []float64{0, 1, 2},
+				RequestSizeHistogram:         export.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram:        export.DefaultBuckets.ResponseSizeHistogram,
+				GenAITokenUsageHistogram:     export.DefaultBuckets.GenAITokenUsageHistogram,
+				GenAIClientDurationHistogram: export.DefaultBuckets.GenAIClientDurationHistogram,
 			},
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
@@ -233,6 +238,7 @@ network:
 				instrumentations.InstrumentationMQTT,
 				instrumentations.InstrumentationMongo,
 				instrumentations.InstrumentationCouchbase,
+				instrumentations.InstrumentationMemcached,
 				// no traces for DNS and GPU by default
 			},
 		},
@@ -244,8 +250,11 @@ network:
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: export.Buckets{
-				RequestSizeHistogram:  []float64{0, 10, 20, 22},
-				ResponseSizeHistogram: []float64{0, 10, 20, 22},
+				DurationHistogram:            export.DefaultBuckets.DurationHistogram,
+				RequestSizeHistogram:         []float64{0, 10, 20, 22},
+				ResponseSizeHistogram:        []float64{0, 10, 20, 22},
+				GenAITokenUsageHistogram:     []float64{1, 2, 3, 4},
+				GenAIClientDurationHistogram: []float64{5, 6, 7, 8},
 			},
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},

@@ -25,9 +25,9 @@ if [ -d "${TARGET_DIR}" ] && [ -n "$(ls -A ${TARGET_DIR} 2>/dev/null)" ]; then
 fi
 
 # Create versioned directory
-mkdir -p "${TARGET_DIR}"
+mkdir -p "${TARGET_DIR}/dist"
 
 # Copy instrumentation files
-cp -r /dist/* "${TARGET_DIR}/"
+cp -r /dist/* "${TARGET_DIR}/dist/"
 
 echo "Successfully populated instrumentation files to ${TARGET_DIR}"

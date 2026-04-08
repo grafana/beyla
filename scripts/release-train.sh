@@ -8,7 +8,7 @@
 #
 # Notes:
 #   - Versions must be SemVer tags: vMAJOR.MINOR.PATCH
-#   - Release branch naming is: release-vMAJOR.MINOR.PATCH
+#   - Release branch naming is: release-MAJOR.MINOR.PATCH (no "v" prefix)
 #   - Run from any directory (the script uses temporary clones)
 
 set -euo pipefail
@@ -26,6 +26,7 @@ BUMP_MODE="auto"
 DRY_RUN=false
 SKIP_CI_CHECK=false
 SKIP_UPSTREAM_SYNC_CHECK=false
+EXCLUDE_CHECK_NAME=""
 WORKDIR=""
 
 RELEASE_TRAIN_TOKEN="${RELEASE_TRAIN_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -73,6 +74,7 @@ Common options:
   --obi-repo <owner/repo>
   --dry-run               Validate and print actions, without pushing/tags/releases
   --skip-ci-check         Skip CI-green checks (main for prepare, release branch for tag)
+  --exclude-check <name>  Exclude a check-run by name (e.g. the calling job itself)
   --workdir <path>        Reuse a workspace directory (default: temporary directory)
   --help, -h              Show this help message
 
@@ -157,6 +159,11 @@ set_output() {
 validate_semver_tag() {
     local tag="$1"
     [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Invalid SemVer tag: $tag (expected vMAJOR.MINOR.PATCH)"
+}
+
+version_without_v() {
+    local tag="$1"
+    echo "${tag#v}"
 }
 
 parse_semver() {
@@ -247,6 +254,7 @@ check_ci_green() {
     local repo_slug="$1"
     local ref="$2"
     local label="$3"
+    local exclude_check_name="${4:-}"
 
     require_cmd jq
 
@@ -257,12 +265,41 @@ check_ci_green() {
 
     log_info "Checking CI for ${label} (${sha:0:12})"
 
-    local checks_json
-    checks_json=$(
+    # Build a set of check-suite IDs from push-triggered workflow runs.
+    # The commit may also have check-runs from schedule or workflow_dispatch
+    # triggered suites (e.g. cron jobs, release workflows) which are not part
+    # of the commit's push CI and should be excluded — matching GitHub UI behavior.
+    local push_suite_ids
+    push_suite_ids=$(
+        gh api --paginate -H "Accept: application/vnd.github+json" \
+            "repos/${repo_slug}/actions/runs?head_sha=${sha}&event=push&per_page=100" \
+            | jq -s '[ map(.workflow_runs // []) | add // [] | .[].check_suite_id ]'
+    )
+
+    # Fetch all check-runs once, then filter and deduplicate.
+    local all_checks_json
+    all_checks_json=$(
         gh api --paginate -H "Accept: application/vnd.github+json" \
             "repos/${repo_slug}/commits/${sha}/check-runs?per_page=100" \
             | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
     )
+
+    # Keep only check-runs from push-triggered suites or from non-Actions apps
+    # (e.g. socket-security, codecov).  Then deduplicate by name keeping the
+    # most recent entry (highest .id), matching GitHub's UI behavior.
+    local checks_json
+    checks_json=$(jq --argjson push_suites "$push_suite_ids" \
+        '{check_runs: [.check_runs[] | select(
+            .app.slug != "github-actions" or
+            (.check_suite.id as $id | $push_suites | index($id))
+        )]}' <<< "$all_checks_json" \
+        | jq '{check_runs: [.check_runs | group_by(.name) | .[] | sort_by(.id) | last]}')
+
+    if [[ -n "$exclude_check_name" ]]; then
+        log_info "Excluding self check-run: ${exclude_check_name}"
+        checks_json=$(jq --arg name "$exclude_check_name" \
+            '{check_runs: [.check_runs[] | select(.name != $name)]}' <<< "$checks_json")
+    fi
 
     local total_checks
     total_checks=$(jq -r '.check_runs | length' <<< "$checks_json")
@@ -433,6 +470,29 @@ checkout_or_create_release_branch() {
     fi
 }
 
+uncomment_bpfel_in_gitignore() {
+    local repo_dir="$1"
+    local gitignore="${repo_dir}/.gitignore"
+
+    if [[ ! -f "$gitignore" ]]; then
+        log_warn "No .gitignore found in ${repo_dir}; skipping bpfel uncomment."
+        return
+    fi
+
+    if ! grep -q '^\*_bpfel\.' "$gitignore"; then
+        log_info "No active bpfel gitignore rules found in ${repo_dir}; skipping."
+        return
+    fi
+
+    log_info "Commenting out bpfel exclusions in ${gitignore} for release branch"
+    sed -i.bak \
+        -e 's/^\(\*_bpfel\.go\)$/#\1/' \
+        -e 's/^\(\*_bpfel\.o\)$/#\1/' \
+        -e 's/^\(\*_bpfel\.go\.d\)$/#\1/' \
+        "$gitignore"
+    rm -f "${gitignore}.bak"
+}
+
 prepare_obi_branch() {
     local version="$1"
     local release_branch="$2"
@@ -450,6 +510,8 @@ prepare_obi_branch() {
         run_cmd git -C "$OBI_DIR" checkout "$obi_sha"
         run_cmd git -C "$OBI_DIR" checkout -B "$release_branch"
     fi
+
+    uncomment_bpfel_in_gitignore "$OBI_DIR"
 
     run_write_cmd make -C "$OBI_DIR" docker-generate
     run_write_cmd make -C "$OBI_DIR" java-build
@@ -483,6 +545,8 @@ prepare_beyla_branch() {
     else
         log_info "No Beyla submodule pointer change to commit."
     fi
+
+    uncomment_bpfel_in_gitignore "$BEYLA_DIR"
 
     run_write_cmd make -C "$BEYLA_DIR" vendor-obi
     run_write_cmd make -C "$BEYLA_DIR" java-build
@@ -583,7 +647,7 @@ prepare_command() {
     if [[ "$SKIP_CI_CHECK" == "true" ]]; then
         log_warn "Skipping CI check for ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}"
     else
-        check_ci_green "$BEYLA_REPO" "$BEYLA_MAIN_BRANCH" "${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}"
+        check_ci_green "$BEYLA_REPO" "$BEYLA_MAIN_BRANCH" "${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}" "$EXCLUDE_CHECK_NAME"
     fi
 
     if [[ "$SKIP_UPSTREAM_SYNC_CHECK" == "true" ]]; then
@@ -597,8 +661,8 @@ prepare_command() {
     log_info "OBI SHA pinned in ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}: ${obi_sha}"
 
     resolve_prepare_versions
-    local beyla_release_branch="release-${BEYLA_VERSION}"
-    local obi_release_branch="release-${OBI_VERSION}"
+    local beyla_release_branch="release-$(version_without_v "$BEYLA_VERSION")"
+    local obi_release_branch="release-$(version_without_v "$OBI_VERSION")"
 
     prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha"
     prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch" "$obi_sha"
@@ -623,8 +687,8 @@ tag_command() {
     ensure_gh_auth
 
     resolve_tag_versions
-    local beyla_release_branch="release-${BEYLA_VERSION}"
-    local obi_release_branch="release-${OBI_VERSION}"
+    local beyla_release_branch="release-$(version_without_v "$BEYLA_VERSION")"
+    local obi_release_branch="release-$(version_without_v "$OBI_VERSION")"
 
     setup_workspace
 
@@ -644,8 +708,8 @@ tag_command() {
     if [[ "$SKIP_CI_CHECK" == "true" ]]; then
         log_warn "Skipping CI checks for release branches."
     else
-        check_ci_green "$OBI_REPO" "$obi_checked_sha" "${OBI_REPO}:${obi_release_branch}@${obi_checked_sha:0:12}"
-        check_ci_green "$BEYLA_REPO" "$beyla_checked_sha" "${BEYLA_REPO}:${beyla_release_branch}@${beyla_checked_sha:0:12}"
+        check_ci_green "$OBI_REPO" "$obi_checked_sha" "${OBI_REPO}:${obi_release_branch}@${obi_checked_sha:0:12}" "$EXCLUDE_CHECK_NAME"
+        check_ci_green "$BEYLA_REPO" "$beyla_checked_sha" "${BEYLA_REPO}:${beyla_release_branch}@${beyla_checked_sha:0:12}" "$EXCLUDE_CHECK_NAME"
     fi
 
     local obi_target_sha
@@ -760,6 +824,15 @@ parse_args() {
             --skip-ci-check)
                 SKIP_CI_CHECK=true
                 shift
+                ;;
+            --exclude-check=*)
+                EXCLUDE_CHECK_NAME="${1#*=}"
+                shift
+                ;;
+            --exclude-check)
+                require_option_value "$1" "${2:-}"
+                EXCLUDE_CHECK_NAME="${2:-}"
+                shift 2
                 ;;
             --skip-upstream-sync-check)
                 SKIP_UPSTREAM_SYNC_CHECK=true

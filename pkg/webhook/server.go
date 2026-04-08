@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -64,12 +65,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	}, nil
 }
 
-// Start starts the webhook server
-func (s *Server) Start(ctx context.Context) error {
-	if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
-		return fmt.Errorf("webhook TLS not ready: %w", err)
-	}
-
+func (s *Server) makeHTTPServer() *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mutate", s.mutator.HandleMutate)
 	mux.HandleFunc("/health", s.mutator.HealthCheck)
@@ -89,7 +85,22 @@ func (s *Server) Start(ctx context.Context) error {
 
 	server.TLSConfig = tlsConfig
 
+	return server
+}
+
+// Start starts the webhook server
+func (s *Server) Start(ctx context.Context) error {
+	if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
+		return fmt.Errorf("webhook TLS not ready: %w", err)
+	}
+
+	server := s.makeHTTPServer()
+
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
+
+	if err := s.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
+		return err
+	}
 
 	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
 		s.logger.Info("starting initial state scanning")
@@ -110,6 +121,10 @@ func (s *Server) Start(ctx context.Context) error {
 		close(errChan)
 	}()
 
+	return s.waitForCancellation(ctx, server, errChan)
+}
+
+func (s *Server) waitForCancellation(ctx context.Context, server *http.Server, errChan chan error) error {
 	// Wait for context cancellation or server error
 	select {
 	case <-ctx.Done():
@@ -160,7 +175,7 @@ func (s *Server) establishInitialProcessState() error {
 	}
 	s.initialState = initialState
 
-	if s.cfg.Injector.ManageSDKVersions {
+	if !s.cfg.Injector.UsesImageVolume() && s.cfg.Injector.ManageSDKVersions {
 		oldestSDK := s.scanner.OldestSDKVersion()
 		// we could be downgrading the SDK, check if the oldest version is not
 		// newer than what we are launching with now
@@ -172,6 +187,26 @@ func (s *Server) establishInitialProcessState() error {
 			s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
 		}
 	}
+	return nil
+}
+
+func (s *Server) checkImageVolumeSupport(provider *kube.MetadataProvider) error {
+	if s.cfg.Injector.UsesImageVolume() {
+		kubeClient, err := provider.KubeClient()
+		if err != nil {
+			return fmt.Errorf("can't get kubernetes client: %w", err)
+		}
+		serverVersion, err := kubeClient.Discovery().ServerVersion()
+		if err != nil {
+			return fmt.Errorf("can't get kubernetes server version: %w", err)
+		}
+		k8sVersion := fmt.Sprintf("v%s.%s.0", serverVersion.Major, strings.TrimRight(serverVersion.Minor, "+"))
+		s.logger.Info("found Kubernetes version", "version", k8sVersion)
+		if semver.Compare(k8sVersion, "v1.31.0") < 0 {
+			return fmt.Errorf("image volume mounts require Kubernetes 1.31 or later, found %s.%s", serverVersion.Major, serverVersion.Minor)
+		}
+	}
+
 	return nil
 }
 

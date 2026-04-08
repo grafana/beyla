@@ -177,7 +177,11 @@ func (pt *ProcessTracer) setupOtelBPFFSPath(bundles []*common.SpecBundle) string
 	return ""
 }
 
-func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer) error {
+func setupBPFMapSizes(spec *ebpf.CollectionSpec, cfg *obi.Config, otelBPFFSPath string) {
+	ebpfconvenience.SetupMapSizes(spec, cfg.EBPF.MapsConfig.GlobalScaleFactor, otelBPFFSPath)
+}
+
+func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer, cfg *obi.Config) error {
 	bundles, err := p.LoadSpecs()
 	if err != nil {
 		return fmt.Errorf("loading eBPF program specs: %w", err)
@@ -186,6 +190,9 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 	otelBPFFSPath := pt.setupOtelBPFFSPath(bundles)
 
 	for i, bundle := range bundles {
+		// set max entries map using user defined values
+		setupBPFMapSizes(bundle.Spec, cfg, otelBPFFSPath)
+
 		if err := loadSpec(eventContext, bundle, otelBPFFSPath, i); err != nil {
 			closeLoadedSpecs(bundles[:i])
 			return err
@@ -195,11 +202,11 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 	return nil
 }
 
-func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tracer, log *slog.Logger) error {
+func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tracer, log *slog.Logger, cfg *obi.Config) error {
 	plog := log.With("program", reflect.TypeOf(p))
 	plog.Debug("loading eBPF program", "type", pt.Type)
 
-	err := pt.loadAndAssign(eventContext, p)
+	err := pt.loadAndAssign(eventContext, p, cfg)
 
 	if err != nil && (strings.Contains(err.Error(), "unknown func bpf_probe_write_user") ||
 		strings.Contains(err.Error(), "cannot use helper bpf_probe_write_user")) {
@@ -210,7 +217,7 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 			"For more details set OTEL_EBPF_LOG_LEVEL=DEBUG.")
 
 		common.IntegrityModeOverride = true
-		err = pt.loadAndAssign(eventContext, p)
+		err = pt.loadAndAssign(eventContext, p, cfg)
 	}
 
 	if err != nil {
@@ -266,7 +273,7 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 	return nil
 }
 
-func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) error {
+func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext, cfg *obi.Config) error {
 	eventContext.LoadLock.Lock()
 	defer eventContext.LoadLock.Unlock()
 
@@ -275,7 +282,7 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) erro
 	loadedPrograms := make([]Tracer, 0, len(pt.Programs))
 
 	for _, p := range pt.Programs {
-		if err := pt.loadTracer(eventContext, p, log); err != nil {
+		if err := pt.loadTracer(eventContext, p, log, cfg); err != nil {
 			log.Warn("couldn't load tracer", "error", err, "required", p.Required())
 			if p.Required() {
 				return err
@@ -292,8 +299,8 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) erro
 	return nil
 }
 
-func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext) error {
-	return pt.loadTracers(eventContext)
+func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext, cfg *obi.Config) error {
+	return pt.loadTracers(eventContext, cfg)
 }
 
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
@@ -371,7 +378,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext, p UtilityTracer) error {
+func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext, p UtilityTracer, cfg *obi.Config) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -382,6 +389,9 @@ func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext
 	}
 
 	for idx, bundle := range bundles {
+		// Utility tracers don't pin maps (empty pin path), so no pinned
+		// map conflicts are possible — the empty path is intentional.
+		setupBPFMapSizes(bundle.Spec, cfg, "")
 		if err := loadSpec(eventContext, bundle, "", idx); err != nil {
 			closeLoadedSpecs(bundles[:idx])
 			printVerifierErrorInfo(err)

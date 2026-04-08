@@ -53,7 +53,7 @@ jobs:
           github_app: grafana-beyla-bot
 
       - name: Run Claude Code – Triage
-        uses: anthropics/claude-code-action@cd77b50d2b0808657f8e6774085c8bf54484351c # v1.0.72
+        uses: anthropics/claude-code-action@e7b588b6eaa5263c2e7c6c7b34a29e190d32ee68 # v1.0.81
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
@@ -166,7 +166,7 @@ jobs:
           github_app: grafana-beyla-bot
 
       - name: Run Claude Code – Plan
-        uses: anthropics/claude-code-action@cd77b50d2b0808657f8e6774085c8bf54484351c # v1.0.72
+        uses: anthropics/claude-code-action@e7b588b6eaa5263c2e7c6c7b34a29e190d32ee68 # v1.0.81
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
@@ -301,7 +301,7 @@ jobs:
           github_app: grafana-beyla-bot
 
       - name: Run Claude Code – Implement
-        uses: anthropics/claude-code-action@cd77b50d2b0808657f8e6774085c8bf54484351c # v1.0.72
+        uses: anthropics/claude-code-action@e7b588b6eaa5263c2e7c6c7b34a29e190d32ee68 # v1.0.81
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}

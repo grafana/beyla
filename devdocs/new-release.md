@@ -181,7 +181,39 @@ gh workflow run promote-patch-to-stable.yml \
   --repo grafana/beyla \
   -f version_tag=v3.0.0
 ```
+### 6. Post-promotion follow-up
 
+After Beyla `v3.0.0` is promoted to stable/latest, complete the downstream
+version bumps that should not be merged while the release is still a prerelease.
+
+#### Alloy
+
+Use the Grafana Alloy workflow
+[agent_bump_beyla.yml](https://github.com/grafana/alloy/actions/workflows/agent_bump_beyla.yml)
+to prepare the Beyla bump:
+
+- A draft PR can be prepared as soon as the Beyla release is available.
+- If the new Beyla version requires OpenTelemetry dependency updates in Alloy,
+  coordinate with the Alloy team and wait for those changes before merging.
+- The workflow attempts to upgrade the component to the latest release, but
+  manual follow-up may still be needed if the Beyla release contains larger
+  architectural changes.
+- Merge the Alloy PR only after the Beyla release has been promoted to
+  stable/latest.
+
+#### Kubernetes Helm chart
+
+After promotion, bump the Beyla Helm chart in this repository, as in
+[#2661](https://github.com/grafana/beyla/pull/2661):
+
+- Update `charts/beyla/Chart.yaml`:
+  - Set `appVersion` to the promoted Beyla version.
+  - Bump the chart `version`.
+- Regenerate Helm chart docs with `make helm-docs`.
+- Open and merge the Helm chart PR after the Beyla release is stable.
+- Run the Beyla
+  [helm-release.yml](https://github.com/grafana/beyla/actions/workflows/helm-release.yml)
+  workflow after the Helm chart PR is merged.
 ## Failure Handling
 
 If a release fails in CI or in `dev/ops/prod`:

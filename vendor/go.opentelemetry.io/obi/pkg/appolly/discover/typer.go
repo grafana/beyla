@@ -30,6 +30,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
+type cacheKey struct {
+	Dev uint64
+	Ino uint64
+}
+
 type instrumentedExecutable struct {
 	Type                 svc.InstrumentableType
 	Offsets              *goexec.Offsets
@@ -46,7 +51,7 @@ func ExecTyperProvider(
 	input *msg.Queue[[]Event[ProcessMatch]],
 	output *msg.Queue[[]Event[ebpf.Instrumentable]],
 ) swarm.InstanceFunc {
-	instrumentableCache, _ := lru.New[uint64, instrumentedExecutable](100)
+	instrumentableCache, _ := lru.New[cacheKey, instrumentedExecutable](100)
 
 	t := typer{
 		cfg:                 cfg,
@@ -78,7 +83,7 @@ type typer struct {
 	log                 *slog.Logger
 	currentPids         map[app.PID]*exec.FileInfo
 	allGoFunctions      []string
-	instrumentableCache *lru.Cache[uint64, instrumentedExecutable]
+	instrumentableCache *lru.Cache[cacheKey, instrumentedExecutable]
 }
 
 func samplerFromConfig(s *services.SamplerConfig) trace.Sampler {
@@ -177,6 +182,9 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		case EventDeleted:
 			if fInfo, ok := t.currentPids[ev.Obj.Process.Pid]; ok {
 				delete(t.currentPids, ev.Obj.Process.Pid)
+				if t.instrumentableCache != nil {
+					t.instrumentableCache.Remove(cacheKey{Dev: fInfo.Dev, Ino: fInfo.Ino})
+				}
 				out = append(out, Event[ebpf.Instrumentable]{
 					Type: EventDeleted,
 					Obj:  ebpf.Instrumentable{FileInfo: fInfo},
@@ -201,7 +209,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 // in case of belonging to a forked process, returns its parent.
 func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	log := t.log.With("pid", execElf.Pid, "comm", execElf.CmdExePath)
-	if ic, ok := t.instrumentableCache.Get(execElf.Ino); ok {
+	if ic, ok := t.instrumentableCache.Get(cacheKey{Dev: execElf.Dev, Ino: execElf.Ino}); ok {
 		log.Debug("new instance of existing executable", "type", ic.Type)
 		return ebpf.Instrumentable{Type: ic.Type, FileInfo: execElf, Offsets: ic.Offsets, InstrumentationError: ic.InstrumentationError}
 	}
@@ -213,7 +221,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		// we found go offsets, let's see if this application is not a proxy
 		if !isGoProxy(offsets) {
 			log.Debug("identified as a Go service or client")
-			t.instrumentableCache.Add(execElf.Ino, instrumentedExecutable{Type: svc.InstrumentableGolang, Offsets: offsets})
+			t.instrumentableCache.Add(cacheKey{Dev: execElf.Dev, Ino: execElf.Ino}, instrumentedExecutable{Type: svc.InstrumentableGolang, Offsets: offsets})
 			return ebpf.Instrumentable{Type: svc.InstrumentableGolang, FileInfo: execElf, Offsets: offsets}
 		}
 
@@ -256,7 +264,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 		"child", child, "language", detectedType.String())
 	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
-	t.instrumentableCache.Add(execElf.Ino, instrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
+	t.instrumentableCache.Add(cacheKey{Dev: execElf.Dev, Ino: execElf.Ino}, instrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
 
 	return ebpf.Instrumentable{
 		Type:                 detectedType,

@@ -16,15 +16,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
-	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-func dnsEventExpireHandler(spansChan *msg.Queue[[]request.Span], filter ServiceFilter) func(key dnsparser.DNSId, span *request.Span) {
+func dnsEventExpireHandler(emitSpans func([]request.Span)) func(key dnsparser.DNSId, span *request.Span) {
 	return func(_ dnsparser.DNSId, span *request.Span) {
 		// final status is -1, which means we never received a response
-		if span.Status == -1 {
+		if span.Status == -1 && emitSpans != nil {
 			span.Status = int(dnsparser.RCodeRefused)
-			spansChan.Send(filter.Filter([]request.Span{*span}))
+			emitSpans([]request.Span{*span})
 		}
 	}
 }

@@ -294,6 +294,8 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.DNSEnabled()
 	case request.EventTypeCouchbaseClient:
 		return is.CouchbaseEnabled()
+	case request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
+		return is.MemcachedEnabled()
 	}
 
 	return false
@@ -390,9 +392,13 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 
 		host := request.HTTPClientHost(span)
 		scheme := request.HTTPScheme(span)
-		url := span.Path
+		urlPath := span.Path
+		if span.FullPath != "" {
+			urlPath = span.FullPath
+		}
+		url := urlPath
 		if span.HasOriginalHost() {
-			url = request.URLFull(scheme, host, span.Path)
+			url = request.URLFull(scheme, host, urlPath)
 		}
 
 		attrs = []attribute.KeyValue{
@@ -659,6 +665,26 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		if span.DBNamespace != "" {
 			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
 		}
+	case request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.HostAsServer(span)),
+			request.ServerPort(span.HostPort),
+			semconv.DBSystemNameMemcached,
+		}
+		if span.Type == request.EventTypeMemcachedClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
+		}
+		if span.Method != "" {
+			attrs = append(attrs, request.DBOperationName(span.Method))
+			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+				if span.Path != "" {
+					attrs = append(attrs, request.DBQueryText(span.Path))
+				}
+			}
+		}
+		if span.Status != 0 {
+			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+		}
 	case request.EventTypeManualSpan:
 		attrs = manualSpanAttributes(span)
 	case request.EventTypeFailedConnect:
@@ -690,9 +716,9 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer, request.EventTypeSQLServer:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer, request.EventTypeMemcachedServer, request.EventTypeSQLServer:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeFailedConnect:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeFailedConnect:
 		return trace2.SpanKindClient
 	case request.EventTypeKafkaClient, request.EventTypeMQTTClient:
 		switch span.Method {

@@ -1,0 +1,101 @@
+suite: test cache-deployment template
+templates:
+  - cache-deployment.yaml
+tests:
+  - it: should set tolerations when provided
+    template: cache-deployment.yaml
+    set:
+      k8sCache:
+        replicas: 1
+        tolerations:
+          - key: "dedicated"
+            operator: "Equal"
+            value: "cache"
+            effect: "NoSchedule"
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: spec.template.spec.tolerations
+          value:
+            - key: "dedicated"
+              operator: "Equal"
+              value: "cache"
+              effect: "NoSchedule"
+
+  - it: should not set tolerations when not provided
+    template: cache-deployment.yaml
+    set:
+      k8sCache:
+        replicas: 1
+    asserts:
+      - isKind:
+          of: Deployment
+      - notExists:
+          path: spec.template.spec.tolerations
+
+  - it: should set nodeSelector when provided
+    template: cache-deployment.yaml
+    set:
+      k8sCache:
+        replicas: 1
+        nodeSelector:
+          disktype: ssd
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: spec.template.spec.nodeSelector
+          value:
+            disktype: ssd
+
+  - it: should not set nodeSelector when not provided
+    template: cache-deployment.yaml
+    set:
+      k8sCache:
+        replicas: 1
+    asserts:
+      - isKind:
+          of: Deployment
+      - notExists:
+          path: spec.template.spec.nodeSelector
+
+  - it: should set affinity when provided
+    template: cache-deployment.yaml
+    set:
+      k8sCache:
+        replicas: 1
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: topology.kubernetes.io/zone
+                      operator: In
+                      values:
+                        - us-east-1a
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: spec.template.spec.affinity
+          value:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: topology.kubernetes.io/zone
+                        operator: In
+                        values:
+                          - us-east-1a
+
+  - it: should not set affinity when not provided
+    template: cache-deployment.yaml
+    set:
+      k8sCache:
+        replicas: 1
+    asserts:
+      - isKind:
+          of: Deployment
+      - notExists:
+          path: spec.template.spec.affinity

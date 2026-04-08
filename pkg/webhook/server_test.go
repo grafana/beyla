@@ -483,6 +483,7 @@ func TestServer_EstablishInitialProcessState(t *testing.T) {
 		mockProcessesErr      error
 		mockEnvs              map[int32][]string
 		configSDKVersion      string
+		imageVolumePath       string
 		setupCleanupDir       bool
 		createVersionDirs     []string
 		expectError           bool
@@ -541,6 +542,22 @@ func TestServer_EstablishInitialProcessState(t *testing.T) {
 			configSDKVersion:   "v0.0.5",
 			setupCleanupDir:    false,
 			expectError:        true,
+		},
+		{
+			name: "skips cleanup when using image volume",
+			mockProcessesByPid: map[int32]*ProcessInfo{
+				123: {pid: 123},
+			},
+			mockProcessesErr: nil,
+			mockEnvs: map[int32][]string{
+				123: {fmt.Sprintf("%s=v0.0.5", envVarSDKVersion), "PATH=/usr/bin"},
+			},
+			imageVolumePath:       "my-registry/sdk-image:v1.0.0",
+			configSDKVersion:      "v0.0.8",
+			setupCleanupDir:       true,
+			createVersionDirs:     []string{"v0.0.3", "v0.0.5"},
+			expectError:           false,
+			expectedRemainingDirs: []string{"v0.0.3", "v0.0.5"}, // nothing removed
 		},
 		{
 			name: "cleanup error does not fail the function",
@@ -640,6 +657,7 @@ func TestServer_EstablishInitialProcessState(t *testing.T) {
 				cfg: &beyla.Config{
 					Injector: beyla.SDKInject{
 						SDKPkgVersion:     tt.configSDKVersion,
+						ImageVolumePath:   tt.imageVolumePath,
 						HostMountPath:     tmpDir,
 						ManageSDKVersions: true,
 					},

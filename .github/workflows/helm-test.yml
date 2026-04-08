@@ -119,7 +119,7 @@ jobs:
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
 
       - name: Install Flux CLI
-        uses: fluxcd/flux2/action@97222a775ae8e68f1e85508f356f248704255c9c # v2.8.1
+        uses: fluxcd/flux2/action@871be9b40d53627786d3a3835a3ddba1e3234bd2 # v2.8.3
 
       - name: Install Kind CLI
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0

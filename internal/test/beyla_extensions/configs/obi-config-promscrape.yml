@@ -15,6 +15,7 @@ prometheus_export:
     - application_process
     - application_host
   extra_resource_attributes: ["deployment_environment"]
+  exemplar_filter: "always_on"
 attributes:
   select:
     process_cpu_utilization:

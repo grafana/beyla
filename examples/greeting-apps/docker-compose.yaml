@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   nginx:
-    image: nginx:latest@sha256:0236ee02dcbce00b9bd83e0f5fbc51069e7e1161bd59d99885b3ae1734f3392e
+    image: nginx:latest@sha256:7150b3a39203cb5bee612ff4a9d18774f8c7caf6399d6e8985e97e28eb751c18
     container_name: demo-nginx
     ports:
       - 3333:3330
@@ -18,7 +18,7 @@ services:
 
   # Beyla for NGINX
   nginxbeyla:
-    image: grafana/beyla:latest@sha256:3513245f8b68ea1ef888d2f95896c705d17115202ffa37c45153cae241cdc48a
+    image: grafana/beyla:latest@sha256:4078f0f5ee3d02e8a416bad576ff00d03ee8abf9690bfe178e5aca04b5f539c9
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -48,7 +48,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   gobeyla:
-    image: grafana/beyla:latest@sha256:3513245f8b68ea1ef888d2f95896c705d17115202ffa37c45153cae241cdc48a
+    image: grafana/beyla:latest@sha256:4078f0f5ee3d02e8a416bad576ff00d03ee8abf9690bfe178e5aca04b5f539c9
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -78,7 +78,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   javabeyla:
-    image: grafana/beyla:latest@sha256:3513245f8b68ea1ef888d2f95896c705d17115202ffa37c45153cae241cdc48a
+    image: grafana/beyla:latest@sha256:4078f0f5ee3d02e8a416bad576ff00d03ee8abf9690bfe178e5aca04b5f539c9
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -108,7 +108,7 @@ services:
 
   # Beyla for Rust Actix
   rustbeyla:
-    image: grafana/beyla:latest@sha256:3513245f8b68ea1ef888d2f95896c705d17115202ffa37c45153cae241cdc48a
+    image: grafana/beyla:latest@sha256:4078f0f5ee3d02e8a416bad576ff00d03ee8abf9690bfe178e5aca04b5f539c9
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -130,7 +130,7 @@ services:
 
   # Grafana Agent
   agent:
-    image: grafana/agent@sha256:bba59e1229303b658e19b08b91c7d520d3d3f0fb5dc66e04e2d515456f3ab4d6
+    image: grafana/agent@sha256:473928c1cace5a23fdb1c187dba4ec0fe733d4627ae65383861a7beb997db88c
     container_name: demo-agent
     command:
       - run
@@ -145,7 +145,7 @@ services:
 
   # Tempo
   tempo:
-    image: grafana/tempo@sha256:7e0dcbbde76f31a49d0e43adf88f32a649f6c05b643a6cc16d61edc877b12386
+    image: grafana/tempo@sha256:9acb33917eb8f35d1956bb7af533a1fd5a3203719a5c8631938fcaaaee7ea5df
     container_name: demo-tempo
     command:
       - -config.file
@@ -159,7 +159,7 @@ services:
 
   # Mimir -config.file=config-mimir.yaml -server.grpc-listen-port=9096
   mimir:
-    image: grafana/mimir@sha256:df4b7a5fefba96c19fa3e0b3d3ecceed32892ef49ae893ce37492cfe4f299645
+    image: grafana/mimir@sha256:9559f3ecadab3a7e5b002ff58527e8f4b1ea4473f9e68f5e3f77dd8e7986c69c
     container_name: demo-mimir
     command:
       - -config.file=/etc/mimir/mimir-config.yaml
@@ -171,7 +171,7 @@ services:
       - "9096:9096"
 
   grafana:
-    image: grafana/grafana@sha256:b0ae311af06228bcfd4a620504b653db80f5b91e94dc3dc2a5b7dab202bcde20
+    image: grafana/grafana@sha256:83749231c3835e390a3144e5e940203e42b9589761f20ef3169c716e734ad505
     container_name: demo-grafana
     volumes:
       - ./configs/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml

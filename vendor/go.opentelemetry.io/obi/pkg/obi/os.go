@@ -6,8 +6,11 @@
 package obi // import "go.opentelemetry.io/obi/pkg/obi"
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 
 	"golang.org/x/sys/unix"
 
@@ -15,21 +18,103 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/helpers"
 )
 
-// Minimum required Kernel version: 4.18
-const minKernMaj, minKernMin = 4, 18
+// Minimum required Kernel version: 5.8 (or 4.18 for RHEL-based distros)
+const (
+	minKernMaj, minKernMin         = 5, 8
+	minRHELKernMaj, minRHELKernMin = 4, 18
+)
 
 var kernelVersion = ebpfcommon.KernelVersion
 
-// CheckOSSupport returns an error if the running operating system does not support
-// the minimum required OBI features.
-func CheckOSSupport() error {
-	major, minor := kernelVersion()
-	if major < minKernMaj || (major == minKernMaj && minor < minKernMin) {
-		return fmt.Errorf("kernel version %d.%d not supported. Minimum required version is %d.%d",
-			major, minor, minKernMaj, minKernMin)
+// parseOSReleaseIsRHEL checks whether os-release content indicates an RHEL-based distro.
+func parseOSReleaseIsRHEL(data []byte) bool {
+	content := strings.ToLower(string(data))
+	// matches ID="rhel" or ID_LIKE containing "rhel" (e.g. Rocky, AlmaLinux, CentOS set ID_LIKE="rhel ...")
+	for _, line := range strings.Split(content, "\n") {
+		var val string
+		switch {
+		case strings.HasPrefix(line, "id_like="):
+			val = line[len("id_like="):]
+		case strings.HasPrefix(line, "id="):
+			val = line[len("id="):]
+		default:
+			continue
+		}
+		val = strings.Trim(val, "\"'")
+		if strings.Contains(val, "rhel") || strings.Contains(val, "centos") ||
+			strings.Contains(val, "rocky") || strings.Contains(val, "alma") {
+			return true
+		}
 	}
+	return false
+}
+
+// isRHELBased is a var so tests can override it.
+var isRHELBased = func() bool {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return false
+	}
+	return parseOSReleaseIsRHEL(data)
+}
+
+// hasBTF checks whether the kernel exposes BTF information by looking for the
+// vmlinux BTF file in the canonical sysfs location and fallback paths (mirroring
+// libbpf's btf__load_vmlinux_btf).
+var hasBTF = func() bool {
+	// canonical sysfs location
+	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); err == nil {
+		return true
+	}
+
+	var uname unix.Utsname
+	if err := unix.Uname(&uname); err != nil {
+		return false
+	}
+	release := unix.ByteSliceToString(uname.Release[:])
+
+	// fallback locations from libbpf
+	for _, pattern := range []string{
+		"/boot/vmlinux-%s",
+		"/lib/modules/%s/vmlinux-%[1]s",
+		"/lib/modules/%s/build/vmlinux",
+		"/usr/lib/modules/%s/kernel/vmlinux",
+		"/usr/lib/debug/boot/vmlinux-%s",
+		"/usr/lib/debug/boot/vmlinux-%s.debug",
+		"/usr/lib/debug/lib/modules/%s/vmlinux",
+	} {
+		path := fmt.Sprintf(pattern, release)
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// checkOSSupport contains the actual logic
+// tests call this directly.
+func checkOSSupport() error {
+	major, minor := kernelVersion()
+	maj, mnr := minKernMaj, minKernMin
+	if isRHELBased() {
+		maj, mnr = minRHELKernMaj, minRHELKernMin
+	}
+	if major < maj || (major == maj && minor < mnr) {
+		return fmt.Errorf("kernel version %d.%d not supported. Minimum required version is %d.%d",
+			major, minor, maj, mnr)
+	}
+
+	if !hasBTF() {
+		return errors.New("kernel does not support BTF (CONFIG_DEBUG_INFO_BTF): no vmlinux BTF found")
+	}
+
 	return nil
 }
+
+// CheckOSSupport returns an error if the running operating system does not support
+// the minimum required OBI features.
+// The result is cached after the first call.
+var CheckOSSupport = sync.OnceValue(checkOSSupport)
 
 type osCapabilitiesError uint64
 

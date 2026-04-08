@@ -22,7 +22,7 @@ jobs:
       contents: read
       checks: read
       id-token: write
-    timeout-minutes: 120
+    timeout-minutes: 150
     steps:
       - name: Get GitHub App token
         id: get-github-app-token
@@ -39,25 +39,40 @@ jobs:
           set -euo pipefail
 
           # Exact names to exclude (our own workflow and the supervisor)
-          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures"]'
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi label"]'
+
+          # Retry wrapper for transient GitHub API errors (e.g. 401 token refresh race)
+          gh_retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if output=$("$@" 2>&1); then
+                echo "$output"
+                return 0
+              fi
+              echo "::warning::API call failed (attempt ${attempt}/3): $output" >&2
+              sleep 10
+            done
+            echo "::error::API call failed after 3 attempts" >&2
+            return 1
+          }
 
           echo "Waiting for all CI checks on PR #${PR_NUMBER} to complete..."
 
           while true; do
-            HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
+            HEAD_SHA=$(gh_retry gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
 
             # Build set of check-suite IDs from pull_request-triggered workflow runs.
             # This excludes schedule/workflow_dispatch/push runs that share the same SHA,
             # matching the approach in scripts/release-train.sh:check_ci_green().
             PR_SUITE_IDS=$(
-              gh api --paginate -H "Accept: application/vnd.github+json" \
+              gh_retry gh api --paginate -H "Accept: application/vnd.github+json" \
                 "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
                 | jq -s '[ map(.workflow_runs // []) | add // [] | .[].check_suite_id ]'
             )
 
             # Fetch all check-runs, filter to PR suites + non-Actions apps, deduplicate by name.
             ALL_CHECKS=$(
-              gh api --paginate -H "Accept: application/vnd.github+json" \
+              gh_retry gh api --paginate -H "Accept: application/vnd.github+json" \
                 "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" \
                 | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
             )

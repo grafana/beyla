@@ -70,9 +70,9 @@ jobs:
           # --- Check attempt limit first ---
           VERDICT="rerun"
           REASON=""
-          if [ "$ATTEMPT" -ge 3 ]; then
+          if [ "$ATTEMPT" -ge 2 ]; then
             VERDICT="skip"
-            REASON="Maximum re-run attempts reached (attempt ${ATTEMPT} of 3)"
+            REASON="Maximum re-run attempts reached (attempt ${ATTEMPT} of 2)"
           fi
 
           # --- Build job summary table ---
@@ -113,7 +113,7 @@ jobs:
           # --- Take action ---
           SHOULD_LABEL="false"
           if [ "$VERDICT" = "rerun" ]; then
-            ACTION_LINE="Re-running failed jobs (attempt $((ATTEMPT + 1)) of 3)"
+            ACTION_LINE="Re-running failed jobs (attempt $((ATTEMPT + 1)) of 2)"
             echo "Re-running failed jobs for run ${RUN_ID}..."
             gh run rerun "$RUN_ID" --repo "$REPO" --failed
           else

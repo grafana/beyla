@@ -50,6 +50,7 @@ type traceAttacher struct {
 	javaInjector        *javaagent.JavaInjector
 	reusableTracer      *ebpf.ProcessTracer
 	reusableGoTracer    *ebpf.ProcessTracer
+	commonTracers       []ebpf.Tracer
 	commonTracersLoaded bool
 
 	// Usually, only ebpf.Tracer implementations will send spans data to the read decorator.
@@ -268,9 +269,9 @@ func (ta *traceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tr
 	}
 
 	ta.commonTracersLoaded = true
-	tracers = append(tracers, newCommonTracersGroup(ta.Cfg, ta.Metrics, ta.EbpfEventContext.CommonPIDsFilter)...)
+	ta.commonTracers = newCommonTracersGroup(ta.Cfg, ta.Metrics, ta.EbpfEventContext.CommonPIDsFilter)
 
-	return tracers
+	return append(tracers, ta.commonTracers...)
 }
 
 func (ta *traceAttacher) harvestRoutesProcessor(ie *ebpf.Instrumentable, reused bool) {
@@ -362,6 +363,14 @@ func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	for _, pid := range ie.ChildPids {
 		tracer.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
 	}
+
+	for _, ct := range ta.commonTracers {
+		ct.AllowPID(ie.FileInfo.Pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
+		for _, pid := range ie.ChildPids {
+			ct.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
+		}
+	}
+
 	if ta.SpanSignalsShortcut != nil {
 		spans := make([]request.Span, 0, len(ie.ChildPids)+1)
 		// the forwarded signal must include
@@ -399,6 +408,9 @@ func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		// unless explicitly allowed
 		ta.Metrics.UninstrumentProcess(ie.FileInfo.ExecutableName())
 		tracer.BlockPID(ie.FileInfo.Pid, ie.FileInfo.Ns)
+		for _, ct := range ta.commonTracers {
+			ct.BlockPID(ie.FileInfo.Pid, ie.FileInfo.Ns)
+		}
 
 		// if there are no more trace instances for a program, we need to notify that
 		// the tracer needs to be stopped and deleted.

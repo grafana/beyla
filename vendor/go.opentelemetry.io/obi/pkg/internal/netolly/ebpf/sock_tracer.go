@@ -79,7 +79,7 @@ func NewSockFlowFetcher(
 	spec.Maps[flowDirectionsMap].MaxEntries = uint32(cacheMaxSize)
 	spec.Maps[connInitiatorsMap].MaxEntries = uint32(cacheMaxSize)
 
-	convenience.SetupMapSizes(spec, cfg.MapsConfig.GlobalScaleFactor, "")
+	convenience.SetupMapSizes(spec, cfg.MapsConfig.GlobalScaleFactor)
 
 	traceMsgs := 0
 	if tlog.Enabled(context.TODO(), slog.LevelDebug) {

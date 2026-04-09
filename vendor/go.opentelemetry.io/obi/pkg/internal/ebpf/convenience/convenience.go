@@ -6,7 +6,6 @@ package ebpfconvenience // import "go.opentelemetry.io/obi/pkg/internal/ebpf/con
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -126,13 +125,13 @@ func isResizableMapType(t ebpf.MapType) bool {
 // SetupMapSizes scales all resizable maps in the spec by globalScaleFactor.
 // If globalScaleFactor > 0, sizes are doubled that many times (left shift).
 // If globalScaleFactor < 0, sizes are halved that many times (right shift).
-// Maps already pinned on bpffs (at bpffsPinPath) are skipped.
-func SetupMapSizes(spec *ebpf.CollectionSpec, globalScaleFactor int, bpffsPinPath string) {
+// Maps with PinByName are skipped regardless of scale factor.
+func SetupMapSizes(spec *ebpf.CollectionSpec, globalScaleFactor int) {
 	if globalScaleFactor == 0 {
 		return
 	}
 
-	for name, mSpec := range spec.Maps {
+	for _, mSpec := range spec.Maps {
 		if !isResizableMapType(mSpec.Type) {
 			continue
 		}
@@ -141,11 +140,8 @@ func SetupMapSizes(spec *ebpf.CollectionSpec, globalScaleFactor int, bpffsPinPat
 			continue
 		}
 
-		if bpffsPinPath != "" && mSpec.Pinning == ebpf.PinByName {
-			mapPath := filepath.Join(bpffsPinPath, name)
-			if _, err := os.Stat(mapPath); err == nil {
-				continue
-			}
+		if mSpec.Pinning == ebpf.PinByName {
+			continue
 		}
 
 		oldEntries := mSpec.MaxEntries

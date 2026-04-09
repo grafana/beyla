@@ -48,7 +48,7 @@ func NewStatsFetcher(cfg *config.EBPFTracer) (*StatsFetcher, error) {
 		return nil, fmt.Errorf("loading BPF data: %w", err)
 	}
 
-	ebpfconvenience.SetupMapSizes(spec, cfg.MapsConfig.GlobalScaleFactor, "")
+	ebpfconvenience.SetupMapSizes(spec, cfg.MapsConfig.GlobalScaleFactor)
 
 	sharedMaps := map[string]*ebpf.Map{}
 	var mu sync.Mutex

@@ -177,8 +177,8 @@ func (pt *ProcessTracer) setupOtelBPFFSPath(bundles []*common.SpecBundle) string
 	return ""
 }
 
-func setupBPFMapSizes(spec *ebpf.CollectionSpec, cfg *obi.Config, otelBPFFSPath string) {
-	ebpfconvenience.SetupMapSizes(spec, cfg.EBPF.MapsConfig.GlobalScaleFactor, otelBPFFSPath)
+func setupBPFMapSizes(spec *ebpf.CollectionSpec, cfg *obi.Config) {
+	ebpfconvenience.SetupMapSizes(spec, cfg.EBPF.MapsConfig.GlobalScaleFactor)
 }
 
 func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer, cfg *obi.Config) error {
@@ -191,7 +191,7 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 
 	for i, bundle := range bundles {
 		// set max entries map using user defined values
-		setupBPFMapSizes(bundle.Spec, cfg, otelBPFFSPath)
+		setupBPFMapSizes(bundle.Spec, cfg)
 
 		if err := loadSpec(eventContext, bundle, otelBPFFSPath, i); err != nil {
 			closeLoadedSpecs(bundles[:i])
@@ -391,7 +391,7 @@ func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext
 	for idx, bundle := range bundles {
 		// Utility tracers don't pin maps (empty pin path), so no pinned
 		// map conflicts are possible — the empty path is intentional.
-		setupBPFMapSizes(bundle.Spec, cfg, "")
+		setupBPFMapSizes(bundle.Spec, cfg)
 		if err := loadSpec(eventContext, bundle, "", idx); err != nil {
 			closeLoadedSpecs(bundles[:idx])
 			printVerifierErrorInfo(err)

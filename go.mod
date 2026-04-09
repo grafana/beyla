@@ -9,11 +9,12 @@ replace go.opentelemetry.io/obi => ./.obi-src
 require (
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/distribution/reference v0.6.0
-	github.com/docker/docker v28.5.2+incompatible
 	github.com/goccy/go-json v0.10.6
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
+	github.com/moby/moby/api v1.54.1
+	github.com/moby/moby/client v0.4.0
 	github.com/ory/dockertest/v3 v3.12.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
@@ -147,10 +148,7 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.54.0 // indirect
-	github.com/moby/moby/client v0.3.0 // indirect
 	github.com/moby/spdystream v0.5.0 // indirect
-	github.com/moby/sys/sequential v0.6.0 // indirect
 	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

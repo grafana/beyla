@@ -302,6 +302,7 @@ func getDefinitions(
 		[]*AttrReportGroup{&httpRoutes},
 		map[attr.Name]Default{
 			attr.HTTPRequestMethod:      true,
+			attr.HTTPURLScheme:          true,
 			attr.HTTPResponseStatusCode: true,
 			attr.HTTPUrlPath:            false,
 		},

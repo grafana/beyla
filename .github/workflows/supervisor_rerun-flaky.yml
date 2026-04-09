@@ -125,8 +125,8 @@ jobs:
             # Check if we should add agent/fix-obi label for automated PRs
             MAX_AGENT_RUNS=5
             HAS_AUTOMATED=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "automated-pr")')
-            HAS_AGENT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "agent/fix-obi")')
-            AGENT_LABEL_COUNT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments --jq '[.comments[] | select(.author.login == "grafana-beyla-bot" or .author.login == "github-actions[bot]") | .body | select(contains("Added `agent/fix-obi` label"))] | length')
+            HAS_AGENT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "agent/fix-obi" or . == "agent/fix-obi-pending")')
+            AGENT_LABEL_COUNT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments --jq '[.comments[] | select(.author.login == "grafana-beyla-bot" or .author.login == "github-actions[bot]") | .body | select(contains("Added `agent/fix-obi-pending` label") or contains("Added `agent/fix-obi` label"))] | length')
             echo "agent/fix-obi has been added ${AGENT_LABEL_COUNT}/${MAX_AGENT_RUNS} times"
             echo "label_count=${AGENT_LABEL_COUNT}" >> "$GITHUB_OUTPUT"
             echo "max_label_runs=${MAX_AGENT_RUNS}" >> "$GITHUB_OUTPUT"
@@ -139,7 +139,7 @@ jobs:
               else
                 SHOULD_LABEL="true"
                 ACTION_LINE="${ACTION_LINE}
-          Added \`agent/fix-obi\` label to trigger agentic fix workflow ($((AGENT_LABEL_COUNT + 1))/${MAX_AGENT_RUNS})."
+          Added \`agent/fix-obi-pending\` label — agent will be triggered once all CI checks complete ($((AGENT_LABEL_COUNT + 1))/${MAX_AGENT_RUNS})."
               fi
             fi
           fi
@@ -158,11 +158,14 @@ jobs:
           echo "Posted audit comment on PR #${PR_NUMBER}"
 
   add-agent-label:
-    name: Add agent/fix-obi label
+    name: Add agent/fix-obi-pending label
     needs: evaluate-and-rerun
     if: needs.evaluate-and-rerun.outputs.should-label == 'true'
     runs-on: ubuntu-latest
     permissions:
+      actions: read
+      checks: read
+      pull-requests: write
       id-token: write
     timeout-minutes: 5
     steps:
@@ -172,11 +175,163 @@ jobs:
         with:
           github_app: grafana-beyla-bot
 
-      - name: Add label to trigger agent workflow
+      - name: Add pending label and promote if CI is already complete
         env:
           GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           PR_NUMBER: ${{ needs.evaluate-and-rerun.outputs.pr-number }}
           REPO: ${{ github.repository }}
         run: |
-          echo "Adding agent/fix-obi label to PR #${PR_NUMBER}"
+          set -euo pipefail
+
+          echo "Adding agent/fix-obi-pending label to PR #${PR_NUMBER}"
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi-pending"
+
+          # Check if all CI checks are already complete — if so, promote immediately.
+          # This handles the edge case where the failing workflow was the last to complete.
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi-pending label","Gate agent label on CI completion"]'
+
+          HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
+
+          PR_SUITE_IDS=$(
+            gh api --paginate -H "Accept: application/vnd.github+json" \
+              "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+              | jq -s '[ map(.workflow_runs // []) | add // [] | .[].check_suite_id ]'
+          )
+
+          ALL_CHECKS=$(
+            gh api --paginate -H "Accept: application/vnd.github+json" \
+              "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" \
+              | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
+          )
+
+          CHECKS_JSON=$(
+            echo "$ALL_CHECKS" \
+              | jq --argjson pr_suites "$PR_SUITE_IDS" --argjson excluded "$EXCLUDED_NAMES" \
+                '{check_runs: [
+                  .check_runs[]
+                  | select(
+                      .app.slug != "github-actions"
+                      or (.check_suite.id as $id | $pr_suites | index($id))
+                    )
+                  | select(
+                      (.name as $n | $excluded | index($n)) | not
+                    )
+                ]}' \
+              | jq '{check_runs: [.check_runs | group_by(.name) | .[] | sort_by(.id) | last]}'
+          )
+
+          TOTAL=$(echo "$CHECKS_JSON" | jq '.check_runs | length')
+          PENDING=$(echo "$CHECKS_JSON" | jq '[.check_runs[] | select(.status != "completed")] | length')
+
+          if [ "$TOTAL" -gt 0 ] && [ "$PENDING" -eq 0 ]; then
+            echo "All ${TOTAL} CI checks already complete — promoting to agent/fix-obi immediately"
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"
+          else
+            echo "${PENDING} of ${TOTAL} checks still pending — gate job will promote when CI completes"
+          fi
+
+  gate-agent-label:
+    name: Gate agent label on CI completion
+    if: >
+      github.event.workflow_run.head_repository.id == github.event.workflow_run.repository.id
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      pull-requests: write
+      id-token: write
+    timeout-minutes: 5
+    steps:
+      - name: Check for pending label and promote if CI is complete
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Resolve the associated PR
+          PR_NUMBER=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR associated with run ${RUN_ID}. Exiting."
+            exit 0
+          fi
+
+          # Check if the pending label is present
+          HAS_PENDING=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "agent/fix-obi-pending")')
+          if [ "$HAS_PENDING" != "true" ]; then
+            echo "PR #${PR_NUMBER} does not have agent/fix-obi-pending label. Exiting."
+            exit 0
+          fi
+
+          echo "PR #${PR_NUMBER} has agent/fix-obi-pending — checking if all CI is complete..."
+
+          # Check if all CI checks are complete (same logic as wait-for-ci, run once)
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi-pending label","Gate agent label on CI completion"]'
+
+          HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
+
+          PR_SUITE_IDS=$(
+            gh api --paginate -H "Accept: application/vnd.github+json" \
+              "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+              | jq -s '[ map(.workflow_runs // []) | add // [] | .[].check_suite_id ]'
+          )
+
+          ALL_CHECKS=$(
+            gh api --paginate -H "Accept: application/vnd.github+json" \
+              "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" \
+              | jq -s '{check_runs: ((map(.check_runs // []) | add) // [])}'
+          )
+
+          CHECKS_JSON=$(
+            echo "$ALL_CHECKS" \
+              | jq --argjson pr_suites "$PR_SUITE_IDS" --argjson excluded "$EXCLUDED_NAMES" \
+                '{check_runs: [
+                  .check_runs[]
+                  | select(
+                      .app.slug != "github-actions"
+                      or (.check_suite.id as $id | $pr_suites | index($id))
+                    )
+                  | select(
+                      (.name as $n | $excluded | index($n)) | not
+                    )
+                ]}' \
+              | jq '{check_runs: [.check_runs | group_by(.name) | .[] | sort_by(.id) | last]}'
+          )
+
+          TOTAL=$(echo "$CHECKS_JSON" | jq '.check_runs | length')
+          PENDING=$(echo "$CHECKS_JSON" | jq '[.check_runs[] | select(.status != "completed")] | length')
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "No CI checks found yet. Exiting."
+            exit 0
+          fi
+
+          if [ "$PENDING" -gt 0 ]; then
+            echo "${PENDING} of ${TOTAL} checks still pending. Will re-evaluate on next workflow completion."
+            exit 0
+          fi
+
+          echo "All ${TOTAL} CI checks complete. Promoting label."
+          echo "should_promote=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Get GitHub App token
+        if: steps.gate.outputs.should_promote == 'true'
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Promote pending label to agent/fix-obi
+        if: steps.gate.outputs.should_promote == 'true'
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Swapping agent/fix-obi-pending → agent/fix-obi on PR #${PR_NUMBER}"
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"
           gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"

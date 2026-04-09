@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
 
           # Exact names to exclude (our own workflow and the supervisor)
-          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi label"]'
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi label","Add agent/fix-obi-pending label","Gate agent label on CI completion"]'
 
           # Retry wrapper for transient GitHub API errors (e.g. 401 token refresh race)
           gh_retry() {
@@ -487,5 +487,6 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
-          echo "Removing agent/fix-obi label from PR #${PR_NUMBER} to allow re-triggering"
+          echo "Removing agent labels from PR #${PR_NUMBER} to allow re-triggering"
           gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi" || true
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending" || true

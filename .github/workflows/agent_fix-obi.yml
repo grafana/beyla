@@ -383,7 +383,7 @@ jobs:
   cleanup:
     name: Remove agent label
     needs: implement
-    if: always()
+    if: always() && github.event.label.name == 'agent/fix-obi'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

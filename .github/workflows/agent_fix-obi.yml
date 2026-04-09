@@ -161,10 +161,13 @@ jobs:
           github_app: grafana-beyla-bot
 
       - name: Load triage prompt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           PROMPT=$(cat .github/prompts/fix-obi/triage.md)
-          PROMPT="${PROMPT//\{\{PR_NUMBER\}\}/${{ github.event.pull_request.number }}}"
-          PROMPT="${PROMPT//\{\{PR_TITLE\}\}/${{ github.event.pull_request.title }}}"
+          PROMPT="${PROMPT//\{\{PR_NUMBER\}\}/${PR_NUMBER}}"
+          PROMPT="${PROMPT//\{\{PR_TITLE\}\}/${PR_TITLE}}"
           {
             echo 'AGENT_PROMPT<<PROMPT_EOF'
             echo "$PROMPT"
@@ -246,10 +249,13 @@ jobs:
           github_app: grafana-beyla-bot
 
       - name: Load plan prompt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           PROMPT=$(cat .github/prompts/fix-obi/plan.md)
-          PROMPT="${PROMPT//\{\{PR_NUMBER\}\}/${{ github.event.pull_request.number }}}"
-          PROMPT="${PROMPT//\{\{PR_TITLE\}\}/${{ github.event.pull_request.title }}}"
+          PROMPT="${PROMPT//\{\{PR_NUMBER\}\}/${PR_NUMBER}}"
+          PROMPT="${PROMPT//\{\{PR_TITLE\}\}/${PR_TITLE}}"
           {
             echo 'AGENT_PROMPT<<PROMPT_EOF'
             echo "$PROMPT"
@@ -335,10 +341,13 @@ jobs:
           github_app: grafana-beyla-bot
 
       - name: Load implement prompt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           PROMPT=$(cat .github/prompts/fix-obi/implement.md)
-          PROMPT="${PROMPT//\{\{PR_NUMBER\}\}/${{ github.event.pull_request.number }}}"
-          PROMPT="${PROMPT//\{\{PR_TITLE\}\}/${{ github.event.pull_request.title }}}"
+          PROMPT="${PROMPT//\{\{PR_NUMBER\}\}/${PR_NUMBER}}"
+          PROMPT="${PROMPT//\{\{PR_TITLE\}\}/${PR_TITLE}}"
           {
             echo 'AGENT_PROMPT<<PROMPT_EOF'
             echo "$PROMPT"

@@ -28,6 +28,10 @@ func HTTPUrlPath(val string) attribute.KeyValue {
 	return attribute.Key(attr.HTTPUrlPath).String(val)
 }
 
+func HTTPUrlScheme(val string) attribute.KeyValue {
+	return attribute.Key(attr.HTTPURLScheme).String(val)
+}
+
 func HTTPUrlFull(val string) attribute.KeyValue {
 	return attribute.Key(attr.HTTPUrlFull).String(val)
 }

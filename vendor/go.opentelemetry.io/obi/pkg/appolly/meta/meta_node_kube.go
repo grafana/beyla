@@ -36,8 +36,11 @@ func kubeNodeFetcher(k8sInformer *kube.MetadataProvider) fetcher {
 		nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
 			FieldSelector: "metadata.name=" + nodeName,
 		})
-		if err != nil || len(nodes.Items) == 0 {
+		if err != nil {
 			return NodeMeta{}, fmt.Errorf("can't get node %s: %w", nodeName, err)
+		}
+		if len(nodes.Items) == 0 {
+			return NodeMeta{}, fmt.Errorf("can't get node %s: not found", nodeName)
 		}
 		return NodeMeta{
 			HostID: nodes.Items[0].Status.NodeInfo.MachineID,

@@ -12,6 +12,8 @@ on: # zizmor: ignore[dangerous-triggers] no code checkout; GITHUB_TOKEN used for
       - "Check third-party licenses"
       - "Test Docker build"
       - "Documentation CI"
+      - "Pull request integration tests on VM"
+      - "Helm Test"
     types: [completed]
 
 # Set restrictive permissions at workflow level

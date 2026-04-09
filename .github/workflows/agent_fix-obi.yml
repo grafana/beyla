@@ -166,6 +166,7 @@ jobs:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
           label_trigger: agent/fix-obi
+          allowed_bots: "grafana-beyla-bot"
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
@@ -279,6 +280,7 @@ jobs:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
           label_trigger: agent/fix-obi
+          allowed_bots: "grafana-beyla-bot"
           use_sticky_comment: "true"
           use_commit_signing: "false"
           claude_args: >-
@@ -414,6 +416,7 @@ jobs:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
           label_trigger: agent/fix-obi
+          allowed_bots: "grafana-beyla-bot"
           use_sticky_comment: "true"
           use_commit_signing: "true"
           claude_args: >-

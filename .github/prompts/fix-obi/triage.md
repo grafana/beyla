@@ -37,4 +37,6 @@ Your job is to **extract and record** failure information for the next step. Do 
 
    At the top of the file, include an **OBI SHAs** section if the submodule changed.
 
+7. **Note test input changes**: When recording test assertion failures, also check whether OBI's version of the failing test added or changed **test inputs** (config YAML, setup data, table entries) — not just assertions. Include a brief note in the triage output, e.g. "OBI added `log_format: json` to the test config YAML for this test case." This context is critical for the planning step to avoid assertion-only fixes.
+
 **Output**: Only create/update **`triage.md`**. No other file changes. No analysis. No root cause discussion.

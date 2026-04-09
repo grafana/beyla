@@ -48,4 +48,9 @@ Changes should be limited to:
 - Test synchronisation rules in `scripts/generate-obi-tests.sh` (`BEHAVIORAL_TRANSFORMS`, `CODE_INJECTIONS`)
 - Beyla-specific test extensions in `internal/test/beyla_extensions/`
 
-When reviewing OBI integration changes, flag modifications to forbidden directories, test skips, assertion patches that do not match upstream OBI test changes, and config struct mismatches.
+When reviewing OBI integration changes, flag:
+- Modifications to forbidden directories
+- Test skips
+- Assertion-only fixes that change expected values without also porting the corresponding OBI test inputs (config YAML fields, setup data, table entries) — this is the most common shortcut and defeats the purpose of the test
+- Assertion patches that do not match upstream OBI test values
+- Config struct mismatches

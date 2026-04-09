@@ -10,6 +10,12 @@ Triage and root cause analysis are already complete. Your only job is to **imple
 - **`triage.md`** (repo root) — reference only if plan.md directs you to it for additional context.
 - Source code as needed, including `.obi-src/` for reference when porting OBI changes.
 
+## Verification principle
+
+Before committing any test fix, verify that it ports OBI's upstream intention, not just makes the test pass. For each changed test file:
+1. Open the corresponding OBI test in `.obi-src/` and compare both the **test inputs** (config YAML, setup data, table entries) and the **assertions**.
+2. If OBI added new inputs that drive the assertion, those inputs must appear in Beyla's version too. An assertion-only change that omits the upstream input change is incorrect — it makes the test pass against the wrong behavior.
+
 ## Forbidden directories — never modify
 
 - **`vendor/`** — vendored OBI code; correct by definition if OBI CI passes.

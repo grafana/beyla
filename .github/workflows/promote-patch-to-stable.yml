@@ -223,7 +223,7 @@ jobs:
             echo "- Technical documentation publish workflow triggered for \`${VERSION_TAG}\`"
             echo ""
             echo "### Automated Follow-up"
-            echo "- [x] Helm chart bump PR created automatically"
+            echo "- [ ] Helm chart bump workflow triggered (check the workflow run for status)"
             echo ""
             echo "### Manual Follow-up"
             echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) after the chart bump PR merges"

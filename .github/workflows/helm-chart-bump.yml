@@ -95,14 +95,14 @@ jobs:
           fi
 
           # Determine if chart version needs bumping
-          # Bump only if current chart version == last released version
-          if [[ "${CURRENT_CHART_VERSION}" == "${RELEASED_CHART_VERSION}" ]]; then
+          # Bump if current chart version == last released version, or if no prior release exists
+          if [[ -z "${RELEASED_CHART_VERSION}" || "${CURRENT_CHART_VERSION}" == "${RELEASED_CHART_VERSION}" ]]; then
             # Parse semver and bump patch
             IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_CHART_VERSION}"
             NEW_CHART_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
             echo "new_chart_version=${NEW_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
             echo "chart_version_changed=true" >> "${GITHUB_OUTPUT}"
-            echo "Chart version: ${CURRENT_CHART_VERSION} -> ${NEW_CHART_VERSION} (patch bump, last released was ${RELEASED_CHART_VERSION})"
+            echo "Chart version: ${CURRENT_CHART_VERSION} -> ${NEW_CHART_VERSION} (patch bump, last released: ${RELEASED_CHART_VERSION:-none})"
           else
             echo "new_chart_version=${CURRENT_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
             echo "chart_version_changed=false" >> "${GITHUB_OUTPUT}"

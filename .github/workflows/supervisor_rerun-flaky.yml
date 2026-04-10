@@ -227,6 +227,14 @@ jobs:
             echo "All ${TOTAL} CI checks already complete — promoting to agent/fix-obi immediately"
             gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"
             gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"
+
+            # This PR is always automated-pr (evaluate-and-rerun only sets should-label for automated PRs).
+            # If checks are also all green, request Copilot review since handle-ci-completion won't re-fire.
+            NON_GREEN=$(echo "$CHECKS_JSON" | jq '[.check_runs[] | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
+            if [ "$NON_GREEN" -eq 0 ]; then
+              echo "All checks green — requesting Copilot review"
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --add-reviewer "copilot"
+            fi
           else
             echo "${PENDING} of ${TOTAL} checks still pending — handle-ci-completion job will promote when CI completes"
           fi

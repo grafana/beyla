@@ -222,7 +222,20 @@ jobs:
             echo "### Documentation"
             echo "- Technical documentation publish workflow triggered for \`${VERSION_TAG}\`"
             echo ""
+            echo "### Automated Follow-up"
+            echo "- [x] Helm chart bump PR created automatically"
+            echo ""
             echo "### Manual Follow-up"
-            echo "- [ ] Update \`charts/beyla/Chart.yaml\` with new \`appVersion\` and \`version\` if needed"
-            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) if a new chart release is needed"
+            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) after the chart bump PR merges"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  bump-helm-chart:
+    needs: [validate, promote]
+    if: inputs.dry_run == false
+    uses: ./.github/workflows/helm-chart-bump.yml
+    with:
+      version_tag: ${{ needs.validate.outputs.version_tag }}
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write

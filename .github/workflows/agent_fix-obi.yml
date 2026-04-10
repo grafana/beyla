@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
 
           # Exact names to exclude (our own workflow and the supervisor)
-          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi label","Add agent/fix-obi-pending label","Gate agent label on CI completion"]'
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi label","Add agent/fix-obi-pending label","Handle CI completion","Request Copilot review"]'
 
           # Retry wrapper for transient GitHub API errors (e.g. 401 token refresh race)
           gh_retry() {

@@ -188,7 +188,7 @@ jobs:
 
           # Check if all CI checks are already complete — if so, promote immediately.
           # This handles the edge case where the failing workflow was the last to complete.
-          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi-pending label","Gate agent label on CI completion"]'
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi-pending label","Handle CI completion","Request Copilot review"]'
 
           HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
 
@@ -228,11 +228,11 @@ jobs:
             gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"
             gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"
           else
-            echo "${PENDING} of ${TOTAL} checks still pending — gate job will promote when CI completes"
+            echo "${PENDING} of ${TOTAL} checks still pending — handle-ci-completion job will promote when CI completes"
           fi
 
-  gate-agent-label:
-    name: Gate agent label on CI completion
+  handle-ci-completion:
+    name: Handle CI completion
     if: >
       github.event.workflow_run.head_repository.id == github.event.workflow_run.repository.id
     runs-on: ubuntu-latest
@@ -243,8 +243,8 @@ jobs:
       id-token: write
     timeout-minutes: 5
     steps:
-      - name: Check for pending label and promote if CI is complete
-        id: gate
+      - name: Resolve PR and check CI status
+        id: check
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
@@ -252,24 +252,26 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Resolve the associated PR
+          # --- Resolve the associated PR ---
           PR_NUMBER=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty' 2>/dev/null || true)
           if [ -z "$PR_NUMBER" ]; then
             echo "No PR associated with run ${RUN_ID}. Exiting."
             exit 0
           fi
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
 
-          # Check if the pending label is present
-          HAS_PENDING=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "agent/fix-obi-pending")')
-          if [ "$HAS_PENDING" != "true" ]; then
-            echo "PR #${PR_NUMBER} does not have agent/fix-obi-pending label. Exiting."
+          # --- Check which labels are present ---
+          LABELS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name]')
+          HAS_PENDING=$(echo "$LABELS" | jq 'any(. == "agent/fix-obi-pending")')
+          HAS_AUTOMATED=$(echo "$LABELS" | jq 'any(. == "automated-pr")')
+
+          if [ "$HAS_PENDING" != "true" ] && [ "$HAS_AUTOMATED" != "true" ]; then
+            echo "PR #${PR_NUMBER} has neither agent/fix-obi-pending nor automated-pr. Exiting."
             exit 0
           fi
 
-          echo "PR #${PR_NUMBER} has agent/fix-obi-pending — checking if all CI is complete..."
-
-          # Check if all CI checks are complete (same logic as wait-for-ci, run once)
-          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi-pending label","Gate agent label on CI completion"]'
+          # --- Fetch CI check status (single copy of shared logic) ---
+          EXCLUDED_NAMES='["Fix OBI submodule CI","CI Supervisor: Rerun flaky failures","Wait for CI completion","Triage CI failures","Plan fixes","Implement and push","Remove agent label","Evaluate failed checks","Add agent/fix-obi-pending label","Handle CI completion","Request Copilot review"]'
 
           HEAD_SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
 
@@ -314,24 +316,45 @@ jobs:
             exit 0
           fi
 
-          echo "All ${TOTAL} CI checks complete. Promoting label."
-          echo "should_promote=true" >> "$GITHUB_OUTPUT"
-          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "All ${TOTAL} CI checks complete."
+
+          # --- Determine actions ---
+          if [ "$HAS_PENDING" = "true" ]; then
+            echo "should_promote=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          NON_GREEN=$(echo "$CHECKS_JSON" | jq '[.check_runs[] | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
+          if [ "$HAS_AUTOMATED" = "true" ] && [ "$NON_GREEN" -eq 0 ]; then
+            echo "should_request_review=true" >> "$GITHUB_OUTPUT"
+          elif [ "$NON_GREEN" -gt 0 ]; then
+            echo "${NON_GREEN} check(s) are not green:"
+            echo "$CHECKS_JSON" | jq -r '.check_runs[] | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | "  - \(.name): \(.conclusion // "none")"'
+          fi
 
       - name: Get GitHub App token
-        if: steps.gate.outputs.should_promote == 'true'
+        if: steps.check.outputs.should_promote == 'true'
         id: get-github-app-token
         uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
         with:
           github_app: grafana-beyla-bot
 
       - name: Promote pending label to agent/fix-obi
-        if: steps.gate.outputs.should_promote == 'true'
+        if: steps.check.outputs.should_promote == 'true'
         env:
           GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
-          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          PR_NUMBER: ${{ steps.check.outputs.pr_number }}
           REPO: ${{ github.repository }}
         run: |
           echo "Swapping agent/fix-obi-pending → agent/fix-obi on PR #${PR_NUMBER}"
           gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"
           gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"
+
+      - name: Request Copilot review
+        if: steps.check.outputs.should_request_review == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.check.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "All CI checks green on automated PR #${PR_NUMBER}. Requesting Copilot review."
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-reviewer "copilot"

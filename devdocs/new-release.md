@@ -16,7 +16,9 @@ The release process follows a weekly release train and Semantic Versioning only:
 - Failed/abandoned versions are skipped (no retroactive patching)
 
 Releases move through environments: `dev -> ops -> prod`.
-A version starts as a prerelease and is promoted to stable/latest only when it graduates.
+A version starts as a prerelease and is promoted to stable/latest once validated
+in `ops` (no unexpected errors or panics). The stable release is then deployed
+to `prod`.
 
 Example used in this document:
 
@@ -164,27 +166,46 @@ gh release create v3.0.0 \
 
 ### 5. Promote to stable/latest
 
-When the release train has validated a version in `prod`, run:
+When the release has been deployed to `ops` and validated (no unexpected errors
+or panics), promote to stable. Because `ops` closely resembles `prod`, validating
+there is sufficient to declare a stable release — this reduces overall time to
+stable compared to waiting for a full `prod` cycle.
 
-- [`promote-patch-to-stable.yml`](https://github.com/grafana/beyla/actions/workflows/promote-patch-to-stable.yml) with `version_tag=v3.0.0`.
+Run [`promote-patch-to-stable.yml`](https://github.com/grafana/beyla/actions/workflows/promote-patch-to-stable.yml) with `version_tag=v3.0.0`.
 
 Step outcome:
 
 This marks the Beyla GitHub release as stable/latest and promotes the Docker
 tags for that version.
 
-After the release train has validated Beyla `v3.0.0`, promote that Beyla
-release to stable/latest.
-
 ```bash
 gh workflow run promote-patch-to-stable.yml \
   --repo grafana/beyla \
   -f version_tag=v3.0.0
 ```
+
 ### 6. Post-promotion follow-up
 
 After Beyla `v3.0.0` is promoted to stable/latest, complete the downstream
-version bumps that should not be merged while the release is still a prerelease.
+version bumps and deploy the stable release to `prod`.
+
+#### Kubernetes Helm chart
+
+Bump the Beyla Helm chart in this repository, as in
+[#2661](https://github.com/grafana/beyla/pull/2661):
+
+- Update `charts/beyla/Chart.yaml`:
+  - Set `appVersion` to the promoted Beyla version.
+  - Bump the chart `version`.
+- Regenerate Helm chart docs with `make helm-docs`.
+- Open and merge the Helm chart PR.
+- Run the Beyla
+  [helm-release.yml](https://github.com/grafana/beyla/actions/workflows/helm-release.yml)
+  workflow after the Helm chart PR is merged.
+
+#### Deploy to prod
+
+Deploy the stable Beyla release to `prod` using the updated Helm chart.
 
 #### Alloy
 
@@ -200,20 +221,6 @@ to prepare the Beyla bump:
   architectural changes.
 - Merge the Alloy PR only after the Beyla release has been promoted to
   stable/latest.
-
-#### Kubernetes Helm chart
-
-After promotion, bump the Beyla Helm chart in this repository, as in
-[#2661](https://github.com/grafana/beyla/pull/2661):
-
-- Update `charts/beyla/Chart.yaml`:
-  - Set `appVersion` to the promoted Beyla version.
-  - Bump the chart `version`.
-- Regenerate Helm chart docs with `make helm-docs`.
-- Open and merge the Helm chart PR after the Beyla release is stable.
-- Run the Beyla
-  [helm-release.yml](https://github.com/grafana/beyla/actions/workflows/helm-release.yml)
-  workflow after the Helm chart PR is merged.
 ## Failure Handling
 
 If a release fails in CI or in `dev/ops/prod`:

@@ -665,7 +665,10 @@ prepare_command() {
     local obi_release_branch="release-$(version_without_v "$OBI_VERSION")"
 
     prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha"
-    prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch" "$obi_sha"
+    local obi_release_sha
+    obi_release_sha="$(git -C "$OBI_DIR" rev-parse HEAD)"
+    log_info "OBI release branch tip SHA: ${obi_release_sha}"
+    prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch" "$obi_release_sha"
 
     log_info "Release branches prepared: beyla_version=${BEYLA_VERSION}, beyla_branch=${beyla_release_branch}, obi_version=${OBI_VERSION}, obi_branch=${obi_release_branch}"
 

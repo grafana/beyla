@@ -136,7 +136,7 @@ jobs:
       actions: write
     steps:
       - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@f2909d40e17c95ca36e7b643fa56ca53ca6571f9
+        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0

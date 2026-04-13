@@ -23,7 +23,7 @@ COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wra
 RUN make compile-for-coverage
 
 # Create final image from minimal + built binary
-FROM ubuntu@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c
+FROM ubuntu@sha256:84e77dee7d1bc93fb029a45e3c6cb9d8aa4831ccfcc7103d36e876938d28895b
 
 COPY --from=builder /src/bin/beyla /beyla
 # Wrap the executable in a script that waits for the processes to end

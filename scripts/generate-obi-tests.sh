@@ -105,6 +105,12 @@ BEHAVIORAL_TRANSFORMS=(
     'internal/test/integration/components/beyla|internal/test/beyla_extensions/components/beyla'
     'internal/test/integration/components/beyla-k8s-cache|internal/test/beyla_extensions/components/beyla-k8s-cache'
 
+    # --- Test assertion fixes: hard-fail t → collect-t ct inside EventuallyWithT ---
+    # OBI upstream bug: python/rails span checks in testNestedHTTPTracesKProbes use
+    # require.Len(t, ...) instead of require.Len(ct, ...), causing immediate hard-fail
+    # inside EventuallyWithT before it can retry on slow/kernel-5.15 environments.
+    'require\.Len(t, res, 1, traceID)|require.Len(ct, res, 1, traceID)'
+
     # --- K8s image tags ---
     '"obi:dev"|"beyla:dev"'
     '"obi-k8s-cache:dev"|"beyla-k8s-cache:dev"'

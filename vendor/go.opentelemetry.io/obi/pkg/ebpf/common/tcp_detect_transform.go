@@ -38,7 +38,7 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 		return request.Span{}, true, err
 	}
 
-	if !filter.ValidPID(app.PID(event.Pid.UserPid), event.Pid.Ns, PIDTypeKProbes) {
+	if event.EventSource == GenericEventSourceTypeKProbes && !filter.ValidPID(app.PID(event.Pid.UserPid), event.Pid.Ns, PIDTypeKProbes) {
 		return request.Span{}, true, nil
 	}
 
@@ -250,10 +250,13 @@ func detectHeuristicProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, 
 
 	// must come before MQTT: the MQTT heuristic can match the HTTP/2 connection preface,
 	// silently dropping packets that should be re-routed as HTTP/2
-	if span, ignore, matched, err := matchHTTP2(event, requestBuffer, responseBuffer); matched {
-		return span, ignore, matched, err
+	// We also must check for the event source here, since now generic TCP events can come from
+	// the Go tracer. The backup path for HTTP2 should only run for generic kprobe events.
+	if event.EventSource == GenericEventSourceTypeKProbes {
+		if span, ignore, matched, err := matchHTTP2(event, requestBuffer, responseBuffer); matched {
+			return span, ignore, matched, err
+		}
 	}
-
 	if span, ignore, matched, err := matchMQTT(event, requestBuffer, responseBuffer); matched {
 		return span, ignore, matched, err
 	}

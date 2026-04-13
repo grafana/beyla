@@ -767,9 +767,13 @@ func isExponentialAggregation(mc *otelcfg.MetricsConfig, mlog *slog.Logger) bool
 }
 
 func (mr *MetricsReporter) close() {
-	if err := mr.exporter.Shutdown(mr.ctx); err != nil {
-		slog.With("component", "MetricsReporter").Error("closing metrics provider", "error", err)
-	}
+	go func() {
+		if err := mr.exporter.Shutdown(mr.ctx); err != nil {
+			mlog().Warn("closing metrics provider", "error", err)
+			return
+		}
+		mlog().Debug("Metrics reporter closed")
+	}()
 }
 
 // instrumentMetricsExporter checks whether the context is configured to report internal metrics and,

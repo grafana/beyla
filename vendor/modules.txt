@@ -511,6 +511,13 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
+# github.com/ohler55/ojg v1.28.1
+## explicit; go 1.18
+github.com/ohler55/ojg
+github.com/ohler55/ojg/alt
+github.com/ohler55/ojg/gen
+github.com/ohler55/ojg/jp
+github.com/ohler55/ojg/oj
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest

@@ -90,10 +90,17 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 		p.log.Info("Kernel in lockdown mode or missing CAP_SYS_ADMIN.")
 	}
 
+	if p.cfg.TrackRequestHeaders ||
+		p.cfg.ContextPropagation.IsEnabled() {
+		p.log.Info("Enabling trace information parsing", "bpf_loop_enabled", ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.OverrideBPFLoopEnabled))
+	}
+
 	spec, err := LoadBpf()
 	if err != nil {
 		return nil, err
 	}
+
+	ebpfcommon.FixupSpec(spec, p.cfg.OverrideBPFLoopEnabled)
 
 	return []*ebpfcommon.SpecBundle{{
 		Spec:      spec,
@@ -108,7 +115,7 @@ func (p *Tracer) constants() map[string]any {
 		blackBoxCP = uint32(1)
 	}
 
-	return map[string]any{
+	m := map[string]any{
 		"g_bpf_debug":               p.cfg.BpfDebug,
 		"g_bpf_header_propagation":  p.supportsContextPropagation(),
 		"wakeup_data_bytes":         uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
@@ -125,9 +132,47 @@ func (p *Tracer) constants() map[string]any {
 		"g_bpf_traceparent_enabled": true,
 		"g_bpf_loop_enabled":        p.supportsBPFLoop,
 	}
+
+	if p.cfg.TrackRequestHeaders ||
+		p.cfg.ContextPropagation.IsEnabled() {
+		m["capture_header_buffer"] = int32(1)
+	} else {
+		m["capture_header_buffer"] = int32(0)
+	}
+
+	if p.cfg.HighRequestVolume {
+		m["high_request_volume"] = uint32(1)
+	} else {
+		m["high_request_volume"] = uint32(0)
+	}
+
+	m["http_max_captured_bytes"] = p.cfg.BufferSizes.HTTP
+	m["mysql_max_captured_bytes"] = p.cfg.BufferSizes.MySQL
+	m["kafka_max_captured_bytes"] = p.cfg.BufferSizes.Kafka
+	m["postgres_max_captured_bytes"] = p.cfg.BufferSizes.Postgres
+	m["max_transaction_time"] = uint64(p.cfg.MaxTransactionTime.Nanoseconds())
+
+	return m
 }
 
-func (p *Tracer) SetupTailCalls() {}
+func (p *Tracer) SetupTailCalls() {
+	for i, prog := range []*ebpf.Program{
+		p.bpfObjects.ObiProtocolHttp,                      // 0
+		p.bpfObjects.ObiContinueProtocolHttp,              // 1
+		p.bpfObjects.ObiContinue2ProtocolHttp,             // 2
+		p.bpfObjects.ObiProtocolHttp2,                     // 3
+		p.bpfObjects.ObiProtocolTcp,                       // 4
+		p.bpfObjects.ObiProtocolHttp2GrpcFrames,           // 5
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 6
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 7
+		p.bpfObjects.ObiHandleBufWithArgs,                 // 8
+	} {
+		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
+		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
+			p.log.Error("error loading info tail call jump table", "error", err)
+		}
+	}
+}
 
 func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
 	offTable := BpfOffTableT{}
@@ -275,6 +320,9 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.ObiUprobeRuntimeNewproc1,
 			End:   p.bpfObjects.ObiUprobeRuntimeNewproc1Return,
 		}},
+		"runtime.goexit1": {{
+			Start: p.bpfObjects.ObiUprobeProcGoexit1,
+		}},
 		"runtime.casgstatus": {{
 			Start: p.bpfObjects.ObiUprobeRuntimeCasgstatus,
 		}},
@@ -348,6 +396,13 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"net.(*netFD).Read": {{
 			Start: p.bpfObjects.ObiUprobeNetFdRead,
+			End:   p.bpfObjects.ObiUprobeNetFdReadRet,
+		}},
+		"net.(*netFD).Write": {{
+			Start: p.bpfObjects.ObiUprobeNetFdWrite,
+		}},
+		"net.(*netFD).Close": {{
+			Start: p.bpfObjects.ObiUprobeNetFdClose,
 		}},
 		"net/http.(*persistConn).roundTrip": {{ // http client
 			Start: p.bpfObjects.ObiUprobePersistConnRoundTrip,

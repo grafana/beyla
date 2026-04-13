@@ -173,8 +173,10 @@ var DefaultConfig = Config{
 				Enrichment: config.EnrichmentConfig{
 					Enabled: false,
 					Policy: config.HTTPParsingPolicy{
-						DefaultAction:     config.HTTPParsingActionExclude,
-						MatchOrder:        config.HTTPParsingMatchOrderFirstMatchWins,
+						DefaultAction: config.HTTPParsingDefaultAction{
+							Headers: config.HTTPParsingActionExclude,
+							Body:    config.HTTPParsingActionExclude,
+						},
 						ObfuscationString: "***",
 					},
 					Rules: []config.HTTPParsingRule{},
@@ -610,6 +612,10 @@ func (c *Config) Validate() error {
 	}
 
 	if err := c.Discovery.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if err := c.EBPF.PayloadExtraction.HTTP.Enrichment.Validate(); err != nil {
 		return ConfigError(err.Error())
 	}
 

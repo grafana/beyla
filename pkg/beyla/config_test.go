@@ -175,8 +175,10 @@ network:
 					},
 					Enrichment: obiconfig.EnrichmentConfig{
 						Policy: obiconfig.HTTPParsingPolicy{
-							DefaultAction:     obiconfig.HTTPParsingActionExclude,
-							MatchOrder:        obiconfig.HTTPParsingMatchOrderFirstMatchWins,
+							DefaultAction: obiconfig.HTTPParsingDefaultAction{
+								Headers: obiconfig.HTTPParsingActionExclude,
+								Body:    obiconfig.HTTPParsingActionExclude,
+							},
 							ObfuscationString: "***",
 						},
 						Rules: []obiconfig.HTTPParsingRule{},

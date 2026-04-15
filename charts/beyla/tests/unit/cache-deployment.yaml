@@ -99,3 +99,17 @@ tests:
           of: Deployment
       - notExists:
           path: spec.template.spec.affinity
+
+  - it: should use k8sCache.image.tag for version label when set
+    template: cache-deployment.yaml
+    set:
+      k8sCache:
+        replicas: 1
+        image:
+          tag: "custom"
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.labels["app.kubernetes.io/version"]
+          value: "custom"

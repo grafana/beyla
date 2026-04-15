@@ -223,7 +223,8 @@ jobs:
             echo "- Technical documentation publish workflow triggered for \`${VERSION_TAG}\`"
             echo ""
             echo "### Automated Follow-up"
-            echo "- [ ] Helm chart bump workflow triggered (check the workflow run for status)"
+            echo "- [x] Helm chart bump workflow triggered (check the workflow run for status)"
+            echo "- [x] Alloy Beyla component update workflow triggered (check [grafana/alloy actions](https://github.com/grafana/alloy/actions/workflows/agent_bump_beyla.yml) for status)"
             echo ""
             echo "### Manual Follow-up"
             echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) after the chart bump PR merges"
@@ -239,3 +240,30 @@ jobs:
       contents: read
       pull-requests: write
       id-token: write
+
+  trigger-alloy-bump:
+    needs: [validate, promote]
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Trigger Alloy Beyla component update
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          VERSION_TAG: ${{ needs.validate.outputs.version_tag }}
+        run: |
+          set -euo pipefail
+          echo "Triggering Alloy Beyla component update for ${VERSION_TAG}"
+          gh workflow run agent_bump_beyla.yml \
+            --repo grafana/alloy \
+            --ref main \
+            -f beyla_release_tag="${VERSION_TAG}"
+          echo "Alloy bump workflow triggered"

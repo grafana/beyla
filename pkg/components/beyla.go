@@ -298,4 +298,7 @@ func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 	if config.NetworkFlows.CIDRs.Enabled() {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupNetCIDR)
 	}
+	if config.NetworkFlows.GeoIP.Enabled() {
+		ctxInfo.MetricAttributeGroups.Add(attributes.GroupNetGeoIP)
+	}
 }

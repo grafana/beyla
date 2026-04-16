@@ -46,6 +46,7 @@ type Tracer struct {
 	instrumentedLibs ebpfcommon.InstrumentedLibsT
 	libsMux          sync.Mutex
 	iters            []*ebpfcommon.Iter
+	eventCtx         *ebpfcommon.EBPFEventContext
 }
 
 func tlog() *slog.Logger {
@@ -155,6 +156,7 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 6
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 7
 		p.bpfObjects.ObiHandleBufWithArgs,                 // 8
+		p.bpfObjects.ObiContinueProtocolHttpTp,            // 9
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
@@ -649,6 +651,10 @@ func bpfConnInfoT(src ebpfcommon.BpfConnectionInfoT) (dst BpfConnectionInfoT) {
 	dst.S_port = src.S_port
 	return
 }
+
+func (p *Tracer) SetEventContext(ctx *ebpfcommon.EBPFEventContext) { p.eventCtx = ctx }
+
+func (p *Tracer) Capabilities() ebpfcommon.TracerCapability { return 0 }
 
 func (p *Tracer) Required() bool {
 	return true

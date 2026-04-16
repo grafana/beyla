@@ -62,14 +62,15 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 
 	errs := make(chan error, 1)
 	go func() {
-		if err := s.Serve(lis); err != nil {
+		if err := s.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			errs <- fmt.Errorf("failed to serve: %w", err)
 		}
 		close(errs)
 	}()
 	select {
 	case <-ctx.Done():
-		return nil
+		s.Stop()
+		return <-errs
 	case err := <-errs:
 		return err
 	}
@@ -96,6 +97,10 @@ func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server infor
 		"fromEpoch", o.fromEpoch,
 		"fromLast", time.Since(time.Unix(o.fromEpoch, 0)))
 	ic.informers.Subscribe(o)
+	go func() {
+		<-server.Context().Done()
+		o.messages.Enqueue(nil)
+	}()
 	// Keep the connection open
 	o.handleMessagesQueue(server.Context())
 	ic.informers.Unsubscribe(o)
@@ -149,6 +154,9 @@ func (o *connection) handleMessagesQueue(ctx context.Context) {
 			return
 		default:
 			event := o.messages.Dequeue()
+			if event == nil {
+				return
+			}
 			if err := o.server.Send(event); err != nil {
 				o.log.Debug("Error sending message. Closing client connection", "clientID", o.ID(), "error", err)
 				o.metrics.MessageError()

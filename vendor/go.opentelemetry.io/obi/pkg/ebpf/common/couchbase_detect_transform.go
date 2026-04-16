@@ -149,6 +149,11 @@ func processCouchbaseEvent(connInfo BpfConnectionInfoT, requestBuf []byte, respo
 			continue
 		}
 
+		if reqPacket.Header().KeyLen() == 0 {
+			slog.Debug("Ignoring Couchbase KV operation with empty key")
+			continue
+		}
+
 		info := &CouchbaseInfo{
 			Operation: reqPacket.Header().Opcode().String(),
 			Key:       reqPacket.KeyString(),

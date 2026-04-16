@@ -320,9 +320,6 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.ObiUprobeRuntimeNewproc1,
 			End:   p.bpfObjects.ObiUprobeRuntimeNewproc1Return,
 		}},
-		"runtime.goexit1": {{
-			Start: p.bpfObjects.ObiUprobeProcGoexit1,
-		}},
 		"runtime.casgstatus": {{
 			Start: p.bpfObjects.ObiUprobeRuntimeCasgstatus,
 		}},
@@ -753,6 +750,10 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }
+
+func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext) {}
+
+func (p *Tracer) Capabilities() ebpfcommon.TracerCapability { return 0 }
 
 func (p *Tracer) Required() bool {
 	return true

@@ -35,7 +35,7 @@ type StatsConfig struct {
 	// If an IP matches multiple CIDR definitions, the stat will be decorated with the
 	// narrowest CIDR. By this reason, you can safely add a 0.0.0.0/0 entry to group there
 	// all the traffic that does not match any of the other CIDRs.
-	CIDRs cidr.Definitions `yaml:"cidrs" env:"OTEL_EBPF_STATS_CIDRS" envSeparator:"," validate:"omitempty,dive,cidr"`
+	CIDRs cidr.Definitions `yaml:"cidrs" env:"OTEL_EBPF_STATS_CIDRS"`
 	// Enables the calculation of tcp srtt of a given instrumented service
 
 	// ReverseDNS allows stats that haven't been previously decorated with any source/destination name

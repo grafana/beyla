@@ -92,6 +92,8 @@ const (
 
 var IntegrityModeOverride = false
 
+type TracerCapability uint64
+
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
 type ProbeDesc struct {
@@ -213,6 +215,7 @@ type EBPFEventContext struct {
 	RingBufLock      sync.Mutex
 	MapsLock         sync.Mutex
 	LoadLock         sync.Mutex
+	Capabilities     TracerCapability
 }
 
 var MisclassifiedEvents = make(chan MisclassifiedEvent)

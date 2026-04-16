@@ -182,6 +182,8 @@ func setupBPFMapSizes(spec *ebpf.CollectionSpec, cfg *obi.Config) {
 }
 
 func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer, cfg *obi.Config) error {
+	p.SetEventContext(eventContext)
+
 	bundles, err := p.LoadSpecs()
 	if err != nil {
 		return fmt.Errorf("loading eBPF program specs: %w", err)
@@ -289,6 +291,7 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext, cfg 
 			}
 		} else {
 			loadedPrograms = append(loadedPrograms, p)
+			eventContext.Capabilities |= p.Capabilities()
 		}
 	}
 

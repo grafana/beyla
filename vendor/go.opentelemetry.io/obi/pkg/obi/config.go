@@ -169,6 +169,12 @@ var DefaultConfig = Config{
 					Anthropic: config.AnthropicConfig{
 						Enabled: false,
 					},
+					Gemini: config.GeminiConfig{
+						Enabled: false,
+					},
+					Bedrock: config.BedrockConfig{
+						Enabled: false,
+					},
 				},
 				Enrichment: config.EnrichmentConfig{
 					Enabled: false,
@@ -617,6 +623,14 @@ func (c *Config) Validate() error {
 
 	if err := c.EBPF.PayloadExtraction.HTTP.Enrichment.Validate(); err != nil {
 		return ConfigError(err.Error())
+	}
+
+	if err := c.NetworkFlows.CIDRs.Validate(); err != nil {
+		return ConfigError("network " + err.Error())
+	}
+
+	if err := c.Stats.CIDRs.Validate(); err != nil {
+		return ConfigError("stats " + err.Error())
 	}
 
 	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Enabled(FeatureStatsO11y) {

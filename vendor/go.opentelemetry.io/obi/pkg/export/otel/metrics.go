@@ -892,7 +892,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	if otelMetricsAccepted(span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
-			if mr.is.HTTPEnabled() {
+			// JSON-RPC over HTTP gets recorded as RPC server metrics
+			if span.SubType == request.HTTPSubtypeJSONRPC && mr.is.GRPCEnabled() {
+				grpcDuration, attrs := r.grpcDuration.ForRecord(span)
+				grpcDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			} else if mr.is.HTTPEnabled() {
 				// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 				httpDuration, attrs := r.httpDuration.ForRecord(span)
 				httpDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
@@ -918,7 +922,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			if mr.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch) {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			} else if mr.is.GenAIEnabled() && (span.SubType == request.HTTPSubtypeAnthropic || span.SubType == request.HTTPSubtypeOpenAI) {
+			} else if span.SubType == request.HTTPSubtypeJSONRPC && mr.is.GRPCEnabled() {
+				// JSON-RPC client calls over HTTP get recorded as RPC client metrics
+				grpcClientDuration, attrs := r.grpcClientDuration.ForRecord(span)
+				grpcClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			} else if mr.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType) {
 				genAIClientDuration, attrs := r.genAIClientDuration.ForRecord(span)
 				genAIClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)

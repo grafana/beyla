@@ -253,6 +253,13 @@ const (
 	CudaMemcpyKind = Name("cuda.memcpy.kind")
 )
 
+// JSON-RPC attributes (current semconv, replacing deprecated rpc.jsonrpc.* attributes)
+const (
+	JSONRPCProtocolVersion = Name("jsonrpc.protocol.version")
+	JSONRPCRequestID       = Name("jsonrpc.request.id")
+	RPCResponseStatusCode  = Name("rpc.response.status_code")
+)
+
 // DNS events
 const (
 	DNSQuestionName = Name(semconv.DNSQuestionNameKey)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -120,7 +121,9 @@ network:
 	nc := obi.DefaultNetworkConfig
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
-	nc.CIDRs = []string{"10.244.0.0/16"}
+	var cidrNC obi.NetworkConfig
+	require.NoError(t, yaml.Unmarshal([]byte("cidrs:\n  - 10.244.0.0/16\n"), &cidrNC))
+	nc.CIDRs = cidrNC.CIDRs
 
 	nsNamespaceAttr := services.NewRegexp(".")
 	nsPodNameAttr := services.NewGlob("*")

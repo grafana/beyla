@@ -531,10 +531,8 @@ prepare_obi_branch() {
     if git -C "$OBI_DIR" show-ref --verify --quiet "refs/remotes/origin/${release_branch}"; then
         log_info "OBI branch ${release_branch} already exists; reusing it."
         run_cmd git -C "$OBI_DIR" checkout -B "$release_branch" "origin/${release_branch}"
-        if [[ "$is_patch" != "true" ]]; then
-            if ! git -C "$OBI_DIR" merge-base --is-ancestor "$obi_sha" HEAD; then
-                die "Existing OBI branch ${release_branch} does not contain pinned SHA ${obi_sha}"
-            fi
+        if ! git -C "$OBI_DIR" merge-base --is-ancestor "$obi_sha" HEAD; then
+            die "Existing OBI branch ${release_branch} does not contain pinned SHA ${obi_sha}"
         fi
     else
         if [[ "$is_patch" == "true" ]]; then
@@ -695,11 +693,18 @@ prepare_command() {
     local obi_release_branch
     obi_release_branch="$(release_branch_name "$OBI_VERSION")"
 
-    local obi_sha
-    local patch_flag="false"
+    local beyla_is_patch="false"
     if is_patch_release "$BEYLA_VERSION"; then
-        patch_flag="true"
-        # For patch releases, the release branch already exists.
+        beyla_is_patch="true"
+    fi
+    local obi_is_patch="false"
+    if is_patch_release "$OBI_VERSION"; then
+        obi_is_patch="true"
+    fi
+
+    local obi_sha
+    if [[ "$beyla_is_patch" == "true" ]]; then
+        # For Beyla patch releases, the release branch already exists.
         # Read the OBI SHA from the existing release branch instead of main.
         run_git_remote_cmd -C "$BEYLA_DIR" fetch --prune origin
         if ! git -C "$BEYLA_DIR" show-ref --verify --quiet "refs/remotes/origin/${beyla_release_branch}"; then
@@ -712,7 +717,7 @@ prepare_command() {
         log_info "OBI SHA pinned in ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}: ${obi_sha}"
     fi
 
-    prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha" "$patch_flag"
+    prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha" "$obi_is_patch"
     local obi_release_sha
     obi_release_sha="$(git -C "$OBI_DIR" rev-parse HEAD)"
     log_info "OBI release branch tip SHA: ${obi_release_sha}"

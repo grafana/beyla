@@ -257,6 +257,8 @@ If the fix is in Beyla only (no OBI changes):
    that `PATCH != 0`, reuses the existing `release-3.0` branch, reads the
    OBI submodule pointer from the release branch instead of `main`, and
    regenerates release artifacts (`make vendor-obi`, `make java-build`).
+   The OBI artifact regeneration steps (`make docker-generate`,
+   `make java-build`) also run but should be a no-op when OBI is unchanged.
 
 3. **Tag**: After release branch CI is green, run
    [`release-train-tag.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-tag.yml)

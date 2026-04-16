@@ -254,8 +254,9 @@ If the fix is in Beyla only (no OBI changes):
 2. **Prepare**: Run
    [`release-train-prepare.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-prepare.yml)
    with `beyla_version=v3.0.1` and `obi_version=v1.0.0`. The script detects
-   that `PATCH != 0`, reuses the existing `release-3.0` branch, and reads
-   the OBI submodule pointer from the release branch instead of `main`.
+   that `PATCH != 0`, reuses the existing `release-3.0` branch, reads the
+   OBI submodule pointer from the release branch instead of `main`, and
+   regenerates release artifacts (`make vendor-obi`, `make java-build`).
 
 3. **Tag**: After release branch CI is green, run
    [`release-train-tag.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-tag.yml)
@@ -269,17 +270,26 @@ If the fix is in Beyla only (no OBI changes):
 
 If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
 
-1. **Cherry-pick the fix** onto the OBI release branch:
+1. **Cherry-pick the fix** onto the OBI release branch and regenerate
+   artifacts:
    ```bash
    cd /path/to/opentelemetry-ebpf-instrumentation
    git fetch --prune origin
    git checkout -B release-1.0 origin/release-1.0
    git cherry-pick <upstream-fix-sha>
+
+   make docker-generate
+   make java-build
+
+   git add -A
+   if ! git diff --cached --quiet; then
+     git commit -m "Regenerate artifacts for v1.0.1"
+   fi
    git push origin release-1.0
    ```
 
 2. **Update Beyla's `.obi-src`** on the Beyla release branch to point to the
-   new OBI release branch tip:
+   new OBI release branch tip, and regenerate Beyla artifacts:
    ```bash
    cd /path/to/beyla
    git fetch --prune origin
@@ -290,12 +300,24 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
    git -C .obi-src checkout origin/release-1.0
    git add .obi-src
    git commit -m "Update obi submodule for v3.0.1"
+
+   make vendor-obi
+   make java-build
+
+   git add -A
+   if ! git diff --cached --quiet; then
+     git commit -m "Regenerate artifacts for v3.0.1"
+   fi
    git push origin release-3.0
    ```
 
+   Alternatively, skip the manual `make` steps above and use the `prepare`
+   workflow in step 3 to regenerate artifacts automatically.
+
 3. **Prepare**: Run `release-train-prepare.yml` with `beyla_version=v3.0.1`
    and `obi_version=v1.0.1`. The script reuses both existing release
-   branches and regenerates artifacts.
+   branches and regenerates artifacts (OBI: `make docker-generate`,
+   `make java-build`; Beyla: `make vendor-obi`, `make java-build`).
 
 4. **Tag**: Run `release-train-tag.yml` with the same versions after CI is
    green. Tags `v3.0.1` and `v1.0.1` are created on their respective

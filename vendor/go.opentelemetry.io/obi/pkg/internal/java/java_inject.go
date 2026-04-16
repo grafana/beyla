@@ -75,8 +75,30 @@ func NewJavaInjector(cfg *obi.Config) (*JavaInjector, error) {
 	}, nil
 }
 
+func tempDirPath(root, dir string) (string, bool) {
+	if root == "" {
+		return "", false
+	}
+
+	cleanDir := filepath.Clean(dir)
+	if !filepath.IsAbs(cleanDir) {
+		return "", false
+	}
+
+	fullDir := filepath.Join(root, strings.TrimPrefix(cleanDir, "/"))
+	rel, err := filepath.Rel(root, fullDir)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+
+	return fullDir, true
+}
+
 func dirOK(root, dir string) bool {
-	fullDir := filepath.Join(root, dir)
+	fullDir, ok := tempDirPath(root, dir)
+	if !ok {
+		return false
+	}
 
 	info, err := os.Stat(fullDir)
 	return err == nil && info.IsDir()
@@ -287,7 +309,10 @@ func (i *JavaInjector) copyAgent(ie *ebpf.Instrumentable) (string, error) {
 		return "", fmt.Errorf("error accessing temp directory: %w", err)
 	}
 
-	fullTempDir := filepath.Join(root, tempDir)
+	fullTempDir, ok := tempDirPath(root, tempDir)
+	if !ok {
+		return "", fmt.Errorf("invalid temp directory for injection: %q", tempDir)
+	}
 
 	i.log.Info("found injection directory for process", "pid", ie.FileInfo.Pid, "path", fullTempDir)
 
@@ -299,15 +324,34 @@ func (i *JavaInjector) copyAgent(ie *ebpf.Instrumentable) (string, error) {
 	}
 
 	defer source.Close()
-	// Create file with read permissions for owner, group, and others (0644)
-	target, err := os.OpenFile(agentPathHost, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	target, err := os.CreateTemp(fullTempDir, ObiJavaAgentFileName+".tmp-*")
 	if err != nil {
 		return "", fmt.Errorf("unable to create target OBI java agent: %w", err)
 	}
-	defer target.Close()
+	tmpTargetPath := target.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpTargetPath)
+		}
+	}()
+
 	if _, err = target.ReadFrom(source); err != nil {
 		return "", fmt.Errorf("error writing java agent to target location: %w", err)
 	}
+
+	if err = target.Chmod(0o644); err != nil {
+		return "", fmt.Errorf("error setting permissions on target OBI java agent: %w", err)
+	}
+
+	if err = target.Close(); err != nil {
+		return "", fmt.Errorf("error closing target OBI java agent: %w", err)
+	}
+
+	if err = os.Rename(tmpTargetPath, agentPathHost); err != nil {
+		return "", fmt.Errorf("unable to move target OBI java agent into place: %w", err)
+	}
+	cleanup = false
 
 	agentPathContainer := filepath.Join(tempDir, ObiJavaAgentFileName)
 

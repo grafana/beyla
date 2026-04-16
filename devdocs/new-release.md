@@ -53,7 +53,7 @@ with separate Beyla and OBI versions, or do the same work manually.
 
 Step outcome:
 
-This creates `release-v1.0.0` in OBI and `release-v3.0.0` in Beyla. Both are
+This creates `release-1.0` in OBI and `release-3.0` in Beyla. Both are
 based on the OBI SHA pinned by Beyla `main`, and both get their release
 artifacts committed before CI runs.
 
@@ -74,7 +74,7 @@ generate the OBI artifacts that belong on the release branch.
 cd /path/to/opentelemetry-ebpf-instrumentation
 git fetch --prune origin
 git checkout 8634fc94ab21b86dd829fa92c87d8120790de337
-git checkout -B release-v1.0.0
+git checkout -B release-1.0
 
 make docker-generate
 make java-build
@@ -83,7 +83,7 @@ git add -A
 if ! git diff --cached --quiet; then
   git commit -m "Release v1.0.0 artifacts"
 fi
-git push -u origin release-v1.0.0
+git push -u origin release-1.0
 ```
 
 Then create the Beyla release branch for `v3.0.0`, keep `.obi-src` pinned to
@@ -92,7 +92,7 @@ the same OBI SHA, and generate the Beyla release artifacts.
 ```bash
 cd /path/to/beyla
 git fetch --prune origin
-git checkout -B release-v3.0.0 origin/main
+git checkout -B release-3.0 origin/main
 
 git submodule sync --recursive
 git submodule update --init --recursive
@@ -107,15 +107,15 @@ make java-build
 
 git add -A
 git commit -m "Release v3.0.0 artifacts"
-git push -u origin release-v3.0.0
+git push -u origin release-3.0
 ```
 
 ### 3. Wait for release branch CI
 
 Ensure both release branches are green:
 
-- `grafana/opentelemetry-ebpf-instrumentation:release-v1.0.0`
-- `grafana/beyla:release-v3.0.0`
+- `grafana/opentelemetry-ebpf-instrumentation:release-1.0`
+- `grafana/beyla:release-3.0`
 
 ### 4. Create prereleases and tags
 
@@ -133,7 +133,7 @@ First, tag the OBI release branch and create the OBI prerelease.
 ```bash
 cd /path/to/opentelemetry-ebpf-instrumentation
 git fetch --prune --tags origin
-git checkout -B release-v1.0.0 origin/release-v1.0.0
+git checkout -B release-1.0 origin/release-1.0
 
 git tag v1.0.0 "$(git rev-parse HEAD)"
 git push origin refs/tags/v1.0.0
@@ -151,7 +151,7 @@ Then tag the Beyla release branch and create the Beyla prerelease.
 ```bash
 cd /path/to/beyla
 git fetch --prune --tags origin
-git checkout -B release-v3.0.0 origin/release-v3.0.0
+git checkout -B release-3.0 origin/release-3.0
 
 git tag v3.0.0 "$(git rev-parse HEAD)"
 git push origin refs/tags/v3.0.0
@@ -230,6 +230,79 @@ If a release fails in CI or in `dev/ops/prod`:
 - Continue with the next SemVer version in the next run.
 
 Skipping versions is expected behavior.
+
+## Patch Releases
+
+When a critical fix must ship on an already-released minor version (e.g., a
+security hotfix for `v3.0.0`), use the patch release flow instead of the
+normal weekly train. Patch releases reuse the existing `release-MAJOR.MINOR`
+branch.
+
+### Beyla-only patch release
+
+If the fix is in Beyla only (no OBI changes):
+
+1. **Cherry-pick the fix** onto the existing Beyla release branch:
+   ```bash
+   cd /path/to/beyla
+   git fetch --prune origin
+   git checkout -B release-3.0 origin/release-3.0
+   git cherry-pick <fix-commit-sha>
+   git push origin release-3.0
+   ```
+
+2. **Prepare**: Run
+   [`release-train-prepare.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-prepare.yml)
+   with `beyla_version=v3.0.1` and `obi_version=v1.0.0`. The script detects
+   that `PATCH != 0`, reuses the existing `release-3.0` branch, and reads
+   the OBI submodule pointer from the release branch instead of `main`.
+
+3. **Tag**: After release branch CI is green, run
+   [`release-train-tag.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-tag.yml)
+   with the same versions. The tag `v3.0.1` is created on `release-3.0`.
+
+4. **Promote**: After validation in `ops`, run
+   [`promote-patch-to-stable.yml`](https://github.com/grafana/beyla/actions/workflows/promote-patch-to-stable.yml)
+   with `version_tag=v3.0.1`.
+
+### OBI patch release
+
+If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
+
+1. **Cherry-pick the fix** onto the OBI release branch:
+   ```bash
+   cd /path/to/opentelemetry-ebpf-instrumentation
+   git fetch --prune origin
+   git checkout -B release-1.0 origin/release-1.0
+   git cherry-pick <upstream-fix-sha>
+   git push origin release-1.0
+   ```
+
+2. **Update Beyla's `.obi-src`** on the Beyla release branch to point to the
+   new OBI release branch tip:
+   ```bash
+   cd /path/to/beyla
+   git fetch --prune origin
+   git checkout -B release-3.0 origin/release-3.0
+   git submodule sync --recursive
+   git submodule update --init --recursive
+   git -C .obi-src fetch --prune origin
+   git -C .obi-src checkout origin/release-1.0
+   git add .obi-src
+   git commit -m "Update obi submodule for v3.0.1"
+   git push origin release-3.0
+   ```
+
+3. **Prepare**: Run `release-train-prepare.yml` with `beyla_version=v3.0.1`
+   and `obi_version=v1.0.1`. The script reuses both existing release
+   branches and regenerates artifacts.
+
+4. **Tag**: Run `release-train-tag.yml` with the same versions after CI is
+   green. Tags `v3.0.1` and `v1.0.1` are created on their respective
+   release branches.
+
+5. **Promote**: Run `promote-patch-to-stable.yml` with
+   `version_tag=v3.0.1` after validation in `ops`.
 
 ## Manual CLI Notes
 

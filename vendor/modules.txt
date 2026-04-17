@@ -707,7 +707,7 @@ go.mongodb.org/mongo-driver/v2/x/bsonx/bsoncore
 ## explicit; go 1.24.0
 go.opentelemetry.io/auto/sdk
 go.opentelemetry.io/auto/sdk/internal/telemetry
-# go.opentelemetry.io/collector v0.149.0
+# go.opentelemetry.io/collector v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/internal/statusutil
 # go.opentelemetry.io/collector/client v1.53.0
@@ -719,7 +719,7 @@ go.opentelemetry.io/collector/component
 # go.opentelemetry.io/collector/config/configauth v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configauth
-# go.opentelemetry.io/collector/config/configcompression v1.55.0
+# go.opentelemetry.io/collector/config/configcompression v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configcompression
 # go.opentelemetry.io/collector/config/configgrpc v0.147.0
@@ -732,7 +732,7 @@ go.opentelemetry.io/collector/config/confighttp/internal
 # go.opentelemetry.io/collector/config/configmiddleware v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configmiddleware
-# go.opentelemetry.io/collector/config/confignet v1.55.0
+# go.opentelemetry.io/collector/config/confignet v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/confignet
 # go.opentelemetry.io/collector/config/configopaque v1.53.0
@@ -744,20 +744,19 @@ go.opentelemetry.io/collector/config/configoptional
 # go.opentelemetry.io/collector/config/configretry v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configretry
-# go.opentelemetry.io/collector/config/configtelemetry v0.149.0
+# go.opentelemetry.io/collector/config/configtelemetry v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configtelemetry
 # go.opentelemetry.io/collector/config/configtls v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/config/configtls
-# go.opentelemetry.io/collector/confmap v1.55.0
+# go.opentelemetry.io/collector/confmap v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/confmap
 go.opentelemetry.io/collector/confmap/internal
 go.opentelemetry.io/collector/confmap/internal/mapstructure
-go.opentelemetry.io/collector/confmap/internal/metadata
 go.opentelemetry.io/collector/confmap/internal/third_party/composehook
-# go.opentelemetry.io/collector/confmap/xconfmap v0.149.0
+# go.opentelemetry.io/collector/confmap/xconfmap v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/confmap/xconfmap
 # go.opentelemetry.io/collector/consumer v1.53.0
@@ -812,16 +811,16 @@ go.opentelemetry.io/collector/exporter/xexporter
 # go.opentelemetry.io/collector/extension v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/extension
-# go.opentelemetry.io/collector/extension/extensionauth v1.55.0
+# go.opentelemetry.io/collector/extension/extensionauth v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/extension/extensionauth
-# go.opentelemetry.io/collector/extension/extensionmiddleware v0.149.0
+# go.opentelemetry.io/collector/extension/extensionmiddleware v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/extension/extensionmiddleware
 # go.opentelemetry.io/collector/extension/xextension v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/extension/xextension/storage
-# go.opentelemetry.io/collector/featuregate v1.55.0
+# go.opentelemetry.io/collector/featuregate v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/featuregate
 # go.opentelemetry.io/collector/internal/componentalias v0.147.0
@@ -850,11 +849,11 @@ go.opentelemetry.io/collector/pdata/pprofile/pprofileotlp
 go.opentelemetry.io/collector/pdata/xpdata/entity
 go.opentelemetry.io/collector/pdata/xpdata/pref
 go.opentelemetry.io/collector/pdata/xpdata/request
-# go.opentelemetry.io/collector/pipeline v1.55.0
+# go.opentelemetry.io/collector/pipeline v1.53.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/pipeline
 go.opentelemetry.io/collector/pipeline/internal/globalsignal
-# go.opentelemetry.io/collector/pipeline/xpipeline v0.149.0
+# go.opentelemetry.io/collector/pipeline/xpipeline v0.147.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/collector/pipeline/xpipeline
 # go.opentelemetry.io/contrib/detectors/aws/ec2/v2 v2.4.0

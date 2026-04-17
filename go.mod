@@ -185,15 +185,15 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/collector v0.149.0 // indirect
+	go.opentelemetry.io/collector v0.147.0 // indirect
 	go.opentelemetry.io/collector/client v1.53.0 // indirect
 	go.opentelemetry.io/collector/config/configauth v1.53.0 // indirect
-	go.opentelemetry.io/collector/config/configcompression v1.55.0 // indirect
+	go.opentelemetry.io/collector/config/configcompression v1.53.0 // indirect
 	go.opentelemetry.io/collector/config/configmiddleware v1.53.0 // indirect
-	go.opentelemetry.io/collector/config/confignet v1.55.0 // indirect
-	go.opentelemetry.io/collector/config/configtelemetry v0.149.0 // indirect
-	go.opentelemetry.io/collector/confmap v1.55.0 // indirect
-	go.opentelemetry.io/collector/confmap/xconfmap v0.149.0 // indirect
+	go.opentelemetry.io/collector/config/confignet v1.53.0 // indirect
+	go.opentelemetry.io/collector/config/configtelemetry v0.147.0 // indirect
+	go.opentelemetry.io/collector/confmap v1.53.0 // indirect
+	go.opentelemetry.io/collector/confmap/xconfmap v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror/xconsumererror v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.147.0 // indirect
@@ -201,15 +201,15 @@ require (
 	go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper v0.147.0 // indirect
 	go.opentelemetry.io/collector/exporter/xexporter v0.147.0 // indirect
 	go.opentelemetry.io/collector/extension v1.53.0 // indirect
-	go.opentelemetry.io/collector/extension/extensionauth v1.55.0 // indirect
-	go.opentelemetry.io/collector/extension/extensionmiddleware v0.149.0 // indirect
+	go.opentelemetry.io/collector/extension/extensionauth v1.53.0 // indirect
+	go.opentelemetry.io/collector/extension/extensionmiddleware v0.147.0 // indirect
 	go.opentelemetry.io/collector/extension/xextension v0.147.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.55.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.53.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.147.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.147.0 // indirect
 	go.opentelemetry.io/collector/pdata/xpdata v0.147.0 // indirect
-	go.opentelemetry.io/collector/pipeline v1.55.0 // indirect
-	go.opentelemetry.io/collector/pipeline/xpipeline v0.149.0 // indirect
+	go.opentelemetry.io/collector/pipeline v1.53.0 // indirect
+	go.opentelemetry.io/collector/pipeline/xpipeline v0.147.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ec2/v2 v2.4.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/eks v1.42.0 // indirect
 	go.opentelemetry.io/contrib/detectors/azure/azurevm v0.14.0 // indirect

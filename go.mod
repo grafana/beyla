@@ -12,6 +12,7 @@ require (
 	github.com/goccy/go-json v0.10.6
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/invopop/jsonschema v0.13.0
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
 	github.com/moby/moby/api v1.54.1
 	github.com/moby/moby/client v0.4.0
@@ -136,7 +137,6 @@ require (
 	github.com/grafana/jvmtools v0.0.5 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
-	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect

@@ -1,0 +1,102 @@
+name: Deploy Beyla to dev wave
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Beyla version tag (e.g., v3.11.0)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Beyla version tag (e.g., v3.11.0)"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  update-deployment-tools:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.version }}
+          persist-credentials: false
+
+      - name: Derive version components
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_TAG="${VERSION#v}"
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Beyla ${VERSION}: container_image_tag=${IMAGE_TAG}, release_git_tag=${SHORT_SHA}"
+
+      - name: Log in to Google Artifact Registry
+        uses: grafana/shared-workflows/actions/login-to-gar@00646b30431b955ec3c00982b23b1eeb7b66445b # v1.0.0
+
+      - name: Get updater-app secrets from Vault
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
+        with:
+          common_secrets: |
+            APP_ID=updater-app:app-id
+            APP_PRIVATE_KEY=updater-app:private-key
+
+      - name: Get GitHub App token for deployment_tools
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
+        id: get-github-app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.APP_PRIVATE_KEY }}
+          owner: grafana
+          repositories: deployment_tools
+
+      - name: Update deployment_tools dev wave
+        env:
+          GITHUB_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          IMAGE_TAG: ${{ steps.version.outputs.image_tag }}
+          SHORT_SHA: ${{ steps.version.outputs.short_sha }}
+        # zizmor: ignore[template-injection] CONFIG_JSON is locally generated and passed as plain string
+        run: |
+          set -euo pipefail
+
+          cat << EOF > config.json
+          {
+            "repo_owner": "grafana",
+            "repo_name": "deployment_tools",
+            "destination_branch": "master",
+            "pull_request_branch_prefix": "auto-merge/beyla-release",
+            "pull_request_enabled": true,
+            "pull_request_existing_strategy": "replace",
+            "pull_request_message": "Update Beyla dev wave to v${IMAGE_TAG}. Triggered by https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "pull_request_team_reviewers": ["ebpf"],
+            "update_jsonnet_attribute_configs": [
+              {
+                "file_path": "ksonnet/environments/beyla/versions.libsonnet",
+                "jsonnet_key_path": "dev.container_image_tag",
+                "jsonnet_value": "${IMAGE_TAG}"
+              },
+              {
+                "file_path": "ksonnet/environments/beyla/versions.libsonnet",
+                "jsonnet_key_path": "dev.release_git_tag",
+                "jsonnet_value": "${SHORT_SHA}"
+              }
+            ]
+          }
+          EOF
+
+          docker run --rm \
+          -e GITHUB_TOKEN="$GITHUB_TOKEN" \
+          -e CONFIG_JSON="$(cat config.json)" \
+          us-docker.pkg.dev/grafanalabs-global/docker-deployment-tools-prod/updater |& tee updater-output.log

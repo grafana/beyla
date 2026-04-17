@@ -129,3 +129,12 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${META_JSON}") \
             "${IMAGE}@sha256:${AMD64_DIGEST}" \
             "${IMAGE}@sha256:${ARM64_DIGEST}"
+
+  deploy-dev:
+    needs: create-manifest
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-dev.yml
+    with:
+      version: ${{ github.ref_name }}

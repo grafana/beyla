@@ -1,6 +1,5 @@
 display_name: OTLP gRPC Exporter
 type: otlp_grpc
-deprecated_type: otlp
 github_project: open-telemetry/opentelemetry-collector
 
 status:
@@ -8,7 +7,7 @@ status:
   class: exporter
   stability:
     stable: [traces, metrics, logs]
-    alpha: [profiles]
+    development: [profiles]
   distributions: [core, contrib, k8s, otlp]
 
 tests:

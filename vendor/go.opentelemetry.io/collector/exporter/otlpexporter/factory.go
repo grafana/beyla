@@ -24,7 +24,7 @@ func NewFactory() exporter.Factory {
 	return xexporter.NewFactory(
 		metadata.Type,
 		createDefaultConfig,
-		xexporter.WithDeprecatedTypeAlias(metadata.DeprecatedType),
+		xexporter.WithDeprecatedTypeAlias(component.MustNewType("otlp")),
 		xexporter.WithTraces(createTraces, metadata.TracesStability),
 		xexporter.WithMetrics(createMetrics, metadata.MetricsStability),
 		xexporter.WithLogs(createLogs, metadata.LogsStability),

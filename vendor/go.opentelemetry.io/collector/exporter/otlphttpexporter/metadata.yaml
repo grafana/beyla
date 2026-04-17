@@ -1,6 +1,5 @@
 display_name: OTLP HTTP Exporter
 type: otlp_http
-deprecated_type: otlphttp
 github_project: open-telemetry/opentelemetry-collector
 
 status:
@@ -8,7 +7,7 @@ status:
   class: exporter
   stability:
     stable: [traces, metrics, logs]
-    alpha: [profiles]
+    development: [profiles]
   distributions: [core, contrib, k8s, otlp]
 
 tests:
@@ -16,3 +15,4 @@ tests:
     # use an endpoint that does not resolve, to ensure
     # connection attempts fail quickly in tests
     endpoint: "https://testing.invalid:1234"
+

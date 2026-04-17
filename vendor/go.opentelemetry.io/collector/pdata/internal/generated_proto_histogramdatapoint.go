@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -42,7 +41,7 @@ var (
 )
 
 func NewHistogramDataPoint() *HistogramDataPoint {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &HistogramDataPoint{}
 	}
 	return protoPoolHistogramDataPoint.Get().(*HistogramDataPoint)
@@ -53,7 +52,7 @@ func DeleteHistogramDataPoint(orig *HistogramDataPoint, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

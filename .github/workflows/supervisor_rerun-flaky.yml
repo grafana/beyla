@@ -50,6 +50,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          MAX_ATTEMPTS=2
+          MARKER="<!-- ci-supervisor -->"
+
           # --- Resolve the associated PR ---
           PR_NUMBER=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty' 2>/dev/null || true)
           if [ -z "$PR_NUMBER" ]; then
@@ -72,42 +75,34 @@ jobs:
           # --- Check attempt limit first ---
           VERDICT="rerun"
           REASON=""
-          if [ "$ATTEMPT" -ge 2 ]; then
+          if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
             VERDICT="skip"
-            REASON="Maximum re-run attempts reached (attempt ${ATTEMPT} of 2)"
+            REASON="Maximum re-run attempts reached (attempt ${ATTEMPT} of ${MAX_ATTEMPTS})"
           fi
 
-          # --- Build job summary table ---
-          JOBS_TABLE=""
+          # --- Build new table rows for this workflow's failed jobs ---
+          NEW_ROWS=""
 
-          while IFS=$'\t' read -r job_name job_conclusion job_started job_completed; do
-            # Calculate duration
-            duration="unknown"
-            if [ -n "$job_started" ] && [ -n "$job_completed" ] && [ "$job_started" != "null" ] && [ "$job_completed" != "null" ]; then
-              start_epoch=$(date -d "$job_started" +%s 2>/dev/null || echo "0")
-              end_epoch=$(date -d "$job_completed" +%s 2>/dev/null || echo "0")
-              if [ "$start_epoch" -gt 0 ] && [ "$end_epoch" -gt 0 ]; then
-                duration_min=$(( (end_epoch - start_epoch) / 60 ))
-                duration="${duration_min}m"
-              fi
-            fi
-
-            job_verdict="flaky"
-
-            # Check for unrecoverable: Lint failure in "Pull request checks"
+          while IFS=$'\t' read -r job_name job_conclusion; do
+            # Unrecoverable: lint failure in "Pull request checks" -- re-run won't help
             if [ "$WORKFLOW_NAME" = "Pull request checks" ] && echo "$job_name" | grep -qi "lint"; then
-              job_verdict="unrecoverable (lint failure)"
               if [ "$VERDICT" != "skip" ]; then
                 VERDICT="skip"
                 REASON="Lint job failed in '${WORKFLOW_NAME}' -- compile-level problem, re-run will not help"
               fi
             fi
 
-            JOBS_TABLE="${JOBS_TABLE}| ${job_name} | ${job_conclusion} | ${duration} | ${job_verdict} |
-          "
-          done < <(echo "$RUN_JSON" | jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | [.name, .conclusion, .startedAt, .completedAt] | @tsv')
+            if [ "$VERDICT" = "rerun" ]; then
+              rerunning="Yes"
+            else
+              rerunning="No"
+            fi
 
-          if [ -z "$JOBS_TABLE" ]; then
+            NEW_ROWS="${NEW_ROWS}| ${WORKFLOW_NAME} | ${job_name} | ${job_conclusion} | ${rerunning} | ${ATTEMPT}/${MAX_ATTEMPTS} |
+          "
+          done < <(echo "$RUN_JSON" | jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | [.name, .conclusion] | @tsv')
+
+          if [ -z "$NEW_ROWS" ]; then
             echo "No failed or timed-out jobs found. Exiting."
             exit 0
           fi
@@ -115,11 +110,9 @@ jobs:
           # --- Take action ---
           SHOULD_LABEL="false"
           if [ "$VERDICT" = "rerun" ]; then
-            ACTION_LINE="Re-running failed jobs (attempt $((ATTEMPT + 1)) of 2)"
             echo "Re-running failed jobs for run ${RUN_ID}..."
             gh run rerun "$RUN_ID" --repo "$REPO" --failed
           else
-            ACTION_LINE="NOT re-running. Reason: ${REASON}"
             echo "Skipping re-run: ${REASON}"
 
             # Check if we should add agent/fix-obi label for automated PRs
@@ -134,28 +127,48 @@ jobs:
             if [ "$HAS_AUTOMATED" = "true" ] && [ "$HAS_AGENT" = "false" ]; then
               if [ "$AGENT_LABEL_COUNT" -ge "$MAX_AGENT_RUNS" ]; then
                 echo "Maximum agent/fix-obi attempts (${MAX_AGENT_RUNS}) reached -- not relabelling"
-                ACTION_LINE="${ACTION_LINE}
-          Agent fix limit reached (${AGENT_LABEL_COUNT}/${MAX_AGENT_RUNS} runs). Manual intervention required."
               else
                 SHOULD_LABEL="true"
-                ACTION_LINE="${ACTION_LINE}
-          Added \`agent/fix-obi-pending\` label — agent will be triggered once all CI checks complete ($((AGENT_LABEL_COUNT + 1))/${MAX_AGENT_RUNS})."
               fi
             fi
           fi
 
           echo "should_label=${SHOULD_LABEL}" >> "$GITHUB_OUTPUT"
 
-          # --- Post PR comment (using GITHUB_TOKEN -- no secrets needed) ---
-          COMMENT_BODY="### CI Supervisor: ${WORKFLOW_NAME} (attempt ${ATTEMPT})
+          # --- Fetch existing sticky comment (if any) and merge rows ---
+          EXISTING_COMMENT=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments?per_page=100" 2>/dev/null \
+            | jq -s --arg marker "$MARKER" '[.[][] | select(.body | startswith($marker))] | last | {id, body}' \
+            || echo '{}')
+          EXISTING_COMMENT_ID=$(echo "$EXISTING_COMMENT" | jq -r '.id // empty')
+          EXISTING_BODY=$(echo "$EXISTING_COMMENT" | jq -r '.body // empty')
 
-          | Job | Conclusion | Duration | Verdict |
-          |-----|-----------|----------|---------|
-          ${JOBS_TABLE}
-          **Action**: ${ACTION_LINE}"
+          # Extract existing table rows, dropping rows that belong to the current workflow
+          # (they'll be replaced by NEW_ROWS).
+          KEPT_ROWS=""
+          if [ -n "$EXISTING_BODY" ]; then
+            KEPT_ROWS=$(echo "$EXISTING_BODY" | grep '^|' | grep -v '^| Workflow' | grep -v '^|---' | grep -v "^| ${WORKFLOW_NAME} |" || true)
+            if [ -n "$KEPT_ROWS" ]; then
+              KEPT_ROWS="${KEPT_ROWS}
+          "
+            fi
+          fi
 
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT_BODY"
-          echo "Posted audit comment on PR #${PR_NUMBER}"
+          # --- Build the full comment ---
+          COMMENT_BODY="${MARKER}
+          ### CI Supervisor
+
+          | Workflow | Job | Last state | Re-running? | Attempt |
+          |----------|-----|-----------|-------------|---------|
+          ${KEPT_ROWS}${NEW_ROWS}"
+
+          if [ -n "$EXISTING_COMMENT_ID" ]; then
+            gh api "repos/${REPO}/issues/comments/${EXISTING_COMMENT_ID}" \
+              --method PATCH --field body="$COMMENT_BODY" > /dev/null
+            echo "Updated CI Supervisor comment (id: ${EXISTING_COMMENT_ID}) on PR #${PR_NUMBER}"
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT_BODY"
+            echo "Posted CI Supervisor comment on PR #${PR_NUMBER}"
+          fi
 
   add-agent-label:
     name: Add agent/fix-obi-pending label

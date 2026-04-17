@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -79,7 +78,7 @@ var (
 )
 
 func NewExemplar() *Exemplar {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &Exemplar{}
 	}
 	return protoPoolExemplar.Get().(*Exemplar)
@@ -90,7 +89,7 @@ func DeleteExemplar(orig *Exemplar, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}
@@ -100,12 +99,12 @@ func DeleteExemplar(orig *Exemplar, nullable bool) {
 
 	switch ov := orig.Value.(type) {
 	case *Exemplar_AsDouble:
-		if metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+		if UseProtoPooling.IsEnabled() {
 			ov.AsDouble = float64(0)
 			ProtoPoolExemplar_AsDouble.Put(ov)
 		}
 	case *Exemplar_AsInt:
-		if metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+		if UseProtoPooling.IsEnabled() {
 			ov.AsInt = int64(0)
 			ProtoPoolExemplar_AsInt.Put(ov)
 		}
@@ -137,7 +136,7 @@ func CopyExemplar(dest, src *Exemplar) *Exemplar {
 	switch t := src.Value.(type) {
 	case *Exemplar_AsDouble:
 		var ov *Exemplar_AsDouble
-		if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+		if !UseProtoPooling.IsEnabled() {
 			ov = &Exemplar_AsDouble{}
 		} else {
 			ov = ProtoPoolExemplar_AsDouble.Get().(*Exemplar_AsDouble)
@@ -147,7 +146,7 @@ func CopyExemplar(dest, src *Exemplar) *Exemplar {
 
 	case *Exemplar_AsInt:
 		var ov *Exemplar_AsInt
-		if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+		if !UseProtoPooling.IsEnabled() {
 			ov = &Exemplar_AsInt{}
 		} else {
 			ov = ProtoPoolExemplar_AsInt.Get().(*Exemplar_AsInt)
@@ -269,7 +268,7 @@ func (orig *Exemplar) UnmarshalJSON(iter *json.Iterator) {
 		case "asDouble", "as_double":
 			{
 				var ov *Exemplar_AsDouble
-				if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+				if !UseProtoPooling.IsEnabled() {
 					ov = &Exemplar_AsDouble{}
 				} else {
 					ov = ProtoPoolExemplar_AsDouble.Get().(*Exemplar_AsDouble)
@@ -280,7 +279,7 @@ func (orig *Exemplar) UnmarshalJSON(iter *json.Iterator) {
 		case "asInt", "as_int":
 			{
 				var ov *Exemplar_AsInt
-				if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+				if !UseProtoPooling.IsEnabled() {
 					ov = &Exemplar_AsInt{}
 				} else {
 					ov = ProtoPoolExemplar_AsInt.Get().(*Exemplar_AsInt)
@@ -429,7 +428,7 @@ func (orig *Exemplar) UnmarshalProto(buf []byte) error {
 				return err
 			}
 			var ov *Exemplar_AsDouble
-			if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+			if !UseProtoPooling.IsEnabled() {
 				ov = &Exemplar_AsDouble{}
 			} else {
 				ov = ProtoPoolExemplar_AsDouble.Get().(*Exemplar_AsDouble)
@@ -447,7 +446,7 @@ func (orig *Exemplar) UnmarshalProto(buf []byte) error {
 				return err
 			}
 			var ov *Exemplar_AsInt
-			if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+			if !UseProtoPooling.IsEnabled() {
 				ov = &Exemplar_AsInt{}
 			} else {
 				ov = ProtoPoolExemplar_AsInt.Get().(*Exemplar_AsInt)

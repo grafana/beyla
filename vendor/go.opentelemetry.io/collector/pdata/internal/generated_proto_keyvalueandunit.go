@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -33,7 +32,7 @@ var (
 )
 
 func NewKeyValueAndUnit() *KeyValueAndUnit {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &KeyValueAndUnit{}
 	}
 	return protoPoolKeyValueAndUnit.Get().(*KeyValueAndUnit)
@@ -44,7 +43,7 @@ func DeleteKeyValueAndUnit(orig *KeyValueAndUnit, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

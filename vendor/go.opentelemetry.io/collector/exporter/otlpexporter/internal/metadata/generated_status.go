@@ -7,13 +7,12 @@ import (
 )
 
 var (
-	Type           = component.MustNewType("otlp_grpc")
-	DeprecatedType = component.MustNewType("otlp")
-	ScopeName      = "go.opentelemetry.io/collector/exporter/otlpexporter"
+	Type      = component.MustNewType("otlp_grpc")
+	ScopeName = "go.opentelemetry.io/collector/exporter/otlpexporter"
 )
 
 const (
-	ProfilesStability = component.StabilityLevelAlpha
+	ProfilesStability = component.StabilityLevelDevelopment
 	TracesStability   = component.StabilityLevelStable
 	MetricsStability  = component.StabilityLevelStable
 	LogsStability     = component.StabilityLevelStable

@@ -8,4 +8,4 @@ status:
     active:
       - swiatekm
   stability:
-    alpha: [profiles]
+    development: [profiles]

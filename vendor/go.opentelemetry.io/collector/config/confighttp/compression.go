@@ -22,11 +22,19 @@ import (
 	"github.com/pierrec/lz4/v4"
 
 	"go.opentelemetry.io/collector/config/configcompression"
-	"go.opentelemetry.io/collector/config/confighttp/internal/metadata"
+	"go.opentelemetry.io/collector/featuregate"
+)
+
+var enableFramedSnappy = featuregate.GlobalRegistry().MustRegister(
+	"confighttp.framedSnappy",
+	featuregate.StageBeta,
+	featuregate.WithRegisterFromVersion("v0.125.0"),
+	featuregate.WithRegisterDescription("Content encoding 'snappy' will compress/decompress block snappy format while 'x-snappy-framed' will compress/decompress framed snappy format."),
+	featuregate.WithRegisterReferenceURL("https://github.com/open-telemetry/opentelemetry-collector/issues/10584"),
 )
 
 func defaultCompressionAlgorithms() []string {
-	if metadata.ConfighttpFramedSnappyFeatureGate.IsEnabled() {
+	if enableFramedSnappy.IsEnabled() {
 		return []string{"", "gzip", "zstd", "zlib", "snappy", "deflate", "lz4", "x-snappy-framed"}
 	}
 	return []string{"", "gzip", "zstd", "zlib", "snappy", "deflate", "lz4"}
@@ -228,7 +236,7 @@ func httpContentDecompressor(h http.Handler, maxRequestBodySize int64, eh func(w
 
 	enabled := map[string]func(body io.ReadCloser) (io.ReadCloser, error){}
 	for _, dec := range enableDecoders {
-		if dec == "x-frame-snappy" && !metadata.ConfighttpFramedSnappyFeatureGate.IsEnabled() {
+		if dec == "x-frame-snappy" && !enableFramedSnappy.IsEnabled() {
 			continue
 		}
 		enabled[dec] = availableDecoders[dec]

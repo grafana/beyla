@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -32,7 +31,7 @@ var (
 )
 
 func NewSummaryDataPointValueAtQuantile() *SummaryDataPointValueAtQuantile {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &SummaryDataPointValueAtQuantile{}
 	}
 	return protoPoolSummaryDataPointValueAtQuantile.Get().(*SummaryDataPointValueAtQuantile)
@@ -43,7 +42,7 @@ func DeleteSummaryDataPointValueAtQuantile(orig *SummaryDataPointValueAtQuantile
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

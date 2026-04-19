@@ -45,7 +45,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	// Create and register metrics
 	metrics := NewSDKInjectionMetrics()
-	if ctxInfo.Prometheus != nil {
+	if ctxInfo.Prometheus != nil && cfg.InternalMetrics.Prometheus.Port != 0 {
 		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, metrics.Collectors()...)
 	}
 
@@ -118,6 +118,11 @@ func (s *Server) Start(ctx context.Context) error {
 				s.logger.Error("encountered error during initial state scan", "error", err)
 			}
 		}()
+	}
+
+	// Start internal metrics HTTP server if configured
+	if s.cfg.InternalMetrics.Prometheus.Port != 0 && s.ctxInfo.Prometheus != nil {
+		go s.ctxInfo.Prometheus.StartHTTP(ctx)
 	}
 
 	// Start server in a goroutine

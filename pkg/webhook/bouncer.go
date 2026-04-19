@@ -18,10 +18,11 @@ type PodBouncer struct {
 	logger             *slog.Logger
 	kubeClient         kubernetes.Interface
 	bouncedDeployments map[string]any
+	metrics            *SDKInjectionMetrics
 }
 
 // Creates a new K8S pod bouncer that will annotate deployments to force them to restart
-func NewPodBouncer(ctxInfo *global.ContextInfo) (*PodBouncer, error) {
+func NewPodBouncer(ctxInfo *global.ContextInfo, metrics *SDKInjectionMetrics) (*PodBouncer, error) {
 	kubeClient, err := ctxInfo.K8sInformer.KubeClient()
 	if err != nil {
 		return nil, fmt.Errorf("can't get kubernetes client: %w", err)
@@ -31,6 +32,7 @@ func NewPodBouncer(ctxInfo *global.ContextInfo) (*PodBouncer, error) {
 		kubeClient:         kubeClient,
 		logger:             slog.Default().With("component", "webhook.bouncer"),
 		bouncedDeployments: map[string]any{},
+		metrics:            metrics,
 	}, nil
 }
 
@@ -105,6 +107,11 @@ func (b *PodBouncer) RestartDeployment(ctx context.Context, namespace, deploymen
 		"namespace", namespace,
 		"newAnnotations", result.Spec.Template.Annotations,
 		"observedGeneration", result.Status.ObservedGeneration)
+
+	// Record restart metric
+	if b.metrics != nil {
+		b.metrics.RecordRestart(namespace)
+	}
 
 	return nil
 }

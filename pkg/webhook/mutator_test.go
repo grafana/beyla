@@ -559,7 +559,7 @@ func TestPodMutator_MutatePod(t *testing.T) {
 				proto:    "http/protobuf",
 			}
 
-			modified := mutator.mutatePod(tt.pod)
+			modified, _ := mutator.mutatePod(tt.pod)
 
 			assert.Equal(t, tt.expectModified, modified, "mutation result mismatch")
 

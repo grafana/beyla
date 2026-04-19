@@ -35,6 +35,7 @@ type Server struct {
 	logger       *slog.Logger
 	store        *kube.Store
 	initialState map[string][]*ProcessInfo
+	metrics      *SDKInjectionMetrics
 }
 
 // NewServer creates a new webhook server
@@ -42,13 +43,19 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	matcher := NewPodMatcher(cfg)
 	var bouncer *PodBouncer
 
-	mutator, err := NewPodMutator(cfg, matcher)
+	// Create and register metrics
+	metrics := NewSDKInjectionMetrics()
+	if ctxInfo.Prometheus != nil {
+		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, metrics.Collectors()...)
+	}
+
+	mutator, err := NewPodMutator(cfg, matcher, metrics)
 	if err != nil {
 		return nil, err
 	}
 
 	if matcher.HasSelectionCriteria() {
-		bouncer, err = NewPodBouncer(ctxInfo)
+		bouncer, err = NewPodBouncer(ctxInfo, metrics)
 		if err != nil {
 			return nil, err
 		}
@@ -62,6 +69,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		matcher: matcher,
 		logger:  slog.Default().With("component", "webhook-server"),
 		ctxInfo: ctxInfo,
+		metrics: metrics,
 	}, nil
 }
 

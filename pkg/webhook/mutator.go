@@ -76,11 +76,28 @@ func init() {
 	_ = admissionv1.AddToScheme(runtimeScheme)
 }
 
+// languageLabel converts InstrumentableType to a string for metrics
+func languageLabel(kind svc.InstrumentableType) string {
+	switch kind {
+	case svc.InstrumentableDotnet:
+		return "dotnet"
+	case svc.InstrumentableJava:
+		return "java"
+	case svc.InstrumentableNodejs:
+		return "nodejs"
+	case svc.InstrumentablePython:
+		return "python"
+	default:
+		return "unknown"
+	}
+}
+
 // PodMutator handles the mutation of pods
 type PodMutator struct {
 	logger  *slog.Logger
 	matcher *PodMatcher
 	cfg     *beyla.Config
+	metrics *SDKInjectionMetrics
 
 	endpoint      string
 	proto         string
@@ -88,7 +105,7 @@ type PodMutator struct {
 }
 
 // NewPodMutator creates a new PodMutator
-func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) {
+func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjectionMetrics) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions
 	var err error
 
@@ -116,6 +133,7 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) 
 		logger:        logger,
 		matcher:       matcher,
 		cfg:           cfg,
+		metrics:       metrics,
 		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 		exportHeaders: opts.Headers,
 		proto:         proto,
@@ -208,6 +226,12 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	// add a label with the version of the SDKs we've instrumented
 	if pm.cfg.Injector.PackageVersion() == "" {
 		errorResponse(admResponse, "Image Volume Path or SDK package version must be set")
+		// Record failure for missing SDK version
+		if pm.metrics != nil {
+			for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+				pm.metrics.RecordFailure("", languageLabel(sdk.InstrumentableType), ErrorTypeMissingSDKVersion)
+			}
+		}
 		pm.mutateResponse(w, admResponse)
 		return
 	}
@@ -220,12 +244,26 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 			errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
 		} else {
 			pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
+
+			// Record attempts for each enabled SDK
+			if pm.metrics != nil {
+				for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+					pm.metrics.RecordAttempt(pod.Namespace, languageLabel(sdk.InstrumentableType))
+				}
+			}
+
 			// Generate patches for the pod
-			if modified := pm.mutatePod(&pod); modified {
+			if modified, skipReason := pm.mutatePod(&pod); modified {
 				marshalled, err := json.Marshal(pod)
 				if err != nil {
 					pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
 					errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
+					// Record failure for patch generation
+					if pm.metrics != nil {
+						for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+							pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
+						}
+					}
 				} else {
 					// Debug: log sizes to understand what's being compared
 					pm.logger.Info("generating patch", "originalSize", len(admReview.Request.Object.Raw), "modifiedSize", len(marshalled))
@@ -238,18 +276,42 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 						if err != nil {
 							pm.logger.Error("failed to marshal patches", "error", err)
 							errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
+							// Record failure for patch generation
+							if pm.metrics != nil {
+								for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+									pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
+								}
+							}
 						} else {
 							pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
 							admResponse.Patch = patchBytes
 							patchType := admissionv1.PatchTypeJSONPatch
 							admResponse.PatchType = &patchType
+							// Record success for each enabled SDK
+							if pm.metrics != nil {
+								for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+									pm.metrics.RecordSuccess(pod.Namespace, languageLabel(sdk.InstrumentableType))
+								}
+							}
 						}
 					} else {
 						errorResponse(admResponse, "no changes")
+						// Record failure for patch generation
+						if pm.metrics != nil {
+							for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+								pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
+							}
+						}
 					}
 				}
 			} else {
-				pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace)
+				pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
+				// Record failure with the skip reason
+				if pm.metrics != nil && skipReason != "" {
+					for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+						pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), skipReason)
+					}
+				}
 			}
 		}
 	}
@@ -286,39 +348,49 @@ func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissi
 	pm.logger.Info("admission response sent successfully", "uid", admResponse.UID)
 }
 
-func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
+func (pm *PodMutator) mutatePod(pod *corev1.Pod) (bool, string) {
 	spec := &pod.Spec
 	meta := &pod.ObjectMeta
 
 	// check if maybe someone is adding instrumentation manually
 	if pm.alreadyInstrumented(spec, meta) {
-		return false
+		return false, ErrorTypeAlreadyInstrumented
 	}
 
 	selector, matched := pm.matchesSelection(meta)
 	if !matched {
 		pm.logger.Info("pod doesn't match selection criteria")
-		return false
+		return false, ErrorTypeNoMatchingLanguage
 	}
 
 	originalSpec := spec.DeepCopy()
 
-	// mount the shared hostPath volume with the injector and SDKs
-	pm.mountVolume(spec, meta)
-
-	// instrument all containers that don't have some preexisting LD_PRELOAD set on them
+	// Check if any container has LD_PRELOAD conflict
+	hasLDPreloadConflict := false
 	for i := range spec.Containers {
 		c := &spec.Containers[i]
 		if _, ok := findEnvVar(c, envVarLdPreloadName); ok {
 			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
-			continue
+			hasLDPreloadConflict = true
 		}
+	}
+
+	if hasLDPreloadConflict {
+		return false, ErrorTypeLDPreloadConflict
+	}
+
+	// mount the shared hostPath volume with the injector and SDKs
+	pm.mountVolume(spec, meta)
+
+	// instrument all containers
+	for i := range spec.Containers {
+		c := &spec.Containers[i]
 		pm.instrumentContainer(meta, c, selector)
 	}
 
 	pm.addLabel(meta, instrumentedLabel, pm.cfg.Injector.PackageVersion())
 
-	return !reflect.DeepEqual(originalSpec, spec)
+	return !reflect.DeepEqual(originalSpec, spec), ""
 }
 
 func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.ObjectMeta) bool {

@@ -44,7 +44,7 @@ const (
 	SHT_PROGBITS       uint32 = 1          /* program defined information */
 	SHT_SYMTAB         uint32 = 2          /* symbol table section */
 	SHT_STRTAB         uint32 = 3          /* string table section */
-	SHT_RELA           uint32 = 4          /* relocation section with addends */ //nolint:misspell
+	SHT_RELA           uint32 = 4          /* relocation section with addends */
 	SHT_HASH           uint32 = 5          /* symbol hash table section */
 	SHT_DYNAMIC        uint32 = 6          /* dynamic section */
 	SHT_NOTE           uint32 = 7          /* note section */

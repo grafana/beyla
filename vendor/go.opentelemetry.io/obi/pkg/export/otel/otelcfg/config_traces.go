@@ -38,9 +38,17 @@ type TracesConfig struct {
 
 	SamplerConfig services.SamplerConfig `yaml:"sampler"`
 
-	// Configuration options below this line will remain undocumented at the moment,
-	// but can be useful for performance-tuning of some customers.
-	MaxQueueSize int           `yaml:"max_queue_size" env:"OTEL_EBPF_OTLP_TRACES_MAX_QUEUE_SIZE"`
+	// BatchMaxSize is the maximum number of spans that the batcher will accumulate
+	// before flushing a batch to the sending queue.
+	BatchMaxSize int `yaml:"batch_max_size" env:"OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE"`
+
+	// QueueSize is the maximum number of spans that the sending queue will hold
+	// before applying back-pressure. It must be >= 2 * BatchMaxSize, otherwise the
+	// memory queue rejects every batch with "element size too large" and drops
+	// spans permanently. If left at 0 it defaults to 4 * BatchMaxSize.
+	QueueSize int `yaml:"queue_size" env:"OTEL_EBPF_OTLP_TRACES_QUEUE_SIZE"`
+
+	// BatchTimeout is the time after which a batch will be sent regardless of its size.
 	BatchTimeout time.Duration `yaml:"batch_timeout" env:"OTEL_EBPF_OTLP_TRACES_BATCH_TIMEOUT"`
 
 	// Configuration options for BackOffConfig of the traces exporter.
@@ -64,6 +72,24 @@ type TracesConfig struct {
 
 	// InjectHeaders allows injecting custom headers to the HTTP OTLP exporter
 	InjectHeaders func(dst map[string]string) `yaml:"-" env:"-"`
+}
+
+func (m *TracesConfig) NormalizeQueueConfig() error {
+	if m.QueueSize == 0 && m.BatchMaxSize > 0 {
+		// Queue capacity must be at least 2x max batch size to prevent "element size too large"
+		// errors and permanent data loss. We use a 4x multiplier to provide headroom for
+		// transient latency spikes, ensuring brief collector slowdowns don't immediately
+		// back-pressure the eBPF reader.
+		m.QueueSize = 4 * m.BatchMaxSize
+		tlog().Info("traces.queue_size not set, defaulting to 4 * batch_max_size",
+			"queue_size", m.QueueSize, "batch_max_size", m.BatchMaxSize)
+	}
+	if m.BatchMaxSize > 0 && m.QueueSize < 2*m.BatchMaxSize {
+		return fmt.Errorf("traces.queue_size (%d) must be >= 2 * traces.batch_max_size (%d): "+
+			"otherwise the sending queue rejects every batch with \"element size too large\"",
+			m.QueueSize, m.BatchMaxSize)
+	}
+	return nil
 }
 
 func (m TracesConfig) MarshalYAML() (any, error) {

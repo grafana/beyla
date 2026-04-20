@@ -1301,6 +1301,80 @@
           }
         ]
       }
+    },
+    "runtime.moduledata": {
+      "etext": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.2"
+        },
+        "offsets": [
+          {
+            "offset": 184,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "maxpc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.2"
+        },
+        "offsets": [
+          {
+            "offset": 168,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "minpc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.2"
+        },
+        "offsets": [
+          {
+            "offset": 160,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "pcHeader": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.2"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "pclntable": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.2"
+        },
+        "offsets": [
+          {
+            "offset": 104,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "text": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.2"
+        },
+        "offsets": [
+          {
+            "offset": 176,
+            "since": "1.17.0"
+          }
+        ]
+      }
     }
   }
 }

@@ -5,6 +5,7 @@ package goexec // import "go.opentelemetry.io/obi/pkg/internal/goexec"
 
 import (
 	"debug/elf"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -35,6 +36,9 @@ func findInterfaceImpls(ef *elf.File) (map[string]uint64, error) {
 	implementations := map[string]uint64{}
 	symbols, err := ef.Symbols()
 	if err != nil {
+		if errors.Is(err, elf.ErrNoSymbols) {
+			return implementations, nil
+		}
 		return nil, fmt.Errorf("accessing symbols table: %w", err)
 	}
 	for _, s := range symbols {

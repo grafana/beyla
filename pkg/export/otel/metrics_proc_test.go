@@ -235,13 +235,3 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		assert.False(t, exists, "Process attribute %s should be filtered out", attrName)
 	}
 }
-
-func readChan(t require.TestingT, inCh <-chan collector.MetricRecord, timeout time.Duration) collector.MetricRecord {
-	select {
-	case item := <-inCh:
-		return item
-	case <-time.After(timeout):
-		require.Failf(t, "timeout while waiting for event in input channel", "timeout: %s", timeout)
-	}
-	return collector.MetricRecord{}
-}

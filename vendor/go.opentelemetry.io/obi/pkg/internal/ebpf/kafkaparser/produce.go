@@ -11,6 +11,7 @@ import (
 
 type ProduceTopic struct {
 	Name      string
+	UUID      *UUID
 	Partition *int
 }
 
@@ -36,11 +37,11 @@ func ParseProduceRequest(r *largebuf.LargeBufferReader, header KafkaRequestHeade
 
 func produceRequestSkipUntilTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
 	/*
-		Produce Request (Version: 3-12) => transactional_id acks timeout_ms [topic_data] _tagged_fields
-		  transactional_id => NULLABLE_STRING / COMPACT_NULLABLE_STRING
+		Produce Request (Version: 3+) => transactional_id acks timeout_ms [topic_data] _tagged_fields
+		  transactional_id => NULLABLE_STRING (v3-8) / COMPACT_NULLABLE_STRING (v9+)
 		  acks => INT16
 		  timeout_ms => INT32
-		  topic_data => Name [partition_data] _tagged_fields
+		  topic_data => Name (v3-12) / TopicId UUID (v13+) [partition_data] _tagged_fields
 	*/
 	transactionIDSize, err := readStringLength(r, header, true)
 	if err != nil {
@@ -76,15 +77,25 @@ func parseProduceTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader
 
 func parseProduceTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*ProduceTopic, error) {
 	var topic ProduceTopic
-	/*
-	  Topics => topic [partitions] _tagged_fields
-	    topic => STRING / COMPACT_STRING
-	*/
-	topicName, err := readString(r, header, false)
-	if err != nil {
-		return nil, err
+	if header.APIVersion() >= 13 {
+		// v13+: topic identified by UUID (KIP-516), name resolved from metadata cache by caller
+		// https://cwiki.apache.org/confluence/display/KAFKA/KIP-516%3A+Topic+Identifiers#KIP516:TopicIdentifiers-ProduceRequestv9
+		uuid, err := readUUID(r)
+		if err != nil {
+			return nil, err
+		}
+		topic.UUID = uuid
+	} else {
+		/*
+		  Topics => topic [partitions] _tagged_fields
+		    topic => STRING (v3-8) / COMPACT_STRING (v9-12)
+		*/
+		topicName, err := readString(r, header, false)
+		if err != nil {
+			return nil, err
+		}
+		topic.Name = topicName
 	}
-	topic.Name = topicName
 	partitionsLen, err := readArrayLength(r, header)
 	if err != nil {
 		// return the topic even if partitions can't be read

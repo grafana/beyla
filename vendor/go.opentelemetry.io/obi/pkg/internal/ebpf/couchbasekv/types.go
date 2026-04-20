@@ -6,6 +6,9 @@ package couchbasekv // import "go.opentelemetry.io/obi/pkg/internal/ebpf/couchba
 // Header sizes
 const (
 	HeaderLen = 24 // All packets have a 24-byte header
+	// MaxKeyLen is the maximum document key length allowed by the Couchbase
+	// memcached binary protocol (250 bytes per Couchbase server limits).
+	MaxKeyLen = 250
 )
 
 // Magic bytes identify packet direction and encoding format
@@ -965,4 +968,9 @@ func (d DataType) HasSnappy() bool {
 // HasXattr returns true if extended attributes are present.
 func (d DataType) HasXattr() bool {
 	return d&DataTypeXattr != 0
+}
+
+// IsValid returns true if no reserved bits are set.
+func (d DataType) IsValid() bool {
+	return d&^(DataTypeJSON|DataTypeSnappy|DataTypeXattr) == 0
 }

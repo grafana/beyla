@@ -240,9 +240,13 @@ func (mr *SvcGraphMetricsReporter) newMetricSet(service *svc.Attrs) (*SvcGraphMe
 }
 
 func (mr *SvcGraphMetricsReporter) close() {
-	if err := mr.exporter.Shutdown(mr.ctx); err != nil {
-		mr.log.Error("closing metrics provider", "error", err)
-	}
+	go func() {
+		if err := mr.exporter.Shutdown(mr.ctx); err != nil {
+			mr.log.Warn("closing metrics provider", "error", err)
+			return
+		}
+		mr.log.Debug("Metrics reporter closed")
+	}()
 }
 
 func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribute.Set {

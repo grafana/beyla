@@ -349,6 +349,12 @@ k8sCache:
   podAnnotations: {}
   # -- Adds custom labels to the Beyla Kube Cache Pods.
   podLabels: {}
+  # -- The nodeSelector field allows user to constrain which nodes cache pods are scheduled to based on labels on the node
+  nodeSelector: {}
+  # -- Tolerations allow cache pods to be scheduled on nodes with specific taints
+  tolerations: []
+  # -- used for scheduling of cache pods based on affinity rules
+  affinity: {}
 
 # -- Extra k8s manifests to deploy
 extraObjects: []

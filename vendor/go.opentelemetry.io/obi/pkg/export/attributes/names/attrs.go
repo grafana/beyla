@@ -31,6 +31,7 @@ func (an Name) Prom() string {
 const (
 	HTTPRequestMethod      = Name(semconv.HTTPRequestMethodKey)
 	HTTPResponseStatusCode = Name(semconv.HTTPResponseStatusCodeKey)
+	HTTPURLScheme          = Name(semconv.URLSchemeKey)
 	HTTPUrlPath            = Name(semconv.URLPathKey)
 	HTTPUrlFull            = Name(semconv.URLFullKey)
 	ClientAddr             = Name(semconv.ClientAddressKey)
@@ -89,7 +90,23 @@ const (
 
 	ContainerName = Name(semconv.ContainerNameKey)
 	ContainerID   = Name(semconv.ContainerIDKey)
+
+	// HTTP enrichment attribute prefixes and keys
+	HTTPRequestHeaderPrefix  = "http.request.header."
+	HTTPResponseHeaderPrefix = "http.response.header."
+	HTTPRequestBodyContent   = Name("http.request.body.content")
+	HTTPResponseBodyContent  = Name("http.response.body.content")
 )
+
+// HTTPRequestHeaderKey returns the attribute key for a request header (lowercased).
+func HTTPRequestHeaderKey(name string) string {
+	return HTTPRequestHeaderPrefix + strings.ToLower(name)
+}
+
+// HTTPResponseHeaderKey returns the attribute key for a response header (lowercased).
+func HTTPResponseHeaderKey(name string) string {
+	return HTTPResponseHeaderPrefix + strings.ToLower(name)
+}
 
 // OBI-specific network attributes
 // obi.-prefixed attributes are a var instead of a constant to allow overriding the prefix
@@ -180,6 +197,12 @@ const (
 	ServiceName      = Name(semconv.ServiceNameKey)
 	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
 
+	// TODO: replace by semconv.ServicePeerNameKey and semconv.ServicePeerNamespaceKey
+	// when we update to OTEL semconv library 1.40 or with {server|client}.service.{name|namespace}
+	// if this is issue is approved https://github.com/open-telemetry/semantic-conventions/issues/3472
+	ServicePeerName      = Name("service.peer.name")
+	ServicePeerNamespace = Name("service.peer.namespace")
+
 	HostID      = Name(semconv.HostIDKey)
 	HostImageID = Name(semconv.HostImageIDKey)
 	HostName    = Name(semconv.HostNameKey)
@@ -221,6 +244,7 @@ const (
 	GenAIInstructions = Name(semconv.GenAISystemInstructionsKey)
 	GenAIOutput       = Name(semconv.GenAIOutputMessagesKey)
 	GenAIMetadata     = Name("gen_ai.metadata")
+	GenAITools        = Name(semconv.GenAIToolDefinitionsKey)
 )
 
 // OBI specific GPU events
@@ -229,7 +253,29 @@ const (
 	CudaMemcpyKind = Name("cuda.memcpy.kind")
 )
 
+// JSON-RPC attributes (current semconv, replacing deprecated rpc.jsonrpc.* attributes)
+const (
+	JSONRPCProtocolVersion = Name("jsonrpc.protocol.version")
+	JSONRPCRequestID       = Name("jsonrpc.request.id")
+	RPCResponseStatusCode  = Name("rpc.response.status_code")
+)
+
 // DNS events
 const (
 	DNSQuestionName = Name(semconv.DNSQuestionNameKey)
+)
+
+// GenAI events
+
+const (
+	GenAIOperationName = Name(semconv.GenAIOperationNameKey)
+	GenAIProviderName  = Name(semconv.GenAIProviderNameKey)
+	// With GenAI events, it's the first time we have a single event produce two separate metrics: input->tokens, output->tokens.
+	// All of our current metrics have one set of attributes and a value for that. These two attributes are internal and they
+	// map to semconv.GenAITokenTypeKey when they are generated in metrics. The span_getter.go code will generate
+	// semconv.GenAITokenTypeKey with "input" string and semconv.GenAITokenTypeKey with "output" string.
+	GenAITokenTypeInput  = Name(semconv.GenAITokenTypeKey)
+	GenAITokenTypeOutput = Name("gen_ai.token.type_output")
+	GenAIRequestModel    = Name(semconv.GenAIRequestModelKey)
+	GenAIResponseModel   = Name(semconv.GenAIResponseModelKey)
 )

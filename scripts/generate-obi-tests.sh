@@ -77,6 +77,8 @@ BEHAVIORAL_TRANSFORMS=(
     # --- Identity values (where "obi" is a config value or assertion, not a name) ---
     'HOSTNAME: "obi"|HOSTNAME: "beyla"'
     'value: "obi"|value: "beyla"'
+    # service.instance.id regex assertion (Go backtick literal)§§
+    '`\^obi:\\d+\$\$`|`\^beyla:\\d+\$\$`'
     '/var/run/obi|/var/run/beyla'
     '"source":[ ]*"obi"|"source": "beyla"'
 
@@ -102,6 +104,12 @@ BEHAVIORAL_TRANSFORMS=(
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
     'internal/test/integration/components/beyla|internal/test/beyla_extensions/components/beyla'
     'internal/test/integration/components/beyla-k8s-cache|internal/test/beyla_extensions/components/beyla-k8s-cache'
+
+    # --- Test assertion fixes: hard-fail t → collect-t ct inside EventuallyWithT ---
+    # OBI upstream bug: python/rails span checks in testNestedHTTPTracesKProbes use
+    # require.Len(t, ...) instead of require.Len(ct, ...), causing immediate hard-fail
+    # inside EventuallyWithT before it can retry on slow/kernel-5.15 environments.
+    'require\.Len(t, res, 1, traceID)|require.Len(ct, res, 1, traceID)'
 
     # --- K8s image tags ---
     '"obi:dev"|"beyla:dev"'
@@ -502,6 +510,21 @@ ensure_otherinstance_has_service_version() {
     fi
 }
 
+ensure_netolly_basic_guess_ports() {
+    # The plain netolly manifest omits guess_ports, relying on eBPF TCP-SYN tracking
+    # to identify server_port.  In Beyla's test environment (appolly + netolly eBPF
+    # programs loaded together), the connInitiatorsMap (capped at CacheMaxFlows=20)
+    # fills up before the pinger SYN is seen, leaving direction=unknown and
+    # server_port=0.  Add guess_ports: ordinal to mirror the other netolly manifests
+    # and make the test robust.
+    local file="$OBI_DEST/k8s/manifests/06-obi-netolly.yml"
+    [[ -f "$file" ]] || return 0
+    if ! grep -q 'guess_ports:' "$file"; then
+        awk '/^      protocols:/ { print "      guess_ports: ordinal" } { print }' \
+            "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    fi
+}
+
 apply_behavioral_transforms() {
     local jobs="$1"
     echo "  Applying OBI → Beyla behavioral transforms..."
@@ -569,8 +592,10 @@ adjust_oats_compose_paths() {
 rewrite_oats_go_mod() {
     echo "  Rewriting OATs go.mod files..."
     find "$OATS_DEST" -name "go.mod" -type f | while read -r modfile; do
-        # Rewrite module path: OBI → Beyla convention (no /v3 for standalone test modules)
-        sed_i -e "s|module ${OBI_MODULE}/internal/test/oats|module github.com/grafana/beyla/internal/testgenerated/oats|g" "$modfile"
+        # Rewrite all OBI oats module references (module declarations, require, and replace
+        # directives) to the Beyla module path. Use ${BEYLA_MODULE} (with /v3) to match
+        # the Go import transforms applied to .go files by transform_oats_go_files().
+        sed_i -e "s|${OBI_MODULE}/internal/test/oats|${BEYLA_MODULE}/internal/testgenerated/oats|g" "$modfile"
     done
 }
 
@@ -640,6 +665,7 @@ generate() {
     apply_behavioral_transforms "$jobs"
     ensure_daemonset_process_metrics_enabled
     ensure_otherinstance_has_service_version
+    ensure_netolly_basic_guess_ports
     cleanup_and_inject_build_tags "$jobs"
 
     # -----------------------------------------------------------------

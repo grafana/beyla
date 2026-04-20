@@ -5,7 +5,10 @@ package ebpfconvenience // import "go.opentelemetry.io/obi/pkg/internal/ebpf/con
 
 import (
 	"fmt"
+	"os"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/cilium/ebpf"
 )
@@ -13,6 +16,156 @@ import (
 // This file contains convenience functions around the cilum/ebpf
 // CollectionSpec.Variables API.
 // This wrapper has been deprecated in the main cilium/ebpf codebase.
+
+const PinInternal = ebpf.PinType(100)
+
+func roundToNearestMultiple(x, n uint32) uint32 {
+	if x < n {
+		return n
+	}
+
+	if x%n == 0 {
+		return x
+	}
+
+	return (x + n/2) / n * n
+}
+
+// RingBuf map types must be a multiple of os.Getpagesize()
+func alignMaxEntriesIfRingBuf(m *ebpf.MapSpec) {
+	if m.Type == ebpf.RingBuf {
+		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, uint32(os.Getpagesize()))
+	}
+}
+
+// ResolveMaps sets up internal maps and ensures sane max entries values
+func ResolveMaps(spec *ebpf.CollectionSpec, sharedMaps map[string]*ebpf.Map, mu *sync.Mutex) (*ebpf.CollectionOptions, error) {
+	collOpts := ebpf.CollectionOptions{MapReplacements: map[string]*ebpf.Map{}}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	for k, v := range spec.Maps {
+		alignMaxEntriesIfRingBuf(v)
+
+		if v.Pinning != PinInternal {
+			continue
+		}
+
+		v.Pinning = ebpf.PinNone
+		internalMap := sharedMaps[k]
+
+		var err error
+
+		if internalMap == nil {
+			internalMap, err = ebpf.NewMap(v)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load shared map: %w", err)
+			}
+
+			sharedMaps[k] = internalMap
+			runtime.SetFinalizer(internalMap, (*ebpf.Map).Close)
+		}
+
+		collOpts.MapReplacements[k] = internalMap
+	}
+
+	return &collOpts, nil
+}
+
+// LoadSpec loads a BPF collection spec into the provided objects, handling
+// constant rewriting, PinInternal map resolution, and bpffs pin path setup.
+// Notes about some parameters:
+// - constants: optional map of BPF constants to rewrite (may be nil)
+// - sharedMaps: map store for PinInternal maps, shared across specs within the same agent
+// - pinPath: bpffs pin path for PinByName maps (empty string to skip)
+func LoadSpec(spec *ebpf.CollectionSpec, objects any, constants map[string]any, sharedMaps map[string]*ebpf.Map, mu *sync.Mutex, pinPath string) error {
+	if constants != nil {
+		if err := RewriteConstants(spec, constants); err != nil {
+			return fmt.Errorf("rewriting BPF constants: %w", err)
+		}
+	}
+
+	collOpts, err := ResolveMaps(spec, sharedMaps, mu)
+	if err != nil {
+		return fmt.Errorf("resolving maps: %w", err)
+	}
+
+	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
+	collOpts.Maps = ebpf.MapOptions{PinPath: pinPath}
+
+	if err := spec.LoadAndAssign(objects, collOpts); err != nil {
+		return fmt.Errorf("loading and assigning BPF objects: %w", err)
+	}
+
+	return nil
+}
+
+const (
+	MaxMapEntries       uint32 = 1 << 24
+	MinMapEntries       uint32 = 64
+	MinResizableMapSize uint32 = 64
+)
+
+// isResizableMapType returns true for map types where scaling MaxEntries
+// is meaningful. Excludes special map types whose MaxEntries has fixed
+// semantics (e.g. ProgramArray entries are tail-call slots, not data).
+func isResizableMapType(t ebpf.MapType) bool {
+	switch t {
+	case ebpf.ProgramArray, ebpf.PerfEventArray, ebpf.CGroupArray,
+		ebpf.ArrayOfMaps, ebpf.HashOfMaps,
+		ebpf.DevMap, ebpf.SockMap, ebpf.CPUMap, ebpf.XSKMap, ebpf.SockHash,
+		ebpf.DevMapHash, ebpf.ReusePortSockArray:
+		return false
+	default:
+		return true
+	}
+}
+
+// SetupMapSizes scales all resizable maps in the spec by globalScaleFactor.
+// If globalScaleFactor > 0, sizes are doubled that many times (left shift).
+// If globalScaleFactor < 0, sizes are halved that many times (right shift).
+// Maps with PinByName are skipped regardless of scale factor.
+func SetupMapSizes(spec *ebpf.CollectionSpec, globalScaleFactor int) {
+	if globalScaleFactor == 0 {
+		return
+	}
+
+	for _, mSpec := range spec.Maps {
+		if !isResizableMapType(mSpec.Type) {
+			continue
+		}
+
+		if mSpec.MaxEntries < MinResizableMapSize {
+			continue
+		}
+
+		if mSpec.Pinning == ebpf.PinByName {
+			continue
+		}
+
+		oldEntries := mSpec.MaxEntries
+		var newEntries uint32
+
+		if globalScaleFactor > 0 {
+			newEntries = oldEntries << uint32(globalScaleFactor)
+			if newEntries < oldEntries {
+				newEntries = MaxMapEntries
+			}
+		} else {
+			newEntries = oldEntries >> uint32(-globalScaleFactor)
+		}
+
+		if newEntries < MinMapEntries && oldEntries >= MinMapEntries {
+			newEntries = MinMapEntries
+		}
+		if newEntries > MaxMapEntries {
+			newEntries = MaxMapEntries
+		}
+
+		mSpec.MaxEntries = newEntries
+	}
+}
 
 // MissingConstantsError is returned by [ebpf.CollectionSpec.RewriteConstants].
 type MissingConstantsError struct {

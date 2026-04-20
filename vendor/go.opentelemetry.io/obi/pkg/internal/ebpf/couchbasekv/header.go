@@ -45,6 +45,8 @@ func (h Header) KeyLen() uint16 {
 
 func (h Header) ExtrasLen() uint8 { return h[4] }
 
+func (h Header) DataType() DataType { return DataType(h[5]) }
+
 // Status returns bytes 6-7 as status code of the response; returns 0 for requests.
 func (h Header) Status() Status {
 	if h.IsResponse() {
@@ -225,6 +227,14 @@ func (p Packet) valueEnd() int {
 
 // validateHeader checks for basic validity of the parsed header.
 func validateHeader(h Header) error {
+	if int(h.KeyLen()) > MaxKeyLen {
+		return fmt.Errorf("invalid key length: %d > max(%d)", h.KeyLen(), MaxKeyLen)
+	}
+
+	if !h.DataType().IsValid() {
+		return fmt.Errorf("invalid data type: 0x%02x has reserved bits set", byte(h.DataType()))
+	}
+
 	minBodyLen := int(h.FramingExtrasLen()) + int(h.ExtrasLen()) + int(h.KeyLen())
 	if int(h.BodyLen()) < minBodyLen {
 		return fmt.Errorf("invalid body length: %d < framingExtras(%d) + extras(%d) + key(%d)",

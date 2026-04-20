@@ -297,6 +297,10 @@ func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg
 	p.log.Debug("terminating")
 }
 
+func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext) {}
+
+func (p *Tracer) Capabilities() ebpfcommon.TracerCapability { return 0 }
+
 func (p *Tracer) Required() bool {
 	return false
 }

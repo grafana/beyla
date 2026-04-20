@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
+	ebpfhttp "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
@@ -51,6 +52,12 @@ type (
 	GoOTelSpanTrace      BpfOtelSpanT
 	GoMongoClientInfo    BpfMongoGoClientReqT
 	DNSInfo              BpfDnsReqT
+)
+
+// Go mirror of tp_info.h -> enum tp_flags
+// Values from https://www.w3.org/TR/trace-context/
+const (
+	TPFlagSampled = 1
 )
 
 const (
@@ -78,7 +85,14 @@ const (
 	ProtocolTypeMQTT // placeholder for future kernel-space detection
 )
 
+const (
+	GenericEventSourceTypeKProbes  uint8 = 0
+	GenericEventSourceTypeLWThread uint8 = 1
+)
+
 var IntegrityModeOverride = false
+
+type TracerCapability uint64
 
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
@@ -181,7 +195,9 @@ type EBPFParseContext struct {
 	postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
 	kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 	payloadExtraction          config.PayloadExtraction
+	httpEnricher               *ebpfhttp.HTTPEnricher
 	dnsEvents                  *expirable.LRU[dnsparser.DNSId, *request.Span]
+	emitSpans                  func([]request.Span)
 }
 
 // sharedForwarder is implemented by ringBufForwarder[T] so that
@@ -199,6 +215,7 @@ type EBPFEventContext struct {
 	RingBufLock      sync.Mutex
 	MapsLock         sync.Mutex
 	LoadLock         sync.Mutex
+	Capabilities     TracerCapability
 }
 
 var MisclassifiedEvents = make(chan MisclassifiedEvent)
@@ -218,10 +235,23 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		mongoRequestCache          PendingMongoDBRequests
 		payloadExtraction          config.PayloadExtraction
 		dnsEvents                  *expirable.LRU[dnsparser.DNSId, *request.Span]
+		emitSpans                  func([]request.Span)
 	)
 
 	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
 	largeBuffers := expirable.NewLRU[largeBufferKey, *largebuf.LargeBuffer](1024, nil, 5*time.Minute)
+
+	if spansChan != nil {
+		emitSpans = func(spans []request.Span) {
+			if len(spans) == 0 {
+				return
+			}
+			if filter != nil {
+				spans = filter.Filter(spans)
+			}
+			spansChan.SendCtx(context.Background(), spans)
+		}
+	}
 
 	if cfg != nil {
 		protocolDebug = cfg.ProtocolDebug
@@ -264,7 +294,12 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 
 		payloadExtraction = cfg.PayloadExtraction
 
-		dnsEvents = expirable.NewLRU(1024, dnsEventExpireHandler(spansChan, filter), cfg.DNSRequestTimeout)
+		dnsEvents = expirable.NewLRU(1024, dnsEventExpireHandler(emitSpans), cfg.DNSRequestTimeout)
+	}
+
+	var httpEnricher *ebpfhttp.HTTPEnricher
+	if payloadExtraction.HTTP.Enrichment.Enabled {
+		httpEnricher = ebpfhttp.NewHTTPEnricher(payloadExtraction.HTTP.Enrichment)
 	}
 
 	return &EBPFParseContext{
@@ -279,8 +314,18 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		postgresPortals:            postgresPortals,
 		kafkaTopicUUIDToName:       kafkaTopicUUIDToName,
 		payloadExtraction:          payloadExtraction,
+		httpEnricher:               httpEnricher,
 		dnsEvents:                  dnsEvents,
+		emitSpans:                  emitSpans,
 	}
+}
+
+func (ctx *EBPFParseContext) emitExtraSpans(spans ...request.Span) {
+	if ctx == nil || ctx.emitSpans == nil || len(spans) == 0 {
+		return
+	}
+
+	ctx.emitSpans(spans)
 }
 
 func NewEBPFEventContext() *EBPFEventContext {

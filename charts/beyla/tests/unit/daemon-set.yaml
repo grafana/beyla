@@ -58,3 +58,15 @@ tests:
       - matchRegex:
           path: spec.template.metadata.annotations.checksum/config
           pattern: "^[a-f0-9]{64}$"
+
+  - it: should use image.tag for version label when set
+    template: daemon-set.yaml
+    set:
+      image:
+        tag: "custom"
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - equal:
+          path: metadata.labels["app.kubernetes.io/version"]
+          value: "custom"

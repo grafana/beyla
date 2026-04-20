@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,8 +31,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-const PinInternal = ebpf.PinType(100)
-
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 type instrumenter struct {
@@ -45,74 +42,15 @@ type instrumenter struct {
 	processName string
 }
 
-func roundToNearestMultiple(x, n uint32) uint32 {
-	if x < n {
-		return n
-	}
-
-	if x%n == 0 {
-		return x
-	}
-
-	return (x + n/2) / n * n
-}
-
-// RingBuf map types must be a multiple of os.Getpagesize()
-func alignMaxEntriesIfRingBuf(m *ebpf.MapSpec) {
-	if m.Type == ebpf.RingBuf {
-		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, uint32(os.Getpagesize()))
-	}
-}
-
-// sets up internal maps and ensures sane max entries values
-func resolveMaps(eventContext *common.EBPFEventContext, spec *ebpf.CollectionSpec) (*ebpf.CollectionOptions, error) {
-	collOpts := ebpf.CollectionOptions{MapReplacements: map[string]*ebpf.Map{}}
-
-	eventContext.MapsLock.Lock()
-	defer eventContext.MapsLock.Unlock()
-
-	for k, v := range spec.Maps {
-		alignMaxEntriesIfRingBuf(v)
-
-		if v.Pinning != PinInternal {
-			continue
-		}
-
-		v.Pinning = ebpf.PinNone
-		internalMap := eventContext.EBPFMaps[k]
-
-		var err error
-
-		if internalMap == nil {
-			internalMap, err = ebpf.NewMap(v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load shared map: %w", err)
-			}
-
-			eventContext.EBPFMaps[k] = internalMap
-			runtime.SetFinalizer(internalMap, (*ebpf.Map).Close)
-		}
-
-		collOpts.MapReplacements[k] = internalMap
-	}
-
-	return &collOpts, nil
-}
-
 func loadSpec(eventContext *common.EBPFEventContext, bundle *common.SpecBundle, otelBPFFSPath string, idx int) error {
-	if err := ebpfconvenience.RewriteConstants(bundle.Spec, bundle.Constants); err != nil {
-		return fmt.Errorf("rewriting BPF constants for spec %d: %w", idx, err)
-	}
-
-	collOpts, err := resolveMaps(eventContext, bundle.Spec)
-	if err != nil {
-		return fmt.Errorf("resolving maps for spec %d: %w", idx, err)
-	}
-
-	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
-	collOpts.Maps = ebpf.MapOptions{PinPath: otelBPFFSPath}
-
-	if err := bundle.Spec.LoadAndAssign(bundle.Objects, collOpts); err != nil {
+	if err := ebpfconvenience.LoadSpec(
+		bundle.Spec,
+		bundle.Objects,
+		bundle.Constants,
+		eventContext.EBPFMaps,
+		&eventContext.MapsLock,
+		otelBPFFSPath,
+	); err != nil {
 		return fmt.Errorf("loading spec %d: %w", idx, err)
 	}
 
@@ -239,7 +177,13 @@ func (pt *ProcessTracer) setupOtelBPFFSPath(bundles []*common.SpecBundle) string
 	return ""
 }
 
-func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer) error {
+func setupBPFMapSizes(spec *ebpf.CollectionSpec, cfg *obi.Config) {
+	ebpfconvenience.SetupMapSizes(spec, cfg.EBPF.MapsConfig.GlobalScaleFactor)
+}
+
+func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer, cfg *obi.Config) error {
+	p.SetEventContext(eventContext)
+
 	bundles, err := p.LoadSpecs()
 	if err != nil {
 		return fmt.Errorf("loading eBPF program specs: %w", err)
@@ -248,6 +192,9 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 	otelBPFFSPath := pt.setupOtelBPFFSPath(bundles)
 
 	for i, bundle := range bundles {
+		// set max entries map using user defined values
+		setupBPFMapSizes(bundle.Spec, cfg)
+
 		if err := loadSpec(eventContext, bundle, otelBPFFSPath, i); err != nil {
 			closeLoadedSpecs(bundles[:i])
 			return err
@@ -257,11 +204,11 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 	return nil
 }
 
-func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tracer, log *slog.Logger) error {
+func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tracer, log *slog.Logger, cfg *obi.Config) error {
 	plog := log.With("program", reflect.TypeOf(p))
 	plog.Debug("loading eBPF program", "type", pt.Type)
 
-	err := pt.loadAndAssign(eventContext, p)
+	err := pt.loadAndAssign(eventContext, p, cfg)
 
 	if err != nil && (strings.Contains(err.Error(), "unknown func bpf_probe_write_user") ||
 		strings.Contains(err.Error(), "cannot use helper bpf_probe_write_user")) {
@@ -272,7 +219,7 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 			"For more details set OTEL_EBPF_LOG_LEVEL=DEBUG.")
 
 		common.IntegrityModeOverride = true
-		err = pt.loadAndAssign(eventContext, p)
+		err = pt.loadAndAssign(eventContext, p, cfg)
 	}
 
 	if err != nil {
@@ -328,7 +275,7 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 	return nil
 }
 
-func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) error {
+func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext, cfg *obi.Config) error {
 	eventContext.LoadLock.Lock()
 	defer eventContext.LoadLock.Unlock()
 
@@ -337,13 +284,14 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) erro
 	loadedPrograms := make([]Tracer, 0, len(pt.Programs))
 
 	for _, p := range pt.Programs {
-		if err := pt.loadTracer(eventContext, p, log); err != nil {
+		if err := pt.loadTracer(eventContext, p, log, cfg); err != nil {
 			log.Warn("couldn't load tracer", "error", err, "required", p.Required())
 			if p.Required() {
 				return err
 			}
 		} else {
 			loadedPrograms = append(loadedPrograms, p)
+			eventContext.Capabilities |= p.Capabilities()
 		}
 	}
 
@@ -354,8 +302,8 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext) erro
 	return nil
 }
 
-func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext) error {
-	return pt.loadTracers(eventContext)
+func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext, cfg *obi.Config) error {
+	return pt.loadTracers(eventContext, cfg)
 }
 
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
@@ -433,7 +381,7 @@ func printVerifierErrorInfo(err error) {
 	}
 }
 
-func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext, p UtilityTracer) error {
+func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext, p UtilityTracer, cfg *obi.Config) error {
 	i := instrumenter{}
 	plog := ptlog()
 	plog.Debug("loading independent eBPF program")
@@ -444,6 +392,9 @@ func RunUtilityTracer(ctx context.Context, eventContext *common.EBPFEventContext
 	}
 
 	for idx, bundle := range bundles {
+		// Utility tracers don't pin maps (empty pin path), so no pinned
+		// map conflicts are possible — the empty path is intentional.
+		setupBPFMapSizes(bundle.Spec, cfg)
 		if err := loadSpec(eventContext, bundle, "", idx); err != nil {
 			closeLoadedSpecs(bundles[:idx])
 			printVerifierErrorInfo(err)

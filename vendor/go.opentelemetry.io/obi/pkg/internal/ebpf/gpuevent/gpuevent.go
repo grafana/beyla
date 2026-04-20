@@ -319,6 +319,10 @@ func (p *Tracer) readGPUGraphLaunchIntoSpan(record *ringbuf.Record) (request.Spa
 	}, false, nil
 }
 
+func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext) {}
+
+func (p *Tracer) Capabilities() ebpfcommon.TracerCapability { return 0 }
+
 func (p *Tracer) Required() bool {
 	return false
 }

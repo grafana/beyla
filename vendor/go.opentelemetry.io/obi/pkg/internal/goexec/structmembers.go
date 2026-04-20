@@ -51,6 +51,7 @@ const (
 	ReqHeaderPtrPos
 	IoWriterBufPtrPos
 	IoWriterNPos
+	IoWriterWrPos
 	CcNextStreamIDPos
 	CcNextStreamIDVendoredPos
 	CcFramerPos
@@ -222,6 +223,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"buf": IoWriterBufPtrPos,
 			"n":   IoWriterNPos,
+			"wr":  IoWriterWrPos,
 		},
 	},
 	"context.valueCtx": {

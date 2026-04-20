@@ -10,6 +10,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
+// Protocol details
+// https://kafka.apache.org/41/design/protocol/
+
 const (
 	Int8Len            = 1
 	Int16Len           = 2
@@ -248,7 +251,7 @@ func (h KafkaRequestHeader) validate() error {
 			return errors.New("invalid Kafka request header: unsupported API key version for Fetch")
 		}
 	case APIKeyProduce:
-		if h.APIVersion() > 13 { // latest: Produce Request (Version: 12)
+		if h.APIVersion() > 13 { // latest: Produce Request (Version: 13)
 			return errors.New("invalid Kafka request header: unsupported API key version for Produce")
 		}
 	case APIKeyMetadata:

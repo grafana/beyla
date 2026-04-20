@@ -69,7 +69,6 @@ type BeylaDiscoveryConfig struct {
 	// Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically
 	// added to the services definition criteria, with the lowest preference.
 	// Deprecated: Use Instrument instead
-	//nolint:undoc
 	Services services.RegexDefinitionCriteria `yaml:"services"`
 
 	// Survey selection. Same as services selection, however, it generates only the target info (survey_info) instead of instrumenting the services
@@ -78,13 +77,11 @@ type BeylaDiscoveryConfig struct {
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.
 	// Deprecated: Use ExcludeInstrument instead
-	//nolint:undoc
 	ExcludeServices services.RegexDefinitionCriteria `yaml:"exclude_services"`
 
 	// DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector)
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
 	// Deprecated: Use DefaultExcludeInstrument instead
-	//nolint:undoc
 	DefaultExcludeServices services.RegexDefinitionCriteria `yaml:"default_exclude_services"`
 
 	// Instrument selects the services to instrument via Globs. If this section is set,
@@ -103,14 +100,12 @@ type BeylaDiscoveryConfig struct {
 
 	// PollInterval specifies, for the poll service watcher, the interval time between
 	// process inspections
-	// nolint:undoc
 	PollInterval time.Duration `yaml:"poll_interval" env:"BEYLA_DISCOVERY_POLL_INTERVAL"`
 
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
 	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"BEYLA_SKIP_GO_SPECIFIC_TRACERS"`
 
 	// Debugging only option. Make sure the kernel side doesn't filter any PIDs, force user space filtering.
-	// nolint:undoc
 	BPFPidFilterOff bool `yaml:"bpf_pid_filter_off" env:"BEYLA_BPF_PID_FILTER_OFF"`
 
 	// Disables instrumentation of services which are already instrumented
@@ -118,33 +113,26 @@ type BeylaDiscoveryConfig struct {
 
 	// DefaultOtlpGRPCPort specifies the default OTLP gRPC port (4317) to fallback on when missing environment variables on service, for
 	// checking for grpc export requests, defaults to 4317
-	// nolint:undoc
 	DefaultOtlpGRPCPort int `yaml:"default_otlp_grpc_port" env:"BEYLA_DEFAULT_OTLP_GRPC_PORT"`
 
 	// Min process age to be considered for discovery.
-	// nolint:undoc
 	MinProcessAge time.Duration `yaml:"min_process_age" env:"BEYLA_MIN_PROCESS_AGE"`
 
 	// Disables generation of span metrics of services which are already instrumented
 	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
 
-	// nolint:undoc
 	RouteHarvesterTimeout time.Duration `yaml:"route_harvester_timeout" env:"OTEL_EBPF_ROUTE_HARVESTER_TIMEOUT"`
 
-	// nolint:undoc
 	DisabledRouteHarvesters []services.RouteHarvesterLanguage `yaml:"disabled_route_harvesters"`
 
-	// nolint:undoc
 	RouteHarvestConfig RouteHarvestingConfig `yaml:"route_harvester_advanced"`
 
 	// Executable paths for which we don't run language detection and cannot be
 	// selected using the path or language selection criteria
-	//nolint:undoc
 	ExcludedLinuxSystemPaths []string `yaml:"excluded_linux_system_paths"`
 }
 
 type RouteHarvestingConfig struct {
-	// nolint:undoc
 	JavaHarvestDelay time.Duration `yaml:"java_harvest_delay" env:"OTEL_EBPF_JAVA_ROUTE_HARVEST_DELAY"`
 }
 

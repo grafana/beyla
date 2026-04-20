@@ -40,9 +40,9 @@ const (
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
 	envVarLdPreloadName               = "LD_PRELOAD"
-	envVarLdPreloadValue              = internalMountPath + "/injector/libotelinject.so"
+	envVarLdPreloadValue              = internalMountPath + "/dist/injector/libotelinject.so"
 	envOtelInjectorConfigFileName     = "OTEL_INJECTOR_CONFIG_FILE"
-	envOtelInjectorConfigFileValue    = internalMountPath + "/injector/otelinject.conf"
+	envOtelInjectorConfigFileValue    = internalMountPath + "/dist/injector/otelinject.conf"
 	envOtelExporterOtlpEndpointName   = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	envOtelExporterOtlpProtocolName   = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	envOtelSemConvStabilityName       = "OTEL_SEMCONV_STABILITY_OPT_IN"
@@ -152,12 +152,12 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 	// Consult the labels, if we instrumented the pod, we'd have set the
 	// instrumented label.
 	if label, ok := info.podLabels[instrumentedLabel]; ok && label != "" {
-		return label == pm.cfg.Injector.SDKPkgVersion
+		return label == pm.cfg.Injector.PackageVersion()
 	}
 
 	// this a duplicate of the check above, but done on environment variables
 	if ver, ok := info.env[envVarSDKVersion]; ok && ver != "" {
-		return ver == pm.cfg.Injector.SDKPkgVersion
+		return ver == pm.cfg.Injector.PackageVersion()
 	}
 
 	return false
@@ -206,8 +206,8 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// add a label with the version of the SDKs we've instrumented
-	if pm.cfg.Injector.SDKPkgVersion == "" {
-		errorResponse(admResponse, "SDK package version must be set")
+	if pm.cfg.Injector.PackageVersion() == "" {
+		errorResponse(admResponse, "Image Volume Path or SDK package version must be set")
 		pm.mutateResponse(w, admResponse)
 		return
 	}
@@ -316,7 +316,7 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 		pm.instrumentContainer(meta, c, selector)
 	}
 
-	pm.addLabel(meta, instrumentedLabel, pm.cfg.Injector.SDKPkgVersion)
+	pm.addLabel(meta, instrumentedLabel, pm.cfg.Injector.PackageVersion())
 
 	return !reflect.DeepEqual(originalSpec, spec)
 }
@@ -337,26 +337,44 @@ func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.Obj
 	return false
 }
 
+func (pm *PodMutator) buildVolumeDefinition() corev1.Volume {
+	if pm.cfg.Injector.UsesImageVolume() {
+		// Use image volume path directly if the configuration
+		// specifies this mode. Supported on k8s 1.31+
+		return corev1.Volume{
+			Name: injectVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Image: &corev1.ImageVolumeSource{
+					Reference:  pm.cfg.Injector.ImageVolumePath,
+					PullPolicy: corev1.PullIfNotPresent,
+				},
+			},
+		}
+	} else {
+		// Use hostPath volume shared across all pods on the node
+		// The Beyla DaemonSet deployment populates this directory once per node
+		// and it must be setup before Beyla launches
+		return corev1.Volume{
+			Name: injectVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: strings.Join([]string{pm.cfg.Injector.HostPathVolumeDir, pm.cfg.Injector.SDKPkgVersion}, "/"),
+					Type: func() *corev1.HostPathType {
+						t := corev1.HostPathDirectoryOrCreate
+						return &t
+					}(),
+				},
+			},
+		}
+	}
+}
+
 func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta) {
 	if spec.Volumes == nil {
 		spec.Volumes = make([]corev1.Volume, 0)
 	}
 
-	// Use hostPath volume shared across all pods on the node
-	// The Beyla DaemonSet deployment populates this directory once per node
-	// and it must be setup before Beyla launches
-	v := corev1.Volume{
-		Name: injectVolumeName,
-		VolumeSource: corev1.VolumeSource{
-			HostPath: &corev1.HostPathVolumeSource{
-				Path: strings.Join([]string{pm.cfg.Injector.HostPathVolumeDir, pm.cfg.Injector.SDKPkgVersion}, "/"),
-				Type: func() *corev1.HostPathType {
-					t := corev1.HostPathDirectoryOrCreate
-					return &t
-				}(),
-			},
-		},
-	}
+	v := pm.buildVolumeDefinition()
 
 	pos := slices.IndexFunc(spec.Volumes, func(c corev1.Volume) bool {
 		return c.Name == injectVolumeName
@@ -385,6 +403,7 @@ func (pm *PodMutator) addMount(c *corev1.Container) {
 	volume := &corev1.VolumeMount{
 		Name:      injectVolumeName,
 		MountPath: internalMountPath,
+		ReadOnly:  true,
 	}
 	if idx < 0 {
 		c.VolumeMounts = append(c.VolumeMounts, *volume)
@@ -446,7 +465,7 @@ func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container, s
 	// we set the SDK version on the environment variable so that
 	// we can tell on start, when we scan the processes of the oldest
 	// SDK version in use.
-	setEnvVar(c, envVarSDKVersion, pm.cfg.Injector.SDKPkgVersion)
+	setEnvVar(c, envVarSDKVersion, pm.cfg.Injector.PackageVersion())
 	setEnvVar(c, envVarLdPreloadName, envVarLdPreloadValue)
 	setEnvVar(c, envOtelInjectorConfigFileName, envOtelInjectorConfigFileValue)
 	setEnvVar(c, envOtelExporterOtlpEndpointName, pm.endpoint)

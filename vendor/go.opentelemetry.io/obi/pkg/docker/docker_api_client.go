@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
@@ -77,15 +77,15 @@ func (s *ContainerStore) initialize(ctx context.Context) {
 		s.log.Debug("trying to instantiate docker client", "error", err)
 		return
 	}
-	if info, err := docker.Info(ctx); err != nil {
+	if result, err := docker.Info(ctx, client.InfoOptions{}); err != nil {
 		s.log.Debug("failed to get docker info", "error", err)
 		return
 	} else {
 		s.log.Info("Docker info",
-			"driver", info.Driver,
-			"version", info.ServerVersion,
-			"cgroupDriver", info.CgroupDriver,
-			"cgroupVersion", info.CgroupVersion)
+			"driver", result.Info.Driver,
+			"version", result.Info.ServerVersion,
+			"cgroupDriver", result.Info.CgroupDriver,
+			"cgroupVersion", result.Info.CgroupVersion)
 		s.docker = docker
 	}
 }
@@ -98,7 +98,7 @@ func (s *ContainerStore) ContainerInfo(ctx context.Context, pid app.PID) (Contai
 		s.log.Debug("failed to get OS container info for pid", "pid", pid, "error", err)
 		return ContainerMeta{}, false
 	}
-	inspectInfo, err := s.docker.ContainerInspect(ctx, osCntInfo.ContainerID)
+	inspectResult, err := s.docker.ContainerInspect(ctx, osCntInfo.ContainerID, client.ContainerInspectOptions{})
 	if err != nil {
 		s.log.Debug("failed to inspect docker container",
 			"pid", pid,
@@ -107,6 +107,7 @@ func (s *ContainerStore) ContainerInfo(ctx context.Context, pid app.PID) (Contai
 		return ContainerMeta{}, false
 	}
 
+	inspectInfo := inspectResult.Container
 	const abbreviationLength = 12
 	containerID := inspectInfo.ID
 	if len(containerID) > abbreviationLength {

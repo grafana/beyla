@@ -67,7 +67,7 @@ func ProcessKafkaEvent(pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, ka
 	}
 	switch hdr.APIKey() {
 	case kafkaparser.APIKeyProduce:
-		return processProduceRequest(hdr)
+		return processProduceRequest(hdr, kafkaTopicUUIDToName)
 	case kafkaparser.APIKeyFetch:
 		return processFetchRequest(hdr, kafkaTopicUUIDToName)
 	case kafkaparser.APIKeyMetadata:
@@ -77,7 +77,7 @@ func ProcessKafkaEvent(pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, ka
 	}
 }
 
-func processProduceRequest(hdr kafkaparser.KafkaRequestHeader) (*KafkaInfo, bool, error) {
+func processProduceRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
 	r, err := hdr.NewBodyReader()
 	if err != nil {
 		return nil, true, err
@@ -87,17 +87,30 @@ func processProduceRequest(hdr kafkaparser.KafkaRequestHeader) (*KafkaInfo, bool
 	if err != nil {
 		return nil, true, err
 	}
+	firstTopic := produceReq.Topics[0]
+	topicName := firstTopic.Name
+	if firstTopic.UUID != nil {
+		if kafkaTopicUUIDToName != nil {
+			var found bool
+			topicName, found = kafkaTopicUUIDToName.Get(*firstTopic.UUID)
+			if !found {
+				topicName = "*"
+			}
+		} else {
+			topicName = "*"
+		}
+	}
 	var partitionInfo *PartitionInfo
-	if produceReq.Topics[0].Partition != nil {
+	if firstTopic.Partition != nil {
 		partitionInfo = &PartitionInfo{
-			Partition: *produceReq.Topics[0].Partition,
+			Partition: *firstTopic.Partition,
 		}
 	}
 	return &KafkaInfo{
 		ClientID:  hdr.ClientID(),
 		Operation: Produce,
 		// TODO: handle multiple topics
-		Topic:         produceReq.Topics[0].Name,
+		Topic:         topicName,
 		PartitionInfo: partitionInfo,
 	}, false, nil
 }
@@ -165,7 +178,7 @@ func ProcessKafkaRequest(pkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simple
 	}
 	switch hdr.APIKey() {
 	case kafkaparser.APIKeyProduce:
-		return processProduceRequest(hdr)
+		return processProduceRequest(hdr, kafkaTopicUUIDToName)
 	case kafkaparser.APIKeyFetch:
 		return processFetchRequest(hdr, kafkaTopicUUIDToName)
 	default:

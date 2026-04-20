@@ -185,7 +185,7 @@ jobs:
           fi
 
       - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@fa12a1486d937f2a2fba2f0a615356ee3053695e
+        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -330,8 +330,21 @@ jobs:
             echo "- \`grafana/beyla:${DOCKER_PATCH_TAG}\`, \`grafana/beyla:${DOCKER_MINOR_TAG}\`, \`grafana/beyla:${DOCKER_MAJOR_TAG}\`"
             echo "- \`grafana/beyla-k8s-cache:${DOCKER_PATCH_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MINOR_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MAJOR_TAG}\`"
             echo ""
+            echo "### Automated Follow-up"
+            echo "- [ ] Helm chart bump workflow triggered (check the workflow run for status)"
+            echo ""
             echo "### Manual Follow-up"
-            echo "- [ ] Update \`charts/beyla/Chart.yaml\` with new \`appVersion\` and \`version\` if needed"
-            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) if a new chart release is needed"
+            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) after the chart bump PR merges"
             echo "- [ ] Trigger [Technical docs workflow](https://github.com/${{ github.repository }}/actions/workflows/publish-technical-documentation-release.yml) if docs need publishing for this release"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  bump-helm-chart:
+    needs: [validate, promote]
+    if: inputs.dry_run == false
+    uses: ./.github/workflows/helm-chart-bump.yml
+    with:
+      version_tag: ${{ needs.validate.outputs.stable_tag }}
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write

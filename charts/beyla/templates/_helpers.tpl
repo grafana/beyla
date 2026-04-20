@@ -42,14 +42,26 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
+Effective version for beyla (prefers image.tag over Chart appVersion).
+*/}}
+{{- define "beyla.version" -}}
+{{- .Values.image.tag | default .Chart.AppVersion }}
+{{- end }}
+
+{{/*
+Effective version for beyla-k8s-cache (prefers k8sCache.image.tag over Chart appVersion).
+*/}}
+{{- define "beyla.k8sCache.version" -}}
+{{- .Values.k8sCache.image.tag | default .Chart.AppVersion }}
+{{- end }}
+
+{{/*
 Common labels
 */}}
 {{- define "beyla.labels" -}}
 helm.sh/chart: {{ include "beyla.chart" . }}
 {{ include "beyla.selectorLabels" . }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
+app.kubernetes.io/version: {{ include "beyla.version" . | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: beyla
 {{- end }}
@@ -89,7 +101,7 @@ Calculate name of image ID to use for "beyla".
 {{- else if .Values.image.tag }}
 {{- printf ":%s" .Values.image.tag }}
 {{- else }}
-{{- printf ":%s" .Chart.AppVersion }}
+{{- printf ":%s" (include "beyla.version" .) }}
 {{- end }}
 {{- end }}
 
@@ -106,7 +118,7 @@ Calculate name of image ID to use for "beyla-cache".
 {{- else if .Values.k8sCache.image.tag }}
 {{- printf ":%s" .Values.k8sCache.image.tag }}
 {{- else }}
-{{- printf ":%s" .Chart.AppVersion }}
+{{- printf ":%s" (include "beyla.k8sCache.version" .) }}
 {{- end }}
 {{- end }}
 
@@ -116,9 +128,7 @@ Common kube cache labels
 {{- define "beyla.cache.labels" -}}
 helm.sh/chart: {{ include "beyla.chart" . }}
 {{ include "beyla.cache.selectorLabels" . }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
+app.kubernetes.io/version: {{ include "beyla.k8sCache.version" . | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: beyla
 {{- end }}

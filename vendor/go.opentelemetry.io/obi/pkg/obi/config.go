@@ -49,6 +49,13 @@ const (
 	LogLevelError LogLevel = "ERROR"
 )
 
+type LogFormat string
+
+const (
+	LogFormatText LogFormat = "text"
+	LogFormatJSON LogFormat = "json"
+)
+
 // CustomValidations is a map of tag:function for custom validations
 type CustomValidations map[string]validator.Func
 
@@ -58,12 +65,13 @@ const (
 
 const ReporterLRUSize = 256
 
-// Features that can be enabled in OBI (can be at the same time): App O11y and/or Net O11y
+// Features that can be enabled in OBI (can be at the same time): App O11y and/or Net O11y and/or Stats O11y
 type Feature uint
 
 const (
 	FeatureAppO11y = Feature(1 << iota)
 	FeatureNetO11y
+	FeatureStatsO11y
 )
 
 const (
@@ -110,6 +118,7 @@ var DefaultConfig = Config{
 	ChannelSendTimeout:      time.Minute,
 	ChannelSendTimeoutPanic: false,
 	LogLevel:                LogLevelInfo,
+	LogFormat:               LogFormatText,
 	ShutdownTimeout:         10 * time.Second,
 	EnforceSysCaps:          false,
 	EBPF: config.EBPFTracer{
@@ -153,14 +162,27 @@ var DefaultConfig = Config{
 						"/query/service",
 					},
 				},
-				OpenAI: config.OpenAIConfig{
-					Enabled: false,
+				GenAI: config.GenAIConfig{
+					OpenAI: config.OpenAIConfig{
+						Enabled: false,
+					},
+					Anthropic: config.AnthropicConfig{
+						Enabled: false,
+					},
+					Gemini: config.GeminiConfig{
+						Enabled: false,
+					},
+					Bedrock: config.BedrockConfig{
+						Enabled: false,
+					},
 				},
 				Enrichment: config.EnrichmentConfig{
 					Enabled: false,
 					Policy: config.HTTPParsingPolicy{
-						DefaultAction:     config.HTTPParsingActionExclude,
-						MatchOrder:        config.HTTPParsingMatchOrderFirstMatchWins,
+						DefaultAction: config.HTTPParsingDefaultAction{
+							Headers: config.HTTPParsingActionExclude,
+							Body:    config.HTTPParsingActionExclude,
+						},
 						ObfuscationString: "***",
 					},
 					Rules: []config.HTTPParsingRule{},
@@ -213,6 +235,7 @@ var DefaultConfig = Config{
 			instrumentations.InstrumentationMQTT,
 			instrumentations.InstrumentationMongo,
 			instrumentations.InstrumentationCouchbase,
+			instrumentations.InstrumentationMemcached,
 			// no traces for DNS and GPU by default
 		},
 	},
@@ -239,10 +262,11 @@ var DefaultConfig = Config{
 			HostnameDNSResolution: true,
 		},
 		Kubernetes: transform.KubernetesDecorator{
-			Enable:                kubeflags.EnabledDefault,
-			InformersSyncTimeout:  30 * time.Second,
-			InformersResyncPeriod: 30 * time.Minute,
-			ResourceLabels:        kube.DefaultResourceLabels,
+			Enable:                   kubeflags.EnabledDefault,
+			InformersSyncTimeout:     30 * time.Second,
+			ReconnectInitialInterval: 5 * time.Second,
+			InformersResyncPeriod:    30 * time.Minute,
+			ResourceLabels:           kube.DefaultResourceLabels,
 		},
 		HostID:                         HostIDConfig{},
 		MetadataRetry:                  meta.DefaultRetryConfig,
@@ -257,6 +281,7 @@ var DefaultConfig = Config{
 		MaxPathSegmentCardinality: 10,
 	},
 	NetworkFlows: DefaultNetworkConfig,
+	Stats:        DefaultStatsConfig,
 	Discovery: services.DiscoveryConfig{
 		ExcludeOTelInstrumentedServices: true,
 		DefaultExcludeServices: services.RegexDefinitionCriteria{
@@ -297,6 +322,7 @@ type Config struct {
 
 	// NetworkFlows configuration for Network Observability feature
 	NetworkFlows NetworkConfig `yaml:"network"`
+	Stats        StatsConfig   `yaml:"stats"`
 
 	Filters filter.AttributesConfig `yaml:"filter"`
 
@@ -352,6 +378,8 @@ type Config struct {
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
 
 	LogLevel LogLevel `yaml:"log_level" env:"OTEL_EBPF_LOG_LEVEL"`
+
+	LogFormat LogFormat `yaml:"log_format" env:"OTEL_EBPF_LOG_FORMAT"`
 
 	// Timeout for a graceful shutdown
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"OTEL_EBPF_SHUTDOWN_TIMEOUT"`
@@ -593,11 +621,23 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) {
-		return ConfigError("at least one of 'network' or 'application' features must be enabled. " +
-			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network* or application*" +
-			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application' environment variable " +
-			"or 'meter_provider: { features: [network,application] }' in the YAML configuration file. ")
+	if err := c.EBPF.PayloadExtraction.HTTP.Enrichment.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if err := c.NetworkFlows.CIDRs.Validate(); err != nil {
+		return ConfigError("network " + err.Error())
+	}
+
+	if err := c.Stats.CIDRs.Validate(); err != nil {
+		return ConfigError("stats " + err.Error())
+	}
+
+	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Enabled(FeatureStatsO11y) {
+		return ConfigError("at least one of 'network', 'application' or 'stats' features must be enabled. " +
+			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network*, application* or stats*" +
+			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application,stats' environment variable " +
+			"or 'meter_provider: { features: [network,application,stats] }' in the YAML configuration file. ")
 	}
 
 	if c.willUseTC() {
@@ -606,16 +646,20 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
-		return ConfigError("OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")
-	}
-
 	if c.Enabled(FeatureNetO11y) && !c.OTELMetrics.EndpointEnabled() &&
 		!c.Prometheus.EndpointEnabled() && !c.NetworkFlows.Print {
 		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
 			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EBPF_PROMETHEUS_PORT environment variables. For debugging" +
 			" purposes, you can also set OTEL_EBPF_NETWORK_PRINT_FLOWS=true")
+	}
+
+	if c.Enabled(FeatureStatsO11y) && !c.OTELMetrics.EndpointEnabled() &&
+		!c.Prometheus.EndpointEnabled() && !c.Stats.Print {
+		return ConfigError("enabling stat metrics requires to enable at least the OpenTelemetry" +
+			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EBPF_PROMETHEUS_PORT environment variables. For debugging" +
+			" purposes, you can also set OTEL_EBPF_STATS_PRINT_STATS=true")
 	}
 
 	if !c.TracePrinter.Valid() {
@@ -629,10 +673,14 @@ func (c *Config) Validate() error {
 			" otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
-	if c.Enabled(FeatureAppO11y) &&
-		((c.Prometheus.EndpointEnabled() || c.OTELMetrics.EndpointEnabled()) && c.Metrics.Features.InvalidSpanMetricsConfig()) {
-		return ConfigError("you can only enable one format of span metrics," +
-			" application_span or application_span_otel")
+	if c.Enabled(FeatureAppO11y) && (c.Prometheus.EndpointEnabled() || c.OTELMetrics.EndpointEnabled()) {
+		if c.Metrics.Features.InvalidSpanMetricsConfig() {
+			return ConfigError("you can only enable one format of span metrics," +
+				" application_span or application_span_otel")
+		}
+		if c.Metrics.Features.ResolveSpanMetricsConflict() {
+			slog.Warn("application_span and application_span_otel cannot be used together, application_span_otel is selected automatically")
+		}
 	}
 
 	if len(c.Routes.WildcardChar) > 1 {
@@ -657,6 +705,14 @@ func (c *Config) otelNetO11yEnabled() bool {
 	return c.OTELMetrics.EndpointEnabled() && c.Metrics.Features.AnyNetwork()
 }
 
+func (c *Config) promStatsO11yEnabled() bool {
+	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
+func (c *Config) otelStatsO11yEnabled() bool {
+	return c.OTELMetrics.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
 func (c *Config) willUseTC() bool {
 	return c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC
 }
@@ -669,6 +725,8 @@ func (c *Config) Enabled(feature Feature) bool {
 	case FeatureAppO11y:
 		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || len(c.Discovery.Instrument) > 0 ||
 			c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.TargetPIDs.Len() > 0
+	case FeatureStatsO11y:
+		return c.promStatsO11yEnabled() || c.otelStatsO11yEnabled()
 	}
 	return false
 }

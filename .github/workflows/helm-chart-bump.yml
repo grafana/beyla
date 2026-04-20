@@ -1,0 +1,194 @@
+name: Bump Helm chart version
+
+on:
+  workflow_call:
+    inputs:
+      version_tag:
+        description: 'Beyla stable version tag (e.g., v3.7.1)'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Beyla stable version tag (e.g., v3.7.1)'
+        required: true
+        type: string
+
+concurrency:
+  group: helm-chart-bump
+  cancel-in-progress: false
+
+# Set restrictive permissions at workflow level
+permissions: {}
+
+jobs:
+  bump-chart:
+    name: Bump Helm chart appVersion and version
+    if: github.repository == 'grafana/beyla'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Validate input
+        id: validate
+        env:
+          VERSION_TAG: ${{ inputs.version_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${VERSION_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version tag: ${VERSION_TAG}. Expected vX.Y.Z"
+            exit 1
+          fi
+          APP_VERSION="${VERSION_TAG#v}"
+          echo "app_version=${APP_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Read current Chart.yaml values
+        id: current
+        run: |
+          set -euo pipefail
+          CURRENT_APP_VERSION=$(grep '^appVersion:' charts/beyla/Chart.yaml | awk '{print $2}')
+          CURRENT_CHART_VERSION=$(grep '^version:' charts/beyla/Chart.yaml | awk '{print $2}')
+          echo "app_version=${CURRENT_APP_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "chart_version=${CURRENT_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Determine last released chart version
+        id: released
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Query grafana/helm-charts for the latest beyla-* release
+          LATEST_RELEASE=$(gh api repos/grafana/helm-charts/releases \
+            --paginate -q '.[].tag_name' | grep '^beyla-' | head -1 || echo "")
+          if [[ -n "${LATEST_RELEASE}" ]]; then
+            RELEASED_VERSION="${LATEST_RELEASE#beyla-}"
+          else
+            echo "::warning::No beyla release found on grafana/helm-charts, will bump chart version"
+            RELEASED_VERSION=""
+          fi
+          echo "chart_version=${RELEASED_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Last released chart version: ${RELEASED_VERSION:-none}"
+
+      - name: Compute new chart version
+        id: compute
+        env:
+          CURRENT_CHART_VERSION: ${{ steps.current.outputs.chart_version }}
+          RELEASED_CHART_VERSION: ${{ steps.released.outputs.chart_version }}
+          CURRENT_APP_VERSION: ${{ steps.current.outputs.app_version }}
+          NEW_APP_VERSION: ${{ steps.validate.outputs.app_version }}
+        run: |
+          set -euo pipefail
+
+          # Check if appVersion already matches
+          if [[ "${CURRENT_APP_VERSION}" == "${NEW_APP_VERSION}" ]]; then
+            echo "::notice::appVersion already matches ${NEW_APP_VERSION}"
+            echo "app_version_changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "app_version_changed=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+          # Determine if chart version needs bumping
+          # Bump if current chart version == last released version, or if no prior release exists
+          if [[ -z "${RELEASED_CHART_VERSION}" || "${CURRENT_CHART_VERSION}" == "${RELEASED_CHART_VERSION}" ]]; then
+            # Parse semver and bump patch
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_CHART_VERSION}"
+            NEW_CHART_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            echo "new_chart_version=${NEW_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "chart_version_changed=true" >> "${GITHUB_OUTPUT}"
+            echo "Chart version: ${CURRENT_CHART_VERSION} -> ${NEW_CHART_VERSION} (patch bump, last released: ${RELEASED_CHART_VERSION:-none})"
+          else
+            echo "new_chart_version=${CURRENT_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "chart_version_changed=false" >> "${GITHUB_OUTPUT}"
+            echo "Chart version already bumped: ${CURRENT_CHART_VERSION} (last released: ${RELEASED_CHART_VERSION})"
+          fi
+
+      - name: Check if any changes needed
+        id: gate
+        env:
+          APP_VERSION_CHANGED: ${{ steps.compute.outputs.app_version_changed }}
+          CHART_VERSION_CHANGED: ${{ steps.compute.outputs.chart_version_changed }}
+        run: |
+          if [[ "${APP_VERSION_CHANGED}" == "false" && "${CHART_VERSION_CHANGED}" == "false" ]]; then
+            echo "::notice::No changes needed -- Chart.yaml is already up to date"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Update Chart.yaml
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          NEW_APP_VERSION: ${{ steps.validate.outputs.app_version }}
+          NEW_CHART_VERSION: ${{ steps.compute.outputs.new_chart_version }}
+        run: |
+          set -euo pipefail
+          sed -i "s/^appVersion:.*/appVersion: ${NEW_APP_VERSION}/" charts/beyla/Chart.yaml
+          sed -i "s/^version:.*/version: ${NEW_CHART_VERSION}/" charts/beyla/Chart.yaml
+          echo "Updated Chart.yaml:"
+          grep -E '^(version|appVersion):' charts/beyla/Chart.yaml
+
+      - name: Regenerate Helm docs
+        if: steps.gate.outputs.skip != 'true'
+        run: make helm-docs
+
+      - name: Get GitHub App token
+        if: steps.gate.outputs.skip != 'true'
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Clean up stray action checkouts
+        if: steps.gate.outputs.skip != 'true'
+        run: rm -rf _shared-workflows-*
+
+      - name: Create or update PR
+        if: steps.gate.outputs.skip != 'true'
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
+        with:
+          token: ${{ steps.get-github-app-token.outputs.token }}
+          commit-message: "Bump Helm chart for Beyla ${{ inputs.version_tag }}"
+          title: "Bump Helm chart for Beyla ${{ inputs.version_tag }}"
+          body: |
+            Automated Helm chart bump triggered by Beyla ${{ inputs.version_tag }} promotion to stable.
+
+            | Field | Old | New |
+            |-------|-----|-----|
+            | `appVersion` | `${{ steps.current.outputs.app_version }}` | `${{ steps.validate.outputs.app_version }}` |
+            | `version` | `${{ steps.current.outputs.chart_version }}` | `${{ steps.compute.outputs.new_chart_version }}` |
+
+            After this PR merges, trigger the [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) to publish the chart.
+          base: main
+          branch: "helm-chart-bump/${{ steps.validate.outputs.app_version }}"
+          labels: automated-pr
+          delete-branch: true
+
+      - name: Print summary
+        env:
+          SKIP: ${{ steps.gate.outputs.skip }}
+          NEW_APP_VERSION: ${{ steps.validate.outputs.app_version }}
+          NEW_CHART_VERSION: ${{ steps.compute.outputs.new_chart_version }}
+          OLD_APP_VERSION: ${{ steps.current.outputs.app_version }}
+          OLD_CHART_VERSION: ${{ steps.current.outputs.chart_version }}
+        run: |
+          {
+            echo "## Helm Chart Bump"
+            echo ""
+            if [[ "${SKIP}" == "true" ]]; then
+              echo "No changes needed. Chart.yaml is already up to date."
+            else
+              echo "| Field | Old | New |"
+              echo "|-------|-----|-----|"
+              echo "| appVersion | \`${OLD_APP_VERSION}\` | \`${NEW_APP_VERSION}\` |"
+              echo "| version | \`${OLD_CHART_VERSION}\` | \`${NEW_CHART_VERSION}\` |"
+              echo ""
+              echo "A PR has been created. After merge, trigger the [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml)."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

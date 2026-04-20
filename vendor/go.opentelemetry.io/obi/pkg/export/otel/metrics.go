@@ -103,9 +103,13 @@ type MetricsReporter struct {
 	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryCopies        []attributes.Field[*request.Span, attribute.KeyValue]
 	attrDNSLookupDuration      []attributes.Field[*request.Span, attribute.KeyValue]
-	userAttribSelection        attributes.Selection
-	input                      <-chan []request.Span
-	processEvents              <-chan exec.ProcessEvent
+	attrGenAIInputTokenUsage   []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGenAIOutputTokenUsage  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGenAIClientDuration    []attributes.Field[*request.Span, attribute.KeyValue]
+
+	userAttribSelection attributes.Selection
+	input               <-chan []request.Span
+	processEvents       <-chan exec.ProcessEvent
 
 	log *slog.Logger
 
@@ -147,6 +151,10 @@ type Metrics struct {
 	gpuMemoryCopySize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	// dns
 	dnsLookupDuration *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	// genai
+	genAIInputTokenUsage  *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	genAIOutputTokenUsage *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	genAIClientDuration   *Expirer[*request.Span, instrument.Float64Histogram, float64]
 }
 
 type TargetMetrics struct {
@@ -284,6 +292,15 @@ func newMetricsReporter(
 			mr.attrGetters, mr.attributes.For(attributes.DNSLookupDuration))
 	}
 
+	if is.GenAIEnabled() {
+		mr.attrGenAIInputTokenUsage = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GenAIClientInputTokenUsage))
+		mr.attrGenAIOutputTokenUsage = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GenAIClientOutputTokenUsage))
+		mr.attrGenAIClientDuration = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GenAIClientOperationDuration))
+	}
+
 	mr.reporters = otelcfg.NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *Metrics) {
 			llog := log.With("service", id)
@@ -363,6 +380,14 @@ func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option 
 		opts = append(opts,
 			metric.WithView(otelHistogramConfig(attributes.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 			metric.WithView(otelHistogramConfig(attributes.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		)
+	}
+
+	if mr.is.GenAIEnabled() {
+		opts = append(opts,
+			metric.WithView(otelHistogramConfig(attributes.GenAIClientOperationDuration.OTEL, mr.cfg.Buckets.GenAIClientDurationHistogram, useExponentialHistograms)),
+			// the input tokens and output tokens are the same metric, we just need to distinguish the attributes, so we can write the token type
+			metric.WithView(otelHistogramConfig(attributes.GenAIClientInputTokenUsage.OTEL, mr.cfg.Buckets.GenAITokenUsageHistogram, useExponentialHistograms)),
 		)
 	}
 
@@ -547,6 +572,26 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			m.ctx, dnsLookupDuration, mr.attrDNSLookupDuration, timeNow, mr.cfg.TTL)
 	}
 
+	if mr.is.GenAIEnabled() {
+		genAIClientDuration, err := meter.Float64Histogram(attributes.GenAIClientOperationDuration.OTEL, instrument.WithUnit("s"))
+		if err != nil {
+			return fmt.Errorf("creating genai client operation duration histogram: %w", err)
+		}
+		m.genAIClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, genAIClientDuration, mr.attrGenAIClientDuration, timeNow, mr.cfg.TTL)
+
+		// the input tokens and output tokens are the same metric, we just need to distinguish the attributes, so we can write the token type
+		genAITokenUsage, err := meter.Float64Histogram(attributes.GenAIClientInputTokenUsage.OTEL, instrument.WithUnit("1"))
+		if err != nil {
+			return fmt.Errorf("creating genai client token usage histogram: %w", err)
+		}
+		// the attributes have the same keys, we just need custom attribute getter for input vs. output token type
+		m.genAIInputTokenUsage = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, genAITokenUsage, mr.attrGenAIInputTokenUsage, timeNow, mr.cfg.TTL)
+		m.genAIOutputTokenUsage = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, genAITokenUsage, mr.attrGenAIOutputTokenUsage, timeNow, mr.cfg.TTL)
+	}
+
 	return nil
 }
 
@@ -722,9 +767,13 @@ func isExponentialAggregation(mc *otelcfg.MetricsConfig, mlog *slog.Logger) bool
 }
 
 func (mr *MetricsReporter) close() {
-	if err := mr.exporter.Shutdown(mr.ctx); err != nil {
-		slog.With("component", "MetricsReporter").Error("closing metrics provider", "error", err)
-	}
+	go func() {
+		if err := mr.exporter.Shutdown(mr.ctx); err != nil {
+			mlog().Warn("closing metrics provider", "error", err)
+			return
+		}
+		mlog().Debug("Metrics reporter closed")
+	}()
 }
 
 // instrumentMetricsExporter checks whether the context is configured to report internal metrics and,
@@ -843,7 +892,11 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	if otelMetricsAccepted(span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
-			if mr.is.HTTPEnabled() {
+			// JSON-RPC over HTTP gets recorded as RPC server metrics
+			if span.SubType == request.HTTPSubtypeJSONRPC && mr.is.GRPCEnabled() {
+				grpcDuration, attrs := r.grpcDuration.ForRecord(span)
+				grpcDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			} else if mr.is.HTTPEnabled() {
 				// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
 				httpDuration, attrs := r.httpDuration.ForRecord(span)
 				httpDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
@@ -869,6 +922,17 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			if mr.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch) {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			} else if span.SubType == request.HTTPSubtypeJSONRPC && mr.is.GRPCEnabled() {
+				// JSON-RPC client calls over HTTP get recorded as RPC client metrics
+				grpcClientDuration, attrs := r.grpcClientDuration.ForRecord(span)
+				grpcClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			} else if mr.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType) {
+				genAIClientDuration, attrs := r.genAIClientDuration.ForRecord(span)
+				genAIClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)
+				genAIInputTokenUsage.Record(ctx, float64(span.GenAIInputTokens()), instrument.WithAttributeSet(attrs))
+				genAIOutputTokenUsage, attrs := r.genAIOutputTokenUsage.ForRecord(span)
+				genAIOutputTokenUsage.Record(ctx, float64(span.GenAIOutputTokens()), instrument.WithAttributeSet(attrs))
 			} else if mr.is.HTTPEnabled() {
 				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
 				httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
@@ -877,7 +941,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
 				httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
 			}
-		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient:
+		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
 			if mr.is.DBEnabled() {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
@@ -1222,4 +1286,6 @@ func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.gpuKernelBlockSize)
 	cleanupMetrics(r.ctx, r.gpuMemoryCopySize)
 	cleanupMetrics(r.ctx, r.dnsLookupDuration)
+	cleanupMetrics(r.ctx, r.genAIClientDuration)
+	cleanupMetrics(r.ctx, r.genAIInputTokenUsage)
 }

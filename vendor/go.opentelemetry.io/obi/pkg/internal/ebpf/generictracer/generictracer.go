@@ -46,6 +46,7 @@ type Tracer struct {
 	instrumentedLibs ebpfcommon.InstrumentedLibsT
 	libsMux          sync.Mutex
 	iters            []*ebpfcommon.Iter
+	eventCtx         *ebpfcommon.EBPFEventContext
 }
 
 func tlog() *slog.Logger {
@@ -155,6 +156,7 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 6
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 7
 		p.bpfObjects.ObiHandleBufWithArgs,                 // 8
+		p.bpfObjects.ObiContinueProtocolHttpTp,            // 9
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
@@ -333,7 +335,7 @@ func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 }
 
 func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
-	return map[string]map[string][]*ebpfcommon.ProbeDesc{
+	m := map[string]map[string][]*ebpfcommon.ProbeDesc{
 		"libssl.so": {
 			"SSL_read": {{
 				Required: false,
@@ -413,7 +415,47 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Start:    p.bpfObjects.ObiRbObjCallInitKw,
 			}},
 		},
+		"libpython3.": {
+			"context_run": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeContextRun,
+			}},
+			"context_run.lto_priv.0": {{ // In Python 3.14, context_run has different symbols due to Link Time Optimization
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeContextRun,
+			}},
+			"PyContext_CopyCurrent": {{
+				Required: false,
+				End:      p.bpfObjects.ObiUprobeCopyContext,
+			}},
+			"context_new_from_vars": {{ // In Docker, PyContext_CopyCurrent has Tail Recursion Optimization, so we need this function instead
+				Required: false,
+				End:      p.bpfObjects.ObiUprobeCopyContext,
+			}},
+		},
+		"_asyncio": {
+			"_asyncio_Task___init__": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeTaskInit,
+				End:      p.bpfObjects.ObiUprobeTaskInitRet,
+			}},
+		},
+		"_asyncio[< 3.12]": {
+			"task_step": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeTaskStepLegacy,
+				End:      p.bpfObjects.ObiUprobeTaskStepRet,
+			}},
+		},
+		"_asyncio[>= 3.12]": {
+			"task_step": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeTaskStep,
+				End:      p.bpfObjects.ObiUprobeTaskStepRet,
+			}},
+		},
 	}
+	return m
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
@@ -609,6 +651,10 @@ func bpfConnInfoT(src ebpfcommon.BpfConnectionInfoT) (dst BpfConnectionInfoT) {
 	dst.S_port = src.S_port
 	return
 }
+
+func (p *Tracer) SetEventContext(ctx *ebpfcommon.EBPFEventContext) { p.eventCtx = ctx }
+
+func (p *Tracer) Capabilities() ebpfcommon.TracerCapability { return 0 }
 
 func (p *Tracer) Required() bool {
 	return true

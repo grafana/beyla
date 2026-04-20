@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -61,6 +62,8 @@ prometheus_export:
   buckets:
     request_size_histogram: [0, 10, 20, 22]
     response_size_histogram: [0, 10, 20, 22]
+    gen_ai_client_token_usage_histogram: [1, 2, 3, 4]
+    gen_ai_client_operation_duration_histogram: [5, 6, 7, 8]
 attributes:
   kubernetes:
     kubeconfig_path: /foo/bar
@@ -118,7 +121,9 @@ network:
 	nc := obi.DefaultNetworkConfig
 	nc.Enable = true
 	nc.AgentIP = "1.2.3.4"
-	nc.CIDRs = []string{"10.244.0.0/16"}
+	var cidrNC obi.NetworkConfig
+	require.NoError(t, yaml.Unmarshal([]byte("cidrs:\n  - 10.244.0.0/16\n"), &cidrNC))
+	nc.CIDRs = cidrNC.CIDRs
 
 	nsNamespaceAttr := services.NewRegexp(".")
 	nsPodNameAttr := services.NewGlob("*")
@@ -137,6 +142,7 @@ network:
 		ChannelSendTimeoutPanic: true,
 
 		LogLevel:        "INFO",
+		LogFormat:       obi.LogFormatText,
 		ShutdownTimeout: 30 * time.Second,
 		EnforceSysCaps:  false,
 		TracePrinter:    "json",
@@ -172,8 +178,10 @@ network:
 					},
 					Enrichment: obiconfig.EnrichmentConfig{
 						Policy: obiconfig.HTTPParsingPolicy{
-							DefaultAction:     obiconfig.HTTPParsingActionExclude,
-							MatchOrder:        obiconfig.HTTPParsingMatchOrderFirstMatchWins,
+							DefaultAction: obiconfig.HTTPParsingDefaultAction{
+								Headers: obiconfig.HTTPParsingActionExclude,
+								Body:    obiconfig.HTTPParsingActionExclude,
+							},
 							ObfuscationString: "***",
 						},
 						Rules: []obiconfig.HTTPParsingRule{},
@@ -195,6 +203,7 @@ network:
 			},
 		},
 		NetworkFlows: nc,
+		Stats:        obi.DefaultStatsConfig,
 		Metrics: perapp.MetricsConfig{
 			Features: export.FeatureApplicationRED | export.FeatureNetwork,
 		},
@@ -205,9 +214,11 @@ network:
 			MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
 			Buckets: export.Buckets{
-				DurationHistogram:     []float64{0, 1, 2},
-				RequestSizeHistogram:  export.DefaultBuckets.RequestSizeHistogram,
-				ResponseSizeHistogram: export.DefaultBuckets.ResponseSizeHistogram,
+				DurationHistogram:            []float64{0, 1, 2},
+				RequestSizeHistogram:         export.DefaultBuckets.RequestSizeHistogram,
+				ResponseSizeHistogram:        export.DefaultBuckets.ResponseSizeHistogram,
+				GenAITokenUsageHistogram:     export.DefaultBuckets.GenAITokenUsageHistogram,
+				GenAIClientDurationHistogram: export.DefaultBuckets.GenAIClientDurationHistogram,
 			},
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
@@ -232,6 +243,7 @@ network:
 				instrumentations.InstrumentationMQTT,
 				instrumentations.InstrumentationMongo,
 				instrumentations.InstrumentationCouchbase,
+				instrumentations.InstrumentationMemcached,
 				// no traces for DNS and GPU by default
 			},
 		},
@@ -243,9 +255,11 @@ network:
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: export.Buckets{
-				DurationHistogram:     export.DefaultBuckets.DurationHistogram,
-				RequestSizeHistogram:  []float64{0, 10, 20, 22},
-				ResponseSizeHistogram: []float64{0, 10, 20, 22},
+				DurationHistogram:            export.DefaultBuckets.DurationHistogram,
+				RequestSizeHistogram:         []float64{0, 10, 20, 22},
+				ResponseSizeHistogram:        []float64{0, 10, 20, 22},
+				GenAITokenUsageHistogram:     []float64{1, 2, 3, 4},
+				GenAIClientDurationHistogram: []float64{5, 6, 7, 8},
 			},
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
@@ -262,11 +276,12 @@ network:
 				HostnameDNSResolution: true,
 			},
 			Kubernetes: transform.KubernetesDecorator{
-				KubeconfigPath:        "/foo/bar",
-				Enable:                kubeflags.EnabledTrue,
-				InformersSyncTimeout:  30 * time.Second,
-				InformersResyncPeriod: 30 * time.Minute,
-				ResourceLabels:        metaSources,
+				KubeconfigPath:           "/foo/bar",
+				Enable:                   kubeflags.EnabledTrue,
+				InformersSyncTimeout:     30 * time.Second,
+				ReconnectInitialInterval: 5 * time.Second,
+				InformersResyncPeriod:    30 * time.Minute,
+				ResourceLabels:           metaSources,
 			},
 			HostID: HostIDConfig{
 				Override: "the-host-id",

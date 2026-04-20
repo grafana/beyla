@@ -1,6 +1,6 @@
 # Args can be overriden like: docker build --build-arg DOTNET_SDK_VERSION=v1.10.0 --build-arg JAVA_SDK_VERSION=v2.20.0 ...
 ARG DOTNET_SDK_VERSION=v1.11.0
-ARG JAVA_SDK_VERSION=v2.23.0
+ARG JAVA_SDK_VERSION=v2.26.1
 ARG INJECTOR_VERSION=v0.1.0
 
 # download the opentelemetry-injector binary for the target architecture
@@ -18,7 +18,7 @@ RUN case ${TARGETARCH} in \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/${INJECTOR_VERSION}/${INJECTOR_LIB}"
 
 # Get the Python SDK for glibc
-FROM python:3.14.3-trixie@sha256:10c5cd782d36c531ce712844b404bb2b943cf7562ce5d2a9eede3c5363c0f45d AS build-python-glibc
+FROM python:3.14.4-trixie@sha256:1692046a126f2841dfec22313e9a282b697e0aeca6c25c0434b476feba618e16 AS build-python-glibc
 WORKDIR /operator-build
 COPY python/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -76,7 +76,7 @@ RUN case ${TARGETARCH} in \
 # Build the Node.js artifacts
 # The version is hardcoded in package.json and copied from the OTel Operator
 # TODO: Can we allow this to be configurable just like the JVM and .NET
-FROM node:20@sha256:65b74d0fb42134c49530a8c34e9f3e4a2fb8e1f99ac4a0eb4e6f314b426183a2 AS build-nodejs-sdk
+FROM node:20@sha256:8789e1e0752d81088a085689c04fdb7a5b16e8102e353118a4b049bbf05db8ac AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY node.js/package.json .

@@ -71,14 +71,22 @@ jobs:
             exit 1
           fi
 
-          # Verify GitHub release exists
-          RELEASE_JSON=$(gh release view "${VERSION_TAG}" --json tagName,isPrerelease,isLatest 2>&1) || {
+          # Verify GitHub release exists (gh release view --json has no isLatest; use API for latest)
+          if ! RELEASE_JSON=$(gh release view "${VERSION_TAG}" \
+            --repo "${{ github.repository }}" \
+            --json tagName,isPrerelease 2>/dev/null); then
             echo "::error::GitHub release for ${VERSION_TAG} not found"
             exit 1
-          }
+          fi
 
           IS_PRERELEASE=$(echo "${RELEASE_JSON}" | jq -r '.isPrerelease')
-          IS_LATEST=$(echo "${RELEASE_JSON}" | jq -r '.isLatest')
+          IS_LATEST=false
+          if LATEST_JSON=$(gh api "repos/${{ github.repository }}/releases/latest" 2>/dev/null); then
+            LATEST_TAG=$(echo "${LATEST_JSON}" | jq -r '.tag_name')
+            if [[ "${LATEST_TAG}" == "${VERSION_TAG}" ]]; then
+              IS_LATEST=true
+            fi
+          fi
 
           # Idempotency: if already promoted, log and continue
           if [[ "${IS_PRERELEASE}" != "true" ]] && [[ "${IS_LATEST}" == "true" ]]; then
@@ -128,7 +136,7 @@ jobs:
       actions: write
     steps:
       - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@fa12a1486d937f2a2fba2f0a615356ee3053695e
+        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -214,7 +222,48 @@ jobs:
             echo "### Documentation"
             echo "- Technical documentation publish workflow triggered for \`${VERSION_TAG}\`"
             echo ""
+            echo "### Automated Follow-up"
+            echo "- [x] Helm chart bump workflow triggered (check the workflow run for status)"
+            echo "- [x] Alloy Beyla component update workflow triggered (check [grafana/alloy actions](https://github.com/grafana/alloy/actions/workflows/agent_bump_beyla.yml) for status)"
+            echo ""
             echo "### Manual Follow-up"
-            echo "- [ ] Update \`charts/beyla/Chart.yaml\` with new \`appVersion\` and \`version\` if needed"
-            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) if a new chart release is needed"
+            echo "- [ ] Trigger [Helm release workflow](https://github.com/${{ github.repository }}/actions/workflows/helm-release.yml) after the chart bump PR merges"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  bump-helm-chart:
+    needs: [validate, promote]
+    if: inputs.dry_run == false
+    uses: ./.github/workflows/helm-chart-bump.yml
+    with:
+      version_tag: ${{ needs.validate.outputs.version_tag }}
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+  trigger-alloy-bump:
+    needs: [validate, promote]
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Trigger Alloy Beyla component update
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          VERSION_TAG: ${{ needs.validate.outputs.version_tag }}
+        run: |
+          set -euo pipefail
+          echo "Triggering Alloy Beyla component update for ${VERSION_TAG}"
+          gh workflow run agent_bump_beyla.yml \
+            --repo grafana/alloy \
+            --ref main \
+            -f beyla_release_tag="${VERSION_TAG}"
+          echo "Alloy bump workflow triggered"

@@ -2,6 +2,7 @@ cloud.google.com/go/compute/metadata,https://github.com/grafana/beyla/blob/HEAD/
 github.com/AlessandroPomponio/go-gibberish,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/AlessandroPomponio/go-gibberish/LICENSE,MIT
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp/LICENSE,Apache-2.0
 github.com/andybalholm/brotli,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/andybalholm/brotli/LICENSE,MIT
+github.com/andybalholm/brotli/flate,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/andybalholm/brotli/flate/LICENSE,BSD-3-Clause
 github.com/aws/aws-sdk-go-v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/config,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/config/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/credentials,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/credentials/LICENSE.txt,Apache-2.0
@@ -31,7 +32,6 @@ github.com/containerd/errdefs/pkg,https://github.com/grafana/beyla/blob/HEAD/ven
 github.com/containers/common/pkg/cgroupv2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/containers/common/LICENSE,Apache-2.0
 github.com/davecgh/go-spew/spew,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/davecgh/go-spew/LICENSE,ISC
 github.com/distribution/reference,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/distribution/reference/LICENSE,Apache-2.0
-github.com/docker/docker,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/docker/docker/LICENSE,Apache-2.0
 github.com/docker/go-connections,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/docker/go-connections/LICENSE,Apache-2.0
 github.com/docker/go-units,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/docker/go-units/LICENSE,Apache-2.0
 github.com/emicklei/go-restful/v3,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/emicklei/go-restful/v3/LICENSE,MIT
@@ -91,12 +91,15 @@ github.com/mailru/easyjson,https://github.com/grafana/beyla/blob/HEAD/vendor/git
 github.com/mitchellh/copystructure,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mitchellh/copystructure/LICENSE,MIT
 github.com/mitchellh/reflectwalk,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mitchellh/reflectwalk/LICENSE,MIT
 github.com/moby/docker-image-spec/specs-go/v1,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/moby/docker-image-spec/LICENSE,Apache-2.0
+github.com/moby/moby/api/types,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/moby/moby/api/LICENSE,Apache-2.0
+github.com/moby/moby/client,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/moby/moby/client/LICENSE,Apache-2.0
 github.com/moby/spdystream,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/moby/spdystream/LICENSE,Apache-2.0
 github.com/modern-go/concurrent,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/modern-go/concurrent/LICENSE,Apache-2.0
 github.com/modern-go/reflect2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/modern-go/reflect2/LICENSE,Apache-2.0
 github.com/mostynb/go-grpc-compression,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mostynb/go-grpc-compression/LICENSE,Apache-2.0
 github.com/munnerz/goautoneg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/munnerz/goautoneg/LICENSE,BSD-3-Clause
 github.com/mxk/go-flowrate/flowrate,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mxk/go-flowrate/LICENSE,BSD-3-Clause
+github.com/ohler55/ojg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/ohler55/ojg/LICENSE,MIT
 github.com/opencontainers/go-digest,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/opencontainers/go-digest/LICENSE,Apache-2.0
 github.com/opencontainers/image-spec/specs-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/opencontainers/image-spec/LICENSE,Apache-2.0
 github.com/oschwald/maxminddb-golang,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/oschwald/maxminddb-golang/LICENSE,ISC

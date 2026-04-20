@@ -14,6 +14,7 @@ on: # zizmor: ignore[dangerous-triggers] no code checkout; GITHUB_TOKEN used for
       - "Documentation CI"
       - "Pull request integration tests on VM"
       - "Helm Test"
+      - "Fix OBI submodule CI"
     types: [completed]
 
 # Set restrictive permissions at workflow level
@@ -223,8 +224,8 @@ jobs:
                 '{check_runs: [
                   .check_runs[]
                   | select(
-                      .app.slug != "github-actions"
-                      or (.check_suite.id as $id | $pr_suites | index($id))
+                      .app.slug == "github-actions"
+                      and (.check_suite.id as $id | $pr_suites | index($id))
                     )
                   | select(
                       (.name as $n | $excluded | index($n)) | not
@@ -314,8 +315,8 @@ jobs:
                 '{check_runs: [
                   .check_runs[]
                   | select(
-                      .app.slug != "github-actions"
-                      or (.check_suite.id as $id | $pr_suites | index($id))
+                      .app.slug == "github-actions"
+                      and (.check_suite.id as $id | $pr_suites | index($id))
                     )
                   | select(
                       (.name as $n | $excluded | index($n)) | not

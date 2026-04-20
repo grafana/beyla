@@ -157,7 +157,7 @@ configReloader:
     # -- Repository to get config reloader image from.
     repository: jimmidyson/configmap-reload
     # -- Tag of image to use for config reloading.
-    tag: v0.12.0
+    tag: v0.12.0@sha256:a7c754986900e41fc47656bdc8dfce33227112a7cce547e0d9ef5d279f4f8e99
     # -- SHA256 digest of image to use for config reloading (either in format "sha256:XYZ" or "XYZ"). When set, will override `configReloader.image.tag`
     digest: ""
   # -- Override the args passed to the container.

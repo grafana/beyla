@@ -231,7 +231,8 @@ network:
 			TracesProtocol:    otelcfg.ProtocolHTTPProtobuf,
 			CommonEndpoint:    "localhost:3131",
 			TracesEndpoint:    "localhost:3232",
-			MaxQueueSize:      4096,
+			BatchMaxSize:      4096,
+			QueueSize:         16384,
 			BatchTimeout:      15 * time.Second,
 			ReportersCacheLen: ReporterLRUSize,
 			Instrumentations: []instrumentations.Instrumentation{

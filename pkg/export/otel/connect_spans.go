@@ -236,25 +236,29 @@ func (tr *connectionSpansExport) getTracesExporter(ctx context.Context) (exporte
 
 func getQueueConfig(cfg *otelcfg.TracesConfig) configoptional.Optional[exporterhelper.QueueBatchConfig] {
 	// enable batching only if the queue config is enabled
-	if cfg.MaxQueueSize <= 0 && cfg.BatchTimeout <= 0 {
+	if cfg.BatchMaxSize <= 0 && cfg.BatchTimeout <= 0 && cfg.QueueSize <= 0 {
 		return configoptional.None[exporterhelper.QueueBatchConfig]()
 	}
+
 	queueConfig := exporterhelper.NewDefaultQueueConfig()
 	queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
 	// Avoid continuously seeing "sending queue is full" errors in the standard output
 	queueConfig.BlockOnOverflow = true
+	if cfg.QueueSize > 0 {
+		queueConfig.QueueSize = int64(cfg.QueueSize)
+	}
 	batchCfg := exporterhelper.BatchConfig{
 		Sizer: queueConfig.Sizer,
 	}
 	batchSet := false
-	if cfg.MaxQueueSize > 0 {
+	if cfg.BatchMaxSize > 0 {
 		batchSet = true
-		batchCfg.MaxSize = int64(cfg.MaxQueueSize)
+		batchCfg.MaxSize = int64(cfg.BatchMaxSize)
 	}
 	if cfg.BatchTimeout > 0 {
 		batchSet = true
 		batchCfg.FlushTimeout = cfg.BatchTimeout
-		batchCfg.MinSize = int64(cfg.MaxQueueSize)
+		batchCfg.MinSize = int64(cfg.BatchMaxSize)
 	}
 	if batchSet {
 		queueConfig.Batch = configoptional.Some(batchCfg)

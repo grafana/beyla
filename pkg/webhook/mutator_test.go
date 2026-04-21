@@ -559,7 +559,11 @@ func TestPodMutator_MutatePod(t *testing.T) {
 				proto:    "http/protobuf",
 			}
 
-			modified, _ := mutator.mutatePod(tt.pod)
+			selector, matched := mutator.matchesSelection(&tt.pod.ObjectMeta)
+			var modified bool
+			if matched {
+				modified, _ = mutator.mutatePod(tt.pod, selector)
+			}
 
 			assert.Equal(t, tt.expectModified, modified, "mutation result mismatch")
 

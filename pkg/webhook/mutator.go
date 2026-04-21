@@ -226,10 +226,9 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	// add a label with the version of the SDKs we've instrumented
 	if pm.cfg.Injector.PackageVersion() == "" {
 		errorResponse(admResponse, "Image Volume Path or SDK package version must be set")
-		// Record failure for missing SDK version
 		if pm.metrics != nil {
 			for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-				pm.metrics.RecordFailure("", languageLabel(sdk.InstrumentableType), ErrorTypeMissingSDKVersion)
+				pm.metrics.RecordFailure(admReview.Request.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeMissingSDKVersion)
 			}
 		}
 		pm.mutateResponse(w, admResponse)
@@ -242,74 +241,81 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(admReview.Request.Object.Raw, &pod); err != nil {
 			pm.logger.Error("failed to unmarshal pod", "error", err)
 			errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
+			if pm.metrics != nil {
+				for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+					pm.metrics.RecordFailure(admReview.Request.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeAdmissionRejected)
+				}
+			}
 		} else {
 			pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
 
-			// Record attempts for each enabled SDK
-			if pm.metrics != nil {
-				for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-					pm.metrics.RecordAttempt(pod.Namespace, languageLabel(sdk.InstrumentableType))
-				}
-			}
-
-			// Generate patches for the pod
-			if modified, skipReason := pm.mutatePod(&pod); modified {
-				marshalled, err := json.Marshal(pod)
-				if err != nil {
-					pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
-					errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
-					// Record failure for patch generation
-					if pm.metrics != nil {
-						for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-							pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
-						}
+			selector, matched := pm.matchesSelection(&pod.ObjectMeta)
+			if !matched {
+				pm.logger.Info("pod doesn't match selection criteria", "pod", pod.Name, "namespace", pod.Namespace)
+				if pm.metrics != nil {
+					for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+						pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeNoMatchingSelector)
 					}
-				} else {
-					// Debug: log sizes to understand what's being compared
-					pm.logger.Info("generating patch", "originalSize", len(admReview.Request.Object.Raw), "modifiedSize", len(marshalled))
+				}
+			} else {
+				// Record attempts only after selection confirmed
+				if pm.metrics != nil {
+					for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+						pm.metrics.RecordAttempt(pod.Namespace, languageLabel(sdk.InstrumentableType))
+					}
+				}
 
-					// Create admission.Request from the raw admission request
-					patchResponse := admission.PatchResponseFromRaw(admReview.Request.Object.Raw, marshalled)
-
-					if len(patchResponse.Patches) > 0 {
-						patchBytes, err := json.Marshal(patchResponse.Patches)
-						if err != nil {
-							pm.logger.Error("failed to marshal patches", "error", err)
-							errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
-							// Record failure for patch generation
-							if pm.metrics != nil {
-								for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-									pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
-								}
-							}
-						} else {
-							pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
-							admResponse.Patch = patchBytes
-							patchType := admissionv1.PatchTypeJSONPatch
-							admResponse.PatchType = &patchType
-							// Record success for each enabled SDK
-							if pm.metrics != nil {
-								for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-									pm.metrics.RecordSuccess(pod.Namespace, languageLabel(sdk.InstrumentableType))
-								}
-							}
-						}
-					} else {
-						errorResponse(admResponse, "no changes")
-						// Record failure for patch generation
+				if modified, skipReason := pm.mutatePod(&pod, selector); modified {
+					marshalled, err := json.Marshal(pod)
+					if err != nil {
+						pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
+						errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
 						if pm.metrics != nil {
 							for _, sdk := range pm.cfg.Injector.EnabledSDKs {
 								pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
 							}
 						}
+					} else {
+						pm.logger.Info("generating patch", "originalSize", len(admReview.Request.Object.Raw), "modifiedSize", len(marshalled))
+
+						patchResponse := admission.PatchResponseFromRaw(admReview.Request.Object.Raw, marshalled)
+
+						if len(patchResponse.Patches) > 0 {
+							patchBytes, err := json.Marshal(patchResponse.Patches)
+							if err != nil {
+								pm.logger.Error("failed to marshal patches", "error", err)
+								errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
+								if pm.metrics != nil {
+									for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+										pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
+									}
+								}
+							} else {
+								pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
+								admResponse.Patch = patchBytes
+								patchType := admissionv1.PatchTypeJSONPatch
+								admResponse.PatchType = &patchType
+								if pm.metrics != nil {
+									for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+										pm.metrics.RecordSuccess(pod.Namespace, languageLabel(sdk.InstrumentableType))
+									}
+								}
+							}
+						} else {
+							errorResponse(admResponse, "no changes")
+							if pm.metrics != nil {
+								for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+									pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeNoChangesDetected)
+								}
+							}
+						}
 					}
-				}
-			} else {
-				pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
-				// Record failure with the skip reason
-				if pm.metrics != nil && skipReason != "" {
-					for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-						pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), skipReason)
+				} else {
+					pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
+					if pm.metrics != nil && skipReason != "" {
+						for _, sdk := range pm.cfg.Injector.EnabledSDKs {
+							pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), skipReason)
+						}
 					}
 				}
 			}
@@ -348,19 +354,13 @@ func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissi
 	pm.logger.Info("admission response sent successfully", "uid", admResponse.UID)
 }
 
-func (pm *PodMutator) mutatePod(pod *corev1.Pod) (bool, string) {
+func (pm *PodMutator) mutatePod(pod *corev1.Pod, selector services.Selector) (bool, string) {
 	spec := &pod.Spec
 	meta := &pod.ObjectMeta
 
 	// check if maybe someone is adding instrumentation manually
 	if pm.alreadyInstrumented(spec, meta) {
 		return false, ErrorTypeAlreadyInstrumented
-	}
-
-	selector, matched := pm.matchesSelection(meta)
-	if !matched {
-		pm.logger.Info("pod doesn't match selection criteria")
-		return false, ErrorTypeNoMatchingLanguage
 	}
 
 	// Check if all containers have LD_PRELOAD conflicts (nothing to instrument)

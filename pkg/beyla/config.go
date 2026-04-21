@@ -281,9 +281,8 @@ type SDKInject struct {
 	EnabledSDKs []servicesextra.InstrumentableType `yaml:"enabled_sdks"`
 	// Enables injection debugging
 	Debug bool `yaml:"debug"`
-	// DisableStateMetrics disables the beyla_injection_pods state metric collector.
-	// Enabled by default; set to true to suppress the metric for staged rollout.
-	DisableStateMetrics bool `yaml:"disable_state_metrics" env:"BEYLA_INJECTOR_DISABLE_STATE_METRICS"`
+	// Disables the beyla_injection_pods state metric collector, enabled by default
+	DisableStateMetrics bool `yaml:"disable_state_metrics"`
 }
 
 func (s *SDKInject) Validate() error {

@@ -67,10 +67,11 @@ func (m *SDKInjectionMetrics) RecordRestart(namespace string) {
 
 // Error type constants for SDK injection failures
 const (
-	ErrorTypeMissingSDKVersion      = "missing_sdk_version"
-	ErrorTypeAlreadyInstrumented    = "already_instrumented"
-	ErrorTypeLDPreloadConflict      = "ld_preload_conflict"
-	ErrorTypeNoMatchingLanguage     = "no_matching_language"
-	ErrorTypePatchGenerationFailed  = "patch_generation_failed"
-	ErrorTypeAdmissionRejected      = "admission_rejected"
+	ErrorTypeMissingSDKVersion     = "missing_sdk_version"
+	ErrorTypeAlreadyInstrumented   = "already_instrumented"
+	ErrorTypeLDPreloadConflict     = "ld_preload_conflict"
+	ErrorTypeNoMatchingSelector    = "no_matching_selector"
+	ErrorTypePatchGenerationFailed = "patch_generation_failed"
+	ErrorTypeNoChangesDetected     = "no_changes_detected"
+	ErrorTypeAdmissionRejected     = "admission_rejected"
 )

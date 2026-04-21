@@ -2150,6 +2150,10 @@
           ],
           "x-env-var": "OTEL_EBPF_BACKOFF_MAX_INTERVAL"
         },
+        "batch_max_size": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE"
+        },
         "batch_timeout": {
           "type": "string",
           "pattern": "^[0-9]+(ms|s|m)$",
@@ -2192,10 +2196,6 @@
           "uniqueItems": true,
           "x-env-var": "OTEL_EBPF_TRACES_INSTRUMENTATIONS"
         },
-        "max_queue_size": {
-          "type": "integer",
-          "x-env-var": "OTEL_EBPF_OTLP_TRACES_MAX_QUEUE_SIZE"
-        },
         "otel_sdk_log_level": {
           "type": "string",
           "x-env-var": "OTEL_EBPF_SDK_LOG_LEVEL"
@@ -2210,6 +2210,10 @@
             "http/protobuf"
           ],
           "x-env-var": "OTEL_EXPORTER_OTLP_PROTOCOL"
+        },
+        "queue_size": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_OTLP_TRACES_QUEUE_SIZE"
         },
         "reporters_cache_len": {
           "type": "integer",

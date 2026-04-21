@@ -363,28 +363,33 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) (bool, string) {
 		return false, ErrorTypeNoMatchingLanguage
 	}
 
-	originalSpec := spec.DeepCopy()
-
-	// Check if any container has LD_PRELOAD conflict
-	hasLDPreloadConflict := false
+	// Check if all containers have LD_PRELOAD conflicts (nothing to instrument)
+	allHaveConflict := true
 	for i := range spec.Containers {
-		c := &spec.Containers[i]
-		if _, ok := findEnvVar(c, envVarLdPreloadName); ok {
-			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
-			hasLDPreloadConflict = true
+		if _, ok := findEnvVar(&spec.Containers[i], envVarLdPreloadName); !ok {
+			allHaveConflict = false
+			break
 		}
 	}
-
-	if hasLDPreloadConflict {
+	if allHaveConflict {
+		for i := range spec.Containers {
+			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", spec.Containers[i].Name)
+		}
 		return false, ErrorTypeLDPreloadConflict
 	}
+
+	originalSpec := spec.DeepCopy()
 
 	// mount the shared hostPath volume with the injector and SDKs
 	pm.mountVolume(spec, meta)
 
-	// instrument all containers
+	// instrument all containers, skipping those with existing LD_PRELOAD
 	for i := range spec.Containers {
 		c := &spec.Containers[i]
+		if _, ok := findEnvVar(c, envVarLdPreloadName); ok {
+			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
+			continue
+		}
 		pm.instrumentContainer(meta, c, selector)
 	}
 

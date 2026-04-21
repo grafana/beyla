@@ -43,10 +43,22 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	matcher := NewPodMatcher(cfg)
 	var bouncer *PodBouncer
 
+	logger := slog.Default().With("component", "webhook-server")
+
 	// Create and register metrics
 	metrics := NewSDKInjectionMetrics()
 	if ctxInfo.Prometheus != nil && cfg.InternalMetrics.Prometheus.Port != 0 {
-		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, metrics.Collectors()...)
+		collectors := metrics.Collectors()
+		if cfg.Injector.DisableStateMetrics {
+			logger.Info("beyla_injection_pods state metric collector disabled via config")
+		} else if kubeClient, err := ctxInfo.K8sInformer.KubeClient(); err != nil {
+			logger.Warn("state metrics unavailable: cannot get kubernetes client", "error", err)
+		} else {
+			sc := NewStateCollector(kubeClient, matcher, cfg, OwnNodeName())
+			collectors = append(collectors, sc)
+			logger.Info("registered beyla_injection_pods state metric collector")
+		}
+		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, collectors...)
 	}
 
 	mutator, err := NewPodMutator(cfg, matcher, metrics)
@@ -67,7 +79,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		bouncer: bouncer,
 		scanner: NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
 		matcher: matcher,
-		logger:  slog.Default().With("component", "webhook-server"),
+		logger:  logger,
 		ctxInfo: ctxInfo,
 		metrics: metrics,
 	}, nil

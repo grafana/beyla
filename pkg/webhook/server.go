@@ -66,7 +66,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		return nil, err
 	}
 
-	if matcher.HasSelectionCriteria() {
+	if matcher.HasSelectionCriteria() && !cfg.Injector.NoAutoRestart {
 		bouncer, err = NewPodBouncer(ctxInfo, metrics)
 		if err != nil {
 			return nil, err

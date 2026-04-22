@@ -7,65 +7,46 @@ import (
 
 // SDKInjectionMetrics tracks metrics for SDK injection operations
 type SDKInjectionMetrics struct {
-	attempts  *prometheus.CounterVec
-	successes *prometheus.CounterVec
-	failures  *prometheus.CounterVec
-	restarts  *prometheus.CounterVec
+	requests *prometheus.CounterVec
+	restarts *prometheus.CounterVec
 }
 
 // NewSDKInjectionMetrics creates and registers SDK injection metrics
 func NewSDKInjectionMetrics() *SDKInjectionMetrics {
 	return &SDKInjectionMetrics{
-		attempts: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_sdk_injection_attempts_total",
-			Help: "Total SDK injection attempts",
-		}, []string{"namespace", "language"}),
-		successes: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_sdk_injection_successes_total",
-			Help: "Successful SDK injections",
-		}, []string{"namespace", "language"}),
-		failures: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_sdk_injection_failures_total",
-			Help: "Failed SDK injections with error classification",
-		}, []string{"namespace", "language", "error_type"}),
+		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attr.VendorPrefix + "_sdk_injection_requests_total",
+			Help: "SDK injection admission requests by outcome",
+		}, []string{"k8s_namespace_name", "k8s_workload_kind", "k8s_workload_name", "language", "outcome"}),
 		restarts: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attr.VendorPrefix + "_sdk_injection_restarts_total",
 			Help: "Deployment restarts triggered for SDK injection",
-		}, []string{"namespace"}),
+		}, []string{"k8s_namespace_name", "k8s_workload_name"}),
 	}
 }
 
 // Collectors returns all prometheus collectors for registration
 func (m *SDKInjectionMetrics) Collectors() []prometheus.Collector {
-	return []prometheus.Collector{
-		m.attempts,
-		m.successes,
-		m.failures,
-		m.restarts,
-	}
+	return []prometheus.Collector{m.requests, m.restarts}
 }
 
-// RecordAttempt records an SDK injection attempt
-func (m *SDKInjectionMetrics) RecordAttempt(namespace, language string) {
-	m.attempts.WithLabelValues(namespace, language).Inc()
+// RecordRequest records one admission request with its outcome.
+// workloadKind and workloadName are empty for failures that occur before the pod is parsed.
+func (m *SDKInjectionMetrics) RecordRequest(namespace, workloadKind, workloadName, language, outcome string) {
+	m.requests.WithLabelValues(namespace, workloadKind, workloadName, language, outcome).Inc()
 }
 
-// RecordSuccess records a successful SDK injection
-func (m *SDKInjectionMetrics) RecordSuccess(namespace, language string) {
-	m.successes.WithLabelValues(namespace, language).Inc()
+// RecordRestart records a deployment restart triggered for SDK injection.
+func (m *SDKInjectionMetrics) RecordRestart(namespace, workloadName string) {
+	m.restarts.WithLabelValues(namespace, workloadName).Inc()
 }
 
-// RecordFailure records a failed SDK injection with error type
-func (m *SDKInjectionMetrics) RecordFailure(namespace, language, errorType string) {
-	m.failures.WithLabelValues(namespace, language, errorType).Inc()
-}
+// Outcome constants for SDK injection requests.
+const (
+	OutcomeSuccess = "success"
+)
 
-// RecordRestart records a deployment restart triggered for SDK injection
-func (m *SDKInjectionMetrics) RecordRestart(namespace string) {
-	m.restarts.WithLabelValues(namespace).Inc()
-}
-
-// Error type constants for SDK injection failures
+// Failure outcome constants for SDK injection requests.
 const (
 	ErrorTypeMissingSDKVersion     = "missing_sdk_version"
 	ErrorTypeAlreadyInstrumented   = "already_instrumented"

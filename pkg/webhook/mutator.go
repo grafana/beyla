@@ -228,7 +228,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 		errorResponse(admResponse, "Image Volume Path or SDK package version must be set")
 		if pm.metrics != nil {
 			for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-				pm.metrics.RecordFailure(admReview.Request.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeMissingSDKVersion)
+				pm.metrics.RecordRequest(admReview.Request.Namespace, "", "", languageLabel(sdk.InstrumentableType), ErrorTypeMissingSDKVersion)
 			}
 		}
 		pm.mutateResponse(w, admResponse)
@@ -243,28 +243,22 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 			errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
 			if pm.metrics != nil {
 				for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-					pm.metrics.RecordFailure(admReview.Request.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeAdmissionRejected)
+					pm.metrics.RecordRequest(admReview.Request.Namespace, "", "", languageLabel(sdk.InstrumentableType), ErrorTypeAdmissionRejected)
 				}
 			}
 		} else {
 			pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
+			wlKind, wlName := resolveWorkload(&pod)
 
 			selector, matched := pm.matchesSelection(&pod.ObjectMeta)
 			if !matched {
 				pm.logger.Info("pod doesn't match selection criteria", "pod", pod.Name, "namespace", pod.Namespace)
 				if pm.metrics != nil {
 					for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-						pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeNoMatchingSelector)
+						pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, languageLabel(sdk.InstrumentableType), ErrorTypeNoMatchingSelector)
 					}
 				}
 			} else {
-				// Record attempts only after selection confirmed
-				if pm.metrics != nil {
-					for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-						pm.metrics.RecordAttempt(pod.Namespace, languageLabel(sdk.InstrumentableType))
-					}
-				}
-
 				if modified, skipReason := pm.mutatePod(&pod, selector); modified {
 					marshalled, err := json.Marshal(pod)
 					if err != nil {
@@ -272,7 +266,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 						errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
 						if pm.metrics != nil {
 							for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-								pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
+								pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
 							}
 						}
 					} else {
@@ -287,7 +281,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 								errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
 								if pm.metrics != nil {
 									for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-										pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
+										pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, languageLabel(sdk.InstrumentableType), ErrorTypePatchGenerationFailed)
 									}
 								}
 							} else {
@@ -297,7 +291,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 								admResponse.PatchType = &patchType
 								if pm.metrics != nil {
 									for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-										pm.metrics.RecordSuccess(pod.Namespace, languageLabel(sdk.InstrumentableType))
+										pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, languageLabel(sdk.InstrumentableType), OutcomeSuccess)
 									}
 								}
 							}
@@ -305,7 +299,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 							errorResponse(admResponse, "no changes")
 							if pm.metrics != nil {
 								for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-									pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), ErrorTypeNoChangesDetected)
+									pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, languageLabel(sdk.InstrumentableType), ErrorTypeNoChangesDetected)
 								}
 							}
 						}
@@ -314,7 +308,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 					pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
 					if pm.metrics != nil && skipReason != "" {
 						for _, sdk := range pm.cfg.Injector.EnabledSDKs {
-							pm.metrics.RecordFailure(pod.Namespace, languageLabel(sdk.InstrumentableType), skipReason)
+							pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, languageLabel(sdk.InstrumentableType), skipReason)
 						}
 					}
 				}

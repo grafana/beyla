@@ -110,7 +110,7 @@ func (b *PodBouncer) RestartDeployment(ctx context.Context, namespace, deploymen
 
 	// Record restart metric
 	if b.metrics != nil {
-		b.metrics.RecordRestart(namespace)
+		b.metrics.RecordRestart(namespace, deploymentName)
 	}
 
 	return nil

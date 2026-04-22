@@ -12,35 +12,27 @@ func TestSDKInjectionMetrics(t *testing.T) {
 	m := NewSDKInjectionMetrics()
 	prometheus.NewRegistry().MustRegister(m.Collectors()...)
 
-	m.RecordAttempt("ns", "java")
-	m.RecordAttempt("ns", "java")
-	m.RecordAttempt("ns", "python")
-	m.RecordAttempt("other", "nodejs")
-	assert.Equal(t, 2.0, testutil.ToFloat64(m.attempts.WithLabelValues("ns", "java")))
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.attempts.WithLabelValues("ns", "python")))
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.attempts.WithLabelValues("other", "nodejs")))
+	m.RecordRequest("ns", "Deployment", "my-app", "java", OutcomeSuccess)
+	m.RecordRequest("ns", "Deployment", "my-app", "java", OutcomeSuccess)
+	m.RecordRequest("ns", "Deployment", "my-app", "python", ErrorTypeMissingSDKVersion)
+	m.RecordRequest("other", "ReplicaSet", "other-app", "nodejs", ErrorTypeLDPreloadConflict)
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.requests.WithLabelValues("ns", "Deployment", "my-app", "java", OutcomeSuccess)))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.requests.WithLabelValues("ns", "Deployment", "my-app", "python", ErrorTypeMissingSDKVersion)))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.requests.WithLabelValues("other", "ReplicaSet", "other-app", "nodejs", ErrorTypeLDPreloadConflict)))
 
-	m.RecordSuccess("ns", "java")
-	m.RecordSuccess("ns", "python")
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.successes.WithLabelValues("ns", "java")))
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.successes.WithLabelValues("ns", "python")))
+	// early-exit paths have no workload context
+	m.RecordRequest("ns", "", "", "java", ErrorTypeAdmissionRejected)
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.requests.WithLabelValues("ns", "", "", "java", ErrorTypeAdmissionRejected)))
 
-	m.RecordFailure("ns", "java", ErrorTypeMissingSDKVersion)
-	m.RecordFailure("ns", "java", ErrorTypeMissingSDKVersion)
-	m.RecordFailure("ns", "python", ErrorTypeAlreadyInstrumented)
-	m.RecordFailure("other", "nodejs", ErrorTypeLDPreloadConflict)
-	assert.Equal(t, 2.0, testutil.ToFloat64(m.failures.WithLabelValues("ns", "java", ErrorTypeMissingSDKVersion)))
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.failures.WithLabelValues("ns", "python", ErrorTypeAlreadyInstrumented)))
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.failures.WithLabelValues("other", "nodejs", ErrorTypeLDPreloadConflict)))
-
-	m.RecordRestart("ns")
-	m.RecordRestart("ns")
-	m.RecordRestart("other")
-	assert.Equal(t, 2.0, testutil.ToFloat64(m.restarts.WithLabelValues("ns")))
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.restarts.WithLabelValues("other")))
+	m.RecordRestart("ns", "my-app")
+	m.RecordRestart("ns", "my-app")
+	m.RecordRestart("other", "other-app")
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.restarts.WithLabelValues("ns", "my-app")))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.restarts.WithLabelValues("other", "other-app")))
 }
 
-func TestSDKInjectionErrorTypeConstants(t *testing.T) {
+func TestSDKInjectionOutcomeConstants(t *testing.T) {
+	assert.Equal(t, "success", OutcomeSuccess)
 	assert.Equal(t, "missing_sdk_version", ErrorTypeMissingSDKVersion)
 	assert.Equal(t, "already_instrumented", ErrorTypeAlreadyInstrumented)
 	assert.Equal(t, "ld_preload_conflict", ErrorTypeLDPreloadConflict)

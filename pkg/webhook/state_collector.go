@@ -52,7 +52,7 @@ type PodClassification struct {
 }
 
 // classify returns a PodClassification for pod, or nil if the pod is outside
-// the scope of the injector configuration. Pure function: no global state, no I/O.
+// the scope of the injector configuration.
 func classify(pod *corev1.Pod, matcher *PodMatcher, scope nsScope) *PodClassification {
 	ns := pod.Namespace
 	if !inScope(ns, scope) {
@@ -80,7 +80,7 @@ func classifyStatus(pod *corev1.Pod, matched bool) (Status, string) {
 		return StatusUnmatched, ""
 	}
 
-	// Single pass: our LD_PRELOAD → instrumented, any other non-empty value → conflict.
+	// our LD_PRELOAD -> instrumented, any other non-empty value -> conflict.
 	seenConflict := false
 	for i := range pod.Spec.Containers {
 		for _, env := range pod.Spec.Containers[i].Env {
@@ -206,11 +206,6 @@ func (l *k8sPodLister) listPodsOnNode(ctx context.Context, nodeName string) ([]c
 // StateCollector is a prometheus.Collector that emits one gauge sample per unique
 // (namespace, workload_kind, workload_name, node_name, status, skip_reason) tuple,
 // representing the current injection state of pods on this node.
-//
-// Beyla is a DaemonSet, so each instance emits only the pods scheduled to its own
-// node. The Hub queries should sum across nodes:
-//
-//	sum by (k8s_namespace_name, k8s_workload_kind, k8s_workload_name, status) (beyla_injection_pods)
 type StateCollector struct {
 	logger  *slog.Logger
 	lister  podLister
@@ -257,8 +252,7 @@ func (c *StateCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect lists all pods on this node, classifies each one, aggregates by label
-// tuple, and emits one GaugeValue per tuple. It uses a short timeout so a slow
-// API server cannot stall a Prometheus scrape indefinitely.
+// tuple, and emits one GaugeValue per tuple.
 func (c *StateCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

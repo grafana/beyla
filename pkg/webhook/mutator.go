@@ -399,18 +399,10 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod, selector services.Selector) (bo
 }
 
 func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.ObjectMeta) bool {
-	for i := range spec.Containers {
-		c := &spec.Containers[i]
-		if _, ok := findEnvVar(c, envOtelInjectorConfigFileName); ok {
-			pm.logger.Debug("container already instrumented, ignoring...", "container", c.Name)
-			return true
-		}
-	}
-
-	if val, ok := pm.getLabel(meta, instrumentedLabel); ok && val != "" {
+	if alreadyInstrumentedByOther(spec, meta) {
+		pm.logger.Debug("pod already instrumented, ignoring...")
 		return true
 	}
-
 	return false
 }
 

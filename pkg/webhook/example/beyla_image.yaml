@@ -261,16 +261,4 @@ webhooks:
   sideEffects: None
   failurePolicy: Fail
   timeoutSeconds: 10
-  # Exclude system namespaces and the namespace where Beyla itself runs.
-  # Without this, Beyla's own pod creation is intercepted by the webhook,
-  # causing a bootstrap deadlock when failurePolicy is Fail.
-  namespaceSelector:
-    matchExpressions:
-    - key: kubernetes.io/metadata.name
-      operator: NotIn
-      values:
-      - default
-      - kube-system
-      - kube-public
-      - kube-node-lease
-      - cert-manager
+  namespaceSelector: {}

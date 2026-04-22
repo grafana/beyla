@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"time"
 
@@ -31,7 +32,6 @@ const (
 	SkipReasonConflict            = "conflict"
 	SkipReasonAlreadyInstrumented = "already_instrumented"
 	SkipReasonUnsupportedLanguage = "unsupported_language"
-	SkipReasonMissingSDKVersion   = "missing_sdk_version"
 
 	// skipReasonAnnotation is set on pods by the bouncer when a skip reason can't
 	// be determined from the pod spec alone (e.g. unsupported language from process scan).
@@ -82,57 +82,52 @@ func classify(pod *corev1.Pod, matcher *PodMatcher, scope nsScope) *PodClassific
 	}
 }
 
-// classifyStatus determines the status and skip reason for a pod given whether it
-// matched a selector. For unmatched pods it always returns StatusUnmatched.
 func classifyStatus(pod *corev1.Pod, matched bool) (Status, string) {
 	if !matched {
 		return StatusUnmatched, ""
 	}
 
-	// Has our LD_PRELOAD → instrumented by us.
+	// Single pass: our LD_PRELOAD → instrumented, any other non-empty value → conflict.
+	seenConflict := false
 	for i := range pod.Spec.Containers {
 		for _, env := range pod.Spec.Containers[i].Env {
-			if env.Name == envVarLdPreloadName && env.Value == envVarLdPreloadValue {
-				return StatusInstrumented, ""
+			if env.Name == envVarLdPreloadName {
+				if env.Value == envVarLdPreloadValue {
+					return StatusInstrumented, ""
+				}
+				if env.Value != "" {
+					seenConflict = true
+				}
 			}
 		}
 	}
-
-	// Has a different LD_PRELOAD → we cannot inject without overwriting it.
-	for i := range pod.Spec.Containers {
-		for _, env := range pod.Spec.Containers[i].Env {
-			if env.Name == envVarLdPreloadName && env.Value != "" {
-				return StatusSkipped, SkipReasonConflict
-			}
-		}
+	if seenConflict {
+		return StatusSkipped, SkipReasonConflict
 	}
 
-	// Has an instrumentation config env var or our label → already instrumented by another tool.
-	if podAlreadyInstrumentedByOther(pod) {
+	if alreadyInstrumentedByOther(&pod.Spec, &pod.ObjectMeta) {
 		return StatusSkipped, SkipReasonAlreadyInstrumented
 	}
 
-	// Has a skip-reason annotation set by the bouncer (e.g. unsupported language).
 	if reason, ok := pod.Annotations[skipReasonAnnotation]; ok && reason != "" {
 		return StatusSkipped, reason
 	}
 
-	// Matches a selector but we haven't mutated it yet — waiting for a pod bounce.
 	return StatusPendingRestart, ""
 }
 
-// podAlreadyInstrumentedByOther returns true when a pod shows signs of instrumentation
-// by another tool (the operator's config file env var, or our label from a previous
-// webhook invocation that didn't set LD_PRELOAD for some reason).
-func podAlreadyInstrumentedByOther(pod *corev1.Pod) bool {
-	for i := range pod.Spec.Containers {
-		for _, env := range pod.Spec.Containers[i].Env {
+// alreadyInstrumentedByOther returns true when a pod shows signs of instrumentation
+// by another tool: the operator's config file env var, or our label from a previous
+// webhook invocation.
+func alreadyInstrumentedByOther(spec *corev1.PodSpec, meta *metav1.ObjectMeta) bool {
+	for i := range spec.Containers {
+		for _, env := range spec.Containers[i].Env {
 			if env.Name == envOtelInjectorConfigFileName {
 				return true
 			}
 		}
 	}
-	if val, ok := pod.Labels[instrumentedLabel]; ok && val != "" {
+	if val, ok := meta.Labels[instrumentedLabel]; ok && val != "" {
 		return true
 	}
 	return false
@@ -169,14 +164,6 @@ func scopedNamespaces(cfg *beyla.Config) nsScope {
 	return nsScope{globs: globs}
 }
 
-// isInScope returns true if namespace falls within the watched scope.
-// System namespaces are always excluded regardless of config.
-func isInScope(namespace string, cfg *beyla.Config) bool {
-	return inScope(namespace, scopedNamespaces(cfg))
-}
-
-// inScope is the inner check used by both isInScope and Collect (which pre-computes
-// the nsScope once).
 func inScope(namespace string, scope nsScope) bool {
 	if systemNamespaces[namespace] {
 		return false
@@ -243,6 +230,7 @@ func (l *k8sPodLister) listPodsOnNode(ctx context.Context, nodeName string) ([]c
 //
 //	sum by (k8s_namespace_name, k8s_workload_kind, k8s_workload_name, status) (beyla_injection_pods)
 type StateCollector struct {
+	logger  *slog.Logger
 	lister  podLister
 	matcher *PodMatcher
 	cfg     *beyla.Config
@@ -264,6 +252,7 @@ var stateCollectorLabels = []string{
 // convenience helper for that.
 func NewStateCollector(client kubernetes.Interface, matcher *PodMatcher, cfg *beyla.Config, ownNode string) *StateCollector {
 	return &StateCollector{
+		logger:  slog.With("component", "webhook.StateCollector"),
 		lister:  &k8sPodLister{client: client},
 		matcher: matcher,
 		cfg:     cfg,
@@ -303,6 +292,7 @@ func (c *StateCollector) Collect(ch chan<- prometheus.Metric) {
 
 	pods, err := c.lister.listPodsOnNode(ctx, c.ownNode)
 	if err != nil {
+		c.logger.Error("failed to list pods", "node", c.ownNode, "error", err)
 		return
 	}
 

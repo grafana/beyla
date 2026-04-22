@@ -31,11 +31,6 @@ const (
 const (
 	SkipReasonConflict            = "conflict"
 	SkipReasonAlreadyInstrumented = "already_instrumented"
-	SkipReasonUnsupportedLanguage = "unsupported_language"
-
-	// skipReasonAnnotation is set on pods by the bouncer when a skip reason can't
-	// be determined from the pod spec alone (e.g. unsupported language from process scan).
-	skipReasonAnnotation = "beyla.grafana.com/skip-reason"
 )
 
 // systemNamespaces are excluded from the "unmatched" emission even when
@@ -57,9 +52,7 @@ type PodClassification struct {
 }
 
 // classify returns a PodClassification for pod, or nil if the pod is outside
-// the scope of the injector configuration (and should be ignored entirely).
-// It is a pure function: no global state, no I/O.
-// scope should be pre-computed by scopedNamespaces(cfg) once per batch of pods.
+// the scope of the injector configuration. Pure function: no global state, no I/O.
 func classify(pod *corev1.Pod, matcher *PodMatcher, scope nsScope) *PodClassification {
 	ns := pod.Namespace
 	if !inScope(ns, scope) {
@@ -109,10 +102,6 @@ func classifyStatus(pod *corev1.Pod, matched bool) (Status, string) {
 		return StatusSkipped, SkipReasonAlreadyInstrumented
 	}
 
-	if reason, ok := pod.Annotations[skipReasonAnnotation]; ok && reason != "" {
-		return StatusSkipped, reason
-	}
-
 	return StatusPendingRestart, ""
 }
 
@@ -146,9 +135,6 @@ type nsScope struct {
 //   - If any selector has no k8s_namespace constraint, the scope is cluster-wide
 //     (all non-system namespaces are considered in-scope).
 //   - Otherwise, the scope is the union of each selector's k8s_namespace glob matchers.
-//
-// The returned nsScope is a pure function of cfg and can be computed once per
-// scrape rather than once per pod.
 func scopedNamespaces(cfg *beyla.Config) nsScope {
 	for i := range cfg.Injector.Instrument {
 		if _, hasNs := cfg.Injector.Instrument[i].Metadata[services.AttrNamespace]; !hasNs {
@@ -180,10 +166,7 @@ func inScope(namespace string, scope nsScope) bool {
 }
 
 // resolveWorkload returns the top-level workload kind and name for a pod by walking
-// its ownerReferences. For ReplicaSet-owned pods it heuristically extracts the
-// Deployment name (strips the last hyphen-suffix), which matches the approach used by
-// the OBI informer's own ownersFrom function. Falls back to ("Pod", pod.Name) for
-// standalone pods with no owner references.
+// its ownerReferences. Falls back to ("Pod", pod.Name) for standalone pods.
 func resolveWorkload(pod *corev1.Pod) (kind, name string) {
 	owners := ownersFrom(&pod.ObjectMeta)
 	if top := topOwner(owners); top != nil {
@@ -208,7 +191,6 @@ type podLister interface {
 	listPodsOnNode(ctx context.Context, nodeName string) ([]corev1.Pod, error)
 }
 
-// k8sPodLister implements podLister using a Kubernetes client.
 type k8sPodLister struct{ client kubernetes.Interface }
 
 func (l *k8sPodLister) listPodsOnNode(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
@@ -238,15 +220,6 @@ type StateCollector struct {
 	desc    *prometheus.Desc
 }
 
-var stateCollectorLabels = []string{
-	"k8s_namespace_name",
-	"k8s_workload_kind",
-	"k8s_workload_name",
-	"k8s_node_name",
-	"status",
-	"skip_reason",
-}
-
 // NewStateCollector creates a StateCollector. ownNode should come from the NODE_NAME
 // env var (set via downward API in the DaemonSet manifest); OwnNodeName() is a
 // convenience helper for that.
@@ -260,7 +233,7 @@ func NewStateCollector(client kubernetes.Interface, matcher *PodMatcher, cfg *be
 		desc: prometheus.NewDesc(
 			attr.VendorPrefix+"_injection_pods",
 			"Current number of pods in each SDK injection state, as seen from this Beyla node.",
-			stateCollectorLabels,
+			[]string{"k8s_namespace_name", "k8s_workload_kind", "k8s_workload_name", "k8s_node_name", "status", "skip_reason"},
 			nil,
 		),
 	}

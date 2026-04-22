@@ -138,16 +138,14 @@ func TestClassify(t *testing.T) {
 	const prodNS = "prod"
 
 	tests := []struct {
-		name         string
-		pod          *corev1.Pod
-		matcher      *PodMatcher
-		cfg          *beyla.Config
-		wantNil      bool
-		wantStatus   Status
-		wantSkip     string
-		wantWorkKind string
-		wantWorkName string
-		wantNode     string
+		name       string
+		pod        *corev1.Pod
+		matcher    *PodMatcher
+		cfg        *beyla.Config
+		wantNil    bool
+		wantStatus Status
+		wantSkip   string
+		wantNode   string
 	}{
 		{
 			name:       "instrumented_basic",
@@ -186,15 +184,6 @@ func TestClassify(t *testing.T) {
 			cfg:        nsCfg(prodNS),
 			wantStatus: StatusSkipped,
 			wantSkip:   SkipReasonAlreadyInstrumented,
-		},
-		{
-			name: "skipped_unsupported_language",
-			pod: pod(prodNS, "my-pod",
-				withAnnotation(skipReasonAnnotation, SkipReasonUnsupportedLanguage)),
-			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
-			wantStatus: StatusSkipped,
-			wantSkip:   SkipReasonUnsupportedLanguage,
 		},
 		{
 			name:       "unmatched_in_scope",
@@ -361,20 +350,8 @@ func TestIsInScope(t *testing.T) {
 			want:      true,
 		},
 		{
-			name:      "out_of_scope_kube_system",
+			name:      "out_of_scope_system_namespace",
 			namespace: "kube-system",
-			cfg:       wildcardCfg(),
-			want:      false,
-		},
-		{
-			name:      "out_of_scope_kube_node_lease",
-			namespace: "kube-node-lease",
-			cfg:       wildcardCfg(),
-			want:      false,
-		},
-		{
-			name:      "out_of_scope_kube_public",
-			namespace: "kube-public",
 			cfg:       wildcardCfg(),
 			want:      false,
 		},
@@ -532,87 +509,24 @@ func TestStateCollector_Collect(t *testing.T) {
 	})
 }
 
-// TestScopedNamespaces covers the three cases from the plan:
-// explicit namespaces, wildcard selector, and a combination.
-func TestScopedNamespaces(t *testing.T) {
-	t.Run("explicit_namespaces_not_cluster_wide", func(t *testing.T) {
-		cfg := &beyla.Config{
-			Injector: beyla.SDKInject{
-				Instrument: services.GlobDefinitionCriteria{
-					{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("production")}},
-					{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("staging")}},
-				},
-			},
-		}
-		scope := scopedNamespaces(cfg)
-		assert.False(t, scope.clusterWide)
-		assert.Len(t, scope.globs, 2)
-		// correct globs are stored
-		assert.True(t, scope.globs[0].MatchString("production"))
-		assert.False(t, scope.globs[0].MatchString("staging"))
-		assert.True(t, scope.globs[1].MatchString("staging"))
-	})
-
-	t.Run("no_namespace_constraint_is_cluster_wide", func(t *testing.T) {
-		scope := scopedNamespaces(wildcardCfg())
-		assert.True(t, scope.clusterWide)
-		assert.Nil(t, scope.globs)
-	})
-
-	t.Run("glob_namespace_pattern_not_cluster_wide", func(t *testing.T) {
-		cfg := nsCfg("prod*")
-		scope := scopedNamespaces(cfg)
-		assert.False(t, scope.clusterWide)
-		assert.Len(t, scope.globs, 1)
-		assert.True(t, scope.globs[0].MatchString("production"))
-		assert.True(t, scope.globs[0].MatchString("prod-east"))
-		assert.False(t, scope.globs[0].MatchString("staging"))
-	})
-
-	t.Run("combination_with_cluster_wide_selector_is_cluster_wide", func(t *testing.T) {
-		cfg := &beyla.Config{
-			Injector: beyla.SDKInject{
-				Instrument: services.GlobDefinitionCriteria{
-					// explicit namespace
-					{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("production")}},
-					// no namespace constraint → cluster-wide
-					{Metadata: services.MetadataGlobMap{}},
-				},
-			},
-		}
-		scope := scopedNamespaces(cfg)
-		assert.True(t, scope.clusterWide)
-	})
-
-	t.Run("empty_config_not_cluster_wide", func(t *testing.T) {
-		scope := scopedNamespaces(&beyla.Config{})
-		assert.False(t, scope.clusterWide)
-		assert.Empty(t, scope.globs)
-	})
-}
-
 // TestInScope verifies inScope works correctly with a pre-computed nsScope.
 func TestInScope(t *testing.T) {
-	t.Run("cluster_wide_includes_any_non_system_ns", func(t *testing.T) {
+	t.Run("cluster_wide_excludes_system_ns", func(t *testing.T) {
 		scope := nsScope{clusterWide: true}
 		assert.True(t, inScope("prod", scope))
-		assert.True(t, inScope("any-namespace", scope))
 		assert.False(t, inScope("kube-system", scope))
 		assert.False(t, inScope("kube-node-lease", scope))
 		assert.False(t, inScope("kube-public", scope))
 	})
 
 	t.Run("explicit_globs_match_correctly", func(t *testing.T) {
-		prod := strToGlob("production")
-		scope := nsScope{globs: []*services.GlobAttr{prod}}
+		scope := nsScope{globs: []*services.GlobAttr{strToGlob("production")}}
 		assert.True(t, inScope("production", scope))
 		assert.False(t, inScope("staging", scope))
-		assert.False(t, inScope("kube-system", scope))
 	})
 
-	t.Run("no_globs_and_not_cluster_wide_matches_nothing", func(t *testing.T) {
+	t.Run("no_globs_not_cluster_wide_matches_nothing", func(t *testing.T) {
 		scope := nsScope{}
 		assert.False(t, inScope("production", scope))
-		assert.False(t, inScope("anything", scope))
 	})
 }

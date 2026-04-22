@@ -29,6 +29,16 @@ SKIP_UPSTREAM_SYNC_CHECK=false
 EXCLUDE_CHECK_NAME=""
 WORKDIR=""
 
+# Alloy alignment: on by default, can be flipped off globally via env var,
+# per-run via --align-with-alloy / --no-align-with-alloy, or via workflow input.
+# Long-term, when Beyla ships as an embedded binary in Alloy, set the env var
+# default to "false" (or delete the wiring) and the alignment becomes a no-op.
+ALIGN_WITH_ALLOY="${RELEASE_TRAIN_ALIGN_WITH_ALLOY:-true}"
+ALLOY_REPO="${RELEASE_TRAIN_ALLOY_REPO:-grafana/alloy}"
+ALLOY_REF="${RELEASE_TRAIN_ALLOY_REF:-main}"
+ALLOY_RESOLVED_SHA=""
+ALLOY_ALIGN_TOTAL=0
+
 RELEASE_TRAIN_TOKEN="${RELEASE_TRAIN_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
 OUTPUT_FILE="${RELEASE_TRAIN_OUTPUT_FILE:-}"
 
@@ -85,6 +95,19 @@ Prepare-only options:
                           patch -> force PATCH bump
   --skip-upstream-sync-check
                           Skip verification that grafana OBI main includes upstream OBI main
+  --align-with-alloy      Pin OTel + Prometheus deps in release branches to grafana/alloy (default)
+  --no-align-with-alloy   Skip the Alloy alignment step entirely
+  --alloy-repo <owner/repo>
+                          Alloy repository to read go.mod from. Default: grafana/alloy
+  --alloy-ref <ref>       Branch, tag, or SHA in --alloy-repo. Default: main.
+                          Resolved to a concrete SHA once per prepare run so
+                          OBI and Beyla release branches are aligned against
+                          the same snapshot.
+
+Environment:
+  RELEASE_TRAIN_ALIGN_WITH_ALLOY  true|false - default for --align-with-alloy (kill switch)
+  RELEASE_TRAIN_ALLOY_REPO        default for --alloy-repo
+  RELEASE_TRAIN_ALLOY_REF         default for --alloy-ref
 
 Examples:
   # Auto compute the next release versions and cut release branches
@@ -520,6 +543,93 @@ uncomment_bpfel_in_gitignore() {
     rm -f "${gitignore}.bak"
 }
 
+align_with_alloy() {
+    local repo_dir="$1"
+    local repo_label="$2"
+
+    if [[ "$ALIGN_WITH_ALLOY" != "true" ]]; then
+        log_info "Alloy alignment disabled for ${repo_label}; skipping."
+        return 0
+    fi
+
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local aligner="${script_dir}/align-with-alloy.sh"
+    if [[ ! -x "$aligner" ]]; then
+        die "align-with-alloy.sh not found or not executable at ${aligner}"
+    fi
+
+    # First call: pin to the caller-provided ref and capture the resolved SHA.
+    # Subsequent calls: pass the resolved SHA so both repos align to the same snapshot.
+    local effective_ref="$ALLOY_REF"
+    if [[ -n "$ALLOY_RESOLVED_SHA" ]]; then
+        effective_ref="$ALLOY_RESOLVED_SHA"
+    fi
+
+    local out_file
+    out_file="$(mktemp -t align-output.XXXXXX)"
+
+    local -a cmd
+    cmd=("$aligner"
+        --repo-dir "$repo_dir"
+        --alloy-repo "$ALLOY_REPO"
+        --alloy-ref "$effective_ref")
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        cmd+=(--dry-run)
+    fi
+
+    log_info "Aligning ${repo_label} with ${ALLOY_REPO}@${effective_ref}"
+    ALIGN_OUTPUT_FILE="$out_file" run_cmd "${cmd[@]}"
+
+    local alloy_sha aligned_count aligned_modules
+    alloy_sha="$(awk -F= '/^alloy_sha=/ { print $2; exit }' "$out_file")"
+    aligned_count="$(awk -F= '/^aligned_count=/ { print $2; exit }' "$out_file")"
+    aligned_modules="$(awk -F= '/^aligned_modules=/ { sub(/^aligned_modules=/, ""); print; exit }' "$out_file")"
+    rm -f "$out_file"
+
+    [[ -n "$alloy_sha" ]] || die "align-with-alloy.sh did not emit an alloy_sha"
+
+    if [[ -z "$ALLOY_RESOLVED_SHA" ]]; then
+        ALLOY_RESOLVED_SHA="$alloy_sha"
+    elif [[ "$ALLOY_RESOLVED_SHA" != "$alloy_sha" ]]; then
+        die "Alloy SHA drifted between repos: ${ALLOY_RESOLVED_SHA} vs ${alloy_sha}"
+    fi
+
+    aligned_count="${aligned_count:-0}"
+    ALLOY_ALIGN_TOTAL=$((ALLOY_ALIGN_TOTAL + aligned_count))
+
+    if [[ "$aligned_count" == "0" ]]; then
+        log_info "${repo_label} already aligned with grafana/alloy@${alloy_sha:0:12}; nothing to commit."
+        return 0
+    fi
+
+    local short_sha="${alloy_sha:0:12}"
+    local commit_subject="Align ${repo_label} with ${ALLOY_REPO}@${short_sha}"
+    local commit_body_file
+    commit_body_file="$(mktemp -t align-commit.XXXXXX)"
+    {
+        printf '%s\n\n' "$commit_subject"
+        printf 'Alloy ref:  %s\n' "$effective_ref"
+        printf 'Alloy SHA:  %s\n' "$alloy_sha"
+        printf 'Aligned:    %s module(s)\n' "$aligned_count"
+        printf '\n'
+        printf 'Downgrades:\n'
+        # aligned_modules is a CSV of <module>@<old>=><new>
+        printf '%s' "$aligned_modules" | awk -v RS=',' 'NF { print "  " $0 }'
+    } > "$commit_body_file"
+
+    run_write_cmd git -C "$repo_dir" add -A
+    if git -C "$repo_dir" diff --cached --quiet; then
+        log_warn "${repo_label}: aligner reported ${aligned_count} change(s) but git sees no staged diff."
+        rm -f "$commit_body_file"
+        return 0
+    fi
+
+    run_write_cmd git -C "$repo_dir" commit -F "$commit_body_file"
+    rm -f "$commit_body_file"
+}
+
 prepare_obi_branch() {
     local version="$1"
     local release_branch="$2"
@@ -543,6 +653,8 @@ prepare_obi_branch() {
     fi
 
     uncomment_bpfel_in_gitignore "$OBI_DIR"
+
+    align_with_alloy "$OBI_DIR" "OBI ${release_branch}"
 
     run_write_cmd make -C "$OBI_DIR" docker-generate
     run_write_cmd make -C "$OBI_DIR" java-build
@@ -576,6 +688,8 @@ prepare_beyla_branch() {
     else
         log_info "No Beyla submodule pointer change to commit."
     fi
+
+    align_with_alloy "$BEYLA_DIR" "Beyla ${release_branch}"
 
     uncomment_bpfel_in_gitignore "$BEYLA_DIR"
 
@@ -734,6 +848,11 @@ prepare_command() {
     set_output "obi_sha" "$obi_sha"
     set_output "beyla_repo" "$BEYLA_REPO"
     set_output "obi_repo" "$OBI_REPO"
+    set_output "alloy_aligned" "$ALIGN_WITH_ALLOY"
+    set_output "alloy_repo" "$ALLOY_REPO"
+    set_output "alloy_ref" "$ALLOY_REF"
+    set_output "alloy_sha" "$ALLOY_RESOLVED_SHA"
+    set_output "alloy_align_total" "$ALLOY_ALIGN_TOTAL"
 }
 
 tag_command() {
@@ -895,6 +1014,40 @@ parse_args() {
             --skip-upstream-sync-check)
                 SKIP_UPSTREAM_SYNC_CHECK=true
                 shift
+                ;;
+            --align-with-alloy)
+                ALIGN_WITH_ALLOY=true
+                shift
+                ;;
+            --no-align-with-alloy)
+                ALIGN_WITH_ALLOY=false
+                shift
+                ;;
+            --align-with-alloy=*)
+                case "${1#*=}" in
+                    true|1) ALIGN_WITH_ALLOY=true ;;
+                    false|0) ALIGN_WITH_ALLOY=false ;;
+                    *) die "Invalid value for --align-with-alloy: ${1#*=} (expected true/false)" ;;
+                esac
+                shift
+                ;;
+            --alloy-repo=*)
+                ALLOY_REPO="${1#*=}"
+                shift
+                ;;
+            --alloy-repo)
+                require_option_value "$1" "${2:-}"
+                ALLOY_REPO="${2:-}"
+                shift 2
+                ;;
+            --alloy-ref=*)
+                ALLOY_REF="${1#*=}"
+                shift
+                ;;
+            --alloy-ref)
+                require_option_value "$1" "${2:-}"
+                ALLOY_REF="${2:-}"
+                shift 2
                 ;;
             --help|-h)
                 show_help

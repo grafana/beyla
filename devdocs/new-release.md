@@ -37,6 +37,55 @@ Example used in this document:
   - Supports separate Beyla and OBI versions.
 - [`promote-patch-to-stable.yml`](../.github/workflows/promote-patch-to-stable.yml): marks a prerelease as stable/latest and promotes Docker tags.
 
+## Alloy dependency alignment
+
+Grafana Alloy refuses OpenTelemetry dependency bumps on minor/patch releases of
+Beyla that ship embedded inside it. To avoid blocking the Alloy integration on
+every Beyla release, `release-train-prepare.yml` downgrades OTel and Prometheus
+modules in the release branches to match Alloy's `main` branch `go.mod`
+automatically.
+
+Key guarantees:
+
+- Alignment only happens on `release-MAJOR.MINOR` branches. `main` in
+  `grafana/beyla`, `grafana/opentelemetry-ebpf-instrumentation`, and the
+  upstream `open-telemetry/opentelemetry-ebpf-instrumentation` fork are never
+  touched.
+- Scope is limited to `go.opentelemetry.io/*` and `github.com/prometheus/*`.
+  Other dependencies are free to drift.
+- The Alloy ref (default `main`) is resolved once per prepare run to a concrete
+  SHA, so the OBI and Beyla release branches are aligned against the exact
+  same Alloy snapshot.
+- Each alignment commit records the resolved Alloy SHA and the list of
+  module downgrades in its commit message, and the `prepare` workflow
+  surfaces the SHA in the run summary.
+
+Workflow inputs on [release-train-prepare.yml](../.github/workflows/release-train-prepare.yml):
+
+- `align_with_alloy` (boolean, default `true`). Uncheck to skip alignment for
+  a single run (for example, when you want to release Beyla without coupling
+  it to Alloy's OTel pins).
+- `alloy_ref` (string, default `main`). A branch, tag, or SHA in
+  `grafana/alloy`. Use a tag or SHA for a fully reproducible alignment.
+
+Kill switch (turn off globally without removing code):
+
+- Set the env var `RELEASE_TRAIN_ALIGN_WITH_ALLOY=false` in the workflow
+  environment, or flip the default in [`scripts/release-train.sh`](../scripts/release-train.sh)
+  from `true` to `false`. Once Beyla ships as an embedded binary inside Alloy
+  and the two repos no longer share a Go module graph, this knob makes the
+  alignment step a no-op without needing to delete the wiring.
+
+Local testing:
+
+```bash
+# See which modules would be downgraded, without touching the worktree.
+./scripts/align-with-alloy.sh --repo-dir . --dry-run
+
+# Align against a specific Alloy commit instead of main@HEAD.
+./scripts/align-with-alloy.sh --repo-dir . --alloy-ref 1a2b3c4d
+```
+
 ## End-to-End Flow
 
 ### 1. Preconditions

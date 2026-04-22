@@ -35,6 +35,16 @@ on:
         required: false
         type: boolean
         default: false
+      align_with_alloy:
+        description: "Pin OTel + Prometheus deps in release branches to grafana/alloy"
+        required: false
+        type: boolean
+        default: true
+      alloy_ref:
+        description: "Branch, tag, or SHA in grafana/alloy to align against (default: main)"
+        required: false
+        type: string
+        default: main
 
 concurrency:
   group: release-train-prepare
@@ -53,6 +63,9 @@ jobs:
       obi_version: ${{ steps.prepare.outputs.obi_version }}
       beyla_release_branch: ${{ steps.prepare.outputs.beyla_release_branch }}
       obi_release_branch: ${{ steps.prepare.outputs.obi_release_branch }}
+      alloy_aligned: ${{ steps.prepare.outputs.alloy_aligned }}
+      alloy_sha: ${{ steps.prepare.outputs.alloy_sha }}
+      alloy_align_total: ${{ steps.prepare.outputs.alloy_align_total }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -91,6 +104,8 @@ jobs:
           DRY_RUN_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
           SKIP_CI_CHECK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_ci_check || 'false' }}
           SKIP_UPSTREAM_SYNC_CHECK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_upstream_sync_check || 'false' }}
+          ALIGN_WITH_ALLOY_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.align_with_alloy || 'true' }}
+          ALLOY_REF_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.alloy_ref || 'main' }}
         run: |
           set -euo pipefail
 
@@ -120,6 +135,16 @@ jobs:
             cmd+=(--skip-upstream-sync-check)
           fi
 
+          if [[ "${ALIGN_WITH_ALLOY_INPUT:-true}" == "true" ]]; then
+            cmd+=(--align-with-alloy)
+          else
+            cmd+=(--no-align-with-alloy)
+          fi
+
+          if [[ -n "${ALLOY_REF_INPUT}" ]]; then
+            cmd+=(--alloy-ref "${ALLOY_REF_INPUT}")
+          fi
+
           echo "Running: ${cmd[*]}"
           RELEASE_TRAIN_OUTPUT_FILE="$GITHUB_OUTPUT" "${cmd[@]}"
 
@@ -133,6 +158,9 @@ jobs:
             echo "- Beyla release branch: \`${{ steps.prepare.outputs.beyla_release_branch || 'n/a' }}\`"
             echo "- OBI version: \`${{ steps.prepare.outputs.obi_version || 'n/a' }}\`"
             echo "- OBI release branch: \`${{ steps.prepare.outputs.obi_release_branch || 'n/a' }}\`"
+            echo "- Alloy alignment: \`${{ steps.prepare.outputs.alloy_aligned || 'n/a' }}\`"
+            echo "- Alloy SHA: \`${{ steps.prepare.outputs.alloy_sha || 'n/a' }}\`"
+            echo "- Modules downgraded (OBI + Beyla combined): \`${{ steps.prepare.outputs.alloy_align_total || '0' }}\`"
             echo ""
             echo "### Next"
             echo "- Wait for CI to become green on both release branches."

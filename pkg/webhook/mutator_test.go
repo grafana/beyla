@@ -346,6 +346,47 @@ func TestPodMutator_AlreadyInstrumented(t *testing.T) {
 	}
 }
 
+func TestIsLDPreloadConflict(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      []corev1.EnvVar
+		expected bool
+	}{
+		{
+			name:     "no LD_PRELOAD - not a conflict",
+			env:      nil,
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD empty string - not a conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: ""}},
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD set to Beyla value - not a conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: envVarLdPreloadValue}},
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD set to other library - conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: "/some/other/lib.so"}},
+			expected: true,
+		},
+		{
+			name:     "unrelated env vars only - not a conflict",
+			env:      []corev1.EnvVar{{Name: "OTHER_VAR", Value: "/lib.so"}},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &corev1.Container{Env: tt.env}
+			assert.Equal(t, tt.expected, isLDPreloadConflict(c))
+		})
+	}
+}
+
 func TestPodMutator_MutatePod(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -496,6 +537,136 @@ func TestPodMutator_MutatePod(t *testing.T) {
 						{Name: "app1"},
 						{Name: "app2"},
 						{Name: "app3"},
+					},
+				},
+			},
+			expectModified: true,
+			expectLabel:    true,
+			expectVolume:   true,
+			expectEnvVars:  true,
+		},
+		{
+			name: "all containers have empty LD_PRELOAD - should instrument",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					SDKPkgVersion:     "v0.0.3",
+					HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+				},
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://localhost:4318",
+				},
+			},
+			matcher: &PodMatcher{
+				logger: slog.With("component", "webhook.Matcher"),
+				selectors: []services.Selector{
+					&services.GlobAttributes{
+						Metadata: map[string]*services.GlobAttr{
+							"k8s_namespace": strToGlob("*"),
+						},
+					},
+				},
+			},
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "app",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: ""},
+							},
+						},
+					},
+				},
+			},
+			expectModified: true,
+			expectLabel:    true,
+			expectVolume:   true,
+			expectEnvVars:  true,
+		},
+		{
+			name: "all containers have genuine LD_PRELOAD conflict - should skip",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					SDKPkgVersion:     "v0.0.3",
+					HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+				},
+			},
+			matcher: &PodMatcher{
+				logger: slog.With("component", "webhook.Matcher"),
+				selectors: []services.Selector{
+					&services.GlobAttributes{
+						Metadata: map[string]*services.GlobAttr{
+							"k8s_namespace": strToGlob("*"),
+						},
+					},
+				},
+			},
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "app1",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: "/some/other/lib.so"},
+							},
+						},
+						{
+							Name: "app2",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: "/another/lib.so"},
+							},
+						},
+					},
+				},
+			},
+			expectModified: false,
+			expectLabel:    false,
+			expectVolume:   false,
+			expectEnvVars:  false,
+		},
+		{
+			name: "container with Beyla own LD_PRELOAD value - not treated as conflict",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					SDKPkgVersion:     "v0.0.3",
+					HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+				},
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://localhost:4318",
+				},
+			},
+			matcher: &PodMatcher{
+				logger: slog.With("component", "webhook.Matcher"),
+				selectors: []services.Selector{
+					&services.GlobAttributes{
+						Metadata: map[string]*services.GlobAttr{
+							"k8s_namespace": strToGlob("*"),
+						},
+					},
+				},
+			},
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "app-with-beyla-preload",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: envVarLdPreloadValue},
+							},
+						},
+						{Name: "app-clean"},
 					},
 				},
 			},

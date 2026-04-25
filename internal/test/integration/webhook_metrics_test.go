@@ -4,11 +4,20 @@ package integration
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"net/http"
+	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/require"
@@ -33,6 +42,9 @@ var insecureClient = &http.Client{
 }
 
 func TestWebhookMetrics(t *testing.T) {
+	certsDir := path.Join(pathRoot, "internal/test/integration/testdata/certs")
+	require.NoError(t, generateTestCerts(certsDir))
+
 	compose, err := docker.ComposeSuite(
 		"compose/docker-compose-webhook.yml",
 		path.Join(pathOutput, "test-suite-webhook-metrics.log"),
@@ -75,6 +87,46 @@ func TestWebhookMetrics(t *testing.T) {
 			require.NotEmpty(t, results)
 		})
 	})
+}
+
+// generateTestCerts writes a fresh self-signed cert and key to dir, creating the directory if needed.
+func generateTestCerts(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return err
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "localhost"},
+		DNSNames:     []string{"localhost"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return err
+	}
+	certFile, err := os.Create(path.Join(dir, "tls.crt"))
+	if err != nil {
+		return err
+	}
+	defer certFile.Close()
+	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		return err
+	}
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return err
+	}
+	keyFile, err := os.Create(path.Join(dir, "tls.key"))
+	if err != nil {
+		return err
+	}
+	defer keyFile.Close()
+	return pem.Encode(keyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 }
 
 // waitForWebhookReady polls the webhook health endpoint until it responds.

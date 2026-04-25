@@ -509,6 +509,17 @@ func TestStateCollector_Collect(t *testing.T) {
 	})
 }
 
+func TestStateCollector_Collect_EmptyNodeName(t *testing.T) {
+	// A collector with an empty node name must emit nothing rather than issuing
+	// a "spec.nodeName=" field-selector that pulls all unscheduled pods cluster-wide.
+	pods := []corev1.Pod{
+		*pod("prod", "app-1", withEnv(envVarLdPreloadName, envVarLdPreloadValue)),
+	}
+	sc := newTestStateCollector(&fakePodLister{pods: pods}, nsMatcher("prod"), nsCfg("prod"), "")
+	metrics := collectMetrics(t, sc)
+	assert.Empty(t, metrics, "Collect with empty node name must emit no metrics")
+}
+
 // TestInScope verifies inScope works correctly with a pre-computed nsScope.
 func TestInScope(t *testing.T) {
 	t.Run("cluster_wide_excludes_system_ns", func(t *testing.T) {

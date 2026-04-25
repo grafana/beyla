@@ -254,6 +254,11 @@ func (c *StateCollector) Describe(ch chan<- *prometheus.Desc) {
 // Collect lists all pods on this node, classifies each one, aggregates by label
 // tuple, and emits one GaugeValue per tuple.
 func (c *StateCollector) Collect(ch chan<- prometheus.Metric) {
+	if c.ownNode == "" {
+		c.logger.Warn("skipping pod state collection: node name is empty")
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

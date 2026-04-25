@@ -53,8 +53,10 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 			logger.Info("beyla_injection_pods state metric collector disabled via config")
 		} else if kubeClient, err := ctxInfo.K8sInformer.KubeClient(); err != nil {
 			logger.Warn("state metrics unavailable: cannot get kubernetes client", "error", err)
+		} else if ownNode := OwnNodeName(); ownNode == "" {
+			logger.Warn("state metrics unavailable: cannot determine node name (NODE_NAME unset and os.Hostname failed)")
 		} else {
-			sc := NewStateCollector(kubeClient, matcher, cfg, OwnNodeName())
+			sc := NewStateCollector(kubeClient, matcher, cfg, ownNode)
 			collectors = append(collectors, sc)
 			logger.Info("registered beyla_injection_pods state metric collector")
 		}

@@ -530,8 +530,13 @@ oats-test-ai: oats-prereq
 	mkdir -p internal/testgenerated/oats/ai/$(TEST_OUTPUT)/run
 	cd internal/testgenerated/oats/ai && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+.PHONY: oats-test-nats
+oats-test-nats: oats-prereq
+	mkdir -p internal/testgenerated/oats/nats/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/nats && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai
+oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai oats-test-nats
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug

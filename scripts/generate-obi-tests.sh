@@ -375,7 +375,7 @@ transform_go_imports_and_paths() {
 
     # Point the OBI image build (in dockerutil_test.go) at the Beyla Dockerfile.
     if [[ -f "$OBI_DEST/dockerutil_test.go" ]]; then
-        sed_i -e "s|Dockerfile:   \".obi-src/${OBI_DOCKERFILE}\"|Dockerfile:   \"${BEYLA_DOCKERFILE}\"|g" \
+        sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
             "$OBI_DEST/dockerutil_test.go"
     fi
 

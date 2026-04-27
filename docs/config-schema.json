@@ -365,6 +365,10 @@
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA"
         },
+        "mssql": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_MSSQL"
+        },
         "mysql": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL"
@@ -480,6 +484,10 @@
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_MONGO_REQUESTS_CACHE_SIZE"
         },
+        "mssql_prepared_statements_cache_size": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_BPF_MSSQL_PREPARED_STATEMENTS_CACHE_SIZE"
+        },
         "mysql_prepared_statements_cache_size": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_MYSQL_PREPARED_STATEMENTS_CACHE_SIZE"
@@ -577,7 +585,9 @@
           "ebpf",
           "network",
           "network_inter_zone",
-          "stats"
+          "stats",
+          "stats_tcp_failed_connections",
+          "stats_tcp_rtt"
         ]
       },
       "type": "array",
@@ -605,6 +615,9 @@
         },
         "openai": {
           "$ref": "#/$defs/OpenAIConfig"
+        },
+        "qwen": {
+          "$ref": "#/$defs/QwenConfig"
         }
       },
       "type": "object"
@@ -1313,6 +1326,7 @@
               "memcached",
               "mongo",
               "mqtt",
+              "nats",
               "redis",
               "sql"
             ]
@@ -1620,6 +1634,7 @@
               "memcached",
               "mongo",
               "mqtt",
+              "nats",
               "redis",
               "sql"
             ]
@@ -1647,6 +1662,15 @@
             "1ms"
           ],
           "x-env-var": "OTEL_EBPF_PROMETHEUS_TTL"
+        }
+      },
+      "type": "object"
+    },
+    "QwenConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_HTTP_QWEN_ENABLED"
         }
       },
       "type": "object"
@@ -2188,6 +2212,7 @@
               "memcached",
               "mongo",
               "mqtt",
+              "nats",
               "redis",
               "sql"
             ]

@@ -23,6 +23,7 @@ github.com/bahlo/generic-list-go,https://github.com/grafana/beyla/blob/HEAD/vend
 github.com/beorn7/perks/quantile,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/beorn7/perks/LICENSE,MIT
 github.com/blang/semver/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/blang/semver/v4/LICENSE,MIT
 github.com/buger/jsonparser,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/buger/jsonparser/LICENSE,MIT
+github.com/caarlos0/env/v11,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/caarlos0/env/v11/LICENSE.md,MIT
 github.com/caarlos0/env/v9,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/caarlos0/env/v9/LICENSE.md,MIT
 github.com/cenkalti/backoff/v5,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cenkalti/backoff/v5/LICENSE,MIT
 github.com/cespare/xxhash/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/cespare/xxhash/v2/LICENSE.txt,MIT
@@ -103,7 +104,7 @@ github.com/mxk/go-flowrate/flowrate,https://github.com/grafana/beyla/blob/HEAD/v
 github.com/ohler55/ojg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/ohler55/ojg/LICENSE,MIT
 github.com/opencontainers/go-digest,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/opencontainers/go-digest/LICENSE,Apache-2.0
 github.com/opencontainers/image-spec/specs-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/opencontainers/image-spec/LICENSE,Apache-2.0
-github.com/oschwald/maxminddb-golang,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/oschwald/maxminddb-golang/LICENSE,ISC
+github.com/oschwald/maxminddb-golang/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/oschwald/maxminddb-golang/v2/LICENSE,ISC
 github.com/pierrec/lz4/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pierrec/lz4/v4/LICENSE,BSD-3-Clause
 github.com/pkg/errors,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pkg/errors/LICENSE,BSD-2-Clause
 github.com/pmezard/go-difflib/difflib,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/pmezard/go-difflib/LICENSE,BSD-3-Clause
@@ -114,6 +115,7 @@ github.com/prometheus/common,https://github.com/grafana/beyla/blob/HEAD/vendor/g
 github.com/prometheus/procfs,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/prometheus/procfs/LICENSE,Apache-2.0
 github.com/rs/cors,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/rs/cors/LICENSE,MIT
 github.com/shirou/gopsutil/v3,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/shirou/gopsutil/v3/LICENSE,BSD-3-Clause
+github.com/shirou/gopsutil/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/shirou/gopsutil/v4/LICENSE,BSD-3-Clause
 github.com/spf13/pflag,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/spf13/pflag/LICENSE,BSD-3-Clause
 github.com/stretchr/testify,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/stretchr/testify/LICENSE,MIT
 github.com/tklauser/go-sysconf,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/tklauser/go-sysconf/LICENSE,BSD-3-Clause

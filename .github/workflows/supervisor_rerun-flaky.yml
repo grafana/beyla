@@ -247,7 +247,10 @@ jobs:
             NON_GREEN=$(echo "$CHECKS_JSON" | jq '[.check_runs[] | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
             if [ "$NON_GREEN" -eq 0 ]; then
               echo "All checks green — requesting Copilot review"
-              gh pr edit "$PR_NUMBER" --repo "$REPO" --add-reviewer "copilot"
+              gh api --method POST \
+                -H "Accept: application/vnd.github+json" \
+                "repos/${REPO}/pulls/${PR_NUMBER}/requested_reviewers" \
+                -f "reviewers[]=Copilot"
             fi
           else
             echo "${PENDING} of ${TOTAL} checks still pending — handle-ci-completion job will promote when CI completes"
@@ -379,4 +382,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           echo "All CI checks green on automated PR #${PR_NUMBER}. Requesting Copilot review."
-          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-reviewer "copilot"
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${REPO}/pulls/${PR_NUMBER}/requested_reviewers" \
+            -f "reviewers[]=Copilot"

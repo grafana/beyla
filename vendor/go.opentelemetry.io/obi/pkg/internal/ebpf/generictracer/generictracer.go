@@ -203,6 +203,8 @@ func (p *Tracer) constants() map[string]any {
 	m["mysql_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.MySQL
 	m["kafka_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Kafka
 	m["postgres_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Postgres
+	m["mssql_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.MSSQL
+
 	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
 
 	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug

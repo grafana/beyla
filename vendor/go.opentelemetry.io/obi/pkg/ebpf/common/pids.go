@@ -19,7 +19,7 @@ import (
 type PIDType uint8
 
 const (
-	PIDTypeKProbes PIDType = iota + 1
+	PIDTypeKProbes PIDType = 1 << iota
 	PIDTypeGo
 )
 
@@ -30,7 +30,7 @@ var readNamespacePIDs = procs.FindNamespacedPids
 
 type PIDInfo struct {
 	service        *svc.Attrs
-	pidType        PIDType
+	pidTypes       PIDType
 	otherKnownPids []app.PID
 }
 
@@ -85,7 +85,7 @@ func (pf *PIDsFilter) ValidPID(userPID app.PID, ns uint32, pidType PIDType) bool
 
 	if ns, nsExists := pf.current[ns]; nsExists {
 		if info, pidExists := ns[userPID]; pidExists {
-			return info.pidType == pidType
+			return info.pidTypes&pidType != 0
 		}
 	}
 
@@ -100,7 +100,7 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[app.PID]svc.Attrs {
 	for k, v := range pf.current {
 		cVal := map[app.PID]svc.Attrs{}
 		for kv, vv := range v {
-			if vv.pidType == t {
+			if vv.pidTypes&t != 0 {
 				cVal[kv] = *vv.service
 			}
 		}
@@ -175,7 +175,11 @@ func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, s *svc.Attrs, t PIDType) 
 	}
 
 	for _, p := range allPids {
-		ns[p] = PIDInfo{service: s, pidType: t, otherKnownPids: allPids}
+		pidInfo := ns[p]
+		pidInfo.service = s
+		pidInfo.pidTypes |= t
+		pidInfo.otherKnownPids = allPids
+		ns[p] = pidInfo
 	}
 }
 

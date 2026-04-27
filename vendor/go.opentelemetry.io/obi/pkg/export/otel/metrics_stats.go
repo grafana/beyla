@@ -37,11 +37,11 @@ type StatMetricsConfig struct {
 
 func (mc *StatMetricsConfig) Enabled() bool {
 	return mc.Metrics != nil && mc.Metrics.EndpointEnabled() &&
-		mc.CommonCfg.Features.StatMetrics()
+		(mc.CommonCfg.Features.StatMetrics())
 }
 
 func smlog() *slog.Logger {
-	return slog.With("component", "otel.StatsworkMetricsExporter")
+	return slog.With("component", "otel.StatMetricsExporter")
 }
 
 // getFilteredStatsResourceAttrs returns resource attributes that can be filtered based on the attribute selector
@@ -72,11 +72,11 @@ func newStatMeterProvider(res *resource.Resource, exporter *sdkmetric.Exporter, 
 }
 
 type statMetricsExporter struct {
-	tcpRtt         *Expirer[*ebpf.Stat, metric2.Float64Histogram, float64]
-	interZoneBytes *Expirer[*ebpf.Stat, metric2.Int64Counter, float64]
-	clock          *expire.CachedClock
-	expireTTL      time.Duration
-	in             <-chan []*ebpf.Stat
+	tcpRtt               *Expirer[*ebpf.Stat, metric2.Float64Histogram, float64]
+	tcpFailedConnections *Expirer[*ebpf.Stat, metric2.Int64Counter, int64]
+	clock                *expire.CachedClock
+	expireTTL            time.Duration
+	in                   <-chan []*ebpf.Stat
 }
 
 func StatMetricsExporterProvider(
@@ -131,7 +131,8 @@ func newStatMetricsExporter(
 		clock:     clock,
 		expireTTL: cfg.Metrics.TTL,
 	}
-	if cfg.CommonCfg.Features.StatMetrics() {
+
+	if cfg.CommonCfg.Features.StatsTCPRtt() {
 		log := log.With("metricFamily", "StatsTCPRtt")
 
 		tcpRtt, err := ebpfEvents.Float64Histogram(attributes.StatTCPRtt.OTEL, metric2.WithUnit("s"))
@@ -148,6 +149,22 @@ func newStatMetricsExporter(
 		nme.tcpRtt = NewExpirer[*ebpf.Stat, metric2.Float64Histogram, float64](ctx, tcpRtt, attrs, clock.Time, cfg.Metrics.TTL)
 	}
 
+	if cfg.CommonCfg.Features.StatsTCPFailedConnections() {
+		log := log.With("metricFamily", "StatsTCPFailedConnections")
+
+		tcpFailedConnections, err := ebpfEvents.Int64Counter(attributes.StatTCPFailedConnections.OTEL)
+		if err != nil {
+			log.Error("creating stats tcp failed connection counter", "error", err)
+			return nil, err
+		}
+
+		attrs := attributes.OpenTelemetryGetters(
+			ebpf.StatGetters,
+			attrProv.For(attributes.StatTCPFailedConnections))
+
+		nme.tcpFailedConnections = NewExpirer[*ebpf.Stat, metric2.Int64Counter, int64](ctx, tcpFailedConnections, attrs, clock.Time, cfg.Metrics.TTL)
+	}
+
 	nme.in = input.Subscribe(msg.SubscriberName("otel.StatMetricsExporter"))
 	return nme, nil
 }
@@ -156,9 +173,13 @@ func (me *statMetricsExporter) Do(ctx context.Context) {
 	for i := range me.in {
 		me.clock.Update()
 		for _, v := range i {
-			if me.tcpRtt != nil {
+			if me.tcpRtt != nil && v.TCPRtt != nil {
 				tcpRtt, attrs := me.tcpRtt.ForRecord(v)
 				tcpRtt.Record(ctx, float64(v.TCPRtt.SrttUs)/1_000_000.0, metric2.WithAttributeSet(attrs))
+			}
+			if me.tcpFailedConnections != nil && v.TCPFailedConnection != nil {
+				tcpFailedConnections, attrs := me.tcpFailedConnections.ForRecord(v)
+				tcpFailedConnections.Add(ctx, 1, metric2.WithAttributeSet(attrs))
 			}
 		}
 	}

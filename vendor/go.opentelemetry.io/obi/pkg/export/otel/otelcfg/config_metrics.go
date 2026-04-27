@@ -46,7 +46,7 @@ type MetricsConfig struct {
 	Protocol        Protocol `yaml:"protocol" env:"OTEL_EXPORTER_OTLP_PROTOCOL"`
 	MetricsProtocol Protocol `yaml:"-" env:"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"`
 
-	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
+	// InsecureSkipVerify enables skipping TLS certificate verification (not standard, so we don't follow the same naming convention)
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
 	Buckets              export.Buckets       `yaml:"buckets"`
@@ -59,7 +59,7 @@ type MetricsConfig struct {
 	// Accepted values: debug, info, warn, error (case-insensitive).
 	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
 
-	// Features of metrics that can be exported. Accepted values: application, network,
+	// Features specifies which metric features to export. Accepted values: application, network,
 	// application_span, application_service_graph, ...
 	// envDefault is provided to avoid breaking changes
 	//
@@ -69,7 +69,7 @@ type MetricsConfig struct {
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
 	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_METRICS_INSTRUMENTATIONS" envSeparator:"," jsonschema:"uniqueItems=true"`
 
-	// TTL is the time since a metric was updated for the last time until it is
+	// TTL specifies the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
 	TTL time.Duration `yaml:"ttl" env:"OTEL_EBPF_METRICS_TTL"`
 

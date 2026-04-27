@@ -33,7 +33,7 @@ type TracesConfig struct {
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
 	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_TRACES_INSTRUMENTATIONS" envSeparator:"," jsonschema:"uniqueItems=true"`
 
-	// InsecureSkipVerify is not standard, so we don't follow the same naming convention
+	// InsecureSkipVerify enables skipping TLS certificate verification (not standard, so we don't follow the same naming convention)
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
 	SamplerConfig services.SamplerConfig `yaml:"sampler"`
@@ -43,9 +43,9 @@ type TracesConfig struct {
 	BatchMaxSize int `yaml:"batch_max_size" env:"OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE"`
 
 	// QueueSize is the maximum number of spans that the sending queue will hold
-	// before applying back-pressure. It must be >= 2 * BatchMaxSize, otherwise the
+	// before applying back-pressure. It must be >= `2 * BatchMaxSize`, otherwise the
 	// memory queue rejects every batch with "element size too large" and drops
-	// spans permanently. If left at 0 it defaults to 4 * BatchMaxSize.
+	// spans permanently. If left at 0 it defaults to `4 * BatchMaxSize`.
 	QueueSize int `yaml:"queue_size" env:"OTEL_EBPF_OTLP_TRACES_QUEUE_SIZE"`
 
 	// BatchTimeout is the time after which a batch will be sent regardless of its size.
@@ -55,9 +55,9 @@ type TracesConfig struct {
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
 	// BackOffInitialInterval the time to wait after the first failure before retrying.
 	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"OTEL_EBPF_BACKOFF_INITIAL_INTERVAL"`
-	// BackOffMaxInterval is the upper bound on backoff interval.
+	// BackOffMaxInterval specifies the upper bound on backoff interval.
 	BackOffMaxInterval time.Duration `yaml:"backoff_max_interval" env:"OTEL_EBPF_BACKOFF_MAX_INTERVAL"`
-	// BackOffMaxElapsedTime is the maximum amount of time (including retries) spent trying to send a request/batch.
+	// BackOffMaxElapsedTime specifies the maximum amount of time (including retries) spent trying to send a request/batch.
 	BackOffMaxElapsedTime time.Duration `yaml:"backoff_max_elapsed_time" env:"OTEL_EBPF_BACKOFF_MAX_ELAPSED_TIME"`
 	ReportersCacheLen     int           `yaml:"reporters_cache_len" env:"OTEL_EBPF_TRACES_REPORT_CACHE_LEN"`
 

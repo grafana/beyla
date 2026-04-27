@@ -144,6 +144,11 @@ var (
 		Prom:    "gen_ai_client_operation_duration_seconds",
 		OTEL:    "gen_ai.client.operation.duration",
 	}
+	StatTCPFailedConnections = Name{
+		Section: "obi.stat.tcp.failed.connections",
+		Prom:    "obi_stat_tcp_failed_connections",
+		OTEL:    "obi.stat.tcp.failed.connections",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

@@ -3,6 +3,12 @@
 
 package ebpf // import "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 
+import (
+	"errors"
+)
+
+var ErrTracerTerminated = errors.New("flow tracer terminated")
+
 const (
 	// DirectionUnset is a convenience value to specify an unset/removed direction field
 	DirectionUnset = 0xFF

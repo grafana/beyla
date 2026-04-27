@@ -193,11 +193,13 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.MessagingSystem:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
+			switch span.Type {
+			case EventTypeKafkaClient, EventTypeKafkaServer:
 				return semconv.MessagingSystemKafka
-			}
-			if span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer {
+			case EventTypeMQTTClient, EventTypeMQTTServer:
 				return semconv.MessagingSystemKey.String("mqtt")
+			case EventTypeNATSClient, EventTypeNATSServer:
+				return semconv.MessagingSystemKey.String("nats")
 			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
 				return semconv.MessagingSystemAWSSQS
@@ -212,6 +214,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer {
 				return semconv.MessagingDestinationName(span.Path)
 			}
+			if span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer {
+				return semconv.MessagingDestinationName(span.Path)
+			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
 				return semconv.MessagingDestinationName(span.AWS.SQS.Destination)
 			}
@@ -223,7 +228,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			case span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil:
 				return MessagingOperationName(span.AWS.SQS.OperationName)
 			case span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer ||
-				span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer:
+				span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer ||
+				span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer:
 				return MessagingOperationName(span.Method)
 			default:
 				return MessagingOperationName("")
@@ -231,6 +237,12 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.MessagingOpType:
 		getter = func(span *Span) attribute.KeyValue {
+			switch span.Type {
+			case EventTypeKafkaClient, EventTypeKafkaServer,
+				EventTypeMQTTClient, EventTypeMQTTServer,
+				EventTypeNATSClient, EventTypeNATSServer:
+				return MessagingOperationType(span.Method)
+			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
 				return MessagingOperationType(span.AWS.SQS.OperationType)
 			}
@@ -352,6 +364,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
 				return semconv.GenAIInputMessagesKey.String(s.GenAI.Gemini.GetInput())
 			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
+				return semconv.GenAIInputMessagesKey.String(s.GenAI.Qwen.Request.GetInput())
+			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
 				return semconv.GenAIInputMessagesKey.String(s.GenAI.Bedrock.GetInput())
 			}
@@ -368,6 +383,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
 				return semconv.GenAIOutputMessagesKey.String(s.GenAI.Gemini.GetOutput())
 			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
+				return semconv.GenAIOutputMessagesKey.String(s.GenAI.Qwen.GetOutput())
+			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
 				return semconv.GenAIOutputMessagesKey.String(s.GenAI.Bedrock.GetOutput())
 			}
@@ -383,6 +401,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
 				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Gemini.GetSystemInstruction())
+			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
+				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Qwen.Request.Instructions)
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
 				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Bedrock.GetSystemInstruction())

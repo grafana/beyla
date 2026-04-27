@@ -4,10 +4,12 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
+	"encoding/binary"
 	"errors"
 	"log/slog"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
@@ -25,8 +27,127 @@ type CouchbaseInfo struct {
 	Bucket     string
 	Scope      string
 	Collection string
+	Statement  string
 	Status     couchbasekv.Status
 	IsError    bool
+}
+
+// buildCouchbaseStatement builds a db.query.text string for a KV request packet.
+// See devdocs/protocols/tcp/couchbase.md for the full format specification.
+//
+// When collectionsEnabled is true, the LEB128 collection ID prefix is stripped
+// from the key. A leading null byte (default collection, ID 0) is also stripped
+// best-effort even when collectionsEnabled is false, to handle connections
+// established before OBI started monitoring.
+func buildCouchbaseStatement(pkt couchbasekv.Packet, collectionsEnabled bool) string {
+	op := pkt.Header().Opcode()
+	keyBytes := pkt.Key()
+	if collectionsEnabled {
+		keyBytes = stripLEB128Prefix(keyBytes)
+	} else if len(keyBytes) > 0 && keyBytes[0] == 0x00 {
+		keyBytes = keyBytes[1:]
+	}
+	if len(keyBytes) == 0 || !utf8.Valid(keyBytes) {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(op.String())
+	b.WriteByte(' ')
+	b.Write(keyBytes)
+
+	switch op {
+	case couchbasekv.OpcodeSet, couchbasekv.OpcodeAdd, couchbasekv.OpcodeReplace,
+		couchbasekv.OpcodeSetQ, couchbasekv.OpcodeAddQ, couchbasekv.OpcodeReplaceQ:
+		appendMutationExtras(&b, pkt)
+	case couchbasekv.OpcodeAppend, couchbasekv.OpcodePrepend,
+		couchbasekv.OpcodeAppendQ, couchbasekv.OpcodePrependQ:
+		appendValue(&b, pkt)
+	case couchbasekv.OpcodeIncrement, couchbasekv.OpcodeDecrement,
+		couchbasekv.OpcodeIncrementQ, couchbasekv.OpcodeDecrementQ:
+		appendCounterExtras(&b, pkt)
+	case couchbasekv.OpcodeTouch, couchbasekv.OpcodeGAT, couchbasekv.OpcodeGATQ:
+		appendTouchExtras(&b, pkt)
+	}
+
+	return b.String()
+}
+
+func appendMutationExtras(b *strings.Builder, pkt couchbasekv.Packet) {
+	if extras := pkt.Extras(); len(extras) >= 8 {
+		if ttl := binary.BigEndian.Uint32(extras[4:8]); ttl != 0 {
+			appendUint32Tag(b, "TTL", ttl)
+		}
+	}
+	appendValue(b, pkt)
+}
+
+func appendCounterExtras(b *strings.Builder, pkt couchbasekv.Packet) {
+	extras := pkt.Extras()
+	if len(extras) < 20 {
+		return
+	}
+	delta := binary.BigEndian.Uint64(extras[0:8])
+	ttl := binary.BigEndian.Uint32(extras[16:20])
+	b.WriteString(" DELTA=")
+	b.WriteString(strconv.FormatUint(delta, 10))
+	if ttl != 0 {
+		appendUint32Tag(b, "TTL", ttl)
+	}
+}
+
+func appendTouchExtras(b *strings.Builder, pkt couchbasekv.Packet) {
+	if extras := pkt.Extras(); len(extras) >= 4 {
+		ttl := binary.BigEndian.Uint32(extras[0:4])
+		appendUint32Tag(b, "TTL", ttl)
+	}
+}
+
+func appendUint32Tag(b *strings.Builder, name string, val uint32) {
+	b.WriteByte(' ')
+	b.WriteString(name)
+	b.WriteByte('=')
+	b.WriteString(strconv.FormatUint(uint64(val), 10))
+}
+
+func appendValue(b *strings.Builder, pkt couchbasekv.Packet) {
+	if val := couchbaseValueForStatement(pkt); val != "" {
+		b.WriteByte(' ')
+		b.WriteString(val)
+	}
+}
+
+// stripLEB128Prefix consumes the leading LEB128-encoded unsigned varint
+// (Couchbase collection ID) from the key bytes and returns the remainder.
+// A valid uint32 LEB128 varint is at most 5 bytes; if no terminator is found
+// within that window, the original slice is returned unchanged.
+func stripLEB128Prefix(key []byte) []byte {
+	const maxLen = 5
+	limit := len(key)
+	if limit > maxLen {
+		limit = maxLen
+	}
+	for i := 0; i < limit; i++ {
+		if key[i]&0x80 == 0 {
+			return key[i+1:]
+		}
+	}
+	return key
+}
+
+func couchbaseValueForStatement(pkt couchbasekv.Packet) string {
+	dataType := pkt.Header().DataType()
+	if dataType.HasSnappy() || dataType.HasXattr() {
+		return ""
+	}
+	val := pkt.Value()
+	if len(val) == 0 {
+		return ""
+	}
+	if !utf8.Valid(val) {
+		return ""
+	}
+	return string(val)
 }
 
 // ProcessPossibleCouchbaseEvent attempts to parse the event as a Couchbase memcached binary protocol event.
@@ -160,13 +281,17 @@ func processCouchbaseEvent(connInfo BpfConnectionInfoT, requestBuf []byte, respo
 		}
 
 		// Get bucket info from cache
+		collectionsEnabled := false
 		if bucketCache != nil {
 			if bucketInfo, found := bucketCache.Get(connInfo); found {
 				info.Bucket = bucketInfo.Bucket
 				info.Scope = bucketInfo.Scope
 				info.Collection = bucketInfo.Collection
+				collectionsEnabled = bucketInfo.Scope != "" || bucketInfo.Collection != ""
 			}
 		}
+
+		info.Statement = buildCouchbaseStatement(reqPacket, collectionsEnabled)
 
 		if hasResp && respPacket.IsResponse() {
 			info.Status = respPacket.Header().Status()
@@ -238,5 +363,6 @@ func TCPToCouchbaseToSpan(trace *TCPRequestInfo, data *CouchbaseInfo) request.Sp
 		},
 		DBError:     dbError,
 		DBNamespace: dbNamespace,
+		Statement:   data.Statement,
 	}
 }

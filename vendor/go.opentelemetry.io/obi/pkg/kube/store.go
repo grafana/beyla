@@ -378,26 +378,62 @@ func (s *Store) PodByContainerID(cid string) *kube.CachedObjMeta {
 	return s.podsByContainer[cid]
 }
 
-// PodContainerByPIDNs second return value: container Name
-func (s *Store) PodContainerByPIDNs(pidns uint32) (*kube.CachedObjMeta, string) {
+// PodContainerByPIDNs returns the pod metadata and container name for the
+// process identified by Linux PID namespace pidns and host-visible PID
+// hostPID.
+//
+// When multiple containers share a PID namespace (e.g. pods with hostPID=true
+// all collapse onto the host's init_pid_ns inode), the host-visible PID is
+// used to disambiguate. If the exact PID is not found but all entries in the
+// namespace belong to the same container, the result is unambiguous and
+// returned. When container IDs differ and the PID can't be matched, nil is
+// returned to avoid silently misattributing spans to the wrong pod.
+// Second return value: container Name.
+func (s *Store) PodContainerByPIDNs(pidns uint32, hostPID app.PID) (*kube.CachedObjMeta, string) {
 	s.access.RLock()
 	defer s.access.RUnlock()
-	if infos, ok := s.namespaces[pidns]; ok {
-		for _, info := range infos {
-			if om, ok := s.podsByContainer[info.ContainerID]; ok {
-				oID := fetchOwnerID(om.Meta)
-				containerName := ""
-				if containerInfo, ok := s.containersByOwner.Get(oID, info.ContainerID); ok {
-					containerName = containerInfo.Name
-				}
-				return om, containerName
-			}
-			// we break here, the namespace is the same for all pids in the container
-			// we need to check one only
-			break
+	infos, ok := s.namespaces[pidns]
+	if !ok {
+		return nil, ""
+	}
+	// Prefer exact match by host PID. This is the only way to correctly
+	// disambiguate when a PID namespace is shared across multiple containers.
+	if hostPID != 0 {
+		if info, ok := infos[hostPID]; ok {
+			return s.podContainerByInfo(info)
 		}
 	}
-	return nil, ""
+	// Fallback: only safe when every registered PID in this namespace points
+	// to the same container (i.e. the namespace is not actually shared).
+	var pick *container.Info
+	for _, info := range infos {
+		if pick == nil {
+			pick = info
+			continue
+		}
+		if info.ContainerID != pick.ContainerID {
+			s.log.Debug("cannot disambiguate shared PID namespace without matching host PID; skipping k8s decoration",
+				"pidNs", pidns, "lookupHostPID", hostPID, "processes", len(infos))
+			return nil, ""
+		}
+	}
+	if pick == nil {
+		return nil, ""
+	}
+	return s.podContainerByInfo(pick)
+}
+
+func (s *Store) podContainerByInfo(info *container.Info) (*kube.CachedObjMeta, string) {
+	om, ok := s.podsByContainer[info.ContainerID]
+	if !ok {
+		return nil, ""
+	}
+	containerName := ""
+	oID := fetchOwnerID(om.Meta)
+	if containerInfo, ok := s.containersByOwner.Get(oID, info.ContainerID); ok {
+		containerName = containerInfo.Name
+	}
+	return om, containerName
 }
 
 func (s *Store) ObjectMetaByIP(ip string) *kube.CachedObjMeta {

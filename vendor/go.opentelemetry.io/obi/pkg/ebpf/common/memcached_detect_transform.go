@@ -568,15 +568,6 @@ func memcachedSignedIntField(field []byte) bool {
 	if field[0] == '-' {
 		field = field[1:]
 	}
-	if len(field) == 0 {
-		return false
-	}
 
-	for _, b := range field {
-		if b < '0' || b > '9' {
-			return false
-		}
-	}
-
-	return true
+	return isASCIIDecimal(field)
 }

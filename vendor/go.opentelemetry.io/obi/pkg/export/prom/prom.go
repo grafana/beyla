@@ -123,7 +123,7 @@ type PrometheusConfig struct {
 
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"OTEL_EBPF_PROMETHEUS_DISABLE_BUILD_INFO"`
 
-	// Features of metrics that can be exported. Accepted values: application, network,
+	// Features specifies which metric features to export. Accepted values: application, network,
 	// application_span, application_service_graph, ...
 	//
 	// Deprecated: use top-level MetricsConfig.Features instead.
@@ -134,7 +134,7 @@ type PrometheusConfig struct {
 
 	Buckets export.Buckets `yaml:"buckets"`
 
-	// TTL is the time since a metric was updated for the last time until it is
+	// TTL specifies the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
 	TTL                         time.Duration `yaml:"ttl" env:"OTEL_EBPF_PROMETHEUS_TTL"`
 	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
@@ -1045,6 +1045,19 @@ func (r *metricsReporter) observe(span *request.Span) {
 					r.observeHistogram(r.msgPublishDuration.WithLabelValues(labelValues(span, r.attrMsgPublishDuration)...).Metric, duration, span)
 				case request.MessagingProcess:
 					r.observeHistogram(r.msgProcessDuration.WithLabelValues(labelValues(span, r.attrMsgProcessDuration)...).Metric, duration, span)
+				}
+			}
+		case request.EventTypeNATSClient, request.EventTypeNATSServer:
+			if r.is.NATSEnabled() {
+				switch span.Method {
+				case request.MessagingPublish:
+					r.msgPublishDuration.WithLabelValues(
+						labelValues(span, r.attrMsgPublishDuration)...,
+					).Metric.Observe(duration)
+				case request.MessagingProcess:
+					r.msgProcessDuration.WithLabelValues(
+						labelValues(span, r.attrMsgProcessDuration)...,
+					).Metric.Observe(duration)
 				}
 			}
 		case request.EventTypeGPUCudaKernelLaunch:

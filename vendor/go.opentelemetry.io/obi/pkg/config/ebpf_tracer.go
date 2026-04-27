@@ -64,7 +64,7 @@ type EBPFTracer struct {
 	// reach the BatchLength size
 	BatchTimeout time.Duration `yaml:"batch_timeout" env:"OTEL_EBPF_BPF_BATCH_TIMEOUT" validate:"gte=0"`
 
-	// If enabled, the kprobes based HTTP request tracking will start tracking the request
+	// TrackRequestHeaders enables the kprobes based HTTP request tracking to start tracking the request
 	// headers to process any 'Traceparent' fields.
 	TrackRequestHeaders bool `yaml:"track_request_headers" env:"OTEL_EBPF_BPF_TRACK_REQUEST_HEADERS" validate:"boolean"`
 
@@ -108,6 +108,9 @@ type EBPFTracer struct {
 
 	// Postgres prepared statements cache size.
 	PostgresPreparedStatementsCacheSize int `yaml:"postgres_prepared_statements_cache_size" env:"OTEL_EBPF_BPF_POSTGRES_PREPARED_STATEMENTS_CACHE_SIZE" validate:"gt=0"`
+
+	// MSSQL prepared statements cache size.
+	MSSQLPreparedStatementsCacheSize int `yaml:"mssql_prepared_statements_cache_size" env:"OTEL_EBPF_BPF_MSSQL_PREPARED_STATEMENTS_CACHE_SIZE" validate:"gt=0"`
 
 	// Kafka Topic UUID to Name cache size.
 	KafkaTopicUUIDCacheSize int `yaml:"kafka_topic_uuid_cache_size" env:"OTEL_KAFKA_TOPIC_UUID_CACHE_SIZE" validate:"gt=0"`
@@ -180,6 +183,7 @@ type EBPFBufferSizes struct {
 	MySQL    uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL" validate:"lte=65536"`
 	Kafka    uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=65536"`
 	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=65536"`
+	MSSQL    uint32 `yaml:"mssql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MSSQL" validate:"lte=65536"`
 }
 
 // HasHeaders returns true if HTTP headers context propagation is enabled

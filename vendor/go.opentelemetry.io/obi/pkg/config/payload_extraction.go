@@ -75,13 +75,15 @@ type GenAIConfig struct {
 	Anthropic AnthropicConfig `yaml:"anthropic"`
 	// Google AI Studio (Gemini) payload extraction and parsing
 	Gemini GeminiConfig `yaml:"gemini"`
+	// Qwen (DashScope) payload extraction and parsing
+	Qwen QwenConfig `yaml:"qwen"`
 	// AWS Bedrock payload extraction and parsing
 	Bedrock BedrockConfig `yaml:"bedrock"`
 }
 
 func (g *GenAIConfig) Enabled() bool {
 	return g.Anthropic.Enabled || g.OpenAI.Enabled ||
-		g.Gemini.Enabled || g.Bedrock.Enabled
+		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled
 }
 
 type OpenAIConfig struct {
@@ -97,6 +99,11 @@ type AnthropicConfig struct {
 type GeminiConfig struct {
 	// Enable Google AI Studio (Gemini) payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_GEMINI_ENABLED" validate:"boolean"`
+}
+
+type QwenConfig struct {
+	// Enable Qwen (DashScope) payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_QWEN_ENABLED" validate:"boolean"`
 }
 
 type BedrockConfig struct {

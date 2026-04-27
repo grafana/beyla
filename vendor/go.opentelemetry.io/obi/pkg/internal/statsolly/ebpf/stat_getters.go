@@ -43,6 +43,13 @@ func StatGetters(name attr.Name) (attributes.Getter[*Stat, attribute.KeyValue], 
 		getter = func(s *Stat) attribute.KeyValue { return attribute.String(string(attr.SrcZone), s.CommonAttrs.SrcZone) }
 	case attr.DstZone:
 		getter = func(s *Stat) attribute.KeyValue { return attribute.String(string(attr.DstZone), s.CommonAttrs.DstZone) }
+	case attr.TCPFailedConnectionReason:
+		getter = func(s *Stat) attribute.KeyValue {
+			if s.TCPFailedConnection == nil {
+				return attribute.String(string(attr.TCPFailedConnectionReason), string(Unknown))
+			}
+			return attribute.String(string(attr.TCPFailedConnectionReason), tcpFailReasonStr(s.TCPFailedConnection.Reason))
+		}
 	default:
 		getter = func(s *Stat) attribute.KeyValue { return attribute.String(string(name), s.CommonAttrs.Metadata[name]) }
 	}
@@ -54,4 +61,23 @@ func StatStringGetters(name attr.Name) (attributes.Getter[*Stat, string], bool) 
 		return func(s *Stat) string { return g(s).Value.Emit() }, true
 	}
 	return nil, false
+}
+
+func tcpFailReasonStr(reason uint8) string {
+	switch TCPFailReasonTypeCode(reason) {
+	case CodeConnectionRefused:
+		return string(ConnectionRefused)
+	case CodeConnectionReset:
+		return string(ConnectionReset)
+	case CodeTimedOut:
+		return string(TimedOut)
+	case CodeHostUnreachable:
+		return string(HostUnreachable)
+	case CodeNetUnreachable:
+		return string(NetUnreachable)
+	case CodeOther:
+		return string(Other)
+	default:
+		return string(Unknown)
+	}
 }

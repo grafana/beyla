@@ -39,9 +39,12 @@ type statMetricsReporter struct {
 
 	tcpRtt *Expirer[prometheus.Histogram]
 
+	tcpFailedConnections *Expirer[prometheus.Counter]
+
 	promConnect *connector.PrometheusManager
 
-	statsAttrs []attributes.Field[*ebpf.Stat, string]
+	tcpRttAttrs               []attributes.Field[*ebpf.Stat, string]
+	tcpFailedConnectionsAttrs []attributes.Field[*ebpf.Stat, string]
 
 	clock *expire.CachedClock
 
@@ -95,9 +98,10 @@ func newStatsReporter(
 
 	var register []prometheus.Collector
 	log := slog.With("component", "prom.StatsEndpoint")
-	if cfg.CommonCfg.Features.StatMetrics() {
-		log.Debug("registering stat metrics")
-		mr.statsAttrs = attributes.PrometheusGetters(
+	if cfg.CommonCfg.Features.StatsTCPRtt() {
+		log.Debug("registering stat tcp rtt metric")
+
+		mr.tcpRttAttrs = attributes.PrometheusGetters(
 			ebpf.StatStringGetters,
 			provider.For(attributes.StatTCPRtt))
 
@@ -109,9 +113,23 @@ func newStatsReporter(
 			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-		}, labelNames(mr.statsAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.tcpRttAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.tcpRtt)
+	}
 
+	if cfg.CommonCfg.Features.StatsTCPFailedConnections() {
+		log.Debug("registering stat tcp failed connections metric")
+
+		mr.tcpFailedConnectionsAttrs = attributes.PrometheusGetters(
+			ebpf.StatStringGetters,
+			provider.For(attributes.StatTCPFailedConnections))
+
+		mr.tcpFailedConnections = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.StatTCPFailedConnections.Prom,
+			Help: "counts the TCP failed connections between 2 endpoints",
+		}, labelNames(mr.tcpFailedConnectionsAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+
+		register = append(register, mr.tcpFailedConnections)
 	}
 
 	if cfg.Config.Registry != nil {
@@ -136,6 +154,7 @@ func (r *statMetricsReporter) collectMetrics(_ context.Context) {
 		r.clock.Update()
 		for _, stat := range stats {
 			r.observeTCPRtt(stat)
+			r.observeTCPFailedConnections(stat)
 		}
 	}
 }
@@ -144,6 +163,14 @@ func (r *statMetricsReporter) observeTCPRtt(stat *ebpf.Stat) {
 	if r.tcpRtt == nil || stat.TCPRtt == nil {
 		return
 	}
-	r.tcpRtt.WithLabelValues(labelValues(stat, r.statsAttrs)...).
+	r.tcpRtt.WithLabelValues(labelValues(stat, r.tcpRttAttrs)...).
 		Metric.Observe(float64(stat.TCPRtt.SrttUs) / 1_000_000.0)
+}
+
+func (r *statMetricsReporter) observeTCPFailedConnections(stat *ebpf.Stat) {
+	if r.tcpFailedConnections == nil || stat.TCPFailedConnection == nil {
+		return
+	}
+	r.tcpFailedConnections.WithLabelValues(labelValues(stat, r.tcpFailedConnectionsAttrs)...).
+		Metric.Add(1)
 }

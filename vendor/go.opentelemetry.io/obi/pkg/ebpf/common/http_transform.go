@@ -190,6 +190,13 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		}
 	}
 
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Qwen.Enabled {
+		span, ok := ebpfhttp.QwenSpan(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Bedrock.Enabled {
 		span, ok := ebpfhttp.BedrockSpan(&httpSpan, req, resp)
 		if ok {

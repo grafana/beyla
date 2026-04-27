@@ -283,6 +283,8 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.KafkaEnabled()
 	case request.EventTypeMQTTClient, request.EventTypeMQTTServer:
 		return is.MQTTEnabled()
+	case request.EventTypeNATSClient, request.EventTypeNATSServer:
+		return is.NATSEnabled()
 	case request.EventTypeMongoClient:
 		return is.MongoEnabled()
 	case request.EventTypeManualSpan:
@@ -302,6 +304,7 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 
 var (
 	messagingSystemMQTT = attribute.String(string(attr.MessagingSystem), "mqtt")
+	messagingSystemNATS = attribute.String(string(attr.MessagingSystem), "nats")
 	spanMetricsSkip     = attribute.Bool(string(attr.SkipSpanMetrics), true)
 )
 
@@ -622,6 +625,52 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 		}
 
+		if span.SubType == request.HTTPSubtypeQwen && span.GenAI != nil && span.GenAI.Qwen != nil {
+			ai := span.GenAI.Qwen
+			attrs = append(attrs, semconv.GenAIProviderNameKey.String(attr.QwenProviderName))
+			attrs = append(attrs, semconv.GenAIOperationNameKey.String(ai.OperationName))
+			attrs = append(attrs, semconv.GenAIResponseID(ai.ID))
+			attrs = append(attrs, semconv.GenAIRequestModel(ai.Request.Model))
+			if ai.ResponseModel != "" {
+				attrs = append(attrs, semconv.GenAIResponseModel(ai.ResponseModel))
+			} else {
+				attrs = append(attrs, semconv.GenAIResponseModel(ai.Request.Model))
+			}
+			if ai.FrequencyPenalty > 0.0 {
+				attrs = append(attrs, semconv.GenAIRequestFrequencyPenalty(ai.FrequencyPenalty))
+			}
+			if ai.Temperature > 0.0 {
+				attrs = append(attrs, semconv.GenAIRequestTemperature(ai.Temperature))
+			} else if ai.Request.Temperature != 0 {
+				attrs = append(attrs, semconv.GenAIRequestTemperature(ai.Request.Temperature))
+			}
+			if ai.TopP > 0.0 {
+				attrs = append(attrs, semconv.GenAIRequestTopP(ai.TopP))
+			}
+			attrs = append(attrs, semconv.GenAIUsageInputTokens(ai.Usage.GetInputTokens()))
+			attrs = append(attrs, semconv.GenAIUsageOutputTokens(ai.Usage.GetOutputTokens()))
+			if _, ok := optionalAttrs[attr.GenAIInput]; ok {
+				attrs = append(attrs, semconv.GenAIInputMessagesKey.String(ai.Request.GetInput()))
+			}
+			if _, ok := optionalAttrs[attr.GenAIOutput]; ok {
+				attrs = append(attrs, semconv.GenAIOutputMessagesKey.String(ai.GetOutput()))
+			}
+			if _, ok := optionalAttrs[attr.GenAIInstructions]; ok {
+				if ai.Request.Instructions != "" {
+					attrs = append(attrs, semconv.GenAISystemInstructionsKey.String(ai.Request.Instructions))
+				}
+			}
+			if _, ok := optionalAttrs[attr.GenAIMetadata]; ok {
+				if len(ai.Metadata) > 0 {
+					attrs = append(attrs, request.Metadata(string(ai.Metadata)))
+				}
+			}
+			if ai.Error.Type != "" {
+				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Error.Type))
+				attrs = append(attrs, semconv.ErrorMessage(ai.Error.Message))
+			}
+		}
+
 		if span.SubType == request.HTTPSubtypeAWSBedrock && span.GenAI != nil && span.GenAI.Bedrock != nil {
 			ai := span.GenAI.Bedrock
 			attrs = append(attrs, semconv.GenAIProviderNameAWSBedrock)
@@ -762,6 +811,21 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		if span.Type == request.EventTypeMQTTClient {
 			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
 		}
+	case request.EventTypeNATSServer, request.EventTypeNATSClient:
+		operation := request.MessagingOperationType(span.Method)
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.HostAsServer(span)),
+			request.ServerPort(span.HostPort),
+			messagingSystemNATS,
+			semconv.MessagingDestinationName(span.Path),
+			semconv.MessagingClientID(span.Statement),
+			operation,
+			semconv.MessagingMessageEnvelopeSize(int(span.ContentLength)),
+		}
+
+		if span.Type == request.EventTypeNATSClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
+		}
 	case request.EventTypeMongoClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
@@ -792,6 +856,11 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		operation := span.Method
 		if operation != "" {
 			attrs = append(attrs, request.DBOperationName(operation))
+			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+				if span.Statement != "" {
+					attrs = append(attrs, request.DBQueryText(span.Statement))
+				}
+			}
 		}
 		if span.Path != "" {
 			attrs = append(attrs, request.DBCollectionName(span.Path))
@@ -853,11 +922,11 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer, request.EventTypeMemcachedServer, request.EventTypeSQLServer:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer, request.EventTypeNATSServer, request.EventTypeMemcachedServer, request.EventTypeSQLServer:
 		return trace2.SpanKindServer
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeFailedConnect:
 		return trace2.SpanKindClient
-	case request.EventTypeKafkaClient, request.EventTypeMQTTClient:
+	case request.EventTypeKafkaClient, request.EventTypeMQTTClient, request.EventTypeNATSClient:
 		switch span.Method {
 		case request.MessagingPublish:
 			return trace2.SpanKindProducer

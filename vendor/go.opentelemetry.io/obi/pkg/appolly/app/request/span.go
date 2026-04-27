@@ -54,6 +54,8 @@ const (
 	EventTypeMemcachedClient
 	EventTypeMemcachedServer
 	EventTypeSQLServer
+	EventTypeNATSClient
+	EventTypeNATSServer
 )
 
 const (
@@ -83,6 +85,7 @@ const (
 	DBGeneric SQLKind = iota + 1
 	DBPostgres
 	DBMySQL
+	DBMSSQL
 )
 
 const (
@@ -97,12 +100,14 @@ const (
 	HTTPSubtypeGemini        = 8  // http + Google AI Studio (Gemini)
 	HTTPSubtypeJSONRPC       = 9  // http + JSON-RPC
 	HTTPSubtypeAWSBedrock    = 10 // http + AWS Bedrock
+	HTTPSubtypeQwen          = 11 // http + Qwen (DashScope)
 )
 
 func IsGenAISubtype(subtype int) bool {
 	return subtype == HTTPSubtypeOpenAI ||
 		subtype == HTTPSubtypeAnthropic ||
 		subtype == HTTPSubtypeGemini ||
+		subtype == HTTPSubtypeQwen ||
 		subtype == HTTPSubtypeAWSBedrock
 }
 
@@ -129,12 +134,16 @@ func (t EventType) String() string {
 		return "KafkaClient"
 	case EventTypeMQTTClient:
 		return "MQTTClient"
+	case EventTypeNATSClient:
+		return "NATSClient"
 	case EventTypeRedisServer:
 		return "RedisServer"
 	case EventTypeKafkaServer:
 		return "KafkaServer"
 	case EventTypeMQTTServer:
 		return "MQTTServer"
+	case EventTypeNATSServer:
+		return "NATSServer"
 	case EventTypeGPUCudaKernelLaunch:
 		return "CUDALaunchKernel"
 	case EventTypeGPUCudaGraphLaunch:
@@ -252,7 +261,15 @@ type GenAI struct {
 	OpenAI    *VendorOpenAI
 	Anthropic *VendorAnthropic
 	Gemini    *VendorGemini
-	Bedrock   *VendorBedrock
+	// Qwen reuses VendorOpenAI because DashScope's compatible-mode API
+	// returns the same JSON structure as OpenAI.  The native generation
+	// API uses slightly different field names (request_id, output,
+	// input_tokens/output_tokens) but VendorOpenAI already accommodates
+	// both via GetInputTokens()/GetOutputTokens() and the Output field.
+	// A separate field (rather than sharing OpenAI) keeps provider
+	// routing explicit and allows future divergence without refactoring.
+	Qwen    *VendorOpenAI
+	Bedrock *VendorBedrock
 }
 
 type OpenAIUsage struct {
@@ -824,6 +841,14 @@ func spanAttributes(s *Span) SpanAttributes {
 			}
 		}
 		return attrs
+	case EventTypeNATSServer, EventTypeNATSClient:
+		return SpanAttributes{
+			"serverAddr": SpanHost(s),
+			"serverPort": strconv.Itoa(s.HostPort),
+			"operation":  s.Method,
+			"clientId":   s.Statement,
+			"subject":    s.Path,
+		}
 	case EventTypeGPUCudaKernelLaunch:
 		return SpanAttributes{
 			"gridSize":  strconv.FormatInt(s.ContentLength, 10),
@@ -956,7 +981,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
+	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return true
 	}
 
@@ -1051,6 +1076,9 @@ func HTTPSpanStatusCode(span *Span) string {
 				if span.GenAI.Gemini != nil && span.GenAI.Gemini.Output.Error != nil && span.GenAI.Gemini.Output.Error.Status != "" {
 					return StatusCodeError
 				}
+				if span.GenAI.Qwen != nil && span.GenAI.Qwen.Error.Type != "" {
+					return StatusCodeError
+				}
 				if span.GenAI.Bedrock != nil && span.GenAI.Bedrock.Output.ErrorType != "" {
 					return StatusCodeError
 				}
@@ -1112,11 +1140,11 @@ func (s *Span) ResponseBodyLength() int64 {
 // ServiceGraphKind returns the Kind string representation that is compliant with service graph metrics specification
 func (s *Span) ServiceGraphKind() string {
 	switch s.Type {
-	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeRedisServer, EventTypeMemcachedServer, EventTypeSQLServer:
+	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeNATSServer, EventTypeRedisServer, EventTypeMemcachedServer, EventTypeSQLServer:
 		return "SPAN_KIND_SERVER"
 	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "SPAN_KIND_CLIENT"
-	case EventTypeKafkaClient, EventTypeMQTTClient:
+	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient:
 		switch s.Method {
 		case MessagingPublish:
 			return "SPAN_KIND_PRODUCER"
@@ -1133,7 +1161,7 @@ func (s *Span) ServiceGraphConnectionType() string {
 	switch s.Type {
 	case EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "database"
-	case EventTypeKafkaClient, EventTypeMQTTClient:
+	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient:
 		return "messaging_system"
 	case EventTypeHTTPClient:
 		if s.SubType == HTTPSubtypeAWSSQS {
@@ -1247,6 +1275,20 @@ func (s *Span) TraceName() string {
 			return op
 		}
 
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
+			name := s.GenAI.Qwen.OperationName
+			if name != "" {
+				switch {
+				case s.GenAI.Qwen.Request.Model != "":
+					return name + " " + s.GenAI.Qwen.Request.Model
+				case s.GenAI.Qwen.ResponseModel != "":
+					return name + " " + s.GenAI.Qwen.ResponseModel
+				default:
+					return name
+				}
+			}
+		}
+
 		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
 			if s.GenAI.Bedrock.Model != "" {
 				return "invoke_model " + s.GenAI.Bedrock.Model
@@ -1288,7 +1330,7 @@ func (s *Span) TraceName() string {
 			return "MEMCACHED"
 		}
 		return s.Method
-	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer:
+	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer, EventTypeNATSClient, EventTypeNATSServer:
 		if s.Path == "" {
 			return s.Method
 		}
@@ -1462,6 +1504,8 @@ func (s *Span) DBSystemName() attribute.KeyValue {
 			return semconv.DBSystemNamePostgreSQL
 		case int(DBMySQL):
 			return semconv.DBSystemNameMySQL
+		case int(DBMSSQL):
+			return semconv.DBSystemNameMicrosoftSQLServer
 		}
 	}
 
@@ -1490,6 +1534,10 @@ func (s *Span) GenAIInputTokens() int {
 		return s.GenAI.Gemini.Output.UsageMetadata.PromptTokenCount
 	}
 
+	if s.GenAI.Qwen != nil {
+		return s.GenAI.Qwen.Usage.GetInputTokens()
+	}
+
 	if s.GenAI.Bedrock != nil {
 		return s.GenAI.Bedrock.Output.InputTokens
 	}
@@ -1514,6 +1562,10 @@ func (s *Span) GenAIOutputTokens() int {
 		return s.GenAI.Gemini.Output.UsageMetadata.CandidatesTokenCount
 	}
 
+	if s.GenAI.Qwen != nil {
+		return s.GenAI.Qwen.Usage.GetOutputTokens()
+	}
+
 	if s.GenAI.Bedrock != nil {
 		return s.GenAI.Bedrock.Output.OutputTokens
 	}
@@ -1534,6 +1586,9 @@ func (s *Span) GenAIOperationName() string {
 	if s.GenAI.Gemini != nil {
 		return s.GenAI.Gemini.OperationName()
 	}
+	if s.GenAI.Qwen != nil {
+		return s.GenAI.Qwen.OperationName
+	}
 	if s.GenAI.Bedrock != nil {
 		return "invoke_model"
 	}
@@ -1553,6 +1608,9 @@ func (s *Span) GenAIProviderName() string {
 	if s.GenAI.Gemini != nil {
 		return semconv.GenAIProviderNameGCPGemini.Value.AsString()
 	}
+	if s.GenAI.Qwen != nil {
+		return attr.QwenProviderName
+	}
 	if s.GenAI.Bedrock != nil {
 		return semconv.GenAIProviderNameAWSBedrock.Value.AsString()
 	}
@@ -1571,6 +1629,9 @@ func (s *Span) GenAIRequestModel() string {
 	}
 	if s.GenAI.Gemini != nil {
 		return s.GenAI.Gemini.Model
+	}
+	if s.GenAI.Qwen != nil {
+		return s.GenAI.Qwen.Request.Model
 	}
 	if s.GenAI.Bedrock != nil {
 		return s.GenAI.Bedrock.Model
@@ -1593,6 +1654,12 @@ func (s *Span) GenAIResponseModel() string {
 			return s.GenAI.Gemini.Output.ModelVersion
 		}
 		return s.GenAI.Gemini.Model
+	}
+	if s.GenAI.Qwen != nil {
+		if s.GenAI.Qwen.ResponseModel != "" {
+			return s.GenAI.Qwen.ResponseModel
+		}
+		return s.GenAI.Qwen.Request.Model
 	}
 	if s.GenAI.Bedrock != nil {
 		return s.GenAI.Bedrock.Model

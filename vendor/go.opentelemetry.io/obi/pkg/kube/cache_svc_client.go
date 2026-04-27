@@ -20,6 +20,8 @@ func cslog() *slog.Logger {
 	return slog.With("component", "kube.CacheSvcClient")
 }
 
+const defaultReconnectInitialInterval = 5 * time.Second
+
 type cacheSvcClient struct {
 	meta.BaseNotifier
 	address string
@@ -52,6 +54,7 @@ func (sc *cacheSvcClient) Start(ctx context.Context) {
 	sc.waitForSubscription = make(chan struct{})
 	sc.waitForSynchronization = make(chan struct{})
 	sc.ctx = ctx
+	sc.reconnectInitialInterval = normalizeReconnectInitialInterval(sc.reconnectInitialInterval)
 
 	// subscribe itself to each message from the cache, to keep track of the
 	// message timestamps for a more efficient reconnection
@@ -81,6 +84,14 @@ func (sc *cacheSvcClient) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func normalizeReconnectInitialInterval(interval time.Duration) time.Duration {
+	if interval <= 0 {
+		return defaultReconnectInitialInterval
+	}
+
+	return interval
 }
 
 func (sc *cacheSvcClient) connect(ctx context.Context) error {

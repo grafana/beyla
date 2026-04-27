@@ -123,6 +123,11 @@ spec:
           volumeMounts:
             - mountPath: /etc/beyla/config
               name: beyla-config
+          {{- range $index, $path := .Values.machineIDFiles }}
+            - mountPath: {{ $path | quote }}
+              name: machine-id-file-{{ $index }}
+              readOnly: true
+          {{- end }}
           {{- if .Values.contextPropagation.enabled }}
             - mountPath: /sys/fs/cgroup
               name: cgroup
@@ -154,6 +159,12 @@ spec:
         - name: beyla-config
           configMap:
             name: {{ default (include "beyla.fullname" .) .Values.config.name }}
+      {{- range $index, $path := .Values.machineIDFiles }}
+        - name: machine-id-file-{{ $index }}
+          hostPath:
+            path: {{ $path | quote }}
+            type: File
+      {{- end }}
       {{- if .Values.contextPropagation.enabled }}
         - name: cgroup
           hostPath:

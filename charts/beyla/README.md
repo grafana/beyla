@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.16.5](https://img.shields.io/badge/Version-1.16.5-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 3.9.5](https://img.shields.io/badge/AppVersion-3.9.5-informational?style=flat-square)
+![Version: 1.16.6](https://img.shields.io/badge/Version-1.16.6-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 3.9.5](https://img.shields.io/badge/AppVersion-3.9.5-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -67,6 +67,7 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | k8sCache.service.name | string | `"beyla-k8s-cache"` | Name of both the Service and Deployment |
 | k8sCache.service.port | int | `50055` | Port of the Kubernetes metadata cache service. |
 | k8sCache.tolerations | list | `[]` | Tolerations allow cache pods to be scheduled on nodes with specific taints |
+| machineIDFiles | list | `["/etc/machine-id"]` | Read-only host files to mount into the Beyla DaemonSet at the same absolute path. Each entry is mounted as a hostPath volume with `type: File`, so the file must exist on the node. |
 | minReadySeconds | int | `0` | Minimum number of seconds for which a newly created DaemonSet pod should be ready without any of its containers crashing, for it to be considered available. ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#min-ready-seconds |
 | nameOverride | string | `""` | Overrides the chart's name |
 | namespaceOverride | string | `""` | Override the deployment namespace |

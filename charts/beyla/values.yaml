@@ -152,6 +152,14 @@ updateStrategy:
 # ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#min-ready-seconds
 minReadySeconds: 0
 
+# -- Read-only host files to mount into the Beyla DaemonSet at the same absolute path.
+# Each entry is mounted as a hostPath volume with `type: File`, so the file must exist on the node.
+machineIDFiles:
+  - /etc/machine-id
+  # disabling entry below af it is ignored if /etc/machine-id exists,
+  # to prevent that the deployment fails in a node not containing this file
+  # - /var/lib/dbus/machine-id
+
 # -- Additional volumes on the output daemonset definition.
 volumes: []
 # - name: foo

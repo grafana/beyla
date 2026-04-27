@@ -70,3 +70,59 @@ tests:
       - equal:
           path: metadata.labels["app.kubernetes.io/version"]
           value: "custom"
+
+  - it: should mount default host machine-id files as read-only
+    template: daemon-set.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            mountPath: /etc/machine-id
+            name: machine-id-file-0
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: machine-id-file-0
+            hostPath:
+              path: /etc/machine-id
+              type: File
+
+  - it: should allow disabling machine-id host file mounts
+    template: daemon-set.yaml
+    set:
+      machineIDFiles: []
+      contextPropagation:
+        enabled: false
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts
+          value:
+            - mountPath: /etc/beyla/config
+              name: beyla-config
+      - equal:
+          path: spec.template.spec.volumes
+          value:
+            - name: beyla-config
+              configMap:
+                name: RELEASE-NAME-beyla
+
+  - it: should allow replacing machine-id host file mounts
+    template: daemon-set.yaml
+    set:
+      machineIDFiles:
+        - /run/custom-machine-id
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            mountPath: /run/custom-machine-id
+            name: machine-id-file-0
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: machine-id-file-0
+            hostPath:
+              path: /run/custom-machine-id
+              type: File

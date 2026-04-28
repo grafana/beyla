@@ -12,7 +12,7 @@ keywords:
 
 YAML section: `grafana.otlp`
 
-You can use the eBPF tracer to fine-tune Beyla's performance.
+You can use the eBPF tracer to fine-tune Beyla performance.
 
 You can configure the component under the `ebpf` section of your YAML configuration or with environment variables.
 

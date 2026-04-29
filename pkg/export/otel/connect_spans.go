@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -49,7 +50,7 @@ var beylaSpan = attribute.KeyValue{Key: "beyla.topology", Value: attribute.Strin
 // that will be exclusively used from Tempo to create inter-cluster service graph metrics
 func ConnectionSpanAttributes(unresolvedNames request.UnresolvedNames) []attributes.Getter[*request.Span, attribute.KeyValue] {
 	functionalGetters := request.SpanOTELGetters(unresolvedNames)
-	attributeValueGetters := make([]attributes.Getter[*request.Span, attribute.KeyValue], 0, 5)
+	attributeValueGetters := make([]attributes.Getter[*request.Span, attribute.KeyValue], 0, 6)
 	for _, name := range []attr.Name{attr.Client, attr.Server, attr.ClientAddr, attr.ServerAddr} {
 		getter, ok := functionalGetters(name)
 		if !ok {
@@ -58,9 +59,42 @@ func ConnectionSpanAttributes(unresolvedNames request.UnresolvedNames) []attribu
 		}
 		attributeValueGetters = append(attributeValueGetters, getter)
 	}
+	attributeValueGetters = append(attributeValueGetters, httpClientURLFullGetter)
 	return append(attributeValueGetters, func(*request.Span) attribute.KeyValue {
 		return beylaSpan
 	})
+}
+
+func applyAttributeGetters(span *request.Span, getters []attributes.Getter[*request.Span, attribute.KeyValue]) []attribute.KeyValue {
+	out := make([]attribute.KeyValue, 0, len(getters))
+	for _, getter := range getters {
+		kv := getter(span)
+		if kv.Key == "" {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
+func httpClientURLFullGetter(span *request.Span) attribute.KeyValue {
+	if span.Type != request.EventTypeHTTPClient {
+		return attribute.KeyValue{}
+	}
+	scheme := request.HTTPScheme(span)
+	host := request.HTTPClientHost(span)
+	if scheme == "" || host == "" {
+		return attribute.KeyValue{}
+	}
+	urlPath := span.Path
+	if span.FullPath != "" {
+		urlPath = span.FullPath
+	}
+	hostPort := host
+	if span.HostPort > 0 {
+		hostPort = host + ":" + strconv.Itoa(span.HostPort)
+	}
+	return semconv.URLFull(scheme + "://" + hostPort + urlPath)
 }
 
 // ConnectionSpansExport creates a terminal node that consumes inter-cluster spans and sends them to the configured
@@ -112,10 +146,7 @@ func (tr *connectionSpansExport) processSpans(ctx context.Context, exp exporter.
 			sample := &spanGroup[0]
 
 			// append external attribute
-			sample.Attributes = make([]attribute.KeyValue, 0, len(tr.attributeProvider))
-			for _, getter := range tr.attributeProvider {
-				sample.Attributes = append(sample.Attributes, getter(sample.Span))
-			}
+			sample.Attributes = applyAttributeGetters(sample.Span, tr.attributeProvider)
 
 			// set attributes for src and dst
 			traces := GenerateConnectSpans(&tr.ctxInfo.NodeMeta, sample.Span, spanGroup)
@@ -320,13 +351,8 @@ func GroupConnectionSpans(
 			continue
 		}
 
-		finalAttrs := make([]attribute.KeyValue, 0, len(attributeProvider))
-		for _, getter := range attributeProvider {
-			finalAttrs = append(finalAttrs, getter(span))
-		}
-
 		group := spanGroups[span.Service.UID]
-		group = append(group, tracesgen.TraceSpanAndAttributes{Span: span, Attributes: finalAttrs})
+		group = append(group, tracesgen.TraceSpanAndAttributes{Span: span, Attributes: applyAttributeGetters(span, attributeProvider)})
 		spanGroups[span.Service.UID] = group
 	}
 

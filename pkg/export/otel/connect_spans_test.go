@@ -20,6 +20,75 @@ import (
 	"github.com/grafana/beyla/v3/pkg/test/collector"
 )
 
+func clientSpanWithURL(scheme, host, path string, port int) request.Span {
+	return request.Span{
+		Type:      request.EventTypeHTTPClient,
+		Method:    "GET",
+		Route:     path,
+		Path:      path,
+		FullPath:  path,
+		Statement: scheme + request.SchemeHostSeparator + host,
+		Host:      host,
+		HostName:  host,
+		HostPort:  port,
+		Peer:      "10.0.0.1",
+		PeerName:  "client.local",
+		Service:   svc.Attrs{UID: svc.UID{Name: "client-service"}},
+		Start:     100,
+		End:       200,
+		SpanID:    [8]byte{9},
+	}
+}
+
+func runConnectionSpan(t *testing.T, span request.Span) map[string]string {
+	t.Helper()
+	otlp, err := collector.Start(t.Context())
+	require.NoError(t, err)
+	traces := otlp.TraceRecords()
+
+	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
+	cse, err := ConnectionSpansExport(
+		&global.ContextInfo{NodeMeta: meta.NodeMeta{HostID: "the-host"}},
+		&otelcfg.TracesConfig{
+			TracesEndpoint: otlp.ServerEndpoint + "/v1/traces",
+			TracesProtocol: otelcfg.ProtocolHTTPJSON,
+			Instrumentations: []instrumentations.Instrumentation{
+				instrumentations.InstrumentationALL,
+			},
+			SamplerConfig: services.SamplerConfig{Name: "always_on"},
+			BatchMaxSize:  4096,
+			BatchTimeout:  10 * time.Millisecond,
+		},
+		request.UnresolvedNames{},
+		input,
+	)(t.Context())
+	require.NoError(t, err)
+	go cse(t.Context())
+	testutil.ChannelEmpty(t, traces, 10*time.Millisecond)
+
+	input.Send([]request.Span{span})
+	return testutil.ReadChannel(t, traces, 5*time.Second).Attributes
+}
+
+func TestConnection_Spans_URLFull(t *testing.T) {
+	t.Run("scheme host port path", func(t *testing.T) {
+		attrs := runConnectionSpan(t, clientSpanWithURL("https", "example.com", "/api/v1/users", 443))
+		assert.Equal(t, "https://example.com:443/api/v1/users", attrs["url.full"])
+	})
+
+	t.Run("path with query string", func(t *testing.T) {
+		span := clientSpanWithURL("http", "example.com", "/search?q=beyla&page=2", 8080)
+		attrs := runConnectionSpan(t, span)
+		assert.Equal(t, "http://example.com:8080/search?q=beyla&page=2", attrs["url.full"])
+	})
+
+	t.Run("ipv6 host without explicit port", func(t *testing.T) {
+		span := clientSpanWithURL("http", "[2001:db8::1]", "/healthz", 0)
+		attrs := runConnectionSpan(t, span)
+		assert.Equal(t, "http://[2001:db8::1]/healthz", attrs["url.full"])
+	})
+}
+
 func TestConnection_Spans(t *testing.T) {
 	otlp, err := collector.Start(t.Context())
 	require.NoError(t, err)

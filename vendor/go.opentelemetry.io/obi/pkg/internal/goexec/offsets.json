@@ -328,7 +328,7 @@
       "bw": {
         "versions": {
           "oldest": "9.0.0",
-          "newest": "9.18.0"
+          "newest": "9.19.0"
         },
         "offsets": [
           {

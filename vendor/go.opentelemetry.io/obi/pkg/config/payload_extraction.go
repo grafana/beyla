@@ -79,11 +79,14 @@ type GenAIConfig struct {
 	Qwen QwenConfig `yaml:"qwen"`
 	// AWS Bedrock payload extraction and parsing
 	Bedrock BedrockConfig `yaml:"bedrock"`
+	// Model Context Protocol (MCP) payload extraction and parsing
+	MCP MCPConfig `yaml:"mcp"`
 }
 
 func (g *GenAIConfig) Enabled() bool {
 	return g.Anthropic.Enabled || g.OpenAI.Enabled ||
-		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled
+		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled ||
+		g.MCP.Enabled
 }
 
 type OpenAIConfig struct {
@@ -109,6 +112,11 @@ type QwenConfig struct {
 type BedrockConfig struct {
 	// Enable AWS Bedrock payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_BEDROCK_ENABLED" validate:"boolean"`
+}
+
+type MCPConfig struct {
+	// Enable Model Context Protocol (MCP) payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_MCP_ENABLED" validate:"boolean"`
 }
 
 type JSONRPCConfig struct {

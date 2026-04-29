@@ -112,8 +112,7 @@ const (
 
 // not adding version, as it is a fixed value
 var (
-	obiInfoLabelNames  = []string{LanguageLabel}
-	hostInfoLabelNames = []string{CloudHostIDKey}
+	obiInfoLabelNames = []string{LanguageLabel}
 )
 
 // TODO: TLS
@@ -627,7 +626,7 @@ func newReporter(
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesHostInfo,
 				Help: "A metric with a constant '1' value labeled by the host id ",
-			}, hostInfoLabelNames).MetricVec, clock.Time, cfg.TTL)
+			}, []string{CloudHostIDKey}).MetricVec, clock.Time, cfg.TTL)
 		}),
 		serviceGraphClient: optionalHistogramProvider(jointMetricsConfig.Features.ServiceGraph(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{

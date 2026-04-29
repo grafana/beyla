@@ -101,6 +101,7 @@ const (
 	HTTPSubtypeJSONRPC       = 9  // http + JSON-RPC
 	HTTPSubtypeAWSBedrock    = 10 // http + AWS Bedrock
 	HTTPSubtypeQwen          = 11 // http + Qwen (DashScope)
+	HTTPSubtypeMCP           = 12 // http + Model Context Protocol
 )
 
 func IsGenAISubtype(subtype int) bool {
@@ -108,7 +109,8 @@ func IsGenAISubtype(subtype int) bool {
 		subtype == HTTPSubtypeAnthropic ||
 		subtype == HTTPSubtypeGemini ||
 		subtype == HTTPSubtypeQwen ||
-		subtype == HTTPSubtypeAWSBedrock
+		subtype == HTTPSubtypeAWSBedrock ||
+		subtype == HTTPSubtypeMCP
 }
 
 //nolint:cyclop
@@ -270,6 +272,7 @@ type GenAI struct {
 	// routing explicit and allows future divergence without refactoring.
 	Qwen    *VendorOpenAI
 	Bedrock *VendorBedrock
+	MCP     *MCPCall
 }
 
 type OpenAIUsage struct {
@@ -624,6 +627,28 @@ func (b *VendorBedrock) GetStopReason() string {
 		return b.Output.StopReasonNova
 	}
 	return ""
+}
+
+// MCPCall holds parsed data from a Model Context Protocol request/response.
+type MCPCall struct {
+	Method       string `json:"method"`
+	ToolName     string `json:"toolName,omitempty"`
+	ResourceURI  string `json:"resourceUri,omitempty"`
+	PromptName   string `json:"promptName,omitempty"`
+	SessionID    string `json:"sessionId,omitempty"`
+	ProtocolVer  string `json:"protocolVer,omitempty"`
+	RequestID    string `json:"requestId,omitempty"`
+	ErrorCode    int    `json:"errorCode,omitempty"`
+	ErrorMessage string `json:"errorMessage,omitempty"`
+}
+
+// OperationName returns the GenAI operation name for the MCP method.
+// tools/call maps to execute_tool; other methods return the method name as-is.
+func (m *MCPCall) OperationName() string {
+	if m.Method == "tools/call" {
+		return "execute_tool"
+	}
+	return m.Method
 }
 
 type JSONRPC struct {
@@ -1042,9 +1067,15 @@ func SpanStatusMessage(span *Span) string {
 		if span.SubType == HTTPSubtypeJSONRPC && span.JSONRPC != nil && span.JSONRPC.ErrorMessage != "" {
 			return span.JSONRPC.ErrorMessage
 		}
+		if span.SubType == HTTPSubtypeMCP && span.GenAI != nil && span.GenAI.MCP != nil && span.GenAI.MCP.ErrorMessage != "" {
+			return span.GenAI.MCP.ErrorMessage
+		}
 	case EventTypeHTTP:
 		if span.SubType == HTTPSubtypeJSONRPC && span.JSONRPC != nil && span.JSONRPC.ErrorMessage != "" {
 			return span.JSONRPC.ErrorMessage
+		}
+		if span.SubType == HTTPSubtypeMCP && span.GenAI != nil && span.GenAI.MCP != nil && span.GenAI.MCP.ErrorMessage != "" {
+			return span.GenAI.MCP.ErrorMessage
 		}
 	}
 	return ""
@@ -1058,6 +1089,11 @@ func HTTPSpanStatusCode(span *Span) string {
 
 	// JSON-RPC errors are signaled in the response body, not via HTTP status code.
 	if span.SubType == HTTPSubtypeJSONRPC && span.JSONRPC != nil && span.JSONRPC.ErrorCode != 0 {
+		return StatusCodeError
+	}
+
+	// MCP errors are signaled in the JSON-RPC response body.
+	if span.SubType == HTTPSubtypeMCP && span.GenAI != nil && span.GenAI.MCP != nil && span.GenAI.MCP.ErrorCode != 0 {
 		return StatusCodeError
 	}
 
@@ -1294,6 +1330,14 @@ func (s *Span) TraceName() string {
 				return "invoke_model " + s.GenAI.Bedrock.Model
 			}
 			return "invoke_model"
+		}
+
+		if s.SubType == HTTPSubtypeMCP && s.GenAI != nil && s.GenAI.MCP != nil {
+			op := s.GenAI.MCP.OperationName()
+			if s.GenAI.MCP.ToolName != "" {
+				return op + " " + s.GenAI.MCP.ToolName
+			}
+			return op
 		}
 
 		if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {

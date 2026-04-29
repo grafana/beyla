@@ -308,6 +308,43 @@ var (
 	spanMetricsSkip     = attribute.Bool(string(attr.SkipSpanMetrics), true)
 )
 
+// mcpAttributes returns MCP span attributes following the OTEL MCP semantic conventions.
+func mcpAttributes(span *request.Span) []attribute.KeyValue {
+	if span.SubType != request.HTTPSubtypeMCP || span.GenAI == nil || span.GenAI.MCP == nil {
+		return nil
+	}
+	mcp := span.GenAI.MCP
+	attrs := []attribute.KeyValue{
+		attribute.String(string(attr.MCPMethodName), mcp.Method),
+		semconv.GenAIOperationNameKey.String(mcp.OperationName()),
+	}
+	if mcp.ToolName != "" {
+		attrs = append(attrs, attribute.String(string(attr.GenAIToolName), mcp.ToolName))
+	}
+	if mcp.ResourceURI != "" {
+		attrs = append(attrs, attribute.String(string(attr.MCPResourceURI), mcp.ResourceURI))
+	}
+	if mcp.PromptName != "" {
+		attrs = append(attrs, attribute.String(string(attr.GenAIPromptName), mcp.PromptName))
+	}
+	if mcp.SessionID != "" {
+		attrs = append(attrs, attribute.String(string(attr.MCPSessionID), mcp.SessionID))
+	}
+	if mcp.ProtocolVer != "" {
+		attrs = append(attrs, attribute.String(string(attr.MCPProtocolVersion), mcp.ProtocolVer))
+	}
+	if mcp.RequestID != "" {
+		attrs = append(attrs, attribute.String(string(attr.JSONRPCRequestID), mcp.RequestID))
+	}
+	if mcp.ErrorCode != 0 {
+		attrs = append(attrs, attribute.String(string(attr.RPCResponseStatusCode), strconv.Itoa(mcp.ErrorCode)))
+		if mcp.ErrorMessage != "" {
+			attrs = append(attrs, semconv.ErrorMessage(mcp.ErrorMessage))
+		}
+	}
+	return attrs
+}
+
 // jsonRPCAttributes returns JSON-RPC span attributes following the OTEL RPC semantic conventions.
 func jsonRPCAttributes(span *request.Span) []attribute.KeyValue {
 	if span.SubType != request.HTTPSubtypeJSONRPC || span.JSONRPC == nil {
@@ -374,6 +411,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			attrs = append(attrs, semconv.GraphQLOperationName(span.GraphQL.OperationName))
 			attrs = append(attrs, request.GraphqlOperationType(span.GraphQL.OperationType))
 		}
+		attrs = append(attrs, mcpAttributes(span)...)
 		attrs = append(attrs, jsonRPCAttributes(span)...)
 		attrs = append(attrs, httpEnrichmentAttributes(span)...)
 	case request.EventTypeGRPC:
@@ -715,6 +753,8 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 				attrs = append(attrs, semconv.ErrorMessage(ai.Output.ErrorMessage))
 			}
 		}
+
+		attrs = append(attrs, mcpAttributes(span)...)
 
 		attrs = append(attrs, jsonRPCAttributes(span)...)
 		attrs = append(attrs, httpEnrichmentAttributes(span)...)

@@ -245,6 +245,8 @@ const (
 	GenAIOutput       = Name(semconv.GenAIOutputMessagesKey)
 	GenAIMetadata     = Name("gen_ai.metadata")
 	GenAITools        = Name(semconv.GenAIToolDefinitionsKey)
+	GenAIToolName     = Name("gen_ai.tool.name")
+	GenAIPromptName   = Name("gen_ai.prompt.name")
 )
 
 // OBI specific GPU events
@@ -258,6 +260,14 @@ const (
 	JSONRPCProtocolVersion = Name("jsonrpc.protocol.version")
 	JSONRPCRequestID       = Name("jsonrpc.request.id")
 	RPCResponseStatusCode  = Name("rpc.response.status_code")
+)
+
+// MCP (Model Context Protocol) attributes
+const (
+	MCPMethodName      = Name("mcp.method.name")
+	MCPSessionID       = Name("mcp.session.id")
+	MCPProtocolVersion = Name("mcp.protocol.version")
+	MCPResourceURI     = Name("mcp.resource.uri")
 )
 
 // DNS events

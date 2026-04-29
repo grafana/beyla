@@ -421,10 +421,12 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"context_run": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUprobeContextRun,
+				End:      p.bpfObjects.ObiUretprobeContextRun,
 			}},
 			"context_run.lto_priv.0": {{ // In Python 3.14, context_run has different symbols due to Link Time Optimization
 				Required: false,
 				Start:    p.bpfObjects.ObiUprobeContextRun,
+				End:      p.bpfObjects.ObiUretprobeContextRun,
 			}},
 			"PyContext_CopyCurrent": {{
 				Required: false,

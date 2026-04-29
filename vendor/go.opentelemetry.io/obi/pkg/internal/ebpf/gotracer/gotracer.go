@@ -166,6 +166,8 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 6
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 7
 		p.bpfObjects.ObiHandleBufWithArgs,                 // 8
+		p.bpfObjects.ObiContinueProtocolHttpTp,            // 9
+		p.bpfObjects.ObiContinueNetfdRead,                 // 10
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {

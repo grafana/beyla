@@ -1023,18 +1023,18 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		}
 
 		if span.Service.Features.SpanMetrics() {
-			sml, attrs := r.spanMetricsLatency.ForRecord(span)
+			sml, attrs := r.spanMetricsLatency.ForRecord(span, extraAttrs...)
 			sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 
-			smct, attrs := r.spanMetricsCallsTotal.ForRecord(span)
+			smct, attrs := r.spanMetricsCallsTotal.ForRecord(span, extraAttrs...)
 			smct.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 		}
 
 		if span.Service.Features.SpanSizes() {
-			smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span)
+			smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span, extraAttrs...)
 			smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
 
-			smst, attr := r.spanMetricsResponseSizeTotal.ForRecord(span)
+			smst, attr := r.spanMetricsResponseSizeTotal.ForRecord(span, extraAttrs...)
 			smst.Add(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attr))
 		}
 	}

@@ -613,6 +613,9 @@
         "gemini": {
           "$ref": "#/$defs/GeminiConfig"
         },
+        "mcp": {
+          "$ref": "#/$defs/MCPConfig"
+        },
         "openai": {
           "$ref": "#/$defs/OpenAIConfig"
         },
@@ -1204,6 +1207,15 @@
       "properties": {
         "service": {
           "$ref": "#/$defs/GlobDefinitionCriteria"
+        }
+      },
+      "type": "object"
+    },
+    "MCPConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_HTTP_MCP_ENABLED"
         }
       },
       "type": "object"

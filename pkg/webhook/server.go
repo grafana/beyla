@@ -268,8 +268,8 @@ func (s *Server) restartDeployment(a *ProcessInfo) {
 		s.logger.Debug("already restarted", "namespace", namespace, "deployment", deployment)
 		return
 	}
-
-	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment); err != nil {
+	lang := languageLabel(a.kind)
+	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment, lang); err != nil {
 		s.logger.Info("failed to restart pods", "error", err)
 	}
 }

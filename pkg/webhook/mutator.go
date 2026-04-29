@@ -230,11 +230,12 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 			pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
 			wlKind, wlName := resolveWorkload(&pod)
 
+			lang := detectLanguageFromPodSpec(&pod)
 			selector, matched := pm.matchesSelection(&pod.ObjectMeta)
 			if !matched {
 				pm.logger.Info("pod doesn't match selection criteria", "pod", pod.Name, "namespace", pod.Namespace)
 				if pm.metrics != nil {
-					pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, "", ErrorTypeNoMatchingSelector)
+					pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoMatchingSelector)
 				}
 			} else {
 				if modified, skipReason := pm.mutatePod(&pod, selector); modified {
@@ -243,7 +244,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 						pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
 						errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
 						if pm.metrics != nil {
-							pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, "", ErrorTypePatchGenerationFailed)
+							pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
 						}
 					} else {
 						pm.logger.Info("generating patch", "originalSize", len(admReview.Request.Object.Raw), "modifiedSize", len(marshalled))
@@ -256,7 +257,7 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 								pm.logger.Error("failed to marshal patches", "error", err)
 								errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
 								if pm.metrics != nil {
-									pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, "", ErrorTypePatchGenerationFailed)
+									pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
 								}
 							} else {
 								pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
@@ -264,20 +265,20 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 								patchType := admissionv1.PatchTypeJSONPatch
 								admResponse.PatchType = &patchType
 								if pm.metrics != nil {
-									pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, "", OutcomeSuccess)
+									pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, OutcomeSuccess)
 								}
 							}
 						} else {
 							errorResponse(admResponse, "no changes")
 							if pm.metrics != nil {
-								pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, "", ErrorTypeNoChangesDetected)
+								pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoChangesDetected)
 							}
 						}
 					}
 				} else {
 					pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
 					if pm.metrics != nil && skipReason != "" {
-						pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, "", skipReason)
+						pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, skipReason)
 					}
 				}
 			}
@@ -595,4 +596,86 @@ func (pm *PodMutator) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write([]byte("OK")); err != nil {
 		pm.logger.Debug("error responding to health check", "error", err)
 	}
+}
+
+// languageLabel converts an InstrumentableType to the Prometheus label string
+// used in SDK injection metrics. Returns "" for unknown or generic types.
+func languageLabel(kind svc.InstrumentableType) string {
+	switch kind {
+	case svc.InstrumentableUnknown, svc.InstrumentableGeneric:
+		return ""
+	default:
+		return kind.String()
+	}
+}
+
+// detectLanguageFromPodSpec returns the best-guess language for a pod by
+// scanning each container's image name and command/args. Returns "" when
+// the language cannot be determined from the available pod spec signals.
+func detectLanguageFromPodSpec(pod *corev1.Pod) string {
+	for i := range pod.Spec.Containers {
+		if lang := detectLanguageFromContainer(&pod.Spec.Containers[i]); lang != "" {
+			return lang
+		}
+	}
+	return ""
+}
+
+func detectLanguageFromContainer(c *corev1.Container) string {
+	if lang := languageFromImageName(c.Image); lang != "" {
+		return lang
+	}
+	for _, token := range append(c.Command, c.Args...) {
+		// strip directory prefix so "/usr/bin/python3" matches as "python3"
+		if idx := strings.LastIndex(token, "/"); idx >= 0 {
+			token = token[idx+1:]
+		}
+		if lang := languageFromToken(strings.ToLower(token)); lang != "" {
+			return lang
+		}
+	}
+	return ""
+}
+
+// languageFromImageName matches well-known image names to a language.
+// It strips the digest and tag before matching, but keeps the full registry
+// path so that images like mcr.microsoft.com/dotnet/aspnet are detected.
+func languageFromImageName(image string) string {
+	lower := strings.ToLower(image)
+	if idx := strings.Index(lower, "@"); idx >= 0 {
+		lower = lower[:idx]
+	}
+	// strip tag only when the colon has no slash after it (avoids cutting registry ports)
+	if idx := strings.LastIndex(lower, ":"); idx >= 0 && !strings.Contains(lower[idx:], "/") {
+		lower = lower[:idx]
+	}
+	// extract the image name component for short-word matching
+	name := lower
+	if idx := strings.LastIndex(lower, "/"); idx >= 0 {
+		name = lower[idx+1:]
+	}
+	return languageFromToken(name)
+}
+
+// languageFromToken matches a single lowercase token (image name component,
+// command basename, or arg) to a language string.
+func languageFromToken(s string) string {
+	switch {
+	case strings.Contains(s, "dotnet") || strings.Contains(s, "aspnet"):
+		return svc.InstrumentableDotnet.String()
+	case strings.Contains(s, "python"):
+		return svc.InstrumentablePython.String()
+	case strings.Contains(s, "nodejs"):
+		return svc.InstrumentableNodejs.String()
+	// "node" alone is checked as an exact/prefix match to avoid false positives
+	// from unrelated names like "mongodb" or "node-exporter" in image names, but
+	// remains the canonical Node.js executable name in Command/Args.
+	case s == "node" || strings.HasPrefix(s, "node-"):
+		return svc.InstrumentableNodejs.String()
+	case strings.Contains(s, "java") || strings.Contains(s, "jdk") ||
+		strings.Contains(s, "jre") || strings.Contains(s, "corretto") ||
+		strings.Contains(s, "temurin"):
+		return svc.InstrumentableJava.String()
+	}
+	return ""
 }

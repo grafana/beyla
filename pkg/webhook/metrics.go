@@ -21,7 +21,7 @@ func NewSDKInjectionMetrics() *SDKInjectionMetrics {
 		restarts: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attr.VendorPrefix + "_sdk_injection_restarts_total",
 			Help: "Deployment restarts triggered for SDK injection",
-		}, []string{"k8s_namespace_name", "k8s_workload_name"}),
+		}, []string{"k8s_namespace_name", "k8s_workload_name", "language"}),
 	}
 }
 
@@ -37,8 +37,8 @@ func (m *SDKInjectionMetrics) RecordRequest(namespace, workloadKind, workloadNam
 }
 
 // RecordRestart records a deployment restart triggered for SDK injection.
-func (m *SDKInjectionMetrics) RecordRestart(namespace, workloadName string) {
-	m.restarts.WithLabelValues(namespace, workloadName).Inc()
+func (m *SDKInjectionMetrics) RecordRestart(namespace, workloadName, language string) {
+	m.restarts.WithLabelValues(namespace, workloadName, language).Inc()
 }
 
 // Outcome constants for SDK injection requests.

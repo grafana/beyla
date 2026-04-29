@@ -57,7 +57,7 @@ func (b *PodBouncer) AlreadyBounced(namespace, deploymentName string) bool {
 }
 
 // RestartDeployment triggers a rollout restart of a deployment by patching its pod template annotations
-func (b *PodBouncer) RestartDeployment(ctx context.Context, namespace, deploymentName string) error {
+func (b *PodBouncer) RestartDeployment(ctx context.Context, namespace, deploymentName, language string) error {
 	if !b.CanBeBounced(namespace, deploymentName) {
 		return fmt.Errorf("pod missing namespace: %s or deployment name: %s", namespace, deploymentName)
 	}
@@ -110,7 +110,7 @@ func (b *PodBouncer) RestartDeployment(ctx context.Context, namespace, deploymen
 
 	// Record restart metric
 	if b.metrics != nil {
-		b.metrics.RecordRestart(namespace, deploymentName)
+		b.metrics.RecordRestart(namespace, deploymentName, language)
 	}
 
 	return nil

@@ -24,11 +24,11 @@ func TestSDKInjectionMetrics(t *testing.T) {
 	m.RecordRequest("ns", "", "", "java", ErrorTypeAdmissionRejected)
 	assert.Equal(t, 1.0, testutil.ToFloat64(m.requests.WithLabelValues("ns", "", "", "java", ErrorTypeAdmissionRejected)))
 
-	m.RecordRestart("ns", "my-app")
-	m.RecordRestart("ns", "my-app")
-	m.RecordRestart("other", "other-app")
-	assert.Equal(t, 2.0, testutil.ToFloat64(m.restarts.WithLabelValues("ns", "my-app")))
-	assert.Equal(t, 1.0, testutil.ToFloat64(m.restarts.WithLabelValues("other", "other-app")))
+	m.RecordRestart("ns", "my-app", "java")
+	m.RecordRestart("ns", "my-app", "java")
+	m.RecordRestart("other", "other-app", "python")
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.restarts.WithLabelValues("ns", "my-app", "java")))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.restarts.WithLabelValues("other", "other-app", "python")))
 }
 
 func TestSDKInjectionOutcomeConstants(t *testing.T) {

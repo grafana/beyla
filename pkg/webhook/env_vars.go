@@ -120,6 +120,8 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 	// node name has to be added to extra attributes as there is no dedicated OTEL_INJECTOR_* variable
 	extraResAttrs[semconv.K8SNodeNameKey] =
 		setEnvVarFromFieldPath(container, envOtelK8sNodeName, "spec.nodeName")
+	extraResAttrs[attribute.Key("k8s.pod.ip")] =
+		setEnvVarFromFieldPath(container, envOtelK8sPodIP, "status.podIP")
 
 	if cfg.AddK8sUIDAttributes {
 		setEnvVarFromFieldPath(container, envInjectorOtelK8sPodUID, "metadata.uid")

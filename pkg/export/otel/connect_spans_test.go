@@ -87,6 +87,27 @@ func TestConnection_Spans_URLFull(t *testing.T) {
 		attrs := runConnectionSpan(t, span)
 		assert.Equal(t, "http://[2001:db8::1]/healthz", attrs["url.full"])
 	})
+
+	t.Run("non http client span emits no url.full", func(t *testing.T) {
+		span := clientSpanWithURL("https", "example.com", "/api/v1/users", 443)
+		span.Type = request.EventTypeHTTP
+		attrs := runConnectionSpan(t, span)
+		assert.NotContains(t, attrs, "url.full")
+	})
+
+	t.Run("missing scheme emits no url.full", func(t *testing.T) {
+		span := clientSpanWithURL("https", "example.com", "/api/v1/users", 443)
+		span.Statement = ""
+		attrs := runConnectionSpan(t, span)
+		assert.NotContains(t, attrs, "url.full")
+	})
+
+	t.Run("FullPath overrides Path", func(t *testing.T) {
+		span := clientSpanWithURL("https", "example.com", "/route", 443)
+		span.FullPath = "/actual/path?q=1"
+		attrs := runConnectionSpan(t, span)
+		assert.Equal(t, "https://example.com:443/actual/path?q=1", attrs["url.full"])
+	})
 }
 
 func TestConnection_Spans(t *testing.T) {

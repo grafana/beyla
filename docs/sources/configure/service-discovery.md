@@ -325,6 +325,25 @@ The `exclude_instrument` section lets you specify selection criteria for excludi
 
 This option helps you avoid instrumenting services typically found in observability environments. For example, use this option to exclude instrumenting Prometheus.
 
+The following example excludes any process whose executable name ends with `prometheus` from instrumentation:
+
+```yaml
+discovery:
+  exclude_instrument:
+    - exe_path: "*prometheus"
+```
+
+In Kubernetes, you can also exclude Prometheus by Pod metadata. For example, exclude every Pod in the `monitoring` namespace whose name starts with `prometheus-`:
+
+```yaml
+discovery:
+  exclude_instrument:
+    - k8s_namespace: monitoring
+      k8s_pod_name: "prometheus-*"
+```
+
+`exclude_instrument` entries combine with the [default exclusions](#default-exclude-services-from-instrumentation), so you don't need to repeat them.
+
 ## Default exclude services from instrumentation
 
 The `default_exclude_instrument` section disables instrumentation of Beyla itself (self-instrumentation), as well as Grafana Alloy and the OpenTelemetry Collector.

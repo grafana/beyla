@@ -1,18 +1,48 @@
 ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.11@sha256:c9a11deeda1de354aa334817f693efbf5ccee15dcd18caee6a9b221eed0e5773
 
+# Build JNI native library using Go image (has gcc + apt; installs cross-compiler)
+FROM golang:1.25.8@sha256:f55a6ec7f24aedc1ed66e2641fdc52de01f2d24d6e49d1fa38582c07dd5f601d AS jni-builder
+ARG BUILDARCH=amd64
+COPY --from=gradle:9.4.1-jdk21-noble@sha256:5a739da3c34646f72da2634b2d4a5e2b467132eaf6abccfb7bc60e1b502d51b5 /opt/java/openjdk/include /opt/java/include
+WORKDIR /build
+COPY .obi-src/pkg/internal/java/agent/src/main/c/ src/main/c/
+COPY .obi-src/pkg/internal/java/agent/Makefile.jni Makefile.jni
+
+# Install the cross-compiler for the non-native architecture
+RUN apt-get update && \
+    case "$BUILDARCH" in \
+      amd64) apt-get install -y gcc-aarch64-linux-gnu ;; \
+      arm64) apt-get install -y gcc-x86-64-linux-gnu ;; \
+    esac
+
+# Build for own architecture
+RUN case "$BUILDARCH" in \
+      amd64) SLUG=linux-amd64 ;; \
+      arm64) SLUG=linux-aarch64 ;; \
+    esac && \
+    make -f Makefile.jni CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+
+# Cross-compile for the other architecture
+RUN case "$BUILDARCH" in \
+      amd64) CC=aarch64-linux-gnu-gcc; SLUG=linux-aarch64 ;; \
+      arm64) CC=x86_64-linux-gnu-gcc;  SLUG=linux-amd64 ;; \
+    esac && \
+    make -f Makefile.jni CC=$CC JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+
 # Build the Java OBI agent
 FROM gradle:9.4.1-jdk21-noble@sha256:5a739da3c34646f72da2634b2d4a5e2b467132eaf6abccfb7bc60e1b502d51b5 AS javaagent-builder
 
 WORKDIR /build
 
-RUN apt update
-RUN apt install -y clang llvm
-
 # Copy build files
 COPY .obi-src/pkg/internal/java .
 
-# Build the project
-RUN gradle build --no-daemon
+# Pre-built native library from jni-builder stage
+COPY --from=jni-builder /build/target/classes/native/linux-amd64/libobijni.so  agent/target/classes/native/linux-amd64/libobijni.so
+COPY --from=jni-builder /build/target/classes/native/linux-aarch64/libobijni.so agent/target/classes/native/linux-aarch64/libobijni.so
+
+# Build the project (skip native lib compilation, already done above)
+RUN gradle build -x buildNativeLib-amd64 -x buildNativeLib-aarch64 --no-daemon
 
 # Build the autoinstrumenter binary
 FROM $GEN_IMG AS builder

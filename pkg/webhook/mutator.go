@@ -667,10 +667,7 @@ func languageFromToken(s string) string {
 		return svc.InstrumentablePython.String()
 	case strings.Contains(s, "nodejs"):
 		return svc.InstrumentableNodejs.String()
-	// "node" alone is checked as an exact/prefix match to avoid false positives
-	// from unrelated names like "mongodb" or "node-exporter" in image names, but
-	// remains the canonical Node.js executable name in Command/Args.
-	case s == "node" || strings.HasPrefix(s, "node-"):
+	case s == "node":
 		return svc.InstrumentableNodejs.String()
 	case strings.Contains(s, "java") || strings.Contains(s, "jdk") ||
 		strings.Contains(s, "jre") || strings.Contains(s, "corretto") ||

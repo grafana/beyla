@@ -221,6 +221,17 @@ func TestClassify(t *testing.T) {
 			wantStatus:   StatusInstrumented,
 			wantNode:     "node-1",
 		},
+		{
+			// A pod carrying Beyla's instrumented label AND a foreign LD_PRELOAD must be
+			// reported as already_instrumented (not conflict) — alreadyInstrumentedByOther
+			// takes priority, mirroring the check order in mutatePod.
+			name:       "skipped_already_instrumented_label_beats_conflict",
+			pod:        pod(prodNS, "my-pod", withLabel(instrumentedLabel, "v1.2.3"), withEnv(envVarLdPreloadName, "/foreign/lib.so")),
+			matcher:    nsMatcher(prodNS),
+			cfg:        nsCfg(prodNS),
+			wantStatus: StatusSkipped,
+			wantSkip:   SkipReasonAlreadyInstrumented,
+		},
 	}
 
 	for _, tt := range tests {

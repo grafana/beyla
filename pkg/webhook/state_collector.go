@@ -80,6 +80,11 @@ func classifyStatus(pod *corev1.Pod, matched bool) (Status, string) {
 		return StatusUnmatched, ""
 	}
 
+	// Mirror mutatePod: check alreadyInstrumentedByOther before inspecting LD_PRELOAD.
+	if alreadyInstrumentedByOther(&pod.Spec, &pod.ObjectMeta) {
+		return StatusSkipped, SkipReasonAlreadyInstrumented
+	}
+
 	// our LD_PRELOAD -> instrumented, any other non-empty value -> conflict.
 	seenConflict := false
 	for i := range pod.Spec.Containers {
@@ -96,10 +101,6 @@ func classifyStatus(pod *corev1.Pod, matched bool) (Status, string) {
 	}
 	if seenConflict {
 		return StatusSkipped, SkipReasonConflict
-	}
-
-	if alreadyInstrumentedByOther(&pod.Spec, &pod.ObjectMeta) {
-		return StatusSkipped, SkipReasonAlreadyInstrumented
 	}
 
 	return StatusPendingRestart, ""

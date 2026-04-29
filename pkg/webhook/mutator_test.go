@@ -782,6 +782,100 @@ func TestPodMutator_MutatePod(t *testing.T) {
 	}
 }
 
+func TestDetectLanguage(t *testing.T) {
+	t.Run("languageFromImageName", func(t *testing.T) {
+		tests := []struct {
+			image string
+			want  string
+		}{
+			// Node.js
+			{"node:20", "nodejs"},
+			{"node:alpine", "nodejs"},
+			// node-exporter must NOT match as nodejs (fixed false positive)
+			{"node-exporter:latest", ""},
+			{"prom/node-exporter:v1.8.0", ""},
+			// Python
+			{"python:3.12", "python"},
+			{"python:3.12@sha256:abcdef1234", "python"},
+			// Java
+			{"openjdk:17", "java"},
+			{"eclipse-temurin:21", "java"},
+			{"amazoncorretto:17", "java"},
+			// .NET — only the last path component is matched, so "aspnet" works but bare "runtime" does not
+			{"mcr.microsoft.com/dotnet/aspnet:8.0", "dotnet"},
+			{"dotnet/aspnet:8.0", "dotnet"},
+			{"mcr.microsoft.com/dotnet/runtime:8.0", ""},
+			// Registry with port — must not strip the image name component
+			{"registry:5000/myapp:latest", ""},
+			{"registry:5000/python:latest", "python"},
+			// No language cue
+			{"nginx:latest", ""},
+			{"alpine:3.18", ""},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.image, func(t *testing.T) {
+				assert.Equal(t, tt.want, languageFromImageName(tt.image))
+			})
+		}
+	})
+
+	t.Run("detectLanguageFromPodSpec_command_args", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			image   string
+			command []string
+			args    []string
+			want    string
+		}{
+			{
+				name:    "path_stripped_python",
+				image:   "ubuntu:22.04",
+				command: []string{"/usr/bin/python3"},
+				want:    "python",
+			},
+			{
+				name:    "node_command",
+				image:   "ubuntu:22.04",
+				command: []string{"node"},
+				args:    []string{"index.js"},
+				want:    "nodejs",
+			},
+			{
+				// node-exporter as a command must NOT match nodejs
+				name:    "node_exporter_command_not_nodejs",
+				image:   "ubuntu:22.04",
+				command: []string{"node-exporter"},
+				want:    "",
+			},
+			{
+				name:  "image_takes_priority_over_command",
+				image: "python:3.12",
+				args:  []string{"node"},
+				want:  "python",
+			},
+			{
+				name:  "no_cues",
+				image: "ubuntu:22.04",
+				want:  "",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				p := &corev1.Pod{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Image: tt.image, Command: tt.command, Args: tt.args},
+						},
+					},
+				}
+				assert.Equal(t, tt.want, detectLanguageFromPodSpec(p))
+			})
+		}
+	})
+}
+
 func TestPodMutator_AddLabel(t *testing.T) {
 	tests := []struct {
 		name     string

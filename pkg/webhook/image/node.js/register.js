@@ -49,7 +49,6 @@ function getRequireArgsFromExecArgv() {
 function findNearestPackageJson(startDir) {
   let dir = startDir;
   while (true) {
-    console.error(dir);
     const candidate = path.join(dir, "package.json");
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);
@@ -63,12 +62,10 @@ function moduleHasOtelSdkPackageDependency(modulePath) {
   try {
     const appDir = process.argv[1] ? path.dirname(process.argv[1]) : process.cwd();
     const resolved = require.resolve(modulePath, { paths: [appDir, process.cwd()] });
-    console.error(resolved);
     const pkgJsonPath = findNearestPackageJson(path.dirname(resolved));
     if (!pkgJsonPath) return false;
     const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
     const allDeps = { ...pkg.dependencies, ...pkg.peerDependencies };
-    console.error(allDeps);
     return ("@opentelemetry/sdk-node" in allDeps) || ("@opentelemetry/auto-instrumentations-node" in allDeps);
   } catch (e) {
     return false;

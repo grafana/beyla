@@ -120,8 +120,13 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 	// node name has to be added to extra attributes as there is no dedicated OTEL_INJECTOR_* variable
 	extraResAttrs[semconv.K8SNodeNameKey] =
 		setEnvVarFromFieldPath(container, envOtelK8sNodeName, "spec.nodeName")
-	extraResAttrs[attribute.Key("k8s.pod.ip")] =
-		setEnvVarFromFieldPath(container, envOtelK8sPodIP, "status.podIP")
+
+	if cfg.AddK8sIPAttribute {
+		// k8s.pod.ip is resolved at container start by the kubelet, after the CNI assigns the IP.
+		// semconv v1.37.0 doesn't yet expose K8SPodIPKey (added in v1.40.0), so reference the key directly.
+		extraResAttrs[attribute.Key("k8s.pod.ip")] =
+			setEnvVarFromFieldPath(container, envOtelK8sPodIP, "status.podIP")
+	}
 
 	if cfg.AddK8sUIDAttributes {
 		setEnvVarFromFieldPath(container, envInjectorOtelK8sPodUID, "metadata.uid")

@@ -238,6 +238,7 @@ compile-cache-for-coverage:
 
 # Java agent targets
 JAVA_AGENT_DIR      := .obi-src/pkg/internal/java
+JAVA_AGENT_PATCH_DIR := internal/java
 JAVA_AGENT_EMBED_DIR := vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded
 
 .PHONY: java-build
@@ -252,21 +253,25 @@ java-build:
 java-docker-build:
 	@echo "### Building Java agent with Docker"
 	mkdir -p $(JAVA_AGENT_EMBED_DIR)
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	$(OCI_BIN) build --output type=local,dest=$(JAVA_AGENT_EMBED_DIR) --target=export -f javaagent.Dockerfile .
 
 .PHONY: java-test
 java-test:
 	@echo "### Testing Java agent"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	cd $(JAVA_AGENT_DIR) && gradle test
 
 .PHONY: java-spotless-check
 java-spotless-check:
 	@echo "### Checking Java code formatting"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	cd $(JAVA_AGENT_DIR) && gradle spotlessCheck
 
 .PHONY: java-spotless-apply
 java-spotless-apply:
 	@echo "### Formatting Java code"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	cd $(JAVA_AGENT_DIR) && gradle spotlessApply
 
 .PHONY: java-clean

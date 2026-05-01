@@ -29,7 +29,7 @@ require (
 	go.opentelemetry.io/collector/config/confighttp v0.149.0
 	go.opentelemetry.io/collector/config/configopaque v1.55.0
 	go.opentelemetry.io/collector/config/configoptional v1.55.0
-	go.opentelemetry.io/collector/config/configretry v1.55.0
+	go.opentelemetry.io/collector/config/configretry v1.57.0
 	go.opentelemetry.io/collector/config/configtls v1.55.0
 	go.opentelemetry.io/collector/consumer v1.55.0
 	go.opentelemetry.io/collector/exporter v1.55.0

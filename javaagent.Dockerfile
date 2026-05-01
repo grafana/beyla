@@ -47,4 +47,4 @@ COPY --from=jni-builder /build/target/classes/native/linux-aarch64/libobijni.so 
 RUN gradle build -x buildNativeLib-amd64 -x buildNativeLib-aarch64 --no-daemon
 
 FROM scratch AS export
-COPY --from=builder /build/build/obi-java-agent.jar vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
+COPY --from=builder /build/build/obi-java-agent.jar obi-java-agent.jar

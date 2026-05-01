@@ -268,7 +268,7 @@ java-build:
 	@echo "### Building Java agent"
 	mkdir -p $(JAVA_AGENT_EMBED_DIR)
 	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
-	cd $(JAVA_AGENT_DIR) && gradle build
+	cd $(JAVA_AGENT_DIR) && gradle build -PnativeOnly=true
 	cp $(JAVA_AGENT_DIR)/build/$(JAVA_AGENT) $(JAVA_AGENT_EMBED_DIR)/$(JAVA_AGENT)
 
 .PHONY: java-docker-build

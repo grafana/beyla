@@ -36,6 +36,8 @@ WORKDIR /build
 
 # Copy build files
 COPY .obi-src/pkg/internal/java .
+# Apply Beyla-specific Java patches on top of OBI source
+COPY internal/java/ .
 
 # Pre-built native library from jni-builder stage
 COPY --from=jni-builder /build/target/classes/native/linux-amd64/libobijni.so  agent/target/classes/native/linux-amd64/libobijni.so

@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,8 @@ otel_metrics_export:
   buckets:
     duration_histogram: [0, 1, 2]
   histogram_aggregation: base2_exponential_bucket_histogram
+  extra_span_resource_attributes:
+    - k8s.pod.uid
 prometheus_export:
   ttl: 1s
   buckets:
@@ -64,6 +67,8 @@ prometheus_export:
     response_size_histogram: [0, 10, 20, 22]
     gen_ai_client_token_usage_histogram: [1, 2, 3, 4]
     gen_ai_client_operation_duration_histogram: [5, 6, 7, 8]
+  extra_span_resource_attributes:
+    - k8s.pod.uid
 attributes:
   kubernetes:
     kubeconfig_path: /foo/bar
@@ -132,6 +137,10 @@ network:
 	metaSources["service.namespace"] = []string{"huha.com/yeah"}
 	// uncache internal field
 	cfg.obi = nil
+	// sort some deduplicated values so we can compare consistently
+	slices.Sort(cfg.OTELMetrics.ExtraSpanResourceLabels)
+	slices.Sort(cfg.Prometheus.ExtraSpanResourceLabels)
+
 	assert.Equal(t, &Config{
 		Exec:        cfg.Exec,
 		Port:        cfg.Port,
@@ -224,9 +233,18 @@ network:
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
-			HistogramAggregation:    "base2_exponential_bucket_histogram",
-			TTL:                     5 * time.Minute,
-			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
+			HistogramAggregation: "base2_exponential_bucket_histogram",
+			TTL:                  5 * time.Minute,
+			ExtraSpanResourceLabels: []string{
+				"cloud.availability_zone",
+				"cloud.region",
+				"deployment.environment.name",
+				"k8s.cluster.name",
+				"k8s.namespace.name",
+				"k8s.node.name",
+				"k8s.pod.uid", // non-default: injected in test config
+				"service.version",
+			},
 		},
 		Traces: otelcfg.TracesConfig{
 			TracesProtocol:    otelcfg.ProtocolHTTPProtobuf,
@@ -264,7 +282,16 @@ network:
 				GenAITokenUsageHistogram:     []float64{1, 2, 3, 4},
 				GenAIClientDurationHistogram: []float64{5, 6, 7, 8},
 			},
-			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
+			ExtraSpanResourceLabels: []string{
+				"cloud.availability_zone",
+				"cloud.region",
+				"deployment.environment.name",
+				"k8s.cluster.name",
+				"k8s.namespace.name",
+				"k8s.node.name",
+				"k8s.pod.uid", // non-default: injected in test config
+				"service.version",
+			},
 		},
 		InternalMetrics: imetrics.InternalMetricsConfig{
 			Exporter: imetrics.InternalMetricsExporterDisabled,

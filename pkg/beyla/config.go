@@ -10,6 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/grafana/beyla/v3/pkg/config"
 	botel "github.com/grafana/beyla/v3/pkg/export/otel"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
+	maps2 "github.com/grafana/beyla/v3/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 )
@@ -83,12 +85,6 @@ func DefaultConfig() *Config {
 
 	def.Routes.Unmatch = transform.UnmatchLowCardinality
 
-	if !slices.Contains(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name") {
-		def.OTELMetrics.ExtraSpanResourceLabels = append(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name")
-	}
-	if !slices.Contains(def.Prometheus.ExtraSpanResourceLabels, "k8s.namespace.name") {
-		def.Prometheus.ExtraSpanResourceLabels = append(def.Prometheus.ExtraSpanResourceLabels, "k8s.namespace.name")
-	}
 	return def
 }
 
@@ -605,4 +601,19 @@ func normalizeConfig(c *Config) {
 	if c.NetworkFlows.Enable {
 		c.Metrics.Features |= export.FeatureNetwork
 	}
+
+	c.OTELMetrics.ExtraSpanResourceLabels = appendDefaultResourceLabels(c.OTELMetrics.ExtraSpanResourceLabels)
+	c.Prometheus.ExtraSpanResourceLabels = appendDefaultResourceLabels(c.Prometheus.ExtraSpanResourceLabels)
+}
+
+func appendDefaultResourceLabels(dst []string) []string {
+	// appends mandatory resource labels to a slice and deduplicates it
+	return maps2.SetToSlice(maps2.SliceToSet(append(dst,
+		string(attr.K8sClusterName),
+		string(attr.K8sNamespaceName),
+		string(attr.K8sNodeName),
+		string(semconv.ServiceVersionKey),
+		string(semconv.DeploymentEnvironmentNameKey),
+		string(semconv.CloudAvailabilityZoneKey),
+		string(semconv.CloudRegionKey))))
 }

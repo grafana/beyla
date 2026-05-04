@@ -1,16 +1,43 @@
+# Build JNI native library using Go image (has gcc + apt; installs cross-compiler)
+FROM golang:1.26.1@sha256:595c7847cff97c9a9e76f015083c481d26078f961c9c8dca3923132f51fe12f1 AS jni-builder
+ARG BUILDARCH=amd64
+COPY --from=gradle:9.4.1-jdk21-noble@sha256:5a739da3c34646f72da2634b2d4a5e2b467132eaf6abccfb7bc60e1b502d51b5 /opt/java/openjdk/include /opt/java/include
+WORKDIR /build
+COPY .obi-src/pkg/internal/java/agent/src/main/c/ src/main/c/
+COPY .obi-src/pkg/internal/java/agent/Makefile.jni Makefile.jni
+
+RUN apt-get update && \
+    case "$BUILDARCH" in \
+      amd64) apt-get install -y gcc-aarch64-linux-gnu ;; \
+      arm64) apt-get install -y gcc-x86-64-linux-gnu ;; \
+    esac
+
+RUN case "$BUILDARCH" in \
+      amd64) SLUG=linux-amd64 ;; \
+      arm64) SLUG=linux-aarch64 ;; \
+    esac && \
+    make -f Makefile.jni CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+
+RUN case "$BUILDARCH" in \
+      amd64) CC=aarch64-linux-gnu-gcc; SLUG=linux-aarch64 ;; \
+      arm64) CC=x86_64-linux-gnu-gcc;  SLUG=linux-amd64 ;; \
+    esac && \
+    make -f Makefile.jni CC=$CC JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+
 # Build the Java OBI agent
 FROM gradle:9.4.1-jdk21-noble@sha256:5a739da3c34646f72da2634b2d4a5e2b467132eaf6abccfb7bc60e1b502d51b5 AS javaagent-builder
-
-RUN apt update
-RUN apt install -y clang llvm
 
 WORKDIR /build
 
 # Copy build files
 COPY .obi-src/pkg/internal/java .
 
-# Build the project
-RUN gradle build --no-daemon
+# Pre-built native library from jni-builder stage
+COPY --from=jni-builder /build/target/classes/native/linux-amd64/libobijni.so  agent/target/classes/native/linux-amd64/libobijni.so
+COPY --from=jni-builder /build/target/classes/native/linux-aarch64/libobijni.so agent/target/classes/native/linux-aarch64/libobijni.so
+
+# Build the project (skip native lib compilation, already done above)
+RUN gradle build -x buildNativeLib-amd64 -x buildNativeLib-aarch64 --no-daemon
 
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.

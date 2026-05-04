@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -35,14 +34,7 @@ const (
 )
 
 //go:embed embedded/obi-java-agent.jar
-var embeddedJavaAgentRaw []byte
-
-// Aliases used for testing.
-var (
-	embeddedJavaAgentBytes = embeddedJavaAgentRaw
-	userCacheDir           = os.UserCacheDir
-	renameFile             = os.Rename
-)
+var embeddedJavaAgentBytes []byte
 
 type JavaInjectError struct {
 	Message string
@@ -53,26 +45,20 @@ func (e *JavaInjectError) Error() string {
 }
 
 type JavaInjector struct {
-	log       *slog.Logger
-	cfg       *obi.Config
-	agentPath string
+	log *slog.Logger
+	cfg *obi.Config
 }
 
-func NewJavaInjector(cfg *obi.Config) (*JavaInjector, error) {
+func NewJavaInjector(cfg *obi.Config) *JavaInjector {
 	if !cfg.Java.Enabled {
-		return nil, nil
+		return nil
 	}
-
-	agentPath, err := ensureEmbeddedAgentInCache()
-	if err != nil {
-		return nil, fmt.Errorf("unable to extract embedded OBI java agent jar: %w", err)
-	}
+	ensureEmbeddedAgent()
 
 	return &JavaInjector{
-		cfg:       cfg,
-		log:       slog.With("component", "javaagent.Injector"),
-		agentPath: agentPath,
-	}, nil
+		cfg: cfg,
+		log: slog.With("component", "javaagent.Injector"),
+	}
 }
 
 func tempDirPath(root, dir string) (string, bool) {
@@ -211,92 +197,12 @@ func (i *JavaInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 	return nil
 }
 
-func ensureEmbeddedAgentInCache() (string, error) {
+func ensureEmbeddedAgent() {
 	if len(embeddedJavaAgentBytes) == 0 || strings.TrimSpace(string(embeddedJavaAgentBytes)) == javaAgentEmbedPlaceholder {
-		return "", errors.New("embedded OBI java agent artifact is missing; run `make java-docker-build`")
+		// Make sure to run `make java-docker-build` to build the Java Agent
+		// so that it can be embedded during build.
+		panic("embedded OBI java agent artifact is missing")
 	}
-
-	cacheRoot, err := userCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("unable to resolve user cache directory: %w", err)
-	}
-
-	cacheDir := filepath.Join(cacheRoot, "obi", "java")
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		return "", fmt.Errorf("unable to create java agent cache directory: %w", err)
-	}
-
-	checksum := sha256.Sum256(embeddedJavaAgentBytes)
-	// The final cache filename is content-addressed so identical embedded bytes
-	// always resolve to the same reusable artifact path.
-	targetPath := filepath.Join(cacheDir, fmt.Sprintf("obi-java-agent-%x.jar", checksum))
-
-	// Fast path: if the checksum-addressed artifact already exists and matches
-	// expected size, reuse it without rewriting.
-	if info, err := os.Stat(targetPath); err == nil {
-		if !info.IsDir() && info.Size() == int64(len(embeddedJavaAgentBytes)) {
-			return targetPath, nil
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("unable to stat cached java agent: %w", err)
-	}
-
-	// Stage writes in a temporary file first so readers never observe a partially
-	// written jar if this process fails mid-write.
-	tmpFile, err := os.CreateTemp(cacheDir, "obi-java-agent-*.jar")
-	if err != nil {
-		return "", fmt.Errorf("unable to create temporary java agent file: %w", err)
-	}
-
-	tmpPath := tmpFile.Name()
-	cleanup := true
-	defer func() {
-		if cleanup {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	written, err := tmpFile.Write(embeddedJavaAgentBytes)
-	func() {
-		defer func() {
-			e := tmpFile.Close()
-			if e != nil {
-				err = errors.Join(err, e)
-			}
-		}()
-		if err != nil {
-			return
-		}
-		if written != len(embeddedJavaAgentBytes) {
-			err = errors.New("short write")
-			return
-		}
-		if err = tmpFile.Chmod(0o644); err != nil {
-			err = fmt.Errorf("unable to set permissions on temporary java agent file: %w", err)
-			return
-		}
-	}()
-	if err != nil {
-		return "", fmt.Errorf("unable to write embedded java agent: %w", err)
-	}
-
-	// Publish by atomic rename (same directory/filesystem), which also behaves
-	// safely under concurrent writers of identical content.
-	if err := renameFile(tmpPath, targetPath); err != nil {
-		// A concurrent OBI process may have already published the same
-		// checksum-addressed file between our initial stat and rename.
-		// If the target is now present and valid, treat this as success.
-		if info, statErr := os.Stat(targetPath); statErr == nil {
-			if !info.IsDir() && info.Size() == int64(len(embeddedJavaAgentBytes)) {
-				return targetPath, nil
-			}
-		}
-
-		return "", fmt.Errorf("unable to move java agent into cache: %w", err)
-	}
-
-	cleanup = false // Renamed, tmpPath no longer exists.
-	return targetPath, nil
 }
 
 // to be changed in tests
@@ -318,12 +224,7 @@ func (i *JavaInjector) copyAgent(ie *ebpf.Instrumentable) (string, error) {
 
 	agentPathHost := filepath.Join(fullTempDir, ObiJavaAgentFileName)
 
-	source, err := os.Open(i.agentPath)
-	if err != nil {
-		return "", fmt.Errorf("unable to access OBI java agent: %w", err)
-	}
-
-	defer source.Close()
+	source := bytes.NewReader(embeddedJavaAgentBytes)
 	target, err := os.CreateTemp(fullTempDir, ObiJavaAgentFileName+".tmp-*")
 	if err != nil {
 		return "", fmt.Errorf("unable to create target OBI java agent: %w", err)

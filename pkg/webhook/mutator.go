@@ -56,6 +56,7 @@ const (
 	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
 	envInjectorDebugName              = "OTEL_INJECTOR_LOG_LEVEL"
 	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // stored in OTEL_INJECTOR_RESOURCE_ATTRIBUTES, since there's no individual OTEL_INJECTOR_K8S_NODE_NAME
+	envOtelK8sPodIP                   = "OTEL_RESOURCE_ATTRIBUTES_POD_IP"
 	envVarSDKVersion                  = "BEYLA_INJECTOR_SDK_PKG_VERSION"
 	envOtelTracesSamplerName          = "OTEL_TRACES_SAMPLER"
 	envOtelTracesSamplerArgName       = "OTEL_TRACES_SAMPLER_ARG"

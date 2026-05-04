@@ -148,7 +148,7 @@ type NetworkConfig struct {
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
 	ReverseDNS rdns.ReverseDNS `yaml:"reverse_dns"`
-	// Print the network flows in the Standard Output, if true
+	// Print enables printing the network flows to the Standard Output
 	Print bool `yaml:"print_flows" env:"OTEL_EBPF_NETWORK_PRINT_FLOWS" validate:"boolean"`
 
 	// CIDRs list, to be set as the "src.cidr" and "dst.cidr"

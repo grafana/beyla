@@ -101,6 +101,8 @@ func SQLParseError(kind request.SQLKind, buf []uint8) *request.SQLError {
 		sqlErr = parseMySQLError(buf)
 	case request.DBPostgres:
 		sqlErr = parsePostgresError(buf)
+	case request.DBMSSQL:
+		sqlErr = parseMSSQLError(buf)
 	default:
 		return nil // unsupported SQL kind
 	}
@@ -114,6 +116,8 @@ func SQLParseCommandID(kind request.SQLKind, buf []byte) string {
 		return mysqlCommandIDToString(parseMySQLCommandID(buf))
 	case request.DBPostgres:
 		return postgresMessageTypeToString(parsePostgresMessageType(buf))
+	case request.DBMSSQL:
+		return mssqlCommandIDToString(parseMSSQLCommandID(buf))
 	default:
 		return ""
 	}

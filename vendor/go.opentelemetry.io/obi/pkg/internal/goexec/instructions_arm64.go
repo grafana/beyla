@@ -20,6 +20,8 @@ func FindReturnOffsets(baseOffset uint64, data []byte) ([]uint64, error) {
 			returnOffsets = append(returnOffsets, baseOffset+uint64(index))
 		}
 
+		// arm64 instructions are fixed 4 bytes; advance unconditionally even on
+		// decode errors so that truncated or unrecognized words are skipped cleanly.
 		index += armInstructionSize
 	}
 

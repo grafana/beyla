@@ -83,6 +83,9 @@ const (
 	ProtocolTypeHTTP // not used, written for consistency
 	ProtocolTypeKafka
 	ProtocolTypeMQTT // placeholder for future kernel-space detection
+	ProtocolTypeMSSQL
+	ProtocolTypeNATS // placeholder for future kernel-space detection
+	ProtocolTypeAMQP // placeholder for future kernel-space detection
 )
 
 const (
@@ -193,6 +196,7 @@ type EBPFParseContext struct {
 	mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 	postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
 	postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
+	mssqlPreparedStatements    *simplelru.LRU[mssqlPreparedStatementsKey, string]
 	kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 	payloadExtraction          config.PayloadExtraction
 	httpEnricher               *ebpfhttp.HTTPEnricher
@@ -222,6 +226,50 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
+func isASCIIAlnumByte(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if isASCIIAlnumByte(c) || c == '.' || c == '_' || c == ' ' || c == '-' {
+			continue
+		}
+		return false
+	}
+
+	return true
+}
+
+func isASCIIAlnumBytes(field []byte) bool {
+	if len(field) == 0 {
+		return false
+	}
+
+	for _, b := range field {
+		if !isASCIIAlnumByte(b) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isASCIIDecimal(field []byte) bool {
+	if len(field) == 0 {
+		return false
+	}
+
+	for _, b := range field {
+		if b < '0' || b > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
 func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.Span], filter ServiceFilter) *EBPFParseContext {
 	var (
 		err                        error
@@ -231,6 +279,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		mysqlPreparedStatements    *simplelru.LRU[mysqlPreparedStatementsKey, string]
 		postgresPreparedStatements *simplelru.LRU[postgresPreparedStatementsKey, string]
 		postgresPortals            *simplelru.LRU[postgresPortalsKey, string]
+		mssqlPreparedStatements    *simplelru.LRU[mssqlPreparedStatementsKey, string]
 		kafkaTopicUUIDToName       *simplelru.LRU[kafkaparser.UUID, string]
 		mongoRequestCache          PendingMongoDBRequests
 		payloadExtraction          config.PayloadExtraction
@@ -285,6 +334,11 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 			ptlog().Error("failed to create Postgres portals cache", "error", err)
 		}
 
+		mssqlPreparedStatements, err = simplelru.NewLRU[mssqlPreparedStatementsKey, string](cfg.MSSQLPreparedStatementsCacheSize, nil)
+		if err != nil {
+			ptlog().Error("failed to create MSSQL prepared statements cache", "error", err)
+		}
+
 		kafkaTopicUUIDToName, err = simplelru.NewLRU[kafkaparser.UUID, string](cfg.KafkaTopicUUIDCacheSize, nil)
 		if err != nil {
 			ptlog().Error("failed to create Kafka topic UUID to name cache", "error", err)
@@ -312,6 +366,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		mysqlPreparedStatements:    mysqlPreparedStatements,
 		postgresPreparedStatements: postgresPreparedStatements,
 		postgresPortals:            postgresPortals,
+		mssqlPreparedStatements:    mssqlPreparedStatements,
 		kafkaTopicUUIDToName:       kafkaTopicUUIDToName,
 		payloadExtraction:          payloadExtraction,
 		httpEnricher:               httpEnricher,
@@ -463,10 +518,10 @@ func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
 		// use one predefined field name to store either of them.
 		spec.Programs["obi_protocol_http"] = spec.Programs["obi_protocol_http_legacy"]
 		spec.Programs["obi_protocol_http"].Name = "obi_protocol_http"
+		spec.Programs["obi_continue_protocol_http"] = spec.Programs["obi_continue_protocol_http_legacy"]
+		spec.Programs["obi_continue_protocol_http"].Name = "obi_continue_protocol_http"
 	}
-	// Hack: insert a dummy unused program in order to be able to use bpf2go generated struct to load
-	// the collection.
-	spec.Programs["obi_protocol_http_legacy"] = &ebpf.ProgramSpec{
+	dummy := &ebpf.ProgramSpec{
 		Name: "obi_dummy",
 		Type: ebpf.Kprobe,
 		Instructions: asm.Instructions{
@@ -475,6 +530,10 @@ func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
 		},
 		License: "MIT",
 	}
+	// Hack: insert dummy unused programs in order to be able to use bpf2go generated struct to load
+	// the collection.
+	spec.Programs["obi_protocol_http_legacy"] = dummy
+	spec.Programs["obi_continue_protocol_http_legacy"] = dummy
 }
 
 // Injectable for tests
@@ -547,7 +606,7 @@ func (connInfo *BPFConnInfo) reqHostInfo() (source, target string) {
 func isClientEvent(et uint8) bool {
 	switch request.EventType(et) {
 	case request.EventTypeGRPCClient, request.EventTypeHTTPClient, request.EventTypeRedisClient,
-		request.EventTypeKafkaClient, request.EventTypeSQLClient, request.EventTypeMongoClient,
+		request.EventTypeKafkaClient, request.EventTypeNATSClient, request.EventTypeAMQPClient, request.EventTypeSQLClient, request.EventTypeMongoClient,
 		request.EventTypeFailedConnect:
 		return true
 	}

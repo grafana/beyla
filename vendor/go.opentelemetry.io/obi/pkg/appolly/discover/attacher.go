@@ -87,12 +87,7 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	ta.log = slog.With("component", "discover.traceAttacher")
 	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
 	ta.nodeInjector = nodejs.NewNodeInjector(ta.Cfg)
-	javaInjector, err := javaagent.NewJavaInjector(ta.Cfg)
-	if err != nil {
-		ta.log.Warn("unable to inject OBI java agent, Java TLS telemetry generation will not work", "error", err)
-	} else {
-		ta.javaInjector = javaInjector
-	}
+	ta.javaInjector = javaagent.NewJavaInjector(ta.Cfg)
 	ta.processInstances = maps.MultiCounter[uint64]{}
 	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.NewPIDsFilter(&ta.Cfg.Discovery, slog.With("component", "ebpfCommon.CommonPIDsFilter"), ta.Metrics)
 	ta.routeHarvester = harvest.NewRouteHarvester(&ta.Cfg.Discovery.RouteHarvestConfig, ta.Cfg.Discovery.DisabledRouteHarvesters, ta.Cfg.Discovery.RouteHarvesterTimeout)

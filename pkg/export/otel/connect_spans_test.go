@@ -35,7 +35,7 @@ func TestConnection_Spans(t *testing.T) {
 				instrumentations.InstrumentationALL,
 			},
 			SamplerConfig: services.SamplerConfig{Name: "always_on"},
-			MaxQueueSize:  4096,
+			BatchMaxSize:  4096,
 			BatchTimeout:  10 * time.Millisecond,
 		},
 		request.UnresolvedNames{},

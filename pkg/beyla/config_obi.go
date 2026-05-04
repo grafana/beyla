@@ -104,4 +104,9 @@ func OverrideOBIGlobalConfig() {
 		Prom:    "beyla_stat_tcp_rtt_seconds",
 		OTEL:    "beyla.stat.tcp.rtt",
 	}
+	attributes.StatTCPFailedConnections = attributes.Name{
+		Section: "beyla.stat.tcp.failed.connections",
+		Prom:    "beyla_stat_tcp_failed_connections",
+		OTEL:    "beyla.stat.tcp.failed.connections",
+	}
 }

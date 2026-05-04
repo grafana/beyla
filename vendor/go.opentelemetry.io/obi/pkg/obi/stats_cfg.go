@@ -43,7 +43,7 @@ type StatsConfig struct {
 	// This is an experimental feature and it is not guaranteed to work on most virtualized environments
 	// for external traffic.
 	ReverseDNS rdns.ReverseDNS `yaml:"reverse_dns"`
-	// Print the stats in the Standard Output, if true
+	// Print enables printing the stats to the Standard Output
 	Print bool `yaml:"print_stats" env:"OTEL_EBPF_STATS_PRINT_STATS" validate:"boolean"`
 
 	GeoIP geoip.GeoIP `yaml:"geo_ip"`

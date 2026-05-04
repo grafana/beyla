@@ -375,15 +375,14 @@ transform_go_imports_and_paths() {
 
     # Point the OBI image build (in dockerutil_test.go) at the Beyla Dockerfile.
     if [[ -f "$OBI_DEST/dockerutil_test.go" ]]; then
-        sed_i -e "s|Dockerfile:   \".obi-src/${OBI_DOCKERFILE}\"|Dockerfile:   \"${BEYLA_DOCKERFILE}\"|g" \
+        sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
             "$OBI_DEST/dockerutil_test.go"
     fi
 
     # go_otel BuildImage: use .obi-src as context (go_otel Dockerfile expects
     # internal/test/integration/components/go_otel/ relative to context).
     if [[ -f "$OBI_DEST/http_go_otel_test.go" ]]; then
-        sed_i -e 's|ContextDir:   pathRoot,|ContextDir:   pathObiSrc,|' \
-            -e 's|Dockerfile:   "\.obi-src/internal/test/integration/components/go_otel/Dockerfile"|Dockerfile:   "internal/test/integration/components/go_otel/Dockerfile"|' \
+        sed_i -e 's|buildDockerImage(t\.Context(), t\.Output(), "hatest-testserver", "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")|buildDockerImageWithContext(t.Context(), t.Output(), "hatest-testserver", pathObiSrc, "internal/test/integration/components/go_otel/Dockerfile")|' \
             "$OBI_DEST/http_go_otel_test.go"
     fi
 

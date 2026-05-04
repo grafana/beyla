@@ -17,6 +17,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: grafana/writers-toolkit/vale-action@f49dd90f007967990095ac2d18c5bdf37b412a5f # vale-action/v1
+      - uses: grafana/writers-toolkit/vale-action@31bf09e570ccfeee9325769e225a59d05c262471 # vale-action/v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

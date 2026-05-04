@@ -65,6 +65,12 @@ For the inter-zone bytes metric, the default attributes are `k8s.cluster.name`, 
 | `k8s.cluster.name` / `k8s_cluster_name`     | Name of the Kubernetes cluster. Beyla can auto-detect it on Google Cloud, Microsoft Azure, and Amazon Web Services. For other providers, set the `BEYLA_KUBE_CLUSTER_NAME` property |
 | `src.zone` / `src_zone`                     | Name of the source Cloud Availability Zone                                                                                                                                          |
 | `dst.zone` / `dst_zone`                     | Name of the destination Cloud Availability Zone                                                                                                                                     |
+| `network.type` / `network_type`             | Network type (for example, `IPv4` or `IPv6`)                                                                                                                                        |
+| `network.protocol.name` / `network_protocol_name` | Network protocol name (for example, `TCP` or `UDP`)                                                                                                                        |
+| `src.country` / `src_country`               | If the [`geoip` configuration section](config/) is set, the country of the source IP address                                                                                      |
+| `dst.country` / `dst_country`               | If the [`geoip` configuration section](config/) is set, the country of the destination IP address                                                                                 |
+| `src.asn` / `src_asn`                       | If the [`geoip` configuration section](config/) is set, the ASN of the source IP address                                                                                          |
+| `dst.asn` / `dst_asn`                       | If the [`geoip` configuration section](config/) is set, the ASN of the destination IP address                                                                                     |
 
 ### How to specify reported attributes
 

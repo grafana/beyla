@@ -48,9 +48,10 @@ func (r recordGetters) get(name attr.Name) (attributes.Getter[*Record, attribute
 			return attribute.String(string(attr.NetworkType), transport.NetworkType(r.NetAttrs.EthProtocol).String())
 		}
 	case attr.NetworkProtocol:
+		guesser := r.cfg.serverPortGuesser()
 		getter = func(r *Record) attribute.KeyValue {
 			return attribute.String(string(attr.NetworkProtocol),
-				transport.ApplicationPortToString(serverPort(r, serverPortOrdinalGuess)))
+				transport.ApplicationPortToString(serverPort(r, guesser)))
 		}
 	case attr.SrcAddress:
 		getter = func(r *Record) attribute.KeyValue {

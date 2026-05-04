@@ -13,10 +13,13 @@ import (
 func sqlKind(b *largebuf.LargeBuffer) request.SQLKind {
 	if isPostgres(b) {
 		return request.DBPostgres
-	} else if isMySQL(b) {
+	}
+	if isMySQL(b) {
 		return request.DBMySQL
 	}
-
+	if isMSSQL(b) {
+		return request.DBMSSQL
+	}
 	return request.DBGeneric
 }
 
@@ -26,19 +29,6 @@ func sqlKind(b *largebuf.LargeBuffer) request.SQLKind {
 // traffic that may have SQL like keywords as SQL.
 func validSQL(op, table string, sqlKind request.SQLKind) bool {
 	return op != "" && (sqlKind != request.DBGeneric || table != "")
-}
-
-func isASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-			c == '.' || c == '_' || c == ' ' || c == '-' {
-			continue
-		}
-		return false
-	}
-
-	return true
 }
 
 func toLowerASCII(c byte) byte {
@@ -102,6 +92,8 @@ func detectSQLPayload(useHeuristics bool, b *largebuf.LargeBuffer) (string, stri
 			op, table, sql = postgresPreparedStatements(b)
 		case request.DBMySQL:
 			op, table, sql = mysqlPreparedStatements(view)
+		case request.DBMSSQL:
+			op, table, sql = mssqlExtractBatchSQL(b)
 		}
 	}
 

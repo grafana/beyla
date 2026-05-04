@@ -55,7 +55,7 @@ const wildCard = "/**"
 type RoutesConfig struct {
 	// Unmatch specifies what to do when a route pattern is not matched
 	Unmatch UnmatchType `yaml:"unmatched"`
-	// Patterns of the paths that will match to a route
+	// Patterns defines the URL path patterns that will match to a route
 	Patterns []string `yaml:"patterns"`
 	// Deprecated: To be removed and replaced by a collector-like filtering mechanism
 	IgnorePatterns []string `yaml:"ignored_patterns"`

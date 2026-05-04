@@ -166,6 +166,7 @@ network:
 			},
 			MySQLPreparedStatementsCacheSize:    1024,
 			PostgresPreparedStatementsCacheSize: 1024,
+			MSSQLPreparedStatementsCacheSize:    1024,
 			MongoRequestsCacheSize:              1024,
 			KafkaTopicUUIDCacheSize:             1024,
 			CouchbaseDBCacheSize:                1024,
@@ -223,7 +224,11 @@ network:
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
-			HistogramAggregation:    "base2_exponential_bucket_histogram",
+			HistogramAggregation: "base2_exponential_bucket_histogram",
+			ExponentialHistogram: otelcfg.ExponentialHistogramConfig{
+				MaxSize:  160,
+				MaxScale: 20,
+			},
 			TTL:                     5 * time.Minute,
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
@@ -231,7 +236,8 @@ network:
 			TracesProtocol:    otelcfg.ProtocolHTTPProtobuf,
 			CommonEndpoint:    "localhost:3131",
 			TracesEndpoint:    "localhost:3232",
-			MaxQueueSize:      4096,
+			BatchMaxSize:      4096,
+			QueueSize:         16384,
 			BatchTimeout:      15 * time.Second,
 			ReportersCacheLen: ReporterLRUSize,
 			Instrumentations: []instrumentations.Instrumentation{
@@ -241,6 +247,8 @@ network:
 				instrumentations.InstrumentationRedis,
 				instrumentations.InstrumentationKafka,
 				instrumentations.InstrumentationMQTT,
+				instrumentations.InstrumentationNATS,
+				instrumentations.InstrumentationAMQP,
 				instrumentations.InstrumentationMongo,
 				instrumentations.InstrumentationCouchbase,
 				instrumentations.InstrumentationMemcached,
@@ -252,6 +260,7 @@ network:
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
+			NativeHistogram:             prom.DefaultNativeHistogramConfig,
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: export.Buckets{

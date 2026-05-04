@@ -6,8 +6,8 @@ package config // import "go.opentelemetry.io/obi/pkg/config"
 // InstanceIDConfig configures how OBI will get the Instance ID of the traces/metrics
 // from the current hostname + the instrumented process PID
 type InstanceIDConfig struct {
-	// HostnameDNSResolution is true if OBI uses the DNS to resolve the local hostname or
-	// false if it uses the local hostname.
+	// HostnameDNSResolution controls whether OBI uses the DNS to resolve the local hostname.
+	// If false, the local hostname is used as-is.
 	HostnameDNSResolution bool `yaml:"dns" env:"OTEL_EBPF_HOSTNAME_DNS_RESOLUTION"`
 	// OverrideHostname can be optionally set to avoid resolving any hostname and using this
 	// value. OBI will anyway attach the process ID to the given hostname for composing

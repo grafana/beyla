@@ -179,8 +179,8 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 			// good!
 		case <-q.sendTimeout.C:
 			q.logger.Warn("an internal queue seems to be blocked. You might need to change "+
-				"some of the following configuration options: OTEL_EBPF_OTLP_TRACES_MAX_QUEUE_SIZE, "+
-				"OTEL_EBPF_CHANNEL_BUFFER_LEN, OTEL_EBPF_CHANNEL_SEND_TIMEOUT, "+
+				"some of the following configuration options: OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE, "+
+				"OTEL_EBPF_OTLP_TRACES_QUEUE_SIZE, OTEL_EBPF_CHANNEL_BUFFER_LEN, OTEL_EBPF_CHANNEL_SEND_TIMEOUT, "+
 				"OTEL_EBPF_BPF_BATCH_LENGTH, OTEL_EBPF_BPF_BATCH_TIMEOUT",
 				slog.Duration("timeout", q.cfg.sendTimeout),
 				slog.Int("queueLen", len(d.ch)),

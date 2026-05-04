@@ -52,6 +52,9 @@ jobs:
       - name: Generate and vendor OBI
         run: make vendor-obi
 
+      - name: Check config schema is up to date
+        run: make check-config-schema
+
       - name: Build unit test matrix
         id: build-matrix
         env:

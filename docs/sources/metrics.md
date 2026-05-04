@@ -147,6 +147,12 @@ For more information about the OpenTelemetry semantic conventions for each metri
 | `beyla.network.flow.bytes`     | `src.port`                   | hidden                                            |
 | `beyla.network.flow.bytes`     | `src.zone` (only Kubernetes) | hidden                                            |
 | `beyla.network.flow.bytes`     | `transport`                  | hidden                                            |
+| `beyla.network.flow.bytes`     | `network.type`               | hidden                                            |
+| `beyla.network.flow.bytes`     | `network.protocol.name`      | hidden                                            |
+| `beyla.network.flow.bytes`     | `src.country`                | shown if the `geoip` configuration section exists |
+| `beyla.network.flow.bytes`     | `src.asn`                    | shown if the `geoip` configuration section exists |
+| `beyla.network.flow.bytes`     | `dst.country`                | shown if the `geoip` configuration section exists |
+| `beyla.network.flow.bytes`     | `dst.asn`                    | shown if the `geoip` configuration section exists |
 
 {{< admonition type="note" >}}
 The `beyla.network.inter.zone.bytes` metric supports the same set of attributes as `beyla.network.flow.bytes`,

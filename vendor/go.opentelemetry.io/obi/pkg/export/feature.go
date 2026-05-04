@@ -23,7 +23,8 @@ const (
 	// zero value.
 	FeatureEmpty Features = 1 << iota
 	FeatureNetwork
-	FeatureStats
+	FeatureStatsTCPRtt
+	FeatureStatsTCPFailedConnections
 	FeatureNetworkInterZone
 	FeatureApplicationRED
 	FeatureSpanLegacy
@@ -35,21 +36,26 @@ const (
 	FeatureAll = Features(^uint(0)) // all bits to 1
 )
 
+// FeatureStats enables all stat metrics.
+const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections
+
 // FeatureMapper stays public so any extension package can add and remove feature
 // definitions before loading them.
 var FeatureMapper = map[string]Features{
-	"stats":                     FeatureStats,
-	"network":                   FeatureNetwork,
-	"network_inter_zone":        FeatureNetworkInterZone,
-	"application":               FeatureApplicationRED,
-	"application_span":          FeatureSpanLegacy,
-	"application_span_otel":     FeatureSpanOTel,
-	"application_span_sizes":    FeatureSpanSizes,
-	"application_service_graph": FeatureGraph,
-	"application_host":          FeatureApplicationHost,
-	"ebpf":                      FeatureEBPF,
-	"all":                       FeatureAll,
-	"*":                         FeatureAll,
+	"stats":                        FeatureStats,
+	"stats_tcp_rtt":                FeatureStatsTCPRtt,
+	"stats_tcp_failed_connections": FeatureStatsTCPFailedConnections,
+	"network":                      FeatureNetwork,
+	"network_inter_zone":           FeatureNetworkInterZone,
+	"application":                  FeatureApplicationRED,
+	"application_span":             FeatureSpanLegacy,
+	"application_span_otel":        FeatureSpanOTel,
+	"application_span_sizes":       FeatureSpanSizes,
+	"application_service_graph":    FeatureGraph,
+	"application_host":             FeatureApplicationHost,
+	"ebpf":                         FeatureEBPF,
+	"all":                          FeatureAll,
+	"*":                            FeatureAll,
 }
 
 func (Features) JSONSchema() *jsonschema.Schema {
@@ -176,6 +182,14 @@ func (f Features) NetworkBytes() bool {
 
 func (f Features) StatMetrics() bool {
 	return f.any(FeatureStats)
+}
+
+func (f Features) StatsTCPRtt() bool {
+	return f.any(FeatureStatsTCPRtt)
+}
+
+func (f Features) StatsTCPFailedConnections() bool {
+	return f.any(FeatureStatsTCPFailedConnections)
 }
 
 func (f Features) NetworkInterZone() bool {

@@ -169,6 +169,17 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		}
 	}
 
+	// Embedding detection uses hostname+path matching and must run before
+	// header-based detectors (OpenAI, Anthropic, etc.) so that known
+	// embedding-only providers are not misclassified when they return
+	// OpenAI-compatible response headers.
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Embedding.Enabled {
+		span, ok := ebpfhttp.EmbeddingSpan(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAI.Enabled {
 		span, ok := ebpfhttp.OpenAISpan(&httpSpan, req, resp)
 		if ok {
@@ -190,6 +201,13 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		}
 	}
 
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Qwen.Enabled {
+		span, ok := ebpfhttp.QwenSpan(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Bedrock.Enabled {
 		span, ok := ebpfhttp.BedrockSpan(&httpSpan, req, resp)
 		if ok {
@@ -197,10 +215,19 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		}
 	}
 
-	if parseCtx != nil && parseCtx.payloadExtraction.HTTP.JSONRPC.Enabled {
-		span, ok := ebpfhttp.JSONRPCSpan(&httpSpan, req, resp)
-		if ok {
-			return span
+	// Parse JSON-RPC once and reuse for both MCP and plain JSON-RPC
+	// detection, since MCP is a protocol layer on top of JSON-RPC.
+	if parseCtx != nil && (parseCtx.payloadExtraction.HTTP.GenAI.MCP.Enabled || parseCtx.payloadExtraction.HTTP.JSONRPC.Enabled) {
+		if parsed := ebpfhttp.TryParseJSONRPC(req); parsed != nil {
+			if parseCtx.payloadExtraction.HTTP.GenAI.MCP.Enabled {
+				span, ok := ebpfhttp.MCPSpanFromParsed(&httpSpan, req, resp, parsed)
+				if ok {
+					return span
+				}
+			}
+			if parseCtx.payloadExtraction.HTTP.JSONRPC.Enabled {
+				return ebpfhttp.JSONRPCSpanFromParsed(&httpSpan, resp, parsed)
+			}
 		}
 	}
 

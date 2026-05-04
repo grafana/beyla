@@ -200,6 +200,28 @@ vendor-obi-tests:
 	go mod tidy
 	go mod vendor
 
+CONFIG_SCHEMA_FILE ?= docs/config-schema.json
+
+.PHONY: generate-config-schema
+generate-config-schema:
+	@echo "### Generating JSON schema for Beyla configuration"
+	@mkdir -p $(dir $(CONFIG_SCHEMA_FILE))
+	go run ./cmd/beyla-schema -output $(CONFIG_SCHEMA_FILE)
+
+.PHONY: check-config-schema
+check-config-schema:
+	@echo "### Checking if JSON schema is up-to-date"
+	@mkdir -p $(dir $(CONFIG_SCHEMA_FILE))
+	@go run ./cmd/beyla-schema -output $(CONFIG_SCHEMA_FILE).tmp
+	@if ! diff -q $(CONFIG_SCHEMA_FILE) $(CONFIG_SCHEMA_FILE).tmp > /dev/null 2>&1; then \
+		echo "JSON schema is out of date. Run 'make generate-config-schema' to update it."; \
+		echo "Diff:"; \
+		diff $(CONFIG_SCHEMA_FILE) $(CONFIG_SCHEMA_FILE).tmp || true; \
+		rm -f $(CONFIG_SCHEMA_FILE).tmp; \
+		exit 1; \
+	fi
+	@rm -f $(CONFIG_SCHEMA_FILE).tmp
+
 .PHONY: vendor-obi
 vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor
 
@@ -238,34 +260,40 @@ compile-cache-for-coverage:
 
 # Java agent targets
 JAVA_AGENT_DIR      := .obi-src/pkg/internal/java
+JAVA_AGENT_PATCH_DIR := internal/java
 JAVA_AGENT_EMBED_DIR := vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded
 
 .PHONY: java-build
 java-build:
 	@echo "### Building Java agent"
 	mkdir -p $(JAVA_AGENT_EMBED_DIR)
-	cd $(JAVA_AGENT_DIR) && gradle build
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
+	cd $(JAVA_AGENT_DIR) && gradle build -PnativeOnly=true
 	cp $(JAVA_AGENT_DIR)/build/$(JAVA_AGENT) $(JAVA_AGENT_EMBED_DIR)/$(JAVA_AGENT)
 
 .PHONY: java-docker-build
 java-docker-build:
 	@echo "### Building Java agent with Docker"
 	mkdir -p $(JAVA_AGENT_EMBED_DIR)
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	$(OCI_BIN) build --output type=local,dest=$(JAVA_AGENT_EMBED_DIR) --target=export -f javaagent.Dockerfile .
 
 .PHONY: java-test
 java-test:
 	@echo "### Testing Java agent"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	cd $(JAVA_AGENT_DIR) && gradle test
 
 .PHONY: java-spotless-check
 java-spotless-check:
 	@echo "### Checking Java code formatting"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	cd $(JAVA_AGENT_DIR) && gradle spotlessCheck
 
 .PHONY: java-spotless-apply
 java-spotless-apply:
 	@echo "### Formatting Java code"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
 	cd $(JAVA_AGENT_DIR) && gradle spotlessApply
 
 .PHONY: java-clean
@@ -508,8 +536,18 @@ oats-test-ai: oats-prereq
 	mkdir -p internal/testgenerated/oats/ai/$(TEST_OUTPUT)/run
 	cd internal/testgenerated/oats/ai && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+.PHONY: oats-test-nats
+oats-test-nats: oats-prereq
+	mkdir -p internal/testgenerated/oats/nats/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/nats && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-amqp
+oats-test-amqp: oats-prereq
+	mkdir -p internal/testgenerated/oats/amqp/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/amqp && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
 .PHONY: oats-test
-oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai
+oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai oats-test-nats oats-test-amqp
 	$(MAKE) itest-coverage-data
 
 .PHONY: oats-test-debug

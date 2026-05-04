@@ -23,13 +23,11 @@ package flow // import "go.opentelemetry.io/obi/pkg/internal/netolly/flow"
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
 
-	cebpf "github.com/cilium/ebpf"
-
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -54,7 +52,7 @@ type MapTracer struct {
 
 type mapFetcher interface {
 	LookupAndDeleteMap() map[ebpf.NetFlowId]*ebpf.NetFlowMetrics
-	FlowPacketStatsMap() *cebpf.Map
+	LookupPacketStats() (ebpf.NetPacketCount, error)
 }
 
 func NewMapTracer(ctxInfo *global.ContextInfo, fetcher mapFetcher, evictionTimeout time.Duration) *MapTracer {
@@ -75,10 +73,6 @@ func (m *MapTracer) Flush() {
 
 func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 	return func(ctx context.Context) {
-		packetStats, err := NewPacketStats(m.mapFetcher.FlowPacketStatsMap())
-		if err != nil {
-			m.log.Warn("Can't setup metric: "+attr.VendorPrefix+"_network_dropped_flow_bytes", "err", err)
-		}
 		defer out.MarkCloseable()
 		evictionTicker := time.NewTicker(m.evictionTimeout)
 		go m.evictionSynchronization(ctx, out)
@@ -92,9 +86,13 @@ func (m *MapTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
 				m.log.Debug("triggering flow eviction on timer")
 				m.Flush()
 
-				if count, err := packetStats.Count(); err != nil {
+				count, err := m.mapFetcher.LookupPacketStats()
+				switch {
+				case errors.Is(err, ebpf.ErrTracerTerminated):
+					// fetcher is shutting down; nothing more to report
+				case err != nil:
 					m.log.Debug("Can't retrieve internal network packet stats", "err", err)
-				} else {
+				default:
 					m.imetrics.BPFPacketStats(count.Total, count.Ignored)
 				}
 			}

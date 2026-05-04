@@ -11,6 +11,7 @@ import (
 	ciliumebpf "github.com/cilium/ebpf"
 
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/export"
 )
 
 type StatsFetcher struct{}
@@ -29,7 +30,21 @@ type StatsTCPRtt struct {
 	}
 }
 
-func NewStatsFetcher(_ *config.EBPFTracer) (*StatsFetcher, error) {
+type StatsTCPFailedConnection struct {
+	_      structs.HostLayout
+	Flags  uint8
+	Reason uint8
+	Pad    [2]uint8
+	Conn   struct {
+		_      structs.HostLayout
+		S_addr [16]uint8 //nolint:revive,staticcheck
+		D_addr [16]uint8 //nolint:revive,staticcheck
+		S_port uint16    //nolint:revive,staticcheck
+		D_port uint16    //nolint:revive,staticcheck
+	}
+}
+
+func NewStatsFetcher(_ *config.EBPFTracer, _ *export.Features) (*StatsFetcher, error) {
 	return nil, nil
 }
 
@@ -39,5 +54,9 @@ func (m *StatsFetcher) Close() error {
 }
 
 func (m *StatsFetcher) StatsEventsMap() *ciliumebpf.Map {
+	return nil
+}
+
+func (m *StatsFetcher) DebugEventsMap() *ciliumebpf.Map {
 	return nil
 }

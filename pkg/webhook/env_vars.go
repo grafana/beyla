@@ -9,7 +9,7 @@ import (
 
 	"github.com/distribution/reference"
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -122,9 +122,7 @@ func (pm *PodMutator) setResourceAttributes(meta *metav1.ObjectMeta, container *
 		setEnvVarFromFieldPath(container, envOtelK8sNodeName, "spec.nodeName")
 
 	if cfg.AddK8sIPAttribute {
-		// k8s.pod.ip is resolved at container start by the kubelet, after the CNI assigns the IP.
-		// semconv v1.37.0 doesn't yet expose K8SPodIPKey (added in v1.40.0), so reference the key directly.
-		extraResAttrs[attribute.Key("k8s.pod.ip")] =
+		extraResAttrs[semconv.K8SPodIPKey] =
 			setEnvVarFromFieldPath(container, envOtelK8sPodIP, "status.podIP")
 	}
 

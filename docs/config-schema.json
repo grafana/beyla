@@ -2029,6 +2029,11 @@
     },
     "SDKResource": {
       "properties": {
+        "addK8sIPAttribute": {
+          "type": "boolean",
+          "description": "AddK8sIPAttribute defines whether the k8s.pod.ip resource attribute should be set from the Kubernetes downward API (status.podIP). Useful for environments where the OTel k8sattributesprocessor cannot infer the pod IP from the connection source (e.g. clusters behind a NAT gateway). +optional",
+          "x-env-var": "BEYLA_RESOURCE_ADD_K8S_IP_ATTRIBUTE"
+        },
         "addK8sUIDAttributes": {
           "type": "boolean",
           "description": "AddK8sUIDAttributes defines whether K8s UID attributes should be collected (e.g. k8s.deployment.uid). +optional",

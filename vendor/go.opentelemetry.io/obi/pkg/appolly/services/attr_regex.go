@@ -29,6 +29,7 @@ func (dc RegexDefinitionCriteria) Validate() error {
 			!dc[i].PathRegexp.IsSet() &&
 			!dc[i].Languages.IsSet() &&
 			len(dc[i].PIDs) == 0 &&
+			!dc[i].CmdArgs.IsSet() &&
 			len(dc[i].Metadata) == 0 &&
 			len(dc[i].PodLabels) == 0 &&
 			len(dc[i].PodAnnotations) == 0 {

@@ -245,6 +245,8 @@ const (
 	GenAIOutput       = Name(semconv.GenAIOutputMessagesKey)
 	GenAIMetadata     = Name("gen_ai.metadata")
 	GenAITools        = Name(semconv.GenAIToolDefinitionsKey)
+	GenAIToolName     = Name("gen_ai.tool.name")
+	GenAIPromptName   = Name("gen_ai.prompt.name")
 )
 
 // OBI specific GPU events
@@ -260,6 +262,14 @@ const (
 	RPCResponseStatusCode  = Name("rpc.response.status_code")
 )
 
+// MCP (Model Context Protocol) attributes
+const (
+	MCPMethodName      = Name("mcp.method.name")
+	MCPSessionID       = Name("mcp.session.id")
+	MCPProtocolVersion = Name("mcp.protocol.version")
+	MCPResourceURI     = Name("mcp.resource.uri")
+)
+
 // DNS events
 const (
 	DNSQuestionName = Name(semconv.DNSQuestionNameKey)
@@ -270,6 +280,7 @@ const (
 const (
 	GenAIOperationName = Name(semconv.GenAIOperationNameKey)
 	GenAIProviderName  = Name(semconv.GenAIProviderNameKey)
+	QwenProviderName   = "qwen"
 	// With GenAI events, it's the first time we have a single event produce two separate metrics: input->tokens, output->tokens.
 	// All of our current metrics have one set of attributes and a value for that. These two attributes are internal and they
 	// map to semconv.GenAITokenTypeKey when they are generated in metrics. The span_getter.go code will generate
@@ -278,4 +289,9 @@ const (
 	GenAITokenTypeOutput = Name("gen_ai.token.type_output")
 	GenAIRequestModel    = Name(semconv.GenAIRequestModelKey)
 	GenAIResponseModel   = Name(semconv.GenAIResponseModelKey)
+)
+
+// Stat metrics
+const (
+	TCPFailedConnectionReason = Name("reason")
 )

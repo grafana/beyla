@@ -67,6 +67,7 @@ func tlog() *slog.Logger {
 // in the map
 type FlowFetcher struct {
 	log           *slog.Logger
+	objectsMu     sync.Mutex
 	objects       *NetObjects
 	ringbufReader *ringbuf.Reader
 	tcManager     tcmanager.TCManager
@@ -175,17 +176,34 @@ func (m *FlowFetcher) Close() error {
 		}
 	}
 
-	if m.objects != nil {
-		if err := m.objects.Close(); err != nil {
+	m.objectsMu.Lock()
+	obj := m.objects
+	m.objects = nil
+	m.objectsMu.Unlock()
+
+	if obj != nil {
+		if err := obj.Close(); err != nil {
 			errs = append(errs, err)
 		}
-		m.objects = nil
 	}
 	return errors.Join(errs...)
 }
 
-func (m *FlowFetcher) FlowPacketStatsMap() *ebpf.Map {
-	return m.objects.FlowPacketStats
+// LookupPacketStats returns the internal BPF accounting of how many
+// flow packets are accounted in the namespace and how many are ignored in the
+// BPF space due to internal map collisions.
+// Callers use it to report map-collision drops.
+func (m *FlowFetcher) LookupPacketStats() (NetPacketCount, error) {
+	m.objectsMu.Lock()
+	defer m.objectsMu.Unlock()
+	if m.objects == nil {
+		return NetPacketCount{}, ErrTracerTerminated
+	}
+	return lookupPacketStats(m.objects.FlowPacketStats)
+}
+
+func (m *FlowFetcher) DebugEventsMap() *ebpf.Map {
+	return m.objects.DebugEvents
 }
 
 func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {

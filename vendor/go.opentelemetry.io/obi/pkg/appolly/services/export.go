@@ -119,7 +119,7 @@ func (modes *ExportModes) UnmarshalYAML(value *yaml.Node) error {
 	}
 	for i, inner := range value.Content {
 		if inner.Kind != yaml.ScalarNode {
-			return fmt.Errorf("ExportModes[%d]: : unexpected YAML node kind %d", i, inner.Kind)
+			return fmt.Errorf("ExportModes[%d]: unexpected YAML node kind %d", i, inner.Kind)
 		}
 		if mode, ok := modeForText[inner.Value]; !ok {
 			return fmt.Errorf("ExportModes[%d]: unknown export mode %q", i, inner.Value)

@@ -83,7 +83,7 @@ type DiscoveryConfig struct {
 	// Deprecated: Use ExcludeInstrument instead
 	ExcludeServices RegexDefinitionCriteria `yaml:"exclude_services"`
 
-	// DefaultExcludeServices by default prevents self-instrumentation of OBI as well as related observability tools
+	// DefaultExcludeServices defines the default exclusion patterns that prevent self-instrumentation of OBI as well as related observability tools.
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
 	//
 	// Deprecated: Use DefaultExcludeInstrument instead
@@ -99,7 +99,7 @@ type DiscoveryConfig struct {
 	// even if they match the Instrument selection.
 	ExcludeInstrument GlobDefinitionCriteria `yaml:"exclude_instrument"`
 
-	// DefaultExcludeInstrument by default prevents self-instrumentation of OBI as well as related observability tools
+	// DefaultExcludeInstrument defines the default exclusion patterns that prevent self-instrumentation of OBI as well as related observability tools.
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
 	DefaultExcludeInstrument GlobDefinitionCriteria `yaml:"default_exclude_instrument"`
 

@@ -10,9 +10,12 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
@@ -87,6 +90,8 @@ func dispatchKernelAssignedProtocol(parseCtx *EBPFParseContext, event *TCPReques
 		return dispatchMySQL(parseCtx, event, requestBuffer, responseBuffer)
 	case ProtocolTypePostgres:
 		return dispatchPostgres(parseCtx, event, requestBuffer, responseBuffer)
+	case ProtocolTypeMSSQL:
+		return dispatchMSSQL(parseCtx, event, requestBuffer, responseBuffer)
 	}
 
 	return request.Span{}, false, false, nil
@@ -145,6 +150,11 @@ func dispatchMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuf
 func dispatchPostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) {
 	span, err := handlePostgres(parseCtx, event, requestBuffer, responseBuffer)
 	return handleError(span, err, "Postgres")
+}
+
+func dispatchMSSQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) {
+	span, err := handleMSSQL(parseCtx, event, requestBuffer, responseBuffer)
+	return handleError(span, err, "MSSQL")
 }
 
 // detectGenericProtocol runs deterministic protocol detection for unclassified events:
@@ -238,7 +248,7 @@ func matchMemcachedNoreply(parseCtx *EBPFParseContext, event *TCPRequestInfo, re
 }
 
 // detectHeuristicProtocol runs heuristic-based protocol detection as a last resort:
-// Redis, Memcached, HTTP/2, MQTT, and Kafka (for packets the kernel couldn't classify).
+// Redis, Memcached, HTTP/2, NATS, AMQP, MQTT, and Kafka (for packets the kernel couldn't classify).
 func detectHeuristicProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) {
 	if span, ignore, matched, err := matchRedis(parseCtx, event, requestBuffer, responseBuffer); matched {
 		return span, ignore, matched, err
@@ -256,6 +266,12 @@ func detectHeuristicProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, 
 		if span, ignore, matched, err := matchHTTP2(event, requestBuffer, responseBuffer); matched {
 			return span, ignore, matched, err
 		}
+	}
+	if span, ignore, matched, err := matchNATS(parseCtx, event, requestBuffer, responseBuffer); matched {
+		return span, ignore, matched, err
+	}
+	if span, ignore, matched, err := matchAMQP(parseCtx, event, requestBuffer, responseBuffer); matched {
+		return span, ignore, matched, err
 	}
 	if span, ignore, matched, err := matchMQTT(event, requestBuffer, responseBuffer); matched {
 		return span, ignore, matched, err
@@ -334,6 +350,60 @@ func matchHTTP2(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.L
 	return request.Span{}, true, true, nil // ignore for now, next event will be parsed
 }
 
+func matchNATS(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
+	info, extraInfo, ignore, err := ProcessPossibleNATSEvent(event, requestBuffer, responseBuffer)
+
+	if ignore && err == nil {
+		return request.Span{}, true, true, nil
+	}
+
+	if err != nil {
+		return request.Span{}, false, false, nil
+	}
+
+	if extraInfo != nil {
+		extraSpan := TCPToNATSToSpan(event, extraInfo)
+		extraSpan.Type = request.EventTypeNATSServer
+		extraSpan.SpanID = trace.SpanID{}
+
+		parseCtx.emitExtraSpans(extraSpan)
+	}
+	return TCPToNATSToSpan(event, info), false, true, nil
+}
+
+func matchAMQP(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
+	infos, ignore, err := ProcessPossibleAMQPEvent(event, requestBuffer, responseBuffer)
+	if ignore && err == nil {
+		return request.Span{}, true, true, nil
+	}
+
+	if err == nil {
+		spans := make([]request.Span, 0, len(infos))
+		for _, info := range infos {
+			spans = append(spans, TCPToAMQPToSpan(event, info))
+		}
+		if len(spans) == 0 {
+			return request.Span{}, true, true, nil
+		}
+		if len(spans) > 1 {
+			// Clear SpanID on extras so tracesgen assigns fresh IDs; otherwise
+			// every clone exports with the captured SpanID, violating OTel.
+			for i := 1; i < len(spans); i++ {
+				spans[i].SpanID = trace.SpanID{}
+			}
+			parseCtx.emitExtraSpans(spans[1:]...)
+		}
+		return spans[0], false, true, nil
+	}
+
+	if errors.Is(err, amqpparser.ErrNotAMQP) {
+		return request.Span{}, false, false, nil
+	}
+
+	slog.Debug("AMQP parsing failed after heuristic match, dropping event", "error", err)
+	return request.Span{}, true, true, nil
+}
+
 func matchMQTT(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
 	if !isMQTT(requestBuffer) && !isMQTT(responseBuffer) {
 		return request.Span{}, false, false, nil
@@ -397,16 +467,19 @@ func getBuffers(parseCtx *EBPFParseContext, event *TCPRequestInfo) (req *largebu
 }
 
 func reverseTCPEvent(trace *TCPRequestInfo) {
-	if trace.Direction == 0 {
-		trace.Direction = 1
-	} else {
-		trace.Direction = 0
-	}
+	trace.Direction = reverseDirection(trace.Direction)
+	trace.ConnInfo = reverseTCPConnInfo(trace.ConnInfo)
+}
 
-	port := trace.ConnInfo.S_port
-	addr := trace.ConnInfo.S_addr
-	trace.ConnInfo.S_addr = trace.ConnInfo.D_addr
-	trace.ConnInfo.S_port = trace.ConnInfo.D_port
-	trace.ConnInfo.D_addr = addr
-	trace.ConnInfo.D_port = port
+func reverseDirection(direction uint8) uint8 {
+	if direction == directionSend {
+		return directionRecv
+	}
+	return directionSend
+}
+
+func reverseTCPConnInfo(conn BpfConnectionInfoT) BpfConnectionInfoT {
+	conn.S_addr, conn.D_addr = conn.D_addr, conn.S_addr
+	conn.S_port, conn.D_port = conn.D_port, conn.S_port
+	return conn
 }

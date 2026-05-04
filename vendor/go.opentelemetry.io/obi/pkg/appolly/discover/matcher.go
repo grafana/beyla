@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/process"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -221,12 +221,12 @@ func (m *Matcher) isExcluded(obj *ProcessAttrs, proc *services.ProcessInfo) bool
 
 func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a services.Selector) bool {
 	log := m.Log.With("pid", p.Pid, "exe", p.ExePath)
-	if pids, ok := a.GetPIDs(); ok && len(pids) > 0 {
-		return pidInList(p.Pid, pids)
+	pids, hasPIDs := a.GetPIDs()
+	if hasPIDs && len(pids) > 0 && !pidInList(p.Pid, pids) {
+		return false
 	}
 
 	if !a.GetPath().IsSet() && !a.GetLanguages().IsSet() && !a.GetCmdArgs().IsSet() && a.GetOpenPorts().Len() == 0 && len(obj.metadata) == 0 {
-		pids, hasPIDs := a.GetPIDs()
 		if !hasPIDs || len(pids) == 0 {
 			log.Debug("no Kube metadata, no local selection criteria. Ignoring")
 			return false

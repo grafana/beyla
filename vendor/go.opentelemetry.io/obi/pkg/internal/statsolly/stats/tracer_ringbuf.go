@@ -65,6 +65,8 @@ func handleStatEvent(record *ringbuf.Record) (ebpf.Stat, error) {
 	switch eventType {
 	case ebpf.StatTypeTCPRtt:
 		return readTCPRttIntoStat(record)
+	case ebpf.StatTypeTCPFailedConnection:
+		return readTCPFailedConnectionsIntoStat(record)
 	default:
 		return ebpf.Stat{}, fmt.Errorf("unknown stats event [type %d]", uint8(eventType))
 	}
@@ -89,6 +91,35 @@ func readTCPRttIntoStat(record *ringbuf.Record) (ebpf.Stat, error) {
 		Type: ebpf.StatTypeTCPRtt,
 		TCPRtt: &ebpf.TCPRtt{
 			SrttUs: event.SrttUs,
+		},
+		CommonAttrs: pipe.CommonAttrs{
+			SrcAddr: srcAddr,
+			DstAddr: dstAddr,
+			SrcPort: sourcePort,
+			DstPort: destinationPort,
+		},
+	}, nil
+}
+
+func readTCPFailedConnectionsIntoStat(record *ringbuf.Record) (ebpf.Stat, error) {
+	event, err := ebpfcommon.ReinterpretCast[ebpf.StatsTCPFailedConnection](record.RawSample)
+	if err != nil {
+		return ebpf.Stat{}, err
+	}
+
+	var srcAddr, dstAddr pipe.IPAddr
+	var destinationPort uint16
+	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
+		srcAddr = pipe.IPAddr(event.Conn.S_addr)
+		dstAddr = pipe.IPAddr(event.Conn.D_addr)
+		destinationPort = event.Conn.D_port
+	}
+
+	sourcePort := event.Conn.S_port
+	return ebpf.Stat{
+		Type: ebpf.StatTypeTCPFailedConnection,
+		TCPFailedConnection: &ebpf.TCPFailedConnection{
+			Reason: event.Reason,
 		},
 		CommonAttrs: pipe.CommonAttrs{
 			SrcAddr: srcAddr,

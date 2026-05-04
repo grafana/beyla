@@ -8,7 +8,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/caarlos0/env/v9"
+	"github.com/caarlos0/env/v11"
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/config"

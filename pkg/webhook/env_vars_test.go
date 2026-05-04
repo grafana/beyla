@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -2151,6 +2151,62 @@ func TestPodMutator_disableUndesiredSDKs(t *testing.T) {
 
 			// Verify total number of env vars matches expectations
 			assert.Equal(t, len(tt.expected), len(container.Env), "unexpected number of env vars set")
+		})
+	}
+}
+
+func TestConfigureContainerEnvVars_K8sPodIP(t *testing.T) {
+	const expectedEnvName = "OTEL_RESOURCE_ATTRIBUTES_POD_IP"
+
+	tests := []struct {
+		name              string
+		addK8sIPAttribute bool
+		expectVar         bool
+	}{
+		{name: "opt-in disabled by default", addK8sIPAttribute: false, expectVar: false},
+		{name: "opt-in enabled", addK8sIPAttribute: true, expectVar: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &beyla.Config{
+				Injector: beyla.SDKInject{
+					Resources: beyla.SDKResource{
+						Attributes:                     map[string]string{},
+						UseLabelsForResourceAttributes: false,
+						AddK8sUIDAttributes:            false,
+						AddK8sIPAttribute:              tt.addK8sIPAttribute,
+					},
+				},
+			}
+			meta := &metav1.ObjectMeta{Name: "test-pod", Namespace: "default"}
+			container := &corev1.Container{Name: "test-container", Image: "myapp:v1.0.0", Env: []corev1.EnvVar{}}
+
+			pm := &PodMutator{cfg: cfg}
+			pm.configureContainerEnvVars(meta, container, nil)
+
+			var podIPVar *corev1.EnvVar
+			var resAttrs string
+			for i := range container.Env {
+				switch container.Env[i].Name {
+				case expectedEnvName:
+					podIPVar = &container.Env[i]
+				case envInjectorOtelExtraResourceAttrs:
+					resAttrs = container.Env[i].Value
+				}
+			}
+
+			if !tt.expectVar {
+				assert.Nil(t, podIPVar, "expected env var %q to NOT be set when AddK8sIPAttribute is false", expectedEnvName)
+				assert.NotContains(t, resAttrs, "k8s.pod.ip")
+				return
+			}
+
+			require.NotNil(t, podIPVar, "expected env var %q to be set", expectedEnvName)
+			require.NotNil(t, podIPVar.ValueFrom)
+			require.NotNil(t, podIPVar.ValueFrom.FieldRef)
+			assert.Equal(t, "status.podIP", podIPVar.ValueFrom.FieldRef.FieldPath)
+			assert.Contains(t, resAttrs, "k8s.pod.ip=$("+expectedEnvName+")")
 		})
 	}
 }

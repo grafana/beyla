@@ -10,7 +10,7 @@ import (
 )
 
 type LogEnricherConfig struct {
-	// Services to enable log enrichment for
+	// Services specifies the services to enable log enrichment for
 	Services []LogEnricherServiceConfig `yaml:"services"`
 
 	// CacheTTL defines the TTL for cached file descriptors

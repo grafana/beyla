@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/oschwald/maxminddb-golang"
+	"github.com/oschwald/maxminddb-golang/v2"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/internal/pipe"
@@ -139,13 +140,24 @@ func ipinfoLookup(path string) (IPLookupFn, error) {
 		return nil, fmt.Errorf("opening ipinfo database: %w", err)
 	}
 	return func(addr net.IP) (ipInfo, error) {
+		netAddr, ok := netipAddrFromNetIP(addr)
+		if !ok {
+			return ipInfo{}, fmt.Errorf("invalid IP address: %v", addr)
+		}
 		record := ipInfoLiteRecord{}
-		err := db.Lookup(addr, &record)
-		if err != nil {
+		if err := db.Lookup(netAddr).Decode(&record); err != nil {
 			return ipInfo{}, fmt.Errorf("looking up address: %w", err)
 		}
 		return ipInfo(record), nil
 	}, nil
+}
+
+func netipAddrFromNetIP(addr net.IP) (netip.Addr, bool) {
+	a, ok := netip.AddrFromSlice(addr)
+	if !ok {
+		return netip.Addr{}, false
+	}
+	return a.Unmap(), true
 }
 
 type maxmindCountryRecord struct {
@@ -167,12 +179,16 @@ func maxmindlookup(countryPath, asnPath string) (IPLookupFn, error) {
 		return nil, fmt.Errorf("opening maxmind country database: %w", err)
 	}
 	return func(addr net.IP) (ipInfo, error) {
+		netAddr, ok := netipAddrFromNetIP(addr)
+		if !ok {
+			return ipInfo{}, fmt.Errorf("invalid IP address: %v", addr)
+		}
 		countryRecord := maxmindCountryRecord{}
-		if err := countryDB.Lookup(addr, &countryRecord); err != nil {
+		if err := countryDB.Lookup(netAddr).Decode(&countryRecord); err != nil {
 			return ipInfo{}, fmt.Errorf("looking up country for address: %w", err)
 		}
 		asnRecord := maxmindASNRecord{}
-		if err := asnDB.Lookup(addr, &asnRecord); err != nil {
+		if err := asnDB.Lookup(netAddr).Decode(&asnRecord); err != nil {
 			return ipInfo{}, fmt.Errorf("looking up country for address: %w", err)
 		}
 		out := ipInfo{

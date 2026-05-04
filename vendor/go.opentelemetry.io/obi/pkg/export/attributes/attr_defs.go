@@ -459,6 +459,12 @@ func getDefinitions(
 				attr.ServerAddr:         true,
 			},
 		},
+		StatTCPFailedConnections.Section: {
+			SubGroups: []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.TCPFailedConnectionReason: false,
+			},
+		},
 
 		// span and service graph metrics don't yet implement attribute selection,
 		// but their values can still be filtered, so we list them here just to

@@ -15,6 +15,8 @@ import (
 	ciliumebpf "github.com/cilium/ebpf"
 
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/logger"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	stats "go.opentelemetry.io/obi/pkg/internal/statsolly/stats"
 	"go.opentelemetry.io/obi/pkg/netip"
@@ -79,6 +81,7 @@ type Stats struct {
 type ebpFetcher interface {
 	io.Closer
 	StatsEventsMap() *ciliumebpf.Map
+	DebugEventsMap() *ciliumebpf.Map
 }
 
 func StatsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Stats, error) {
@@ -98,7 +101,7 @@ func StatsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Stats, error) {
 	}
 	alog.Debug("agent IP: " + agentIP.String())
 
-	statsFetcher, err = newFetcher(&cfg.EBPF)
+	statsFetcher, err = newFetcher(&cfg.EBPF, &cfg.Metrics.Features)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +109,8 @@ func StatsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Stats, error) {
 	return statsAgent(ctxInfo, cfg, statsFetcher, agentIP)
 }
 
-func newFetcher(cfg *config.EBPFTracer) (ebpFetcher, error) {
-	return ebpf.NewStatsFetcher(cfg)
+func newFetcher(cfg *config.EBPFTracer, features *export.Features) (ebpFetcher, error) {
+	return ebpf.NewStatsFetcher(cfg, features)
 }
 
 // statsAgent is a private constructor with injectable dependencies, usable for tests
@@ -134,6 +137,14 @@ func (s *Stats) Run(ctx context.Context) error {
 
 	s.status = StatusStarting
 	alog.Info("starting Stats agent")
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if s.cfg.EBPF.BpfDebug {
+		go logger.ReadDebugEventsMap(runCtx, s.fetcher.DebugEventsMap(),
+			slog.With("component", "statsolly.BPFDebug"))
+	}
 
 	graph, err := s.buildPipeline(ctx)
 	if err != nil {

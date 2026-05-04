@@ -75,7 +75,7 @@ func (m *surveyor) fetchMetadata(i *ebpf.Instrumentable) {
 	if m.store != nil {
 		// we can do this because there is a previous ContainerDBUpdater pipeline stage
 		// that has provided this information
-		if objectMeta, containerName := m.store.PodContainerByPIDNs(i.FileInfo.Ns); objectMeta != nil {
+		if objectMeta, containerName := m.store.PodContainerByPIDNs(i.FileInfo.Ns, i.FileInfo.Pid); objectMeta != nil {
 			transform.AppendKubeMetadata(m.store, &i.FileInfo.Service, objectMeta, m.clusterName, containerName)
 		}
 	}

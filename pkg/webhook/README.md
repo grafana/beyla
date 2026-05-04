@@ -441,6 +441,9 @@ When no selector matches or selector is nil, these environment variables are not
 **[4] Kubernetes UID Attributes:**
 Pod UID is only set when `cfg.Injector.Resources.AddK8sUIDAttributes = true`.
 
+**[4b] Kubernetes Pod IP Attribute:**
+`k8s.pod.ip` is only set when `cfg.Injector.Resources.AddK8sIPAttribute = true`. The value is sourced from the Kubernetes downward API (`status.podIP`) and resolved by the kubelet at container start, after the CNI assigns the pod IP. Useful for clusters behind a NAT gateway, where the OTel `k8sattributesprocessor` cannot infer the pod IP from the connection source address.
+
 **[5] Service Name Derivation:**
 Follows the [OpenTelemetry Kubernetes semantic conventions](https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/). Priority order:
 1. Annotation: `resource.opentelemetry.io/service.name`
@@ -490,6 +493,7 @@ cfg.Injector.Resources = beyla.ResourcesConfig{
     },
     UseLabelsForResourceAttributes: true,
     AddK8sUIDAttributes: true,
+    AddK8sIPAttribute:   true,
 }
 ```
 

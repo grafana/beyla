@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -77,77 +76,60 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 		},
 	})
 
-	// THEN the metrics are exported aggregated by system/user/wait times
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.cpu.time", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"cpu.mode": "user"}, metric.Attributes)
-		require.EqualValues(t, 30, metric.FloatVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.cpu.time", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"cpu.mode": "system"}, metric.Attributes)
-		require.EqualValues(t, 10, metric.FloatVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.cpu.time", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"cpu.mode": "wait"}, metric.Attributes)
-		require.EqualValues(t, 20, metric.FloatVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.cpu.utilization", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"cpu.mode": "user"}, metric.Attributes)
-		require.EqualValues(t, 1, metric.FloatVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.cpu.utilization", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"cpu.mode": "system"}, metric.Attributes)
-		require.EqualValues(t, 2, metric.FloatVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.cpu.utilization", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"cpu.mode": "wait"}, metric.Attributes)
-		require.EqualValues(t, 3, metric.FloatVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.disk.io", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"disk.io.direction": "write"}, metric.Attributes)
-		require.EqualValues(t, 456, metric.IntVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.disk.io", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"disk.io.direction": "read"}, metric.Attributes)
-		require.EqualValues(t, 123, metric.IntVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.network.io", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"network.io.direction": "receive"}, metric.Attributes)
-		require.EqualValues(t, 10, metric.IntVal)
-	})
-	test.Eventually(t, timeout, func(t require.TestingT) {
-		metric := readChan(t, otlp.Records(), timeout)
-		require.Equal(t, "process.network.io", metric.Name)
-		require.Equal(t, "foo", metric.ResourceAttributes["process.command"])
-		require.Equal(t, map[string]string{"network.io.direction": "transmit"}, metric.Attributes)
-		require.EqualValues(t, 20, metric.IntVal)
-	})
+	// readMetricsOfName drains the records channel, collecting exactly n records
+	// whose Name matches name and discarding all others.  It fails the test if
+	// the named records cannot be collected before timeout.
+	readMetricsOfName := func(name string, n int) []collector.MetricRecord {
+		t.Helper()
+		var results []collector.MetricRecord
+		for len(results) < n {
+			select {
+			case m := <-otlp.Records():
+				if m.Name == name {
+					results = append(results, m)
+				}
+			case <-time.After(timeout):
+				t.Fatalf("timeout waiting for %d metrics named %q, collected %d so far", n, name, len(results))
+				return nil
+			}
+		}
+		return results
+	}
+
+	// THEN the metrics are exported aggregated by system/user/wait times.
+	// Datapoint ordering within a metric is non-deterministic, so we collect
+	// all records of a given name and assert on the resulting set.
+	cpuTimes := readMetricsOfName("process.cpu.time", 3)
+	gotCPUTimes := map[string]float64{}
+	for _, m := range cpuTimes {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotCPUTimes[m.Attributes["cpu.mode"]] = m.FloatVal
+	}
+	assert.Equal(t, map[string]float64{"user": 30, "system": 10, "wait": 20}, gotCPUTimes)
+
+	cpuUtils := readMetricsOfName("process.cpu.utilization", 3)
+	gotCPUUtils := map[string]float64{}
+	for _, m := range cpuUtils {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotCPUUtils[m.Attributes["cpu.mode"]] = m.FloatVal
+	}
+	assert.Equal(t, map[string]float64{"user": 1, "system": 2, "wait": 3}, gotCPUUtils)
+
+	diskIOs := readMetricsOfName("process.disk.io", 2)
+	gotDiskIO := map[string]int64{}
+	for _, m := range diskIOs {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotDiskIO[m.Attributes["disk.io.direction"]] = m.IntVal
+	}
+	assert.Equal(t, map[string]int64{"read": 123, "write": 456}, gotDiskIO)
+
+	netIOs := readMetricsOfName("process.network.io", 2)
+	gotNetIO := map[string]int64{}
+	for _, m := range netIOs {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotNetIO[m.Attributes["network.io.direction"]] = m.IntVal
+	}
+	assert.Equal(t, map[string]int64{"receive": 10, "transmit": 20}, gotNetIO)
 }
 
 func TestGetFilteredProcessResourceAttrs(t *testing.T) {
@@ -252,14 +234,4 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		_, exists := attrMap[attrName]
 		assert.False(t, exists, "Process attribute %s should be filtered out", attrName)
 	}
-}
-
-func readChan(t require.TestingT, inCh <-chan collector.MetricRecord, timeout time.Duration) collector.MetricRecord {
-	select {
-	case item := <-inCh:
-		return item
-	case <-time.After(timeout):
-		require.Failf(t, "timeout while waiting for event in input channel", "timeout: %s", timeout)
-	}
-	return collector.MetricRecord{}
 }

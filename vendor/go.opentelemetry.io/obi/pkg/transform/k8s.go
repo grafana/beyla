@@ -41,14 +41,14 @@ type KubernetesDecorator struct {
 	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.
 	ClusterName string `yaml:"cluster_name" env:"OTEL_EBPF_KUBE_CLUSTER_NAME"`
 
-	// KubeconfigPath is optional. If unset, it will look in the usual location.
+	// KubeconfigPath specifies the path to the kubeconfig file. If unset, it will look in the usual location.
 	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG" validate:"omitempty,filepath"`
 
-	// InformersSyncTimeout is the timeout for waiting for informers to sync on startup.
+	// InformersSyncTimeout specifies the timeout for waiting for informers to sync on startup.
 	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT" validate:"gt=0"`
 
-	// ReconnectInitialInterval is the time to wait before reconnecting to the Kubernetes API after a connection loss.
-	ReconnectInitialInterval time.Duration `yaml:"reconnect_initial_interval" env:"OTEL_EBPF_KUBE_RECONNECT_INITIAL_INTERVAL" validate:"gte=0"`
+	// ReconnectInitialInterval specifies the time to wait before reconnecting to the Kubernetes API after a connection loss.
+	ReconnectInitialInterval time.Duration `yaml:"reconnect_initial_interval" env:"OTEL_EBPF_KUBE_RECONNECT_INITIAL_INTERVAL" validate:"gt=0"`
 
 	// InformersResyncPeriod defaults to 30m. Higher values will reduce the load on the Kube API.
 	InformersResyncPeriod time.Duration `yaml:"informers_resync_period" env:"OTEL_EBPF_KUBE_INFORMERS_RESYNC_PERIOD" validate:"gte=0"`
@@ -64,7 +64,7 @@ type KubernetesDecorator struct {
 	// kubernetes metadata decoration.
 	DisableInformers []string `yaml:"disable_informers" env:"OTEL_EBPF_KUBE_DISABLE_INFORMERS"`
 
-	// MetaCacheAddress is the host:port address of the obi-k8s-cache service instance
+	// MetaCacheAddress specifies the host:port address of the obi-k8s-cache service instance
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"OTEL_EBPF_KUBE_META_CACHE_ADDRESS"`
 
 	// MetaRestrictLocalNode will download only the metadata from the Pods that are located in the same
@@ -162,7 +162,7 @@ func (md *metadataDecorator) nodeLoop(ctx context.Context) {
 }
 
 func (md *metadataDecorator) do(span *request.Span) {
-	if podMeta, containerName := md.store.PodContainerByPIDNs(span.Pid.Namespace); podMeta != nil {
+	if podMeta, containerName := md.store.PodContainerByPIDNs(span.Pid.Namespace, span.Pid.HostPID); podMeta != nil {
 		AppendKubeMetadata(md.store, &span.Service, podMeta, md.clusterName, containerName)
 	} else if span.Service.Metadata == nil {
 		// do not leave the service attributes map as nil
@@ -293,7 +293,7 @@ mainLoop:
 			}
 			md.log.Debug("annotating process event", "event", pe)
 
-			if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
+			if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns, pe.File.Pid); podMeta != nil {
 				AppendKubeMetadata(md.store, &pe.File.Service, podMeta, md.clusterName, containerName)
 			} else {
 				// do not leave the service attributes map as nil
@@ -343,7 +343,7 @@ func (md *procEventMetadataDecorator) handlePodUpdateEvent(pod *informer.ObjectM
 		if peMap, ok := md.tracker.info(cnt.Id); ok {
 			md.log.Debug("found missed pid info", "containerId", cnt.Id)
 			for _, pe := range peMap {
-				if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns); podMeta != nil {
+				if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns, pe.File.Pid); podMeta != nil {
 					md.log.Debug("resubmitting process event", "event", pe)
 					AppendKubeMetadata(md.store, &pe.File.Service, podMeta, md.clusterName, containerName)
 					md.output.Send(*pe)

@@ -76,6 +76,13 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	}
 }
 
+func effectiveSendTimeout(configured time.Duration) time.Duration {
+	if configured == 0 {
+		return kubecache.DefaultConfig.SendTimeout
+	}
+	return configured
+}
+
 // Subscribe method of the generated protobuf definition
 func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server informer.EventStreamService_SubscribeServer) error {
 	// extract peer information to identify it
@@ -88,7 +95,7 @@ func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server infor
 		log:         ic.log.With("clientID", p.Addr.String()),
 		id:          p.Addr.String(),
 		server:      server,
-		sendTimeout: ic.Config.SendTimeout,
+		sendTimeout: effectiveSendTimeout(ic.Config.SendTimeout),
 		metrics:     ic.metrics,
 		fromEpoch:   msg.GetFromTimestampEpoch(),
 		messages:    sync.NewQueue[*informer.Event](),
@@ -147,6 +154,8 @@ func (o *connection) On(event *informer.Event) error {
 }
 
 func (o *connection) handleMessagesQueue(ctx context.Context) {
+	timer := time.NewTimer(o.sendTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -157,12 +166,44 @@ func (o *connection) handleMessagesQueue(ctx context.Context) {
 			if event == nil {
 				return
 			}
-			if err := o.server.Send(event); err != nil {
-				o.log.Debug("Error sending message. Closing client connection", "clientID", o.ID(), "error", err)
-				o.metrics.MessageError()
+			if err := o.sendWithTimeout(ctx, timer, event); err != nil {
 				return
 			}
-			o.metrics.MessageSucceed()
 		}
+	}
+}
+
+// sendWithTimeout sends event and drops the connection if Send blocks longer
+// than o.sendTimeout (enforced per-Send). Returns a non-nil error whenever the
+// caller should stop processing the queue.
+func (o *connection) sendWithTimeout(ctx context.Context, timer *time.Timer, event *informer.Event) error {
+	sendErr := make(chan error, 1)
+	go func() { sendErr <- o.server.Send(event) }()
+
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(o.sendTimeout)
+
+	select {
+	case err := <-sendErr:
+		if err != nil {
+			o.log.Warn("Error sending message. Closing client connection", "clientID", o.ID(), "error", err)
+			o.metrics.MessageError()
+			return err
+		}
+		o.metrics.MessageSucceed()
+		return nil
+	case <-timer.C:
+		o.log.Warn("Send timed out. Closing client connection", "clientID", o.ID(), "timeout", o.sendTimeout)
+		o.metrics.MessageTimeout()
+		// sendErr is buffered; the goroutine exits when gRPC closes the stream on Subscribe's return.
+		return context.DeadlineExceeded
+	case <-ctx.Done():
+		o.log.Debug("context done. Closing client connection")
+		return ctx.Err()
 	}
 }

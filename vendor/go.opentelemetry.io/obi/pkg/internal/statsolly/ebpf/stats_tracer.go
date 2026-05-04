@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -17,25 +18,44 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/export"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 )
 
-type StatsTCPRtt StatsTcpRttT
+type (
+	StatsTCPRtt              StatsTcpRttT
+	StatsTCPFailedConnection StatsTcpFailedConnectionT
+)
+
+type probe struct {
+	name    string
+	program *ebpf.Program
+	enabled bool
+}
+
+// Hook point names, grouped by attach type.
+const (
+	// Kprobes: kernel function names.
+	KprobeTCPClose = "tcp_close"
+
+	// Tracepoints: group/name.
+	TracepointInetSockSetState = "sock/inet_sock_set_state"
+)
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type tcp_rtt_t -target amd64,arm64 Stats ../../../../bpf/statsolly/k_tcp.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type tcp_rtt_t -type tcp_failed_connection_t -target amd64,arm64 Stats ../../../../bpf/statsolly/stats.c -- -I../../../../bpf
 
 type StatsFetcher struct {
-	log         *slog.Logger
-	statsEvents *ebpf.Map
-	closables   []io.Closer
+	log       *slog.Logger
+	objects   *StatsObjects
+	closables []io.Closer
 }
 
 func tlog() *slog.Logger {
 	return slog.With("component", "ebpf.StatFetcher")
 }
 
-func NewStatsFetcher(cfg *config.EBPFTracer) (*StatsFetcher, error) {
+func NewStatsFetcher(cfg *config.EBPFTracer, features *export.Features) (*StatsFetcher, error) {
 	tlog := tlog()
 	if err := rlimit.RemoveMemlock(); err != nil {
 		tlog.Warn("can't remove mem lock. The agent could not be able to start eBPF programs",
@@ -58,18 +78,66 @@ func NewStatsFetcher(cfg *config.EBPFTracer) (*StatsFetcher, error) {
 		return nil, fmt.Errorf("loading stats eBPF spec: %w", err)
 	}
 
-	ktc, err := link.Kprobe("tcp_close", objects.ObiKprobeTcpCloseSrtt, nil)
-	if err != nil {
-		tlog.Error("opening %s: %s", "tcp_close", err)
-		return nil, fmt.Errorf("opening kprobe: %w", err)
+	var closables []io.Closer
+
+	// kprobes
+	for _, k := range []probe{
+		{
+			name:    KprobeTCPClose,
+			program: objects.ObiKprobeTcpCloseSrtt,
+			enabled: features.StatsTCPRtt(),
+		},
+	} {
+		if !k.enabled {
+			continue
+		}
+
+		l, err := link.Kprobe(k.name, k.program, nil)
+		if err != nil {
+			closeAll(closables)
+			return nil, fmt.Errorf("failed kprobe attachment %s: %w", k.name, err)
+		}
+		closables = append(closables, l)
 	}
 
-	var closables []io.Closer
+	// tracepoints
+	for _, t := range []probe{
+		{
+			name:    TracepointInetSockSetState,
+			program: objects.ObiTracepointInetSockSetState,
+			enabled: features.StatsTCPFailedConnections(),
+		},
+	} {
+		if !t.enabled {
+			continue
+		}
+
+		parts := strings.SplitN(t.name, "/", 2)
+		if len(parts) != 2 {
+			closeAll(closables)
+			return nil, fmt.Errorf("invalid tracepoint %q: must be group/name", t.name)
+		}
+		l, err := link.Tracepoint(parts[0], parts[1], t.program, nil)
+		if err != nil {
+			closeAll(closables)
+			return nil, fmt.Errorf("failed tracepoint attachment %s: %w", t.name, err)
+		}
+		closables = append(closables, l)
+	}
+
 	return &StatsFetcher{
-		log:         tlog,
-		statsEvents: objects.StatsEvents,
-		closables:   append(closables, ktc),
+		log:       tlog,
+		objects:   &objects,
+		closables: closables,
 	}, nil
+}
+
+func closeAll(closables []io.Closer) {
+	for _, c := range closables {
+		if c != nil {
+			c.Close()
+		}
+	}
 }
 
 // Close any resources that are taken
@@ -88,5 +156,9 @@ func (m *StatsFetcher) Close() error {
 // StatsEventsMap returns the ring buffer map for stats events.
 // The caller (ForwardRingbuf) is responsible for creating and closing the reader.
 func (m *StatsFetcher) StatsEventsMap() *ebpf.Map {
-	return m.statsEvents
+	return m.objects.StatsEvents
+}
+
+func (m *StatsFetcher) DebugEventsMap() *ebpf.Map {
+	return m.objects.DebugEvents
 }

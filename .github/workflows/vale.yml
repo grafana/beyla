@@ -12,11 +12,11 @@ jobs:
   vale:
     runs-on: ubuntu-latest
     container:
-      image: grafana/vale@sha256:6e38e76afd31739c060ce18182b13c6376c3d2d9aaf06d0f98757d501cae3007
+      image: grafana/vale@sha256:8483bd2967fef7d41a121db316995055743680fb7efaafcf94942a315eb8c937
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: grafana/writers-toolkit/vale-action@31bf09e570ccfeee9325769e225a59d05c262471 # vale-action/v2
+      - uses: grafana/writers-toolkit/vale-action@67d43d461804a3413c2e11fd7899ff01e05b2563 # vale-action/v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

@@ -4,7 +4,7 @@ ARG JAVA_SDK_VERSION=v2.26.1
 ARG INJECTOR_VERSION=v0.1.0
 
 # download the opentelemetry-injector binary for the target architecture
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-injector-binary
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-injector-binary
 ARG TARGETARCH
 ARG INJECTOR_VERSION
 
@@ -18,7 +18,7 @@ RUN case ${TARGETARCH} in \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/${INJECTOR_VERSION}/${INJECTOR_LIB}"
 
 # Get the Python SDK for glibc
-FROM python:3.14.4-trixie@sha256:1692046a126f2841dfec22313e9a282b697e0aeca6c25c0434b476feba618e16 AS build-python-glibc
+FROM python:3.14.4-trixie@sha256:b66e615ac4aab0d74c4d665bbecafba274e0cc632094ccbe4f9c41fb13c2093a AS build-python-glibc
 WORKDIR /operator-build
 COPY python/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -31,7 +31,7 @@ RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
 
 # Get the Python SDK for musl
-FROM python:3.14.3-alpine3.23@sha256:faee120f7885a06fcc9677922331391fa690d911c020abb9e8025ff3d908e510 AS build-python-musl
+FROM python:3.14.4-alpine3.23@sha256:dd4d2bd5b53d9b25a51da13addf2be586beebd5387e289e798e4083d94ca837a AS build-python-musl
 WORKDIR /operator-build
 COPY python/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -44,7 +44,7 @@ RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-java-sdk
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-java-sdk
 ARG JAVA_SDK_VERSION
 
 RUN apk add --no-cache curl unzip
@@ -53,7 +53,7 @@ RUN curl -sSfL -o opentelemetry-javaagent.jar \
     "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/${JAVA_SDK_VERSION}/opentelemetry-javaagent.jar"
 
 # Get the OTel .NET SDK
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-dotnet-sdk
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-dotnet-sdk
 ARG DOTNET_SDK_VERSION
 ARG TARGETARCH
 
@@ -76,7 +76,7 @@ RUN case ${TARGETARCH} in \
 # Build the Node.js artifacts
 # The version is hardcoded in package.json and copied from the OTel Operator
 # TODO: Can we allow this to be configurable just like the JVM and .NET
-FROM node:20@sha256:8789e1e0752d81088a085689c04fdb7a5b16e8102e353118a4b049bbf05db8ac AS build-nodejs-sdk
+FROM node:20@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5 AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY node.js/package.json .
@@ -90,7 +90,7 @@ RUN cp build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/bu
 RUN ls -al *
 
 # build the final instrumentation image
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 COPY copy-to-volume.sh /
 RUN mkdir -p /dist
 

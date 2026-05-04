@@ -26,16 +26,17 @@ import (
 
 // Server represents the webhook server
 type Server struct {
-	cfg          *beyla.Config
-	ctxInfo      *global.ContextInfo
-	mutator      *PodMutator
-	bouncer      *PodBouncer
-	scanner      *LocalProcessScanner
-	matcher      *PodMatcher
-	logger       *slog.Logger
-	store        *kube.Store
-	initialState map[string][]*ProcessInfo
-	metrics      *SDKInjectionMetrics
+	cfg           *beyla.Config
+	ctxInfo       *global.ContextInfo
+	mutator       *PodMutator
+	bouncer       *PodBouncer
+	scanner       *LocalProcessScanner
+	matcher       *PodMatcher
+	logger        *slog.Logger
+	store         *kube.Store
+	initialState  map[string][]*ProcessInfo
+	metrics       *SDKInjectionMetrics
+	podStateCache *PodStateCache
 }
 
 // NewServer creates a new webhook server
@@ -47,17 +48,16 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	// Create and register metrics
 	metrics := NewSDKInjectionMetrics()
+	var podStateCache *PodStateCache
 	if ctxInfo.Prometheus != nil && cfg.InternalMetrics.Prometheus.Port != 0 {
 		collectors := metrics.Collectors()
 		if cfg.Injector.DisableStateMetrics {
 			logger.Info("beyla_injection_pods state metric collector disabled via config")
-		} else if kubeClient, err := ctxInfo.K8sInformer.KubeClient(); err != nil {
-			logger.Warn("state metrics unavailable: cannot get kubernetes client", "error", err)
 		} else if ownNode := OwnNodeName(); ownNode == "" {
 			logger.Warn("state metrics unavailable: cannot determine node name (NODE_NAME unset and os.Hostname failed)")
 		} else {
-			sc := NewStateCollector(kubeClient, matcher, cfg, ownNode)
-			collectors = append(collectors, sc)
+			podStateCache = NewPodStateCache(matcher, cfg, ownNode)
+			collectors = append(collectors, podStateCache)
 			logger.Info("registered beyla_injection_pods state metric collector")
 		}
 		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, collectors...)
@@ -76,14 +76,15 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	}
 
 	return &Server{
-		cfg:     cfg,
-		mutator: mutator,
-		bouncer: bouncer,
-		scanner: NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
-		matcher: matcher,
-		logger:  logger,
-		ctxInfo: ctxInfo,
-		metrics: metrics,
+		cfg:           cfg,
+		mutator:       mutator,
+		bouncer:       bouncer,
+		scanner:       NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		matcher:       matcher,
+		logger:        logger,
+		ctxInfo:       ctxInfo,
+		metrics:       metrics,
+		podStateCache: podStateCache,
 	}, nil
 }
 
@@ -122,6 +123,10 @@ func (s *Server) Start(ctx context.Context) error {
 
 	if err := s.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
 		return err
+	}
+
+	if s.podStateCache != nil {
+		go s.subscribeStateCache(ctx)
 	}
 
 	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
@@ -235,6 +240,20 @@ func (s *Server) checkImageVolumeSupport(provider *kube.MetadataProvider) error 
 	}
 
 	return nil
+}
+
+// subscribeStateCache subscribes the pod state cache to the kube informer store.
+func (s *Server) subscribeStateCache(ctx context.Context) {
+	store, err := s.ctxInfo.K8sInformer.Get(ctx)
+	if err != nil {
+		s.logger.Error("state metrics unavailable: cannot subscribe to k8s informer", "error", err)
+		return
+	}
+	// Subscribe delivers all existing pods synchronously as CREATED events before
+	// returning. SYNC_FINISHED is not forwarded to late subscribers, so we mark
+	// the cache as ready immediately after Subscribe returns.
+	store.Subscribe(s.podStateCache)
+	s.podStateCache.markSynced()
 }
 
 func (s *Server) getInitialState(ctx context.Context) error {

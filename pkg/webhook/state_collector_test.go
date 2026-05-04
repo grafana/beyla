@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 
@@ -13,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
@@ -214,12 +214,12 @@ func TestClassify(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:         "node_name_propagated",
-			pod:          pod(prodNS, "my-pod", withEnv(envVarLdPreloadName, envVarLdPreloadValue), withNodeName("node-1")),
-			matcher:      nsMatcher(prodNS),
-			cfg:          nsCfg(prodNS),
-			wantStatus:   StatusInstrumented,
-			wantNode:     "node-1",
+			name:       "node_name_propagated",
+			pod:        pod(prodNS, "my-pod", withEnv(envVarLdPreloadName, envVarLdPreloadValue), withNodeName("node-1")),
+			matcher:    nsMatcher(prodNS),
+			cfg:        nsCfg(prodNS),
+			wantStatus: StatusInstrumented,
+			wantNode:   "node-1",
 		},
 		{
 			// A pod carrying Beyla's instrumented label AND a foreign LD_PRELOAD must be
@@ -395,19 +395,12 @@ func TestIsInScope(t *testing.T) {
 	}
 }
 
-// fakePodLister satisfies podLister for tests.
-type fakePodLister struct{ pods []corev1.Pod }
-
-func (f *fakePodLister) listPodsOnNode(_ context.Context, _ string) ([]corev1.Pod, error) {
-	return f.pods, nil
-}
-
-// collectMetrics runs the StateCollector and returns the collected samples as a map
-// from label-set string to gauge value, for easy assertion.
-func collectMetrics(t *testing.T, sc *StateCollector) map[string]float64 {
+// collectMetrics gathers metrics from any prometheus.Collector and returns them
+// as a map from label-set string to gauge value.
+func collectMetrics(t *testing.T, c prometheus.Collector) map[string]float64 {
 	t.Helper()
 	reg := prometheus.NewRegistry()
-	require.NoError(t, reg.Register(sc))
+	require.NoError(t, reg.Register(c))
 
 	mfs, err := reg.Gather()
 	require.NoError(t, err)
@@ -430,107 +423,6 @@ func labelSetKey(labels []*dto.LabelPair) string {
 	return s
 }
 
-func newTestStateCollector(lister podLister, matcher *PodMatcher, cfg *beyla.Config, node string) *StateCollector {
-	sc := NewStateCollector(nil, matcher, cfg, node)
-	sc.lister = lister // override with test lister
-	return sc
-}
-
-func TestStateCollector_Collect(t *testing.T) {
-	const (
-		node  = "node-1"
-		ns    = "prod"
-		appNS = "prod"
-	)
-
-	cfg := nsCfg(ns)
-	matcher := nsMatcher(ns)
-
-	t.Run("instrumented_pod_counted", func(t *testing.T) {
-		pods := []corev1.Pod{
-			*pod(appNS, "app-1",
-				withEnv(envVarLdPreloadName, envVarLdPreloadValue),
-				withNodeName(node),
-				withOwner("ReplicaSet", "my-deploy-abc", "apps/v1"),
-			),
-		}
-		sc := newTestStateCollector(&fakePodLister{pods: pods}, matcher, cfg, node)
-		metrics := collectMetrics(t, sc)
-
-		assert.Len(t, metrics, 1)
-		for key, val := range metrics {
-			assert.Contains(t, key, "status=instrumented,")
-			assert.Contains(t, key, "k8s_workload_kind=Deployment,")
-			assert.Contains(t, key, "k8s_workload_name=my-deploy,")
-			assert.Equal(t, float64(1), val)
-		}
-	})
-
-	t.Run("aggregates_multiple_pods_same_workload", func(t *testing.T) {
-		// All pods owned by the same ReplicaSet → same Deployment label → one sample with count=3.
-		pods := []corev1.Pod{
-			*pod(appNS, "app-abc-1", withEnv(envVarLdPreloadName, envVarLdPreloadValue), withNodeName(node), withOwner("ReplicaSet", "app-abc", "apps/v1")),
-			*pod(appNS, "app-abc-2", withEnv(envVarLdPreloadName, envVarLdPreloadValue), withNodeName(node), withOwner("ReplicaSet", "app-abc", "apps/v1")),
-			*pod(appNS, "app-abc-3", withEnv(envVarLdPreloadName, envVarLdPreloadValue), withNodeName(node), withOwner("ReplicaSet", "app-abc", "apps/v1")),
-		}
-		sc := newTestStateCollector(&fakePodLister{pods: pods}, matcher, cfg, node)
-		metrics := collectMetrics(t, sc)
-
-		require.Len(t, metrics, 1)
-		for _, val := range metrics {
-			assert.Equal(t, float64(3), val)
-		}
-	})
-
-	t.Run("different_statuses_emit_separate_samples", func(t *testing.T) {
-		pods := []corev1.Pod{
-			*pod(appNS, "instrumented", withEnv(envVarLdPreloadName, envVarLdPreloadValue), withNodeName(node)),
-			*pod(appNS, "pending", withNodeName(node)),
-			*pod(appNS, "conflict", withEnv(envVarLdPreloadName, "/other/lib.so"), withNodeName(node)),
-		}
-		sc := newTestStateCollector(&fakePodLister{pods: pods}, matcher, cfg, node)
-		metrics := collectMetrics(t, sc)
-
-		assert.Len(t, metrics, 3)
-	})
-
-	t.Run("out_of_scope_pods_not_emitted", func(t *testing.T) {
-		pods := []corev1.Pod{
-			*pod("kube-system", "system-pod", withNodeName(node)),
-			*pod("other-ns", "foreign-pod", withNodeName(node)),
-		}
-		sc := newTestStateCollector(&fakePodLister{pods: pods}, matcher, cfg, node)
-		metrics := collectMetrics(t, sc)
-
-		assert.Empty(t, metrics)
-	})
-
-	t.Run("skipped_conflict_has_skip_reason_label", func(t *testing.T) {
-		pods := []corev1.Pod{
-			*pod(appNS, "conflict-pod", withEnv(envVarLdPreloadName, "/other.so"), withNodeName(node)),
-		}
-		sc := newTestStateCollector(&fakePodLister{pods: pods}, matcher, cfg, node)
-		metrics := collectMetrics(t, sc)
-
-		require.Len(t, metrics, 1)
-		for key := range metrics {
-			assert.Contains(t, key, "status=skipped,")
-			assert.Contains(t, key, "skip_reason=conflict,")
-		}
-	})
-}
-
-func TestStateCollector_Collect_EmptyNodeName(t *testing.T) {
-	// A collector with an empty node name must emit nothing rather than issuing
-	// a "spec.nodeName=" field-selector that pulls all unscheduled pods cluster-wide.
-	pods := []corev1.Pod{
-		*pod("prod", "app-1", withEnv(envVarLdPreloadName, envVarLdPreloadValue)),
-	}
-	sc := newTestStateCollector(&fakePodLister{pods: pods}, nsMatcher("prod"), nsCfg("prod"), "")
-	metrics := collectMetrics(t, sc)
-	assert.Empty(t, metrics, "Collect with empty node name must emit no metrics")
-}
-
 // TestInScope verifies inScope works correctly with a pre-computed nsScope.
 func TestInScope(t *testing.T) {
 	t.Run("cluster_wide_excludes_system_ns", func(t *testing.T) {
@@ -550,5 +442,324 @@ func TestInScope(t *testing.T) {
 	t.Run("no_globs_not_cluster_wide_matches_nothing", func(t *testing.T) {
 		scope := nsScope{}
 		assert.False(t, inScope("production", scope))
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Informer-based classification tests
+// ---------------------------------------------------------------------------
+
+// informerPod builds a minimal *informer.ObjectMeta for testing.
+func informerPod(namespace, name, uid, node string, opts ...func(*informer.ObjectMeta)) *informer.ObjectMeta {
+	p := &informer.ObjectMeta{
+		Name:      name,
+		Namespace: namespace,
+		Pod: &informer.PodInfo{
+			Uid:      uid,
+			NodeName: node,
+		},
+	}
+	for _, o := range opts {
+		o(p)
+	}
+	return p
+}
+
+func withInformerLabel(key, value string) func(*informer.ObjectMeta) {
+	return func(p *informer.ObjectMeta) {
+		if p.Labels == nil {
+			p.Labels = map[string]string{}
+		}
+		p.Labels[key] = value
+	}
+}
+
+// withInformerOwners sets the full owner chain on the informer pod, as the OBI
+// informer would produce it (e.g. [ReplicaSet, Deployment] after the heuristic).
+func withInformerOwners(owners []*informer.Owner) func(*informer.ObjectMeta) {
+	return func(p *informer.ObjectMeta) {
+		p.Pod.Owners = owners
+	}
+}
+
+func createdEvent(pod *informer.ObjectMeta) *informer.Event {
+	return &informer.Event{Type: informer.EventType_CREATED, Resource: pod}
+}
+
+func updatedEvent(pod *informer.ObjectMeta) *informer.Event {
+	return &informer.Event{Type: informer.EventType_UPDATED, Resource: pod}
+}
+
+func deletedEvent(pod *informer.ObjectMeta) *informer.Event {
+	return &informer.Event{Type: informer.EventType_DELETED, Resource: pod}
+}
+
+func syncFinishedEvent() *informer.Event {
+	return &informer.Event{Type: informer.EventType_SYNC_FINISHED}
+}
+
+func TestClassifyFromInformer(t *testing.T) {
+	const (
+		ns      = "prod"
+		node    = "node-1"
+		version = "v1.2.3"
+	)
+
+	cfg := nsCfg(ns)
+	matcher := nsMatcher(ns)
+	scope := scopedNamespaces(cfg)
+
+	tests := []struct {
+		name       string
+		pod        *informer.ObjectMeta
+		wantNil    bool
+		wantStatus Status
+		wantSkip   string
+		wantKind   string
+		wantWork   string
+	}{
+		{
+			name:       "matched_no_label_pending_restart",
+			pod:        informerPod(ns, "my-pod", "uid-1", node),
+			wantStatus: StatusPendingRestart,
+		},
+		{
+			name:       "matched_current_version_label_instrumented",
+			pod:        informerPod(ns, "my-pod", "uid-2", node, withInformerLabel(instrumentedLabel, version)),
+			wantStatus: StatusInstrumented,
+		},
+		{
+			name:       "matched_stale_version_label_pending_restart",
+			pod:        informerPod(ns, "my-pod", "uid-3", node, withInformerLabel(instrumentedLabel, "v0.9.0")),
+			wantStatus: StatusPendingRestart,
+		},
+		{
+			name:       "unmatched_different_namespace",
+			pod:        informerPod("staging", "my-pod", "uid-4", node),
+			wantStatus: StatusUnmatched,
+		},
+		{
+			name:    "out_of_scope_system_namespace",
+			pod:     informerPod("kube-system", "system-pod", "uid-5", node),
+			wantNil: true,
+		},
+		{
+			name:    "out_of_scope_other_namespace",
+			pod:     informerPod("other-ns", "my-pod", "uid-6", node),
+			wantNil: true,
+		},
+		{
+			// Deployment owner: OBI produces [ReplicaSet, Deployment] after the heuristic.
+			name: "workload_deployment",
+			pod: informerPod(ns, "my-pod-abc-xyz", "uid-7", node,
+				withInformerOwners([]*informer.Owner{
+					{Kind: "ReplicaSet", Name: "my-deploy-abc"},
+					{Kind: "Deployment", Name: "my-deploy"},
+				}),
+			),
+			wantStatus: StatusPendingRestart,
+			wantKind:   "Deployment",
+			wantWork:   "my-deploy",
+		},
+		{
+			name:       "workload_standalone_pod",
+			pod:        informerPod(ns, "standalone", "uid-8", node),
+			wantStatus: StatusPendingRestart,
+			wantKind:   "Pod",
+			wantWork:   "standalone",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyFromInformer(tt.pod, matcher, scope, version)
+			if tt.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			assert.Equal(t, tt.wantStatus, got.Status, "status")
+			assert.Equal(t, tt.wantSkip, got.SkipReason, "skip_reason")
+			if tt.wantKind != "" {
+				assert.Equal(t, tt.wantKind, got.WorkloadKind, "workload_kind")
+				assert.Equal(t, tt.wantWork, got.WorkloadName, "workload_name")
+			}
+		})
+	}
+}
+
+// newTestPodStateCache creates a PodStateCache with the given owner node name,
+// suitable for testing without a live informer.
+func newTestPodStateCache(matcher *PodMatcher, cfg *beyla.Config, node string) *PodStateCache {
+	return NewPodStateCache(matcher, cfg, node)
+}
+
+func TestPodStateCache_On(t *testing.T) {
+	const (
+		ns      = "prod"
+		node    = "node-1"
+		version = "v1.2.3"
+	)
+
+	cfg := &beyla.Config{
+		Injector: beyla.SDKInject{
+			SDKPkgVersion: version,
+			Instrument: services.GlobDefinitionCriteria{
+				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
+			},
+		},
+	}
+	matcher := nsMatcher(ns)
+
+	t.Run("created_event_populates_cache", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-a", "uid-a", node))))
+
+		cache.mu.RLock()
+		defer cache.mu.RUnlock()
+		require.Contains(t, cache.pods, "uid-a")
+		assert.Equal(t, StatusPendingRestart, cache.pods["uid-a"].Status)
+	})
+
+	t.Run("created_other_node_ignored", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-b", "uid-b", "node-2"))))
+
+		cache.mu.RLock()
+		defer cache.mu.RUnlock()
+		assert.NotContains(t, cache.pods, "uid-b")
+	})
+
+	t.Run("updated_event_overwrites_entry", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-c", "uid-c", node))))
+		// Update with the instrumented label — status should change.
+		require.NoError(t, cache.On(updatedEvent(
+			informerPod(ns, "pod-c", "uid-c", node, withInformerLabel(instrumentedLabel, version)),
+		)))
+
+		cache.mu.RLock()
+		defer cache.mu.RUnlock()
+		require.Contains(t, cache.pods, "uid-c")
+		assert.Equal(t, StatusInstrumented, cache.pods["uid-c"].Status)
+	})
+
+	t.Run("deleted_event_removes_entry", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-d", "uid-d", node))))
+		require.NoError(t, cache.On(deletedEvent(informerPod(ns, "pod-d", "uid-d", node))))
+
+		cache.mu.RLock()
+		defer cache.mu.RUnlock()
+		assert.NotContains(t, cache.pods, "uid-d")
+	})
+
+	t.Run("non_pod_event_ignored", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		// Event with no Pod field on the resource.
+		nonPod := &informer.Event{
+			Type:     informer.EventType_CREATED,
+			Resource: &informer.ObjectMeta{Name: "some-service", Namespace: ns},
+		}
+		require.NoError(t, cache.On(nonPod))
+
+		cache.mu.RLock()
+		defer cache.mu.RUnlock()
+		assert.Empty(t, cache.pods)
+	})
+
+	t.Run("sync_finished_sets_synced", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		assert.False(t, cache.synced)
+		require.NoError(t, cache.On(syncFinishedEvent()))
+		assert.True(t, cache.synced)
+	})
+}
+
+func TestPodStateCache_Collect(t *testing.T) {
+	const (
+		ns      = "prod"
+		node    = "node-1"
+		version = "v1.2.3"
+	)
+
+	cfg := &beyla.Config{
+		Injector: beyla.SDKInject{
+			SDKPkgVersion: version,
+			Instrument: services.GlobDefinitionCriteria{
+				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
+			},
+		},
+	}
+	matcher := nsMatcher(ns)
+
+	t.Run("no_metrics_before_sync", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-a", "uid-a", node))))
+		// markSynced not yet called — Collect must emit nothing.
+		metrics := collectMetrics(t, cache)
+		assert.Empty(t, metrics)
+	})
+
+	t.Run("emits_metrics_after_sync", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-a", "uid-a", node))))
+		// markSynced mirrors what subscribeStateCache() does after Subscribe returns.
+		cache.markSynced()
+
+		metrics := collectMetrics(t, cache)
+		require.Len(t, metrics, 1)
+		for key, val := range metrics {
+			assert.Contains(t, key, "status=pending_restart,")
+			assert.Equal(t, float64(1), val)
+		}
+	})
+
+	t.Run("aggregates_same_label_tuple", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		owner := withInformerOwners([]*informer.Owner{
+			{Kind: "ReplicaSet", Name: "my-deploy-abc"},
+			{Kind: "Deployment", Name: "my-deploy"},
+		})
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-1", "uid-1", node, owner))))
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-2", "uid-2", node, owner))))
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-3", "uid-3", node, owner))))
+		cache.markSynced()
+
+		metrics := collectMetrics(t, cache)
+		require.Len(t, metrics, 1)
+		for _, val := range metrics {
+			assert.Equal(t, float64(3), val)
+		}
+	})
+
+	t.Run("different_statuses_emit_separate_samples", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pending", "uid-p", node))))
+		require.NoError(t, cache.On(createdEvent(
+			informerPod(ns, "instrumented", "uid-i", node, withInformerLabel(instrumentedLabel, version)),
+		)))
+		cache.markSynced()
+
+		metrics := collectMetrics(t, cache)
+		assert.Len(t, metrics, 2)
+	})
+
+	t.Run("out_of_scope_pods_not_emitted", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, node)
+		require.NoError(t, cache.On(createdEvent(informerPod("kube-system", "sys", "uid-s", node))))
+		require.NoError(t, cache.On(createdEvent(informerPod("other-ns", "foreign", "uid-f", node))))
+		cache.markSynced()
+
+		metrics := collectMetrics(t, cache)
+		assert.Empty(t, metrics)
+	})
+
+	t.Run("empty_node_name_emits_nothing", func(t *testing.T) {
+		cache := newTestPodStateCache(matcher, cfg, "")
+		cache.markSynced()
+
+		metrics := collectMetrics(t, cache)
+		assert.Empty(t, metrics, "Collect with empty node name must emit no metrics")
 	})
 }

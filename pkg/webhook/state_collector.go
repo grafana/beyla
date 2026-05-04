@@ -1,18 +1,18 @@
 package webhook
 
 import (
-	"context"
 	"log/slog"
 	"os"
-	"time"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
@@ -41,7 +41,7 @@ var systemNamespaces = map[string]bool{
 	"kube-public":     true,
 }
 
-// PodClassification is the per-pod output of classify.
+// PodClassification is the per-pod output of classify and classifyFromInformer.
 type PodClassification struct {
 	Namespace    string
 	WorkloadKind string
@@ -53,6 +53,7 @@ type PodClassification struct {
 
 // classify returns a PodClassification for pod, or nil if the pod is outside
 // the scope of the injector configuration.
+// Retained for test coverage of the underlying classification helpers.
 func classify(pod *corev1.Pod, matcher *PodMatcher, scope nsScope) *PodClassification {
 	ns := pod.Namespace
 	if !inScope(ns, scope) {
@@ -124,18 +125,12 @@ func alreadyInstrumentedByOther(spec *corev1.PodSpec, meta *metav1.ObjectMeta) b
 }
 
 // nsScope is the pre-computed namespace scope derived from the injector config.
-// It is calculated once per Collect() call and passed into classify to avoid
-// re-scanning the full config for every pod.
 type nsScope struct {
 	clusterWide bool
 	globs       []*services.GlobAttr
 }
 
 // scopedNamespaces analyses the injector configuration and returns an nsScope.
-//
-//   - If any selector has no k8s_namespace constraint, the scope is cluster-wide
-//     (all non-system namespaces are considered in-scope).
-//   - Otherwise, the scope is the union of each selector's k8s_namespace glob matchers.
 func scopedNamespaces(cfg *beyla.Config) nsScope {
 	for i := range cfg.Injector.Instrument {
 		if _, hasNs := cfg.Injector.Instrument[i].Metadata[services.AttrNamespace]; !hasNs {
@@ -186,55 +181,6 @@ type labelTuple struct {
 	skipReason   string
 }
 
-// podLister lists pods on a given node. Abstracted so the StateCollector can be tested
-// without a live Kubernetes cluster.
-type podLister interface {
-	listPodsOnNode(ctx context.Context, nodeName string) ([]corev1.Pod, error)
-}
-
-type k8sPodLister struct{ client kubernetes.Interface }
-
-func (l *k8sPodLister) listPodsOnNode(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
-	list, err := l.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return list.Items, nil
-}
-
-// StateCollector is a prometheus.Collector that emits one gauge sample per unique
-// (namespace, workload_kind, workload_name, node_name, status, skip_reason) tuple,
-// representing the current injection state of pods on this node.
-type StateCollector struct {
-	logger  *slog.Logger
-	lister  podLister
-	matcher *PodMatcher
-	cfg     *beyla.Config
-	ownNode string
-	desc    *prometheus.Desc
-}
-
-// NewStateCollector creates a StateCollector. ownNode should come from the NODE_NAME
-// env var (set via downward API in the DaemonSet manifest); OwnNodeName() is a
-// convenience helper for that.
-func NewStateCollector(client kubernetes.Interface, matcher *PodMatcher, cfg *beyla.Config, ownNode string) *StateCollector {
-	return &StateCollector{
-		logger:  slog.With("component", "webhook.StateCollector"),
-		lister:  &k8sPodLister{client: client},
-		matcher: matcher,
-		cfg:     cfg,
-		ownNode: ownNode,
-		desc: prometheus.NewDesc(
-			attr.VendorPrefix+"_injection_pods",
-			"Current number of pods in each SDK injection state, as seen from this Beyla node.",
-			[]string{"k8s_namespace_name", "k8s_workload_kind", "k8s_workload_name", "k8s_node_name", "status", "skip_reason"},
-			nil,
-		),
-	}
-}
-
 // OwnNodeName returns the name of the node this Beyla instance is running on.
 // It reads NODE_NAME (set via the downward API in the DaemonSet manifest) and
 // falls back to os.Hostname().
@@ -248,34 +194,112 @@ func OwnNodeName() string {
 	return ""
 }
 
-func (c *StateCollector) Describe(ch chan<- *prometheus.Desc) {
+// PodStateCache is an event-driven cache of pod injection states. It implements
+// meta.Observer to receive pod events from the kube informer store and
+// prometheus.Collector to expose the aggregated state as a gauge metric.
+// This replaces the per-scrape Kubernetes API call used by the old StateCollector.
+type PodStateCache struct {
+	mu      sync.RWMutex
+	pods    map[string]*PodClassification // keyed by pod UID
+	synced  bool                          // true after first SYNC_FINISHED
+	matcher *PodMatcher
+	cfg     *beyla.Config
+	ownNode string
+	desc    *prometheus.Desc
+	logger  *slog.Logger
+}
+
+// NewPodStateCache creates a PodStateCache. ownNode should come from OwnNodeName().
+func NewPodStateCache(matcher *PodMatcher, cfg *beyla.Config, ownNode string) *PodStateCache {
+	return &PodStateCache{
+		logger:  slog.With("component", "webhook.PodStateCache"),
+		pods:    map[string]*PodClassification{},
+		matcher: matcher,
+		cfg:     cfg,
+		ownNode: ownNode,
+		desc: prometheus.NewDesc(
+			attr.VendorPrefix+"_injection_pods",
+			"Current number of pods in each SDK injection state, as seen from this Beyla node.",
+			[]string{"k8s_namespace_name", "k8s_workload_kind", "k8s_workload_name", "k8s_node_name", "status", "skip_reason"},
+			nil,
+		),
+	}
+}
+
+// ID implements meta.Observer.
+func (c *PodStateCache) ID() string { return "webhook-pod-state-cache" }
+
+// markSynced marks the cache as ready to serve metrics. It is called by
+// subscribeStateCache after store.Subscribe returns, at which point all
+// existing pods have been delivered synchronously as CREATED events.
+// SYNC_FINISHED from the informer is not forwarded to late subscribers by the
+// store, so we set the flag explicitly here instead.
+func (c *PodStateCache) markSynced() {
+	c.mu.Lock()
+	c.synced = true
+	c.mu.Unlock()
+}
+
+// On implements meta.Observer. It updates the in-memory pod state cache from
+// informer events.
+func (c *PodStateCache) On(event *informer.Event) error {
+	if event.Type == informer.EventType_SYNC_FINISHED {
+		c.mu.Lock()
+		c.synced = true
+		c.mu.Unlock()
+		return nil
+	}
+
+	if event.Resource == nil || event.GetResource().GetPod() == nil {
+		return nil
+	}
+
+	pod := event.GetResource()
+	uid := pod.Pod.Uid
+
+	switch event.Type {
+	case informer.EventType_CREATED, informer.EventType_UPDATED:
+		if c.ownNode == "" || pod.Pod.NodeName != c.ownNode {
+			return nil
+		}
+		pc := classifyFromInformer(pod, c.matcher, scopedNamespaces(c.cfg), c.cfg.Injector.PackageVersion())
+		c.mu.Lock()
+		if pc == nil {
+			delete(c.pods, uid)
+		} else {
+			c.pods[uid] = pc
+		}
+		c.mu.Unlock()
+	case informer.EventType_DELETED:
+		c.mu.Lock()
+		delete(c.pods, uid)
+		c.mu.Unlock()
+	}
+	return nil
+}
+
+func (c *PodStateCache) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
-// Collect lists all pods on this node, classifies each one, aggregates by label
-// tuple, and emits one GaugeValue per tuple.
-func (c *StateCollector) Collect(ch chan<- prometheus.Metric) {
+// Collect emits one GaugeValue per unique (namespace, workload_kind, workload_name,
+// node_name, status, skip_reason) tuple. It returns nothing until the initial
+// informer sync completes to avoid emitting misleading zeros at startup.
+func (c *PodStateCache) Collect(ch chan<- prometheus.Metric) {
 	if c.ownNode == "" {
 		c.logger.Warn("skipping pod state collection: node name is empty")
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-	pods, err := c.lister.listPodsOnNode(ctx, c.ownNode)
-	if err != nil {
-		c.logger.Error("failed to list pods", "node", c.ownNode, "error", err)
+	if !c.synced {
 		return
 	}
 
-	scope := scopedNamespaces(c.cfg)
 	counts := map[labelTuple]int{}
-	for i := range pods {
-		pc := classify(&pods[i], c.matcher, scope)
-		if pc == nil {
-			continue
-		}
+	for _, pc := range c.pods {
 		lt := labelTuple{
 			namespace:    pc.Namespace,
 			workloadKind: pc.WorkloadKind,
@@ -300,4 +324,91 @@ func (c *StateCollector) Collect(ch chan<- prometheus.Metric) {
 			lt.skipReason,
 		)
 	}
+}
+
+// classifyFromInformer classifies a pod from informer metadata, returning nil if
+// the pod is outside the configured namespace scope.
+func classifyFromInformer(pod *informer.ObjectMeta, matcher *PodMatcher, scope nsScope, currentVersion string) *PodClassification {
+	ns := pod.Namespace
+	if !inScope(ns, scope) {
+		return nil
+	}
+
+	info := processMetadataFromInformer(pod)
+	_, matched := matcher.MatchProcessInfo(info)
+
+	status, skipReason := classifyStatusFromInformer(pod, matched, currentVersion)
+
+	kind, name := resolveWorkloadFromInformer(pod)
+
+	nodeName := ""
+	if pod.Pod != nil {
+		nodeName = pod.Pod.NodeName
+	}
+
+	return &PodClassification{
+		Namespace:    ns,
+		WorkloadKind: kind,
+		WorkloadName: name,
+		NodeName:     nodeName,
+		Status:       status,
+		SkipReason:   skipReason,
+	}
+}
+
+// classifyStatusFromInformer derives pod injection status from informer metadata.
+// Limitation: StatusSkipped/conflict (LD_PRELOAD set to a foreign value) is not
+// detectable from informer data because LD_PRELOAD is filtered by OBI's usefulEnvVars.
+// Conflict pods appear as pending_restart.
+func classifyStatusFromInformer(pod *informer.ObjectMeta, matched bool, currentVersion string) (Status, string) {
+	if !matched {
+		return StatusUnmatched, ""
+	}
+	if ver, ok := pod.Labels[instrumentedLabel]; ok && ver != "" {
+		if ver == currentVersion {
+			return StatusInstrumented, ""
+		}
+		// Label present but version differs — pod will be re-instrumented after restart.
+		return StatusPendingRestart, ""
+	}
+	return StatusPendingRestart, ""
+}
+
+// processMetadataFromInformer builds a *ProcessInfo for MatchProcessInfo() from
+// informer metadata. Mirrors processMetadata() in mutator.go but works directly
+// with *informer.ObjectMeta (owners are already []*informer.Owner).
+func processMetadataFromInformer(pod *informer.ObjectMeta) *ProcessInfo {
+	ownerName := pod.Name
+	var owners []*informer.Owner
+	if pod.Pod != nil {
+		owners = pod.Pod.Owners
+	}
+	if top := topOwner(owners); top != nil {
+		ownerName = top.Name
+	}
+
+	ret := ProcessInfo{}
+	ret.metadata = map[string]string{
+		services.AttrNamespace: pod.Namespace,
+		services.AttrPodName:   pod.Name,
+		services.AttrOwnerName: ownerName,
+	}
+	ret.podLabels = pod.Labels
+	ret.podAnnotations = pod.Annotations
+
+	for _, owner := range owners {
+		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+	}
+	return &ret
+}
+
+// resolveWorkloadFromInformer returns the top-level workload kind and name using
+// the owner chain already present in the informer ObjectMeta.
+func resolveWorkloadFromInformer(pod *informer.ObjectMeta) (kind, name string) {
+	if pod.Pod != nil {
+		if top := topOwner(pod.Pod.Owners); top != nil {
+			return top.Kind, top.Name
+		}
+	}
+	return "Pod", pod.Name
 }

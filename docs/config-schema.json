@@ -539,6 +539,15 @@
       },
       "type": "object"
     },
+    "EmbeddingProviderConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_HTTP_GENAI_EMBEDDING_ENABLED"
+        }
+      },
+      "type": "object"
+    },
     "EnrichmentConfig": {
       "properties": {
         "enabled": {
@@ -553,6 +562,19 @@
             "$ref": "#/$defs/HTTPParsingRule"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "ExponentialHistogramConfig": {
+      "properties": {
+        "max_scale": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SCALE"
+        },
+        "max_size": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SIZE"
         }
       },
       "type": "object"
@@ -609,6 +631,9 @@
         },
         "bedrock": {
           "$ref": "#/$defs/BedrockConfig"
+        },
+        "embedding": {
+          "$ref": "#/$defs/EmbeddingProviderConfig"
         },
         "gemini": {
           "$ref": "#/$defs/GeminiConfig"
@@ -1300,6 +1325,9 @@
           "format": "uri",
           "x-env-var": "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"
         },
+        "exponential_histogram": {
+          "$ref": "#/$defs/ExponentialHistogramConfig"
+        },
         "extra_span_resource_attributes": {
           "items": {
             "type": "string"
@@ -1328,6 +1356,7 @@
             "type": "string",
             "enum": [
               "*",
+              "amqp",
               "couchbase",
               "dns",
               "genai",
@@ -1418,6 +1447,29 @@
           },
           "type": "array",
           "x-env-var": "OTEL_EBPF_NAME_RESOLVER_SOURCES"
+        }
+      },
+      "type": "object"
+    },
+    "NativeHistogramConfig": {
+      "properties": {
+        "bucket_factor": {
+          "type": "number",
+          "x-env-var": "OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_BUCKET_FACTOR"
+        },
+        "max_bucket_number": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_MAX_BUCKET_NUMBER"
+        },
+        "min_reset_duration": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_MIN_RESET_DURATION"
         }
       },
       "type": "object"
@@ -1636,6 +1688,7 @@
             "type": "string",
             "enum": [
               "*",
+              "amqp",
               "couchbase",
               "dns",
               "genai",
@@ -1653,6 +1706,9 @@
           },
           "type": "array",
           "x-env-var": "OTEL_EBPF_PROMETHEUS_INSTRUMENTATIONS"
+        },
+        "native_histogram": {
+          "$ref": "#/$defs/NativeHistogramConfig"
         },
         "path": {
           "type": "string",
@@ -2214,6 +2270,7 @@
             "type": "string",
             "enum": [
               "*",
+              "amqp",
               "couchbase",
               "dns",
               "genai",

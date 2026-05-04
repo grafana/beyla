@@ -33,8 +33,8 @@ const (
 	SkipReasonAlreadyInstrumented = "already_instrumented"
 )
 
-// systemNamespaces are excluded from the "unmatched" emission even when
-// the injector is configured with a wildcard namespace selector.
+// systemNamespaces are excluded entirely from state metrics, even when the
+// injector is configured with a wildcard namespace selector.
 var systemNamespaces = map[string]bool{
 	"kube-system":     true,
 	"kube-node-lease": true,

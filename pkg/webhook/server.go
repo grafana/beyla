@@ -46,14 +46,14 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	logger := slog.Default().With("component", "webhook-server")
 
-	// Create and register metrics
-	metrics := NewSDKInjectionMetrics()
+	// Create and register metrics only when the Prometheus endpoint is configured;
+	// otherwise CounterVec label maps grow unboundedly with no scraper to read them.
+	var metrics *SDKInjectionMetrics
 	var podStateCache *PodStateCache
 	if ctxInfo.Prometheus != nil && cfg.InternalMetrics.Prometheus.Port != 0 {
+		metrics = NewSDKInjectionMetrics()
 		collectors := metrics.Collectors()
-		if cfg.Injector.DisableStateMetrics {
-			logger.Info("beyla_injection_pods state metric collector disabled via config")
-		} else if ownNode := OwnNodeName(); ownNode == "" {
+		if ownNode := OwnNodeName(); ownNode == "" {
 			logger.Warn("state metrics unavailable: cannot determine node name (NODE_NAME unset and os.Hostname failed)")
 		} else {
 			podStateCache = NewPodStateCache(matcher, cfg, ownNode)

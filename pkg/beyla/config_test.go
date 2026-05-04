@@ -229,7 +229,7 @@ network:
 				MaxSize:  160,
 				MaxScale: 20,
 			},
-			TTL: 5 * time.Minute,
+			TTL:                     5 * time.Minute,
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
 		Traces: otelcfg.TracesConfig{

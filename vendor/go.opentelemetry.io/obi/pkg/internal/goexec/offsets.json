@@ -222,7 +222,7 @@
       "Addr": {
         "versions": {
           "oldest": "1.5.0",
-          "newest": "1.9.3"
+          "newest": "1.10.0"
         },
         "offsets": [
           {
@@ -236,7 +236,7 @@
       "cfg": {
         "versions": {
           "oldest": "1.5.0",
-          "newest": "1.9.3"
+          "newest": "1.10.0"
         },
         "offsets": [
           {

@@ -124,11 +124,6 @@ var (
 		Prom:    "dns_lookup_duration_seconds",
 		OTEL:    "dns.lookup.duration",
 	}
-	StatTCPRtt = Name{
-		Section: "obi.stat.tcp.rtt",
-		Prom:    "obi_stat_tcp_rtt_seconds",
-		OTEL:    "obi.stat.tcp.rtt",
-	}
 	GenAIClientInputTokenUsage = Name{
 		Section: "gen_ai.client.token.usage.input",
 		Prom:    "gen_ai_client_token_usage",
@@ -143,6 +138,11 @@ var (
 		Section: "gen_ai.client.operation.duration",
 		Prom:    "gen_ai_client_operation_duration_seconds",
 		OTEL:    "gen_ai.client.operation.duration",
+	}
+	StatTCPRtt = Name{
+		Section: "obi.stat.tcp.rtt",
+		Prom:    "obi_stat_tcp_rtt_seconds",
+		OTEL:    "obi.stat.tcp.rtt",
 	}
 	StatTCPFailedConnections = Name{
 		Section: "obi.stat.tcp.failed.connections",

@@ -224,7 +224,11 @@ network:
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
-			HistogramAggregation:    "base2_exponential_bucket_histogram",
+			HistogramAggregation: "base2_exponential_bucket_histogram",
+			ExponentialHistogram: otelcfg.ExponentialHistogramConfig{
+				MaxSize:  160,
+				MaxScale: 20,
+			},
 			TTL:                     5 * time.Minute,
 			ExtraSpanResourceLabels: []string{"k8s.namespace.name"},
 		},
@@ -244,6 +248,7 @@ network:
 				instrumentations.InstrumentationKafka,
 				instrumentations.InstrumentationMQTT,
 				instrumentations.InstrumentationNATS,
+				instrumentations.InstrumentationAMQP,
 				instrumentations.InstrumentationMongo,
 				instrumentations.InstrumentationCouchbase,
 				instrumentations.InstrumentationMemcached,
@@ -255,6 +260,7 @@ network:
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
 			},
+			NativeHistogram:             prom.DefaultNativeHistogramConfig,
 			TTL:                         time.Second,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: export.Buckets{

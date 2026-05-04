@@ -172,9 +172,13 @@ func (tc *netlinkManager) attachProgramToIfaceLocked(prog *netlinkProg, iface *n
 	}
 
 	if err := netlink.FilterAdd(filter); err != nil {
-		if errors.Is(err, fs.ErrExist) {
+		switch {
+		case errors.Is(err, unix.ENODEV):
+			tc.log.Warn(eNoDevMsg, "program", prog.name, "iface", iface.Index, "error", err)
+			return
+		case errors.Is(err, fs.ErrExist):
 			tc.log.Warn("filter already exists. Ignoring", "error", err)
-		} else {
+		default:
 			tc.emitError("failed to create filter", err)
 		}
 	}
@@ -253,6 +257,12 @@ func (tc *netlinkManager) onIfaceManagerError(err error) {
 func (tc *netlinkManager) installQdisc(iface *ifaces.Interface) *netlink.GenericQdisc {
 	link, err := netlink.LinkByIndex(iface.Index)
 	if err != nil {
+		var linkNotFound netlink.LinkNotFoundError
+		if errors.As(err, &linkNotFound) {
+			tc.log.Warn(eNoDevMsg, "index", iface.Index, "name", iface.Name, "error", err)
+			return nil
+		}
+
 		tc.emitError("failed to lookup link device", "index", iface.Index, "name", iface.Name, "error", err)
 		return nil
 	}
@@ -269,9 +279,13 @@ func (tc *netlinkManager) installQdisc(iface *ifaces.Interface) *netlink.Generic
 	}
 
 	if err := netlink.QdiscAdd(qdisc); err != nil {
-		if errors.Is(err, fs.ErrExist) {
+		switch {
+		case errors.Is(err, unix.ENODEV):
+			tc.log.Warn(eNoDevMsg, "index", iface.Index, "name", iface.Name, "error", err)
+			return nil
+		case errors.Is(err, fs.ErrExist):
 			tc.log.Warn("qdisc clsact already exists. Ignoring", "error", err)
-		} else {
+		default:
 			tc.emitError("failed to create clsact qdisc on", "index", iface.Index, "name", iface.Name, "error", err)
 			return nil
 		}

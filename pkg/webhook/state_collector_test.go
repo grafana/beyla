@@ -110,15 +110,6 @@ func withLabel(key, value string) func(*corev1.Pod) {
 	}
 }
 
-func withAnnotation(key, value string) func(*corev1.Pod) {
-	return func(p *corev1.Pod) {
-		if p.Annotations == nil {
-			p.Annotations = map[string]string{}
-		}
-		p.Annotations[key] = value
-	}
-}
-
 func withNodeName(node string) func(*corev1.Pod) {
 	return func(p *corev1.Pod) { p.Spec.NodeName = node }
 }
@@ -133,7 +124,6 @@ func withOwner(kind, name, apiVersion string) func(*corev1.Pod) {
 	}
 }
 
-// TestClassify covers every status/skip-reason combination from the plan.
 func TestClassify(t *testing.T) {
 	const prodNS = "prod"
 
@@ -202,7 +192,7 @@ func TestClassify(t *testing.T) {
 		{
 			name:    "out_of_scope_system_namespace",
 			pod:     pod("kube-system", "my-pod"),
-			matcher: wildcardMatcher(),
+			matcher: &PodMatcher{logger: slog.Default(), selectors: []services.Selector{&services.GlobAttributes{Metadata: services.MetadataGlobMap{}}}},
 			cfg:     wildcardCfg(),
 			wantNil: true,
 		},
@@ -252,19 +242,6 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-// wildcardMatcher returns a PodMatcher with no namespace constraint.
-func wildcardMatcher() *PodMatcher {
-	return &PodMatcher{
-		logger: slog.Default(),
-		selectors: []services.Selector{
-			&services.GlobAttributes{
-				Metadata: services.MetadataGlobMap{},
-			},
-		},
-	}
-}
-
-// TestClassifyWorkloadResolution covers owner-reference walking.
 func TestClassifyWorkloadResolution(t *testing.T) {
 	const ns = "prod"
 
@@ -367,6 +344,18 @@ func TestIsInScope(t *testing.T) {
 			want:      false,
 		},
 		{
+			name:      "out_of_scope_kube_node_lease",
+			namespace: "kube-node-lease",
+			cfg:       wildcardCfg(),
+			want:      false,
+		},
+		{
+			name:      "out_of_scope_kube_public",
+			namespace: "kube-public",
+			cfg:       wildcardCfg(),
+			want:      false,
+		},
+		{
 			name:      "out_of_scope_no_selectors",
 			namespace: "prod",
 			cfg:       &beyla.Config{},
@@ -421,28 +410,6 @@ func labelSetKey(labels []*dto.LabelPair) string {
 		s += lp.GetName() + "=" + lp.GetValue() + ","
 	}
 	return s
-}
-
-// TestInScope verifies inScope works correctly with a pre-computed nsScope.
-func TestInScope(t *testing.T) {
-	t.Run("cluster_wide_excludes_system_ns", func(t *testing.T) {
-		scope := nsScope{clusterWide: true}
-		assert.True(t, inScope("prod", scope))
-		assert.False(t, inScope("kube-system", scope))
-		assert.False(t, inScope("kube-node-lease", scope))
-		assert.False(t, inScope("kube-public", scope))
-	})
-
-	t.Run("explicit_globs_match_correctly", func(t *testing.T) {
-		scope := nsScope{globs: []*services.GlobAttr{strToGlob("production")}}
-		assert.True(t, inScope("production", scope))
-		assert.False(t, inScope("staging", scope))
-	})
-
-	t.Run("no_globs_not_cluster_wide_matches_nothing", func(t *testing.T) {
-		scope := nsScope{}
-		assert.False(t, inScope("production", scope))
-	})
 }
 
 // ---------------------------------------------------------------------------
@@ -534,11 +501,6 @@ func TestClassifyFromInformer(t *testing.T) {
 			wantStatus: StatusPendingRestart,
 		},
 		{
-			name:       "unmatched_different_namespace",
-			pod:        informerPod("staging", "my-pod", "uid-4", node),
-			wantStatus: StatusUnmatched,
-		},
-		{
 			name:    "out_of_scope_system_namespace",
 			pod:     informerPod("kube-system", "system-pod", "uid-5", node),
 			wantNil: true,
@@ -586,12 +548,13 @@ func TestClassifyFromInformer(t *testing.T) {
 			}
 		})
 	}
-}
 
-// newTestPodStateCache creates a PodStateCache with the given owner node name,
-// suitable for testing without a live informer.
-func newTestPodStateCache(matcher *PodMatcher, cfg *beyla.Config, node string) *PodStateCache {
-	return NewPodStateCache(matcher, cfg, node)
+	t.Run("unmatched_in_scope", func(t *testing.T) {
+		m := nsLabelMatcher(ns, "app", "specific-app")
+		got := classifyFromInformer(informerPod(ns, "other-app", "uid-u", node), m, scope, version)
+		require.NotNil(t, got)
+		assert.Equal(t, StatusUnmatched, got.Status)
+	})
 }
 
 func TestPodStateCache_On(t *testing.T) {
@@ -612,7 +575,7 @@ func TestPodStateCache_On(t *testing.T) {
 	matcher := nsMatcher(ns)
 
 	t.Run("created_event_populates_cache", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-a", "uid-a", node))))
 
 		cache.mu.RLock()
@@ -622,7 +585,7 @@ func TestPodStateCache_On(t *testing.T) {
 	})
 
 	t.Run("created_other_node_ignored", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-b", "uid-b", "node-2"))))
 
 		cache.mu.RLock()
@@ -631,7 +594,7 @@ func TestPodStateCache_On(t *testing.T) {
 	})
 
 	t.Run("updated_event_overwrites_entry", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-c", "uid-c", node))))
 		// Update with the instrumented label — status should change.
 		require.NoError(t, cache.On(updatedEvent(
@@ -645,7 +608,7 @@ func TestPodStateCache_On(t *testing.T) {
 	})
 
 	t.Run("deleted_event_removes_entry", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-d", "uid-d", node))))
 		require.NoError(t, cache.On(deletedEvent(informerPod(ns, "pod-d", "uid-d", node))))
 
@@ -655,7 +618,7 @@ func TestPodStateCache_On(t *testing.T) {
 	})
 
 	t.Run("non_pod_event_ignored", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		// Event with no Pod field on the resource.
 		nonPod := &informer.Event{
 			Type:     informer.EventType_CREATED,
@@ -669,7 +632,7 @@ func TestPodStateCache_On(t *testing.T) {
 	})
 
 	t.Run("sync_finished_sets_synced", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		assert.False(t, cache.synced)
 		require.NoError(t, cache.On(syncFinishedEvent()))
 		assert.True(t, cache.synced)
@@ -694,7 +657,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 	matcher := nsMatcher(ns)
 
 	t.Run("no_metrics_before_sync", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-a", "uid-a", node))))
 		// markSynced not yet called — Collect must emit nothing.
 		metrics := collectMetrics(t, cache)
@@ -702,7 +665,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 	})
 
 	t.Run("emits_metrics_after_sync", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pod-a", "uid-a", node))))
 		// markSynced mirrors what subscribeStateCache() does after Subscribe returns.
 		cache.markSynced()
@@ -716,7 +679,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 	})
 
 	t.Run("aggregates_same_label_tuple", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		owner := withInformerOwners([]*informer.Owner{
 			{Kind: "ReplicaSet", Name: "my-deploy-abc"},
 			{Kind: "Deployment", Name: "my-deploy"},
@@ -734,7 +697,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 	})
 
 	t.Run("different_statuses_emit_separate_samples", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod(ns, "pending", "uid-p", node))))
 		require.NoError(t, cache.On(createdEvent(
 			informerPod(ns, "instrumented", "uid-i", node, withInformerLabel(instrumentedLabel, version)),
@@ -746,7 +709,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 	})
 
 	t.Run("out_of_scope_pods_not_emitted", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, node)
+		cache := NewPodStateCache(matcher, cfg, node)
 		require.NoError(t, cache.On(createdEvent(informerPod("kube-system", "sys", "uid-s", node))))
 		require.NoError(t, cache.On(createdEvent(informerPod("other-ns", "foreign", "uid-f", node))))
 		cache.markSynced()
@@ -756,7 +719,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 	})
 
 	t.Run("empty_node_name_emits_nothing", func(t *testing.T) {
-		cache := newTestPodStateCache(matcher, cfg, "")
+		cache := NewPodStateCache(matcher, cfg, "")
 		cache.markSynced()
 
 		metrics := collectMetrics(t, cache)

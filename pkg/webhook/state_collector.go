@@ -81,7 +81,6 @@ func classifyStatus(pod *corev1.Pod, matched bool) (Status, string) {
 		return StatusUnmatched, ""
 	}
 
-	// Mirror mutatePod: check alreadyInstrumentedByOther before inspecting LD_PRELOAD.
 	if alreadyInstrumentedByOther(&pod.Spec, &pod.ObjectMeta) {
 		return StatusSkipped, SkipReasonAlreadyInstrumented
 	}
@@ -130,7 +129,7 @@ type nsScope struct {
 	globs       []*services.GlobAttr
 }
 
-// scopedNamespaces analyses the injector configuration and returns an nsScope.
+// scopedNamespaces analyzes the injector configuration and returns an nsScope.
 func scopedNamespaces(cfg *beyla.Config) nsScope {
 	for i := range cfg.Injector.Instrument {
 		if _, hasNs := cfg.Injector.Instrument[i].Metadata[services.AttrNamespace]; !hasNs {
@@ -197,7 +196,6 @@ func OwnNodeName() string {
 // PodStateCache is an event-driven cache of pod injection states. It implements
 // meta.Observer to receive pod events from the kube informer store and
 // prometheus.Collector to expose the aggregated state as a gauge metric.
-// This replaces the per-scrape Kubernetes API call used by the old StateCollector.
 type PodStateCache struct {
 	mu      sync.RWMutex
 	pods    map[string]*PodClassification // keyed by pod UID

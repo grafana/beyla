@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 

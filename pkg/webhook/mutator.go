@@ -169,45 +169,16 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	pm.logger.Info("received mutation request", "remoteAddr", r.RemoteAddr)
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		pm.logger.Error("failed to read request body", "error", err)
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-
-	// Verify the content type
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
-		pm.logger.Error("invalid content type", "contentType", contentType)
-		http.Error(w, "invalid Content-Type, expect application/json", http.StatusUnsupportedMediaType)
+	admReview := pm.parseAdmissionReview(w, r)
+	if admReview == nil {
 		return
 	}
 
-	// Decode the admission review request
-	admReview := admissionv1.AdmissionReview{}
-	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		pm.logger.Error("failed to decode admission review", "error", err)
-		http.Error(w, fmt.Sprintf("failed to decode admission review: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	if admReview.Request == nil {
-		pm.logger.Error("admission review request is nil")
-		http.Error(w, "admission review request is nil", http.StatusBadRequest)
-		return
-	}
-
-	pm.logger.Info("processing admission request", "uid", admReview.Request.UID, "kind", admReview.Request.Kind.Kind)
-
-	// Create the admission response
 	admResponse := &admissionv1.AdmissionResponse{
 		UID:     admReview.Request.UID,
 		Allowed: true,
 	}
 
-	// add a label with the version of the SDKs we've instrumented
 	if pm.cfg.Injector.PackageVersion() == "" {
 		errorResponse(admResponse, "Image Volume Path or SDK package version must be set")
 		if pm.metrics != nil {
@@ -217,75 +188,125 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Process the pod
 	if admReview.Request.Kind.Kind == "Pod" {
-		pod := corev1.Pod{}
-		if err := json.Unmarshal(admReview.Request.Object.Raw, &pod); err != nil {
-			pm.logger.Error("failed to unmarshal pod", "error", err)
-			errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
-			if pm.metrics != nil {
-				pm.metrics.RecordRequest(admReview.Request.Namespace, "", "", "", ErrorTypeAdmissionRejected)
-			}
-		} else {
-			pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
-			wlKind, wlName := resolveWorkload(&pod)
-
-			lang := detectLanguageFromPodSpec(&pod)
-			selector, matched := pm.matchesSelection(&pod.ObjectMeta)
-			if !matched {
-				pm.logger.Info("pod doesn't match selection criteria", "pod", pod.Name, "namespace", pod.Namespace)
-				if pm.metrics != nil {
-					pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoMatchingSelector)
-				}
-			} else {
-				if modified, skipReason := pm.mutatePod(&pod, selector); modified {
-					marshalled, err := json.Marshal(pod)
-					if err != nil {
-						pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
-						errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
-						if pm.metrics != nil {
-							pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
-						}
-					} else {
-						pm.logger.Info("generating patch", "originalSize", len(admReview.Request.Object.Raw), "modifiedSize", len(marshalled))
-
-						patchResponse := admission.PatchResponseFromRaw(admReview.Request.Object.Raw, marshalled)
-
-						if len(patchResponse.Patches) > 0 {
-							patchBytes, err := json.Marshal(patchResponse.Patches)
-							if err != nil {
-								pm.logger.Error("failed to marshal patches", "error", err)
-								errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
-								if pm.metrics != nil {
-									pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
-								}
-							} else {
-								pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
-								admResponse.Patch = patchBytes
-								patchType := admissionv1.PatchTypeJSONPatch
-								admResponse.PatchType = &patchType
-								if pm.metrics != nil {
-									pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, OutcomeSuccess)
-								}
-							}
-						} else {
-							errorResponse(admResponse, "no changes")
-							if pm.metrics != nil {
-								pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoChangesDetected)
-							}
-						}
-					}
-				} else {
-					pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
-					if pm.metrics != nil && skipReason != "" {
-						pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, skipReason)
-					}
-				}
-			}
-		}
+		pm.processPodRequest(admReview.Request, admResponse)
 	}
 
 	pm.mutateResponse(w, admResponse)
+}
+
+func (pm *PodMutator) parseAdmissionReview(w http.ResponseWriter, r *http.Request) *admissionv1.AdmissionReview {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		pm.logger.Error("failed to read request body", "error", err)
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return nil
+	}
+	defer r.Body.Close()
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		pm.logger.Error("invalid content type", "contentType", contentType)
+		http.Error(w, "invalid Content-Type, expect application/json", http.StatusUnsupportedMediaType)
+		return nil
+	}
+
+	admReview := admissionv1.AdmissionReview{}
+	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
+		pm.logger.Error("failed to decode admission review", "error", err)
+		http.Error(w, fmt.Sprintf("failed to decode admission review: %v", err), http.StatusBadRequest)
+		return nil
+	}
+
+	if admReview.Request == nil {
+		pm.logger.Error("admission review request is nil")
+		http.Error(w, "admission review request is nil", http.StatusBadRequest)
+		return nil
+	}
+
+	pm.logger.Info("processing admission request", "uid", admReview.Request.UID, "kind", admReview.Request.Kind.Kind)
+	return &admReview
+}
+
+func (pm *PodMutator) processPodRequest(req *admissionv1.AdmissionRequest, admResponse *admissionv1.AdmissionResponse) {
+	pod := corev1.Pod{}
+	if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
+		pm.logger.Error("failed to unmarshal pod", "error", err)
+		errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(req.Namespace, "", "", "", ErrorTypeAdmissionRejected)
+		}
+		return
+	}
+
+	pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
+	wlKind, wlName := resolveWorkload(&pod)
+	lang := detectLanguageFromPodSpec(&pod)
+	selector, matched := pm.matchesSelection(&pod.ObjectMeta)
+
+	if !matched {
+		pm.logger.Info("pod doesn't match selection criteria", "pod", pod.Name, "namespace", pod.Namespace)
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoMatchingSelector)
+		}
+		return
+	}
+
+	pm.applyMutation(req.Object.Raw, &pod, wlKind, wlName, lang, admResponse, selector)
+}
+
+func (pm *PodMutator) applyMutation(originalRaw []byte, pod *corev1.Pod, wlKind, wlName, lang string, admResponse *admissionv1.AdmissionResponse, selector services.Selector) {
+	modified, skipReason := pm.mutatePod(pod, selector)
+	if !modified {
+		pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
+		if pm.metrics != nil && skipReason != "" {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, skipReason)
+		}
+		return
+	}
+
+	pm.buildAndApplyPatch(originalRaw, pod, wlKind, wlName, lang, admResponse)
+}
+
+func (pm *PodMutator) buildAndApplyPatch(originalRaw []byte, pod *corev1.Pod, wlKind, wlName, lang string, admResponse *admissionv1.AdmissionResponse) {
+	marshalled, err := json.Marshal(pod)
+	if err != nil {
+		pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
+		errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
+		}
+		return
+	}
+
+	pm.logger.Info("generating patch", "originalSize", len(originalRaw), "modifiedSize", len(marshalled))
+	patchResponse := admission.PatchResponseFromRaw(originalRaw, marshalled)
+
+	if len(patchResponse.Patches) == 0 {
+		errorResponse(admResponse, "no changes")
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoChangesDetected)
+		}
+		return
+	}
+
+	patchBytes, err := json.Marshal(patchResponse.Patches)
+	if err != nil {
+		pm.logger.Error("failed to marshal patches", "error", err)
+		errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
+		}
+		return
+	}
+
+	pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
+	admResponse.Patch = patchBytes
+	patchType := admissionv1.PatchTypeJSONPatch
+	admResponse.PatchType = &patchType
+	if pm.metrics != nil {
+		pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, OutcomeSuccess)
+	}
 }
 
 func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissionv1.AdmissionResponse) {

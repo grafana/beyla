@@ -238,7 +238,7 @@ network:
 				MaxSize:  160,
 				MaxScale: 20,
 			},
-			TTL:                     5 * time.Minute,
+			TTL: 5 * time.Minute,
 			ExtraSpanResourceLabels: []string{
 				"cloud.availability_zone",
 				"cloud.region",

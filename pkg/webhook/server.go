@@ -26,15 +26,17 @@ import (
 
 // Server represents the webhook server
 type Server struct {
-	cfg          *beyla.Config
-	ctxInfo      *global.ContextInfo
-	mutator      *PodMutator
-	bouncer      *PodBouncer
-	scanner      *LocalProcessScanner
-	matcher      *PodMatcher
-	logger       *slog.Logger
-	store        *kube.Store
-	initialState map[string][]*ProcessInfo
+	cfg           *beyla.Config
+	ctxInfo       *global.ContextInfo
+	mutator       *PodMutator
+	bouncer       *PodBouncer
+	scanner       *LocalProcessScanner
+	matcher       *PodMatcher
+	logger        *slog.Logger
+	store         *kube.Store
+	initialState  map[string][]*ProcessInfo
+	metrics       *SDKInjectionMetrics
+	podStateCache *PodStateCache
 }
 
 // NewServer creates a new webhook server
@@ -42,26 +44,45 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	matcher := NewPodMatcher(cfg)
 	var bouncer *PodBouncer
 
-	mutator, err := NewPodMutator(cfg, matcher)
+	logger := slog.Default().With("component", "webhook-server")
+
+	var metrics *SDKInjectionMetrics
+	var podStateCache *PodStateCache
+	if ctxInfo.Prometheus != nil && cfg.InternalMetrics.Prometheus.Port != 0 {
+		metrics = NewSDKInjectionMetrics()
+		collectors := metrics.Collectors()
+		if ownNode := OwnNodeName(); ownNode == "" {
+			logger.Warn("state metrics unavailable: cannot determine node name (NODE_NAME unset and os.Hostname failed)")
+		} else {
+			podStateCache = NewPodStateCache(matcher, cfg, ownNode)
+			collectors = append(collectors, podStateCache)
+			logger.Info("registered beyla_injection_pods state metric collector")
+		}
+		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, collectors...)
+	}
+
+	mutator, err := NewPodMutator(cfg, matcher, metrics)
 	if err != nil {
 		return nil, err
 	}
 
-	if matcher.HasSelectionCriteria() {
-		bouncer, err = NewPodBouncer(ctxInfo)
+	if matcher.HasSelectionCriteria() && !cfg.Injector.NoAutoRestart {
+		bouncer, err = NewPodBouncer(ctxInfo, metrics)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &Server{
-		cfg:     cfg,
-		mutator: mutator,
-		bouncer: bouncer,
-		scanner: NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
-		matcher: matcher,
-		logger:  slog.Default().With("component", "webhook-server"),
-		ctxInfo: ctxInfo,
+		cfg:           cfg,
+		mutator:       mutator,
+		bouncer:       bouncer,
+		scanner:       NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		matcher:       matcher,
+		logger:        logger,
+		ctxInfo:       ctxInfo,
+		metrics:       metrics,
+		podStateCache: podStateCache,
 	}, nil
 }
 
@@ -102,6 +123,10 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
+	if s.podStateCache != nil {
+		go s.subscribeStateCache(ctx)
+	}
+
 	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
 		s.logger.Info("starting initial state scanning")
 		go func() {
@@ -110,6 +135,11 @@ func (s *Server) Start(ctx context.Context) error {
 				s.logger.Error("encountered error during initial state scan", "error", err)
 			}
 		}()
+	}
+
+	// Start internal metrics HTTP server if configured
+	if s.cfg.InternalMetrics.Prometheus.Port != 0 && s.ctxInfo.Prometheus != nil {
+		go s.ctxInfo.Prometheus.StartHTTP(ctx)
 	}
 
 	// Start server in a goroutine
@@ -210,6 +240,20 @@ func (s *Server) checkImageVolumeSupport(provider *kube.MetadataProvider) error 
 	return nil
 }
 
+// subscribeStateCache subscribes the pod state cache to the kube informer store.
+func (s *Server) subscribeStateCache(ctx context.Context) {
+	store, err := s.ctxInfo.K8sInformer.Get(ctx)
+	if err != nil {
+		s.logger.Error("state metrics unavailable: cannot subscribe to k8s informer", "error", err)
+		return
+	}
+	// Subscribe delivers all existing pods synchronously as CREATED events before
+	// returning. SYNC_FINISHED is not forwarded to late subscribers, so we mark
+	// the cache as ready immediately after Subscribe returns.
+	store.Subscribe(s.podStateCache)
+	s.podStateCache.markSynced()
+}
+
 func (s *Server) getInitialState(ctx context.Context) error {
 	provider := s.ctxInfo.K8sInformer
 	store, err := provider.Get(ctx)
@@ -241,8 +285,8 @@ func (s *Server) restartDeployment(a *ProcessInfo) {
 		s.logger.Debug("already restarted", "namespace", namespace, "deployment", deployment)
 		return
 	}
-
-	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment); err != nil {
+	lang := languageLabel(a.kind)
+	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment, "Deployment", lang); err != nil {
 		s.logger.Info("failed to restart pods", "error", err)
 	}
 }

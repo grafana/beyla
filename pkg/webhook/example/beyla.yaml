@@ -280,3 +280,8 @@ webhooks:
   failurePolicy: Fail
   timeoutSeconds: 10
   namespaceSelector: {}
+  objectSelector:
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values: ["beyla"]

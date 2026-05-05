@@ -81,6 +81,39 @@ define gomod-version
 $(shell sh -c "echo $$(grep $(1) go.mod | awk '{print $$2}')")
 endef
 
+# host OS/ARCH normalized for matching pre-built release asset filenames
+HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+HOST_ARCH := $(shell uname -m)
+ifeq ($(HOST_ARCH),x86_64)
+HOST_ARCH := amd64
+endif
+ifeq ($(HOST_ARCH),aarch64)
+HOST_ARCH := arm64
+endif
+
+# download-release-tool fetches a pre-built binary from a GitHub release tarball
+# and installs it locally to $(1). The tarball must contain the binary named
+# $(notdir $(1)) at its root.
+# $(1) destination binary path
+# $(2) version (used as a stamp file suffix; no leading "v")
+# $(3) tarball URL
+define download-release-tool
+@[ -f "$(1)-$(2)" ] || { \
+set -e ;\
+echo "Removing any outdated version of $(1)";\
+rm -f $(1)*;\
+mkdir -p $(TOOLS_DIR) ;\
+TMP_DIR=$$(mktemp -d) ;\
+echo "Downloading $(3)" ;\
+curl -sSfL "$(3)" -o "$$TMP_DIR/tool.tar.gz" ;\
+tar -xzf "$$TMP_DIR/tool.tar.gz" -C "$$TMP_DIR" $(notdir $(1)) ;\
+mv "$$TMP_DIR/$(notdir $(1))" "$(1)" ;\
+chmod +x "$(1)" ;\
+touch "$(1)-$(2)" ;\
+rm -rf $$TMP_DIR ;\
+}
+endef
+
 # Check that given variables are set and all have non-empty values,
 # die with an error otherwise.
 #
@@ -101,6 +134,8 @@ GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
+DASHBOARD_LINTER_VERSION = 0.1.0
+DASHBOARD_LINTER_URL = https://github.com/grafana/dashboard-linter/releases/download/v$(DASHBOARD_LINTER_VERSION)/dashboard-linter_$(DASHBOARD_LINTER_VERSION)_$(HOST_OS)_$(HOST_ARCH).tar.gz
 GINKGO = $(TOOLS_DIR)/ginkgo
 GOTESTSUM = $(TOOLS_DIR)/gotestsum
 
@@ -133,7 +168,7 @@ prereqs: install-hooks bpf2go
 	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses/v2,v2.0.1)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
-	$(call go-install-tool,$(DASHBOARD_LINTER),github.com/grafana/dashboard-linter,latest)
+	$(call download-release-tool,$(DASHBOARD_LINTER),$(DASHBOARD_LINTER_VERSION),$(DASHBOARD_LINTER_URL))
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,v0.0.0-20260305142021-f9589b9f2b9d) # pin for Go version compatibility
 	$(call go-install-tool,$(GOTESTSUM),gotest.tools/gotestsum,v1.13.0)
 

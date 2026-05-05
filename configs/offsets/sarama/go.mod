@@ -1,6 +1,6 @@
 module sarama_off
 
-go 1.25.8
+go 1.25.9
 
 require github.com/IBM/sarama v1.48.0
 

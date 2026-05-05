@@ -1,7 +1,11 @@
 package webhook
 
 import (
+	"bytes"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,6 +58,115 @@ func TestErrorResponse(t *testing.T) {
 			assert.Equal(t, tt.expected, admResponse.Result.Message)
 		})
 	}
+}
+
+func TestPodMutator_HandleMutateRejectsOversizedBody(t *testing.T) {
+	mutator := &PodMutator{
+		logger: slog.With("component", "webhook.Mutator"),
+		cfg:    beyla.DefaultConfig(),
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/mutate",
+		bytes.NewReader(bytes.Repeat([]byte("a"), int(mutator.cfg.Injector.Webhook.MaxAdmissionBodySize.Value())+1)),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "request body too large")
+}
+
+func TestPodMutator_HandleMutateRejectsWhenRequestLimitReached(t *testing.T) {
+	requestLimiter := make(chan struct{}, 1)
+	requestLimiter <- struct{}{}
+	mutator := &PodMutator{
+		logger:         slog.With("component", "webhook.Mutator"),
+		requestLimiter: requestLimiter,
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/mutate",
+		bytes.NewReader([]byte(`{}`)),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "too many concurrent mutation requests")
+}
+
+func TestPodMutator_HandleMutateAllows10ConcurrentRequests(t *testing.T) {
+	const concurrency = 10
+	requestLimiter := make(chan struct{}, concurrency)
+	mutator := &PodMutator{
+		logger:           slog.With("component", "webhook.Mutator"),
+		requestLimiter:   requestLimiter,
+		maxAdmissionSize: 3 * 1024 * 1024,
+	}
+
+	var wg sync.WaitGroup
+	codes := make([]int, concurrency)
+	start := make(chan struct{})
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/mutate",
+				bytes.NewReader([]byte(`{}`)),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			mutator.HandleMutate(recorder, req)
+			codes[i] = recorder.Code
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
+
+	for i, code := range codes {
+		assert.NotEqual(t, http.StatusServiceUnavailable, code, "request %d was rejected by the limiter", i)
+	}
+}
+
+func TestPodMutator_HandleMutateDoesntRejectWhenRequestLimitNotReached(t *testing.T) {
+	requestLimiter := make(chan struct{}, 2)
+	requestLimiter <- struct{}{}
+	mutator := &PodMutator{
+		logger:           slog.With("component", "webhook.Mutator"),
+		requestLimiter:   requestLimiter,
+		maxAdmissionSize: 3 * 1024 * 1024,
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/mutate",
+		bytes.NewReader([]byte(`{}`)),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.NotContains(t, recorder.Body.String(), "too many concurrent mutation requests")
+
+	recorder = httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.NotContains(t, recorder.Body.String(), "too many concurrent mutation requests")
 }
 
 func TestPodMutator_CanInstrument(t *testing.T) {

@@ -352,27 +352,6 @@ func (pm *PodMutator) acquireRequestSlot(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (pm *PodMutator) acquireRequestSlot(w http.ResponseWriter, r *http.Request) func() {
-	if pm.requestLimiter == nil {
-		return func() {}
-	}
-
-	select {
-	case pm.requestLimiter <- struct{}{}:
-		return func() {
-			<-pm.requestLimiter
-		}
-	case <-r.Context().Done():
-		pm.logger.Warn("mutation request canceled before acquiring request slot", "error", r.Context().Err())
-		http.Error(w, "request canceled", http.StatusRequestTimeout)
-		return nil
-	default:
-		pm.logger.Warn("too many concurrent mutation requests")
-		http.Error(w, "too many concurrent mutation requests", http.StatusServiceUnavailable)
-		return nil
-	}
-}
-
 func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissionv1.AdmissionResponse) {
 	// Construct the response
 	admReviewResponse := admissionv1.AdmissionReview{

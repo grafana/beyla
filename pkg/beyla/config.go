@@ -12,6 +12,7 @@ import (
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	obimeta "go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -65,12 +66,19 @@ func DefaultConfig() *Config {
 	}
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
+
+	maxWebhookRequest := resource.MustParse("3Mi")
+
 	def.Injector.Webhook = WebhookConfig{
 		Enable:   false,
 		Port:     8443,
 		Timeout:  30 * time.Second,
 		CertPath: "/etc/webhook/certs/tls.crt",
 		KeyPath:  "/etc/webhook/certs/tls.key",
+		// we are technically allowing the memory here to grow 1_000 * 3MB by default
+		// the concurrency is set high to allow for massive node drains or cluster upgrades
+		MaxConcurrentRequests: 1_000,
+		MaxAdmissionBodySize:  maxWebhookRequest,
 	}
 	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
 	def.Injector.ManageSDKVersions = true
@@ -402,6 +410,10 @@ type WebhookConfig struct {
 	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
 	// Timeout is the time we wait for the TLS webhook to get initialized
 	Timeout time.Duration `yaml:"timeout" env:"BEYLA_WEBHOOK_TIMEOUT"`
+	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
+	MaxConcurrentRequests int `yaml:"max_concurrent_requests" env:"BEYLA_WEBHOOK_MAX_CONCURRENT_REQUESTS"`
+	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
+	MaxAdmissionBodySize resource.Quantity `yaml:"max_admission_body_size" env:"BEYLA_WEBHOOK_MAX_ADMISSION_BODY_SIZE"`
 }
 
 func (w WebhookConfig) Enabled() bool {

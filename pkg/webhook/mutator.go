@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -86,6 +87,9 @@ type PodMutator struct {
 	endpoint      string
 	proto         string
 	exportHeaders map[string]string
+
+	requestLimiter   chan struct{}
+	maxAdmissionSize int64
 }
 
 // NewPodMutator creates a new PodMutator
@@ -113,13 +117,17 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) 
 	if proto == "" {
 		proto = string(otelcfg.ProtocolHTTPProtobuf)
 	}
+
+	cfg.Injector.Webhook.MaxAdmissionBodySize.AsInt64()
 	return &PodMutator{
-		logger:        logger,
-		matcher:       matcher,
-		cfg:           cfg,
-		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
-		exportHeaders: opts.Headers,
-		proto:         proto,
+		logger:           logger,
+		matcher:          matcher,
+		cfg:              cfg,
+		endpoint:         opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
+		exportHeaders:    opts.Headers,
+		proto:            proto,
+		requestLimiter:   make(chan struct{}, cfg.Injector.Webhook.MaxConcurrentRequests),
+		maxAdmissionSize: cfg.Injector.Webhook.MaxAdmissionBodySize.Value(),
 	}, nil
 }
 
@@ -168,13 +176,25 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	pm.logger.Info("received mutation request", "remoteAddr", r.RemoteAddr)
 
-	body, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+
+	if release := pm.acquireRequestSlot(w, r); release == nil {
+		return
+	} else {
+		defer release()
+	}
+
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, pm.maxAdmissionSize))
 	if err != nil {
 		pm.logger.Error("failed to read request body", "error", err)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	// Verify the content type
 	contentType := r.Header.Get("Content-Type")
@@ -256,6 +276,27 @@ func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pm.mutateResponse(w, admResponse)
+}
+
+func (pm *PodMutator) acquireRequestSlot(w http.ResponseWriter, r *http.Request) func() {
+	if pm.requestLimiter == nil {
+		return func() {}
+	}
+
+	select {
+	case pm.requestLimiter <- struct{}{}:
+		return func() {
+			<-pm.requestLimiter
+		}
+	case <-r.Context().Done():
+		pm.logger.Warn("mutation request canceled before acquiring request slot", "error", r.Context().Err())
+		http.Error(w, "request canceled", http.StatusRequestTimeout)
+		return nil
+	default:
+		pm.logger.Warn("too many concurrent mutation requests")
+		http.Error(w, "too many concurrent mutation requests", http.StatusServiceUnavailable)
+		return nil
+	}
 }
 
 func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissionv1.AdmissionResponse) {

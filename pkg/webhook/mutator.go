@@ -280,7 +280,7 @@ func (pm *PodMutator) buildAndApplyPatch(originalRaw []byte, pod *corev1.Pod, wl
 		return
 	}
 
-	pm.logger.Info("generating patch", "originalSize", len(originalRaw), "modifiedSize", len(marshalled))
+	pm.logger.Debug("generating patch", "originalSize", len(originalRaw), "modifiedSize", len(marshalled))
 	patchResponse := admission.PatchResponseFromRaw(originalRaw, marshalled)
 
 	if len(patchResponse.Patches) == 0 {
@@ -301,7 +301,7 @@ func (pm *PodMutator) buildAndApplyPatch(originalRaw []byte, pod *corev1.Pod, wl
 		return
 	}
 
-	pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
+	pm.logger.Info("mutated pod", "pod", pod.Name, "namespace", pod.Namespace)
 	admResponse.Patch = patchBytes
 	patchType := admissionv1.PatchTypeJSONPatch
 	admResponse.PatchType = &patchType

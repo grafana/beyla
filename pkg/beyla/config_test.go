@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -132,6 +133,9 @@ network:
 	metaSources["service.namespace"] = []string{"huha.com/yeah"}
 	// uncache internal field
 	cfg.obi = nil
+
+	maxWebhookRequest := resource.MustParse("3Mi")
+
 	assert.Equal(t, &Config{
 		Exec:        cfg.Exec,
 		Port:        cfg.Port,
@@ -363,11 +367,13 @@ network:
 		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
 		Injector: SDKInject{
 			Webhook: WebhookConfig{
-				Enable:   false,
-				Port:     8443,
-				Timeout:  30 * time.Second,
-				CertPath: "/etc/webhook/certs/tls.crt",
-				KeyPath:  "/etc/webhook/certs/tls.key",
+				Enable:                false,
+				Port:                  8443,
+				Timeout:               30 * time.Second,
+				CertPath:              "/etc/webhook/certs/tls.crt",
+				KeyPath:               "/etc/webhook/certs/tls.key",
+				MaxConcurrentRequests: 1_000,
+				MaxAdmissionBodySize:  maxWebhookRequest,
 			},
 			HostPathVolumeDir: "/var/lib/beyla/instrumentation",
 			ManageSDKVersions: true,

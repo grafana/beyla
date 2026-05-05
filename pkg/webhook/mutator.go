@@ -82,6 +82,7 @@ type PodMutator struct {
 	logger  *slog.Logger
 	matcher *PodMatcher
 	cfg     *beyla.Config
+	metrics *SDKInjectionMetrics
 
 	endpoint      string
 	proto         string
@@ -89,7 +90,7 @@ type PodMutator struct {
 }
 
 // NewPodMutator creates a new PodMutator
-func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) {
+func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjectionMetrics) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions
 	var err error
 
@@ -117,6 +118,7 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher) (*PodMutator, error) 
 		logger:        logger,
 		matcher:       matcher,
 		cfg:           cfg,
+		metrics:       metrics,
 		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 		exportHeaders: opts.Headers,
 		proto:         proto,
@@ -168,94 +170,144 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
 	pm.logger.Info("received mutation request", "remoteAddr", r.RemoteAddr)
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		pm.logger.Error("failed to read request body", "error", err)
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-
-	// Verify the content type
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
-		pm.logger.Error("invalid content type", "contentType", contentType)
-		http.Error(w, "invalid Content-Type, expect application/json", http.StatusUnsupportedMediaType)
+	admReview := pm.parseAdmissionReview(w, r)
+	if admReview == nil {
 		return
 	}
 
-	// Decode the admission review request
-	admReview := admissionv1.AdmissionReview{}
-	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		pm.logger.Error("failed to decode admission review", "error", err)
-		http.Error(w, fmt.Sprintf("failed to decode admission review: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	if admReview.Request == nil {
-		pm.logger.Error("admission review request is nil")
-		http.Error(w, "admission review request is nil", http.StatusBadRequest)
-		return
-	}
-
-	pm.logger.Info("processing admission request", "uid", admReview.Request.UID, "kind", admReview.Request.Kind.Kind)
-
-	// Create the admission response
 	admResponse := &admissionv1.AdmissionResponse{
 		UID:     admReview.Request.UID,
 		Allowed: true,
 	}
 
-	// add a label with the version of the SDKs we've instrumented
 	if pm.cfg.Injector.PackageVersion() == "" {
 		errorResponse(admResponse, "Image Volume Path or SDK package version must be set")
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(admReview.Request.Namespace, "", "", "", ErrorTypeMissingSDKVersion)
+		}
 		pm.mutateResponse(w, admResponse)
 		return
 	}
 
-	// Process the pod
 	if admReview.Request.Kind.Kind == "Pod" {
-		pod := corev1.Pod{}
-		if err := json.Unmarshal(admReview.Request.Object.Raw, &pod); err != nil {
-			pm.logger.Error("failed to unmarshal pod", "error", err)
-			errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
-		} else {
-			pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
-			// Generate patches for the pod
-			if modified := pm.mutatePod(&pod); modified {
-				marshalled, err := json.Marshal(pod)
-				if err != nil {
-					pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
-					errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
-				} else {
-					// Debug: log sizes to understand what's being compared
-					pm.logger.Debug("generating patch", "originalSize", len(admReview.Request.Object.Raw), "modifiedSize", len(marshalled))
-
-					// Create admission.Request from the raw admission request
-					patchResponse := admission.PatchResponseFromRaw(admReview.Request.Object.Raw, marshalled)
-
-					if len(patchResponse.Patches) > 0 {
-						patchBytes, err := json.Marshal(patchResponse.Patches)
-						if err != nil {
-							pm.logger.Error("failed to marshal patches", "error", err)
-							errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
-						} else {
-							pm.logger.Info("mutated pod", "pod", pod.Name, "namespace", pod.Namespace)
-							admResponse.Patch = patchBytes
-							patchType := admissionv1.PatchTypeJSONPatch
-							admResponse.PatchType = &patchType
-						}
-					} else {
-						errorResponse(admResponse, "no changes")
-					}
-				}
-			} else {
-				pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace)
-			}
-		}
+		pm.processPodRequest(admReview.Request, admResponse)
 	}
 
 	pm.mutateResponse(w, admResponse)
+}
+
+func (pm *PodMutator) parseAdmissionReview(w http.ResponseWriter, r *http.Request) *admissionv1.AdmissionReview {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		pm.logger.Error("failed to read request body", "error", err)
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return nil
+	}
+	defer r.Body.Close()
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		pm.logger.Error("invalid content type", "contentType", contentType)
+		http.Error(w, "invalid Content-Type, expect application/json", http.StatusUnsupportedMediaType)
+		return nil
+	}
+
+	admReview := admissionv1.AdmissionReview{}
+	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
+		pm.logger.Error("failed to decode admission review", "error", err)
+		http.Error(w, fmt.Sprintf("failed to decode admission review: %v", err), http.StatusBadRequest)
+		return nil
+	}
+
+	if admReview.Request == nil {
+		pm.logger.Error("admission review request is nil")
+		http.Error(w, "admission review request is nil", http.StatusBadRequest)
+		return nil
+	}
+
+	pm.logger.Info("processing admission request", "uid", admReview.Request.UID, "kind", admReview.Request.Kind.Kind)
+	return &admReview
+}
+
+func (pm *PodMutator) processPodRequest(req *admissionv1.AdmissionRequest, admResponse *admissionv1.AdmissionResponse) {
+	pod := corev1.Pod{}
+	if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
+		pm.logger.Error("failed to unmarshal pod", "error", err)
+		errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(req.Namespace, "", "", "", ErrorTypeAdmissionRejected)
+		}
+		return
+	}
+
+	pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
+	wlKind, wlName := resolveWorkload(&pod)
+	lang := detectLanguageFromPodSpec(&pod)
+	selector, matched := pm.matchesSelection(&pod.ObjectMeta)
+
+	if !matched {
+		pm.logger.Info("pod doesn't match selection criteria", "pod", pod.Name, "namespace", pod.Namespace)
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoMatchingSelector)
+		}
+		return
+	}
+
+	pm.applyMutation(req.Object.Raw, &pod, wlKind, wlName, lang, admResponse, selector)
+}
+
+func (pm *PodMutator) applyMutation(originalRaw []byte, pod *corev1.Pod, wlKind, wlName, lang string, admResponse *admissionv1.AdmissionResponse, selector services.Selector) {
+	modified, skipReason := pm.mutatePod(pod, selector)
+	if !modified {
+		pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
+		if pm.metrics != nil && skipReason != "" {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, skipReason)
+		}
+		return
+	}
+
+	pm.buildAndApplyPatch(originalRaw, pod, wlKind, wlName, lang, admResponse)
+}
+
+func (pm *PodMutator) buildAndApplyPatch(originalRaw []byte, pod *corev1.Pod, wlKind, wlName, lang string, admResponse *admissionv1.AdmissionResponse) {
+	marshalled, err := json.Marshal(pod)
+	if err != nil {
+		pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
+		errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
+		}
+		return
+	}
+
+	pm.logger.Info("generating patch", "originalSize", len(originalRaw), "modifiedSize", len(marshalled))
+	patchResponse := admission.PatchResponseFromRaw(originalRaw, marshalled)
+
+	if len(patchResponse.Patches) == 0 {
+		errorResponse(admResponse, "no changes")
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoChangesDetected)
+		}
+		return
+	}
+
+	patchBytes, err := json.Marshal(patchResponse.Patches)
+	if err != nil {
+		pm.logger.Error("failed to marshal patches", "error", err)
+		errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
+		if pm.metrics != nil {
+			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
+		}
+		return
+	}
+
+	pm.logger.Info("mutating pod", "pod", pod.Name, "namespace", pod.Namespace, "patches", patchResponse.Patches)
+	admResponse.Patch = patchBytes
+	patchType := admissionv1.PatchTypeJSONPatch
+	admResponse.PatchType = &patchType
+	if pm.metrics != nil {
+		pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, OutcomeSuccess)
+	}
 }
 
 func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissionv1.AdmissionResponse) {
@@ -287,19 +339,28 @@ func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissi
 	pm.logger.Info("admission response sent successfully", "uid", admResponse.UID)
 }
 
-func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
+func (pm *PodMutator) mutatePod(pod *corev1.Pod, selector services.Selector) (bool, string) {
 	spec := &pod.Spec
 	meta := &pod.ObjectMeta
 
 	// check if maybe someone is adding instrumentation manually
 	if pm.alreadyInstrumented(spec, meta) {
-		return false
+		return false, ErrorTypeAlreadyInstrumented
 	}
 
-	selector, matched := pm.matchesSelection(meta)
-	if !matched {
-		pm.logger.Info("pod doesn't match selection criteria")
-		return false
+	// Check if all containers have LD_PRELOAD conflicts (nothing to instrument)
+	allHaveConflict := len(spec.Containers) > 0
+	for i := range spec.Containers {
+		if !isLDPreloadConflict(&spec.Containers[i]) {
+			allHaveConflict = false
+			break
+		}
+	}
+	if allHaveConflict {
+		for i := range spec.Containers {
+			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", spec.Containers[i].Name)
+		}
+		return false, ErrorTypeLDPreloadConflict
 	}
 
 	originalSpec := spec.DeepCopy()
@@ -307,10 +368,10 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 	// mount the shared hostPath volume with the injector and SDKs
 	pm.mountVolume(spec, meta)
 
-	// instrument all containers that don't have some preexisting LD_PRELOAD set on them
+	// instrument all containers, skipping those with a conflicting LD_PRELOAD
 	for i := range spec.Containers {
 		c := &spec.Containers[i]
-		if _, ok := findEnvVar(c, envVarLdPreloadName); ok {
+		if isLDPreloadConflict(c) {
 			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
 			continue
 		}
@@ -319,22 +380,14 @@ func (pm *PodMutator) mutatePod(pod *corev1.Pod) bool {
 
 	pm.addLabel(meta, instrumentedLabel, pm.cfg.Injector.PackageVersion())
 
-	return !reflect.DeepEqual(originalSpec, spec)
+	return !reflect.DeepEqual(originalSpec, spec), ""
 }
 
 func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.ObjectMeta) bool {
-	for i := range spec.Containers {
-		c := &spec.Containers[i]
-		if _, ok := findEnvVar(c, envOtelInjectorConfigFileName); ok {
-			pm.logger.Debug("container already instrumented, ignoring...", "container", c.Name)
-			return true
-		}
-	}
-
-	if val, ok := pm.getLabel(meta, instrumentedLabel); ok && val != "" {
+	if alreadyInstrumentedByOther(spec, meta) {
+		pm.logger.Debug("pod already instrumented, ignoring...")
 		return true
 	}
-
 	return false
 }
 
@@ -428,6 +481,18 @@ func (pm *PodMutator) getLabel(meta *metav1.ObjectMeta, key string) (string, boo
 		return value, true
 	}
 	return "", false
+}
+
+// isLDPreloadConflict returns true only when LD_PRELOAD is set to a non-empty
+// value that is not Beyla's own injector path. An empty LD_PRELOAD or one
+// already set to our value is not a conflict.
+func isLDPreloadConflict(c *corev1.Container) bool {
+	pos, ok := findEnvVar(c, envVarLdPreloadName)
+	if !ok {
+		return false
+	}
+	val := c.Env[pos].Value
+	return val != "" && val != envVarLdPreloadValue
 }
 
 func findEnvVar(c *corev1.Container, name string) (int, bool) {
@@ -553,4 +618,83 @@ func (pm *PodMutator) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write([]byte("OK")); err != nil {
 		pm.logger.Debug("error responding to health check", "error", err)
 	}
+}
+
+// languageLabel converts an InstrumentableType to the Prometheus label string
+// used in SDK injection metrics. Returns "" for unknown or generic types.
+func languageLabel(kind svc.InstrumentableType) string {
+	switch kind {
+	case svc.InstrumentableUnknown, svc.InstrumentableGeneric:
+		return ""
+	default:
+		return kind.String()
+	}
+}
+
+// detectLanguageFromPodSpec returns the best-guess language for a pod by
+// scanning each container's image name and command/args. Returns "" when
+// the language cannot be determined from the available pod spec signals.
+func detectLanguageFromPodSpec(pod *corev1.Pod) string {
+	for i := range pod.Spec.Containers {
+		if lang := detectLanguageFromContainer(&pod.Spec.Containers[i]); lang != "" {
+			return lang
+		}
+	}
+	return ""
+}
+
+func detectLanguageFromContainer(c *corev1.Container) string {
+	if lang := languageFromImageName(c.Image); lang != "" {
+		return lang
+	}
+	for _, token := range append(c.Command, c.Args...) {
+		// strip directory prefix so "/usr/bin/python3" matches as "python3"
+		if idx := strings.LastIndex(token, "/"); idx >= 0 {
+			token = token[idx+1:]
+		}
+		if lang := languageFromToken(strings.ToLower(token)); lang != "" {
+			return lang
+		}
+	}
+	return ""
+}
+
+// languageFromImageName matches well-known image names to a language.
+// It strips the digest and tag before matching, but keeps the full registry
+// path so that images like mcr.microsoft.com/dotnet/aspnet are detected.
+func languageFromImageName(image string) string {
+	lower := strings.ToLower(image)
+	if idx := strings.Index(lower, "@"); idx >= 0 {
+		lower = lower[:idx]
+	}
+	// strip tag only when the colon has no slash after it (avoids cutting registry ports)
+	if idx := strings.LastIndex(lower, ":"); idx >= 0 && !strings.Contains(lower[idx:], "/") {
+		lower = lower[:idx]
+	}
+	// extract the image name component for short-word matching
+	name := lower
+	if idx := strings.LastIndex(lower, "/"); idx >= 0 {
+		name = lower[idx+1:]
+	}
+	return languageFromToken(name)
+}
+
+// languageFromToken matches a single lowercase token (image name component,
+// command basename, or arg) to a language string.
+func languageFromToken(s string) string {
+	switch {
+	case strings.Contains(s, "dotnet") || strings.Contains(s, "aspnet"):
+		return svc.InstrumentableDotnet.String()
+	case strings.Contains(s, "python"):
+		return svc.InstrumentablePython.String()
+	case strings.Contains(s, "nodejs"):
+		return svc.InstrumentableNodejs.String()
+	case s == "node":
+		return svc.InstrumentableNodejs.String()
+	case strings.Contains(s, "java") || strings.Contains(s, "jdk") ||
+		strings.Contains(s, "jre") || strings.Contains(s, "corretto") ||
+		strings.Contains(s, "temurin"):
+		return svc.InstrumentableJava.String()
+	}
+	return ""
 }

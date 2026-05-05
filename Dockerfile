@@ -1,7 +1,7 @@
-ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.11@sha256:c9a11deeda1de354aa334817f693efbf5ccee15dcd18caee6a9b221eed0e5773
+ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.12@sha256:6f3e8b73b6b93e01380315cea5a4d31e270bf3f8d08ca61eba05240a12fbfe60
 
 # Build JNI native library using Go image (has gcc + apt; installs cross-compiler)
-FROM golang:1.25.8@sha256:f55a6ec7f24aedc1ed66e2641fdc52de01f2d24d6e49d1fa38582c07dd5f601d AS jni-builder
+FROM golang:1.25.9@sha256:8a7adc288b77e9b787cd2695029eb54d10ae80571b21d44fed68d067ad0a9c96 AS jni-builder
 ARG BUILDARCH=amd64
 COPY --from=gradle:9.4.1-jdk21-noble@sha256:5a739da3c34646f72da2634b2d4a5e2b467132eaf6abccfb7bc60e1b502d51b5 /opt/java/openjdk/include /opt/java/include
 WORKDIR /build

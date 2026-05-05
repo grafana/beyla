@@ -1,0 +1,20 @@
+injector:
+  webhook:
+    enable: true
+    port: 9443
+    cert_path: /etc/webhook/certs/tls.crt
+    key_path: /etc/webhook/certs/tls.key
+    timeout: 10s
+  sdk_package_version: "v0.1.0"
+  manage_sdk_versions: false
+  disable_auto_restart: true
+  disable_state_metrics: true
+  instrument:
+    - k8s_namespace: "test-ns"
+# required by config validation when webhook is enabled
+otel_traces_export:
+  endpoint: http://localhost:4318
+internal_metrics:
+  prometheus:
+    port: 2222
+    path: /metrics

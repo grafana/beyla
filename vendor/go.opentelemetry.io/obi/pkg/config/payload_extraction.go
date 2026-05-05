@@ -81,12 +81,15 @@ type GenAIConfig struct {
 	Bedrock BedrockConfig `yaml:"bedrock"`
 	// Model Context Protocol (MCP) payload extraction and parsing
 	MCP MCPConfig `yaml:"mcp"`
+	// Generic embedding provider (Voyage AI, Cohere, Jina AI) payload extraction and parsing
+	Embedding EmbeddingProviderConfig `yaml:"embedding"`
 }
 
 func (g *GenAIConfig) Enabled() bool {
 	return g.Anthropic.Enabled || g.OpenAI.Enabled ||
 		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled ||
-		g.MCP.Enabled
+		g.MCP.Enabled ||
+		g.Embedding.Enabled
 }
 
 type OpenAIConfig struct {
@@ -117,6 +120,11 @@ type BedrockConfig struct {
 type MCPConfig struct {
 	// Enable Model Context Protocol (MCP) payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_MCP_ENABLED" validate:"boolean"`
+}
+
+type EmbeddingProviderConfig struct {
+	// Enable generic embedding provider (Voyage AI, Cohere, Jina AI) payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_GENAI_EMBEDDING_ENABLED" validate:"boolean"`
 }
 
 type JSONRPCConfig struct {

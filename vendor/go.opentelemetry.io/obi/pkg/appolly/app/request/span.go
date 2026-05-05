@@ -56,6 +56,7 @@ const (
 	EventTypeSQLServer
 	EventTypeNATSClient
 	EventTypeNATSServer
+	EventTypeAMQPClient
 )
 
 const (
@@ -102,6 +103,7 @@ const (
 	HTTPSubtypeAWSBedrock    = 10 // http + AWS Bedrock
 	HTTPSubtypeQwen          = 11 // http + Qwen (DashScope)
 	HTTPSubtypeMCP           = 12 // http + Model Context Protocol
+	HTTPSubtypeEmbedding     = 13 // http + generic embedding provider (Voyage, Cohere, Jina)
 )
 
 func IsGenAISubtype(subtype int) bool {
@@ -110,7 +112,8 @@ func IsGenAISubtype(subtype int) bool {
 		subtype == HTTPSubtypeGemini ||
 		subtype == HTTPSubtypeQwen ||
 		subtype == HTTPSubtypeAWSBedrock ||
-		subtype == HTTPSubtypeMCP
+		subtype == HTTPSubtypeMCP ||
+		subtype == HTTPSubtypeEmbedding
 }
 
 //nolint:cyclop
@@ -138,6 +141,8 @@ func (t EventType) String() string {
 		return "MQTTClient"
 	case EventTypeNATSClient:
 		return "NATSClient"
+	case EventTypeAMQPClient:
+		return "AMQPClient"
 	case EventTypeRedisServer:
 		return "RedisServer"
 	case EventTypeKafkaServer:
@@ -270,9 +275,10 @@ type GenAI struct {
 	// both via GetInputTokens()/GetOutputTokens() and the Output field.
 	// A separate field (rather than sharing OpenAI) keeps provider
 	// routing explicit and allows future divergence without refactoring.
-	Qwen    *VendorOpenAI
-	Bedrock *VendorBedrock
-	MCP     *MCPCall
+	Qwen      *VendorOpenAI
+	Bedrock   *VendorBedrock
+	MCP       *MCPCall
+	Embedding *VendorEmbedding
 }
 
 type OpenAIUsage struct {
@@ -296,7 +302,17 @@ func (u *OpenAIUsage) GetOutputTokens() int {
 		return u.OutputTokens
 	}
 
-	return u.CompletionTokens
+	if u.CompletionTokens > 0 {
+		return u.CompletionTokens
+	}
+
+	// Embedding responses only report prompt_tokens and total_tokens.
+	// Derive output tokens from the difference.
+	if u.TotalTokens > 0 && u.PromptTokens > 0 {
+		return u.TotalTokens - u.PromptTokens
+	}
+
+	return 0
 }
 
 type OpenAIError struct {
@@ -345,6 +361,7 @@ type OpenAIInput struct {
 	Messages     json.RawMessage `json:"messages"`
 	Items        json.RawMessage `json:"items"`
 	Temperature  float64         `json:"temperature"`
+	Dimensions   int             `json:"dimensions,omitempty"`
 }
 
 func (air *OpenAIInput) GetInput() string {
@@ -659,6 +676,100 @@ type JSONRPC struct {
 	ErrorMessage string `json:"errorMessage,omitempty"`
 }
 
+// Generic embedding provider types (Voyage AI, Cohere, Jina AI)
+
+// EmbeddingOperationName is the canonical operation name for embedding spans.
+const EmbeddingOperationName = "embeddings"
+
+// VendorEmbedding represents a generic embedding API provider such as
+// Voyage AI, Cohere, or Jina AI.
+type VendorEmbedding struct {
+	Provider string
+	Model    string
+	Input    EmbeddingRequest
+	Output   EmbeddingResponse
+}
+
+// OperationName returns the canonical embedding operation name.
+func (e *VendorEmbedding) OperationName() string {
+	return EmbeddingOperationName
+}
+
+// EmbeddingRequest captures the common fields from embedding API requests.
+type EmbeddingRequest struct {
+	Model      string          `json:"model"`
+	Input      json.RawMessage `json:"input"`
+	Dimensions int             `json:"dimensions,omitempty"`
+	// Cohere uses "texts" instead of "input"
+	Texts json.RawMessage `json:"texts,omitempty"`
+}
+
+// InputCount returns the number of input texts in the request.
+// It handles both single-string and array-of-strings formats.
+func (r *EmbeddingRequest) InputCount() int {
+	raw := r.Input
+	if len(raw) == 0 {
+		raw = r.Texts
+	}
+	if len(raw) == 0 {
+		return 0
+	}
+	// Array of strings: count elements
+	var arr []json.RawMessage
+	if json.Unmarshal(raw, &arr) == nil {
+		return len(arr)
+	}
+	// Single string
+	return 1
+}
+
+// EmbeddingResponse captures the common fields from embedding API responses.
+type EmbeddingResponse struct {
+	Model string         `json:"model"`
+	Usage EmbeddingUsage `json:"usage"`
+	// Cohere uses meta.billed_units for token counts
+	Meta *CohereResponseMeta `json:"meta,omitempty"`
+}
+
+// EmbeddingUsage captures token usage in embedding responses.
+type EmbeddingUsage struct {
+	PromptTokens int `json:"prompt_tokens"`
+	TotalTokens  int `json:"total_tokens"`
+}
+
+// CohereResponseMeta captures Cohere-specific response metadata.
+type CohereResponseMeta struct {
+	BilledUnits *CohereBilledUnits `json:"billed_units,omitempty"`
+}
+
+// CohereBilledUnits captures Cohere token billing information.
+type CohereBilledUnits struct {
+	InputTokens int `json:"input_tokens"`
+}
+
+// GetInputTokens returns the input token count, handling provider-specific formats.
+func (e *VendorEmbedding) GetInputTokens() int {
+	if e.Output.Usage.PromptTokens > 0 {
+		return e.Output.Usage.PromptTokens
+	}
+	if e.Output.Usage.TotalTokens > 0 {
+		return e.Output.Usage.TotalTokens
+	}
+	if e.Output.Meta != nil && e.Output.Meta.BilledUnits != nil {
+		return e.Output.Meta.BilledUnits.InputTokens
+	}
+	return 0
+}
+
+// GetOutputTokens returns the output token count for embedding requests,
+// derived as total_tokens - prompt_tokens.
+func (e *VendorEmbedding) GetOutputTokens() int {
+	if e.Output.Usage.TotalTokens > 0 && e.Output.Usage.PromptTokens > 0 {
+		return e.Output.Usage.TotalTokens - e.Output.Usage.PromptTokens
+	}
+	return 0
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters
@@ -851,7 +962,7 @@ func spanAttributes(s *Span) SpanAttributes {
 			"statement":  s.Statement,
 			"query":      s.Path,
 		}
-	case EventTypeKafkaServer, EventTypeKafkaClient, EventTypeMQTTServer, EventTypeMQTTClient:
+	case EventTypeKafkaServer, EventTypeKafkaClient, EventTypeMQTTServer, EventTypeMQTTClient, EventTypeAMQPClient:
 		attrs := SpanAttributes{
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
@@ -1006,7 +1117,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
+	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return true
 	}
 
@@ -1180,7 +1291,7 @@ func (s *Span) ServiceGraphKind() string {
 		return "SPAN_KIND_SERVER"
 	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "SPAN_KIND_CLIENT"
-	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient:
+	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient:
 		switch s.Method {
 		case MessagingPublish:
 			return "SPAN_KIND_PRODUCER"
@@ -1197,7 +1308,7 @@ func (s *Span) ServiceGraphConnectionType() string {
 	switch s.Type {
 	case EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "database"
-	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient:
+	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient:
 		return "messaging_system"
 	case EventTypeHTTPClient:
 		if s.SubType == HTTPSubtypeAWSSQS {
@@ -1340,6 +1451,18 @@ func (s *Span) TraceName() string {
 			return op
 		}
 
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeEmbedding && s.GenAI != nil && s.GenAI.Embedding != nil {
+			op := s.GenAI.Embedding.OperationName()
+			model := s.GenAI.Embedding.Model
+			if s.GenAI.Embedding.Input.Model != "" {
+				model = s.GenAI.Embedding.Input.Model
+			}
+			if model != "" {
+				return op + " " + model
+			}
+			return op
+		}
+
 		if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
 			if s.JSONRPC.Method != "" {
 				return s.JSONRPC.Method
@@ -1374,7 +1497,7 @@ func (s *Span) TraceName() string {
 			return "MEMCACHED"
 		}
 		return s.Method
-	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer, EventTypeNATSClient, EventTypeNATSServer:
+	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer, EventTypeNATSClient, EventTypeNATSServer, EventTypeAMQPClient:
 		if s.Path == "" {
 			return s.Method
 		}
@@ -1586,6 +1709,10 @@ func (s *Span) GenAIInputTokens() int {
 		return s.GenAI.Bedrock.Output.InputTokens
 	}
 
+	if s.GenAI.Embedding != nil {
+		return s.GenAI.Embedding.GetInputTokens()
+	}
+
 	return 0
 }
 
@@ -1614,6 +1741,10 @@ func (s *Span) GenAIOutputTokens() int {
 		return s.GenAI.Bedrock.Output.OutputTokens
 	}
 
+	if s.GenAI.Embedding != nil {
+		return s.GenAI.Embedding.GetOutputTokens()
+	}
+
 	return 0
 }
 
@@ -1635,6 +1766,9 @@ func (s *Span) GenAIOperationName() string {
 	}
 	if s.GenAI.Bedrock != nil {
 		return "invoke_model"
+	}
+	if s.GenAI.Embedding != nil {
+		return s.GenAI.Embedding.OperationName()
 	}
 	return ""
 }
@@ -1658,6 +1792,9 @@ func (s *Span) GenAIProviderName() string {
 	if s.GenAI.Bedrock != nil {
 		return semconv.GenAIProviderNameAWSBedrock.Value.AsString()
 	}
+	if s.GenAI.Embedding != nil {
+		return s.GenAI.Embedding.Provider
+	}
 	return ""
 }
 
@@ -1679,6 +1816,12 @@ func (s *Span) GenAIRequestModel() string {
 	}
 	if s.GenAI.Bedrock != nil {
 		return s.GenAI.Bedrock.Model
+	}
+	if s.GenAI.Embedding != nil {
+		if s.GenAI.Embedding.Input.Model != "" {
+			return s.GenAI.Embedding.Input.Model
+		}
+		return s.GenAI.Embedding.Model
 	}
 	return ""
 }
@@ -1707,6 +1850,12 @@ func (s *Span) GenAIResponseModel() string {
 	}
 	if s.GenAI.Bedrock != nil {
 		return s.GenAI.Bedrock.Model
+	}
+	if s.GenAI.Embedding != nil {
+		if s.GenAI.Embedding.Output.Model != "" {
+			return s.GenAI.Embedding.Output.Model
+		}
+		return s.GenAI.Embedding.Model
 	}
 	return ""
 }

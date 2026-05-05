@@ -169,6 +169,17 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		}
 	}
 
+	// Embedding detection uses hostname+path matching and must run before
+	// header-based detectors (OpenAI, Anthropic, etc.) so that known
+	// embedding-only providers are not misclassified when they return
+	// OpenAI-compatible response headers.
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Embedding.Enabled {
+		span, ok := ebpfhttp.EmbeddingSpan(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAI.Enabled {
 		span, ok := ebpfhttp.OpenAISpan(&httpSpan, req, resp)
 		if ok {

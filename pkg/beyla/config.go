@@ -371,6 +371,13 @@ type SDKResource struct {
 	// +optional
 	AddK8sUIDAttributes bool `yaml:"addK8sUIDAttributes" env:"BEYLA_RESOURCE_ADD_K8S_UID_ATTRIBUTES"`
 
+	// AddK8sIPAttribute defines whether the k8s.pod.ip resource attribute should be set
+	// from the Kubernetes downward API (status.podIP). Useful for environments where the
+	// OTel k8sattributesprocessor cannot infer the pod IP from the connection source
+	// (e.g. clusters behind a NAT gateway).
+	// +optional
+	AddK8sIPAttribute bool `yaml:"addK8sIPAttribute" env:"BEYLA_RESOURCE_ADD_K8S_IP_ATTRIBUTE"`
+
 	// UseLabelsForResourceAttributes defines whether to use common labels for resource attributes:
 	// Note: first entry wins:
 	//   - `app.kubernetes.io/instance` becomes `service.name`

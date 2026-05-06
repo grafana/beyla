@@ -39,7 +39,7 @@ func mlog() *slog.Logger {
 
 const (
 	// SpanMetricsLatency and rest of metrics below haven't been yet moved to the
-	// pkg/export/attributes/metric.go file as we are disabling user-provided attribute
+	// pkg/internal/export/metric package as we are disabling user-provided attribute
 	// selection for them. They are very specific metrics with an opinionated format
 	// for Span Metrics and Service Graph Metrics functionalities
 	SpanMetricsLatency       = "traces_spanmetrics_latency"
@@ -344,47 +344,50 @@ func newMetricsReporter(
 	return &mr, nil
 }
 
-func (mr *MetricsReporter) otelMetricOptions() []metric.Option {
+func (mr *MetricsReporter) otelMetricOptions(mlog *slog.Logger) []metric.Option {
 	var opts []metric.Option
 	if !mr.jointMetricsCfg.Features.AppRED() {
 		return opts
 	}
+
+	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
+
 	if mr.is.HTTPEnabled() {
 		opts = append(opts,
-			metric.WithView(mr.otelHistogramConfig(attributes.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(mr.otelHistogramConfig(attributes.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(mr.otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram)),
-			metric.WithView(mr.otelHistogramConfig(attributes.HTTPServerResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram)),
-			metric.WithView(mr.otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram)),
-			metric.WithView(mr.otelHistogramConfig(attributes.HTTPClientResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPServerRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPServerResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPClientRequestSize.OTEL, mr.cfg.Buckets.RequestSizeHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.HTTPClientResponseSize.OTEL, mr.cfg.Buckets.ResponseSizeHistogram, useExponentialHistograms)),
 		)
 	}
 
 	if mr.is.GRPCEnabled() {
 		opts = append(opts,
-			metric.WithView(mr.otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(mr.otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		)
 	}
 
 	if mr.is.DBEnabled() {
 		opts = append(opts,
-			metric.WithView(mr.otelHistogramConfig(attributes.DBClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramConfig(attributes.DBClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		)
 	}
 
 	if mr.is.MQEnabled() {
 		opts = append(opts,
-			metric.WithView(mr.otelHistogramConfig(attributes.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
-			metric.WithView(mr.otelHistogramConfig(attributes.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(otelHistogramConfig(attributes.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+			metric.WithView(otelHistogramConfig(attributes.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 		)
 	}
 
 	if mr.is.GenAIEnabled() {
 		opts = append(opts,
-			metric.WithView(mr.otelHistogramConfig(attributes.GenAIClientOperationDuration.OTEL, mr.cfg.Buckets.GenAIClientDurationHistogram)),
+			metric.WithView(otelHistogramConfig(attributes.GenAIClientOperationDuration.OTEL, mr.cfg.Buckets.GenAIClientDurationHistogram, useExponentialHistograms)),
 			// the input tokens and output tokens are the same metric, we just need to distinguish the attributes, so we can write the token type
-			metric.WithView(mr.otelHistogramConfig(attributes.GenAIClientInputTokenUsage.OTEL, mr.cfg.Buckets.GenAITokenUsageHistogram)),
+			metric.WithView(otelHistogramConfig(attributes.GenAIClientInputTokenUsage.OTEL, mr.cfg.Buckets.GenAITokenUsageHistogram, useExponentialHistograms)),
 		)
 	}
 
@@ -403,12 +406,15 @@ func (mr *MetricsReporter) spanMetricsLatencyName() string {
 	return SpanMetricsLatencyOTel
 }
 
-func (mr *MetricsReporter) spanMetricOptions() []metric.Option {
+func (mr *MetricsReporter) spanMetricOptions(mlog *slog.Logger) []metric.Option {
 	if !mr.jointMetricsCfg.Features.SpanMetrics() {
 		return []metric.Option{}
 	}
+
+	useExponentialHistograms := isExponentialAggregation(mr.cfg, mlog)
+
 	return []metric.Option{
-		metric.WithView(mr.otelHistogramConfig(mr.spanMetricsLatencyName(), mr.cfg.Buckets.DurationHistogram)),
+		metric.WithView(otelHistogramConfig(mr.spanMetricsLatencyName(), mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 	}
 }
 
@@ -700,8 +706,8 @@ func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 			metric.WithInterval(mr.cfg.Interval))),
 	}
 
-	opts = append(opts, mr.otelMetricOptions()...)
-	opts = append(opts, mr.spanMetricOptions()...)
+	opts = append(opts, mr.otelMetricOptions(mlog)...)
+	opts = append(opts, mr.spanMetricOptions(mlog)...)
 
 	return Metrics{
 		ctx:     mr.ctx,
@@ -746,17 +752,16 @@ func (mr *MetricsReporter) setupMetricExpirers(m *Metrics, meter instrument.Mete
 	return nil
 }
 
-func (mr *MetricsReporter) isExponentialAggregation() bool {
-	switch mr.cfg.HistogramAggregation {
+func isExponentialAggregation(mc *otelcfg.MetricsConfig, mlog *slog.Logger) bool {
+	switch mc.HistogramAggregation {
 	case otelcfg.HistogramAggregationExponential:
 		return true
 	case otelcfg.HistogramAggregationExplicit:
 	// do nothing
 	default:
-		mr.log.Warn("invalid value for histogram aggregation. Accepted values are: "+
+		mlog.Warn("invalid value for histogram aggregation. Accepted values are: "+
 			string(otelcfg.HistogramAggregationExponential)+", "+string(otelcfg.HistogramAggregationExplicit)+" (default). Using default",
-			"value", mr.cfg.HistogramAggregation)
-		mr.cfg.HistogramAggregation = otelcfg.HistogramAggregationExplicit
+			"value", mc.HistogramAggregation)
 	}
 	return false
 }
@@ -785,11 +790,8 @@ func instrumentMetricsExporter(internalMetrics imetrics.Reporter, in sdkmetric.E
 	}
 }
 
-func (mr *MetricsReporter) otelHistogramConfig(
-	metricName string,
-	buckets []float64,
-) metric.View {
-	if mr.isExponentialAggregation() {
+func otelHistogramConfig(metricName string, buckets []float64, useExponentialHistogram bool) metric.View {
+	if useExponentialHistogram {
 		return metric.NewView(
 			metric.Instrument{
 				Name:  metricName,
@@ -798,8 +800,8 @@ func (mr *MetricsReporter) otelHistogramConfig(
 			metric.Stream{
 				Name: metricName,
 				Aggregation: sdkmetric.AggregationBase2ExponentialHistogram{
-					MaxScale: mr.cfg.ExponentialHistogram.MaxScale,
-					MaxSize:  mr.cfg.ExponentialHistogram.MaxSize,
+					MaxScale: 20,
+					MaxSize:  160,
 				},
 			})
 	}
@@ -968,17 +970,6 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			}
 		case request.EventTypeNATSClient, request.EventTypeNATSServer:
 			if mr.is.NATSEnabled() {
-				switch span.Method {
-				case request.MessagingPublish:
-					msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)
-					msgPublishDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-				case request.MessagingProcess:
-					msgProcessDuration, attrs := r.msgProcessDuration.ForRecord(span)
-					msgProcessDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-				}
-			}
-		case request.EventTypeAMQPClient:
-			if mr.is.AMQPEnabled() {
 				switch span.Method {
 				case request.MessagingPublish:
 					msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)

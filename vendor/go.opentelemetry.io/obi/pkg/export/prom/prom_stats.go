@@ -110,9 +110,9 @@ func newStatsReporter(
 			Help: "measures the smoothed TCP RTT as calculated by the kernel in seconds",
 			// TODO define a default bucket for stat metrics when we have enough metrics to have something standard
 			Buckets:                         []float64{0.0005, 0.001, 0.002, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0},
-			NativeHistogramBucketFactor:     DefaultNativeHistogramConfig.BucketFactor,
-			NativeHistogramMaxBucketNumber:  DefaultNativeHistogramConfig.MaxBucketNumber,
-			NativeHistogramMinResetDuration: DefaultNativeHistogramConfig.MinResetDuration,
+			NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 		}, labelNames(mr.tcpRttAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.tcpRtt)
 	}

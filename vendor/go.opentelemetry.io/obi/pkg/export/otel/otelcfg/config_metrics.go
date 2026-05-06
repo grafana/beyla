@@ -26,17 +26,6 @@ const (
 	HistogramAggregationExponential HistogramAggregation = "base2_exponential_bucket_histogram"
 )
 
-// ExponentialHistogramConfig configures the precision and size of exponential histograms
-// according to https://opentelemetry.io/docs/specs/otel/metrics/sdk/#base2-exponential-bucket-histogram-aggregation
-type ExponentialHistogramConfig struct {
-	// Sets the maximum number of buckets used for a base-2 exponential histogram.
-	// Higher values reduce bucket compaction and preserve more detail at the cost of larger metric payloads.
-	MaxSize int32 `yaml:"max_size" env:"OTEL_EBPF_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SIZE" validate:"gt=0"`
-	// Sets the maximum resolution scale used by base-2 exponential histograms.
-	// Higher values create narrower buckets and more precision, but may require more buckets. Valid values are from -10 to 20.
-	MaxScale int32 `yaml:"max_scale" env:"OTEL_EBPF_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SCALE" validate:"gte=-10,lte=20"`
-}
-
 func mlog() *slog.Logger {
 	return slog.With("component", "otelcfg.MetricsConfig")
 }
@@ -60,9 +49,8 @@ type MetricsConfig struct {
 	// InsecureSkipVerify enables skipping TLS certificate verification (not standard, so we don't follow the same naming convention)
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 
-	Buckets              export.Buckets             `yaml:"buckets"`
-	HistogramAggregation HistogramAggregation       `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
-	ExponentialHistogram ExponentialHistogramConfig `yaml:"exponential_histogram"`
+	Buckets              export.Buckets       `yaml:"buckets"`
+	HistogramAggregation HistogramAggregation `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 
 	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN"`
 

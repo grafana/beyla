@@ -7,14 +7,15 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -49,17 +50,19 @@ type StateConfigMapWriter struct {
 	logger       *slog.Logger
 	kubeClient   kubernetes.Interface
 	nodeName     string
-	name         string
+	ownContainer string
 	ownNamespace string
+	podName      string
+	owner        *metav1.OwnerReference
 }
 
-// We use uuid instead of the host name, because there might be multiple Beyla instances
-// on the node, which is especially true with Alloy and multiple active Beyla components.
 func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nodeName string) (*StateConfigMapWriter, error) {
 	logger := slog.Default().With("component", "webhook.StateConfigMapWriter")
 
-	uuid := uuid.New().String()
-	logger.Info("starting injection state config writer", "uuid", uuid)
+	ownContainer, err := ownContainerID()
+	if err != nil {
+		return nil, fmt.Errorf("cannot find own container ID: %w", err)
+	}
 
 	if nodeName == "" {
 		return nil, fmt.Errorf("node name unavailable; cannot derive ConfigMap name")
@@ -69,7 +72,7 @@ func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nod
 		return nil, fmt.Errorf("can't get kubernetes client: %w", err)
 	}
 
-	myNamespace, err := ownNamespace()
+	podNamespace, err := ownNamespace()
 	if err != nil {
 		return nil, fmt.Errorf("cannot find out the current namespace: %w", err)
 	}
@@ -78,9 +81,25 @@ func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nod
 		logger:       logger,
 		kubeClient:   kubeClient,
 		nodeName:     nodeName,
-		name:         uuid,
-		ownNamespace: myNamespace,
+		ownContainer: ownContainer,
+		ownNamespace: podNamespace,
 	}, nil
+}
+
+func (w *StateConfigMapWriter) Init(ctx context.Context) error {
+	owner, podName, err := w.findDaemonSetOwner(ctx)
+
+	if err != nil {
+		return fmt.Errorf("error finding daemonset: %w", err)
+	}
+	if owner == nil {
+		return fmt.Errorf("no DaemonSet owner found for own pod in namespace %s on node %s", w.ownNamespace, w.nodeName)
+	}
+
+	w.owner = owner
+	w.podName = podName
+
+	return nil
 }
 
 // Write upserts the ConfigMap. The instrumentation criteria comes from the
@@ -91,17 +110,9 @@ func (w *StateConfigMapWriter) Write(
 	criteria services.GlobDefinitionCriteria,
 	eligible []*EligibleDeployment,
 ) error {
-	owner, err := w.findDaemonSetOwner(ctx)
-	if err != nil {
-		return err
-	}
-	if owner == nil {
-		return fmt.Errorf("no DaemonSet owner found for pod %s/%s", w.ownNamespace, w.name)
-	}
-
 	sortEligible(eligible)
 
-	criteriaYAML, err := yaml.Marshal(criteria)
+	criteriaYAML, err := marshalNonZeroYAML(criteria)
 	if err != nil {
 		return fmt.Errorf("marshal criteria: %w", err)
 	}
@@ -110,13 +121,13 @@ func (w *StateConfigMapWriter) Write(
 		return fmt.Errorf("marshal eligible deployments: %w", err)
 	}
 
-	name := stateConfigMapName(owner.Name, w.nodeName)
+	name := stateConfigMapName(w.owner.Name, w.nodeName, w.podName)
 
 	desired := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
 			Namespace:       w.ownNamespace,
-			OwnerReferences: []metav1.OwnerReference{*owner},
+			OwnerReferences: []metav1.OwnerReference{*w.owner},
 			Labels: map[string]string{
 				"app.kubernetes.io/managed-by": "beyla",
 				"app.kubernetes.io/component":  "injector-state",
@@ -154,10 +165,10 @@ func (w *StateConfigMapWriter) Write(
 
 // findDaemonSetOwner fetches this pod and returns an OwnerReference pointing at
 // the parent DaemonSet, or nil if the pod has no DaemonSet owner.
-func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.OwnerReference, error) {
-	pod, err := w.kubeClient.CoreV1().Pods(w.ownNamespace).Get(ctx, w.name, metav1.GetOptions{})
+func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.OwnerReference, string, error) {
+	pod, err := w.findOwnPod(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("get own pod %s/%s: %w", w.ownNamespace, w.name, err)
+		return nil, "", err
 	}
 	for i := range pod.OwnerReferences {
 		ref := &pod.OwnerReferences[i]
@@ -173,9 +184,50 @@ func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.
 			UID:                ref.UID,
 			Controller:         &controller,
 			BlockOwnerDeletion: &blockOwnerDeletion,
-		}, nil
+		}, pod.Name, nil
 	}
-	return nil, nil
+	return nil, "", nil
+}
+
+func (w *StateConfigMapWriter) findOwnPod(ctx context.Context) (*corev1.Pod, error) {
+	pods, err := w.kubeClient.CoreV1().Pods(w.ownNamespace).List(ctx, metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", w.nodeName).String(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list pods in namespace %s on node %s: %w", w.ownNamespace, w.nodeName, err)
+	}
+	for i := range pods.Items {
+		if podHasContainerID(&pods.Items[i], w.ownContainer) {
+			return &pods.Items[i], nil
+		}
+	}
+	return nil, fmt.Errorf("own pod not found in namespace %s on node %s for container ID %s",
+		w.ownNamespace, w.nodeName, w.ownContainer)
+}
+
+func podHasContainerID(pod *corev1.Pod, containerID string) bool {
+	for i := range pod.Status.ContainerStatuses {
+		if containerIDMatches(pod.Status.ContainerStatuses[i].ContainerID, containerID) {
+			return true
+		}
+	}
+	return false
+}
+
+func containerIDMatches(statusContainerID, ownContainerID string) bool {
+	statusContainerID = trimContainerIDScheme(statusContainerID)
+	ownContainerID = trimContainerIDScheme(ownContainerID)
+	if statusContainerID == "" || ownContainerID == "" {
+		return false
+	}
+	return statusContainerID == ownContainerID
+}
+
+func trimContainerIDScheme(containerID string) string {
+	if _, id, ok := strings.Cut(containerID, "://"); ok {
+		return id
+	}
+	return containerID
 }
 
 func sortEligible(eligible []*EligibleDeployment) {
@@ -187,8 +239,70 @@ func sortEligible(eligible []*EligibleDeployment) {
 	})
 }
 
-func stateConfigMapName(daemonSetName, nodeName string) string {
-	return daemonSetName + stateConfigMapNameSuffix + "-" + sanitizeDNS1123(nodeName)
+func marshalNonZeroYAML(value any) ([]byte, error) {
+	var node yaml.Node
+	if err := node.Encode(value); err != nil {
+		return nil, err
+	}
+	pruneZeroYAMLNodes(&node)
+	return yaml.Marshal(&node)
+}
+
+func pruneZeroYAMLNodes(node *yaml.Node) {
+	switch node.Kind {
+	case yaml.DocumentNode:
+		for _, child := range node.Content {
+			pruneZeroYAMLNodes(child)
+		}
+	case yaml.SequenceNode:
+		content := node.Content[:0]
+		for _, child := range node.Content {
+			pruneZeroYAMLNodes(child)
+			if !isZeroYAMLNode(child) {
+				content = append(content, child)
+			}
+		}
+		node.Content = content
+	case yaml.MappingNode:
+		content := node.Content[:0]
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key, value := node.Content[i], node.Content[i+1]
+			pruneZeroYAMLNodes(value)
+			if !isZeroYAMLNode(value) {
+				content = append(content, key, value)
+			}
+		}
+		node.Content = content
+	}
+}
+
+func isZeroYAMLNode(node *yaml.Node) bool {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		switch node.Tag {
+		case "!!null":
+			return true
+		case "!!str":
+			return node.Value == ""
+		case "!!bool":
+			return node.Value == "false"
+		case "!!int":
+			v, err := strconv.ParseInt(node.Value, 0, 64)
+			return err == nil && v == 0
+		case "!!float":
+			v, err := strconv.ParseFloat(node.Value, 64)
+			return err == nil && v == 0
+		default:
+			return node.Value == ""
+		}
+	case yaml.SequenceNode, yaml.MappingNode:
+		return len(node.Content) == 0
+	}
+	return false
+}
+
+func stateConfigMapName(daemonSetName, nodeName, podName string) string {
+	return daemonSetName + stateConfigMapNameSuffix + "-" + sanitizeDNS1123(nodeName) + "-" + podName
 }
 
 var dns1123InvalidRE = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -211,6 +325,17 @@ func sanitizeDNS1123(s string) string {
 		s = strings.TrimRight(s[:maxLen], "-")
 	}
 	return s
+}
+
+func ownContainerID() (string, error) {
+	info, err := containerInfoForPID(uint32(os.Getpid()))
+	if err != nil {
+		return "", err
+	}
+	if info.ContainerID == "" {
+		return "", fmt.Errorf("container ID is empty")
+	}
+	return info.ContainerID, nil
 }
 
 // Reads the namespace name like k8s client-go does it

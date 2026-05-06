@@ -285,8 +285,6 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.MQTTEnabled()
 	case request.EventTypeNATSClient, request.EventTypeNATSServer:
 		return is.NATSEnabled()
-	case request.EventTypeAMQPClient:
-		return is.AMQPEnabled()
 	case request.EventTypeMongoClient:
 		return is.MongoEnabled()
 	case request.EventTypeManualSpan:
@@ -307,7 +305,6 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 var (
 	messagingSystemMQTT = attribute.String(string(attr.MessagingSystem), "mqtt")
 	messagingSystemNATS = attribute.String(string(attr.MessagingSystem), "nats")
-	messagingSystemAMQP = attribute.String(string(attr.MessagingSystem), "amqp")
 	spanMetricsSkip     = attribute.Bool(string(attr.SkipSpanMetrics), true)
 )
 
@@ -897,16 +894,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		if span.Type == request.EventTypeNATSClient {
 			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
 		}
-	case request.EventTypeAMQPClient:
-		operation := request.MessagingOperationType(span.Method)
-		attrs = []attribute.KeyValue{
-			request.ServerAddr(request.HostAsServer(span)),
-			request.ServerPort(span.HostPort),
-			messagingSystemAMQP,
-			operation,
-		}
-
-		attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
 	case request.EventTypeMongoClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
@@ -1007,7 +994,7 @@ func spanKind(span *request.Span) trace2.SpanKind {
 		return trace2.SpanKindServer
 	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeFailedConnect:
 		return trace2.SpanKindClient
-	case request.EventTypeKafkaClient, request.EventTypeMQTTClient, request.EventTypeNATSClient, request.EventTypeAMQPClient:
+	case request.EventTypeKafkaClient, request.EventTypeMQTTClient, request.EventTypeNATSClient:
 		switch span.Method {
 		case request.MessagingPublish:
 			return trace2.SpanKindProducer

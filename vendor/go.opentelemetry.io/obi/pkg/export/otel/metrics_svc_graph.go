@@ -9,7 +9,6 @@ import (
 	"log/slog"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
@@ -154,53 +153,13 @@ func newSvcGraphMetricsReporter(
 	return &mr, nil
 }
 
-func (mr *SvcGraphMetricsReporter) graphMetricOptions() []metric.Option {
+func (mr *SvcGraphMetricsReporter) graphMetricOptions(log *slog.Logger) []metric.Option {
+	useExponentialHistograms := isExponentialAggregation(mr.cfg, log)
+
 	return []metric.Option{
-		metric.WithView(mr.otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram)),
-		metric.WithView(mr.otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram)),
+		metric.WithView(otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
 	}
-}
-
-func (mr *SvcGraphMetricsReporter) isExponentialAggregation() bool {
-	switch mr.cfg.HistogramAggregation {
-	case otelcfg.HistogramAggregationExponential:
-		return true
-	case otelcfg.HistogramAggregationExplicit:
-	// do nothing
-	default:
-		mr.log.Warn("invalid value for histogram aggregation. Accepted values are: "+
-			string(otelcfg.HistogramAggregationExponential)+", "+string(otelcfg.HistogramAggregationExplicit)+" (default). Using default",
-			"value", mr.cfg.HistogramAggregation)
-	}
-	return false
-}
-
-func (mr *SvcGraphMetricsReporter) otelHistogramConfig(metricName string, buckets []float64) metric.View {
-	if mr.isExponentialAggregation() {
-		return metric.NewView(
-			metric.Instrument{
-				Name:  metricName,
-				Scope: instrumentation.Scope{Name: reporterName},
-			},
-			metric.Stream{
-				Name: metricName,
-				Aggregation: sdkmetric.AggregationBase2ExponentialHistogram{
-					MaxScale: mr.cfg.ExponentialHistogram.MaxScale,
-					MaxSize:  mr.cfg.ExponentialHistogram.MaxSize,
-				},
-			})
-	}
-	return metric.NewView(
-		metric.Instrument{
-			Name:  metricName,
-			Scope: instrumentation.Scope{Name: reporterName},
-		},
-		metric.Stream{
-			Name: metricName,
-			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
-				Boundaries: buckets,
-			},
-		})
 }
 
 func (mr *SvcGraphMetricsReporter) setupGraphMeters(m *SvcGraphMetrics, meter instrument.Meter) error {
@@ -253,7 +212,7 @@ func (mr *SvcGraphMetricsReporter) newSvcGraphMetricsInstance(service *svc.Attrs
 			metric.WithInterval(mr.cfg.Interval))),
 	}
 
-	opts = append(opts, mr.graphMetricOptions()...)
+	opts = append(opts, mr.graphMetricOptions(log)...)
 
 	return &SvcGraphMetrics{
 		ctx:                      mr.ctx,

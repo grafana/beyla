@@ -8,8 +8,8 @@ on:
         required: true
         type: string
       obi_version:
-        description: "OBI version to prerelease/tag (vMAJOR.MINOR.PATCH)"
-        required: true
+        description: "Optional OBI version to prerelease/tag (vMAJOR.MINOR.PATCH). Defaults to beyla_version when omitted."
+        required: false
         type: string
       dry_run:
         description: "Dry run mode (validate only)"
@@ -65,10 +65,13 @@ jobs:
 
           cmd=(./scripts/release-train.sh tag
             --beyla-version "${BEYLA_VERSION_INPUT}"
-            --obi-version "${OBI_VERSION_INPUT}"
             --beyla-repo "${{ github.repository }}"
             --obi-repo "grafana/opentelemetry-ebpf-instrumentation"
             --exclude-check "${{ github.job }}")
+
+          if [[ -n "${OBI_VERSION_INPUT}" ]]; then
+            cmd+=(--obi-version "${OBI_VERSION_INPUT}")
+          fi
 
           if [[ "${DRY_RUN_INPUT}" == "true" ]]; then
             cmd+=(--dry-run)

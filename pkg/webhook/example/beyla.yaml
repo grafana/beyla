@@ -53,6 +53,9 @@ rules:
   - apiGroups: [""]
     resources: ["replicationcontrollers"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create", "update"]        
     # Required to retrieve the owner references used by the seccomp beyla.
   - apiGroups: ["security-profiles-operator.x-k8s.io"]
     resources: ["seccompprofiles"]

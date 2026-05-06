@@ -26,17 +26,19 @@ import (
 
 // Server represents the webhook server
 type Server struct {
-	cfg           *beyla.Config
-	ctxInfo       *global.ContextInfo
-	mutator       *PodMutator
-	bouncer       *PodBouncer
-	scanner       *LocalProcessScanner
-	matcher       *PodMatcher
-	logger        *slog.Logger
-	store         *kube.Store
-	initialState  map[string][]*ProcessInfo
-	metrics       *SDKInjectionMetrics
-	podStateCache *PodStateCache
+	cfg                 *beyla.Config
+	ctxInfo             *global.ContextInfo
+	mutator             *PodMutator
+	bouncer             *PodBouncer
+	scanner             *LocalProcessScanner
+	matcher             *PodMatcher
+	logger              *slog.Logger
+	store               *kube.Store
+	initialState        map[string][]*ProcessInfo
+	metrics             *SDKInjectionMetrics
+	podStateCache       *PodStateCache
+	stateWriter         *StateConfigMapWriter
+	eligibleDeployments map[string]*EligibleDeployment
 }
 
 // NewServer creates a new webhook server
@@ -66,23 +68,30 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		return nil, err
 	}
 
-	if matcher.HasSelectionCriteria() && !cfg.Injector.NoAutoRestart {
+	if matcher.HasSelectionCriteria() && configuredToBounceDeployments(cfg) {
 		bouncer, err = NewPodBouncer(ctxInfo, metrics)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, OwnNodeName())
+	if err != nil {
+		logger.Warn("disabling injector state ConfigMap writer", "error", err)
+	}
+
 	return &Server{
-		cfg:           cfg,
-		mutator:       mutator,
-		bouncer:       bouncer,
-		scanner:       NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
-		matcher:       matcher,
-		logger:        logger,
-		ctxInfo:       ctxInfo,
-		metrics:       metrics,
-		podStateCache: podStateCache,
+		cfg:                 cfg,
+		mutator:             mutator,
+		bouncer:             bouncer,
+		scanner:             NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		matcher:             matcher,
+		logger:              logger,
+		ctxInfo:             ctxInfo,
+		metrics:             metrics,
+		podStateCache:       podStateCache,
+		stateWriter:         stateWriter,
+		eligibleDeployments: map[string]*EligibleDeployment{},
 	}, nil
 }
 
@@ -109,6 +118,10 @@ func (s *Server) makeHTTPServer() *http.Server {
 	return server
 }
 
+func configuredToBounceDeployments(cfg *beyla.Config) bool {
+	return !cfg.Injector.NoAutoRestart
+}
+
 // Start starts the webhook server
 func (s *Server) Start(ctx context.Context) error {
 	if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
@@ -127,7 +140,7 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.subscribeStateCache(ctx)
 	}
 
-	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
+	if s.matcher.HasSelectionCriteria() {
 		s.logger.Info("starting initial state scanning")
 		go func() {
 			err := s.getInitialState(ctx)
@@ -266,9 +279,44 @@ func (s *Server) getInitialState(ctx context.Context) error {
 		return err
 	}
 
-	go store.Subscribe(s)
+	// Subscribe synchronously: the store delivers all existing pods as CREATED
+	// events before returning. After this call our eligibleDeployments map
+	// reflects the initial state, and we can persist it. Future events still
+	// flow through the registered observer asynchronously.
+	store.Subscribe(s)
+
+	if s.stateWriter != nil {
+		if err := s.writeStateConfigMap(ctx); err != nil {
+			s.logger.Warn("failed to write injector state ConfigMap", "error", err)
+		}
+	}
 
 	return nil
+}
+
+func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
+	if s.eligibleDeployments == nil {
+		return
+	}
+	namespace := a.metadata[services.AttrNamespace]
+	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
+
+	language := languageLabel(a.kind)
+
+	s.eligibleDeployments[mutationKey(namespace, deployment)] = &EligibleDeployment{
+		Namespace:  namespace,
+		Kind:       "Deployment",
+		Deployment: deployment,
+		Language:   language,
+	}
+}
+
+func (s *Server) writeStateConfigMap(ctx context.Context) error {
+	eligible := make([]*EligibleDeployment, 0, len(s.eligibleDeployments))
+	for _, d := range s.eligibleDeployments {
+		eligible = append(eligible, d)
+	}
+	return s.stateWriter.Write(ctx, s.cfg.Injector.Instrument, eligible)
 }
 
 func (s *Server) ID() string { return "unique-webhook-server-id" }
@@ -311,7 +359,10 @@ func (s *Server) On(event *informer.Event) error {
 				case false:
 					if s.mutator.CanInstrument(a.kind) && !s.mutator.PreloadsSomethingElse(a) {
 						if _, matched := s.matcher.MatchProcessInfo(a); matched {
-							s.restartDeployment(a)
+							s.recordEligibleDeployment(a)
+							if configuredToBounceDeployments(s.cfg) {
+								s.restartDeployment(a)
+							}
 						}
 					} else {
 						s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
@@ -320,7 +371,9 @@ func (s *Server) On(event *informer.Event) error {
 					// If this pod was instrumented, but the new Beyla config says don't anymore
 					// we bounce the pods to undo the instrumentation
 					if _, matched := s.matcher.MatchProcessInfo(a); !matched {
-						s.restartDeployment(a)
+						if configuredToBounceDeployments(s.cfg) {
+							s.restartDeployment(a)
+						}
 					}
 				}
 			}

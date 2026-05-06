@@ -23,8 +23,8 @@ import (
 
 const (
 	stateConfigMapNameSuffix  = "-injector-state"
-	stateConfigMapKeyCriteria = "selectors.yaml"
-	stateConfigMapKeyEligible = "eligible_deployments.yaml"
+	stateConfigMapKeyCriteria = "selection_criteria.yaml"
+	stateConfigMapKeyEligible = "eligible_for_restart.yaml"
 
 	daemonSetOwnerKind       = "DaemonSet"
 	daemonSetOwnerAPIVersion = "apps/v1"
@@ -75,7 +75,7 @@ func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nod
 
 	myNamespace, err := ownNamespace()
 	if err != nil {
-		return nil, fmt.Errorf("cannot find out the current namespace", "error", err)
+		return nil, fmt.Errorf("cannot find out the current namespace: %w", err)
 	}
 
 	return &StateConfigMapWriter{

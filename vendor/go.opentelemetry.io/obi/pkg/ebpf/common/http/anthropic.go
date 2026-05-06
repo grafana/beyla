@@ -69,13 +69,13 @@ func AnthropicSpan(baseSpan *request.Span, req *http.Request, resp *http.Respons
 
 	var parsedRequest request.AnthropicRequest
 	if err := json.Unmarshal(reqB, &parsedRequest); err != nil {
-		slog.Debug("failed to parse OpenAI request", "error", err)
+		slog.Debug("failed to parse Anthropic request", "error", err)
 	}
 
 	var parsedResponse request.AnthropicResponse
 	if len(respB) > 0 && respB[0] == '{' {
 		if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-			slog.Debug("failed to parse OpenAI response", "error", err)
+			slog.Debug("failed to parse Anthropic response", "error", err)
 		}
 	} else {
 		reader := bytes.NewReader(respB)

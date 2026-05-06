@@ -139,6 +139,7 @@ var DefaultConfig = Config{
 			Postgres: 0,
 			Kafka:    0,
 			MSSQL:    0,
+			TCP:      0,
 		},
 		MySQLPreparedStatementsCacheSize:    1024,
 		PostgresPreparedStatementsCacheSize: 1024,
@@ -223,6 +224,10 @@ var DefaultConfig = Config{
 		Buckets:              export.DefaultBuckets,
 		ReportersCacheLen:    ReporterLRUSize,
 		HistogramAggregation: otelcfg.HistogramAggregationExplicit,
+		ExponentialHistogram: otelcfg.ExponentialHistogramConfig{
+			MaxSize:  160,
+			MaxScale: 20,
+		},
 		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
@@ -243,6 +248,7 @@ var DefaultConfig = Config{
 			instrumentations.InstrumentationKafka,
 			instrumentations.InstrumentationMQTT,
 			instrumentations.InstrumentationNATS,
+			instrumentations.InstrumentationAMQP,
 			instrumentations.InstrumentationMongo,
 			instrumentations.InstrumentationCouchbase,
 			instrumentations.InstrumentationMemcached,
@@ -250,8 +256,9 @@ var DefaultConfig = Config{
 		},
 	},
 	Prometheus: prom.PrometheusConfig{
-		Path:    "/metrics",
-		Buckets: export.DefaultBuckets,
+		Path:            "/metrics",
+		Buckets:         export.DefaultBuckets,
+		NativeHistogram: prom.DefaultNativeHistogramConfig,
 		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},

@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -26,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
+	"go.opentelemetry.io/obi/pkg/internal/netns"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -200,6 +203,7 @@ func (p *Tracer) constants() map[string]any {
 	}
 
 	m["http_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.HTTP
+	m["tcp_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.TCP
 	m["mysql_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.MySQL
 	m["kafka_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Kafka
 	m["postgres_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Postgres
@@ -482,6 +486,39 @@ func (p *Tracer) Iters() []*ebpfcommon.Iter {
 	return p.iters
 }
 
+func (p *Tracer) runItersForPids() {
+	iters := p.Iters()
+	if len(iters) == 0 {
+		return
+	}
+
+	seen := make(map[uint64]struct{})
+
+	for _, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
+		for pid := range pids {
+			info, err := os.Stat(fmt.Sprintf("/proc/%d/ns/net", pid))
+			if err != nil {
+				p.log.Debug("netns stat failed", "pid", pid, "error", err)
+				continue
+			}
+
+			inode := info.Sys().(*syscall.Stat_t).Ino
+			if _, ok := seen[inode]; ok {
+				continue
+			}
+			seen[inode] = struct{}{}
+
+			for _, it := range iters {
+				if err := netns.WithNetNS(int(pid), func() error {
+					return it.Run(p.log)
+				}); err != nil {
+					p.log.Error("error running iterator in netns", "pid", pid, "error", err)
+				}
+			}
+		}
+	}
+}
+
 func (p *Tracer) Tracing() []*ebpfcommon.Tracing { return nil }
 
 func (p *Tracer) RecordInstrumentedLib(id uint64, closers []io.Closer) {
@@ -540,13 +577,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	go p.lookForTimeouts(ctx, parseContext, timeoutTicker, eventsChan)
 	defer timeoutTicker.Stop()
 
-	for _, it := range p.Iters() {
-		if it.Program == p.bpfObjects.ObiIterTcp {
-			if err := it.Run(p.log); err != nil {
-				p.log.Error("error running TCP iterator", "error", err)
-			}
-		}
-	}
+	p.runItersForPids()
 
 	p.log.Info("Launching p.Tracer")
 

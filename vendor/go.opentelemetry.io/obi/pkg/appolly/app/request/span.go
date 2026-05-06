@@ -56,6 +56,7 @@ const (
 	EventTypeSQLServer
 	EventTypeNATSClient
 	EventTypeNATSServer
+	EventTypeAMQPClient
 )
 
 const (
@@ -140,6 +141,8 @@ func (t EventType) String() string {
 		return "MQTTClient"
 	case EventTypeNATSClient:
 		return "NATSClient"
+	case EventTypeAMQPClient:
+		return "AMQPClient"
 	case EventTypeRedisServer:
 		return "RedisServer"
 	case EventTypeKafkaServer:
@@ -959,7 +962,7 @@ func spanAttributes(s *Span) SpanAttributes {
 			"statement":  s.Statement,
 			"query":      s.Path,
 		}
-	case EventTypeKafkaServer, EventTypeKafkaClient, EventTypeMQTTServer, EventTypeMQTTClient:
+	case EventTypeKafkaServer, EventTypeKafkaClient, EventTypeMQTTServer, EventTypeMQTTClient, EventTypeAMQPClient:
 		attrs := SpanAttributes{
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
@@ -1114,7 +1117,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
+	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return true
 	}
 
@@ -1288,7 +1291,7 @@ func (s *Span) ServiceGraphKind() string {
 		return "SPAN_KIND_SERVER"
 	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "SPAN_KIND_CLIENT"
-	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient:
+	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient:
 		switch s.Method {
 		case MessagingPublish:
 			return "SPAN_KIND_PRODUCER"
@@ -1305,7 +1308,7 @@ func (s *Span) ServiceGraphConnectionType() string {
 	switch s.Type {
 	case EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return "database"
-	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient:
+	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient:
 		return "messaging_system"
 	case EventTypeHTTPClient:
 		if s.SubType == HTTPSubtypeAWSSQS {
@@ -1494,7 +1497,7 @@ func (s *Span) TraceName() string {
 			return "MEMCACHED"
 		}
 		return s.Method
-	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer, EventTypeNATSClient, EventTypeNATSServer:
+	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer, EventTypeNATSClient, EventTypeNATSServer, EventTypeAMQPClient:
 		if s.Path == "" {
 			return s.Method
 		}

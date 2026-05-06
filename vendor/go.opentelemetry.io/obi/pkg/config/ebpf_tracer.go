@@ -184,6 +184,7 @@ type EBPFBufferSizes struct {
 	Kafka    uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=65536"`
 	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=65536"`
 	MSSQL    uint32 `yaml:"mssql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MSSQL" validate:"lte=65536"`
+	TCP      uint32 `yaml:"tcp" env:"OTEL_EBPF_BPF_BUFFER_SIZE_TCP" validate:"lte=65536"`
 }
 
 // HasHeaders returns true if HTTP headers context propagation is enabled

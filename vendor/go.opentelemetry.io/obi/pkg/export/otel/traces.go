@@ -183,7 +183,7 @@ func (tr *tracesOTELReceiver) provideLoop(ctx context.Context) {
 func instrumentTracesExporter(internalMetrics imetrics.Reporter, in exporter.Traces) exporter.Traces {
 	// avoid wrapping the instrumented exporter if we don't have
 	// internal instrumentation (NoopReporter)
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+	if internalMetrics == nil || imetrics.IsBuiltinNoopReporter(internalMetrics) {
 		return in
 	}
 	return &instrumentedTracesExporter{

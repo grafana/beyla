@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
@@ -128,7 +129,8 @@ func newSvcGraphMetricsReporter(
 		log:              log,
 	}
 
-	mr.reporters = otelcfg.NewReporterPool[*svc.Attrs, *SvcGraphMetrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
+	var err error
+	mr.reporters, err = otelcfg.NewReporterPool[*svc.Attrs, *SvcGraphMetrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *SvcGraphMetrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
@@ -140,6 +142,9 @@ func newSvcGraphMetricsReporter(
 				}
 			}()
 		}, mr.newMetricSet)
+	if err != nil {
+		return nil, fmt.Errorf("creating service graph metrics reporters pool: %w", err)
+	}
 
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
@@ -153,13 +158,53 @@ func newSvcGraphMetricsReporter(
 	return &mr, nil
 }
 
-func (mr *SvcGraphMetricsReporter) graphMetricOptions(log *slog.Logger) []metric.Option {
-	useExponentialHistograms := isExponentialAggregation(mr.cfg, log)
-
+func (mr *SvcGraphMetricsReporter) graphMetricOptions() []metric.Option {
 	return []metric.Option{
-		metric.WithView(otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
-		metric.WithView(otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram, useExponentialHistograms)),
+		metric.WithView(mr.otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram)),
+		metric.WithView(mr.otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram)),
 	}
+}
+
+func (mr *SvcGraphMetricsReporter) isExponentialAggregation() bool {
+	switch mr.cfg.HistogramAggregation {
+	case otelcfg.HistogramAggregationExponential:
+		return true
+	case otelcfg.HistogramAggregationExplicit:
+	// do nothing
+	default:
+		mr.log.Warn("invalid value for histogram aggregation. Accepted values are: "+
+			string(otelcfg.HistogramAggregationExponential)+", "+string(otelcfg.HistogramAggregationExplicit)+" (default). Using default",
+			"value", mr.cfg.HistogramAggregation)
+	}
+	return false
+}
+
+func (mr *SvcGraphMetricsReporter) otelHistogramConfig(metricName string, buckets []float64) metric.View {
+	if mr.isExponentialAggregation() {
+		return metric.NewView(
+			metric.Instrument{
+				Name:  metricName,
+				Scope: instrumentation.Scope{Name: reporterName},
+			},
+			metric.Stream{
+				Name: metricName,
+				Aggregation: sdkmetric.AggregationBase2ExponentialHistogram{
+					MaxScale: mr.cfg.ExponentialHistogram.MaxScale,
+					MaxSize:  mr.cfg.ExponentialHistogram.MaxSize,
+				},
+			})
+	}
+	return metric.NewView(
+		metric.Instrument{
+			Name:  metricName,
+			Scope: instrumentation.Scope{Name: reporterName},
+		},
+		metric.Stream{
+			Name: metricName,
+			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+				Boundaries: buckets,
+			},
+		})
 }
 
 func (mr *SvcGraphMetricsReporter) setupGraphMeters(m *SvcGraphMetrics, meter instrument.Meter) error {
@@ -212,7 +257,7 @@ func (mr *SvcGraphMetricsReporter) newSvcGraphMetricsInstance(service *svc.Attrs
 			metric.WithInterval(mr.cfg.Interval))),
 	}
 
-	opts = append(opts, mr.graphMetricOptions(log)...)
+	opts = append(opts, mr.graphMetricOptions()...)
 
 	return &SvcGraphMetrics{
 		ctx:                      mr.ctx,

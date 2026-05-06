@@ -200,6 +200,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return semconv.MessagingSystemKey.String("mqtt")
 			case EventTypeNATSClient, EventTypeNATSServer:
 				return semconv.MessagingSystemKey.String("nats")
+			case EventTypeAMQPClient:
+				return semconv.MessagingSystemKey.String("amqp")
 			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
 				return semconv.MessagingSystemAWSSQS
@@ -214,7 +216,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer {
 				return semconv.MessagingDestinationName(span.Path)
 			}
-			if span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer {
+			if span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer || span.Type == EventTypeAMQPClient {
 				return semconv.MessagingDestinationName(span.Path)
 			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
@@ -229,7 +231,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return MessagingOperationName(span.AWS.SQS.OperationName)
 			case span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer ||
 				span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer ||
-				span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer:
+				span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer ||
+				span.Type == EventTypeAMQPClient:
 				return MessagingOperationName(span.Method)
 			default:
 				return MessagingOperationName("")
@@ -240,7 +243,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			switch span.Type {
 			case EventTypeKafkaClient, EventTypeKafkaServer,
 				EventTypeMQTTClient, EventTypeMQTTServer,
-				EventTypeNATSClient, EventTypeNATSServer:
+				EventTypeNATSClient, EventTypeNATSServer,
+				EventTypeAMQPClient:
 				return MessagingOperationType(span.Method)
 			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
@@ -260,7 +264,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.Job:
 		getter = func(span *Span) attribute.KeyValue { return Job(span.Service.Job()) }
 	case attr.Instance:
-		getter = func(span *Span) attribute.KeyValue { return Job(span.Service.UID.Instance) }
+		getter = func(span *Span) attribute.KeyValue { return Instance(span.Service.UID.Instance) }
 	case attr.GraphQLDocument:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {

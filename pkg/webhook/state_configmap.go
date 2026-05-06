@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/grafana/beyla/v3/pkg/beyla"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,6 +19,8 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
+
+	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 const (

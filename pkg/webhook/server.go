@@ -81,6 +81,9 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	}
 
 	err = stateWriter.Init(context.Background())
+	if err != nil {
+		logger.Warn("disabling injector state ConfigMap writer", "error", err)
+	}
 
 	return &Server{
 		cfg:                 cfg,
@@ -341,6 +344,7 @@ func (s *Server) restartDeployment(a *ProcessInfo) {
 	}
 }
 
+//nolint:cyclop
 func (s *Server) On(event *informer.Event) error {
 	// ignoring updates on non-pod resources
 	if event.Resource == nil || event.GetResource().GetPod() == nil {

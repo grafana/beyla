@@ -53,17 +53,13 @@ type StateConfigMapWriter struct {
 	ownNamespace string
 }
 
-// NewStateConfigMapWriter resolves the Beyla pod identity from the downward
-// API (POD_NAME, POD_NAMESPACE). It returns an error if either is unset, in
-// which case the caller should disable state ConfigMap writing.
+// We use uuid instead of the host name, because there might be multiple Beyla instances
+// on the node, which is especially true with Alloy and multiple active Beyla components.
 func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nodeName string) (*StateConfigMapWriter, error) {
 	logger := slog.Default().With("component", "webhook.StateConfigMapWriter")
 
-	fullHostName, err := os.Hostname()
-	if err != nil {
-		fullHostName = uuid.New().String()
-		logger.Warn("cannot determine Beyla instance hostname", "error", err, "uuid", fullHostName)
-	}
+	uuid := uuid.New().String()
+	logger.Info("starting injection state config writer", "uuid", uuid)
 
 	if nodeName == "" {
 		return nil, fmt.Errorf("node name unavailable; cannot derive ConfigMap name")
@@ -82,7 +78,7 @@ func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nod
 		logger:       logger,
 		kubeClient:   kubeClient,
 		nodeName:     nodeName,
-		name:         fullHostName,
+		name:         uuid,
 		ownNamespace: myNamespace,
 	}, nil
 }
@@ -217,6 +213,7 @@ func sanitizeDNS1123(s string) string {
 	return s
 }
 
+// Reads the namespace name like k8s client-go does it
 func ownNamespace() (string, error) {
 	data, err := os.ReadFile(saNamespacePath)
 	if err != nil {

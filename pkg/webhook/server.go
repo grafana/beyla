@@ -260,6 +260,9 @@ func (s *Server) checkImageVolumeSupport(provider *kube.MetadataProvider) error 
 
 // subscribeStateCache subscribes the pod state cache to the kube informer store.
 func (s *Server) subscribeStateCache(ctx context.Context) {
+	if !s.ctxInfo.K8sInformer.IsKubeEnabled() {
+		return
+	}
 	store, err := s.ctxInfo.K8sInformer.Get(ctx)
 	if err != nil {
 		s.logger.Error("state metrics unavailable: cannot subscribe to k8s informer", "error", err)
@@ -273,15 +276,23 @@ func (s *Server) subscribeStateCache(ctx context.Context) {
 }
 
 func (s *Server) getInitialState(ctx context.Context) error {
-	provider := s.ctxInfo.K8sInformer
-	store, err := provider.Get(ctx)
-	if err != nil {
-		return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)
-	}
-	s.store = store
+	var store *kube.Store
 
-	if err = s.establishInitialProcessState(); err != nil {
+	provider := s.ctxInfo.K8sInformer
+	if provider.IsKubeEnabled() {
+		store, err := provider.Get(ctx)
+		if err != nil {
+			return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)
+		}
+		s.store = store
+	}
+
+	if err := s.establishInitialProcessState(); err != nil {
 		return err
+	}
+
+	if !provider.IsKubeEnabled() {
+		return nil
 	}
 
 	// Subscribe synchronously: the store delivers all existing pods as CREATED

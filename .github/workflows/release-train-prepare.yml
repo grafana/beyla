@@ -8,7 +8,7 @@ on:
         required: false
         type: string
       obi_version:
-        description: "Optional explicit OBI version (vMAJOR.MINOR.PATCH)"
+        description: "Optional explicit OBI version (vMAJOR.MINOR.PATCH). Defaults to beyla_version when omitted."
         required: false
         type: string
       bump:

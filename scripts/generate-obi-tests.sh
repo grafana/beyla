@@ -24,6 +24,9 @@ OATS_DEST="internal/testgenerated/oats"
 VM_SRC=".obi-src/internal/test/vm"
 VM_DEST="internal/testgenerated/vm"
 
+SCHEMAS_SRC=".obi-src/schemas"
+SCHEMAS_DEST="schemas"
+
 
 # OBI module path → Beyla module path
 OBI_MODULE="go.opentelemetry.io/obi"
@@ -643,6 +646,19 @@ copy_vm() {
     fi
 }
 
+# =============================================================================
+# SCHEMAS FUNCTIONS
+# =============================================================================
+
+copy_schemas() {
+    echo "  Copying SCHEMAs..."
+    if [[ -d "$SCHEMAS_SRC" ]]; then
+        rm -rf "$SCHEMAS_DEST"
+        mkdir -p "$SCHEMAS_DEST"
+        cp -r "$SCHEMAS_SRC"/* "$SCHEMAS_DEST/"
+    fi
+}
+
 generate() {
     echo "Generating OBI tests from $OBI_SRC..."
     local jobs
@@ -681,10 +697,16 @@ generate() {
     # -----------------------------------------------------------------
     copy_vm
 
+    # -----------------------------------------------------------------
+    # Weaver schemas test infrastructure
+    # -----------------------------------------------------------------
+    copy_schemas
+
     echo ""
     echo "Generated integration tests at $OBI_DEST"
     echo "Generated oats tests at $OATS_DEST"
     echo "Imported vm assets into $VM_DEST"
+    echo "Imported weaver schemas into $SCHEMAS_DEST"
     echo ""
     echo "Using Beyla module path: $BEYLA_MODULE"
     echo "Env vars, metric names, etc. were automatically transformed to use Beyla conventions."

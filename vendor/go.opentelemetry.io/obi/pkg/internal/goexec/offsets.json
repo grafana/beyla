@@ -666,7 +666,7 @@
       "s": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -680,7 +680,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -694,7 +694,7 @@
       "Stream": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -706,7 +706,7 @@
       "st": {
         "versions": {
           "oldest": "1.69.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -724,7 +724,7 @@
       "id": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -740,7 +740,7 @@
       "method": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -764,7 +764,7 @@
       "st": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -782,7 +782,7 @@
       "buf": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -798,7 +798,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -814,7 +814,7 @@
       "offset": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -832,7 +832,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -852,7 +852,7 @@
       "scheme": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {
@@ -878,7 +878,7 @@
       "conn": {
         "versions": {
           "oldest": "1.40.0",
-          "newest": "1.80.0"
+          "newest": "1.81.0"
         },
         "offsets": [
           {

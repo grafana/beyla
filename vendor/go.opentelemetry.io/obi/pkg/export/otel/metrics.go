@@ -301,7 +301,7 @@ func newMetricsReporter(
 			mr.attrGetters, mr.attributes.For(attributes.GenAIClientOperationDuration))
 	}
 
-	mr.reporters = otelcfg.NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
+	mr.reporters, err = otelcfg.NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *Metrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
@@ -317,6 +317,9 @@ func newMetricsReporter(
 				}
 			}()
 		}, mr.newMetricSet)
+	if err != nil {
+		return nil, fmt.Errorf("creating metrics reporters pool: %w", err)
+	}
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
 	if err != nil {
@@ -776,7 +779,7 @@ func (mr *MetricsReporter) close() {
 func instrumentMetricsExporter(internalMetrics imetrics.Reporter, in sdkmetric.Exporter) sdkmetric.Exporter {
 	// avoid wrapping the instrumented exporter if we don't have
 	// internal instrumentation (NoopReporter)
-	if _, ok := internalMetrics.(imetrics.NoopReporter); ok || internalMetrics == nil {
+	if internalMetrics == nil || imetrics.IsBuiltinNoopReporter(internalMetrics) {
 		return in
 	}
 	return &instrumentedMetricsExporter{

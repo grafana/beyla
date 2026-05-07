@@ -463,6 +463,7 @@ func getDefinitions(
 			SubGroups: []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.TCPFailedConnectionReason: false,
+				attr.NetworkTCPHandshakeRole:   false,
 			},
 		},
 

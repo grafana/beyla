@@ -240,7 +240,7 @@ func (pf *PIDsFilter) checkIfExportsOTelSpanMetrics(svc *svc.Attrs, span *reques
 
 // reportAvoidedService calls the appropriate internal metrics method based on telemetry type
 func (pf *PIDsFilter) reportAvoidedService(svc *svc.Attrs, telemetryType string) {
-	if _, ok := pf.metrics.(imetrics.NoopReporter); ok || pf.metrics == nil {
+	if pf.metrics == nil || imetrics.IsBuiltinNoopReporter(pf.metrics) {
 		return
 	}
 

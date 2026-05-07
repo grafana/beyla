@@ -294,4 +294,5 @@ const (
 // Stat metrics
 const (
 	TCPFailedConnectionReason = Name("reason")
+	NetworkTCPHandshakeRole   = Name("network.tcp.handshake.role")
 )

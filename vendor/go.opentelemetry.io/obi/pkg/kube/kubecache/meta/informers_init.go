@@ -528,6 +528,13 @@ func objLastUpdateTime(
 	return lastStatus.Unix()
 }
 
+func refreshStatusTimeEpoch(em *informer.ObjectMeta) {
+	now := time.Now().Unix()
+	if em.StatusTimeEpoch < now {
+		em.StatusTimeEpoch = now
+	}
+}
+
 func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEventHandlerFuncs {
 	metrics := instrument.FromContext(ctx)
 	log := inf.log.With("func", "ipInfoEventHandler")
@@ -550,9 +557,10 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 			if unchanged(oldEM, newEM) {
 				return
 			}
+			metrics.ForwardLag(time.Since(time.Unix(newEM.StatusTimeEpoch, 0)).Seconds())
+			refreshStatusTimeEpoch(newEM)
 			log.Debug("UpdateFunc", "kind", newEM.Kind, "name", newEM.Name,
 				"ips", newEM.Ips, "oldIps", oldEM.Ips)
-			metrics.ForwardLag(time.Since(time.Unix(newEM.StatusTimeEpoch, 0)).Seconds())
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_UPDATED,
 				Resource: newEM,
@@ -573,8 +581,9 @@ func (inf *Informers) ipInfoEventHandler(ctx context.Context) *cache.ResourceEve
 				}
 			}
 			em := obj.(*indexableEntity).EncodedMeta
-			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 			metrics.ForwardLag(time.Since(time.Unix(em.StatusTimeEpoch, 0)).Seconds())
+			refreshStatusTimeEpoch(em)
+			log.Debug("DeleteFunc", "kind", em.Kind, "name", em.Name, "ips", em.Ips)
 			metrics.InformerDelete()
 			inf.Notify(&informer.Event{
 				Type:     informer.EventType_DELETED,

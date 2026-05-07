@@ -188,7 +188,7 @@ func newProcMetricsExporter(
 		mr.netObserver = netAggregatedObserver
 	}
 
-	mr.reporters = otelcfg.NewReporterPool[*process.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
+	mr.reporters, err = otelcfg.NewReporterPool[*process.ID, *procMetrics](cfg.Metrics.ReportersCacheLen, cfg.Metrics.TTL, timeNow,
 		func(id svc.UID, v *procMetrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
@@ -199,6 +199,9 @@ func newProcMetricsExporter(
 				}
 			}()
 		}, mr.newMetricSet)
+	if err != nil {
+		return nil, fmt.Errorf("creating process metrics reporter pool: %w", err)
+	}
 
 	mr.exporter, err = ctxInfo.OTELMetricsExporter.Instantiate(ctx)
 	if err != nil {

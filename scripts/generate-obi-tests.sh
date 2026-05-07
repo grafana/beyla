@@ -256,6 +256,7 @@ run_parallel() {
 clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "internal/testgenerated"
+    rm -rf "$SCHEMAS_DEST"
     echo "Done."
 }
 

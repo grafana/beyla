@@ -30,9 +30,10 @@ const (
 
 	daemonSetOwnerKind       = "DaemonSet"
 	daemonSetOwnerAPIVersion = "apps/v1"
-
-	saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
+
+// overridable for testing
+var saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
 // EligibleDeployment is a workload that matches the SDK injection criteria and
 // would be (or has been) bounced by the bouncer.
@@ -329,7 +330,7 @@ func sanitizeDNS1123(s string) string {
 }
 
 func ownContainerID() (string, error) {
-	info, err := containerInfoForPID(uint32(os.Getpid()))
+	info, err := containerInfoFunc(uint32(os.Getpid()))
 	if err != nil {
 		return "", err
 	}

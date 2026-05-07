@@ -78,11 +78,11 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, OwnNodeName())
 	if err != nil {
 		logger.Warn("disabling injector state ConfigMap writer", "error", err)
-	}
-
-	err = stateWriter.Init(context.Background())
-	if err != nil {
-		logger.Warn("disabling injector state ConfigMap writer", "error", err)
+	} else {
+		err = stateWriter.Init(context.Background())
+		if err != nil {
+			logger.Warn("disabling injector state ConfigMap writer", "error", err)
+		}
 	}
 
 	return &Server{

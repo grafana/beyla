@@ -1,0 +1,27 @@
+schema_url: https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/schemas/0.1.0
+description: |
+  Schema registry for the OpenTelemetry eBPF instrumentation (OBI).
+
+  Extends the upstream OpenTelemetry semantic conventions registry with the
+  metrics and attributes that OBI emits in addition to (or as overrides of)
+  the standard semconv set:
+
+  - Prometheus / OpenMetrics conventions (`target_info`, `instance`, `job`)
+  - Span metrics matching the OTel collector-contrib `spanmetricsconnector`
+    output (emitted when the `application_span_otel` metrics feature is
+    enabled — this registry pins the OTel-canonical names; the legacy
+    `application_span` underscored variants are not declared here)
+  - Service-graph metrics matching the OTel collector-contrib
+    `servicegraphconnector` output (emitted when the
+    `application_service_graph` metrics feature is enabled)
+  - OBI-internal markers consumed by downstream processors
+
+  Together with the upstream registry referenced in `dependencies`, this
+  registry forms the complete contract of what OBI emits.
+stability: development
+dependencies:
+  # The dependency version MUST stay in sync with the upstream
+  # OpenTelemetry semantic conventions version OBI is built against. A
+  # CI guard asserts both sides match — bump them together.
+  - schema_url: https://opentelemetry.io/schemas/1.38.0
+    registry_path: https://github.com/open-telemetry/semantic-conventions.git@v1.38.0[model]

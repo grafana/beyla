@@ -1,0 +1,97 @@
+groups:
+  - id: registry.obi.spanmetrics
+    type: attribute_group
+    display_name: Span Metrics
+    brief: >
+      Attributes used by OBI's span-metrics emission. The metric names match
+      the output of the OTel collector-contrib `spanmetricsconnector` so the
+      same dashboards consume both OBI-emitted and connector-emitted data.
+      Emitted when OBI's `application_span_otel` metrics feature is enabled.
+
+      Per-metric resource attributes (`service.name`, `service.namespace`,
+      `service.instance.id`, `host.id`, `telemetry.sdk.language`, etc.) come
+      from upstream OpenTelemetry semantic conventions and are not
+      redeclared here. The OBI-specific `source` attribute is declared in
+      `obi_internal.yaml`.
+
+      See:
+      https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector
+    attributes:
+      - id: span.metrics.skip
+        type: boolean
+        stability: development
+        brief: >
+          Hint set on a span by the producer to tell downstream span-metrics
+          processors that this span is already accounted for in upstream
+          span-metrics emissions and should be excluded from aggregation,
+          to avoid double counting.
+      - id: span.name
+        type: string
+        stability: development
+        brief: The span name (matches the OTLP span name field).
+        examples: ["GET /api/users"]
+      - id: span.kind
+        type:
+          allow_custom_values: true
+          members:
+            - id: server
+              value: SPAN_KIND_SERVER
+              stability: development
+            - id: client
+              value: SPAN_KIND_CLIENT
+              stability: development
+            - id: producer
+              value: SPAN_KIND_PRODUCER
+              stability: development
+            - id: consumer
+              value: SPAN_KIND_CONSUMER
+              stability: development
+            - id: internal
+              value: SPAN_KIND_INTERNAL
+              stability: development
+        stability: development
+        brief: The span kind, mirrored from the originating span.
+      - id: status.code
+        type:
+          allow_custom_values: true
+          members:
+            - id: ok
+              value: STATUS_CODE_OK
+              stability: development
+            - id: error
+              value: STATUS_CODE_ERROR
+              stability: development
+            - id: unset
+              value: STATUS_CODE_UNSET
+              stability: development
+        stability: development
+        brief: The span status code, mirrored from the originating span.
+
+  - id: metric.traces_span_metrics_calls_total
+    type: metric
+    metric_name: traces_span_metrics_calls_total
+    instrument: counter
+    unit: "1"
+    stability: development
+    brief: >
+      Total number of spans observed, grouped by span name / kind / status.
+    attributes:
+      - ref: span.name
+      - ref: span.kind
+      - ref: status.code
+      - ref: source
+
+  - id: metric.traces_span_metrics_duration
+    type: metric
+    metric_name: traces_span_metrics_duration
+    instrument: histogram
+    unit: "s"
+    stability: development
+    brief: >
+      Duration distribution for observed spans, grouped by span name / kind
+      / status.
+    attributes:
+      - ref: span.name
+      - ref: span.kind
+      - ref: status.code
+      - ref: source

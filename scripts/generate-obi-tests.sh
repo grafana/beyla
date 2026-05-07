@@ -24,6 +24,8 @@ OATS_DEST="internal/testgenerated/oats"
 VM_SRC=".obi-src/internal/test/vm"
 VM_DEST="internal/testgenerated/vm"
 
+SCHEMAS_SRC=".obi-src/schemas/obi"
+SCHEMAS_DEST="schemas/obi"
 
 # OBI module path → Beyla module path
 OBI_MODULE="go.opentelemetry.io/obi"
@@ -253,6 +255,7 @@ run_parallel() {
 clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "internal/testgenerated"
+    rm -rf "schemas/obi"
     echo "Done."
 }
 
@@ -619,6 +622,13 @@ apply_oats_behavioral_transforms() {
 # VM FUNCTIONS
 # =============================================================================
 
+copy_obi_schemas() {
+    echo "Copying OBI schema registry from $SCHEMAS_SRC..."
+    rm -rf "$SCHEMAS_DEST"
+    mkdir -p "$(dirname "$SCHEMAS_DEST")"
+    cp -r "$SCHEMAS_SRC" "$SCHEMAS_DEST"
+}
+
 copy_vm() {
     echo "  Copying VM test infrastructure..."
     if [[ -d "$VM_SRC" ]]; then
@@ -680,6 +690,11 @@ generate() {
     # VM test infrastructure
     # -----------------------------------------------------------------
     copy_vm
+
+    # -----------------------------------------------------------------
+    # OBI schema registry
+    # -----------------------------------------------------------------
+    copy_obi_schemas
 
     echo ""
     echo "Generated integration tests at $OBI_DEST"

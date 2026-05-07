@@ -1,0 +1,107 @@
+groups:
+  - id: registry.obi
+    type: attribute_group
+    display_name: OBI Internal Telemetry
+    brief: >
+      OBI's own meta-telemetry: the `target_info` / `host_info` family of
+      Prometheus-style and OBI-invented per-target meta-metrics that
+      identify the instrumenter and the resource it is running against,
+      together with the labels they carry and any deviations from upstream
+      semconv that are tracked for removal. Distinct from OBI's emissions
+      that describe the *instrumented application's* behaviour
+      (HTTP / DB / messaging / spanmetrics / service-graph), which live in
+      sibling files or in upstream semconv.
+    attributes:
+      - id: source
+        type: string
+        stability: development
+        brief: >
+          Identifier of the vendor / SDK that produced the metric. OBI sets
+          this to `obi`. Used by the spanmetrics and service-graph
+          emissions to disambiguate from collector-contrib connector
+          output.
+        examples: [ "obi" ]
+      - id: instance
+        type: string
+        stability: development
+        brief: >
+          Scrape target instance label, originating from the Prometheus /
+          OpenMetrics convention. Carried on `target_info` and on every
+          series exported via OBI's Prometheus exporter.
+        examples: ["host.local:9090"]
+      - id: job
+        type: string
+        stability: development
+        brief: >
+          Scrape target job label, originating from the Prometheus /
+          OpenMetrics convention. Carried on `target_info` and on every
+          series exported via OBI's Prometheus exporter.
+        examples: ["my-service"]
+
+  # The instrument and (empty) unit declared here mirror what OBI currently
+  # emits over OTLP rather than the OTel-canonical `gauge` / `unit: "1"`
+  # Prometheus mapping, so weaver validates against the actual contract.
+  - id: metric.target_info
+    type: metric
+    metric_name: target_info
+    instrument: updowncounter
+    unit: ""
+    stability: development
+    brief: >
+      `target_info` meta-metric in the Prometheus / OpenMetrics style.
+      Emitted with value 1 to carry the resource attributes of the
+      originating service.
+    attributes:
+      - ref: instance
+      - ref: job
+
+  # The trace-pipeline counterpart of `target_info`. Only emitted when any
+  # span-metrics feature is enabled — i.e. one of `application_span`,
+  # `application_span_otel`, or `application_span_sizes` (the
+  # `application_service_graph` feature does NOT trigger it).
+  - id: metric.traces_target_info
+    type: metric
+    metric_name: traces_target_info
+    instrument: updowncounter
+    unit: ""
+    stability: development
+    brief: >
+      OBI counterpart of `target_info` for the traces pipeline. Carries the
+      resource attribute set of every traced service so dashboards can
+      join trace metrics back to service identity.
+    attributes:
+      - ref: source
+
+  # OBI-invented per-host meta-metric — there is no upstream /
+  # collector-contrib analogue. Carries the upstream `host.id` attribute.
+  - id: metric.traces_host_info
+    type: metric
+    metric_name: traces_host_info
+    instrument: gauge
+    unit: ""
+    stability: development
+    brief: >
+      OBI per-host meta-metric carrying the host identifier so dashboards
+      can join trace metrics back to host / instance identity.
+    attributes:
+      - ref: host.id
+        requirement_level: opt_in
+
+  # OBI deviation from upstream semconv: we currently emit `rpc.server.duration`
+  # in seconds while semconv == 1.38 specifies milliseconds. This declaration
+  # produces a duplicate-id / duplicate-metric-name warning during
+  # `weaver registry check` (because the upstream registry also defines this
+  # metric). The warning is non-fatal; it documents the deviation explicitly.
+  # TODO: drop this group once OBI emits `rpc.server.duration` in
+  # milliseconds (matching the semconv >= 1.38 unit specification — likely
+  # in lockstep with bumping the manifest's pinned semconv to >= 1.40.0).
+  - id: metric.rpc.server.duration
+    type: metric
+    metric_name: rpc.server.duration
+    instrument: histogram
+    unit: "s"
+    stability: development
+    brief: >
+      OBI deviation: rpc.server.duration is emitted in seconds rather than
+      the milliseconds specified by upstream semconv. Tracked for removal.
+    attributes: [ ]

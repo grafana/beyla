@@ -1,0 +1,26 @@
+groups:
+  # OBI synthesises a pair of internal child spans under every accepted
+  # server-side request span to surface the queue-time vs processing-time
+  # split of the request. They carry no custom attributes — only the
+  # standard span fields (name, kind, parent, timing) — so they are
+  # documented here purely to anchor OBI's emission contract.
+
+  - id: span.obi.in_queue
+    type: span
+    span_kind: internal
+    stability: development
+    brief: >
+      Internal child span representing the time between when a request was
+      received by the server and when its processing started. Span name is
+      the literal string `in queue`. Parent is the originating server span.
+    attributes: []
+
+  - id: span.obi.processing
+    type: span
+    span_kind: internal
+    stability: development
+    brief: >
+      Internal child span representing the time between when request
+      processing started and when the response was sent. Span name is the
+      literal string `processing`. Parent is the originating server span.
+    attributes: []

@@ -1,0 +1,127 @@
+groups:
+  - id: registry.obi.service_graph
+    type: attribute_group
+    display_name: Service Graph
+    brief: >
+      Attributes used by OBI's service-graph emission. The metric names and
+      label set match the output of the OTel collector-contrib
+      `servicegraphconnector` so the same dashboards consume both
+      OBI-emitted and connector-emitted data. Emitted when OBI's
+      `application_service_graph` metrics feature is enabled.
+
+      The OBI-specific `source` attribute is declared in `obi_internal.yaml`.
+
+      See:
+      https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector
+    attributes:
+      - id: server
+        type: string
+        stability: development
+        brief: Name of the service receiving the request.
+        examples: ["users-api"]
+      - id: client
+        type: string
+        stability: development
+        brief: Name of the service initiating the request.
+        examples: ["frontend"]
+      - id: connection_type
+        type:
+          allow_custom_values: true
+          members:
+            - id: messaging_system
+              value: messaging_system
+              stability: development
+            - id: database
+              value: database
+              stability: development
+            - id: virtual_node
+              value: virtual_node
+              stability: development
+        stability: development
+        brief: >
+          The connection type between the two services (mirroring the
+          servicegraphconnector values). Empty string represents a direct
+          HTTP/gRPC request.
+      - id: server_service_namespace
+        type: string
+        stability: development
+        brief: >
+          The service namespace of the server side. Equivalent to the
+          `service.namespace`-prefixed dimension defined by
+          `servicegraphconnector` when `service.namespace` is added to the
+          connector's `dimensions` list.
+        examples: ["integration-test"]
+      - id: client_service_namespace
+        type: string
+        stability: development
+        brief: >
+          The service namespace of the client side. Equivalent to the
+          `service.namespace`-prefixed dimension defined by
+          `servicegraphconnector` when `service.namespace` is added to the
+          connector's `dimensions` list.
+        examples: ["integration-test"]
+
+  - id: metric.traces_service_graph_request_total
+    type: metric
+    metric_name: traces_service_graph_request_total
+    instrument: counter
+    unit: "1"
+    stability: development
+    brief: >
+      Total number of edges in the service graph, grouped by client / server.
+    attributes:
+      - ref: client
+      - ref: server
+      - ref: connection_type
+      - ref: client_service_namespace
+      - ref: server_service_namespace
+      - ref: source
+
+  - id: metric.traces_service_graph_request_failed_total
+    type: metric
+    metric_name: traces_service_graph_request_failed_total
+    instrument: counter
+    unit: "1"
+    stability: development
+    brief: >
+      Total number of failed edges in the service graph, grouped by
+      client / server.
+    attributes:
+      - ref: client
+      - ref: server
+      - ref: connection_type
+      - ref: client_service_namespace
+      - ref: server_service_namespace
+      - ref: source
+
+  - id: metric.traces_service_graph_request_server
+    type: metric
+    metric_name: traces_service_graph_request_server
+    instrument: histogram
+    unit: "s"
+    stability: development
+    brief: >
+      Server-side request duration distribution per service-graph edge.
+    attributes:
+      - ref: client
+      - ref: server
+      - ref: connection_type
+      - ref: client_service_namespace
+      - ref: server_service_namespace
+      - ref: source
+
+  - id: metric.traces_service_graph_request_client
+    type: metric
+    metric_name: traces_service_graph_request_client
+    instrument: histogram
+    unit: "s"
+    stability: development
+    brief: >
+      Client-side request duration distribution per service-graph edge.
+    attributes:
+      - ref: client
+      - ref: server
+      - ref: connection_type
+      - ref: client_service_namespace
+      - ref: server_service_namespace
+      - ref: source

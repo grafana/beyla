@@ -8,6 +8,7 @@ import (
 	"encoding"
 	"log/slog"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -15,7 +16,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
-	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -33,6 +33,9 @@ type BPFCollector struct {
 	probeLatencyDesc *prometheus.Desc
 	mapSizeDesc      *prometheus.Desc
 	progs            map[ebpf.ProgramID]*BPFProgram
+	probeMetrics     func() []ProbeMetrics
+	mapMetrics       func() []BpfMapMetrics
+	mu               sync.Mutex
 }
 
 type BPFProgram struct {
@@ -66,17 +69,41 @@ func BPFMetrics(
 	mpCfg *perapp.MetricsConfig,
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		if !bpfCollectorEnabled(cfg, mpCfg, ctxInfo.Metrics) {
+		promEnabled := promMetricsEnabled(cfg, mpCfg)
+		internalEnabled := internalMetricsEnabled(ctxInfo.Metrics)
+		if !promEnabled && !internalEnabled {
 			return swarm.EmptyRunFunc()
 		}
-		collector := newBPFCollector(ctxInfo, cfg, mpCfg)
-		return collector.start, nil
+
+		runFns := make([]swarm.RunFunc, 0, 2)
+		if promEnabled {
+			collector := newBPFCollectorFn(ctxInfo, cfg, mpCfg)
+			runFns = append(runFns, collector.startPrometheus)
+		}
+		if internalEnabled {
+			collector := newInternalBPFCollectorFn(ctxInfo, cfg, mpCfg)
+			runFns = append(runFns, collector.startInternalMetrics)
+		}
+
+		return func(ctx context.Context) {
+			for _, run := range runFns {
+				run(ctx)
+			}
+		}, nil
 	}
 }
 
-func internalMetricsOTELEnabled(internalMetrics imetrics.Reporter) bool {
-	_, ok := internalMetrics.(*otel.InternalMetricsReporter)
-	return ok
+var (
+	newBPFCollectorFn         = newBPFCollector
+	newInternalBPFCollectorFn = newInternalBPFCollector
+)
+
+func internalMetricsEnabled(internalMetrics imetrics.Reporter) bool {
+	if internalMetrics == nil || imetrics.IsBuiltinNoopReporter(internalMetrics) {
+		return false
+	}
+
+	return internalMetrics.BpfInternalMetricsScrapeInterval() > 0
 }
 
 func promMetricsEnabled(cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig) bool {
@@ -84,10 +111,18 @@ func promMetricsEnabled(cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig) bool
 }
 
 func bpfCollectorEnabled(cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig, internalMetrics imetrics.Reporter) bool {
-	return promMetricsEnabled(cfg, mpCfg) || internalMetricsOTELEnabled(internalMetrics)
+	return promMetricsEnabled(cfg, mpCfg) || internalMetricsEnabled(internalMetrics)
 }
 
 func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig) *BPFCollector {
+	return newCollector(ctxInfo, cfg, mpCfg, true)
+}
+
+func newInternalBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig) *BPFCollector {
+	return newCollector(ctxInfo, cfg, mpCfg, false)
+}
+
+func newCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig, mpCfg *perapp.MetricsConfig, registerProm bool) *BPFCollector {
 	c := &BPFCollector{
 		promCfg:         cfg,
 		commonCfg:       mpCfg,
@@ -109,19 +144,24 @@ func newBPFCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig, mpCfg *
 			nil,
 		),
 	}
-	if promMetricsEnabled(cfg, mpCfg) {
+	c.probeMetrics = c.getProbeMetrics
+	c.mapMetrics = c.getMapMetrics
+	if registerProm && promMetricsEnabled(cfg, mpCfg) {
 		// Register the collector
 		c.promConnect.Register(cfg.Port, cfg.Path, c)
 	}
 	return c
 }
 
-func (bc *BPFCollector) start(ctx context.Context) {
-	if promMetricsEnabled(bc.promCfg, bc.commonCfg) {
-		bc.reportMetrics(ctx)
-	} else {
-		go bc.collectInternalMetrics(ctx)
+func (bc *BPFCollector) startPrometheus(ctx context.Context) {
+	bc.reportMetrics(ctx)
+}
+
+func (bc *BPFCollector) startInternalMetrics(ctx context.Context) {
+	if !internalMetricsEnabled(bc.internalMetrics) {
+		return
 	}
+	go bc.collectInternalMetrics(ctx)
 }
 
 func (bc *BPFCollector) reportMetrics(ctx context.Context) {
@@ -137,7 +177,7 @@ func (bc *BPFCollector) collectInternalMetrics(ctx context.Context) {
 			return
 
 		case <-ticker.C:
-			probeMetrics := bc.getProbeMetrics()
+			probeMetrics, mapMetrics := bc.collectMetrics()
 			for _, metric := range probeMetrics {
 				// TODO: this is not the most efficient way to report histogram metrics,
 				// but with otel metrics we don't have a way to report histograms based on count and latency, like filling buckets with prometheus.
@@ -147,7 +187,6 @@ func (bc *BPFCollector) collectInternalMetrics(ctx context.Context) {
 				}
 			}
 
-			mapMetrics := bc.getMapMetrics()
 			for _, metric := range mapMetrics {
 				bc.ctxInfo.Metrics.BpfMapEntries(metric.mapID, metric.mapName, metric.mapType, int(metric.entries))
 				bc.ctxInfo.Metrics.BpfMapMaxEntries(metric.mapID, metric.mapName, metric.mapType, metric.maxEntries)
@@ -162,7 +201,10 @@ func (bc *BPFCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 	bc.log.Debug("Collecting eBPF metrics")
-	probeMetrics := bc.getProbeMetrics()
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	probeMetrics := bc.probeMetrics()
 	for _, metric := range probeMetrics {
 		metric.program.updateBuckets(metric.latency, metric.count)
 
@@ -177,7 +219,7 @@ func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 			metric.probeName,
 		)
 	}
-	mapMetrics := bc.getMapMetrics()
+	mapMetrics := bc.mapMetrics()
 	for _, metric := range mapMetrics {
 		ch <- prometheus.MustNewConstMetric(
 			bc.mapSizeDesc,
@@ -189,6 +231,13 @@ func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 			strconv.FormatUint(uint64(metric.maxEntries), 10),
 		)
 	}
+}
+
+func (bc *BPFCollector) collectMetrics() ([]ProbeMetrics, []BpfMapMetrics) {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	return bc.probeMetrics(), bc.mapMetrics()
 }
 
 func (bc *BPFCollector) getProbeMetrics() []ProbeMetrics {

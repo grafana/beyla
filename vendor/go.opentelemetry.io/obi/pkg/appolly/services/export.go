@@ -99,15 +99,15 @@ func (modes ExportModes) CanExportLogs() bool {
 //  modes.AllowMetrics() // export metrics only
 
 func (modes *ExportModes) AllowTraces() {
-	modes.blockSignal ^= blockTraces
+	modes.blockSignal &^= blockTraces
 }
 
 func (modes *ExportModes) AllowMetrics() {
-	modes.blockSignal ^= blockMetrics
+	modes.blockSignal &^= blockMetrics
 }
 
 func (modes *ExportModes) AllowLogs() {
-	modes.blockSignal ^= blockLogs
+	modes.blockSignal &^= blockLogs
 }
 
 func (modes *ExportModes) UnmarshalYAML(value *yaml.Node) error {
@@ -125,7 +125,7 @@ func (modes *ExportModes) UnmarshalYAML(value *yaml.Node) error {
 			return fmt.Errorf("ExportModes[%d]: unknown export mode %q", i, inner.Value)
 		} else {
 			// a given signal is defined. Remove it from the blocking list
-			modes.blockSignal ^= mode
+			modes.blockSignal &^= mode
 		}
 	}
 	return nil
@@ -147,7 +147,7 @@ func (modes *ExportModes) UnmarshalText(text []byte) error {
 		if mode, ok := modeForText[part]; !ok {
 			return fmt.Errorf("ExportModes: unknown export mode %q", part)
 		} else {
-			modes.blockSignal ^= mode
+			modes.blockSignal &^= mode
 		}
 	}
 	return nil

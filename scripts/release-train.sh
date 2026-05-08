@@ -69,7 +69,7 @@ Commands:
 
 Common options:
   --beyla-version <vX.Y.Z>
-  --obi-version <vX.Y.Z>
+  --obi-version <vX.Y.Z>   Defaults to --beyla-version when omitted
   --beyla-repo <owner/repo>
   --obi-repo <owner/repo>
   --dry-run               Validate and print actions, without pushing/tags/releases
@@ -87,14 +87,17 @@ Prepare-only options:
                           Skip verification that grafana OBI main includes upstream OBI main
 
 Examples:
-  # Auto compute the next release versions and cut release branches
+  # Auto compute the next Beyla version and cut release branches (OBI version defaults to Beyla)
   ./scripts/release-train.sh prepare
 
-  # Force specific versions
-  ./scripts/release-train.sh prepare --beyla-version v4.3.0 --obi-version v1.0.0
+  # Force a specific Beyla version (OBI inherits the same version)
+  ./scripts/release-train.sh prepare --beyla-version v4.3.0
 
-  # After CI is green, create tags and prereleases
-  ./scripts/release-train.sh tag --beyla-version v4.3.0 --obi-version v1.0.0
+  # Override OBI version explicitly (escape hatch for out-of-band OBI releases)
+  ./scripts/release-train.sh prepare --beyla-version v4.3.0 --obi-version v4.3.1
+
+  # After CI is green, create tags and prereleases (OBI defaults to Beyla)
+  ./scripts/release-train.sh tag --beyla-version v4.3.0
 EOF
 }
 
@@ -470,16 +473,19 @@ resolve_prepare_versions() {
         validate_semver_tag "$OBI_VERSION"
         log_info "Using explicit OBI version: ${OBI_VERSION}"
     else
-        OBI_VERSION="$(auto_compute_next_version "$OBI_DIR" "$OBI_REPO")"
-        log_info "Auto-computed OBI version: ${OBI_VERSION}"
+        OBI_VERSION="$BEYLA_VERSION"
+        log_info "OBI version defaulted to Beyla version: ${OBI_VERSION}"
     fi
 }
 
 resolve_tag_versions() {
     [[ -n "$BEYLA_VERSION" ]] || die "--beyla-version is required for the tag command."
-    [[ -n "$OBI_VERSION" ]] || die "--obi-version is required for the tag command."
-
     validate_semver_tag "$BEYLA_VERSION"
+
+    if [[ -z "$OBI_VERSION" ]]; then
+        OBI_VERSION="$BEYLA_VERSION"
+        log_info "OBI version defaulted to Beyla version: ${OBI_VERSION}"
+    fi
     validate_semver_tag "$OBI_VERSION"
 }
 

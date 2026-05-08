@@ -110,6 +110,19 @@ type Reporter interface {
 	BPFPacketStats(count, ignored uint64)
 }
 
+func IsBuiltinNoopReporter(reporter Reporter) bool {
+	if reporter == nil {
+		return false
+	}
+
+	switch reporter.(type) {
+	case NoopReporter, *NoopReporter:
+		return true
+	default:
+		return false
+	}
+}
+
 // NoopReporter is a metrics Reporter that just does nothing
 type NoopReporter struct{}
 

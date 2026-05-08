@@ -147,6 +147,7 @@ func (p *Tracer) constants() map[string]any {
 	}
 
 	m["http_max_captured_bytes"] = p.cfg.BufferSizes.HTTP
+	m["tcp_max_captured_bytes"] = p.cfg.BufferSizes.TCP
 	m["mysql_max_captured_bytes"] = p.cfg.BufferSizes.MySQL
 	m["kafka_max_captured_bytes"] = p.cfg.BufferSizes.Kafka
 	m["postgres_max_captured_bytes"] = p.cfg.BufferSizes.Postgres
@@ -399,6 +400,14 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"net.(*netFD).Write": {{
 			Start: p.bpfObjects.ObiUprobeNetFdWrite,
+		}},
+		"crypto/tls.(*Conn).Read": {{
+			Start: p.bpfObjects.ObiUprobeCryptoTlsRead,
+			End:   p.bpfObjects.ObiUprobeCryptoTlsReadRet,
+		}},
+		"crypto/tls.(*Conn).Write": {{
+			Start: p.bpfObjects.ObiUprobeCryptoTlsWrite,
+			End:   p.bpfObjects.ObiUprobeCryptoTlsWriteRet,
 		}},
 		"net.(*netFD).Close": {{
 			Start: p.bpfObjects.ObiUprobeNetFdClose,

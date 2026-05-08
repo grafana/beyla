@@ -49,16 +49,18 @@ type JavaInjector struct {
 	cfg *obi.Config
 }
 
-func NewJavaInjector(cfg *obi.Config) *JavaInjector {
+func NewJavaInjector(cfg *obi.Config) (*JavaInjector, error) {
 	if !cfg.Java.Enabled {
-		return nil
+		return nil, nil
 	}
-	ensureEmbeddedAgent()
+	if err := ensureEmbeddedAgent(); err != nil {
+		return nil, err
+	}
 
 	return &JavaInjector{
 		cfg: cfg,
 		log: slog.With("component", "javaagent.Injector"),
-	}
+	}, nil
 }
 
 func tempDirPath(root, dir string) (string, bool) {
@@ -197,12 +199,12 @@ func (i *JavaInjector) NewExecutable(ie *ebpf.Instrumentable) error {
 	return nil
 }
 
-func ensureEmbeddedAgent() {
+func ensureEmbeddedAgent() error {
 	if len(embeddedJavaAgentBytes) == 0 || strings.TrimSpace(string(embeddedJavaAgentBytes)) == javaAgentEmbedPlaceholder {
-		// Make sure to run `make java-docker-build` to build the Java Agent
-		// so that it can be embedded during build.
-		panic("embedded OBI java agent artifact is missing")
+		return errors.New("embedded OBI java agent artifact is missing from this build; Java TLS telemetry generation will be disabled")
 	}
+
+	return nil
 }
 
 // to be changed in tests

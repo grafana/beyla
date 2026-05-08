@@ -376,6 +376,10 @@
         "postgres": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES"
+        },
+        "tcp": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_TCP"
         }
       },
       "type": "object"

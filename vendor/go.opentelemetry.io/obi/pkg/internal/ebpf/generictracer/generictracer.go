@@ -203,6 +203,7 @@ func (p *Tracer) constants() map[string]any {
 	}
 
 	m["http_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.HTTP
+	m["tcp_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.TCP
 	m["mysql_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.MySQL
 	m["kafka_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Kafka
 	m["postgres_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Postgres

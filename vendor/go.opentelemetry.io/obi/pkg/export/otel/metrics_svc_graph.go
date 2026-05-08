@@ -129,7 +129,8 @@ func newSvcGraphMetricsReporter(
 		log:              log,
 	}
 
-	mr.reporters = otelcfg.NewReporterPool[*svc.Attrs, *SvcGraphMetrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
+	var err error
+	mr.reporters, err = otelcfg.NewReporterPool[*svc.Attrs, *SvcGraphMetrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
 		func(id svc.UID, v *SvcGraphMetrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
@@ -141,6 +142,9 @@ func newSvcGraphMetricsReporter(
 				}
 			}()
 		}, mr.newMetricSet)
+	if err != nil {
+		return nil, fmt.Errorf("creating service graph metrics reporters pool: %w", err)
+	}
 
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)

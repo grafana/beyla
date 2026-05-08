@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -22,7 +23,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/transform"
 
-	"github.com/google/uuid"
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 

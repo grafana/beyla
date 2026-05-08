@@ -341,27 +341,27 @@ func TestStateConfigMapName(t *testing.T) {
 			daemonSetName: "beyla",
 			nodeName:      "node-1",
 			podName:       "beyla-abcde",
-			expected:      "beyla-injector-state-node-1-beyla-abcde",
+			expected:      "beyla-injector-state-node-1",
 		},
 		{
 			name:          "node name with uppercase and dots is sanitized",
 			daemonSetName: "beyla",
 			nodeName:      "Node.Example.COM",
 			podName:       "pod-xyz",
-			expected:      "beyla-injector-state-node-example-com-pod-xyz",
+			expected:      "beyla-injector-state-node-example-com",
 		},
 		{
 			name:          "empty node name falls back to 'unknown'",
 			daemonSetName: "beyla",
 			nodeName:      "",
 			podName:       "pod-xyz",
-			expected:      "beyla-injector-state-unknown-pod-xyz",
+			expected:      "beyla-injector-state-unknown",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, stateConfigMapName(tt.daemonSetName, tt.nodeName, tt.podName))
+			assert.Equal(t, tt.expected, stateConfigMapName(tt.daemonSetName, tt.nodeName))
 		})
 	}
 }
@@ -613,10 +613,9 @@ func TestFindDaemonSetOwner(t *testing.T) {
 		client := fake.NewSimpleClientset(pod)
 		w := newTestWriter(client, ns, node, containerID)
 
-		owner, podName, err := w.findDaemonSetOwner(context.Background())
+		owner, err := w.findDaemonSetOwner(context.Background())
 		require.NoError(t, err)
 		require.NotNil(t, owner)
-		assert.Equal(t, "beyla-xyz", podName)
 		assert.Equal(t, "apps/v1", owner.APIVersion)
 		assert.Equal(t, "DaemonSet", owner.Kind)
 		assert.Equal(t, "beyla", owner.Name)
@@ -632,10 +631,9 @@ func TestFindDaemonSetOwner(t *testing.T) {
 		client := fake.NewSimpleClientset(pod)
 		w := newTestWriter(client, ns, node, containerID)
 
-		owner, podName, err := w.findDaemonSetOwner(context.Background())
+		owner, err := w.findDaemonSetOwner(context.Background())
 		require.NoError(t, err)
 		assert.Nil(t, owner)
-		assert.Equal(t, "", podName)
 	})
 
 	t.Run("nil owner when pod has no owner references at all", func(t *testing.T) {
@@ -643,10 +641,9 @@ func TestFindDaemonSetOwner(t *testing.T) {
 		client := fake.NewSimpleClientset(pod)
 		w := newTestWriter(client, ns, node, containerID)
 
-		owner, podName, err := w.findDaemonSetOwner(context.Background())
+		owner, err := w.findDaemonSetOwner(context.Background())
 		require.NoError(t, err)
 		assert.Nil(t, owner)
-		assert.Equal(t, "", podName)
 	})
 
 	t.Run("picks the daemonset owner among multiple owner refs", func(t *testing.T) {
@@ -655,19 +652,18 @@ func TestFindDaemonSetOwner(t *testing.T) {
 		client := fake.NewSimpleClientset(pod)
 		w := newTestWriter(client, ns, node, containerID)
 
-		owner, podName, err := w.findDaemonSetOwner(context.Background())
+		owner, err := w.findDaemonSetOwner(context.Background())
 		require.NoError(t, err)
 		require.NotNil(t, owner)
 		assert.Equal(t, "DaemonSet", owner.Kind)
 		assert.Equal(t, "beyla", owner.Name)
-		assert.Equal(t, "beyla-xyz", podName)
 	})
 
 	t.Run("propagates pod lookup error", func(t *testing.T) {
 		client := fake.NewSimpleClientset()
 		w := newTestWriter(client, ns, node, containerID)
 
-		_, _, err := w.findDaemonSetOwner(context.Background())
+		_, err := w.findDaemonSetOwner(context.Background())
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "own pod not found")
 	})

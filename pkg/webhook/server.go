@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -21,24 +22,26 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/transform"
 
+	"github.com/google/uuid"
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 // Server represents the webhook server
 type Server struct {
-	cfg                 *beyla.Config
-	ctxInfo             *global.ContextInfo
-	mutator             *PodMutator
-	bouncer             *PodBouncer
-	scanner             *LocalProcessScanner
-	matcher             *PodMatcher
-	logger              *slog.Logger
-	store               *kube.Store
-	initialState        map[string][]*ProcessInfo
-	metrics             *SDKInjectionMetrics
-	podStateCache       *PodStateCache
-	stateWriter         *StateConfigMapWriter
-	eligibleDeployments map[string]*EligibleDeployment
+	cfg                    *beyla.Config
+	ctxInfo                *global.ContextInfo
+	mutator                *PodMutator
+	bouncer                *PodBouncer
+	scanner                *LocalProcessScanner
+	matcher                *PodMatcher
+	logger                 *slog.Logger
+	store                  *kube.Store
+	initialState           map[string][]*ProcessInfo
+	metrics                *SDKInjectionMetrics
+	podStateCache          *PodStateCache
+	stateWriter            *StateConfigMapWriter
+	eligibleDeployments    map[string]*EligibleDeployment
+	eligibleDeploymentsMux *sync.Mutex
 }
 
 // NewServer creates a new webhook server
@@ -86,17 +89,18 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	}
 
 	return &Server{
-		cfg:                 cfg,
-		mutator:             mutator,
-		bouncer:             bouncer,
-		scanner:             NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
-		matcher:             matcher,
-		logger:              logger,
-		ctxInfo:             ctxInfo,
-		metrics:             metrics,
-		podStateCache:       podStateCache,
-		stateWriter:         stateWriter,
-		eligibleDeployments: map[string]*EligibleDeployment{},
+		cfg:                    cfg,
+		mutator:                mutator,
+		bouncer:                bouncer,
+		scanner:                NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		matcher:                matcher,
+		logger:                 logger,
+		ctxInfo:                ctxInfo,
+		metrics:                metrics,
+		podStateCache:          podStateCache,
+		stateWriter:            stateWriter,
+		eligibleDeployments:    map[string]*EligibleDeployment{},
+		eligibleDeploymentsMux: &sync.Mutex{},
 	}, nil
 }
 
@@ -276,24 +280,21 @@ func (s *Server) subscribeStateCache(ctx context.Context) {
 }
 
 func (s *Server) getInitialState(ctx context.Context) error {
-	var store *kube.Store
-
-	provider := s.ctxInfo.K8sInformer
-	if provider.IsKubeEnabled() {
-		store, err := provider.Get(ctx)
-		if err != nil {
-			return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)
-		}
-		s.store = store
-	}
-
 	if err := s.establishInitialProcessState(); err != nil {
 		return err
 	}
 
+	provider := s.ctxInfo.K8sInformer
+
 	if !provider.IsKubeEnabled() {
 		return nil
 	}
+
+	store, err := provider.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)
+	}
+	s.store = store
 
 	// Subscribe synchronously: the store delivers all existing pods as CREATED
 	// events before returning. After this call our eligibleDeployments map
@@ -310,10 +311,19 @@ func (s *Server) getInitialState(ctx context.Context) error {
 	return nil
 }
 
+func (s *Server) removeEligibleDeployment(a *ProcessInfo) {
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
+
+	namespace := a.metadata[services.AttrNamespace]
+	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
+
+	delete(s.eligibleDeployments, mutationKey(namespace, deployment))
+}
+
 func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
-	if s.eligibleDeployments == nil {
-		return
-	}
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
 	namespace := a.metadata[services.AttrNamespace]
 	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
 
@@ -328,14 +338,21 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 }
 
 func (s *Server) writeStateConfigMap(ctx context.Context) error {
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
 	eligible := make([]*EligibleDeployment, 0, len(s.eligibleDeployments))
 	for _, d := range s.eligibleDeployments {
 		eligible = append(eligible, d)
 	}
-	return s.stateWriter.Write(ctx, s.cfg.Injector.Instrument, eligible)
+
+	config := InjectConfig{
+		criteria: s.cfg.Injector.Instrument,
+	}
+
+	return s.stateWriter.Write(ctx, &config, eligible)
 }
 
-func (s *Server) ID() string { return "unique-webhook-server-id" }
+func (s *Server) ID() string { return uuid.NewString() }
 
 func (s *Server) restartDeployment(a *ProcessInfo) {
 	namespace := a.metadata[services.AttrNamespace]
@@ -355,48 +372,71 @@ func (s *Server) restartDeployment(a *ProcessInfo) {
 	}
 }
 
-//nolint:cyclop
 func (s *Server) On(event *informer.Event) error {
 	// ignoring updates on non-pod resources
 	if event.Resource == nil || event.GetResource().GetPod() == nil {
 		return nil
 	}
-	switch event.Type {
-	case informer.EventType_CREATED, informer.EventType_UPDATED:
-		s.logger.Debug("new pod", "pod", event.Resource)
-		// It's important to consider the local process info here
-		// so that we are not evaluating pods from other nodes, since
-		// Beyla gets the cluster wide info.
-		if attrs := s.enrichProcessInfo(event.GetResource()); attrs != nil {
-			for _, a := range attrs {
-				// It's important to check here for the SDK supported programming languages.
-				// Go would be the killer here, since many of the Kubernetes services are written in
-				// Go, and we don't want to say bounce coredns.
-				switch s.mutator.AlreadyInstrumented(a) {
-				case false:
-					if s.mutator.CanInstrument(a.kind) && !s.mutator.PreloadsSomethingElse(a) {
-						if _, matched := s.matcher.MatchProcessInfo(a); matched {
-							s.recordEligibleDeployment(a)
-							if configuredToBounceDeployments(s.cfg) {
-								s.restartDeployment(a)
-							}
-						}
-					} else {
-						s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
-					}
-				case true:
-					// If this pod was instrumented, but the new Beyla config says don't anymore
-					// we bounce the pods to undo the instrumentation
-					if _, matched := s.matcher.MatchProcessInfo(a); !matched {
-						if configuredToBounceDeployments(s.cfg) {
-							s.restartDeployment(a)
-						}
-					}
-				}
-			}
+
+	// It's important to consider the local process info here so that we are
+	// not evaluating pods from other nodes, since Beyla gets cluster-wide info.
+	attrs := s.enrichProcessInfo(event.GetResource())
+	if attrs == nil {
+		return nil
+	}
+
+	if event.Type == informer.EventType_DELETED {
+		s.logger.Debug("removed pod", "pod", event.Resource)
+		for _, a := range attrs {
+			s.handleDeletedProcessEvent(a)
 		}
+
+		return nil
+	}
+
+	if event.Type != informer.EventType_CREATED && event.Type != informer.EventType_UPDATED {
+		return nil
+	}
+
+	s.logger.Debug("new pod", "pod", event.Resource)
+
+	for _, a := range attrs {
+		s.handleNewProcessEvent(a)
 	}
 	return nil
+}
+
+func (s *Server) handleDeletedProcessEvent(a *ProcessInfo) {
+	s.removeEligibleDeployment(a)
+}
+
+func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
+	if s.mutator.AlreadyInstrumented(a) {
+		// If this pod was instrumented, but the new Beyla config says don't anymore
+		// we bounce the pods to undo the instrumentation
+		if _, matched := s.matcher.MatchProcessInfo(a); matched {
+			return
+		}
+		if configuredToBounceDeployments(s.cfg) {
+			s.restartDeployment(a)
+		}
+		return
+	}
+
+	// It's important to check here for the SDK supported programming languages.
+	// Go would be the killer here, since many of the Kubernetes services are written in
+	// Go, and we don't want to say bounce coredns.
+	if !s.mutator.CanInstrument(a.kind) || s.mutator.PreloadsSomethingElse(a) {
+		s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
+		return
+	}
+
+	if _, matched := s.matcher.MatchProcessInfo(a); matched {
+		s.recordEligibleDeployment(a)
+		if configuredToBounceDeployments(s.cfg) {
+			s.restartDeployment(a)
+		}
+	}
 }
 
 // This function will return nil if the pod containers didn't match, which

@@ -25,7 +25,7 @@ import (
 
 const (
 	stateConfigMapNameSuffix  = "-injector-state"
-	stateConfigMapKeyCriteria = "selection_criteria.yaml"
+	stateConfigMapKey         = "config.yaml"
 	stateConfigMapKeyEligible = "eligible_for_restart.yaml"
 
 	daemonSetOwnerKind       = "DaemonSet"
@@ -34,6 +34,12 @@ const (
 
 // overridable for testing
 var saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
+// InjectConfig contains all the configuration options we share with an
+// operator controller, related to the SDK instrumentation
+type InjectConfig struct {
+	criteria services.GlobDefinitionCriteria
+}
 
 // EligibleDeployment is a workload that matches the SDK injection criteria and
 // would be (or has been) bounced by the bouncer.
@@ -54,7 +60,6 @@ type StateConfigMapWriter struct {
 	nodeName     string
 	ownContainer string
 	ownNamespace string
-	podName      string
 	owner        *metav1.OwnerReference
 }
 
@@ -89,7 +94,7 @@ func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nod
 }
 
 func (w *StateConfigMapWriter) Init(ctx context.Context) error {
-	owner, podName, err := w.findDaemonSetOwner(ctx)
+	owner, err := w.findDaemonSetOwner(ctx)
 
 	if err != nil {
 		return fmt.Errorf("error finding daemonset: %w", err)
@@ -99,7 +104,6 @@ func (w *StateConfigMapWriter) Init(ctx context.Context) error {
 	}
 
 	w.owner = owner
-	w.podName = podName
 
 	return nil
 }
@@ -109,12 +113,12 @@ func (w *StateConfigMapWriter) Init(ctx context.Context) error {
 // deployments collected during the initial sync.
 func (w *StateConfigMapWriter) Write(
 	ctx context.Context,
-	criteria services.GlobDefinitionCriteria,
+	config *InjectConfig,
 	eligible []*EligibleDeployment,
 ) error {
 	sortEligible(eligible)
 
-	criteriaYAML, err := marshalNonZeroYAML(criteria)
+	criteriaYAML, err := marshalNonZeroYAML(config)
 	if err != nil {
 		return fmt.Errorf("marshal criteria: %w", err)
 	}
@@ -123,7 +127,7 @@ func (w *StateConfigMapWriter) Write(
 		return fmt.Errorf("marshal eligible deployments: %w", err)
 	}
 
-	name := stateConfigMapName(w.owner.Name, w.nodeName, w.podName)
+	name := stateConfigMapName(w.owner.Name, w.nodeName)
 
 	desired := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -137,7 +141,7 @@ func (w *StateConfigMapWriter) Write(
 			},
 		},
 		Data: map[string]string{
-			stateConfigMapKeyCriteria: string(criteriaYAML),
+			stateConfigMapKey:         string(criteriaYAML),
 			stateConfigMapKeyEligible: string(eligibleYAML),
 		},
 	}
@@ -167,10 +171,10 @@ func (w *StateConfigMapWriter) Write(
 
 // findDaemonSetOwner fetches this pod and returns an OwnerReference pointing at
 // the parent DaemonSet, or nil if the pod has no DaemonSet owner.
-func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.OwnerReference, string, error) {
+func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.OwnerReference, error) {
 	pod, err := w.findOwnPod(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	for i := range pod.OwnerReferences {
 		ref := &pod.OwnerReferences[i]
@@ -186,9 +190,9 @@ func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.
 			UID:                ref.UID,
 			Controller:         &controller,
 			BlockOwnerDeletion: &blockOwnerDeletion,
-		}, pod.Name, nil
+		}, nil
 	}
-	return nil, "", nil
+	return nil, nil
 }
 
 func (w *StateConfigMapWriter) findOwnPod(ctx context.Context) (*corev1.Pod, error) {
@@ -303,8 +307,8 @@ func isZeroYAMLNode(node *yaml.Node) bool {
 	return false
 }
 
-func stateConfigMapName(daemonSetName, nodeName, podName string) string {
-	return daemonSetName + stateConfigMapNameSuffix + "-" + sanitizeDNS1123(nodeName) + "-" + podName
+func stateConfigMapName(daemonSetName, nodeName string) string {
+	return daemonSetName + stateConfigMapNameSuffix + "-" + sanitizeDNS1123(nodeName)
 }
 
 var dns1123InvalidRE = regexp.MustCompile(`[^a-z0-9-]+`)

@@ -120,6 +120,7 @@ func readTCPFailedConnectionsIntoStat(record *ringbuf.Record) (ebpf.Stat, error)
 		Type: ebpf.StatTypeTCPFailedConnection,
 		TCPFailedConnection: &ebpf.TCPFailedConnection{
 			Reason: event.Reason,
+			Role:   event.Role,
 		},
 		CommonAttrs: pipe.CommonAttrs{
 			SrcAddr: srcAddr,

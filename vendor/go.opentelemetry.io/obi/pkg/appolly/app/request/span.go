@@ -104,6 +104,7 @@ const (
 	HTTPSubtypeQwen          = 11 // http + Qwen (DashScope)
 	HTTPSubtypeMCP           = 12 // http + Model Context Protocol
 	HTTPSubtypeEmbedding     = 13 // http + generic embedding provider (Voyage, Cohere, Jina)
+	HTTPSubtypeRerank        = 14 // http + Rerank (Cohere, Jina, Voyage, etc.)
 )
 
 func IsGenAISubtype(subtype int) bool {
@@ -113,7 +114,8 @@ func IsGenAISubtype(subtype int) bool {
 		subtype == HTTPSubtypeQwen ||
 		subtype == HTTPSubtypeAWSBedrock ||
 		subtype == HTTPSubtypeMCP ||
-		subtype == HTTPSubtypeEmbedding
+		subtype == HTTPSubtypeEmbedding ||
+		subtype == HTTPSubtypeRerank
 }
 
 //nolint:cyclop
@@ -279,6 +281,7 @@ type GenAI struct {
 	Bedrock   *VendorBedrock
 	MCP       *MCPCall
 	Embedding *VendorEmbedding
+	Rerank    *VendorRerank
 }
 
 type OpenAIUsage struct {
@@ -770,6 +773,82 @@ func (e *VendorEmbedding) GetOutputTokens() int {
 	return 0
 }
 
+// VendorRerank holds parsed data from a rerank API request/response.
+// Reranking services (Cohere, Jina AI, Voyage AI, etc.) share a similar
+// REST API shape: POST /v1/rerank with a JSON body containing model,
+// query, and documents.  The provider is identified from the request
+// hostname.
+type VendorRerank struct {
+	Input    RerankRequest
+	Output   RerankResponse
+	Provider string
+}
+
+type RerankRequest struct {
+	Model     string          `json:"model"`
+	Query     string          `json:"query"`
+	TopN      int             `json:"top_n"`
+	Documents json.RawMessage `json:"documents"`
+}
+
+type RerankResponse struct {
+	ID      string          `json:"id"`
+	Model   string          `json:"model"`
+	Results json.RawMessage `json:"results"`
+	Usage   RerankUsage     `json:"usage"`
+	Meta    *RerankMeta     `json:"meta,omitempty"`
+	Error   *RerankError    `json:"error,omitempty"`
+}
+
+// RerankMeta represents Cohere-style metadata in the rerank response.
+type RerankMeta struct {
+	BilledUnits *RerankBilledUnits `json:"billed_units,omitempty"`
+	Tokens      *RerankMetaTokens  `json:"tokens,omitempty"`
+}
+
+type RerankBilledUnits struct {
+	SearchUnits float64 `json:"search_units"`
+}
+
+type RerankMetaTokens struct {
+	InputTokens int `json:"input_tokens"`
+}
+
+type RerankUsage struct {
+	TotalTokens  int `json:"total_tokens"`
+	PromptTokens int `json:"prompt_tokens"`
+	SearchUnits  int `json:"search_units"`
+}
+
+func (u *RerankUsage) GetInputTokens() int {
+	if u.PromptTokens > 0 {
+		return u.PromptTokens
+	}
+	return u.TotalTokens
+}
+
+// GetTotalTokens returns the total token count from any supported response
+// format.  It checks usage.total_tokens (Jina/Voyage), then
+// usage.prompt_tokens, and finally falls back to meta.tokens.input_tokens
+// (Cohere).
+func (r *RerankResponse) GetTotalTokens() int {
+	if r.Usage.TotalTokens > 0 {
+		return r.Usage.TotalTokens
+	}
+	if r.Usage.PromptTokens > 0 {
+		return r.Usage.PromptTokens
+	}
+	if r.Meta != nil && r.Meta.Tokens != nil && r.Meta.Tokens.InputTokens > 0 {
+		return r.Meta.Tokens.InputTokens
+	}
+	return 0
+}
+
+type RerankError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
 // Span contains the information being submitted by the following nodes in the graph.
 // It enables comfortable handling of data from Go.
 // REMINDER: any attribute here must be also added to the functions SpanOTELGetters
@@ -1159,22 +1238,31 @@ func SpanStatusCode(span *Span) string {
 	return StatusCodeUnset
 }
 
+func SpanDBStatusMessage(span *Span, dbError string) string {
+	if span.Status != 0 && dbError != "" {
+		return dbError
+	}
+	return ""
+}
+
+func (s *Span) IsDBSpan() bool {
+	switch s.Type {
+	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSQLClient, EventTypeSQLServer:
+		return true
+	case EventTypeHTTPClient:
+		if s.SubType == HTTPSubtypeSQLPP {
+			return true
+		}
+	}
+
+	return false
+}
+
 func SpanStatusMessage(span *Span) string {
 	switch span.Type {
-	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer:
-		if span.Status != 0 && span.DBError.Description != "" {
-			return span.DBError.Description
-		}
-	case EventTypeSQLClient, EventTypeSQLServer:
-		if span.Status != 0 && span.SQLError != nil {
-			return span.SQLErrorDescription()
-		}
 	case EventTypeManualSpan:
 		return span.Path
 	case EventTypeHTTPClient:
-		if span.SubType == HTTPSubtypeSQLPP && span.Status != 0 && span.DBError.Description != "" {
-			return span.DBError.Description
-		}
 		if span.SubType == HTTPSubtypeJSONRPC && span.JSONRPC != nil && span.JSONRPC.ErrorMessage != "" {
 			return span.JSONRPC.ErrorMessage
 		}
@@ -1227,6 +1315,9 @@ func HTTPSpanStatusCode(span *Span) string {
 					return StatusCodeError
 				}
 				if span.GenAI.Bedrock != nil && span.GenAI.Bedrock.Output.ErrorType != "" {
+					return StatusCodeError
+				}
+				if span.GenAI.Rerank != nil && span.GenAI.Rerank.Output.Error != nil && span.GenAI.Rerank.Output.Error.Type != "" {
 					return StatusCodeError
 				}
 			}
@@ -1461,6 +1552,17 @@ func (s *Span) TraceName() string {
 				return op + " " + model
 			}
 			return op
+		}
+
+		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeRerank && s.GenAI != nil && s.GenAI.Rerank != nil {
+			model := s.GenAI.Rerank.Input.Model
+			if model == "" {
+				model = s.GenAI.Rerank.Output.Model
+			}
+			if model != "" {
+				return "rerank " + model
+			}
+			return "rerank"
 		}
 
 		if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
@@ -1713,6 +1815,10 @@ func (s *Span) GenAIInputTokens() int {
 		return s.GenAI.Embedding.GetInputTokens()
 	}
 
+	if s.GenAI.Rerank != nil {
+		return s.GenAI.Rerank.Output.GetTotalTokens()
+	}
+
 	return 0
 }
 
@@ -1770,6 +1876,9 @@ func (s *Span) GenAIOperationName() string {
 	if s.GenAI.Embedding != nil {
 		return s.GenAI.Embedding.OperationName()
 	}
+	if s.GenAI.Rerank != nil {
+		return "rerank"
+	}
 	return ""
 }
 
@@ -1794,6 +1903,9 @@ func (s *Span) GenAIProviderName() string {
 	}
 	if s.GenAI.Embedding != nil {
 		return s.GenAI.Embedding.Provider
+	}
+	if s.GenAI.Rerank != nil {
+		return s.GenAI.Rerank.Provider
 	}
 	return ""
 }
@@ -1822,6 +1934,9 @@ func (s *Span) GenAIRequestModel() string {
 			return s.GenAI.Embedding.Input.Model
 		}
 		return s.GenAI.Embedding.Model
+	}
+	if s.GenAI.Rerank != nil {
+		return s.GenAI.Rerank.Input.Model
 	}
 	return ""
 }
@@ -1856,6 +1971,12 @@ func (s *Span) GenAIResponseModel() string {
 			return s.GenAI.Embedding.Output.Model
 		}
 		return s.GenAI.Embedding.Model
+	}
+	if s.GenAI.Rerank != nil {
+		if s.GenAI.Rerank.Output.Model != "" {
+			return s.GenAI.Rerank.Output.Model
+		}
+		return s.GenAI.Rerank.Input.Model
 	}
 	return ""
 }

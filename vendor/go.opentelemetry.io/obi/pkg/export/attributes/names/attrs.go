@@ -34,6 +34,7 @@ const (
 	HTTPURLScheme          = Name(semconv.URLSchemeKey)
 	HTTPUrlPath            = Name(semconv.URLPathKey)
 	HTTPUrlFull            = Name(semconv.URLFullKey)
+	HTTPUrlQuery           = Name(semconv.URLQueryKey)
 	ClientAddr             = Name(semconv.ClientAddressKey)
 	ServerAddr             = Name(semconv.ServerAddressKey)
 	ServerPort             = Name(semconv.ServerPortKey)
@@ -221,6 +222,7 @@ const (
 	DBQueryText          = Name(semconv.DBQueryTextKey)
 	DBResponseStatusCode = Name(semconv.DBResponseStatusCodeKey)
 	DBNamespace          = Name(semconv.DBNamespaceKey)
+	DBResponseError      = Name("db.response.error")
 
 	// Messaging
 	MessagingPartition   = Name(semconv.MessagingDestinationPartitionIDKey)
@@ -294,4 +296,5 @@ const (
 // Stat metrics
 const (
 	TCPFailedConnectionReason = Name("reason")
+	NetworkTCPHandshakeRole   = Name("network.tcp.handshake.role")
 )

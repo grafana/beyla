@@ -34,7 +34,8 @@ type StatsTCPFailedConnection struct {
 	_      structs.HostLayout
 	Flags  uint8
 	Reason uint8
-	Pad    [2]uint8
+	Role   uint8
+	Pad    [1]uint8
 	Conn   struct {
 		_      structs.HostLayout
 		S_addr [16]uint8 //nolint:revive,staticcheck

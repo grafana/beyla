@@ -24,6 +24,9 @@ OATS_DEST="internal/testgenerated/oats"
 VM_SRC=".obi-src/internal/test/vm"
 VM_DEST="internal/testgenerated/vm"
 
+SCHEMAS_SRC=".obi-src/schemas"
+SCHEMAS_DEST="schemas"
+
 
 # OBI module path → Beyla module path
 OBI_MODULE="go.opentelemetry.io/obi"
@@ -253,6 +256,7 @@ run_parallel() {
 clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "internal/testgenerated"
+    rm -rf "$SCHEMAS_DEST"
     echo "Done."
 }
 
@@ -532,9 +536,7 @@ apply_behavioral_transforms() {
 
 cleanup_and_inject_build_tags() {
     local jobs="$1"
-    echo "  Cleaning up headers and adding build tags..."
-    find "$OBI_DEST" -name "*.go" -type f | run_parallel "$jobs" strip_headers
-
+    echo "  Adding build tags..."
     find "$OBI_DEST" -name "*_test.go" -type f | while read -r file; do
         if ! grep -q "^//go:build" "$file"; then
             { echo "//go:build integration"; echo ""; cat "$file"; } > "$file.tmp"
@@ -605,8 +607,6 @@ transform_oats_go_files() {
     find "$OATS_DEST" -name "*.go" -type f 2>/dev/null | while read -r file; do
         sed_i -e "s|${OBI_MODULE}/internal/test|${BEYLA_MODULE}/internal/testgenerated|g" "$file"
     done
-    # Strip copyright headers
-    find "$OATS_DEST" -name "*.go" -type f | run_parallel "$jobs" strip_headers
 }
 
 apply_oats_behavioral_transforms() {
@@ -640,6 +640,19 @@ copy_vm() {
             sed_i -e 's|^IMG_SIZE ?= 10G|IMG_SIZE ?= 20G|' \
                 "$VM_DEST/Makefile"
         fi
+    fi
+}
+
+# =============================================================================
+# SCHEMAS FUNCTIONS
+# =============================================================================
+
+copy_schemas() {
+    echo "  Copying SCHEMAs..."
+    if [[ -d "$SCHEMAS_SRC" ]]; then
+        rm -rf "$SCHEMAS_DEST"
+        mkdir -p "$SCHEMAS_DEST"
+        cp -r "$SCHEMAS_SRC"/* "$SCHEMAS_DEST/"
     fi
 }
 
@@ -681,10 +694,16 @@ generate() {
     # -----------------------------------------------------------------
     copy_vm
 
+    # -----------------------------------------------------------------
+    # Weaver schemas test infrastructure
+    # -----------------------------------------------------------------
+    copy_schemas
+
     echo ""
     echo "Generated integration tests at $OBI_DEST"
     echo "Generated oats tests at $OATS_DEST"
     echo "Imported vm assets into $VM_DEST"
+    echo "Imported weaver schemas into $SCHEMAS_DEST"
     echo ""
     echo "Using Beyla module path: $BEYLA_MODULE"
     echo "Env vars, metric names, etc. were automatically transformed to use Beyla conventions."
@@ -694,14 +713,6 @@ apply_component_path_transform() {
     local file="$1"
     sed_i -e 's|path\.Join(pathRoot, "internal", "test", "integration", "components",|path.Join(pathObiSrc, "internal", "test", "integration", "components",|g' \
         -e 's|pathRoot + "/internal/test/|pathObiSrc + "/internal/test/|g' \
-        "$file"
-}
-
-strip_headers() {
-    local file="$1"
-    sed_i \
-        -e '/^\/\/ Copyright The OpenTelemetry Authors/d' \
-        -e '/^\/\/ SPDX-License-Identifier:/d' \
         "$file"
 }
 

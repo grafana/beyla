@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -26,15 +28,20 @@ import (
 
 // Server represents the webhook server
 type Server struct {
-	cfg          *beyla.Config
-	ctxInfo      *global.ContextInfo
-	mutator      *PodMutator
-	bouncer      *PodBouncer
-	scanner      *LocalProcessScanner
-	matcher      *PodMatcher
-	logger       *slog.Logger
-	store        *kube.Store
-	initialState map[string][]*ProcessInfo
+	cfg                    *beyla.Config
+	ctxInfo                *global.ContextInfo
+	mutator                *PodMutator
+	bouncer                *PodBouncer
+	scanner                *LocalProcessScanner
+	matcher                *PodMatcher
+	logger                 *slog.Logger
+	store                  *kube.Store
+	initialState           map[string][]*ProcessInfo
+	metrics                *SDKInjectionMetrics
+	podStateCache          *PodStateCache
+	stateWriter            *StateConfigMapWriter
+	eligibleDeployments    map[string]*EligibleDeployment
+	eligibleDeploymentsMux *sync.Mutex
 }
 
 // NewServer creates a new webhook server
@@ -42,26 +49,58 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	matcher := NewPodMatcher(cfg)
 	var bouncer *PodBouncer
 
-	mutator, err := NewPodMutator(cfg, matcher)
+	logger := slog.Default().With("component", "webhook-server")
+
+	var metrics *SDKInjectionMetrics
+	var podStateCache *PodStateCache
+	if ctxInfo.Prometheus != nil && cfg.InternalMetrics.Prometheus.Port != 0 {
+		metrics = NewSDKInjectionMetrics()
+		collectors := metrics.Collectors()
+		if ownNode := OwnNodeName(); ownNode == "" {
+			logger.Warn("state metrics unavailable: cannot determine node name (NODE_NAME unset and os.Hostname failed)")
+		} else {
+			podStateCache = NewPodStateCache(matcher, cfg, ownNode)
+			collectors = append(collectors, podStateCache)
+			logger.Info("registered beyla_injection_pods state metric collector")
+		}
+		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, collectors...)
+	}
+
+	mutator, err := NewPodMutator(cfg, matcher, metrics)
 	if err != nil {
 		return nil, err
 	}
 
-	if matcher.HasSelectionCriteria() {
-		bouncer, err = NewPodBouncer(ctxInfo)
+	if matcher.HasSelectionCriteria() && configuredToBounceDeployments(cfg) {
+		bouncer, err = NewPodBouncer(ctxInfo, metrics)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, OwnNodeName())
+	if err != nil {
+		logger.Warn("disabling injector state ConfigMap writer", "error", err)
+	} else {
+		err = stateWriter.Init(context.Background())
+		if err != nil {
+			logger.Warn("disabling injector state ConfigMap writer", "error", err)
+		}
+	}
+
 	return &Server{
-		cfg:     cfg,
-		mutator: mutator,
-		bouncer: bouncer,
-		scanner: NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
-		matcher: matcher,
-		logger:  slog.Default().With("component", "webhook-server"),
-		ctxInfo: ctxInfo,
+		cfg:                    cfg,
+		mutator:                mutator,
+		bouncer:                bouncer,
+		scanner:                NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		matcher:                matcher,
+		logger:                 logger,
+		ctxInfo:                ctxInfo,
+		metrics:                metrics,
+		podStateCache:          podStateCache,
+		stateWriter:            stateWriter,
+		eligibleDeployments:    map[string]*EligibleDeployment{},
+		eligibleDeploymentsMux: &sync.Mutex{},
 	}, nil
 }
 
@@ -88,6 +127,10 @@ func (s *Server) makeHTTPServer() *http.Server {
 	return server
 }
 
+func configuredToBounceDeployments(cfg *beyla.Config) bool {
+	return !cfg.Injector.NoAutoRestart
+}
+
 // Start starts the webhook server
 func (s *Server) Start(ctx context.Context) error {
 	if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
@@ -102,7 +145,11 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
-	if s.matcher.HasSelectionCriteria() && !s.cfg.Injector.NoAutoRestart {
+	if s.podStateCache != nil {
+		go s.subscribeStateCache(ctx)
+	}
+
+	if s.matcher.HasSelectionCriteria() {
 		s.logger.Info("starting initial state scanning")
 		go func() {
 			err := s.getInitialState(ctx)
@@ -110,6 +157,11 @@ func (s *Server) Start(ctx context.Context) error {
 				s.logger.Error("encountered error during initial state scan", "error", err)
 			}
 		}()
+	}
+
+	// Start internal metrics HTTP server if configured
+	if s.cfg.InternalMetrics.Prometheus.Port != 0 && s.ctxInfo.Prometheus != nil {
+		go s.ctxInfo.Prometheus.StartHTTP(ctx)
 	}
 
 	// Start server in a goroutine
@@ -210,24 +262,97 @@ func (s *Server) checkImageVolumeSupport(provider *kube.MetadataProvider) error 
 	return nil
 }
 
+// subscribeStateCache subscribes the pod state cache to the kube informer store.
+func (s *Server) subscribeStateCache(ctx context.Context) {
+	if !s.ctxInfo.K8sInformer.IsKubeEnabled() {
+		return
+	}
+	store, err := s.ctxInfo.K8sInformer.Get(ctx)
+	if err != nil {
+		s.logger.Error("state metrics unavailable: cannot subscribe to k8s informer", "error", err)
+		return
+	}
+	// Subscribe delivers all existing pods synchronously as CREATED events before
+	// returning. SYNC_FINISHED is not forwarded to late subscribers, so we mark
+	// the cache as ready immediately after Subscribe returns.
+	store.Subscribe(s.podStateCache)
+	s.podStateCache.markSynced()
+}
+
 func (s *Server) getInitialState(ctx context.Context) error {
+	if err := s.establishInitialProcessState(); err != nil {
+		return err
+	}
+
 	provider := s.ctxInfo.K8sInformer
+
+	if !provider.IsKubeEnabled() {
+		return nil
+	}
+
 	store, err := provider.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("instantiating Kubernetes metadata scanner: %w", err)
 	}
 	s.store = store
 
-	if err = s.establishInitialProcessState(); err != nil {
-		return err
-	}
+	// Subscribe synchronously: the store delivers all existing pods as CREATED
+	// events before returning. After this call our eligibleDeployments map
+	// reflects the initial state, and we can persist it. Future events still
+	// flow through the registered observer asynchronously.
+	store.Subscribe(s)
 
-	go store.Subscribe(s)
+	if s.stateWriter != nil {
+		if err := s.writeStateConfigMap(ctx); err != nil {
+			s.logger.Warn("failed to write injector state ConfigMap", "error", err)
+		}
+	}
 
 	return nil
 }
 
-func (s *Server) ID() string { return "unique-webhook-server-id" }
+func (s *Server) removeEligibleDeployment(a *ProcessInfo) {
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
+
+	namespace := a.metadata[services.AttrNamespace]
+	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
+
+	delete(s.eligibleDeployments, mutationKey(namespace, deployment))
+}
+
+func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
+	namespace := a.metadata[services.AttrNamespace]
+	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
+
+	language := languageLabel(a.kind)
+
+	s.eligibleDeployments[mutationKey(namespace, deployment)] = &EligibleDeployment{
+		Namespace:  namespace,
+		Kind:       "Deployment",
+		Deployment: deployment,
+		Language:   language,
+	}
+}
+
+func (s *Server) writeStateConfigMap(ctx context.Context) error {
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
+	eligible := make([]*EligibleDeployment, 0, len(s.eligibleDeployments))
+	for _, d := range s.eligibleDeployments {
+		eligible = append(eligible, d)
+	}
+
+	config := InjectConfig{
+		criteria: s.cfg.Injector.Instrument,
+	}
+
+	return s.stateWriter.Write(ctx, &config, eligible)
+}
+
+func (s *Server) ID() string { return uuid.NewString() }
 
 func (s *Server) restartDeployment(a *ProcessInfo) {
 	namespace := a.metadata[services.AttrNamespace]
@@ -241,8 +366,8 @@ func (s *Server) restartDeployment(a *ProcessInfo) {
 		s.logger.Debug("already restarted", "namespace", namespace, "deployment", deployment)
 		return
 	}
-
-	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment); err != nil {
+	lang := languageLabel(a.kind)
+	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment, "Deployment", lang); err != nil {
 		s.logger.Info("failed to restart pods", "error", err)
 	}
 }
@@ -252,37 +377,66 @@ func (s *Server) On(event *informer.Event) error {
 	if event.Resource == nil || event.GetResource().GetPod() == nil {
 		return nil
 	}
-	switch event.Type {
-	case informer.EventType_CREATED, informer.EventType_UPDATED:
-		s.logger.Debug("new pod", "pod", event.Resource)
-		// It's important to consider the local process info here
-		// so that we are not evaluating pods from other nodes, since
-		// Beyla gets the cluster wide info.
-		if attrs := s.enrichProcessInfo(event.GetResource()); attrs != nil {
-			for _, a := range attrs {
-				// It's important to check here for the SDK supported programming languages.
-				// Go would be the killer here, since many of the Kubernetes services are written in
-				// Go, and we don't want to say bounce coredns.
-				switch s.mutator.AlreadyInstrumented(a) {
-				case false:
-					if s.mutator.CanInstrument(a.kind) && !s.mutator.PreloadsSomethingElse(a) {
-						if _, matched := s.matcher.MatchProcessInfo(a); matched {
-							s.restartDeployment(a)
-						}
-					} else {
-						s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
-					}
-				case true:
-					// If this pod was instrumented, but the new Beyla config says don't anymore
-					// we bounce the pods to undo the instrumentation
-					if _, matched := s.matcher.MatchProcessInfo(a); !matched {
-						s.restartDeployment(a)
-					}
-				}
-			}
+
+	// It's important to consider the local process info here so that we are
+	// not evaluating pods from other nodes, since Beyla gets cluster-wide info.
+	attrs := s.enrichProcessInfo(event.GetResource())
+	if attrs == nil {
+		return nil
+	}
+
+	if event.Type == informer.EventType_DELETED {
+		s.logger.Debug("removed pod", "pod", event.Resource)
+		for _, a := range attrs {
+			s.handleDeletedProcessEvent(a)
 		}
+
+		return nil
+	}
+
+	if event.Type != informer.EventType_CREATED && event.Type != informer.EventType_UPDATED {
+		return nil
+	}
+
+	s.logger.Debug("new pod", "pod", event.Resource)
+
+	for _, a := range attrs {
+		s.handleNewProcessEvent(a)
 	}
 	return nil
+}
+
+func (s *Server) handleDeletedProcessEvent(a *ProcessInfo) {
+	s.removeEligibleDeployment(a)
+}
+
+func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
+	if s.mutator.AlreadyInstrumented(a) {
+		// If this pod was instrumented, but the new Beyla config says don't anymore
+		// we bounce the pods to undo the instrumentation
+		if _, matched := s.matcher.MatchProcessInfo(a); matched {
+			return
+		}
+		if configuredToBounceDeployments(s.cfg) {
+			s.restartDeployment(a)
+		}
+		return
+	}
+
+	// It's important to check here for the SDK supported programming languages.
+	// Go would be the killer here, since many of the Kubernetes services are written in
+	// Go, and we don't want to say bounce coredns.
+	if !s.mutator.CanInstrument(a.kind) || s.mutator.PreloadsSomethingElse(a) {
+		s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
+		return
+	}
+
+	if _, matched := s.matcher.MatchProcessInfo(a); matched {
+		s.recordEligibleDeployment(a)
+		if configuredToBounceDeployments(s.cfg) {
+			s.restartDeployment(a)
+		}
+	}
 }
 
 // This function will return nil if the pod containers didn't match, which

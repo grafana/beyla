@@ -1,7 +1,11 @@
 package webhook
 
 import (
+	"bytes"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,6 +58,115 @@ func TestErrorResponse(t *testing.T) {
 			assert.Equal(t, tt.expected, admResponse.Result.Message)
 		})
 	}
+}
+
+func TestPodMutator_HandleMutateRejectsOversizedBody(t *testing.T) {
+	mutator := &PodMutator{
+		logger: slog.With("component", "webhook.Mutator"),
+		cfg:    beyla.DefaultConfig(),
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/mutate",
+		bytes.NewReader(bytes.Repeat([]byte("a"), int(mutator.cfg.Injector.Webhook.MaxAdmissionBodySize.Value())+1)),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "request body too large")
+}
+
+func TestPodMutator_HandleMutateRejectsWhenRequestLimitReached(t *testing.T) {
+	requestLimiter := make(chan struct{}, 1)
+	requestLimiter <- struct{}{}
+	mutator := &PodMutator{
+		logger:         slog.With("component", "webhook.Mutator"),
+		requestLimiter: requestLimiter,
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/mutate",
+		bytes.NewReader([]byte(`{}`)),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "too many concurrent mutation requests")
+}
+
+func TestPodMutator_HandleMutateAllows10ConcurrentRequests(t *testing.T) {
+	const concurrency = 10
+	requestLimiter := make(chan struct{}, concurrency)
+	mutator := &PodMutator{
+		logger:           slog.With("component", "webhook.Mutator"),
+		requestLimiter:   requestLimiter,
+		maxAdmissionSize: 3 * 1024 * 1024,
+	}
+
+	var wg sync.WaitGroup
+	codes := make([]int, concurrency)
+	start := make(chan struct{})
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/mutate",
+				bytes.NewReader([]byte(`{}`)),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			mutator.HandleMutate(recorder, req)
+			codes[i] = recorder.Code
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
+
+	for i, code := range codes {
+		assert.NotEqual(t, http.StatusServiceUnavailable, code, "request %d was rejected by the limiter", i)
+	}
+}
+
+func TestPodMutator_HandleMutateDoesntRejectWhenRequestLimitNotReached(t *testing.T) {
+	requestLimiter := make(chan struct{}, 2)
+	requestLimiter <- struct{}{}
+	mutator := &PodMutator{
+		logger:           slog.With("component", "webhook.Mutator"),
+		requestLimiter:   requestLimiter,
+		maxAdmissionSize: 3 * 1024 * 1024,
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/mutate",
+		bytes.NewReader([]byte(`{}`)),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.NotContains(t, recorder.Body.String(), "too many concurrent mutation requests")
+
+	recorder = httptest.NewRecorder()
+	mutator.HandleMutate(recorder, req)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.NotContains(t, recorder.Body.String(), "too many concurrent mutation requests")
 }
 
 func TestPodMutator_CanInstrument(t *testing.T) {
@@ -346,6 +459,47 @@ func TestPodMutator_AlreadyInstrumented(t *testing.T) {
 	}
 }
 
+func TestIsLDPreloadConflict(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      []corev1.EnvVar
+		expected bool
+	}{
+		{
+			name:     "no LD_PRELOAD - not a conflict",
+			env:      nil,
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD empty string - not a conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: ""}},
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD set to Beyla value - not a conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: envVarLdPreloadValue}},
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD set to other library - conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: "/some/other/lib.so"}},
+			expected: true,
+		},
+		{
+			name:     "unrelated env vars only - not a conflict",
+			env:      []corev1.EnvVar{{Name: "OTHER_VAR", Value: "/lib.so"}},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &corev1.Container{Env: tt.env}
+			assert.Equal(t, tt.expected, isLDPreloadConflict(c))
+		})
+	}
+}
+
 func TestPodMutator_MutatePod(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -505,6 +659,136 @@ func TestPodMutator_MutatePod(t *testing.T) {
 			expectEnvVars:  true,
 		},
 		{
+			name: "all containers have empty LD_PRELOAD - should instrument",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					SDKPkgVersion:     "v0.0.3",
+					HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+				},
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://localhost:4318",
+				},
+			},
+			matcher: &PodMatcher{
+				logger: slog.With("component", "webhook.Matcher"),
+				selectors: []services.Selector{
+					&services.GlobAttributes{
+						Metadata: map[string]*services.GlobAttr{
+							"k8s_namespace": strToGlob("*"),
+						},
+					},
+				},
+			},
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "app",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: ""},
+							},
+						},
+					},
+				},
+			},
+			expectModified: true,
+			expectLabel:    true,
+			expectVolume:   true,
+			expectEnvVars:  true,
+		},
+		{
+			name: "all containers have genuine LD_PRELOAD conflict - should skip",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					SDKPkgVersion:     "v0.0.3",
+					HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+				},
+			},
+			matcher: &PodMatcher{
+				logger: slog.With("component", "webhook.Matcher"),
+				selectors: []services.Selector{
+					&services.GlobAttributes{
+						Metadata: map[string]*services.GlobAttr{
+							"k8s_namespace": strToGlob("*"),
+						},
+					},
+				},
+			},
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "app1",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: "/some/other/lib.so"},
+							},
+						},
+						{
+							Name: "app2",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: "/another/lib.so"},
+							},
+						},
+					},
+				},
+			},
+			expectModified: false,
+			expectLabel:    false,
+			expectVolume:   false,
+			expectEnvVars:  false,
+		},
+		{
+			name: "container with Beyla own LD_PRELOAD value - not treated as conflict",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					SDKPkgVersion:     "v0.0.3",
+					HostPathVolumeDir: "/var/lib/beyla/instrumentation",
+				},
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://localhost:4318",
+				},
+			},
+			matcher: &PodMatcher{
+				logger: slog.With("component", "webhook.Matcher"),
+				selectors: []services.Selector{
+					&services.GlobAttributes{
+						Metadata: map[string]*services.GlobAttr{
+							"k8s_namespace": strToGlob("*"),
+						},
+					},
+				},
+			},
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "app-with-beyla-preload",
+							Env: []corev1.EnvVar{
+								{Name: envVarLdPreloadName, Value: envVarLdPreloadValue},
+							},
+						},
+						{Name: "app-clean"},
+					},
+				},
+			},
+			expectModified: true,
+			expectLabel:    true,
+			expectVolume:   true,
+			expectEnvVars:  true,
+		},
+		{
 			name: "skip container with existing LD_PRELOAD",
 			cfg: &beyla.Config{
 				Injector: beyla.SDKInject{
@@ -559,7 +843,11 @@ func TestPodMutator_MutatePod(t *testing.T) {
 				proto:    "http/protobuf",
 			}
 
-			modified := mutator.mutatePod(tt.pod)
+			selector, matched := mutator.matchesSelection(&tt.pod.ObjectMeta)
+			var modified bool
+			if matched {
+				modified, _ = mutator.mutatePod(tt.pod, selector)
+			}
 
 			assert.Equal(t, tt.expectModified, modified, "mutation result mismatch")
 
@@ -605,6 +893,100 @@ func TestPodMutator_MutatePod(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDetectLanguage(t *testing.T) {
+	t.Run("languageFromImageName", func(t *testing.T) {
+		tests := []struct {
+			image string
+			want  string
+		}{
+			// Node.js
+			{"node:20", "nodejs"},
+			{"node:alpine", "nodejs"},
+			// node-exporter must NOT match as nodejs (fixed false positive)
+			{"node-exporter:latest", ""},
+			{"prom/node-exporter:v1.8.0", ""},
+			// Python
+			{"python:3.12", "python"},
+			{"python:3.12@sha256:abcdef1234", "python"},
+			// Java
+			{"openjdk:17", "java"},
+			{"eclipse-temurin:21", "java"},
+			{"amazoncorretto:17", "java"},
+			// .NET — only the last path component is matched, so "aspnet" works but bare "runtime" does not
+			{"mcr.microsoft.com/dotnet/aspnet:8.0", "dotnet"},
+			{"dotnet/aspnet:8.0", "dotnet"},
+			{"mcr.microsoft.com/dotnet/runtime:8.0", ""},
+			// Registry with port — must not strip the image name component
+			{"registry:5000/myapp:latest", ""},
+			{"registry:5000/python:latest", "python"},
+			// No language cue
+			{"nginx:latest", ""},
+			{"alpine:3.18", ""},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.image, func(t *testing.T) {
+				assert.Equal(t, tt.want, languageFromImageName(tt.image))
+			})
+		}
+	})
+
+	t.Run("detectLanguageFromPodSpec_command_args", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			image   string
+			command []string
+			args    []string
+			want    string
+		}{
+			{
+				name:    "path_stripped_python",
+				image:   "ubuntu:22.04",
+				command: []string{"/usr/bin/python3"},
+				want:    "python",
+			},
+			{
+				name:    "node_command",
+				image:   "ubuntu:22.04",
+				command: []string{"node"},
+				args:    []string{"index.js"},
+				want:    "nodejs",
+			},
+			{
+				// node-exporter as a command must NOT match nodejs
+				name:    "node_exporter_command_not_nodejs",
+				image:   "ubuntu:22.04",
+				command: []string{"node-exporter"},
+				want:    "",
+			},
+			{
+				name:  "image_takes_priority_over_command",
+				image: "python:3.12",
+				args:  []string{"node"},
+				want:  "python",
+			},
+			{
+				name:  "no_cues",
+				image: "ubuntu:22.04",
+				want:  "",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				p := &corev1.Pod{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Image: tt.image, Command: tt.command, Args: tt.args},
+						},
+					},
+				}
+				assert.Equal(t, tt.want, detectLanguageFromPodSpec(p))
+			})
+		}
+	})
 }
 
 func TestPodMutator_AddLabel(t *testing.T) {

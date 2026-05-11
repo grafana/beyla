@@ -53,6 +53,9 @@ rules:
   - apiGroups: [""]
     resources: ["replicationcontrollers"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "update", "delete"]
     # Required to retrieve the owner references used by the seccomp beyla.
   - apiGroups: ["security-profiles-operator.x-k8s.io"]
     resources: ["seccompprofiles"]
@@ -280,3 +283,8 @@ webhooks:
   failurePolicy: Fail
   timeoutSeconds: 10
   namespaceSelector: {}
+  objectSelector:
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values: ["beyla"]

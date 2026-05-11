@@ -264,7 +264,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.Job:
 		getter = func(span *Span) attribute.KeyValue { return Job(span.Service.Job()) }
 	case attr.Instance:
-		getter = func(span *Span) attribute.KeyValue { return Job(span.Service.UID.Instance) }
+		getter = func(span *Span) attribute.KeyValue { return Instance(span.Service.UID.Instance) }
 	case attr.GraphQLDocument:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {

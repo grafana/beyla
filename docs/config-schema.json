@@ -376,6 +376,10 @@
         "postgres": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES"
+        },
+        "tcp": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_TCP"
         }
       },
       "type": "object"
@@ -1734,6 +1738,14 @@
       },
       "type": "object"
     },
+    "Quantity": {
+      "properties": {
+        "Format": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "QwenConfig": {
       "properties": {
         "enabled": {
@@ -2340,6 +2352,16 @@
           "type": "string",
           "description": "KeyPath is the path to the TLS key file",
           "x-env-var": "BEYLA_WEBHOOK_KEY_PATH"
+        },
+        "max_admission_body_size": {
+          "$ref": "#/$defs/Quantity",
+          "description": "MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive",
+          "x-env-var": "BEYLA_WEBHOOK_MAX_ADMISSION_BODY_SIZE"
+        },
+        "max_concurrent_requests": {
+          "type": "integer",
+          "description": "MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive",
+          "x-env-var": "BEYLA_WEBHOOK_MAX_CONCURRENT_REQUESTS"
         },
         "port": {
           "type": "integer",

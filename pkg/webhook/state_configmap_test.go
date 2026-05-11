@@ -156,17 +156,17 @@ func TestTrimContainerIDScheme(t *testing.T) {
 func TestSortEligible(t *testing.T) {
 	t.Run("orders by namespace then deployment", func(t *testing.T) {
 		eligible := []*EligibleDeployment{
-			{Namespace: "b-ns", Deployment: "z-app"},
-			{Namespace: "a-ns", Deployment: "z-app"},
-			{Namespace: "b-ns", Deployment: "a-app"},
-			{Namespace: "a-ns", Deployment: "a-app"},
+			{Namespace: "b-ns", Name: "z-app"},
+			{Namespace: "a-ns", Name: "z-app"},
+			{Namespace: "b-ns", Name: "a-app"},
+			{Namespace: "a-ns", Name: "a-app"},
 		}
 		sortEligible(eligible)
 		assert.Equal(t, []*EligibleDeployment{
-			{Namespace: "a-ns", Deployment: "a-app"},
-			{Namespace: "a-ns", Deployment: "z-app"},
-			{Namespace: "b-ns", Deployment: "a-app"},
-			{Namespace: "b-ns", Deployment: "z-app"},
+			{Namespace: "a-ns", Name: "a-app"},
+			{Namespace: "a-ns", Name: "z-app"},
+			{Namespace: "b-ns", Name: "a-app"},
+			{Namespace: "b-ns", Name: "z-app"},
 		}, eligible)
 	})
 
@@ -176,9 +176,9 @@ func TestSortEligible(t *testing.T) {
 	})
 
 	t.Run("single element unchanged", func(t *testing.T) {
-		eligible := []*EligibleDeployment{{Namespace: "x", Deployment: "y"}}
+		eligible := []*EligibleDeployment{{Namespace: "x", Name: "y"}}
 		sortEligible(eligible)
-		assert.Equal(t, []*EligibleDeployment{{Namespace: "x", Deployment: "y"}}, eligible)
+		assert.Equal(t, []*EligibleDeployment{{Namespace: "x", Name: "y"}}, eligible)
 	})
 }
 
@@ -240,8 +240,8 @@ func TestMarshalNonZeroYAML(t *testing.T) {
 
 	t.Run("preserves struct yaml tags via Encode", func(t *testing.T) {
 		input := []*EligibleDeployment{
-			{Namespace: "ns1", Deployment: "dep1", Language: "java"},
-			{Namespace: "ns2", Deployment: "dep2"},
+			{Namespace: "ns1", Name: "dep1", Language: "java"},
+			{Namespace: "ns2", Name: "dep2"},
 		}
 		out, err := marshalNonZeroYAML(input)
 		require.NoError(t, err)

@@ -330,10 +330,10 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 	language := languageLabel(a.kind)
 
 	s.eligibleDeployments[mutationKey(namespace, deployment)] = &EligibleDeployment{
-		Namespace:  namespace,
-		Kind:       "Deployment",
-		Deployment: deployment,
-		Language:   language,
+		Namespace: namespace,
+		Kind:      "Deployment",
+		Name:      deployment,
+		Language:  language,
 	}
 }
 
@@ -346,7 +346,11 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	}
 
 	config := InjectConfig{
-		criteria: s.cfg.Injector.Instrument,
+		Discovery: s.cfg.Injector.Instrument,
+		OtelExport: OtelExport{
+			Endpoint: s.mutator.Endpoint(),
+			Protocol: s.mutator.Protocol(),
+		},
 	}
 
 	return s.stateWriter.Write(ctx, &config, eligible)

@@ -25,8 +25,13 @@ import (
 
 const (
 	stateConfigMapNameSuffix  = "-injector-state"
-	stateConfigMapKey         = "config.yaml"
+	stateConfigMapKey         = "instrumentation.yaml"
 	stateConfigMapKeyEligible = "eligible_for_restart.yaml"
+
+	// selectorAnnotation marks the ConfigMap so the external k8s injection
+	// controller picks it up. The controller filters its watch on presence
+	// of this annotation; the value is unused.
+	selectorAnnotation = "beyla.grafana.com/node"
 
 	daemonSetOwnerKind       = "DaemonSet"
 	daemonSetOwnerAPIVersion = "apps/v1"
@@ -35,19 +40,29 @@ const (
 // overridable for testing
 var saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
-// InjectConfig contains all the configuration options we share with an
-// operator controller, related to the SDK instrumentation
+// InjectConfig is the on-disk shape of instrumentation.yaml that the external
+// injection controller consumes. Discovery is a list of selectors; OtelExport
+// is the OTLP destination the controller should stamp onto matched pods.
 type InjectConfig struct {
-	criteria services.GlobDefinitionCriteria
+	Discovery  services.GlobDefinitionCriteria `yaml:"discovery,omitempty"`
+	OtelExport OtelExport                      `yaml:"otel_export,omitempty"`
 }
 
-// EligibleDeployment is a workload that matches the SDK injection criteria and
-// would be (or has been) bounced by the bouncer.
+// OtelExport is the per-ConfigMap OTLP destination. Empty fields are pruned by
+// marshalNonZeroYAML before serialization.
+type OtelExport struct {
+	Endpoint string `yaml:"endpoint,omitempty"`
+	Protocol string `yaml:"protocol,omitempty"`
+}
+
+// EligibleDeployment is a workload that matches the SDK injection criteria
+// and would be (or has been) bounced by the bouncer. The on-disk shape
+// matches the external injection controller's restartCriterion struct.
 type EligibleDeployment struct {
-	Namespace  string `yaml:"namespace"`
-	Kind       string `yaml:"kind,omitempty"`
-	Deployment string `yaml:"deployment"`
-	Language   string `yaml:"language,omitempty"`
+	Namespace string `yaml:"namespace"`
+	Kind      string `yaml:"kind,omitempty"`
+	Name      string `yaml:"name"`
+	Language  string `yaml:"language,omitempty"`
 }
 
 // StateConfigMapWriter creates/updates a per-node ConfigMap holding the SDK
@@ -138,6 +153,11 @@ func (w *StateConfigMapWriter) Write(
 				"app.kubernetes.io/managed-by": "beyla",
 				"app.kubernetes.io/component":  "injector-state",
 				"beyla.grafana.com/node":       sanitizeDNS1123(w.nodeName),
+			},
+			// Annotation (presence-only) is what the external injection
+			// controller watches; without it the controller ignores the CM.
+			Annotations: map[string]string{
+				selectorAnnotation: w.nodeName,
 			},
 		},
 		Data: map[string]string{
@@ -241,7 +261,7 @@ func sortEligible(eligible []*EligibleDeployment) {
 		if eligible[i].Namespace != eligible[j].Namespace {
 			return eligible[i].Namespace < eligible[j].Namespace
 		}
-		return eligible[i].Deployment < eligible[j].Deployment
+		return eligible[i].Name < eligible[j].Name
 	})
 }
 

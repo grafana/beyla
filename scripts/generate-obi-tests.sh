@@ -433,6 +433,10 @@ adjust_docker_compose_paths() {
         # generated output (they're built via Docker from the OBI source).
         sed_i -e 's|\./components/|../../../.obi-src/internal/test/integration/components/|g' "$file"
         sed_i -e 's|context: components/|context: ../../../.obi-src/internal/test/integration/components/|g' "$file"
+        # extends:file: references — Docker Compose resolves relative to the compose
+        # file location, so the file must physically exist at that path. Redirect to
+        # .obi-src just as with other components/ references.
+        sed_i -e 's|file: components/|file: ../../../.obi-src/internal/test/integration/components/|g' "$file"
 
         # Swap the OBI Dockerfile for the Beyla Dockerfile and point its
         # build context at the Beyla repo root instead of .obi-src.

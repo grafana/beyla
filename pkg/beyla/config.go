@@ -414,10 +414,16 @@ type WebhookConfig struct {
 	MaxConcurrentRequests int `yaml:"max_concurrent_requests" env:"BEYLA_WEBHOOK_MAX_CONCURRENT_REQUESTS"`
 	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
 	MaxAdmissionBodySize resource.Quantity `yaml:"max_admission_body_size" env:"BEYLA_WEBHOOK_MAX_ADMISSION_BODY_SIZE"`
+	// ExternalWebhook delegates the functionality of the mutating webhook to an external controller/operator
+	ExternalWebhook string `yaml:"external_deployment_name" env:"BEYLA_EXTERNAL_WEBHOOK_DEPLOYMENT_NAME"`
+}
+
+func (w WebhookConfig) UsesExternalWebhook() bool {
+	return w.ExternalWebhook != ""
 }
 
 func (w WebhookConfig) Enabled() bool {
-	return w.Enable && w.Port > 0 && w.CertPath != "" && w.KeyPath != ""
+	return (w.Enable && w.Port > 0 && w.CertPath != "" && w.KeyPath != "") || w.UsesExternalWebhook()
 }
 
 type ConfigError string

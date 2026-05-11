@@ -37,6 +37,7 @@ type Server struct {
 	logger                 *slog.Logger
 	store                  *kube.Store
 	initialState           map[string][]*ProcessInfo
+	initialStateMux        *sync.Mutex
 	metrics                *SDKInjectionMetrics
 	podStateCache          *PodStateCache
 	stateWriter            *StateConfigMapWriter
@@ -101,6 +102,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		stateWriter:            stateWriter,
 		eligibleDeployments:    map[string]*EligibleDeployment{},
 		eligibleDeploymentsMux: &sync.Mutex{},
+		initialStateMux:        &sync.Mutex{},
 	}, nil
 }
 
@@ -128,16 +130,18 @@ func (s *Server) makeHTTPServer() *http.Server {
 }
 
 func configuredToBounceDeployments(cfg *beyla.Config) bool {
-	return !cfg.Injector.NoAutoRestart
+	return !cfg.Injector.NoAutoRestart && !cfg.Injector.Webhook.UsesExternalWebhook()
 }
 
 // Start starts the webhook server
 func (s *Server) Start(ctx context.Context) error {
-	if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
-		return fmt.Errorf("webhook TLS not ready: %w", err)
+	var server *http.Server
+	if !s.cfg.Injector.Webhook.UsesExternalWebhook() {
+		if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
+			return fmt.Errorf("webhook TLS not ready: %w", err)
+		}
+		server = s.makeHTTPServer()
 	}
-
-	server := s.makeHTTPServer()
 
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
 
@@ -164,15 +168,17 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.ctxInfo.Prometheus.StartHTTP(ctx)
 	}
 
-	// Start server in a goroutine
-	errChan := make(chan error, 1)
-	go func() {
-		if err := server.ListenAndServeTLS(s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath); err != nil && err != http.ErrServerClosed {
-			errChan <- fmt.Errorf("webhook server failed: %w", err)
-		}
-		close(errChan)
-	}()
-
+	var errChan chan error
+	if !s.cfg.Injector.Webhook.UsesExternalWebhook() {
+		// Start server in a goroutine
+		errChan = make(chan error, 1)
+		go func() {
+			if err := server.ListenAndServeTLS(s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath); err != nil && err != http.ErrServerClosed {
+				errChan <- fmt.Errorf("webhook server failed: %w", err)
+			}
+			close(errChan)
+		}()
+	}
 	return s.waitForCancellation(ctx, server, errChan)
 }
 
@@ -184,8 +190,10 @@ func (s *Server) waitForCancellation(ctx context.Context, server *http.Server, e
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("webhook server shutdown failed: %w", err)
+		if !s.cfg.Injector.Webhook.UsesExternalWebhook() {
+			if err := server.Shutdown(shutdownCtx); err != nil {
+				return fmt.Errorf("webhook server shutdown failed: %w", err)
+			}
 		}
 		// Don't return ctx.Err() as an error - graceful shutdown is expected
 		if errors.Is(ctx.Err(), context.Canceled) {
@@ -220,12 +228,22 @@ func waitForTLSFiles(ctx context.Context, certPath, keyPath string, timeout, pol
 	}
 }
 
-func (s *Server) establishInitialProcessState() error {
+func (s *Server) setOrUpdateInitialProcessState() error {
+	s.initialStateMux.Lock()
+	defer s.initialStateMux.Unlock()
 	initialState, err := s.scanner.FindExistingProcesses()
 	if err != nil {
 		return fmt.Errorf("finding initial process state: %w", err)
 	}
 	s.initialState = initialState
+
+	return nil
+}
+
+func (s *Server) establishInitialProcessState() error {
+	if err := s.setOrUpdateInitialProcessState(); err != nil {
+		return err
+	}
 
 	if !s.cfg.Injector.UsesImageVolume() && s.cfg.Injector.ManageSDKVersions {
 		oldestSDK := s.scanner.OldestSDKVersion()
@@ -311,30 +329,43 @@ func (s *Server) getInitialState(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) removeEligibleDeployment(a *ProcessInfo) {
-	s.eligibleDeploymentsMux.Lock()
-	defer s.eligibleDeploymentsMux.Unlock()
-
-	namespace := a.metadata[services.AttrNamespace]
-	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
-
-	delete(s.eligibleDeployments, mutationKey(namespace, deployment))
-}
-
-func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
-	s.eligibleDeploymentsMux.Lock()
-	defer s.eligibleDeploymentsMux.Unlock()
+func deploymentFromProcess(a *ProcessInfo) *EligibleDeployment {
 	namespace := a.metadata[services.AttrNamespace]
 	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
 
 	language := languageLabel(a.kind)
 
-	s.eligibleDeployments[mutationKey(namespace, deployment)] = &EligibleDeployment{
+	return &EligibleDeployment{
 		Namespace:  namespace,
 		Kind:       "Deployment",
 		Deployment: deployment,
 		Language:   language,
 	}
+}
+
+func deploymentKeyFromProcess(a *ProcessInfo) string {
+	namespace := a.metadata[services.AttrNamespace]
+	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
+
+	return mutationKey(namespace, deployment)
+}
+
+func (s *Server) removeEligibleDeployment(a *ProcessInfo) {
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
+
+	key := deploymentKeyFromProcess(a)
+	delete(s.eligibleDeployments, key)
+}
+
+func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
+	s.eligibleDeploymentsMux.Lock()
+	defer s.eligibleDeploymentsMux.Unlock()
+
+	key := deploymentKeyFromProcess(a)
+	d := deploymentFromProcess(a)
+
+	s.eligibleDeployments[key] = d
 }
 
 func (s *Server) writeStateConfigMap(ctx context.Context) error {
@@ -346,7 +377,7 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	}
 
 	config := InjectConfig{
-		criteria: s.cfg.Injector.Instrument,
+		Criteria: s.cfg.Injector.Instrument,
 	}
 
 	return s.stateWriter.Write(ctx, &config, eligible)
@@ -378,6 +409,13 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
+	if event.Type == informer.EventType_CREATED {
+		if s.isExternalWebhookEvent(event.GetResource()) {
+			s.rebuildEligibleDeployments()
+			return nil
+		}
+	}
+
 	// It's important to consider the local process info here so that we are
 	// not evaluating pods from other nodes, since Beyla gets cluster-wide info.
 	attrs := s.enrichProcessInfo(event.GetResource())
@@ -398,7 +436,7 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
-	s.logger.Debug("new pod", "pod", event.Resource)
+	s.logger.Info("new pod", "pod", event.Resource)
 
 	for _, a := range attrs {
 		s.handleNewProcessEvent(a)
@@ -431,6 +469,10 @@ func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
 		return
 	}
 
+	// The match process info only relies on the initial process state
+	// so it will not find any info on new processes. This is by design, since
+	// we don't want to do work for processes we've seen after we've launched,
+	// they'll get seen by the webhook when the pods start, before there's info.
 	if _, matched := s.matcher.MatchProcessInfo(a); matched {
 		s.recordEligibleDeployment(a)
 		if configuredToBounceDeployments(s.cfg) {
@@ -526,4 +568,41 @@ func (s *Server) cleanupOldInstrumentationVersions(instrumentDir string, minVers
 	}
 
 	return nil
+}
+
+func (s *Server) isExternalWebhookEvent(info *informer.ObjectMeta) bool {
+	namespace := info.Namespace
+	deploymentName := ""
+	for _, owner := range info.Pod.Owners {
+		if owner.Kind == "Deployment" || owner.Kind == "DaemonSet" {
+			deploymentName = owner.Name
+			break
+		}
+	}
+
+	if namespace != "" && deploymentName != "" {
+		key := mutationKey(namespace, deploymentName)
+		return s.cfg.Injector.Webhook.ExternalWebhook == key
+	}
+
+	return false
+}
+
+func (s *Server) rebuildEligibleDeployments() {
+	s.setOrUpdateInitialProcessState()
+
+	s.initialStateMux.Lock()
+	defer s.initialStateMux.Unlock()
+
+	for cid := range s.initialState {
+		if pod := s.store.PodByContainerID(cid); pod != nil {
+			if attrs := s.enrichProcessInfo(pod.Meta); attrs != nil {
+				for _, a := range attrs {
+					s.handleNewProcessEvent(a)
+				}
+			}
+		}
+	}
+
+	s.writeStateConfigMap(context.Background())
 }

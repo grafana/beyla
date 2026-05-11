@@ -38,7 +38,7 @@ var saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 // InjectConfig contains all the configuration options we share with an
 // operator controller, related to the SDK instrumentation
 type InjectConfig struct {
-	criteria services.GlobDefinitionCriteria
+	Criteria services.GlobDefinitionCriteria `yaml:"criteria"`
 }
 
 // EligibleDeployment is a workload that matches the SDK injection criteria and

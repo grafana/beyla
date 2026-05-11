@@ -589,7 +589,10 @@ func (s *Server) isExternalWebhookEvent(info *informer.ObjectMeta) bool {
 }
 
 func (s *Server) rebuildEligibleDeployments() {
-	s.setOrUpdateInitialProcessState()
+	if err := s.setOrUpdateInitialProcessState(); err != nil {
+		s.logger.Warn("unable to update initial process state", "error", err)
+		return
+	}
 
 	s.initialStateMux.Lock()
 	defer s.initialStateMux.Unlock()
@@ -604,5 +607,7 @@ func (s *Server) rebuildEligibleDeployments() {
 		}
 	}
 
-	s.writeStateConfigMap(context.Background())
+	if err := s.writeStateConfigMap(context.Background()); err != nil {
+		s.logger.Warn("unable to update config map with new process state", "error", err)
+	}
 }

@@ -10,6 +10,7 @@ require (
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/distribution/reference v0.6.0
 	github.com/goccy/go-json v0.10.6
+	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/invopop/jsonschema v0.13.0
@@ -38,7 +39,7 @@ require (
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.149.0
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.149.0
 	go.opentelemetry.io/collector/pdata v1.55.0
-	go.opentelemetry.io/obi v0.8.0
+	go.opentelemetry.io/obi v0.9.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/sdk v1.43.0
 	go.opentelemetry.io/otel/sdk/metric v1.43.0
@@ -127,7 +128,6 @@ require (
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grafana/go-offsets-tracker v0.1.7 // indirect
 	github.com/grafana/jvmtools v0.0.5 // indirect

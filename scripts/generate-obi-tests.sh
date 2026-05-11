@@ -663,6 +663,18 @@ copy_vm() {
 # SCHEMAS FUNCTIONS
 # =============================================================================
 
+fetch_upstream_semconv() {
+    echo "  Fetching upstream semantic conventions (weaver registry dependency)..."
+    local script=".obi-src/scripts/fetch-upstream-semconv.sh"
+    if [[ ! -f "$script" ]]; then
+        echo "  WARNING: $script not found; skipping semconv fetch"
+        return 0
+    fi
+    # Run from the OBI repo root so the script resolves REPO_ROOT = .obi-src/
+    # and writes .obi-src/schemas/obi/.deps/upstream-v<VERSION>/model/.
+    (cd .obi-src && bash scripts/fetch-upstream-semconv.sh)
+}
+
 copy_schemas() {
     echo "  Copying SCHEMAs..."
     if [[ -d "$SCHEMAS_SRC" ]]; then
@@ -714,6 +726,7 @@ generate() {
     # -----------------------------------------------------------------
     # Weaver schemas test infrastructure
     # -----------------------------------------------------------------
+    fetch_upstream_semconv   # ← populate .deps/ before copying
     copy_schemas
 
     echo ""

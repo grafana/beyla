@@ -436,7 +436,7 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
-	s.logger.Info("new pod", "pod", event.Resource)
+	s.logger.Debug("new pod", "pod", event.Resource)
 
 	for _, a := range attrs {
 		s.handleNewProcessEvent(a)

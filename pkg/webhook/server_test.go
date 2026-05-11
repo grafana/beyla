@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/prometheus/procfs"
@@ -662,8 +663,9 @@ func TestServer_EstablishInitialProcessState(t *testing.T) {
 						ManageSDKVersions: true,
 					},
 				},
-				scanner: scanner,
-				logger:  slog.With("component", "test"),
+				scanner:         scanner,
+				logger:          slog.With("component", "test"),
+				initialStateMux: &sync.Mutex{},
 			}
 
 			// Execute

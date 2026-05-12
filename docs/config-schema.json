@@ -2348,6 +2348,11 @@
           "description": "Enable enables the mutating webhook server",
           "x-env-var": "BEYLA_WEBHOOK_ENABLE"
         },
+        "external_deployment_name": {
+          "type": "string",
+          "description": "ExternalWebhook delegates the functionality of the mutating webhook to an external controller/operator",
+          "x-env-var": "BEYLA_EXTERNAL_WEBHOOK_DEPLOYMENT_NAME"
+        },
         "key_path": {
           "type": "string",
           "description": "KeyPath is the path to the TLS key file",

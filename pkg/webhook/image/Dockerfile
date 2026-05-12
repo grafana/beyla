@@ -1,7 +1,7 @@
 # Args can be overriden like: docker build --build-arg DOTNET_SDK_VERSION=v1.10.0 --build-arg JAVA_SDK_VERSION=v2.20.0 ...
 ARG DOTNET_SDK_VERSION=v1.11.0
-ARG JAVA_SDK_VERSION=v2.26.1
-ARG INJECTOR_VERSION=v0.1.0
+ARG JAVA_SDK_VERSION=v2.27.0
+ARG INJECTOR_VERSION=v0.8.0
 
 # download the opentelemetry-injector binary for the target architecture
 FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-injector-binary
@@ -49,8 +49,9 @@ ARG JAVA_SDK_VERSION
 
 RUN apk add --no-cache curl unzip
 
+# Use Grafana's distro of the OpenTelemetry Java Agent
 RUN curl -sSfL -o opentelemetry-javaagent.jar \
-    "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/${JAVA_SDK_VERSION}/opentelemetry-javaagent.jar"
+    "https://github.com/grafana/grafana-opentelemetry-java/releases/download/${JAVA_SDK_VERSION}/grafana-opentelemetry-java.jar"
 
 # Get the OTel .NET SDK
 FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download-dotnet-sdk

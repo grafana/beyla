@@ -650,6 +650,9 @@
         },
         "qwen": {
           "$ref": "#/$defs/QwenConfig"
+        },
+        "rerank": {
+          "$ref": "#/$defs/RerankConfig"
         }
       },
       "type": "object"
@@ -1876,6 +1879,15 @@
         "^service-..$",
         "^prod-.*-db$"
       ]
+    },
+    "RerankConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_HTTP_RERANK_ENABLED"
+        }
+      },
+      "type": "object"
     },
     "ResourceLabels": {
       "additionalProperties": {

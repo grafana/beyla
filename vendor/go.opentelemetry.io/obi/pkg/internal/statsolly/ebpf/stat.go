@@ -39,6 +39,23 @@ const (
 	CodeOther             TCPFailReasonTypeCode = 255
 )
 
+type NetworkTCPHandshakeRoleType string
+
+const (
+	RoleUnknown NetworkTCPHandshakeRoleType = "unknown"
+	RoleClient  NetworkTCPHandshakeRoleType = "client"
+	RoleServer  NetworkTCPHandshakeRoleType = "server"
+)
+
+// NetworkTCPHandshakeRoleCode mirrors enum tcp_handshake_role in bpf/statsolly/tp_tcp.c.
+type NetworkTCPHandshakeRoleCode uint8
+
+const (
+	CodeRoleUnknown NetworkTCPHandshakeRoleCode = 0
+	CodeRoleClient  NetworkTCPHandshakeRoleCode = 1
+	CodeRoleServer  NetworkTCPHandshakeRoleCode = 2
+)
+
 // Stat contains accumulated metrics from a stat, with extra metadata
 // that is added from the user space
 // REMINDER: any attribute here must be also added to the functions StatGetters
@@ -59,4 +76,5 @@ type TCPRtt struct {
 
 type TCPFailedConnection struct {
 	Reason uint8 `json:"reason"`
+	Role   uint8 `json:"role"`
 }

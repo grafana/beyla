@@ -83,13 +83,15 @@ type GenAIConfig struct {
 	MCP MCPConfig `yaml:"mcp"`
 	// Generic embedding provider (Voyage AI, Cohere, Jina AI) payload extraction and parsing
 	Embedding EmbeddingProviderConfig `yaml:"embedding"`
+	// Rerank payload extraction and parsing (Cohere, Jina AI, Voyage AI, etc.)
+	Rerank RerankConfig `yaml:"rerank"`
 }
 
 func (g *GenAIConfig) Enabled() bool {
 	return g.Anthropic.Enabled || g.OpenAI.Enabled ||
 		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled ||
 		g.MCP.Enabled ||
-		g.Embedding.Enabled
+		g.Embedding.Enabled || g.Rerank.Enabled
 }
 
 type OpenAIConfig struct {
@@ -125,6 +127,11 @@ type MCPConfig struct {
 type EmbeddingProviderConfig struct {
 	// Enable generic embedding provider (Voyage AI, Cohere, Jina AI) payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_GENAI_EMBEDDING_ENABLED" validate:"boolean"`
+}
+
+type RerankConfig struct {
+	// Enable Rerank (Cohere, Jina AI, Voyage AI, etc.) payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_RERANK_ENABLED" validate:"boolean"`
 }
 
 type JSONRPCConfig struct {

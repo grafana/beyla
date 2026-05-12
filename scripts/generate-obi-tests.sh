@@ -433,6 +433,10 @@ adjust_docker_compose_paths() {
         # generated output (they're built via Docker from the OBI source).
         sed_i -e 's|\./components/|../../../.obi-src/internal/test/integration/components/|g' "$file"
         sed_i -e 's|context: components/|context: ../../../.obi-src/internal/test/integration/components/|g' "$file"
+        # extends:file: references — Docker Compose resolves relative to the compose
+        # file location, so the file must physically exist at that path. Redirect to
+        # .obi-src just as with other components/ references.
+        sed_i -e 's|file: components/|file: ../../../.obi-src/internal/test/integration/components/|g' "$file"
 
         # Swap the OBI Dockerfile for the Beyla Dockerfile and point its
         # build context at the Beyla repo root instead of .obi-src.
@@ -526,6 +530,18 @@ ensure_netolly_basic_guess_ports() {
         awk '/^      protocols:/ { print "      guess_ports: ordinal" } { print }' \
             "$file" > "$file.tmp" && mv "$file.tmp" "$file"
     fi
+}
+
+restore_weaver_registry_mount_paths() {
+    # The weaver container (from OBI's components/weaver/service.yml) hardcodes
+    # --registry /obi-registry and working_dir: /obi-registry. The BEHAVIORAL_TRANSFORMS
+    # rule '\([^.a-zA-Z0-9/_-]\)/obi|\1/beyla' incorrectly renames the volume mount
+    # suffix from :/obi-registry:ro to :/beyla-registry:ro. Restore the correct path
+    # so the registry bind-mount matches what the weaver command expects.
+    find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" | while read -r file; do
+        grep -q ':/beyla-registry:ro' "$file" || continue
+        sed_i -e 's|:/beyla-registry:ro|:/obi-registry:ro|g' "$file"
+    done
 }
 
 apply_behavioral_transforms() {
@@ -647,6 +663,18 @@ copy_vm() {
 # SCHEMAS FUNCTIONS
 # =============================================================================
 
+fetch_upstream_semconv() {
+    echo "  Fetching upstream semantic conventions (weaver registry dependency)..."
+    local script=".obi-src/scripts/fetch-upstream-semconv.sh"
+    if [[ ! -f "$script" ]]; then
+        echo "  WARNING: $script not found; skipping semconv fetch"
+        return 0
+    fi
+    # Run from the OBI repo root so the script resolves REPO_ROOT = .obi-src/
+    # and writes .obi-src/schemas/obi/.deps/upstream-v<VERSION>/model/.
+    (cd .obi-src && bash scripts/fetch-upstream-semconv.sh)
+}
+
 copy_schemas() {
     echo "  Copying SCHEMAs..."
     if [[ -d "$SCHEMAS_SRC" ]]; then
@@ -675,6 +703,7 @@ generate() {
     ensure_multiexec_local_image_reuse
     split_docker_build_contexts
     apply_behavioral_transforms "$jobs"
+    restore_weaver_registry_mount_paths   # ← restore /obi-registry after BEHAVIORAL_TRANSFORMS
     ensure_daemonset_process_metrics_enabled
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports
@@ -697,6 +726,7 @@ generate() {
     # -----------------------------------------------------------------
     # Weaver schemas test infrastructure
     # -----------------------------------------------------------------
+    fetch_upstream_semconv   # ← populate .deps/ before copying
     copy_schemas
 
     echo ""

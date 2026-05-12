@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
@@ -165,12 +166,25 @@ func GenerateTracesWithAttributes(
 
 		// Set span attributes
 		m := AttrsToMap(attrs)
+		// db.response.error is not a spec attribute, we use it only for
+		// populating the span status message if it's allowed
+		// we fetch it's value and remove it from the final span attributes
+		var dbResponseError string
+		if dbErr, ok := m.Get(string(attr.DBResponseError.OTEL())); ok {
+			dbResponseError = request.SpanDBStatusMessage(span, dbErr.AsString())
+		}
+		m.Remove(string(attr.DBResponseError.OTEL()))
 		m.MoveTo(s.Attributes())
 
 		// Set status code
 		statusCode := CodeToStatusCode(request.SpanStatusCode(span))
 		s.Status().SetCode(statusCode)
-		statusMessage := request.SpanStatusMessage(span)
+		var statusMessage string
+		if span.IsDBSpan() {
+			statusMessage = dbResponseError
+		} else {
+			statusMessage = request.SpanStatusMessage(span)
+		}
 		if statusMessage != "" {
 			s.Status().SetMessage(statusMessage)
 		}
@@ -452,6 +466,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			if span.DBError.ErrorCode != "" {
 				attrs = append(attrs, request.ErrorType(span.DBError.ErrorCode))
 				attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+				attrs = append(attrs, attributes.DBResponseErrorAttr(optionalAttrs, span.DBError.Description)...)
 			}
 			break
 		}
@@ -461,6 +476,15 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		urlPath := span.Path
 		if span.FullPath != "" {
 			urlPath = span.FullPath
+		}
+		// Strip query parameters from url.full by default to avoid leaking
+		// sensitive data (tokens, PII). Include them only when explicitly opted in.
+		var queryString string
+		if idx := strings.IndexByte(urlPath, '?'); idx > 0 {
+			queryString = urlPath[idx+1:]
+			if _, ok := optionalAttrs[attr.HTTPUrlQuery]; !ok {
+				urlPath = urlPath[:idx]
+			}
 		}
 		url := urlPath
 		if span.HasOriginalHost() {
@@ -477,6 +501,10 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
+		}
+
+		if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok && queryString != "" {
+			attrs = append(attrs, request.HTTPUrlQuery(queryString))
 		}
 
 		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
@@ -761,6 +789,26 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 		}
 
+		if span.SubType == request.HTTPSubtypeRerank && span.GenAI != nil && span.GenAI.Rerank != nil {
+			ai := span.GenAI.Rerank
+			attrs = append(attrs, semconv.GenAIProviderNameKey.String(ai.Provider))
+			attrs = append(attrs, semconv.GenAIOperationNameKey.String("rerank"))
+			attrs = append(attrs, semconv.GenAIRequestModel(ai.Input.Model))
+			if ai.Output.Model != "" {
+				attrs = append(attrs, semconv.GenAIResponseModel(ai.Output.Model))
+			} else {
+				attrs = append(attrs, semconv.GenAIResponseModel(ai.Input.Model))
+			}
+			if ai.Output.ID != "" {
+				attrs = append(attrs, semconv.GenAIResponseID(ai.Output.ID))
+			}
+			attrs = append(attrs, semconv.GenAIUsageInputTokens(ai.Output.GetTotalTokens()))
+			if ai.Output.Error != nil && ai.Output.Error.Type != "" {
+				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Type))
+				attrs = append(attrs, semconv.ErrorMessage(ai.Output.Error.Message))
+			}
+		}
+
 		attrs = append(attrs, mcpAttributes(span)...)
 
 		if span.SubType == request.HTTPSubtypeEmbedding && span.GenAI != nil && span.GenAI.Embedding != nil {
@@ -821,6 +869,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		if span.Status == 1 && span.SQLError != nil {
 			attrs = append(attrs, request.DBResponseStatusCode(strconv.Itoa(int(span.SQLError.Code))))
 			attrs = append(attrs, request.ErrorType(span.SQLError.SQLState))
+			attrs = append(attrs, attributes.DBResponseErrorAttr(optionalAttrs, span.SQLErrorDescription())...)
 		}
 	case request.EventTypeRedisServer, request.EventTypeRedisClient:
 		attrs = []attribute.KeyValue{
@@ -843,6 +892,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		}
 		if span.Status == 1 {
 			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+			attrs = append(attrs, attributes.DBResponseErrorAttr(optionalAttrs, span.DBError.Description)...)
 		}
 		if span.DBNamespace != "" {
 			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
@@ -923,6 +973,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		}
 		if span.Status == 1 {
 			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+			attrs = append(attrs, attributes.DBResponseErrorAttr(optionalAttrs, span.DBError.Description)...)
 		}
 		if span.DBNamespace != "" {
 			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
@@ -948,6 +999,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		}
 		if span.Status != 0 {
 			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+			attrs = append(attrs, attributes.DBResponseErrorAttr(optionalAttrs, span.DBError.Description)...)
 		}
 		if span.DBNamespace != "" {
 			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
@@ -971,6 +1023,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		}
 		if span.Status != 0 {
 			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+			attrs = append(attrs, attributes.DBResponseErrorAttr(optionalAttrs, span.DBError.Description)...)
 		}
 	case request.EventTypeManualSpan:
 		attrs = manualSpanAttributes(span)

@@ -14,7 +14,7 @@ type cacheEntry struct {
 // stringCache provides bounded string interning with per-entry mutexes for minimal contention.
 // This achieves thread safety while avoiding the global lock bottleneck.
 type stringCache struct {
-	entries [512]cacheEntry
+	entries [4096]cacheEntry
 }
 
 // newStringCache creates a new per-entry mutex-based string cache.

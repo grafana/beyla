@@ -72,7 +72,9 @@ const (
 var DefaultResourceLabels = ResourceLabels{
 	// If a user sets useLabelsForResourceAttributes: false in its OTEL operator config, is the task of the
 	// OTEL operator to provide empty values for this.
-	"service.name":      []string{"app.kubernetes.io/name"},
+	// app.kubernetes.io/instance has higher precedence than app.kubernetes.io/name per the OTel spec:
+	// https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/#how-servicename-should-be-calculated
+	"service.name":      []string{"app.kubernetes.io/instance", "app.kubernetes.io/name"},
 	"service.namespace": []string{"app.kubernetes.io/part-of"},
 	"service.version":   []string{"app.kubernetes.io/version"},
 }

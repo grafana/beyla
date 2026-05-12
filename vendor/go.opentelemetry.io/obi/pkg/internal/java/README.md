@@ -67,7 +67,7 @@ The project consists of two main modules:
 The core instrumentation logic using ByteBuddy for bytecode manipulation:
 
 - **Instrumentations**: Socket, SocketChannel, SSLEngine, Netty
-- **eBPF Communication**: Via JNA and `ioctl` syscalls for minimal kernel impact
+- **eBPF Communication**: Via JNI to `libobijni.so`, which calls `ioctl` for minimal kernel impact
 - **Data Structures**: Connection tracking, SSL session management
 - **Utilities**: Optimized ByteBuffer extraction and manipulation
 
@@ -78,7 +78,6 @@ A lightweight loader that:
 - Extracts the agent JAR from resources
 - Loads the agent using a separate classloader to avoid conflicts with the
   target application
-- Ensures JNA is available in the bootstrap classloader
 - Handles agent attachment (both premain and agentmain)
 
 ```
@@ -275,7 +274,7 @@ jattach <PID of Java program> load instrument false "/path/to/obi-java-agent.jar
 ### Key Technologies
 
 - **ByteBuddy** - Bytecode manipulation and agent building
-- **JNA (Java Native Access)** - Native library calls (ioctl)
+- **JNI** - Native `libobijni.so` for `ioctl`, `gettid`, and direct `ByteBuffer` address access
 - **Caffeine** - High-performance LRU for keeping track of existing connections
 
 ### Adding New Instrumentations

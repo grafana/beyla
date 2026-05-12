@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
-	"sort"
-	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -17,21 +15,14 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 const (
-	stateConfigMapNameSuffix  = "-injector-state"
-	stateConfigMapKey         = "instrumentation.yaml"
-	stateConfigMapKeyEligible = "eligible_for_restart.yaml"
-
-	// selectorAnnotation marks the ConfigMap so the external k8s injection
-	// controller picks it up. The controller filters its watch on presence
-	// of this annotation; the value is unused.
-	selectorAnnotation = "beyla.grafana.com/node"
+	stateConfigMapNameSuffix = "-injector-state"
 
 	daemonSetOwnerKind       = "DaemonSet"
 	daemonSetOwnerAPIVersion = "apps/v1"
@@ -39,31 +30,6 @@ const (
 
 // overridable for testing
 var saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-
-// InjectConfig is the on-disk shape of instrumentation.yaml that the external
-// injection controller consumes. Discovery is a list of selectors; OtelExport
-// is the OTLP destination the controller should stamp onto matched pods.
-type InjectConfig struct {
-	Discovery  services.GlobDefinitionCriteria `yaml:"discovery,omitempty"`
-	OtelExport OtelExport                      `yaml:"otel_export,omitempty"`
-}
-
-// OtelExport is the per-ConfigMap OTLP destination. Empty fields are pruned by
-// marshalNonZeroYAML before serialization.
-type OtelExport struct {
-	Endpoint string `yaml:"endpoint,omitempty"`
-	Protocol string `yaml:"protocol,omitempty"`
-}
-
-// EligibleDeployment is a workload that matches the SDK injection criteria
-// and would be (or has been) bounced by the bouncer. The on-disk shape
-// matches the external injection controller's restartCriterion struct.
-type EligibleDeployment struct {
-	Namespace string `yaml:"namespace"`
-	Kind      string `yaml:"kind,omitempty"`
-	Name      string `yaml:"name"`
-	Language  string `yaml:"language,omitempty"`
-}
 
 // StateConfigMapWriter creates/updates a per-node ConfigMap holding the SDK
 // injection criteria and the deployments matched for restart. The ConfigMap is
@@ -128,12 +94,10 @@ func (w *StateConfigMapWriter) Init(ctx context.Context) error {
 // deployments collected during the initial sync.
 func (w *StateConfigMapWriter) Write(
 	ctx context.Context,
-	config *InjectConfig,
-	eligible []*EligibleDeployment,
+	config *configmap.InjectConfig,
+	eligible []*configmap.EligibleDeployment,
 ) error {
-	sortEligible(eligible)
-
-	criteriaYAML, err := marshalNonZeroYAML(config)
+	criteriaYAML, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("marshal criteria: %w", err)
 	}
@@ -157,12 +121,12 @@ func (w *StateConfigMapWriter) Write(
 			// Annotation (presence-only) is what the external injection
 			// controller watches; without it the controller ignores the CM.
 			Annotations: map[string]string{
-				selectorAnnotation: w.nodeName,
+				configmap.SelectorAnnotation: w.nodeName,
 			},
 		},
 		Data: map[string]string{
-			stateConfigMapKey:         string(criteriaYAML),
-			stateConfigMapKeyEligible: string(eligibleYAML),
+			configmap.KeyInstrumentation:    string(criteriaYAML),
+			configmap.KeyEligibleForRestart: string(eligibleYAML),
 		},
 	}
 
@@ -254,77 +218,6 @@ func trimContainerIDScheme(containerID string) string {
 		return id
 	}
 	return containerID
-}
-
-func sortEligible(eligible []*EligibleDeployment) {
-	sort.Slice(eligible, func(i, j int) bool {
-		if eligible[i].Namespace != eligible[j].Namespace {
-			return eligible[i].Namespace < eligible[j].Namespace
-		}
-		return eligible[i].Name < eligible[j].Name
-	})
-}
-
-func marshalNonZeroYAML(value any) ([]byte, error) {
-	var node yaml.Node
-	if err := node.Encode(value); err != nil {
-		return nil, err
-	}
-	pruneZeroYAMLNodes(&node)
-	return yaml.Marshal(&node)
-}
-
-func pruneZeroYAMLNodes(node *yaml.Node) {
-	switch node.Kind {
-	case yaml.DocumentNode:
-		for _, child := range node.Content {
-			pruneZeroYAMLNodes(child)
-		}
-	case yaml.SequenceNode:
-		content := node.Content[:0]
-		for _, child := range node.Content {
-			pruneZeroYAMLNodes(child)
-			if !isZeroYAMLNode(child) {
-				content = append(content, child)
-			}
-		}
-		node.Content = content
-	case yaml.MappingNode:
-		content := node.Content[:0]
-		for i := 0; i+1 < len(node.Content); i += 2 {
-			key, value := node.Content[i], node.Content[i+1]
-			pruneZeroYAMLNodes(value)
-			if !isZeroYAMLNode(value) {
-				content = append(content, key, value)
-			}
-		}
-		node.Content = content
-	}
-}
-
-func isZeroYAMLNode(node *yaml.Node) bool {
-	switch node.Kind {
-	case yaml.ScalarNode:
-		switch node.Tag {
-		case "!!null":
-			return true
-		case "!!str":
-			return node.Value == ""
-		case "!!bool":
-			return node.Value == "false"
-		case "!!int":
-			v, err := strconv.ParseInt(node.Value, 0, 64)
-			return err == nil && v == 0
-		case "!!float":
-			v, err := strconv.ParseFloat(node.Value, 64)
-			return err == nil && v == 0
-		default:
-			return node.Value == ""
-		}
-	case yaml.SequenceNode, yaml.MappingNode:
-		return len(node.Content) == 0
-	}
-	return false
 }
 
 func stateConfigMapName(daemonSetName, nodeName string) string {

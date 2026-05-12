@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 // Server represents the webhook server
@@ -40,7 +41,7 @@ type Server struct {
 	metrics                *SDKInjectionMetrics
 	podStateCache          *PodStateCache
 	stateWriter            *StateConfigMapWriter
-	eligibleDeployments    map[string]*EligibleDeployment
+	eligibleDeployments    map[string]*configmap.EligibleDeployment
 	eligibleDeploymentsMux *sync.Mutex
 }
 
@@ -99,7 +100,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		metrics:                metrics,
 		podStateCache:          podStateCache,
 		stateWriter:            stateWriter,
-		eligibleDeployments:    map[string]*EligibleDeployment{},
+		eligibleDeployments:    map[string]*configmap.EligibleDeployment{},
 		eligibleDeploymentsMux: &sync.Mutex{},
 	}, nil
 }
@@ -329,7 +330,7 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 
 	language := languageLabel(a.kind)
 
-	s.eligibleDeployments[mutationKey(namespace, deployment)] = &EligibleDeployment{
+	s.eligibleDeployments[mutationKey(namespace, deployment)] = &configmap.EligibleDeployment{
 		Namespace: namespace,
 		Kind:      "Deployment",
 		Name:      deployment,
@@ -340,14 +341,14 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
-	eligible := make([]*EligibleDeployment, 0, len(s.eligibleDeployments))
+	eligible := make([]*configmap.EligibleDeployment, 0, len(s.eligibleDeployments))
 	for _, d := range s.eligibleDeployments {
 		eligible = append(eligible, d)
 	}
 
-	config := InjectConfig{
+	config := configmap.InjectConfig{
 		Discovery: s.cfg.Injector.Instrument,
-		OtelExport: OtelExport{
+		OtelExport: configmap.OtelExport{
 			Endpoint: s.mutator.Endpoint(),
 			Protocol: s.mutator.Protocol(),
 		},

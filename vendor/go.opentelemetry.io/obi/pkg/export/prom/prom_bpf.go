@@ -179,12 +179,17 @@ func (bc *BPFCollector) collectInternalMetrics(ctx context.Context) {
 		case <-ticker.C:
 			probeMetrics, mapMetrics := bc.collectMetrics()
 			for _, metric := range probeMetrics {
-				// TODO: this is not the most efficient way to report histogram metrics,
-				// but with otel metrics we don't have a way to report histograms based on count and latency, like filling buckets with prometheus.
-				// options are either to create counter with an le label, or just report count and sum of latencies, and drop the histogram.
-				for range metric.count {
-					bc.ctxInfo.Metrics.BpfProbeLatency(metric.probeID, metric.probeType, metric.probeName, metric.latency)
+				if metric.count == 0 {
+					continue
 				}
+
+				bc.ctxInfo.Metrics.BpfProbeStats(
+					metric.probeID,
+					metric.probeType,
+					metric.probeName,
+					metric.count,
+					metric.latency*float64(metric.count),
+				)
 			}
 
 			for _, metric := range mapMetrics {

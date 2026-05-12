@@ -190,10 +190,18 @@ func SymType(info uint8) uint8 {
 }
 
 func GetCString(data []byte, offset uint32) string {
+	size := uint32(len(data))
+
+	if offset >= size {
+		return ""
+	}
+
 	end := offset
-	for end < uint32(len(data)) && data[end] != 0 {
+
+	for end < size && data[end] != 0 {
 		end++
 	}
+
 	return string(data[offset:end])
 }
 
@@ -202,17 +210,28 @@ func unsafeString(b []byte) string {
 }
 
 func GetCStringUnsafe(strtab []byte, offset uint32) string {
+	size := uint32(len(strtab))
+
+	if offset >= size {
+		return ""
+	}
+
 	start := offset
-	for offset < uint32(len(strtab)) && strtab[offset] != 0 {
+
+	for offset < size && strtab[offset] != 0 {
 		offset++
 	}
+
 	return unsafeString(strtab[start:offset])
 }
 
 func ReadStruct[T any](data []byte, offset int) *T {
-	if len(data) < offset+int(unsafe.Sizeof(*new(T))) {
+	size := int(unsafe.Sizeof(*new(T)))
+
+	if offset < 0 || offset > len(data)-size {
 		return nil
 	}
+
 	return (*T)(unsafe.Pointer(&data[offset]))
 }
 
@@ -340,6 +359,10 @@ func (ctx *ElfContext) HasSymbol(symbol string) bool {
 		}
 
 		strs := ctx.Data[strtab.Offset:]
+
+		if sec.Entsize == 0 {
+			continue
+		}
 
 		symCount := int(sec.Size / sec.Entsize)
 

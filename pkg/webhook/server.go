@@ -424,16 +424,8 @@ func (s *Server) On(event *informer.Event) error {
 
 	s.logger.Debug("new pod event", "pod", event.Resource, "type", event.Type)
 
-	if event.Type == informer.EventType_CREATED || event.Type == informer.EventType_UPDATED {
-		if s.isExternalWebhookEvent(event.GetResource()) {
-			if s.needsToUpdateEligibleDeployments() {
-				s.rebuildEligibleDeployments()
-				s.externalWebhookUpdateNS.Store(time.Now().UnixNano())
-			}
-			return nil
-		} else {
-			s.lastEligiblePodLaunchNS.Store(time.Now().UnixNano())
-		}
+	if s.cfg.Injector.Webhook.UsesExternalWebhook() && s.handleExternalWebhookEvent(event) {
+		return nil
 	}
 
 	// It's important to consider the local process info here so that we are
@@ -650,4 +642,20 @@ func (s *Server) rebuildEligibleDeployments() {
 		s.logger.Warn("unable to update config map with new process state", "error", err)
 	}
 	s.externalWebhookUpdateNS.Store(time.Now().UnixNano())
+}
+
+func (s *Server) handleExternalWebhookEvent(event *informer.Event) bool {
+	if event.Type == informer.EventType_CREATED || event.Type == informer.EventType_UPDATED {
+		if s.isExternalWebhookEvent(event.GetResource()) {
+			if s.needsToUpdateEligibleDeployments() {
+				s.rebuildEligibleDeployments()
+				s.externalWebhookUpdateNS.Store(time.Now().UnixNano())
+			}
+			return true
+		} else {
+			s.lastEligiblePodLaunchNS.Store(time.Now().UnixNano())
+		}
+	}
+
+	return false
 }

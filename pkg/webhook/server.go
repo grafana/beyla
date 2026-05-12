@@ -422,7 +422,7 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
-	s.logger.Info("new pod event", "pod", event.Resource, "type", event.Type)
+	s.logger.Debug("new pod event", "pod", event.Resource, "type", event.Type)
 
 	if event.Type == informer.EventType_CREATED || event.Type == informer.EventType_UPDATED {
 		if s.isExternalWebhookEvent(event.GetResource()) {

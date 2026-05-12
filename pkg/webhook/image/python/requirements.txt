@@ -3,7 +3,7 @@
 
 opentelemetry-distro==0.62b1
 
-urllib3 <2.6.4
+urllib3 <2.7.1
 # We don't use the distro[otlp] option which automatically includes exporters since gRPC is not appropriate for
 # injected auto-instrumentation, where it has a strict dependency on the OS / Python version the artifact is built for.
 opentelemetry-exporter-otlp-proto-http==1.41.1

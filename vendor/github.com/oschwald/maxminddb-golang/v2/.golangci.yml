@@ -157,7 +157,7 @@ linters:
           - govet
           - revive
         path: _test.go
-        text: 'fieldalignment:'
+        text: "fieldalignment:"
 formatters:
   enable:
     - gci

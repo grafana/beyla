@@ -27,63 +27,60 @@ import (
 	"unicode"
 )
 
-// nolint: gochecknoglobals
-var (
-	defaultBuiltInParsers = map[reflect.Kind]ParserFunc{
-		reflect.Bool: func(v string) (interface{}, error) {
-			return strconv.ParseBool(v)
-		},
-		reflect.String: func(v string) (interface{}, error) {
-			return v, nil
-		},
-		reflect.Int: func(v string) (interface{}, error) {
-			i, err := strconv.ParseInt(v, 10, 32)
-			return int(i), err
-		},
-		reflect.Int16: func(v string) (interface{}, error) {
-			i, err := strconv.ParseInt(v, 10, 16)
-			return int16(i), err
-		},
-		reflect.Int32: func(v string) (interface{}, error) {
-			i, err := strconv.ParseInt(v, 10, 32)
-			return int32(i), err
-		},
-		reflect.Int64: func(v string) (interface{}, error) {
-			return strconv.ParseInt(v, 10, 64)
-		},
-		reflect.Int8: func(v string) (interface{}, error) {
-			i, err := strconv.ParseInt(v, 10, 8)
-			return int8(i), err
-		},
-		reflect.Uint: func(v string) (interface{}, error) {
-			i, err := strconv.ParseUint(v, 10, 32)
-			return uint(i), err
-		},
-		reflect.Uint16: func(v string) (interface{}, error) {
-			i, err := strconv.ParseUint(v, 10, 16)
-			return uint16(i), err
-		},
-		reflect.Uint32: func(v string) (interface{}, error) {
-			i, err := strconv.ParseUint(v, 10, 32)
-			return uint32(i), err
-		},
-		reflect.Uint64: func(v string) (interface{}, error) {
-			i, err := strconv.ParseUint(v, 10, 64)
-			return i, err
-		},
-		reflect.Uint8: func(v string) (interface{}, error) {
-			i, err := strconv.ParseUint(v, 10, 8)
-			return uint8(i), err
-		},
-		reflect.Float64: func(v string) (interface{}, error) {
-			return strconv.ParseFloat(v, 64)
-		},
-		reflect.Float32: func(v string) (interface{}, error) {
-			f, err := strconv.ParseFloat(v, 32)
-			return float32(f), err
-		},
-	}
-)
+var defaultBuiltInParsers = map[reflect.Kind]ParserFunc{ //nolint:gochecknoglobals
+	reflect.Bool: func(v string) (interface{}, error) {
+		return strconv.ParseBool(v)
+	},
+	reflect.String: func(v string) (interface{}, error) {
+		return v, nil
+	},
+	reflect.Int: func(v string) (interface{}, error) {
+		i, err := strconv.ParseInt(v, 10, 32)
+		return int(i), err
+	},
+	reflect.Int16: func(v string) (interface{}, error) {
+		i, err := strconv.ParseInt(v, 10, 16)
+		return int16(i), err
+	},
+	reflect.Int32: func(v string) (interface{}, error) {
+		i, err := strconv.ParseInt(v, 10, 32)
+		return int32(i), err
+	},
+	reflect.Int64: func(v string) (interface{}, error) {
+		return strconv.ParseInt(v, 10, 64)
+	},
+	reflect.Int8: func(v string) (interface{}, error) {
+		i, err := strconv.ParseInt(v, 10, 8)
+		return int8(i), err
+	},
+	reflect.Uint: func(v string) (interface{}, error) {
+		i, err := strconv.ParseUint(v, 10, 32)
+		return uint(i), err
+	},
+	reflect.Uint16: func(v string) (interface{}, error) {
+		i, err := strconv.ParseUint(v, 10, 16)
+		return uint16(i), err
+	},
+	reflect.Uint32: func(v string) (interface{}, error) {
+		i, err := strconv.ParseUint(v, 10, 32)
+		return uint32(i), err
+	},
+	reflect.Uint64: func(v string) (interface{}, error) {
+		i, err := strconv.ParseUint(v, 10, 64)
+		return i, err
+	},
+	reflect.Uint8: func(v string) (interface{}, error) {
+		i, err := strconv.ParseUint(v, 10, 8)
+		return uint8(i), err
+	},
+	reflect.Float64: func(v string) (interface{}, error) {
+		return strconv.ParseFloat(v, 64)
+	},
+	reflect.Float32: func(v string) (interface{}, error) {
+		f, err := strconv.ParseFloat(v, 32)
+		return float32(f), err
+	},
+}
 
 func defaultTypeParsers() map[reflect.Type]ParserFunc {
 	return map[reflect.Type]ParserFunc{
@@ -162,6 +159,15 @@ type Options struct {
 	// variable names conventions.
 	UseFieldNameByDefault bool
 
+	// SetDefaultsForZeroValuesOnly defines whether to set defaults for zero values
+	// If the `env` variable for the value is not set
+	// and `envDefault` is set
+	// and the value is not a zero value for the the type
+	// and SetDefaultsForZeroValuesOnly=true
+	// the value from `envDefault` will be ignored
+	// Useful for mixing default values from `envDefault` and struct initialization
+	SetDefaultsForZeroValuesOnly bool
+
 	// Custom parse functions for different types.
 	FuncMap map[reflect.Type]ParserFunc
 
@@ -233,31 +239,33 @@ func customOptions(opts Options) Options {
 
 func optionsWithSliceEnvPrefix(opts Options, index int) Options {
 	return Options{
-		Environment:           opts.Environment,
-		TagName:               opts.TagName,
-		PrefixTagName:         opts.PrefixTagName,
-		DefaultValueTagName:   opts.DefaultValueTagName,
-		RequiredIfNoDef:       opts.RequiredIfNoDef,
-		OnSet:                 opts.OnSet,
-		Prefix:                fmt.Sprintf("%s%d_", opts.Prefix, index),
-		UseFieldNameByDefault: opts.UseFieldNameByDefault,
-		FuncMap:               opts.FuncMap,
-		rawEnvVars:            opts.rawEnvVars,
+		Environment:                  opts.Environment,
+		TagName:                      opts.TagName,
+		PrefixTagName:                opts.PrefixTagName,
+		DefaultValueTagName:          opts.DefaultValueTagName,
+		RequiredIfNoDef:              opts.RequiredIfNoDef,
+		OnSet:                        opts.OnSet,
+		Prefix:                       fmt.Sprintf("%s%d_", opts.Prefix, index),
+		UseFieldNameByDefault:        opts.UseFieldNameByDefault,
+		SetDefaultsForZeroValuesOnly: opts.SetDefaultsForZeroValuesOnly,
+		FuncMap:                      opts.FuncMap,
+		rawEnvVars:                   opts.rawEnvVars,
 	}
 }
 
 func optionsWithEnvPrefix(field reflect.StructField, opts Options) Options {
 	return Options{
-		Environment:           opts.Environment,
-		TagName:               opts.TagName,
-		PrefixTagName:         opts.PrefixTagName,
-		DefaultValueTagName:   opts.DefaultValueTagName,
-		RequiredIfNoDef:       opts.RequiredIfNoDef,
-		OnSet:                 opts.OnSet,
-		Prefix:                opts.Prefix + field.Tag.Get(opts.PrefixTagName),
-		UseFieldNameByDefault: opts.UseFieldNameByDefault,
-		FuncMap:               opts.FuncMap,
-		rawEnvVars:            opts.rawEnvVars,
+		Environment:                  opts.Environment,
+		TagName:                      opts.TagName,
+		PrefixTagName:                opts.PrefixTagName,
+		DefaultValueTagName:          opts.DefaultValueTagName,
+		RequiredIfNoDef:              opts.RequiredIfNoDef,
+		OnSet:                        opts.OnSet,
+		Prefix:                       opts.Prefix + field.Tag.Get(opts.PrefixTagName),
+		UseFieldNameByDefault:        opts.UseFieldNameByDefault,
+		SetDefaultsForZeroValuesOnly: opts.SetDefaultsForZeroValuesOnly,
+		FuncMap:                      opts.FuncMap,
+		rawEnvVars:                   opts.rawEnvVars,
 	}
 }
 
@@ -281,7 +289,7 @@ func ParseAs[T any]() (T, error) {
 	return t, err
 }
 
-// ParseWithOptions parses the given struct type containing `env` tags and
+// ParseAsWithOptions parses the given struct type containing `env` tags and
 // loads its values from environment variables.
 func ParseAsWithOptions[T any](opts Options) (T, error) {
 	var t T
@@ -496,7 +504,7 @@ func setField(refField reflect.Value, refTypeField reflect.StructField, opts Opt
 		return err
 	}
 
-	if value != "" {
+	if value != "" && (!opts.SetDefaultsForZeroValuesOnly || refField.IsZero()) {
 		return set(refField, refTypeField, value, opts.FuncMap)
 	}
 
@@ -596,7 +604,7 @@ func get(fieldParams FieldParams, opts Options) (val string, err error) {
 		val = os.Expand(val, opts.getRawEnv)
 	}
 
-	opts.rawEnvVars[fieldParams.OwnKey] = val
+	opts.rawEnvVars[fieldParams.Key] = val
 
 	if fieldParams.Unset {
 		defer os.Unsetenv(fieldParams.Key)

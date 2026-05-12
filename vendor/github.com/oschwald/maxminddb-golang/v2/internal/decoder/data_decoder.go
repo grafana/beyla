@@ -113,6 +113,8 @@ type DataDecoder struct {
 const (
 	// This is the value used in libmaxminddb.
 	maximumDataStructureDepth = 512
+	pointerBase2              = 2048
+	pointerBase3              = 526336
 )
 
 // NewDataDecoder creates a [DataDecoder].
@@ -240,9 +242,9 @@ func (d *DataDecoder) decodePointer(
 	case 1, 4:
 		pointerValueOffset = 0
 	case 2:
-		pointerValueOffset = 2048
+		pointerValueOffset = pointerBase2
 	case 3:
-		pointerValueOffset = 526336
+		pointerValueOffset = pointerBase3
 	default:
 		return 0, 0, mmdberrors.NewInvalidDatabaseError("invalid pointer size: %d", pointerSize)
 	}

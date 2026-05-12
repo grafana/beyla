@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 	"sync"
 	"unicode/utf8"
 
@@ -16,6 +17,8 @@ import (
 type Unmarshaler interface {
 	UnmarshalMaxMindDB(d *Decoder) error
 }
+
+var unmarshalerType = reflect.TypeFor[Unmarshaler]()
 
 // ReflectionDecoder is a decoder for the MMDB data section.
 type ReflectionDecoder struct {
@@ -176,7 +179,7 @@ PATH:
 				return err
 			}
 		default:
-			return fmt.Errorf("unexpected type for %d value in path, %v: %T", i, v, v)
+			return fmt.Errorf("unexpected path element at index %d (%v): %T", i, v, v)
 		}
 	}
 	_, err := d.decode(offset, result, len(path))
@@ -196,73 +199,37 @@ func (*ReflectionDecoder) wrapError(err error, offset uint) error {
 // wrapErrorWithMapKey wraps an error with map key context, building path retroactively.
 // Zero allocation on happy path - only allocates when error != nil.
 func (*ReflectionDecoder) wrapErrorWithMapKey(err error, key string) error {
-	if err == nil {
-		return nil
-	}
-
-	// Build path context retroactively by checking if the error already has context
-	var pathBuilder *mmdberrors.PathBuilder
-	var contextErr mmdberrors.ContextualError
-	if errors.As(err, &contextErr) {
-		// Error already has context, extract existing path and extend it
-		pathBuilder = mmdberrors.NewPathBuilder()
-		if contextErr.Path != "" && contextErr.Path != "/" {
-			// Parse existing path and rebuild
-			pathBuilder.ParseAndExtend(contextErr.Path)
-		}
+	return wrapErrorWithPath(err, func(pathBuilder *mmdberrors.PathBuilder) {
 		pathBuilder.PrependMap(key)
-		// Return unwrapped error with extended path, preserving original offset
-		return mmdberrors.WrapWithContext(contextErr.Err, contextErr.Offset, pathBuilder)
-	}
-
-	// New error, start building path - extract offset if it's already a contextual error
-	pathBuilder = mmdberrors.NewPathBuilder()
-	pathBuilder.PrependMap(key)
-
-	// Try to get existing offset from any wrapped contextual error
-	var existingOffset uint
-	var existingErr mmdberrors.ContextualError
-	if errors.As(err, &existingErr) {
-		existingOffset = existingErr.Offset
-	}
-
-	return mmdberrors.WrapWithContext(err, existingOffset, pathBuilder)
+	})
 }
 
 // wrapErrorWithSliceIndex wraps an error with slice index context, building path retroactively.
 // Zero allocation on happy path - only allocates when error != nil.
 func (*ReflectionDecoder) wrapErrorWithSliceIndex(err error, index int) error {
+	return wrapErrorWithPath(err, func(pathBuilder *mmdberrors.PathBuilder) {
+		pathBuilder.PrependSlice(index)
+	})
+}
+
+func wrapErrorWithPath(err error, prepend func(*mmdberrors.PathBuilder)) error {
 	if err == nil {
 		return nil
 	}
 
-	// Build path context retroactively by checking if the error already has context
-	var pathBuilder *mmdberrors.PathBuilder
 	var contextErr mmdberrors.ContextualError
 	if errors.As(err, &contextErr) {
-		// Error already has context, extract existing path and extend it
-		pathBuilder = mmdberrors.NewPathBuilder()
+		pathBuilder := mmdberrors.NewPathBuilder()
 		if contextErr.Path != "" && contextErr.Path != "/" {
-			// Parse existing path and rebuild
 			pathBuilder.ParseAndExtend(contextErr.Path)
 		}
-		pathBuilder.PrependSlice(index)
-		// Return unwrapped error with extended path, preserving original offset
+		prepend(pathBuilder)
 		return mmdberrors.WrapWithContext(contextErr.Err, contextErr.Offset, pathBuilder)
 	}
 
-	// New error, start building path - extract offset if it's already a contextual error
-	pathBuilder = mmdberrors.NewPathBuilder()
-	pathBuilder.PrependSlice(index)
-
-	// Try to get existing offset from any wrapped contextual error
-	var existingOffset uint
-	var existingErr mmdberrors.ContextualError
-	if errors.As(err, &existingErr) {
-		existingOffset = existingErr.Offset
-	}
-
-	return mmdberrors.WrapWithContext(err, existingOffset, pathBuilder)
+	pathBuilder := mmdberrors.NewPathBuilder()
+	prepend(pathBuilder)
+	return mmdberrors.WrapWithContext(err, 0, pathBuilder)
 }
 
 func (d *ReflectionDecoder) decode(offset uint, result reflect.Value, depth int) (uint, error) {
@@ -282,12 +249,23 @@ func (d *ReflectionDecoder) decodeValue(
 	offset uint,
 	result addressableValue,
 	depth int,
-) (uint, error) {
+) (newOffset uint, retErr error) {
 	if depth > maximumDataStructureDepth {
 		return 0, mmdberrors.NewInvalidDatabaseError(
 			"exceeded maximum data structure depth; database is likely corrupt",
 		)
 	}
+
+	var allocatedPointers []reflect.Value
+	defer func() {
+		if retErr == nil {
+			return
+		}
+
+		for i := len(allocatedPointers) - 1; i >= 0; i-- {
+			allocatedPointers[i].SetZero()
+		}
+	}()
 
 	// Apply the original indirect logic to handle pointers and interfaces properly
 	for {
@@ -307,6 +285,7 @@ func (d *ReflectionDecoder) decodeValue(
 
 		if result.IsNil() {
 			result.Set(reflect.New(result.Type().Elem()))
+			allocatedPointers = append(allocatedPointers, result.Value)
 		}
 
 		result = addressableValue{
@@ -315,8 +294,9 @@ func (d *ReflectionDecoder) decodeValue(
 		} // dereferenced pointer is always addressable
 	}
 
-	// Check if the value implements Unmarshaler interface using type assertion
-	if result.CanAddr() {
+	// Skip the reflective type assertion when the destination type cannot
+	// implement Unmarshaler. This is the common case in normal struct decoding.
+	if result.CanAddr() && mayImplementUnmarshaler(result.Type()) {
 		if unmarshaler, ok := tryTypeAssert(result.Addr()); ok {
 			decoder := NewDecoder(d.DataDecoder, offset)
 			if err := unmarshaler.UnmarshalMaxMindDB(decoder); err != nil {
@@ -402,7 +382,7 @@ func (d *ReflectionDecoder) unmarshalBool(
 	return newOffset, mmdberrors.NewUnmarshalTypeError(value, result.Type())
 }
 
-var sliceType = reflect.TypeOf([]byte{})
+var sliceType = reflect.TypeFor[[]byte]()
 
 func (d *ReflectionDecoder) unmarshalBytes(
 	size, offset uint,
@@ -501,6 +481,9 @@ func (d *ReflectionDecoder) unmarshalInt32(
 		reflect.Uint32,
 		reflect.Uint64,
 		reflect.Uintptr:
+		if value < 0 {
+			break
+		}
 		n := uint64(value)
 		if !result.OverflowUint(n) {
 			result.SetUint(n)
@@ -557,7 +540,7 @@ func (d *ReflectionDecoder) unmarshalPointer(
 	// This is done efficiently by checking the control byte at the pointer location
 	if len(d.buffer) > int(pointer) {
 		controlByte := d.buffer[pointer]
-		if (controlByte >> 5) == 1 { // KindPointer = 1, stored in top 3 bits
+		if Kind(controlByte>>5) == KindPointer {
 			return 0, mmdberrors.NewInvalidDatabaseError(
 				"invalid pointer to pointer at offset %d",
 				pointer,
@@ -700,7 +683,7 @@ func (d *ReflectionDecoder) unmarshalUint(
 	return newOffset, mmdberrors.NewUnmarshalTypeError(value, result.Type())
 }
 
-var bigIntType = reflect.TypeOf(big.Int{})
+var bigIntType = reflect.TypeFor[big.Int]()
 
 func (d *ReflectionDecoder) unmarshalUint128(
 	size, offset uint, result addressableValue,
@@ -807,6 +790,9 @@ func (d *ReflectionDecoder) decodeStruct(
 	depth int,
 ) (uint, error) {
 	fields := cachedFields(result.Value)
+	if fields.validationErr != nil {
+		return 0, fields.validationErr
+	}
 
 	// Single-phase processing: decode only the dominant fields
 	for range size {
@@ -868,13 +854,34 @@ type fieldInfo struct {
 }
 
 type fieldsType struct {
-	namedFields map[string]*fieldInfo // Map from field name to field info
+	namedFields   map[string]*fieldInfo // Map from field name to field info
+	validationErr error
 }
 
 type queueEntry struct {
 	typ   reflect.Type
 	index []int // Field index path
 	depth int   // Embedding depth
+}
+
+// validateTag performs basic validation of maxminddb struct tags.
+func validateTag(field reflect.StructField, tag string) error {
+	if tag == "" || tag == "-" {
+		return nil
+	}
+
+	if !utf8.ValidString(tag) {
+		return invalidMaxMindDBTagError(field.Name)
+	}
+
+	return nil
+}
+
+func invalidMaxMindDBTagError(fieldName string) error {
+	return fmt.Errorf(
+		"invalid maxminddb struct tag on field %q: must be valid UTF-8",
+		fieldName,
+	)
 }
 
 // getEmbeddedStructType returns the struct type for embedded fields.
@@ -913,22 +920,24 @@ func handleEmbeddedField(
 	return !hasTag
 }
 
-// validateTag performs basic validation of maxminddb struct tags.
-func validateTag(field reflect.StructField, tag string) error {
-	if tag == "" || tag == "-" {
-		return nil
+var (
+	fieldsMap        sync.Map
+	unmarshalerCache sync.Map
+)
+
+func mayImplementUnmarshaler(t reflect.Type) bool {
+	if t.PkgPath() == "" || t.Kind() == reflect.Interface {
+		return false
 	}
 
-	// Check for invalid UTF-8
-	if !utf8.ValidString(tag) {
-		return fmt.Errorf("field %s has tag with invalid UTF-8: %q", field.Name, tag)
+	if cached, ok := unmarshalerCache.Load(t); ok {
+		return cached.(bool)
 	}
 
-	// Only flag very obvious mistakes - don't be too restrictive
-	return nil
+	implements := reflect.PointerTo(t).Implements(unmarshalerType)
+	unmarshalerCache.Store(t, implements)
+	return implements
 }
-
-var fieldsMap sync.Map
 
 func cachedFields(result reflect.Value) *fieldsType {
 	resultType := result.Type()
@@ -949,6 +958,7 @@ func makeStructFields(rootType reflect.Type) *fieldsType {
 
 	queue := []queueEntry{{rootType, nil, 0}}
 	var allFields []fieldInfo
+	var validationErr error
 	seen := make(map[reflect.Type]bool)
 	seen[rootType] = true
 
@@ -973,12 +983,12 @@ func makeStructFields(rootType reflect.Type) *fieldsType {
 			// Parse maxminddb tag
 			fieldName := field.Name
 			hasTag := false
+			if validationErr == nil {
+				validationErr = validateRawMaxMindDBTagValue(field, string(field.Tag))
+			}
 			if tag := field.Tag.Get("maxminddb"); tag != "" {
-				// Validate tag syntax
-				if err := validateTag(field, tag); err != nil {
-					// Log warning but continue processing
-					// In a real implementation, you might want to use a proper logger
-					_ = err // For now, just ignore validation errors
+				if validationErr == nil {
+					validationErr = validateTag(field, tag)
 				}
 
 				if tag == "-" {
@@ -1066,13 +1076,35 @@ func makeStructFields(rootType reflect.Type) *fieldsType {
 	}
 
 	fields := &fieldsType{
-		namedFields: namedFields,
+		namedFields:   namedFields,
+		validationErr: validationErr,
 	}
 
 	// Reindex all fields for optimized access
 	fields.reindex()
 
 	return fields
+}
+
+func validateRawMaxMindDBTagValue(field reflect.StructField, rawTag string) error {
+	const key = `maxminddb:"`
+
+	start := strings.Index(rawTag, key)
+	if start == -1 {
+		return nil
+	}
+
+	start += len(key)
+	end := strings.IndexByte(rawTag[start:], '"')
+	if end == -1 {
+		return nil
+	}
+
+	if !utf8.ValidString(rawTag[start : start+end]) {
+		return invalidMaxMindDBTagError(field.Name)
+	}
+
+	return nil
 }
 
 // reindex optimizes field indices to avoid bounds checks during runtime.
@@ -1245,7 +1277,17 @@ func (d *ReflectionDecoder) tryFastDecodeTyped(
 	case reflect.Ptr:
 		// Handle pointer to fast types
 		if result.IsNil() {
-			result.Set(reflect.New(expectedType.Elem()))
+			elem := reflect.New(expectedType.Elem()).Elem()
+			finalOffset, ok := d.tryFastDecodeTyped(
+				offset,
+				addressableValue{elem, false},
+				expectedType.Elem(),
+			)
+			if !ok {
+				return 0, false
+			}
+			result.Set(elem.Addr())
+			return finalOffset, true
 		}
 		return d.tryFastDecodeTyped(
 			offset,

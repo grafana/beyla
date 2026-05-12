@@ -14,12 +14,12 @@ type Decoder struct {
 	d             DataDecoder
 	offset        uint
 	nextOffset    uint
-	opts          decoderOptions
 	hasNextOffset bool
 }
 
 type decoderOptions struct {
-	// Reserved for future options
+	// Intentionally empty for now. DecoderOption callbacks are still invoked so
+	// adding options in a future release is non-breaking.
 }
 
 // DecoderOption configures a Decoder.
@@ -34,13 +34,10 @@ func NewDecoder(d DataDecoder, offset uint, options ...DecoderOption) *Decoder {
 		option(&opts)
 	}
 
-	decoder := &Decoder{
+	return &Decoder{
 		d:      d,
 		offset: offset,
-		opts:   opts,
 	}
-
-	return decoder
 }
 
 // ReadBool reads the value pointed by the decoder as a bool.
@@ -124,7 +121,7 @@ func (d *Decoder) ReadFloat64() (float64, error) {
 	return value, nil
 }
 
-// ReadInt32 reads the value pointed by the decoder as a int32.
+// ReadInt32 reads the value pointed by the decoder as an int32.
 //
 // Returns an error if the database is malformed or if the pointed value is not an int32.
 func (d *Decoder) ReadInt32() (int32, error) {
@@ -144,7 +141,7 @@ func (d *Decoder) ReadInt32() (int32, error) {
 
 // ReadUint16 reads the value pointed by the decoder as a uint16.
 //
-// Returns an error if the database is malformed or if the pointed value is not an uint16.
+// Returns an error if the database is malformed or if the pointed value is not a uint16.
 func (d *Decoder) ReadUint16() (uint16, error) {
 	size, offset, err := d.decodeCtrlDataAndFollow(KindUint16)
 	if err != nil {
@@ -162,7 +159,7 @@ func (d *Decoder) ReadUint16() (uint16, error) {
 
 // ReadUint32 reads the value pointed by the decoder as a uint32.
 //
-// Returns an error if the database is malformed or if the pointed value is not an uint32.
+// Returns an error if the database is malformed or if the pointed value is not a uint32.
 func (d *Decoder) ReadUint32() (uint32, error) {
 	size, offset, err := d.decodeCtrlDataAndFollow(KindUint32)
 	if err != nil {
@@ -180,7 +177,7 @@ func (d *Decoder) ReadUint32() (uint32, error) {
 
 // ReadUint64 reads the value pointed by the decoder as a uint64.
 //
-// Returns an error if the database is malformed or if the pointed value is not an uint64.
+// Returns an error if the database is malformed or if the pointed value is not a uint64.
 func (d *Decoder) ReadUint64() (uint64, error) {
 	size, offset, err := d.decodeCtrlDataAndFollow(KindUint64)
 	if err != nil {
@@ -198,7 +195,7 @@ func (d *Decoder) ReadUint64() (uint64, error) {
 
 // ReadUint128 reads the value pointed by the decoder as a uint128.
 //
-// Returns an error if the database is malformed or if the pointed value is not an uint128.
+// Returns an error if the database is malformed or if the pointed value is not a uint128.
 func (d *Decoder) ReadUint128() (hi, lo uint64, err error) {
 	size, offset, err := d.decodeCtrlDataAndFollow(KindUint128)
 	if err != nil {
@@ -352,9 +349,36 @@ func (d *Decoder) PeekKind() (Kind, error) {
 }
 
 // Offset returns the current offset position in the database.
-// This can be used by custom unmarshalers for caching purposes.
+// If the current position points to a pointer, this method resolves the
+// pointer chain and returns the offset of the actual data. This ensures
+// that multiple pointers to the same data return the same offset, which
+// is important for caching purposes.
 func (d *Decoder) Offset() uint {
-	return d.offset
+	// Follow pointer chain to get resolved data location
+	dataOffset := d.offset
+	for {
+		kindNum, size, ctrlEndOffset, err := d.d.decodeCtrlData(dataOffset)
+		if err != nil {
+			// Return original offset to avoid breaking the public API.
+			// Offset() returns uint (not (uint, error)), so we can't propagate errors.
+			// In practice, errors here are rare and the original offset is still valid.
+			return d.offset
+		}
+		if kindNum != KindPointer {
+			// dataOffset is now pointing at the actual data (not a pointer)
+			// Return this offset, which is where the data's control bytes start
+			break
+		}
+		// Follow the pointer to get the target offset
+		dataOffset, _, err = d.d.decodePointer(size, ctrlEndOffset)
+		if err != nil {
+			// Return original offset to avoid breaking the public API.
+			// The caller will encounter the same error when they try to read.
+			return d.offset
+		}
+		// dataOffset is now the pointer target; loop to check if it's also a pointer
+	}
+	return dataOffset
 }
 
 func (d *Decoder) reset(offset uint) {

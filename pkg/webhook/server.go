@@ -11,10 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/mod/semver"
+	appsv1 "k8s.io/api/apps/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -28,21 +30,23 @@ import (
 
 // Server represents the webhook server
 type Server struct {
-	cfg                    *beyla.Config
-	ctxInfo                *global.ContextInfo
-	mutator                *PodMutator
-	bouncer                *PodBouncer
-	scanner                *LocalProcessScanner
-	matcher                *PodMatcher
-	logger                 *slog.Logger
-	store                  *kube.Store
-	initialState           map[string][]*ProcessInfo
-	initialStateMux        *sync.Mutex
-	metrics                *SDKInjectionMetrics
-	podStateCache          *PodStateCache
-	stateWriter            *StateConfigMapWriter
-	eligibleDeployments    map[string]*EligibleDeployment
-	eligibleDeploymentsMux *sync.Mutex
+	cfg                     *beyla.Config
+	ctxInfo                 *global.ContextInfo
+	mutator                 *PodMutator
+	bouncer                 *PodBouncer
+	scanner                 *LocalProcessScanner
+	matcher                 *PodMatcher
+	logger                  *slog.Logger
+	store                   *kube.Store
+	initialState            map[string][]*ProcessInfo
+	initialStateMux         *sync.Mutex
+	metrics                 *SDKInjectionMetrics
+	podStateCache           *PodStateCache
+	stateWriter             *StateConfigMapWriter
+	eligibleDeployments     map[string]*EligibleDeployment
+	eligibleDeploymentsMux  *sync.Mutex
+	externalWebhookUpdateNS atomic.Int64
+	lastEligiblePodLaunchNS atomic.Int64
 }
 
 // NewServer creates a new webhook server
@@ -89,21 +93,30 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		}
 	}
 
-	return &Server{
-		cfg:                    cfg,
-		mutator:                mutator,
-		bouncer:                bouncer,
-		scanner:                NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
-		matcher:                matcher,
-		logger:                 logger,
-		ctxInfo:                ctxInfo,
-		metrics:                metrics,
-		podStateCache:          podStateCache,
-		stateWriter:            stateWriter,
-		eligibleDeployments:    map[string]*EligibleDeployment{},
-		eligibleDeploymentsMux: &sync.Mutex{},
-		initialStateMux:        &sync.Mutex{},
-	}, nil
+	now := time.Now()
+
+	s := &Server{
+		cfg:                     cfg,
+		mutator:                 mutator,
+		bouncer:                 bouncer,
+		scanner:                 NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		matcher:                 matcher,
+		logger:                  logger,
+		ctxInfo:                 ctxInfo,
+		metrics:                 metrics,
+		podStateCache:           podStateCache,
+		stateWriter:             stateWriter,
+		eligibleDeployments:     map[string]*EligibleDeployment{},
+		eligibleDeploymentsMux:  &sync.Mutex{},
+		initialStateMux:         &sync.Mutex{},
+		lastEligiblePodLaunchNS: atomic.Int64{},
+		externalWebhookUpdateNS: atomic.Int64{},
+	}
+
+	s.lastEligiblePodLaunchNS.Store(now.UnixNano())
+	s.externalWebhookUpdateNS.Store(now.UnixNano())
+
+	return s, nil
 }
 
 func (s *Server) makeHTTPServer() *http.Server {
@@ -409,10 +422,17 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
-	if event.Type == informer.EventType_CREATED {
+	s.logger.Info("new pod event", "pod", event.Resource, "type", event.Type)
+
+	if event.Type == informer.EventType_CREATED || event.Type == informer.EventType_UPDATED {
 		if s.isExternalWebhookEvent(event.GetResource()) {
-			s.rebuildEligibleDeployments()
+			if s.needsToUpdateEligibleDeployments() {
+				s.rebuildEligibleDeployments()
+				s.externalWebhookUpdateNS.Store(time.Now().UnixNano())
+			}
 			return nil
+		} else {
+			s.lastEligiblePodLaunchNS.Store(time.Now().UnixNano())
 		}
 	}
 
@@ -435,8 +455,6 @@ func (s *Server) On(event *informer.Event) error {
 	if event.Type != informer.EventType_CREATED && event.Type != informer.EventType_UPDATED {
 		return nil
 	}
-
-	s.logger.Debug("new pod", "pod", event.Resource)
 
 	for _, a := range attrs {
 		s.handleNewProcessEvent(a)
@@ -574,18 +592,39 @@ func (s *Server) isExternalWebhookEvent(info *informer.ObjectMeta) bool {
 	namespace := info.Namespace
 	deploymentName := ""
 	for _, owner := range info.Pod.Owners {
-		if owner.Kind == "Deployment" || owner.Kind == "DaemonSet" {
+		switch owner.Kind {
+		case "Deployment":
 			deploymentName = owner.Name
+		case "ReplicaSet":
+			deploymentName = deploymentNameFromReplicaSet(owner.Name, info.Labels)
+		}
+		if deploymentName != "" {
 			break
 		}
 	}
 
 	if namespace != "" && deploymentName != "" {
 		key := mutationKey(namespace, deploymentName)
-		return s.cfg.Injector.Webhook.ExternalWebhook == key
+		return key == s.cfg.Injector.Webhook.ExternalWebhook
 	}
 
 	return false
+}
+
+func deploymentNameFromReplicaSet(replicaSetName string, labels map[string]string) string {
+	podTemplateHash := labels[appsv1.DefaultDeploymentUniqueLabelKey]
+	suffix := "-" + podTemplateHash
+	if podTemplateHash != "" && strings.HasSuffix(replicaSetName, suffix) {
+		return strings.TrimSuffix(replicaSetName, suffix)
+	}
+	return replicaSetName
+}
+
+func (s *Server) needsToUpdateEligibleDeployments() bool {
+	lastUpdate := s.externalWebhookUpdateNS.Load()
+	lastLaunch := s.lastEligiblePodLaunchNS.Load()
+
+	return lastLaunch >= lastUpdate
 }
 
 func (s *Server) rebuildEligibleDeployments() {
@@ -610,4 +649,5 @@ func (s *Server) rebuildEligibleDeployments() {
 	if err := s.writeStateConfigMap(context.Background()); err != nil {
 		s.logger.Warn("unable to update config map with new process state", "error", err)
 	}
+	s.externalWebhookUpdateNS.Store(time.Now().UnixNano())
 }

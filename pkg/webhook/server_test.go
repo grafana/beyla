@@ -12,6 +12,7 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
@@ -308,6 +309,122 @@ func TestServer_AddMetadata(t *testing.T) {
 			if tt.expectedAnnotations != nil {
 				assert.Equal(t, tt.expectedAnnotations, result.podAnnotations)
 			}
+		})
+	}
+}
+
+func TestServer_IsExternalWebhookEvent(t *testing.T) {
+	tests := []struct {
+		name            string
+		externalWebhook string
+		pod             *informer.ObjectMeta
+		expected        bool
+	}{
+		{
+			name:            "replicaset owner strips hash and matches deployment",
+			externalWebhook: "observability/otel-injector",
+			pod: &informer.ObjectMeta{
+				Name:      "otel-injector-7bdbc6fc5d-d7zhx",
+				Namespace: "observability",
+				Labels: map[string]string{
+					appsv1.DefaultDeploymentUniqueLabelKey: "7bdbc6fc5d",
+				},
+				Pod: &informer.PodInfo{
+					Owners: []*informer.Owner{
+						{Kind: "ReplicaSet", Name: "otel-injector-7bdbc6fc5d"},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:            "deployment owner matches directly",
+			externalWebhook: "observability/otel-injector",
+			pod: &informer.ObjectMeta{
+				Name:      "otel-injector-7bdbc6fc5d-d7zhx",
+				Namespace: "observability",
+				Pod: &informer.PodInfo{
+					Owners: []*informer.Owner{
+						{Kind: "Deployment", Name: "otel-injector"},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:            "deployment name prefix does not match another deployment",
+			externalWebhook: "observability/otel-injector",
+			pod: &informer.ObjectMeta{
+				Name:      "otel-injector-extra-7bdbc6fc5d-d7zhx",
+				Namespace: "observability",
+				Labels: map[string]string{
+					appsv1.DefaultDeploymentUniqueLabelKey: "7bdbc6fc5d",
+				},
+				Pod: &informer.PodInfo{
+					Owners: []*informer.Owner{
+						{Kind: "ReplicaSet", Name: "otel-injector-extra-7bdbc6fc5d"},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:            "different namespace does not match",
+			externalWebhook: "observability/otel-injector",
+			pod: &informer.ObjectMeta{
+				Name:      "otel-injector-7bdbc6fc5d-d7zhx",
+				Namespace: "default",
+				Labels: map[string]string{
+					appsv1.DefaultDeploymentUniqueLabelKey: "7bdbc6fc5d",
+				},
+				Pod: &informer.PodInfo{
+					Owners: []*informer.Owner{
+						{Kind: "ReplicaSet", Name: "otel-injector-7bdbc6fc5d"},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:            "direct replicaset with hyphenated name matches without stripping",
+			externalWebhook: "observability/cluster-sleeper",
+			pod: &informer.ObjectMeta{
+				Name:      "cluster-sleeper-mz7wk",
+				Namespace: "observability",
+				Pod: &informer.PodInfo{
+					Owners: []*informer.Owner{
+						{Kind: "ReplicaSet", Name: "cluster-sleeper"},
+						{Kind: "Deployment", Name: "cluster"},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:            "direct replicaset with hyphenated name does not match stripped prefix",
+			externalWebhook: "observability/cluster",
+			pod: &informer.ObjectMeta{
+				Name:      "cluster-sleeper-mz7wk",
+				Namespace: "observability",
+				Pod: &informer.PodInfo{
+					Owners: []*informer.Owner{
+						{Kind: "ReplicaSet", Name: "cluster-sleeper"},
+						{Kind: "Deployment", Name: "cluster"},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := &Server{
+				cfg: &beyla.Config{},
+			}
+			server.cfg.Injector.Webhook.ExternalWebhook = tt.externalWebhook
+
+			assert.Equal(t, tt.expected, server.isExternalWebhookEvent(tt.pod))
 		})
 	}
 }

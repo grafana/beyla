@@ -37,7 +37,7 @@ func NewPodBouncer(ctxInfo *global.ContextInfo, metrics *SDKInjectionMetrics) (*
 }
 
 func mutationKey(namespace, deploymentName string) string {
-	return trimmedName(namespace) + ":" + trimmedName(deploymentName)
+	return trimmedName(namespace) + "/" + trimmedName(deploymentName)
 }
 
 func trimmedName(name string) string {

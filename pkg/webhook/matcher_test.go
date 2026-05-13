@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 func TestPodMatcher_HasSelectionCriteria(t *testing.T) {
@@ -322,8 +323,8 @@ func TestNewPodMatcher(t *testing.T) {
 	})
 
 	t.Run("creates matcher with instrumentation criteria", func(t *testing.T) {
-		globs := []services.GlobAttributes{{
-			Metadata: map[string]*services.GlobAttr{
+		globs := configmap.WebhookInstrument{{
+			Metadata: services.MetadataGlobMap{
 				"k8s_namespace": strToGlob("prod*"),
 			}},
 		}

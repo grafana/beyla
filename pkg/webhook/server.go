@@ -84,14 +84,17 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		}
 	}
 
+	// TODO: should we make Beyla to exit on error instead of silently continuing without OTEL injection?
 	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, OwnNodeName())
 	if err != nil {
 		logger.Warn("disabling injector state ConfigMap writer", "error", err)
-	} else {
-		err = stateWriter.Init(context.Background())
-		if err != nil {
-			logger.Warn("disabling injector state ConfigMap writer", "error", err)
-		}
+		stateWriter = nil
+	} else if err = stateWriter.Init(context.Background()); err != nil {
+		logger.Warn("disabling injector state ConfigMap writer at init", "error", err)
+		// Init failed: writer has no DaemonSet owner, so any future
+		// Write would panic. Drop it so the nil-checks downstream actually
+		// short-circuit the call paths.
+		stateWriter = nil
 	}
 
 	now := time.Now()
@@ -383,6 +386,9 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 }
 
 func (s *Server) writeStateConfigMap(ctx context.Context) error {
+	if s.stateWriter == nil {
+		return nil
+	}
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
 	eligible := make([]*configmap.EligibleDeployment, 0, len(s.eligibleDeployments))

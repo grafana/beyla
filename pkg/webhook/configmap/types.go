@@ -28,6 +28,20 @@ const (
 	SelectorAnnotation = "beyla.grafana.com/node"
 )
 
+// WebhookInstrument is a subset of services.GlobDefinitionCriteria because
+// GlobDefinitionCriteria is only designed for unmarshaling and the
+// marshal+unmarshal operation is not idempotent (and makes the injector controller
+// to fail).
+// GlobDefinitionCriteria contains many attributes that are not
+// part of the webhook discovery so we copy here only the ones that are
+// actually needed.
+type WebhookInstrument []WebhookKubeOnlySelector
+
+type WebhookKubeOnlySelector struct {
+	// Metadata stores other attributes, such as Kubernetes object metadata
+	Metadata services.MetadataGlobMap `yaml:",inline" mapstructure:",remain"`
+}
+
 // InjectConfig is the YAML document under KeyInstrumentation: a list of
 // service-selection globs and the OTLP destination to stamp onto matched
 // pods.
@@ -37,7 +51,7 @@ type InjectConfig struct {
 	// kubernetes metadata fields (k8s_namespace, k8s_pod_name, ...) out of
 	// each entry; non-kubernetes fields (open_ports, exe_path, ...) are
 	// ignored on the consumer side.
-	Discovery services.GlobDefinitionCriteria `yaml:"discovery,omitempty"`
+	Discovery WebhookInstrument `yaml:"discovery,omitempty"`
 
 	// OtelExport tells the injection controller what OTLP endpoint and
 	// protocol to set on instrumented containers. Empty fields are pruned

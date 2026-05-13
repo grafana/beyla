@@ -65,6 +65,8 @@ func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nod
 		return nil, fmt.Errorf("cannot find out the current namespace: %w", err)
 	}
 
+	logger.Debug("own namespace", "namespace", podNamespace)
+
 	return &StateConfigMapWriter{
 		logger:       logger,
 		kubeClient:   kubeClient,
@@ -106,7 +108,11 @@ func (w *StateConfigMapWriter) Write(
 		return fmt.Errorf("marshal eligible deployments: %w", err)
 	}
 
-	name := stateConfigMapName(w.owner.Name, w.nodeName)
+	ownerName := "unknown"
+	if w.owner != nil {
+		ownerName = w.owner.Name
+	}
+	name := stateConfigMapName(ownerName, w.nodeName)
 
 	desired := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -116,7 +122,7 @@ func (w *StateConfigMapWriter) Write(
 			Labels: map[string]string{
 				"app.kubernetes.io/managed-by": "beyla",
 				"app.kubernetes.io/component":  "injector-state",
-				"beyla.grafana.com/node":       sanitizeDNS1123(w.nodeName),
+				configmap.SelectorAnnotation:   sanitizeDNS1123(w.nodeName),
 			},
 			// Annotation (presence-only) is what the external injection
 			// controller watches; without it the controller ignores the CM.
@@ -139,7 +145,7 @@ func (w *StateConfigMapWriter) Write(
 		if _, err := cms.Create(ctx, desired, metav1.CreateOptions{}); err != nil {
 			return fmt.Errorf("create ConfigMap %s/%s: %w", w.ownNamespace, name, err)
 		}
-		w.logger.Info("created injector state ConfigMap",
+		w.logger.Debug("created injector state ConfigMap",
 			"name", name, "namespace", w.ownNamespace, "eligible", len(eligible))
 		return nil
 	}
@@ -148,7 +154,7 @@ func (w *StateConfigMapWriter) Write(
 	if _, err := cms.Update(ctx, desired, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("update ConfigMap %s/%s: %w", w.ownNamespace, name, err)
 	}
-	w.logger.Info("updated injector state ConfigMap",
+	w.logger.Debug("updated injector state ConfigMap",
 		"name", name, "namespace", w.ownNamespace, "eligible", len(eligible))
 	return nil
 }
@@ -160,6 +166,7 @@ func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.
 	if err != nil {
 		return nil, err
 	}
+	w.logger.Debug("finding own pod", "pod", pod)
 	for i := range pod.OwnerReferences {
 		ref := &pod.OwnerReferences[i]
 		if ref.Kind != daemonSetOwnerKind {
@@ -167,6 +174,7 @@ func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.
 		}
 		controller := true
 		blockOwnerDeletion := false
+		w.logger.Debug("found owning Daemonset", "owner", ref.Name)
 		return &metav1.OwnerReference{
 			APIVersion:         daemonSetOwnerAPIVersion,
 			Kind:               daemonSetOwnerKind,

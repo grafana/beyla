@@ -10,6 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v9"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -35,6 +36,7 @@ import (
 	"github.com/grafana/beyla/v3/pkg/config"
 	botel "github.com/grafana/beyla/v3/pkg/export/otel"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
+	maps2 "github.com/grafana/beyla/v3/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 )
@@ -91,12 +93,6 @@ func DefaultConfig() *Config {
 
 	def.Routes.Unmatch = transform.UnmatchLowCardinality
 
-	if !slices.Contains(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name") {
-		def.OTELMetrics.ExtraSpanResourceLabels = append(def.OTELMetrics.ExtraSpanResourceLabels, "k8s.namespace.name")
-	}
-	if !slices.Contains(def.Prometheus.ExtraSpanResourceLabels, "k8s.namespace.name") {
-		def.Prometheus.ExtraSpanResourceLabels = append(def.Prometheus.ExtraSpanResourceLabels, "k8s.namespace.name")
-	}
 	return def
 }
 
@@ -414,10 +410,16 @@ type WebhookConfig struct {
 	MaxConcurrentRequests int `yaml:"max_concurrent_requests" env:"BEYLA_WEBHOOK_MAX_CONCURRENT_REQUESTS"`
 	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
 	MaxAdmissionBodySize resource.Quantity `yaml:"max_admission_body_size" env:"BEYLA_WEBHOOK_MAX_ADMISSION_BODY_SIZE"`
+	// ExternalWebhook delegates the functionality of the mutating webhook to an external controller/operator
+	ExternalWebhook string `yaml:"external_deployment_name" env:"BEYLA_EXTERNAL_WEBHOOK_DEPLOYMENT_NAME"`
+}
+
+func (w WebhookConfig) UsesExternalWebhook() bool {
+	return w.ExternalWebhook != ""
 }
 
 func (w WebhookConfig) Enabled() bool {
-	return w.Enable && w.Port > 0 && w.CertPath != "" && w.KeyPath != ""
+	return (w.Enable && w.Port > 0 && w.CertPath != "" && w.KeyPath != "") || w.UsesExternalWebhook()
 }
 
 type ConfigError string
@@ -624,4 +626,19 @@ func normalizeConfig(c *Config) {
 	if c.NetworkFlows.Enable {
 		c.Metrics.Features |= export.FeatureNetwork
 	}
+
+	c.OTELMetrics.ExtraSpanResourceLabels = appendDefaultResourceLabels(c.OTELMetrics.ExtraSpanResourceLabels)
+	c.Prometheus.ExtraSpanResourceLabels = appendDefaultResourceLabels(c.Prometheus.ExtraSpanResourceLabels)
+}
+
+func appendDefaultResourceLabels(dst []string) []string {
+	// appends mandatory resource labels to a slice and deduplicates it
+	return maps2.SetToSlice(maps2.SliceToSet(append(dst,
+		string(attr.K8sClusterName),
+		string(attr.K8sNamespaceName),
+		string(attr.K8sNodeName),
+		string(semconv.ServiceVersionKey),
+		string(semconv.DeploymentEnvironmentNameKey),
+		string(semconv.CloudAvailabilityZoneKey),
+		string(semconv.CloudRegionKey))))
 }

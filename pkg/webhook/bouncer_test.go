@@ -17,31 +17,31 @@ func TestMutationKey(t *testing.T) {
 			name:           "normal case",
 			namespace:      "default",
 			deploymentName: "my-app",
-			expected:       "default:my-app",
+			expected:       "default/my-app",
 		},
 		{
 			name:           "empty namespace",
 			namespace:      "",
 			deploymentName: "my-app",
-			expected:       ":my-app",
+			expected:       "/my-app",
 		},
 		{
 			name:           "empty deployment",
 			namespace:      "default",
 			deploymentName: "",
-			expected:       "default:",
+			expected:       "default/",
 		},
 		{
 			name:           "both empty",
 			namespace:      "",
 			deploymentName: "",
-			expected:       ":",
+			expected:       "/",
 		},
 		{
 			name:           "special characters in names",
 			namespace:      "kube-system",
 			deploymentName: "coredns-12345",
-			expected:       "kube-system:coredns-12345",
+			expected:       "kube-system/coredns-12345",
 		},
 	}
 
@@ -122,7 +122,7 @@ func TestPodBouncer_AlreadyBounced(t *testing.T) {
 		{
 			name: "deployment already bounced",
 			setupBouncedMap: map[string]any{
-				"default:my-app": true,
+				"default/my-app": true,
 			},
 			namespace:              "default",
 			deploymentName:         "my-app",
@@ -131,7 +131,7 @@ func TestPodBouncer_AlreadyBounced(t *testing.T) {
 		{
 			name: "different deployment bounced",
 			setupBouncedMap: map[string]any{
-				"default:other-app": true,
+				"default/other-app": true,
 			},
 			namespace:              "default",
 			deploymentName:         "my-app",
@@ -140,7 +140,7 @@ func TestPodBouncer_AlreadyBounced(t *testing.T) {
 		{
 			name: "same deployment different namespace",
 			setupBouncedMap: map[string]any{
-				"production:my-app": true,
+				"production/my-app": true,
 			},
 			namespace:              "default",
 			deploymentName:         "my-app",
@@ -149,9 +149,9 @@ func TestPodBouncer_AlreadyBounced(t *testing.T) {
 		{
 			name: "multiple deployments bounced, checking existing one",
 			setupBouncedMap: map[string]any{
-				"default:app1":    true,
-				"default:app2":    true,
-				"production:app3": true,
+				"default/app1":    true,
+				"default/app2":    true,
+				"production/app3": true,
 			},
 			namespace:              "default",
 			deploymentName:         "app2",
@@ -160,9 +160,9 @@ func TestPodBouncer_AlreadyBounced(t *testing.T) {
 		{
 			name: "multiple deployments bounced, checking non-existing one",
 			setupBouncedMap: map[string]any{
-				"default:app1":    true,
-				"default:app2":    true,
-				"production:app3": true,
+				"default/app1":    true,
+				"default/app2":    true,
+				"production/app3": true,
 			},
 			namespace:              "staging",
 			deploymentName:         "app1",

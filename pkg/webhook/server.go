@@ -48,7 +48,13 @@ type Server struct {
 	eligibleDeploymentsMux  *sync.Mutex
 	externalWebhookUpdateNS atomic.Int64
 	lastEligiblePodLaunchNS atomic.Int64
+	stateWriteRequestNS     atomic.Int64
 }
+
+const (
+	stateConfigMapDebounceDelay = 10 * time.Second
+	stateConfigMapTickInterval  = time.Second
+)
 
 // NewServer creates a new webhook server
 func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
@@ -168,6 +174,10 @@ func (s *Server) Start(ctx context.Context) error {
 
 	if s.podStateCache != nil {
 		go s.subscribeStateCache(ctx)
+	}
+
+	if s.stateWriter != nil {
+		go s.runStateConfigMapWriter(ctx)
 	}
 
 	if s.matcher.HasSelectionCriteria() {
@@ -337,11 +347,7 @@ func (s *Server) getInitialState(ctx context.Context) error {
 	// flow through the registered observer asynchronously.
 	store.Subscribe(s)
 
-	if s.stateWriter != nil {
-		if err := s.writeStateConfigMap(ctx); err != nil {
-			s.logger.Warn("failed to write injector state ConfigMap", "error", err)
-		}
-	}
+	s.requestStateConfigMapWrite()
 
 	return nil
 }
@@ -383,6 +389,48 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 	d := deploymentFromProcess(a)
 
 	s.eligibleDeployments[key] = d
+
+	// Now request map update
+	s.requestStateConfigMapWrite()
+}
+
+// requestStateConfigMapWrite marks the state ConfigMap as needing an update.
+// Multiple callers within stateConfigMapDebounceDelay coalesce into a single
+// write performed by runStateConfigMapWriter.
+func (s *Server) requestStateConfigMapWrite() {
+	if s.stateWriter == nil {
+		return
+	}
+	s.stateWriteRequestNS.Store(time.Now().UnixNano())
+}
+
+// runStateConfigMapWriter writes the state ConfigMap once requests have been
+// quiescent for stateConfigMapDebounceDelay.
+func (s *Server) runStateConfigMapWriter(ctx context.Context) {
+	ticker := time.NewTicker(stateConfigMapTickInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			requested := s.stateWriteRequestNS.Load()
+			if requested == 0 {
+				continue
+			}
+			if time.Since(time.Unix(0, requested)) < stateConfigMapDebounceDelay {
+				continue
+			}
+			// Clear the request only if no newer request raced in. On CAS
+			// failure the next tick observes the newer timestamp.
+			if !s.stateWriteRequestNS.CompareAndSwap(requested, 0) {
+				continue
+			}
+			if err := s.writeStateConfigMap(ctx); err != nil {
+				s.logger.Warn("failed to write injector state ConfigMap", "error", err)
+			}
+		}
+	}
 }
 
 func (s *Server) writeStateConfigMap(ctx context.Context) error {
@@ -459,6 +507,8 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
+	// These are processes that existed when Beyla booted, otherwise we won't find them
+	// in attrs. In a sense this handles only the initial startup.
 	for _, a := range attrs {
 		s.handleNewProcessEvent(a)
 	}

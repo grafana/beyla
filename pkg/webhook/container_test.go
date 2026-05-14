@@ -35,6 +35,18 @@ func TestFindCgroup(t *testing.T) {
 			expectedFound: true,
 		},
 		{
+			name:          "Kind format",
+			cgroupEntry:   "0::/kubelet.slice/kubelet-kubepods.slice/kubelet-kubepods-besteffort.slice/kubelet-kubepods-besteffort-podc6a7bc8c_2ae5_4b89_a872_4c5a250d5ac8.slice/cri-containerd-0f76e495864f2ec6f05be687d1375e2754b1ffc6265b4f7fae497aad46952205.scope",
+			expectedID:    "0f76e495864f2ec6f05be687d1375e2754b1ffc6265b4f7fae497aad46952205",
+			expectedFound: true,
+		},
+		{
+			name:          "CRI.o format",
+			cgroupEntry:   "0::/../cri-containerd-0f76e495864f2ec6f05be687d1375e2754b1ffc6265b4f7fae497aad46952205.scope",
+			expectedID:    "0f76e495864f2ec6f05be687d1375e2754b1ffc6265b4f7fae497aad46952205",
+			expectedFound: true,
+		},
+		{
 			name:          "containerd format",
 			cgroupEntry:   "0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod7260904bbd08e72e4dff95d9fccd2ee8.slice/cri-containerd-d36686f9785534531160dc936aec9d711a26eb37f4fc7752a2ae27d0a24345c1.scope",
 			expectedID:    "d36686f9785534531160dc936aec9d711a26eb37f4fc7752a2ae27d0a24345c1",

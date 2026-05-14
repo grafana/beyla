@@ -209,6 +209,20 @@ type postgresMessage struct {
 	data []byte
 }
 
+func parsePostgresBindNames(data []byte) (portalName, statementName string, ok bool) {
+	portalEnd := bytes.IndexByte(data, 0)
+	if portalEnd < 0 {
+		return "", "", false
+	}
+
+	stmtStart := portalEnd + 1
+	if stmtStart >= len(data) {
+		return "", "", false
+	}
+
+	return string(data[:portalEnd]), unix.ByteSliceToString(data[stmtStart:]), true
+}
+
 type postgresMessageIterator struct {
 	r   largebuf.LargeBufferReader
 	err error
@@ -325,9 +339,10 @@ Loop:
 
 			continue
 		case "BIND":
-			portal := strings.Clone(unix.ByteSliceToString(msg.data))
-			portalLen := len(portal) + 1 // +1 for the null terminator
-			stmtName := strings.Clone(unix.ByteSliceToString(msg.data[portalLen:]))
+			portal, stmtName, ok := parsePostgresBindNames(msg.data)
+			if !ok {
+				continue
+			}
 
 			parseCtx.postgresPortals.Add(postgresPortalsKey{
 				connInfo:   event.ConnInfo,

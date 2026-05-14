@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 type PodMatcher struct {
@@ -15,7 +16,7 @@ type PodMatcher struct {
 }
 
 func NewPodMatcher(cfg *beyla.Config) *PodMatcher {
-	selectors := discover.NormalizeGlobCriteria(cfg.Injector.Instrument)
+	selectors := asProcessDiscoverySelector(cfg.Injector.Instrument)
 	logger := slog.With("component", "webhook.Matcher")
 
 	logger.Debug("SDK instrumentation criteria", "selectors", selectors)
@@ -24,6 +25,18 @@ func NewPodMatcher(cfg *beyla.Config) *PodMatcher {
 		logger:    logger,
 		selectors: selectors,
 	}
+}
+
+func asProcessDiscoverySelector(in configmap.WebhookInstrument) []services.Selector {
+	out := make(services.GlobDefinitionCriteria, 0, len(in))
+	for _, selector := range in {
+		out = append(out, services.GlobAttributes{
+			Metadata:       selector.Metadata,
+			PodLabels:      selector.PodLabels,
+			PodAnnotations: selector.PodAnnotations,
+		})
+	}
+	return discover.NormalizeGlobCriteria(out)
 }
 
 func (m *PodMatcher) HasSelectionCriteria() bool {

@@ -39,6 +39,7 @@ import (
 	maps2 "github.com/grafana/beyla/v3/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v3/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 const ReporterLRUSize = 256
@@ -249,7 +250,7 @@ type HostIDConfig struct {
 // For SDK instrumentation on Kubernetes, use the OpenTelemetry Operator instead.
 type SDKInject struct {
 	// OTel SDK instrumentation criteria
-	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
+	Instrument configmap.WebhookInstrument `yaml:"instrument"`
 	// Webhook configuration for a mutating admission controller
 	Webhook WebhookConfig `yaml:"webhook"`
 	// Option to disable automatic bouncing of pods, it will be

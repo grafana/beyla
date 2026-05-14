@@ -38,7 +38,8 @@ type PrometheusReporter struct {
 	instrumentationErrors            *prometheus.CounterVec
 	avoidedServices                  *prometheus.GaugeVec
 	buildInfo                        prometheus.Gauge
-	bpfProbeLatencies                *prometheus.HistogramVec
+	bpfProbeExecutions               *prometheus.CounterVec
+	bpfProbeLatencySum               *prometheus.CounterVec
 	bpfMapEntries                    *prometheus.GaugeVec
 	bpfMapMaxEntries                 *prometheus.GaugeVec
 	bpfInternalMetricsScrapeInterval time.Duration
@@ -106,10 +107,13 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 				"revision":  buildinfo.Revision,
 			},
 		}),
-		bpfProbeLatencies: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    attr.VendorPrefix + "_bpf_probe_latency_seconds",
-			Help:    "Latency of the BPF probes in seconds",
-			Buckets: BpfLatenciesBuckets,
+		bpfProbeExecutions: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attr.VendorPrefix + "_bpf_probe_executions_total",
+			Help: "Total number of BPF probe executions",
+		}, []string{"probe_id", "probe_type", "probe_name"}),
+		bpfProbeLatencySum: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attr.VendorPrefix + "_bpf_probe_latency_seconds_total",
+			Help: "Total latency of the BPF probes in seconds",
 		}, []string{"probe_id", "probe_type", "probe_name"}),
 		bpfMapEntries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + "_bpf_map_entries_total",
@@ -149,7 +153,8 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		pr.instrumentationErrors,
 		pr.avoidedServices,
 		pr.buildInfo,
-		pr.bpfProbeLatencies,
+		pr.bpfProbeExecutions,
+		pr.bpfProbeLatencySum,
 		pr.bpfMapEntries,
 		pr.bpfMapMaxEntries,
 		pr.informerLag,
@@ -220,8 +225,9 @@ func (p *PrometheusReporter) AvoidInstrumentationTraces(serviceName, serviceName
 	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "traces")
 }
 
-func (p *PrometheusReporter) BpfProbeLatency(probeID, probeType, probeName string, latencySeconds float64) {
-	p.bpfProbeLatencies.WithLabelValues(probeID, probeType, probeName).Observe(latencySeconds)
+func (p *PrometheusReporter) BpfProbeStats(probeID, probeType, probeName string, count uint64, latencySumSeconds float64) {
+	p.bpfProbeExecutions.WithLabelValues(probeID, probeType, probeName).Add(float64(count))
+	p.bpfProbeLatencySum.WithLabelValues(probeID, probeType, probeName).Add(latencySumSeconds)
 }
 
 func (p *PrometheusReporter) BpfMapEntries(mapID, mapName, mapType string, entriesTotal int) {

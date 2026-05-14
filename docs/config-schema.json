@@ -2073,7 +2073,7 @@
           "description": "OCI image mount instead of host volume, supported on k8s 1.31+"
         },
         "instrument": {
-          "$ref": "#/$defs/GlobDefinitionCriteria",
+          "$ref": "#/$defs/WebhookInstrument",
           "description": "OTel SDK instrumentation criteria"
         },
         "manage_sdk_versions": {
@@ -2399,6 +2399,32 @@
       },
       "type": "object",
       "description": "WebhookConfig contains the configuration for the mutating webhook"
+    },
+    "WebhookInstrument": {
+      "items": {
+        "$ref": "#/$defs/WebhookKubeOnlySelector"
+      },
+      "type": "array",
+      "description": "WebhookInstrument is a subset of services.GlobDefinitionCriteria because GlobDefinitionCriteria is only designed for unmarshaling and the marshal+unmarshal operation is not idempotent (and makes the injector controller to fail). GlobDefinitionCriteria contains many attributes that are not part of the webhook discovery so we copy here only the ones that are actually needed."
+    },
+    "WebhookKubeOnlySelector": {
+      "properties": {
+        "k8s_pod_annotations": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object",
+          "description": "PodAnnotations allows matching against the annotations of a pod"
+        },
+        "k8s_pod_labels": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object",
+          "description": "PodLabels allows matching against the labels of a pod"
+        }
+      },
+      "type": "object"
     }
   },
   "properties": {

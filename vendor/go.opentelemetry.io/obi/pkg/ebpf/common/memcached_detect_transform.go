@@ -5,6 +5,7 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 
 import (
 	"bytes"
+	"math"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -322,6 +323,9 @@ func memcachedNormalizeCommand(token string) string {
 func memcachedConsumeStoragePayload(r *largebuf.LargeBufferReader, fields [][]byte, op string) bool {
 	bytesField, ok := memcachedCommandBytesField(fields, op)
 	if !ok {
+		return false
+	}
+	if bytesField > math.MaxInt-len(memcachedDelimBytes) {
 		return false
 	}
 

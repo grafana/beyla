@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 // nsMatcher builds a PodMatcher that matches pods in the given namespace.
@@ -53,7 +54,7 @@ func nsLabelMatcher(ns, labelKey, labelValue string) *PodMatcher {
 func nsCfg(ns string) *beyla.Config {
 	return &beyla.Config{
 		Injector: beyla.SDKInject{
-			Instrument: services.GlobDefinitionCriteria{
+			Instrument: configmap.WebhookInstrument{
 				{
 					Metadata: services.MetadataGlobMap{
 						services.AttrNamespace: strToGlob(ns),
@@ -69,7 +70,7 @@ func wildcardCfg() *beyla.Config {
 	return &beyla.Config{
 		Injector: beyla.SDKInject{
 			// A selector with no k8s_namespace key matches any namespace.
-			Instrument: services.GlobDefinitionCriteria{
+			Instrument: configmap.WebhookInstrument{
 				{
 					Metadata: services.MetadataGlobMap{},
 				},
@@ -366,7 +367,7 @@ func TestIsInScope(t *testing.T) {
 			namespace: "staging",
 			cfg: &beyla.Config{
 				Injector: beyla.SDKInject{
-					Instrument: services.GlobDefinitionCriteria{
+					Instrument: configmap.WebhookInstrument{
 						{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("prod")}},
 						{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("staging")}},
 					},
@@ -567,7 +568,7 @@ func TestPodStateCache_On(t *testing.T) {
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
 			SDKPkgVersion: version,
-			Instrument: services.GlobDefinitionCriteria{
+			Instrument: configmap.WebhookInstrument{
 				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
 			},
 		},
@@ -649,7 +650,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
 			SDKPkgVersion: version,
-			Instrument: services.GlobDefinitionCriteria{
+			Instrument: configmap.WebhookInstrument{
 				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
 			},
 		},

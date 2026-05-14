@@ -93,6 +93,14 @@ type PodMutator struct {
 	maxAdmissionSize int64
 }
 
+// Endpoint returns the OTLP endpoint the mutator stamps onto matched pods.
+// Exposed so the state ConfigMap writer can advertise the same destination to
+// the external injection controller.
+func (pm *PodMutator) Endpoint() string { return pm.endpoint }
+
+// Protocol returns the OTLP protocol string ("http/protobuf", "grpc", ...).
+func (pm *PodMutator) Protocol() string { return pm.proto }
+
 // NewPodMutator creates a new PodMutator
 func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjectionMetrics) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions

@@ -518,7 +518,10 @@ func parseFirstField(field bson.E) (string, string, error) {
 		return "", "", fmt.Errorf("MongoDB heartbeat operation '%s' is ignored", comm)
 	}
 	if isCollectionCommand(comm) {
-		collection := field.Value.(string)
+		collection, ok := field.Value.(string)
+		if !ok {
+			return "", "", fmt.Errorf("MongoDB command '%s' has non-string collection type %T", comm, field.Value)
+		}
 		return comm, collection, nil
 	}
 	return comm, "", nil

@@ -7,6 +7,7 @@ import (
 	"debug/elf"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 
@@ -88,7 +89,14 @@ func resolveProcBinary(pid app.PID) (string, error) {
 	return fmt.Sprintf("/proc/%d/root%s", pid, realPath), nil
 }
 
-func findLanguageFromElf(filePath string) svc.InstrumentableType {
+func findLanguageFromElf(filePath string) (result svc.InstrumentableType) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Warn("panic while parsing ELF file", "file", filePath, "panic", r)
+			result = svc.InstrumentableGeneric
+		}
+	}()
+
 	ctx, err := fastelf.NewElfContextFromFile(filePath)
 	if err != nil {
 		return svc.InstrumentableGeneric
@@ -178,6 +186,10 @@ func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 		}
 
 		strs := ctx.Data[strtab.Offset:]
+
+		if sec.Entsize == 0 {
+			continue
+		}
 
 		symCount := int(sec.Size / sec.Entsize)
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 // Server represents the webhook server
@@ -43,11 +45,17 @@ type Server struct {
 	metrics                 *SDKInjectionMetrics
 	podStateCache           *PodStateCache
 	stateWriter             *StateConfigMapWriter
-	eligibleDeployments     map[string]*EligibleDeployment
+	eligibleDeployments     map[string]*configmap.EligibleDeployment
 	eligibleDeploymentsMux  *sync.Mutex
 	externalWebhookUpdateNS atomic.Int64
 	lastEligiblePodLaunchNS atomic.Int64
+	stateWriteRequestNS     atomic.Int64
 }
+
+const (
+	stateConfigMapDebounceDelay = 10 * time.Second
+	stateConfigMapTickInterval  = time.Second
+)
 
 // NewServer creates a new webhook server
 func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
@@ -85,12 +93,10 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, OwnNodeName())
 	if err != nil {
-		logger.Warn("disabling injector state ConfigMap writer", "error", err)
-	} else {
-		err = stateWriter.Init(context.Background())
-		if err != nil {
-			logger.Warn("disabling injector state ConfigMap writer", "error", err)
-		}
+		return nil, fmt.Errorf("error creating configmap state writer: %w", err)
+	}
+	if err := stateWriter.Init(context.Background()); err != nil {
+		return nil, fmt.Errorf("error initializing configmap state writer: %w", err)
 	}
 
 	now := time.Now()
@@ -106,7 +112,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		metrics:                 metrics,
 		podStateCache:           podStateCache,
 		stateWriter:             stateWriter,
-		eligibleDeployments:     map[string]*EligibleDeployment{},
+		eligibleDeployments:     map[string]*configmap.EligibleDeployment{},
 		eligibleDeploymentsMux:  &sync.Mutex{},
 		initialStateMux:         &sync.Mutex{},
 		lastEligiblePodLaunchNS: atomic.Int64{},
@@ -166,6 +172,10 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.subscribeStateCache(ctx)
 	}
 
+	if s.stateWriter != nil {
+		go s.runStateConfigMapWriter(ctx)
+	}
+
 	if s.matcher.HasSelectionCriteria() {
 		s.logger.Info("starting initial state scanning")
 		go func() {
@@ -181,18 +191,23 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.ctxInfo.Prometheus.StartHTTP(ctx)
 	}
 
-	var errChan chan error
-	if !s.cfg.Injector.Webhook.UsesExternalWebhook() {
-		// Start server in a goroutine
-		errChan = make(chan error, 1)
-		go func() {
-			if err := server.ListenAndServeTLS(s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath); err != nil && err != http.ErrServerClosed {
-				errChan <- fmt.Errorf("webhook server failed: %w", err)
-			}
-			close(errChan)
-		}()
-	}
+	errChan := s.setupWebhookServer(server)
 	return s.waitForCancellation(ctx, server, errChan)
+}
+
+func (s *Server) setupWebhookServer(server *http.Server) chan error {
+	if s.cfg.Injector.Webhook.UsesExternalWebhook() {
+		return nil
+	}
+	// Start server in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		if err := server.ListenAndServeTLS(s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath); err != nil && err != http.ErrServerClosed {
+			errChan <- fmt.Errorf("webhook server failed: %w", err)
+		}
+		close(errChan)
+	}()
+	return errChan
 }
 
 func (s *Server) waitForCancellation(ctx context.Context, server *http.Server, errChan chan error) error {
@@ -333,26 +348,22 @@ func (s *Server) getInitialState(ctx context.Context) error {
 	// flow through the registered observer asynchronously.
 	store.Subscribe(s)
 
-	if s.stateWriter != nil {
-		if err := s.writeStateConfigMap(ctx); err != nil {
-			s.logger.Warn("failed to write injector state ConfigMap", "error", err)
-		}
-	}
+	s.requestStateConfigMapWrite()
 
 	return nil
 }
 
-func deploymentFromProcess(a *ProcessInfo) *EligibleDeployment {
+func deploymentFromProcess(a *ProcessInfo) *configmap.EligibleDeployment {
 	namespace := a.metadata[services.AttrNamespace]
 	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
 
 	language := languageLabel(a.kind)
 
-	return &EligibleDeployment{
-		Namespace:  namespace,
-		Kind:       "Deployment",
-		Deployment: deployment,
-		Language:   language,
+	return &configmap.EligibleDeployment{
+		Namespace: namespace,
+		Kind:      "Deployment",
+		Name:      deployment,
+		Language:  language,
 	}
 }
 
@@ -379,21 +390,80 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 	d := deploymentFromProcess(a)
 
 	s.eligibleDeployments[key] = d
+
+	// Now request map update
+	s.requestStateConfigMapWrite()
+}
+
+// requestStateConfigMapWrite marks the state ConfigMap as needing an update.
+// Multiple callers within stateConfigMapDebounceDelay coalesce into a single
+// write performed by runStateConfigMapWriter.
+func (s *Server) requestStateConfigMapWrite() {
+	if s.stateWriter == nil {
+		return
+	}
+	s.stateWriteRequestNS.Store(time.Now().UnixNano())
+}
+
+// runStateConfigMapWriter writes the state ConfigMap once requests have been
+// quiescent for stateConfigMapDebounceDelay.
+func (s *Server) runStateConfigMapWriter(ctx context.Context) {
+	ticker := time.NewTicker(stateConfigMapTickInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			requested := s.stateWriteRequestNS.Load()
+			if requested == 0 {
+				continue
+			}
+			if time.Since(time.Unix(0, requested)) < stateConfigMapDebounceDelay {
+				continue
+			}
+			// Clear the request only if no newer request raced in. On CAS
+			// failure the next tick observes the newer timestamp.
+			if !s.stateWriteRequestNS.CompareAndSwap(requested, 0) {
+				continue
+			}
+			if err := s.writeStateConfigMap(ctx); err != nil {
+				s.logger.Warn("failed to write injector state ConfigMap", "error", err)
+			}
+		}
+	}
 }
 
 func (s *Server) writeStateConfigMap(ctx context.Context) error {
+	if s.stateWriter == nil {
+		return nil
+	}
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
-	eligible := make([]*EligibleDeployment, 0, len(s.eligibleDeployments))
+	eligible := make([]*configmap.EligibleDeployment, 0, len(s.eligibleDeployments))
 	for _, d := range s.eligibleDeployments {
 		eligible = append(eligible, d)
 	}
+	sortEligible(eligible)
 
-	config := InjectConfig{
-		Criteria: s.cfg.Injector.Instrument,
+	config := configmap.InjectConfig{
+		Discovery: s.cfg.Injector.Instrument,
+		OtelExport: configmap.OtelExport{
+			Endpoint: s.mutator.Endpoint(),
+			Protocol: s.mutator.Protocol(),
+		},
 	}
 
 	return s.stateWriter.Write(ctx, &config, eligible)
+}
+
+func sortEligible(eligible []*configmap.EligibleDeployment) {
+	sort.Slice(eligible, func(i, j int) bool {
+		if eligible[i].Namespace != eligible[j].Namespace {
+			return eligible[i].Namespace < eligible[j].Namespace
+		}
+		return eligible[i].Name < eligible[j].Name
+	})
 }
 
 func (s *Server) ID() string { return uuid.NewString() }
@@ -448,6 +518,8 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
+	// These are processes that existed when Beyla booted, otherwise we won't find them
+	// in attrs. In a sense this handles only the initial startup.
 	for _, a := range attrs {
 		s.handleNewProcessEvent(a)
 	}

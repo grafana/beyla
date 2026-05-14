@@ -37,7 +37,8 @@ type InternalMetricsReporter struct {
 	instrumentationErrors            instrument.Int64Counter
 	avoidedServices                  instrument.Int64Gauge
 	buildInfo                        instrument.Int64Gauge
-	bpfProbeLatencies                instrument.Float64Histogram
+	bpfProbeExecutions               instrument.Int64Counter
+	bpfProbeLatencySum               instrument.Float64Counter
 	bpfMapEntries                    instrument.Int64Gauge
 	bpfMapMaxEntries                 instrument.Int64Gauge
 	bpfInternalMetricsScrapeInterval time.Duration
@@ -138,14 +139,19 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		return nil, err
 	}
 
-	// TODO should it be ebpf like the others, or bpf like the original one?
-	bpfProbeLatencies, err := meter.Float64Histogram(
-		attr.VendorPrefix+".bpf.probe.latency_seconds",
-		instrument.WithDescription("Latency of the eBPF probe in seconds"),
-		instrument.WithUnit("1"),
-		instrument.WithExplicitBucketBoundaries(
-			imetrics.BpfLatenciesBuckets...,
-		),
+	bpfProbeExecutions, err := meter.Int64Counter(
+		attr.VendorPrefix+".bpf.probe.executions",
+		instrument.WithDescription("Total number of eBPF probe executions"),
+		instrument.WithUnit("{call}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	bpfProbeLatencySum, err := meter.Float64Counter(
+		attr.VendorPrefix+".bpf.probe.latency_seconds_total",
+		instrument.WithDescription("Total latency of the eBPF probe in seconds"),
+		instrument.WithUnit("s"),
 	)
 	if err != nil {
 		return nil, err
@@ -206,7 +212,8 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		instrumentationErrors:            instrumentationErrors,
 		avoidedServices:                  avoidedServices,
 		buildInfo:                        buildInfo,
-		bpfProbeLatencies:                bpfProbeLatencies,
+		bpfProbeExecutions:               bpfProbeExecutions,
+		bpfProbeLatencySum:               bpfProbeLatencySum,
 		bpfMapEntries:                    bpfMapEntries,
 		bpfMapMaxEntries:                 bpfMapMaxEntries,
 		bpfInternalMetricsScrapeInterval: internalMetrics.BpfMetricScrapeInterval,
@@ -303,14 +310,15 @@ func (p *InternalMetricsReporter) AvoidInstrumentationTraces(serviceName, servic
 	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "traces")
 }
 
-func (p *InternalMetricsReporter) BpfProbeLatency(probeID, probeType, probeName string, latencySeconds float64) {
+func (p *InternalMetricsReporter) BpfProbeStats(probeID, probeType, probeName string, count uint64, latencySumSeconds float64) {
 	attrs := []attribute.KeyValue{
 		attribute.String("bpf.probe.id", probeID),
 		attribute.String("bpf.probe.type", probeType),
 		attribute.String("bpf.probe.name", probeName),
 	}
 
-	p.bpfProbeLatencies.Record(p.ctx, latencySeconds, instrument.WithAttributes(attrs...))
+	p.bpfProbeExecutions.Add(p.ctx, int64(count), instrument.WithAttributes(attrs...))
+	p.bpfProbeLatencySum.Add(p.ctx, latencySumSeconds, instrument.WithAttributes(attrs...))
 }
 
 func (p *InternalMetricsReporter) BpfMapEntries(mapID, mapName, mapType string, entriesTotal int) {

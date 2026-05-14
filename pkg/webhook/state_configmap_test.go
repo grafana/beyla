@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,8 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
-
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
 func TestContainerIDMatches(t *testing.T) {
@@ -98,38 +95,6 @@ func TestPodHasContainerIDNoMatch(t *testing.T) {
 	assert.False(t, podHasContainerID(pod, "abc123def456abc123def456abc123def456abc123def456abc123def456abc1"))
 }
 
-func TestMarshalNonZeroYAMLPrunesEmptyCriteriaFields(t *testing.T) {
-	openPorts := services.IntEnum{}
-	assert.NoError(t, openPorts.UnmarshalText([]byte("8080")))
-	podLabel := services.NewGlob("checkout")
-
-	out, err := marshalNonZeroYAML(services.GlobDefinitionCriteria{{
-		Name:           "checkout",
-		OpenPorts:      openPorts,
-		Languages:      services.NewGlob("go"),
-		PodLabels:      map[string]*services.GlobAttr{"app": &podLabel},
-		ContainersOnly: false,
-	}})
-	assert.NoError(t, err)
-
-	yamlText := string(out)
-	assert.Contains(t, yamlText, "name: checkout")
-	assert.Contains(t, yamlText, "open_ports:")
-	assert.Contains(t, yamlText, "languages: go")
-	assert.Contains(t, yamlText, "k8s_pod_labels:")
-	assert.Contains(t, yamlText, "app: checkout")
-
-	assert.NotContains(t, yamlText, "namespace:")
-	assert.NotContains(t, yamlText, "target_pids:")
-	assert.NotContains(t, yamlText, "exe_path:")
-	assert.NotContains(t, yamlText, "cmd_args:")
-	assert.NotContains(t, yamlText, "containers_only:")
-	assert.NotContains(t, yamlText, "exports:")
-	assert.NotContains(t, yamlText, "sampler:")
-	assert.NotContains(t, yamlText, "routes:")
-	assert.NotContains(t, yamlText, "metrics:")
-}
-
 func TestTrimContainerIDScheme(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -149,181 +114,6 @@ func TestTrimContainerIDScheme(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, trimContainerIDScheme(tt.input))
-		})
-	}
-}
-
-func TestSortEligible(t *testing.T) {
-	t.Run("orders by namespace then deployment", func(t *testing.T) {
-		eligible := []*EligibleDeployment{
-			{Namespace: "b-ns", Deployment: "z-app"},
-			{Namespace: "a-ns", Deployment: "z-app"},
-			{Namespace: "b-ns", Deployment: "a-app"},
-			{Namespace: "a-ns", Deployment: "a-app"},
-		}
-		sortEligible(eligible)
-		assert.Equal(t, []*EligibleDeployment{
-			{Namespace: "a-ns", Deployment: "a-app"},
-			{Namespace: "a-ns", Deployment: "z-app"},
-			{Namespace: "b-ns", Deployment: "a-app"},
-			{Namespace: "b-ns", Deployment: "z-app"},
-		}, eligible)
-	})
-
-	t.Run("empty slice is a no-op", func(t *testing.T) {
-		assert.NotPanics(t, func() { sortEligible(nil) })
-		assert.NotPanics(t, func() { sortEligible([]*EligibleDeployment{}) })
-	})
-
-	t.Run("single element unchanged", func(t *testing.T) {
-		eligible := []*EligibleDeployment{{Namespace: "x", Deployment: "y"}}
-		sortEligible(eligible)
-		assert.Equal(t, []*EligibleDeployment{{Namespace: "x", Deployment: "y"}}, eligible)
-	})
-}
-
-func TestMarshalNonZeroYAML(t *testing.T) {
-	t.Run("prunes zero scalars from a map", func(t *testing.T) {
-		input := map[string]any{
-			"keep_string":   "hello",
-			"empty_string":  "",
-			"keep_int":      42,
-			"zero_int":      0,
-			"keep_bool":     true,
-			"false_bool":    false,
-			"keep_float":    1.5,
-			"zero_float":    0.0,
-			"explicit_null": nil,
-		}
-		out, err := marshalNonZeroYAML(input)
-		require.NoError(t, err)
-		s := string(out)
-
-		assert.Contains(t, s, "keep_string: hello")
-		assert.Contains(t, s, "keep_int: 42")
-		assert.Contains(t, s, "keep_bool: true")
-		assert.Contains(t, s, "keep_float: 1.5")
-
-		assert.NotContains(t, s, "empty_string")
-		assert.NotContains(t, s, "zero_int")
-		assert.NotContains(t, s, "false_bool")
-		assert.NotContains(t, s, "zero_float")
-		assert.NotContains(t, s, "explicit_null")
-	})
-
-	t.Run("prunes zero entries from a sequence", func(t *testing.T) {
-		input := []any{"a", "", "b", 0, 1, false, true}
-		out, err := marshalNonZeroYAML(input)
-		require.NoError(t, err)
-
-		var got []any
-		require.NoError(t, yaml.Unmarshal(out, &got))
-		assert.Equal(t, []any{"a", "b", 1, true}, got)
-	})
-
-	t.Run("prunes empty nested maps and sequences after their children are pruned", func(t *testing.T) {
-		input := map[string]any{
-			"outer": map[string]any{
-				"inner_empty": "",
-				"inner_zero":  0,
-			},
-			"list_of_empties": []any{"", 0, false},
-			"surviving":       "kept",
-		}
-		out, err := marshalNonZeroYAML(input)
-		require.NoError(t, err)
-
-		var got map[string]any
-		require.NoError(t, yaml.Unmarshal(out, &got))
-		assert.Equal(t, map[string]any{"surviving": "kept"}, got)
-	})
-
-	t.Run("preserves struct yaml tags via Encode", func(t *testing.T) {
-		input := []*EligibleDeployment{
-			{Namespace: "ns1", Deployment: "dep1", Language: "java"},
-			{Namespace: "ns2", Deployment: "dep2"},
-		}
-		out, err := marshalNonZeroYAML(input)
-		require.NoError(t, err)
-
-		var got []*EligibleDeployment
-		require.NoError(t, yaml.Unmarshal(out, &got))
-		assert.Equal(t, input, got)
-
-		s := string(out)
-		assert.Equal(t, 1, strings.Count(s, "language:"))
-		assert.Equal(t, 0, strings.Count(s, "kind:"))
-	})
-
-	t.Run("returns valid yaml for an entirely-zero document", func(t *testing.T) {
-		out, err := marshalNonZeroYAML(map[string]any{"a": "", "b": 0})
-		require.NoError(t, err)
-		var got map[string]any
-		require.NoError(t, yaml.Unmarshal(out, &got))
-		assert.Empty(t, got)
-	})
-}
-
-func TestPruneZeroYAMLNodesDocumentNode(t *testing.T) {
-	var doc yaml.Node
-	require.NoError(t, yaml.Unmarshal([]byte("a: \"\"\nb: keep\n"), &doc))
-	pruneZeroYAMLNodes(&doc)
-	out, err := yaml.Marshal(&doc)
-	require.NoError(t, err)
-	s := string(out)
-	assert.Contains(t, s, "b: keep")
-	assert.NotContains(t, s, "a:")
-}
-
-func TestIsZeroYAMLNode(t *testing.T) {
-	scalar := func(tag, value string) *yaml.Node {
-		return &yaml.Node{Kind: yaml.ScalarNode, Tag: tag, Value: value}
-	}
-
-	tests := []struct {
-		name string
-		node *yaml.Node
-		want bool
-	}{
-		{"null", scalar("!!null", ""), true},
-		{"empty string", scalar("!!str", ""), true},
-		{"non-empty string", scalar("!!str", "hi"), false},
-		{"false bool", scalar("!!bool", "false"), true},
-		{"true bool", scalar("!!bool", "true"), false},
-		{"zero int", scalar("!!int", "0"), true},
-		{"non-zero int", scalar("!!int", "7"), false},
-		{"hex zero int", scalar("!!int", "0x0"), true},
-		{"unparseable int treated as non-zero", scalar("!!int", "notanumber"), false},
-		{"zero float", scalar("!!float", "0"), true},
-		{"zero float with point", scalar("!!float", "0.0"), true},
-		{"non-zero float", scalar("!!float", "1.5"), false},
-		{"unknown tag empty value", scalar("!!custom", ""), true},
-		{"unknown tag non-empty value", scalar("!!custom", "x"), false},
-		{"empty sequence", &yaml.Node{Kind: yaml.SequenceNode}, true},
-		{
-			name: "non-empty sequence",
-			node: &yaml.Node{
-				Kind:    yaml.SequenceNode,
-				Content: []*yaml.Node{scalar("!!str", "x")},
-			},
-			want: false,
-		},
-		{"empty mapping", &yaml.Node{Kind: yaml.MappingNode}, true},
-		{
-			name: "non-empty mapping",
-			node: &yaml.Node{
-				Kind:    yaml.MappingNode,
-				Content: []*yaml.Node{scalar("!!str", "k"), scalar("!!str", "v")},
-			},
-			want: false,
-		},
-		{"document node returns false (not handled)", &yaml.Node{Kind: yaml.DocumentNode}, false},
-		{"alias node returns false", &yaml.Node{Kind: yaml.AliasNode}, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, isZeroYAMLNode(tt.node))
 		})
 	}
 }

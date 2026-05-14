@@ -50,11 +50,13 @@ type Server struct {
 	externalWebhookUpdateNS atomic.Int64
 	lastEligiblePodLaunchNS atomic.Int64
 	stateWriteRequestNS     atomic.Int64
+	rebuildRequestNS        atomic.Int64
 }
 
 const (
-	stateConfigMapDebounceDelay = 10 * time.Second
-	stateConfigMapTickInterval  = time.Second
+	stateConfigMapDebounceDelay     = 10 * time.Second
+	rebuildDeploymentsDebounceDelay = 10 * time.Second
+	debounceTickInterval            = time.Second
 )
 
 // NewServer creates a new webhook server
@@ -174,6 +176,10 @@ func (s *Server) Start(ctx context.Context) error {
 
 	if s.stateWriter != nil {
 		go s.runStateConfigMapWriter(ctx)
+	}
+
+	if s.cfg.Injector.Webhook.UsesExternalWebhook() {
+		go s.runEligibleDeploymentsRebuilder(ctx)
 	}
 
 	if s.matcher.HasSelectionCriteria() {
@@ -408,7 +414,7 @@ func (s *Server) requestStateConfigMapWrite() {
 // runStateConfigMapWriter writes the state ConfigMap once requests have been
 // quiescent for stateConfigMapDebounceDelay.
 func (s *Server) runStateConfigMapWriter(ctx context.Context) {
-	ticker := time.NewTicker(stateConfigMapTickInterval)
+	ticker := time.NewTicker(debounceTickInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -434,10 +440,47 @@ func (s *Server) runStateConfigMapWriter(ctx context.Context) {
 	}
 }
 
+// requestRebuildEligibleDeployments marks the eligible deployments map as
+// needing a rebuild. Multiple callers within rebuildDeploymentsDebounceDelay
+// coalesce into a single rebuild performed by runEligibleDeploymentsRebuilder.
+func (s *Server) requestRebuildEligibleDeployments() {
+	s.rebuildRequestNS.Store(time.Now().UnixNano())
+}
+
+// runEligibleDeploymentsRebuilder rebuilds the eligible deployments map once
+// requests have been quiescent for rebuildDeploymentsDebounceDelay.
+func (s *Server) runEligibleDeploymentsRebuilder(ctx context.Context) {
+	ticker := time.NewTicker(debounceTickInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			requested := s.rebuildRequestNS.Load()
+			if requested == 0 {
+				continue
+			}
+			if time.Since(time.Unix(0, requested)) < rebuildDeploymentsDebounceDelay {
+				continue
+			}
+			// Clear the request only if no newer request raced in. On CAS
+			// failure the next tick observes the newer timestamp.
+			if !s.rebuildRequestNS.CompareAndSwap(requested, 0) {
+				continue
+			}
+			s.rebuildEligibleDeployments()
+		}
+	}
+}
+
 func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	if s.stateWriter == nil {
 		return nil
 	}
+
+	s.logger.Debug("writing state config map")
+
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
 	eligible := make([]*configmap.EligibleDeployment, 0, len(s.eligibleDeployments))
@@ -720,8 +763,7 @@ func (s *Server) handleExternalWebhookEvent(event *informer.Event) bool {
 	if event.Type == informer.EventType_CREATED || event.Type == informer.EventType_UPDATED {
 		if s.isExternalWebhookEvent(event.GetResource()) {
 			if s.needsToUpdateEligibleDeployments() {
-				s.rebuildEligibleDeployments()
-				s.externalWebhookUpdateNS.Store(time.Now().UnixNano())
+				s.requestRebuildEligibleDeployments()
 			}
 			return true
 		} else {

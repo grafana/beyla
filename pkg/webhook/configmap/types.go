@@ -39,10 +39,10 @@ type WebhookInstrument []WebhookKubeOnlySelector
 
 type WebhookKubeOnlySelector struct {
 	// PodLabels allows matching against the labels of a pod
-	PodLabels map[string]*services.GlobAttr `yaml:"k8s_pod_labels"`
+	PodLabels map[string]*services.GlobAttr `yaml:"k8s_pod_labels,omitempty"`
 
 	// PodAnnotations allows matching against the annotations of a pod
-	PodAnnotations map[string]*services.GlobAttr `yaml:"k8s_pod_annotations"`
+	PodAnnotations map[string]*services.GlobAttr `yaml:"k8s_pod_annotations,omitempty"`
 
 	// Metadata stores other Kubernetes object metadata
 	Metadata services.MetadataGlobMap `yaml:",inline" mapstructure:",remain"`

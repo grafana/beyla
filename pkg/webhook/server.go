@@ -3,31 +3,25 @@ package webhook
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"golang.org/x/mod/semver"
-	appsv1 "k8s.io/api/apps/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
-	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 )
 
 // Server represents the webhook server
@@ -45,12 +39,15 @@ type Server struct {
 	metrics                 *SDKInjectionMetrics
 	podStateCache           *PodStateCache
 	stateWriter             *StateConfigMapWriter
-	eligibleDeployments     map[string]*configmap.EligibleDeployment
+	eligibleDeployments     *simplelru.LRU[string, *configmap.EligibleDeployment]
 	eligibleDeploymentsMux  *sync.Mutex
+	instrumentationManager  *InstrumentationManager
 	externalWebhookUpdateNS atomic.Int64
 	lastEligiblePodLaunchNS atomic.Int64
 	stateWriteRequestNS     atomic.Int64
 	rebuildRequestNS        atomic.Int64
+	nodeName                string
+	initialPodScan          atomic.Bool
 }
 
 const (
@@ -93,7 +90,9 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		}
 	}
 
-	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, OwnNodeName())
+	nodeName := OwnNodeName()
+
+	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, nodeName)
 	if err != nil {
 		return nil, fmt.Errorf("error creating configmap state writer: %w", err)
 	}
@@ -103,26 +102,33 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	now := time.Now()
 
+	eligible, err := simplelru.NewLRU[string, *configmap.EligibleDeployment](10_000, nil)
+
+	if err != nil {
+		return nil, fmt.Errorf("error initalizing the eligible deployments LRU: %w", err)
+	}
+
 	s := &Server{
-		cfg:                     cfg,
-		mutator:                 mutator,
-		bouncer:                 bouncer,
-		scanner:                 NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
-		matcher:                 matcher,
-		logger:                  logger,
-		ctxInfo:                 ctxInfo,
-		metrics:                 metrics,
-		podStateCache:           podStateCache,
-		stateWriter:             stateWriter,
-		eligibleDeployments:     map[string]*configmap.EligibleDeployment{},
-		eligibleDeploymentsMux:  &sync.Mutex{},
-		initialStateMux:         &sync.Mutex{},
-		lastEligiblePodLaunchNS: atomic.Int64{},
-		externalWebhookUpdateNS: atomic.Int64{},
+		cfg:                    cfg,
+		mutator:                mutator,
+		bouncer:                bouncer,
+		scanner:                NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		matcher:                matcher,
+		logger:                 logger,
+		ctxInfo:                ctxInfo,
+		metrics:                metrics,
+		podStateCache:          podStateCache,
+		stateWriter:            stateWriter,
+		eligibleDeployments:    eligible,
+		eligibleDeploymentsMux: &sync.Mutex{},
+		initialStateMux:        &sync.Mutex{},
+		instrumentationManager: NewInstrumentationManager(cfg),
+		nodeName:               nodeName,
 	}
 
 	s.lastEligiblePodLaunchNS.Store(now.UnixNano())
 	s.externalWebhookUpdateNS.Store(now.UnixNano())
+	s.initialPodScan.Store(true)
 
 	return s, nil
 }
@@ -166,7 +172,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
 
-	if err := s.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
+	if err := s.instrumentationManager.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
 		return err
 	}
 
@@ -174,11 +180,8 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.subscribeStateCache(ctx)
 	}
 
-	if s.stateWriter != nil {
+	if s.cfg.Injector.Webhook.UsesExternalWebhook() && s.stateWriter != nil {
 		go s.runStateConfigMapWriter(ctx)
-	}
-
-	if s.cfg.Injector.Webhook.UsesExternalWebhook() {
 		go s.runEligibleDeploymentsRebuilder(ctx)
 	}
 
@@ -199,67 +202,6 @@ func (s *Server) Start(ctx context.Context) error {
 
 	errChan := s.setupWebhookServer(server)
 	return s.waitForCancellation(ctx, server, errChan)
-}
-
-func (s *Server) setupWebhookServer(server *http.Server) chan error {
-	if s.cfg.Injector.Webhook.UsesExternalWebhook() {
-		return nil
-	}
-	// Start server in a goroutine
-	errChan := make(chan error, 1)
-	go func() {
-		if err := server.ListenAndServeTLS(s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath); err != nil && err != http.ErrServerClosed {
-			errChan <- fmt.Errorf("webhook server failed: %w", err)
-		}
-		close(errChan)
-	}()
-	return errChan
-}
-
-func (s *Server) waitForCancellation(ctx context.Context, server *http.Server, errChan chan error) error {
-	// Wait for context cancellation or server error
-	select {
-	case <-ctx.Done():
-		s.logger.Debug("shutting down webhook server")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if !s.cfg.Injector.Webhook.UsesExternalWebhook() {
-			if err := server.Shutdown(shutdownCtx); err != nil {
-				return fmt.Errorf("webhook server shutdown failed: %w", err)
-			}
-		}
-		// Don't return ctx.Err() as an error - graceful shutdown is expected
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return nil
-		}
-		return ctx.Err()
-	case err := <-errChan:
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-}
-
-// waitForTLSFiles blocks until both TLS cert and key exist or context/timeout expires.
-func waitForTLSFiles(ctx context.Context, certPath, keyPath string, timeout, poll time.Duration) error {
-	deadline := time.After(timeout)
-	for {
-		if _, err := os.Stat(certPath); err == nil {
-			if _, err := os.Stat(keyPath); err == nil {
-				return nil
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-deadline:
-			return errors.New("TLS files not found before timeout")
-		case <-time.After(poll):
-		}
-	}
 }
 
 func (s *Server) setOrUpdateInitialProcessState() error {
@@ -287,55 +229,14 @@ func (s *Server) establishInitialProcessState() error {
 			oldestSDK = s.cfg.Injector.SDKPkgVersion
 		}
 
-		if err := s.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
+		if err := s.instrumentationManager.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
 			s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
 		}
 	}
 	return nil
 }
 
-func (s *Server) checkImageVolumeSupport(provider *kube.MetadataProvider) error {
-	if s.cfg.Injector.UsesImageVolume() {
-		kubeClient, err := provider.KubeClient()
-		if err != nil {
-			return fmt.Errorf("can't get kubernetes client: %w", err)
-		}
-		serverVersion, err := kubeClient.Discovery().ServerVersion()
-		if err != nil {
-			return fmt.Errorf("can't get kubernetes server version: %w", err)
-		}
-		k8sVersion := fmt.Sprintf("v%s.%s.0", serverVersion.Major, strings.TrimRight(serverVersion.Minor, "+"))
-		s.logger.Info("found Kubernetes version", "version", k8sVersion)
-		if semver.Compare(k8sVersion, "v1.31.0") < 0 {
-			return fmt.Errorf("image volume mounts require Kubernetes 1.31 or later, found %s.%s", serverVersion.Major, serverVersion.Minor)
-		}
-	}
-
-	return nil
-}
-
-// subscribeStateCache subscribes the pod state cache to the kube informer store.
-func (s *Server) subscribeStateCache(ctx context.Context) {
-	if !s.ctxInfo.K8sInformer.IsKubeEnabled() {
-		return
-	}
-	store, err := s.ctxInfo.K8sInformer.Get(ctx)
-	if err != nil {
-		s.logger.Error("state metrics unavailable: cannot subscribe to k8s informer", "error", err)
-		return
-	}
-	// Subscribe delivers all existing pods synchronously as CREATED events before
-	// returning. SYNC_FINISHED is not forwarded to late subscribers, so we mark
-	// the cache as ready immediately after Subscribe returns.
-	store.Subscribe(s.podStateCache)
-	s.podStateCache.markSynced()
-}
-
 func (s *Server) getInitialState(ctx context.Context) error {
-	if err := s.establishInitialProcessState(); err != nil {
-		return err
-	}
-
 	provider := s.ctxInfo.K8sInformer
 
 	if !provider.IsKubeEnabled() {
@@ -353,39 +254,12 @@ func (s *Server) getInitialState(ctx context.Context) error {
 	// reflects the initial state, and we can persist it. Future events still
 	// flow through the registered observer asynchronously.
 	store.Subscribe(s)
+	s.initialPodScan.Store(false)
+	s.logger.Debug("finished initial Kubernetes store scan")
 
 	s.requestStateConfigMapWrite()
 
 	return nil
-}
-
-func deploymentFromProcess(a *ProcessInfo) *configmap.EligibleDeployment {
-	namespace := a.metadata[services.AttrNamespace]
-	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
-
-	language := languageLabel(a.kind)
-
-	return &configmap.EligibleDeployment{
-		Namespace: namespace,
-		Kind:      "Deployment",
-		Name:      deployment,
-		Language:  language,
-	}
-}
-
-func deploymentKeyFromProcess(a *ProcessInfo) string {
-	namespace := a.metadata[services.AttrNamespace]
-	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
-
-	return mutationKey(namespace, deployment)
-}
-
-func (s *Server) removeEligibleDeployment(a *ProcessInfo) {
-	s.eligibleDeploymentsMux.Lock()
-	defer s.eligibleDeploymentsMux.Unlock()
-
-	key := deploymentKeyFromProcess(a)
-	delete(s.eligibleDeployments, key)
 }
 
 func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
@@ -395,7 +269,9 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 	key := deploymentKeyFromProcess(a)
 	d := deploymentFromProcess(a)
 
-	s.eligibleDeployments[key] = d
+	s.eligibleDeployments.Add(key, d)
+
+	s.logger.Debug("added eligible deployment", "key", key)
 
 	// Now request map update
 	s.requestStateConfigMapWrite()
@@ -483,8 +359,8 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
-	eligible := make([]*configmap.EligibleDeployment, 0, len(s.eligibleDeployments))
-	for _, d := range s.eligibleDeployments {
+	eligible := make([]*configmap.EligibleDeployment, 0, s.eligibleDeployments.Len())
+	for _, d := range s.eligibleDeployments.Values() {
 		eligible = append(eligible, d)
 	}
 	sortEligible(eligible)
@@ -509,8 +385,6 @@ func sortEligible(eligible []*configmap.EligibleDeployment) {
 	})
 }
 
-func (s *Server) ID() string { return uuid.NewString() }
-
 func (s *Server) restartDeployment(a *ProcessInfo) {
 	namespace := a.metadata[services.AttrNamespace]
 	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
@@ -529,6 +403,14 @@ func (s *Server) restartDeployment(a *ProcessInfo) {
 	}
 }
 
+func (s *Server) isMyNodeEvent(event *informer.Event) bool {
+	if s.nodeName == "" || event.Resource.Pod.NodeName == "" {
+		return false
+	}
+
+	return s.nodeName == event.Resource.Pod.NodeName
+}
+
 func (s *Server) On(event *informer.Event) error {
 	// ignoring updates on non-pod resources
 	if event.Resource == nil || event.GetResource().GetPod() == nil {
@@ -541,24 +423,37 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
-	// It's important to consider the local process info here so that we are
-	// not evaluating pods from other nodes, since Beyla gets cluster-wide info.
-	attrs := s.enrichProcessInfo(event.GetResource())
-	if attrs == nil {
-		return nil
-	}
-
-	if event.Type == informer.EventType_DELETED {
-		s.logger.Debug("removed pod", "pod", event.Resource)
-		for _, a := range attrs {
-			s.handleDeletedProcessEvent(a)
-		}
-
+	if !s.isMyNodeEvent(event) {
 		return nil
 	}
 
 	if event.Type != informer.EventType_CREATED && event.Type != informer.EventType_UPDATED {
 		return nil
+	}
+
+	if s.initialPodScan.Load() {
+		if s.initialState == nil {
+			if err := s.establishInitialProcessState(); err != nil {
+				s.logger.Warn("unable to set initial process state", "error", err)
+				return err
+			}
+		}
+	}
+
+	// It's important to consider the local process info here so that we are
+	// not evaluating pods from other nodes, since Beyla gets cluster-wide info.
+	attrs := s.enrichProcessInfo(event.GetResource())
+	if attrs == nil {
+		if s.initialPodScan.Load() {
+			if err := s.setOrUpdateInitialProcessState(); err != nil {
+				s.logger.Warn("unable to update initial process state", "error", err)
+				return err
+			}
+			attrs = s.enrichProcessInfo(event.GetResource())
+		}
+		if attrs == nil {
+			return nil
+		}
 	}
 
 	// These are processes that existed when Beyla booted, otherwise we won't find them
@@ -567,10 +462,6 @@ func (s *Server) On(event *informer.Event) error {
 		s.handleNewProcessEvent(a)
 	}
 	return nil
-}
-
-func (s *Server) handleDeletedProcessEvent(a *ProcessInfo) {
-	s.removeEligibleDeployment(a)
 }
 
 func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
@@ -609,90 +500,25 @@ func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
 // This function will return nil if the pod containers didn't match, which
 // typically means it's a pod from a different node
 func (s *Server) enrichProcessInfo(pod *informer.ObjectMeta) []*ProcessInfo {
+	s.initialStateMux.Lock()
+	defer s.initialStateMux.Unlock()
+
+	return s.enrichProcessInfoLocked(pod)
+}
+
+func (s *Server) enrichProcessInfoLocked(pod *informer.ObjectMeta) []*ProcessInfo {
 	var res []*ProcessInfo
 
 	for _, cnt := range pod.Pod.Containers {
 		if procInfos, ok := s.initialState[cnt.Id]; ok {
 			for _, p := range procInfos {
-				attr := s.addMetadata(p, pod)
+				attr := addMetadata(p, pod)
 				res = append(res, attr)
 			}
 		}
 	}
 
 	return res
-}
-
-func topOwner(owners []*informer.Owner) *informer.Owner {
-	if len(owners) == 0 {
-		return nil
-	}
-	return owners[len(owners)-1]
-}
-
-// Adds the kubernetes metadata to the matched local process
-func (s *Server) addMetadata(pp *ProcessInfo, info *informer.ObjectMeta) *ProcessInfo {
-	ownerName := info.Name
-	if info.Pod != nil {
-		if topOwner := topOwner(info.Pod.Owners); topOwner != nil {
-			ownerName = topOwner.Name
-		}
-	}
-
-	ret := pp
-
-	ret.metadata = map[string]string{
-		services.AttrNamespace: info.Namespace,
-		services.AttrPodName:   info.Name,
-		services.AttrOwnerName: ownerName,
-	}
-	ret.podLabels = info.Labels
-	ret.podAnnotations = info.Annotations
-
-	// add any other owner name (they might be several, e.g. replicaset and deployment)
-	for _, owner := range info.Pod.Owners {
-		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
-	}
-	return ret
-}
-
-// cleanupOldInstrumentationVersions removes instrumentation directories
-// older than the specified minimum version
-func (s *Server) cleanupOldInstrumentationVersions(instrumentDir string, minVersion string) error {
-	if !semver.IsValid(minVersion) {
-		return fmt.Errorf("invalid minimum version: %s", minVersion)
-	}
-
-	entries, err := os.ReadDir(instrumentDir)
-	if err != nil {
-		return fmt.Errorf("failed to read directory %s: %w", instrumentDir, err)
-	}
-
-	s.logger.Debug("found SDK versions", "entries", entries)
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		version := entry.Name()
-
-		// Skip if the directory not a valid semver in the instrumentation volume
-		if !semver.IsValid(version) {
-			s.logger.Debug("ignoring directory in the instrumentation path", "dir", entry.Name())
-			continue
-		}
-
-		if semver.Compare(version, minVersion) < 0 {
-			dirPath := filepath.Join(instrumentDir, entry.Name())
-			if err := os.RemoveAll(dirPath); err != nil {
-				return fmt.Errorf("failed to remove directory %s: %w", dirPath, err)
-			}
-			s.logger.Info("removed old instrumentation", "version", entry.Name())
-		}
-	}
-
-	return nil
 }
 
 func (s *Server) isExternalWebhookEvent(info *informer.ObjectMeta) bool {
@@ -718,15 +544,6 @@ func (s *Server) isExternalWebhookEvent(info *informer.ObjectMeta) bool {
 	return false
 }
 
-func deploymentNameFromReplicaSet(replicaSetName string, labels map[string]string) string {
-	podTemplateHash := labels[appsv1.DefaultDeploymentUniqueLabelKey]
-	suffix := "-" + podTemplateHash
-	if podTemplateHash != "" && strings.HasSuffix(replicaSetName, suffix) {
-		return strings.TrimSuffix(replicaSetName, suffix)
-	}
-	return replicaSetName
-}
-
 func (s *Server) needsToUpdateEligibleDeployments() bool {
 	lastUpdate := s.externalWebhookUpdateNS.Load()
 	lastLaunch := s.lastEligiblePodLaunchNS.Load()
@@ -740,12 +557,16 @@ func (s *Server) rebuildEligibleDeployments() {
 		return
 	}
 
+	s.eligibleDeploymentsMux.Lock()
+	s.eligibleDeployments.Purge()
+	s.eligibleDeploymentsMux.Unlock()
+
 	s.initialStateMux.Lock()
 	defer s.initialStateMux.Unlock()
 
 	for cid := range s.initialState {
 		if pod := s.store.PodByContainerID(cid); pod != nil {
-			if attrs := s.enrichProcessInfo(pod.Meta); attrs != nil {
+			if attrs := s.enrichProcessInfoLocked(pod.Meta); attrs != nil {
 				for _, a := range attrs {
 					s.handleNewProcessEvent(a)
 				}
@@ -762,6 +583,7 @@ func (s *Server) rebuildEligibleDeployments() {
 func (s *Server) handleExternalWebhookEvent(event *informer.Event) bool {
 	if event.Type == informer.EventType_CREATED || event.Type == informer.EventType_UPDATED {
 		if s.isExternalWebhookEvent(event.GetResource()) {
+			s.logger.Debug("external webhook event")
 			if s.needsToUpdateEligibleDeployments() {
 				s.requestRebuildEligibleDeployments()
 			}
@@ -772,4 +594,21 @@ func (s *Server) handleExternalWebhookEvent(event *informer.Event) bool {
 	}
 
 	return false
+}
+
+// subscribeStateCache subscribes the pod state cache to the kube informer store.
+func (s *Server) subscribeStateCache(ctx context.Context) {
+	if !s.ctxInfo.K8sInformer.IsKubeEnabled() {
+		return
+	}
+	store, err := s.ctxInfo.K8sInformer.Get(ctx)
+	if err != nil {
+		s.logger.Error("state metrics unavailable: cannot subscribe to k8s informer", "error", err)
+		return
+	}
+	// Subscribe delivers all existing pods synchronously as CREATED events before
+	// returning. SYNC_FINISHED is not forwarded to late subscribers, so we mark
+	// the cache as ready immediately after Subscribe returns.
+	store.Subscribe(s.podStateCache)
+	s.podStateCache.markSynced()
 }

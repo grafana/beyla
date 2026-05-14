@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/process"
@@ -42,6 +43,7 @@ var (
 
 const (
 	dummySDKVersion = "v999.999.999"
+	newProcessDelay = time.Second * 5
 )
 
 var (
@@ -65,6 +67,53 @@ func (s *LocalProcessScanner) OldestSDKVersion() string {
 	return s.oldestSDKVersion
 }
 
+func (s *LocalProcessScanner) EnrichProcessInfoWithContainerData(v *ProcessInfo) bool {
+	containerInfo, err := containerInfoFunc(uint32(v.pid))
+	if err != nil {
+		s.logger.Debug("cannot find container info for pid", "pid", v.pid, "error", err)
+		return false
+	}
+	v.containerInfo = &containerInfo
+
+	return true
+}
+
+func (s *LocalProcessScanner) EnrichProcessInfoWithLanguage(v *ProcessInfo) {
+	v.kind = findProcLanguageCheap(int32(v.pid))
+}
+
+func (s *LocalProcessScanner) EnrichProcessInfoWithEnvironment(v *ProcessInfo) bool {
+	proc, err := newProcessFunc(int32(v.pid))
+	if err != nil {
+		s.logger.Debug("cannot find executable info", "pid", v.pid, "error", err)
+		return false
+	}
+	if env, err := procEnvironFunc(proc); err == nil {
+		v.env = envStrsToMap(env)
+		if ver, ok := v.env[envVarSDKVersion]; ok && semver.IsValid(ver) {
+			if semver.Compare(ver, s.oldestSDKVersion) < 0 {
+				s.oldestSDKVersion = ver
+			}
+		}
+	}
+
+	return true
+}
+
+func (s *LocalProcessScanner) EnrichProcessInfo(v *ProcessInfo) bool {
+	s.EnrichProcessInfoWithLanguage(v)
+
+	if !s.EnrichProcessInfoWithEnvironment(v) {
+		return false
+	}
+
+	if !s.EnrichProcessInfoWithContainerData(v) {
+		return false
+	}
+
+	return true
+}
+
 func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo, error) {
 	procs, err := fetchProcessesFunc()
 	if err != nil {
@@ -75,35 +124,16 @@ func (s *LocalProcessScanner) FindExistingProcesses() (map[string][]*ProcessInfo
 
 	for _, v := range procs {
 		s.logger.Debug("found process", "process", v)
-		v.kind = findProcLanguageCheap(int32(v.pid))
-
-		proc, err := newProcessFunc(int32(v.pid))
-		if err != nil {
-			s.logger.Debug("cannot find executable info", "pid", v.pid, "error", err)
+		if !s.EnrichProcessInfo(v) {
 			continue
 		}
-		if env, err := procEnvironFunc(proc); err == nil {
-			v.env = envStrsToMap(env)
-			if ver, ok := v.env[envVarSDKVersion]; ok && semver.IsValid(ver) {
-				if semver.Compare(ver, s.oldestSDKVersion) < 0 {
-					s.oldestSDKVersion = ver
-				}
-			}
-		}
-
-		containerInfo, err := containerInfoFunc(uint32(v.pid))
-		if err != nil {
-			s.logger.Debug("cannot find container info for pid", "pid", v.pid, "error", err)
-			continue
-		}
-		v.containerInfo = &containerInfo
 		s.logger.Debug("final process state", "state", v)
 
-		if existing, ok := containers[containerInfo.ContainerID]; ok {
+		if existing, ok := containers[v.containerInfo.ContainerID]; ok {
 			existing = append(existing, v)
-			containers[containerInfo.ContainerID] = existing
+			containers[v.containerInfo.ContainerID] = existing
 		} else {
-			containers[containerInfo.ContainerID] = []*ProcessInfo{v}
+			containers[v.containerInfo.ContainerID] = []*ProcessInfo{v}
 		}
 	}
 

@@ -286,9 +286,7 @@ func TestServer_AddMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := &Server{}
-
-			result := server.addMetadata(tt.processInfo, tt.objectMeta)
+			result := addMetadata(tt.processInfo, tt.objectMeta)
 
 			assert.NotNil(t, result)
 			assert.Equal(t, tt.processInfo.pid, result.pid)
@@ -556,10 +554,11 @@ func TestServer_CleanupOldInstrumentationVersions(t *testing.T) {
 			}
 
 			server := &Server{
-				logger: slog.With("component", "test"),
+				logger:                 slog.With("component", "test"),
+				instrumentationManager: NewInstrumentationManager(&beyla.Config{}),
 			}
 
-			err = server.cleanupOldInstrumentationVersions(tmpDir, tt.minVersion)
+			err = server.instrumentationManager.cleanupOldInstrumentationVersions(tmpDir, tt.minVersion)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -588,7 +587,7 @@ func TestServer_CleanupOldInstrumentationVersions(t *testing.T) {
 			logger: slog.With("component", "test"),
 		}
 
-		err := server.cleanupOldInstrumentationVersions("/nonexistent/path", "v0.0.5")
+		err := server.instrumentationManager.cleanupOldInstrumentationVersions("/nonexistent/path", "v0.0.5")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read directory")
 	})

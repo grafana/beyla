@@ -1,0 +1,43 @@
+name: Release binaries
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  release-amd64:
+    uses: ./.github/workflows/release-binaries-base.yml
+    permissions:
+      contents: write
+    with:
+      arch: amd64
+      runner: ubuntu-latest
+
+  release-arm64:
+    uses: ./.github/workflows/release-binaries-base.yml
+    permissions:
+      contents: write
+    with:
+      arch: arm64
+      runner: ubuntu-24.04-arm
+
+  build-alloy-beyla:
+    needs: [release-amd64, release-arm64]
+    uses: ./.github/workflows/build-alloy-beyla-image.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      beyla_version: ${{ github.event.release.tag_name }}
+
+  deploy-alloy-beyla-dev:
+    needs: build-alloy-beyla
+    uses: ./.github/workflows/deploy-alloy-beyla-dev.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      beyla_version: ${{ github.event.release.tag_name }}

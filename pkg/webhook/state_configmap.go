@@ -108,11 +108,7 @@ func (w *StateConfigMapWriter) Write(
 		return fmt.Errorf("marshal eligible deployments: %w", err)
 	}
 
-	ownerName := "unknown"
-	if w.owner != nil {
-		ownerName = w.owner.Name
-	}
-	name := stateConfigMapName(ownerName, w.nodeName)
+	name := stateConfigMapName(w.owner.Name, w.nodeName)
 
 	desired := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

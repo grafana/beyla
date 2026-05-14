@@ -161,7 +161,7 @@ func setupWebhook(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.C
 
 	server, err := webhook.NewServer(cfg, ctxInfo)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating webhook server: %w", err)
 	}
 	if err := server.Start(ctx); err != nil {
 		slog.Debug("webhook server stopped", "error", err)

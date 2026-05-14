@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,17 +91,12 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		}
 	}
 
-	// TODO: should we make Beyla to exit on error instead of silently continuing without OTEL injection?
 	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, OwnNodeName())
 	if err != nil {
-		logger.Warn("disabling injector state ConfigMap writer", "error", err)
-		stateWriter = nil
-	} else if err = stateWriter.Init(context.Background()); err != nil {
-		logger.Warn("disabling injector state ConfigMap writer at init", "error", err)
-		// Init failed: writer has no DaemonSet owner, so any future
-		// Write would panic. Drop it so the nil-checks downstream actually
-		// short-circuit the call paths.
-		stateWriter = nil
+		return nil, fmt.Errorf("error creating configmap state writer: %w", err)
+	}
+	if err := stateWriter.Init(context.Background()); err != nil {
+		return nil, fmt.Errorf("error initializing configmap state writer: %w", err)
 	}
 
 	now := time.Now()
@@ -195,18 +191,23 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.ctxInfo.Prometheus.StartHTTP(ctx)
 	}
 
-	var errChan chan error
-	if !s.cfg.Injector.Webhook.UsesExternalWebhook() {
-		// Start server in a goroutine
-		errChan = make(chan error, 1)
-		go func() {
-			if err := server.ListenAndServeTLS(s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath); err != nil && err != http.ErrServerClosed {
-				errChan <- fmt.Errorf("webhook server failed: %w", err)
-			}
-			close(errChan)
-		}()
-	}
+	errChan := s.setupWebhookServer(server)
 	return s.waitForCancellation(ctx, server, errChan)
+}
+
+func (s *Server) setupWebhookServer(server *http.Server) chan error {
+	if s.cfg.Injector.Webhook.UsesExternalWebhook() {
+		return nil
+	}
+	// Start server in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		if err := server.ListenAndServeTLS(s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath); err != nil && err != http.ErrServerClosed {
+			errChan <- fmt.Errorf("webhook server failed: %w", err)
+		}
+		close(errChan)
+	}()
+	return errChan
 }
 
 func (s *Server) waitForCancellation(ctx context.Context, server *http.Server, errChan chan error) error {
@@ -443,6 +444,7 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	for _, d := range s.eligibleDeployments {
 		eligible = append(eligible, d)
 	}
+	sortEligible(eligible)
 
 	config := configmap.InjectConfig{
 		Discovery: s.cfg.Injector.Instrument,
@@ -453,6 +455,15 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	}
 
 	return s.stateWriter.Write(ctx, &config, eligible)
+}
+
+func sortEligible(eligible []*configmap.EligibleDeployment) {
+	sort.Slice(eligible, func(i, j int) bool {
+		if eligible[i].Namespace != eligible[j].Namespace {
+			return eligible[i].Namespace < eligible[j].Namespace
+		}
+		return eligible[i].Name < eligible[j].Name
+	})
 }
 
 func (s *Server) ID() string { return uuid.NewString() }

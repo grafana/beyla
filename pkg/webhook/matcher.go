@@ -31,7 +31,9 @@ func asProcessDiscoverySelector(in configmap.WebhookInstrument) []services.Selec
 	out := make(services.GlobDefinitionCriteria, 0, len(in))
 	for _, selector := range in {
 		out = append(out, services.GlobAttributes{
-			Metadata: selector.Metadata,
+			Metadata:       selector.Metadata,
+			PodLabels:      selector.PodLabels,
+			PodAnnotations: selector.PodAnnotations,
 		})
 	}
 	return discover.NormalizeGlobCriteria(out)

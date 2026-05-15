@@ -768,18 +768,21 @@ func TestServer_EstablishInitialProcessState(t *testing.T) {
 			// Create real scanner
 			scanner := NewInitialStateScanner("0.0.7")
 
+			cfg := &beyla.Config{
+				Injector: beyla.SDKInject{
+					SDKPkgVersion:     tt.configSDKVersion,
+					ImageVolumePath:   tt.imageVolumePath,
+					HostMountPath:     tmpDir,
+					ManageSDKVersions: true,
+				},
+			}
+
 			// Create server with mocked config
 			server := &Server{
-				cfg: &beyla.Config{
-					Injector: beyla.SDKInject{
-						SDKPkgVersion:     tt.configSDKVersion,
-						ImageVolumePath:   tt.imageVolumePath,
-						HostMountPath:     tmpDir,
-						ManageSDKVersions: true,
-					},
-				},
-				scanner: scanner,
-				logger:  slog.With("component", "test"),
+				cfg:                    cfg,
+				scanner:                scanner,
+				logger:                 slog.With("component", "test"),
+				instrumentationManager: NewInstrumentationManager(cfg),
 			}
 
 			// Execute

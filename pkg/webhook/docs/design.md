@@ -110,6 +110,14 @@ The updating of eligible deployments works the following way:
    controller for this mode to be active. When Beyla sees a new pod created of the external 
    conroller it gets a new initial state and iterates over all current processes 
    to create a new eligible deployments map.
+5. There's still a timing hole, because when we receive the last pod event from the newly starting
+   controller, to the time the webhook is live inside the controller, there could be new pods
+   launching. These pods will be missed, since we updated the eligible deployments prior to the
+   webhook being live and instrumenting pods. We currently mititgate this with the debouncer pattern
+   explained below. We delay the final recalculation of the eligible deployments by 10 seconds,
+   which should be sufficient for the webhook to activate until the last update event of the 
+   controller pod starting. If this doesn't work in the future, we need to find a way to signal
+   from the controller that it's live.
 
 Writing the config maps (same as for CRDs) requires involvement from `etcd` in Kubernetes. If
 we were to constantly write this map, it will likely put too much pressure on the k8s 

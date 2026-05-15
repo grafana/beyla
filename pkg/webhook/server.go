@@ -56,6 +56,8 @@ const (
 	debounceTickInterval            = time.Second
 )
 
+// For information on how this works see docs/design.md
+
 // NewServer creates a new webhook server
 func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
 	matcher := NewPodMatcher(cfg)

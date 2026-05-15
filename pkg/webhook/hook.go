@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 func (s *Server) setupWebhookServer(server *http.Server) chan error {
@@ -72,4 +70,4 @@ func waitForTLSFiles(ctx context.Context, certPath, keyPath string, timeout, pol
 	}
 }
 
-func (s *Server) ID() string { return uuid.NewString() }
+func (s *Server) ID() string { return s.uuid }

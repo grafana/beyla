@@ -6,7 +6,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/process"
@@ -43,7 +42,6 @@ var (
 
 const (
 	dummySDKVersion = "v999.999.999"
-	newProcessDelay = time.Second * 5
 )
 
 var (

@@ -1,3 +1,4 @@
+// See docs/design.md for the architecture overview
 package webhook
 
 import (
@@ -11,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"golang.org/x/mod/semver"
 
@@ -35,12 +37,12 @@ type Server struct {
 	logger                  *slog.Logger
 	store                   *kube.Store
 	initialState            map[string][]*ProcessInfo
-	initialStateMux         *sync.Mutex
+	initialStateMux         sync.Mutex
 	metrics                 *SDKInjectionMetrics
 	podStateCache           *PodStateCache
 	stateWriter             *StateConfigMapWriter
 	eligibleDeployments     *simplelru.LRU[string, *configmap.EligibleDeployment]
-	eligibleDeploymentsMux  *sync.Mutex
+	eligibleDeploymentsMux  sync.Mutex
 	instrumentationManager  *InstrumentationManager
 	externalWebhookUpdateNS atomic.Int64
 	lastEligiblePodLaunchNS atomic.Int64
@@ -48,15 +50,15 @@ type Server struct {
 	rebuildRequestNS        atomic.Int64
 	nodeName                string
 	initialPodScan          atomic.Bool
+	uuid                    string
 }
 
 const (
 	stateConfigMapDebounceDelay     = 10 * time.Second
 	rebuildDeploymentsDebounceDelay = 10 * time.Second
 	debounceTickInterval            = time.Second
+	maxEligibleDeployments          = 10_000
 )
-
-// For information on how this works see docs/design.md
 
 // NewServer creates a new webhook server
 func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
@@ -94,18 +96,20 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	nodeName := OwnNodeName()
 
-	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, nodeName)
-	if err != nil {
-		return nil, fmt.Errorf("error creating configmap state writer: %w", err)
-	}
-	if err := stateWriter.Init(context.Background()); err != nil {
-		return nil, fmt.Errorf("error initializing configmap state writer: %w", err)
+	var stateWriter *StateConfigMapWriter
+	if cfg.Injector.Webhook.UsesExternalWebhook() {
+		stateWriter, err = NewStateConfigMapWriter(cfg, ctxInfo, nodeName)
+		if err != nil {
+			return nil, fmt.Errorf("error creating configmap state writer: %w", err)
+		}
+		if err := stateWriter.Init(context.Background()); err != nil {
+			return nil, fmt.Errorf("error initializing configmap state writer: %w", err)
+		}
 	}
 
 	now := time.Now()
 
-	eligible, err := simplelru.NewLRU[string, *configmap.EligibleDeployment](10_000, nil)
-
+	eligible, err := simplelru.NewLRU[string, *configmap.EligibleDeployment](maxEligibleDeployments, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error initalizing the eligible deployments LRU: %w", err)
 	}
@@ -122,10 +126,9 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		podStateCache:          podStateCache,
 		stateWriter:            stateWriter,
 		eligibleDeployments:    eligible,
-		eligibleDeploymentsMux: &sync.Mutex{},
-		initialStateMux:        &sync.Mutex{},
 		instrumentationManager: NewInstrumentationManager(cfg),
 		nodeName:               nodeName,
+		uuid:                   uuid.NewString(),
 	}
 
 	s.lastEligiblePodLaunchNS.Store(now.UnixNano())
@@ -182,7 +185,7 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.subscribeStateCache(ctx)
 	}
 
-	if s.cfg.Injector.Webhook.UsesExternalWebhook() && s.stateWriter != nil {
+	if s.stateWriter != nil {
 		go s.runStateConfigMapWriter(ctx)
 		go s.runEligibleDeploymentsRebuilder(ctx)
 	}
@@ -265,6 +268,10 @@ func (s *Server) getInitialState(ctx context.Context) error {
 }
 
 func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
+	if s.stateWriter == nil {
+		return
+	}
+
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
 
@@ -431,7 +438,7 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
-	if err := s.loadProcessStateIfNeccessary(); err != nil {
+	if err := s.loadProcessStateIfNecessary(); err != nil {
 		return err
 	}
 
@@ -451,7 +458,7 @@ func (s *Server) On(event *informer.Event) error {
 	return nil
 }
 
-func (s *Server) loadProcessStateIfNeccessary() error {
+func (s *Server) loadProcessStateIfNecessary() error {
 	if s.initialPodScan.Load() {
 		if s.initialState == nil {
 			if err := s.establishInitialProcessState(); err != nil {
@@ -586,14 +593,12 @@ func (s *Server) rebuildEligibleDeployments() {
 		if pod := s.store.PodByContainerID(cid); pod != nil {
 			if attrs := s.enrichProcessInfoLocked(pod.Meta); attrs != nil {
 				for _, a := range attrs {
+					// handleNewProcessEvent will request a config map
+					// update if any changes are needed
 					s.handleNewProcessEvent(a)
 				}
 			}
 		}
-	}
-
-	if err := s.writeStateConfigMap(context.Background()); err != nil {
-		s.logger.Warn("unable to update config map with new process state", "error", err)
 	}
 	s.externalWebhookUpdateNS.Store(time.Now().UnixNano())
 }

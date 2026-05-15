@@ -27,7 +27,7 @@ the controller can automatically restart deployments which are deemed as eligibl
     - For each pod, consult the local process state. If matched we correlate the pod information with
       the process attributes, by the container ID, and then decide if this deployment should be 
       restarted. The restart happens by adding a label to the deployment, which in turn creates
-      gracefull rollout of the deployment.
+      graceful rollout of the deployment.
     - If we fail to find the process attributes we do a rebuild of the process state, while we
       haven't received all of the initial state from the k8s informers. Once all of the inital 
       k8s state is received we don't try to rebuild the local process state.
@@ -76,7 +76,7 @@ to the controller which deployments should be considered for restart.
 The communication happens via config maps. These config maps also contain other information,
 such as the local node exporter endpoint for those services and the SDK image that should be
 injected. While these can be configured on the controller, especially if there's a global
-collector load balanacer, having them communicated by Beyla allows for updating them dynamically
+collector load balancer, having them communicated by Beyla allows for updating them dynamically
 through fleet management or OpAMP.
 
 The updating of eligible deployments works the following way:

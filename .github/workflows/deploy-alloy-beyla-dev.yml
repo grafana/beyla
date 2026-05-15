@@ -33,7 +33,13 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Derive image tag
+      - name: Checkout Beyla at version tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.beyla_version }}
+          persist-credentials: false
+
+      - name: Derive image tag and Beyla SHA
         id: tag
         env:
           BEYLA_VERSION: ${{ inputs.beyla_version }}
@@ -46,8 +52,10 @@ jobs:
           else
             IMAGE_TAG="${VERSION}"
           fi
+          SHORT_SHA="$(git rev-parse --short HEAD)"
           echo "image_tag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
-          echo "alloy-beyla dev image tag: ${IMAGE_TAG}"
+          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "alloy-beyla dev image tag: ${IMAGE_TAG}, beyla short SHA: ${SHORT_SHA}"
 
       - name: Log in to Google Artifact Registry
         uses: grafana/shared-workflows/actions/login-to-gar@00646b30431b955ec3c00982b23b1eeb7b66445b # v1.0.0
@@ -72,6 +80,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+          SHORT_SHA: ${{ steps.tag.outputs.short_sha }}
         # zizmor: ignore[template-injection] CONFIG_JSON is locally generated and passed as plain string
         run: |
           set -euo pipefail
@@ -91,6 +100,11 @@ jobs:
                 "file_path": "ksonnet/environments/beyla/alloy_beyla_versions.libsonnet",
                 "jsonnet_key_path": "dev.container_image_tag",
                 "jsonnet_value": "${IMAGE_TAG}"
+              },
+              {
+                "file_path": "ksonnet/environments/beyla/alloy_beyla_versions.libsonnet",
+                "jsonnet_key_path": "dev.release_git_tag",
+                "jsonnet_value": "${SHORT_SHA}"
               }
             ]
           }

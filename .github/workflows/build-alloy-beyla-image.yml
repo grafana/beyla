@@ -58,12 +58,18 @@ jobs:
           BEYLA_VERSION: ${{ inputs.beyla_version }}
         run: |
           set -euo pipefail
+          if [[ ! "${BEYLA_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "::error::Invalid beyla_version: ${BEYLA_VERSION}. Expected vX.Y.Z or vX.Y.Z-suffix."
+            exit 1
+          fi
           sed -i -E "s|^(BEYLA_VERSION[[:space:]]+\?=).*$|\1 ${BEYLA_VERSION}|" Makefile
           grep '^BEYLA_VERSION' Makefile
-          git config user.email "beyla-bot@grafana.com"
-          git config user.name "beyla-bot"
-          git add Makefile
-          git commit -m "Pin BEYLA_VERSION to ${BEYLA_VERSION} (ephemeral)"
+          if ! git diff --quiet Makefile; then
+            git config user.email "grafana-beyla-bot[bot]@users.noreply.github.com"
+            git config user.name "grafana-beyla-bot[bot]"
+            git add Makefile
+            git commit -m "Pin BEYLA_VERSION to ${BEYLA_VERSION} (ephemeral)"
+          fi
 
       - name: Login to GHCR
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0

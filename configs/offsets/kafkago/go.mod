@@ -1,6 +1,6 @@
 module kafkago_off
 
-go 1.25.9
+go 1.25.10
 
 require github.com/segmentio/kafka-go v0.4.50
 

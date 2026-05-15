@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/grafana/beyla/v3/pkg/beyla"
-	"go.opentelemetry.io/obi/pkg/kube"
 	"golang.org/x/mod/semver"
+
+	"go.opentelemetry.io/obi/pkg/kube"
+
+	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
 type InstrumentationManager struct {

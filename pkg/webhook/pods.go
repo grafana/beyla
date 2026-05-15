@@ -3,12 +3,14 @@ package webhook
 import (
 	"strings"
 
-	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
+	appsv1 "k8s.io/api/apps/v1"
+
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/transform"
-	appsv1 "k8s.io/api/apps/v1"
+
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 func topOwner(owners []*informer.Owner) *informer.Owner {

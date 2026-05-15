@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -21,7 +22,6 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
-	"github.com/hashicorp/golang-lru/v2/simplelru"
 )
 
 // Server represents the webhook server
@@ -362,9 +362,7 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
 	eligible := make([]*configmap.EligibleDeployment, 0, s.eligibleDeployments.Len())
-	for _, d := range s.eligibleDeployments.Values() {
-		eligible = append(eligible, d)
-	}
+	eligible = append(eligible, s.eligibleDeployments.Values()...)
 	sortEligible(eligible)
 
 	config := configmap.InjectConfig{
@@ -433,6 +431,27 @@ func (s *Server) On(event *informer.Event) error {
 		return nil
 	}
 
+	if err := s.loadProcessStateIfNeccessary(); err != nil {
+		return err
+	}
+
+	// It's important to consider the local process info here so that we are
+	// not evaluating pods from other nodes, since Beyla gets cluster-wide info.
+	attrs, err := s.processAttributes(event)
+
+	if err != nil {
+		return err
+	}
+
+	// These are processes that existed when Beyla booted, otherwise we won't find them
+	// in attrs. In a sense this handles only the initial startup.
+	for _, a := range attrs {
+		s.handleNewProcessEvent(a)
+	}
+	return nil
+}
+
+func (s *Server) loadProcessStateIfNeccessary() error {
 	if s.initialPodScan.Load() {
 		if s.initialState == nil {
 			if err := s.establishInitialProcessState(); err != nil {
@@ -442,28 +461,25 @@ func (s *Server) On(event *informer.Event) error {
 		}
 	}
 
-	// It's important to consider the local process info here so that we are
-	// not evaluating pods from other nodes, since Beyla gets cluster-wide info.
+	return nil
+}
+
+func (s *Server) processAttributes(event *informer.Event) ([]*ProcessInfo, error) {
 	attrs := s.enrichProcessInfo(event.GetResource())
 	if attrs == nil {
 		if s.initialPodScan.Load() {
 			if err := s.setOrUpdateInitialProcessState(); err != nil {
 				s.logger.Warn("unable to update initial process state", "error", err)
-				return err
+				return nil, err
 			}
 			attrs = s.enrichProcessInfo(event.GetResource())
 		}
 		if attrs == nil {
-			return nil
+			return nil, nil
 		}
 	}
 
-	// These are processes that existed when Beyla booted, otherwise we won't find them
-	// in attrs. In a sense this handles only the initial startup.
-	for _, a := range attrs {
-		s.handleNewProcessEvent(a)
-	}
-	return nil
+	return attrs, nil
 }
 
 func (s *Server) handleNewProcessEvent(a *ProcessInfo) {

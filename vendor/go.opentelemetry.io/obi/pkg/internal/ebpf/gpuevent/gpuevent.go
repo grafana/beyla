@@ -14,7 +14,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -77,8 +76,8 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 	}
 }
 
-func (p *Tracer) AllowPID(pid app.PID, ns uint32, svc *svc.Attrs) {
-	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeKProbes)
+func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	p.pidsFilter.AllowPID(pid, ns, fi, ebpfcommon.PIDTypeKProbes)
 }
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {

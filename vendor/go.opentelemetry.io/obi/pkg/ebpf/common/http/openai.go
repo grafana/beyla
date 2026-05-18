@@ -14,6 +14,44 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 )
 
+type openAIToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name string `json:"name"`
+	} `json:"function"`
+}
+
+func extractToolCalls(choices json.RawMessage) []request.ToolCall {
+	if len(choices) == 0 {
+		return nil
+	}
+
+	var parsed []struct {
+		Message struct {
+			ToolCalls []openAIToolCall `json:"tool_calls"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(choices, &parsed); err != nil {
+		return nil
+	}
+
+	var result []request.ToolCall
+	for i := range parsed {
+		for j := range parsed[i].Message.ToolCalls {
+			tc := &parsed[i].Message.ToolCalls[j]
+			if tc.Function.Name == "" {
+				continue
+			}
+			result = append(result, request.ToolCall{
+				ID:   tc.ID,
+				Name: tc.Function.Name,
+			})
+		}
+	}
+	return result
+}
+
 func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
 	// Check any of the well known response headers that OpenAI would use
 	isOpenAI := false
@@ -52,6 +90,7 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	}
 
 	parsedResponse.Request = parsedRequest
+	parsedResponse.ToolCalls = extractToolCalls(parsedResponse.Choices)
 
 	// Override operation name for embedding requests.
 	if req.URL != nil {

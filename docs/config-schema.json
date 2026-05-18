@@ -260,6 +260,12 @@
             "type": "number"
           },
           "type": "array"
+        },
+        "stat_tcp_rtt_histogram": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
         }
       },
       "type": "object"
@@ -613,6 +619,7 @@
           "network_inter_zone",
           "stats",
           "stats_tcp_failed_connections",
+          "stats_tcp_retransmits",
           "stats_tcp_rtt"
         ]
       },
@@ -653,6 +660,9 @@
         },
         "rerank": {
           "$ref": "#/$defs/RerankConfig"
+        },
+        "retrieval": {
+          "$ref": "#/$defs/RetrievalConfig"
         }
       },
       "type": "object"
@@ -1895,6 +1905,15 @@
           "type": "string"
         },
         "type": "array"
+      },
+      "type": "object"
+    },
+    "RetrievalConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_HTTP_RETRIEVAL_ENABLED"
+        }
       },
       "type": "object"
     },

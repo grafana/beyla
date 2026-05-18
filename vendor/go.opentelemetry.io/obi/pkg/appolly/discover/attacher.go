@@ -109,23 +109,23 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 		swarms.ForEachInput(ctx, in, ta.log.Debug, func(instrumentables []Event[ebpf.Instrumentable]) {
 			for _, instr := range instrumentables {
 				ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
-					"exec", instr.Obj.FileInfo.CmdExePath, "pid", instr.Obj.FileInfo.Pid)
+					"exec", instr.Obj.FileInfo.CmdExePath(), "pid", instr.Obj.FileInfo.Pid())
 				switch instr.Type {
 				case EventCreated:
 					ta.nodeInjector.NewExecutable(&instr.Obj)
 					if ta.javaInjector != nil {
 						if err := ta.javaInjector.NewExecutable(&instr.Obj); err != nil {
-							ta.log.Warn("unable to attach java agent to process, Java TLS telemetry will not work", "pid", instr.Obj.FileInfo.Pid, "error", err)
+							ta.log.Warn("unable to attach java agent to process, Java TLS telemetry will not work", "pid", instr.Obj.FileInfo.Pid(), "error", err)
 						}
 					}
 
-					ta.processInstances.Inc(instr.Obj.FileInfo.Ino)
+					ta.processInstances.Inc(instr.Obj.FileInfo.Ino())
 					if ok := ta.getTracer(&instr.Obj); ok {
 						ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
 					}
 
-					if instr.Obj.FileInfo.ELF != nil {
-						_ = instr.Obj.FileInfo.ELF.Close()
+					if instr.Obj.FileInfo.ELF() != nil {
+						_ = instr.Obj.FileInfo.ELF().Close()
 					}
 				case EventDeleted:
 					ta.notifyProcessDeletion(&instr.Obj)
@@ -137,12 +137,12 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 
 //nolint:cyclop
 func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
-	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino()]; ok {
 		ta.log.Debug("new process for already instrumented executable",
-			"pid", ie.FileInfo.Pid,
+			"pid", ie.FileInfo.Pid(),
 			"child", ie.ChildPids,
-			"cmd", ie.FileInfo.CmdExePath)
-		ie.FileInfo.Service.SDKLanguage = ie.Type
+			"cmd", ie.FileInfo.CmdExePath())
+		ie.FileInfo.SetSDKLanguage(ie.Type)
 		// Must be called after we've set the SDKLanguage
 		ta.harvestRoutes(ie, true)
 
@@ -162,13 +162,14 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return ok
 	}
 
+	snap := ie.FileInfo.ServiceAttrs()
 	ta.log.Info("instrumenting process",
-		"cmd", ie.FileInfo.CmdExePath,
-		"pid", ie.FileInfo.Pid,
-		"ino", ie.FileInfo.Ino,
+		"cmd", ie.FileInfo.CmdExePath(),
+		"pid", ie.FileInfo.Pid(),
+		"ino", ie.FileInfo.Ino(),
 		"type", ie.Type,
-		"service", ie.FileInfo.Service.UID.Name,
-		"logenricher", ie.FileInfo.Service.LogEnricherEnabled,
+		"service", snap.UID.Name,
+		"logenricher", snap.LogEnricherEnabled,
 	)
 
 	// builds a tracer for that executable
@@ -209,12 +210,12 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		ta.log.Warn("unexpected instrumentable type. This is basically a bug", "type", ie.Type)
 	}
 	if len(programs) == 0 {
-		ta.log.Warn("no instrumentable functions found. Ignoring", "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
+		ta.log.Warn("no instrumentable functions found. Ignoring", "pid", ie.FileInfo.Pid(), "cmd", ie.FileInfo.CmdExePath())
 		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorNoInstrumentableFunctionsFound)
 		return false
 	}
 
-	ie.FileInfo.Service.SDKLanguage = ie.Type
+	ie.FileInfo.SetSDKLanguage(ie.Type)
 	// Must be called after we've set the SDKLanguage
 	ta.harvestRoutes(ie, false)
 
@@ -242,13 +243,13 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	}
 
 	ta.log.Debug("new executable for discovered process",
-		"pid", ie.FileInfo.Pid,
+		"pid", ie.FileInfo.Pid(),
 		"child", ie.ChildPids,
-		"cmd", ie.FileInfo.CmdExePath,
+		"cmd", ie.FileInfo.CmdExePath(),
 		"type", ie.Type)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	ta.monitorPIDs(tracer, ie)
-	ta.existingTracers[ie.FileInfo.Ino] = tracer
+	ta.existingTracers[ie.FileInfo.Ino()] = tracer
 	if tracer.Type == ebpf.Generic {
 		if ta.reusableTracer != nil {
 			ta.monitorPIDs(ta.reusableTracer, ie)
@@ -277,21 +278,21 @@ func (ta *traceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tr
 func (ta *traceAttacher) harvestRoutesProcessor(ie *ebpf.Instrumentable, reused bool) {
 	routes, err := ta.routeHarvester.HarvestRoutes(ie.FileInfo)
 	if err != nil {
-		ta.log.Info("encountered error harvesting routes", "error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
+		ta.log.Info("encountered error harvesting routes", "error", err, "pid", ie.FileInfo.Pid(), "cmd", ie.FileInfo.CmdExePath())
 	} else if routes != nil && len(routes.Routes) > 0 {
-		ta.log.Debug("found routes in executable", "pid", ie.FileInfo.Pid, "routes", routes, "reused", reused)
+		ta.log.Debug("found routes in executable", "pid", ie.FileInfo.Pid(), "routes", routes, "reused", reused)
 		m := harvest.RouteMatcherFromResult(*routes)
-		ie.FileInfo.Service.SetHarvestedRoutes(m)
+		ie.FileInfo.SetHarvestedRoutes(m)
 	}
 }
 
 func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
 	if delay, delayTime := ta.routeHarvester.HarvestRoutesDelay(ie.FileInfo); delay {
-		procAge := ta.processAgeFunc(ie.FileInfo.Pid)
+		procAge := ta.processAgeFunc(ie.FileInfo.Pid())
 		if procAge < delayTime {
 			time.AfterFunc(delayTime-procAge, func() {
 				// sanity check that the program is still up and running and it's the same command
-				if exePath, ready := ExecutableReady(ie.FileInfo.Pid); ready && exePath == ie.FileInfo.CmdExePath {
+				if exePath, ready := ExecutableReady(ie.FileInfo.Pid()); ready && exePath == ie.FileInfo.CmdExePath() {
 					ta.harvestRoutesProcessor(ie, reused)
 				}
 			})
@@ -306,10 +307,10 @@ func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
 func (ta *traceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {
 	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
 	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath)
+	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath())
 	if err != nil {
 		ta.log.Debug("can't open executable. Ignoring",
-			"error", err, "pid", ie.FileInfo.Pid, "cmd", ie.FileInfo.CmdExePath)
+			"error", err, "pid", ie.FileInfo.Pid(), "cmd", ie.FileInfo.CmdExePath())
 		return nil, false
 	}
 
@@ -323,17 +324,17 @@ func (ta *traceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	}
 
 	if err := tracer.NewExecutable(exe, ie); err != nil {
-		ta.log.Debug("Failed to attach uprobes for new executable", "pid", ie.FileInfo.Pid, "error", err)
+		ta.log.Debug("Failed to attach uprobes for new executable", "pid", ie.FileInfo.Pid(), "error", err)
 	}
 
 	ta.log.Debug("reusing Generic tracer for",
-		"pid", ie.FileInfo.Pid,
+		"pid", ie.FileInfo.Pid(),
 		"child", ie.ChildPids,
-		"cmd", ie.FileInfo.CmdExePath,
+		"cmd", ie.FileInfo.CmdExePath(),
 		"language", ie.Type)
 
 	ta.monitorPIDs(tracer, ie)
-	ta.existingTracers[ie.FileInfo.Ino] = tracer
+	ta.existingTracers[ie.FileInfo.Ino()] = tracer
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	return true
@@ -341,13 +342,13 @@ func (ta *traceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 
 func (ta *traceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
 	if err := tracer.NewExecutableInstance(ie); err != nil {
-		ta.log.Debug("Failed to attach uprobes", "pid", ie.FileInfo.Pid, "error", err)
+		ta.log.Debug("Failed to attach uprobes", "pid", ie.FileInfo.Pid(), "error", err)
 	}
 
 	ta.log.Debug("reusing Generic tracer for",
-		"pid", ie.FileInfo.Pid,
+		"pid", ie.FileInfo.Pid(),
 		"child", ie.ChildPids,
-		"cmd", ie.FileInfo.CmdExePath,
+		"cmd", ie.FileInfo.CmdExePath(),
 		"language", ie.Type)
 
 	ta.monitorPIDs(tracer, ie)
@@ -359,35 +360,37 @@ func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 	ie.CopyToServiceAttributes()
 
 	// allowing the tracer to forward traces from the discovered PID and its children processes
-	tracer.AllowPID(ie.FileInfo.Pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
+	tracer.AllowPID(ie.FileInfo.Pid(), ie.FileInfo.Ns(), ie.FileInfo)
 	for _, pid := range ie.ChildPids {
-		tracer.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
+		tracer.AllowPID(pid, ie.FileInfo.Ns(), ie.FileInfo)
 	}
 
 	for _, ct := range ta.commonTracers {
-		ct.AllowPID(ie.FileInfo.Pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
+		ct.AllowPID(ie.FileInfo.Pid(), ie.FileInfo.Ns(), ie.FileInfo)
 		for _, pid := range ie.ChildPids {
-			ct.AllowPID(pid, ie.FileInfo.Ns, &ie.FileInfo.Service)
+			ct.AllowPID(pid, ie.FileInfo.Ns(), ie.FileInfo)
 		}
 	}
 
 	if ta.SpanSignalsShortcut != nil {
+		snap := ie.FileInfo.ServiceAttrs()
+		ns := ie.FileInfo.Ns()
 		spans := make([]request.Span, 0, len(ie.ChildPids)+1)
 		// the forwarded signal must include
 		// - Service, which includes several metadata about the process
 		// - PID namespace, to allow further kubernetes decoration
 		spans = append(spans, request.Span{
 			Type:    request.EventTypeProcessAlive,
-			Service: ie.FileInfo.Service,
-			Pid:     request.PidInfo{Namespace: ie.FileInfo.Ns},
+			Service: snap,
+			Pid:     request.PidInfo{Namespace: ns},
 		})
 		for _, pid := range ie.ChildPids {
-			service := ie.FileInfo.Service
+			service := snap
 			service.ProcPID = pid
 			spans = append(spans, request.Span{
 				Type:    request.EventTypeProcessAlive,
 				Service: service,
-				Pid:     request.PidInfo{Namespace: ie.FileInfo.Ns},
+				Pid:     request.PidInfo{Namespace: ns},
 			})
 		}
 		ta.SpanSignalsShortcut.Send(spans)
@@ -395,28 +398,28 @@ func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 }
 
 func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
-	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino]; ok {
+	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino()]; ok {
 		ta.log.Info("process ended for already instrumented executable",
-			"cmd", ie.FileInfo.CmdExePath,
-			"pid", ie.FileInfo.Pid,
-			"ino", ie.FileInfo.Ino,
+			"cmd", ie.FileInfo.CmdExePath(),
+			"pid", ie.FileInfo.Pid(),
+			"ino", ie.FileInfo.Ino(),
 			"type", ie.Type,
-			"service", ie.FileInfo.Service.UID.Name,
+			"service", ie.FileInfo.ServiceAttrs().UID.Name,
 		)
 		// notifying the tracer to block any trace from that PID
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed
 		ta.Metrics.UninstrumentProcess(ie.FileInfo.ExecutableName())
-		tracer.BlockPID(ie.FileInfo.Pid, ie.FileInfo.Ns)
+		tracer.BlockPID(ie.FileInfo.Pid(), ie.FileInfo.Ns())
 		for _, ct := range ta.commonTracers {
-			ct.BlockPID(ie.FileInfo.Pid, ie.FileInfo.Ns)
+			ct.BlockPID(ie.FileInfo.Pid(), ie.FileInfo.Ns())
 		}
 
 		// if there are no more trace instances for a program, we need to notify that
 		// the tracer needs to be stopped and deleted.
 		// We don't remove kernel-based traces as there is only one tracer per host
-		if ta.processInstances.Dec(ie.FileInfo.Ino) == 0 {
-			delete(ta.existingTracers, ie.FileInfo.Ino)
+		if ta.processInstances.Dec(ie.FileInfo.Ino()) == 0 {
+			delete(ta.existingTracers, ie.FileInfo.Ino())
 			ie.Tracer = tracer
 			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventDeleted, Obj: ie})
 		} else {

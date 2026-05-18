@@ -98,7 +98,7 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 	resultChan := make(chan result, 1)
 
 	// We need to fix this in the downstream library and then we can remove this code
-	if fileInfo.Service.SDKLanguage == svc.InstrumentableJava {
+	if fileInfo.SDKLanguage() == svc.InstrumentableJava {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		h.java.Attacher.Init()
@@ -114,10 +114,10 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			}
 		}()
 
-		switch fileInfo.Service.SDKLanguage {
+		switch fileInfo.SDKLanguage() {
 		case svc.InstrumentableJava:
 			if _, ok := h.disabled[svc.InstrumentableJava]; !ok {
-				r, err := h.javaExtractRoutes(fileInfo.Pid)
+				r, err := h.javaExtractRoutes(fileInfo.Pid())
 				if err != nil {
 					resultChan <- result{err: err}
 					return
@@ -128,7 +128,7 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			}
 		case svc.InstrumentableNodejs:
 			if _, ok := h.disabled[svc.InstrumentableNodejs]; !ok {
-				r, err := h.nodeExtractRoutes(fileInfo.Pid)
+				r, err := h.nodeExtractRoutes(fileInfo.Pid())
 				if err != nil {
 					resultChan <- result{err: err}
 					return
@@ -149,7 +149,7 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 	case result := <-resultChan:
 		return result.r, result.err
 	case <-ctx.Done():
-		h.log.Warn("route harvesting timed out", "timeout", h.timeout, "pid", fileInfo.Pid)
+		h.log.Warn("route harvesting timed out", "timeout", h.timeout, "pid", fileInfo.Pid())
 		return nil, &HarvestError{Message: "route harvesting timed out"}
 	}
 }
@@ -166,7 +166,7 @@ func RouteMatcherFromResult(r RouteHarvesterResult) route.Matcher {
 }
 
 func (h *RouteHarvester) HarvestRoutesDelay(fileInfo *exec.FileInfo) (bool, time.Duration) {
-	if fileInfo.Service.SDKLanguage == svc.InstrumentableJava {
+	if fileInfo.SDKLanguage() == svc.InstrumentableJava {
 		return true, h.cfg.JavaHarvestDelay
 	}
 

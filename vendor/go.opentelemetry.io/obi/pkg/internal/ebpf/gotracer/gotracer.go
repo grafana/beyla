@@ -26,7 +26,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
@@ -73,8 +72,8 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 	}
 }
 
-func (p *Tracer) AllowPID(pid app.PID, ns uint32, svc *svc.Attrs) {
-	p.pidsFilter.AllowPID(pid, ns, svc, ebpfcommon.PIDTypeGo)
+func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	p.pidsFilter.AllowPID(pid, ns, fi, ebpfcommon.PIDTypeGo)
 }
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
@@ -157,18 +156,25 @@ func (p *Tracer) constants() map[string]any {
 }
 
 func (p *Tracer) SetupTailCalls() {
+	// Order must match the k_tail_* enum in bpf/generictracer/k_tracer_tailcall.h
 	for i, prog := range []*ebpf.Program{
-		p.bpfObjects.ObiProtocolHttp,                      // 0
-		p.bpfObjects.ObiContinueProtocolHttp,              // 1
-		p.bpfObjects.ObiContinue2ProtocolHttp,             // 2
-		p.bpfObjects.ObiProtocolHttp2,                     // 3
-		p.bpfObjects.ObiProtocolTcp,                       // 4
-		p.bpfObjects.ObiProtocolHttp2GrpcFrames,           // 5
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame, // 6
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,   // 7
-		p.bpfObjects.ObiHandleBufWithArgs,                 // 8
-		p.bpfObjects.ObiContinueProtocolHttpTp,            // 9
-		p.bpfObjects.ObiContinueNetfdRead,                 // 10
+		// HTTP/1
+		p.bpfObjects.ObiProtocolHttp,           // 0  k_tail_protocol_http
+		p.bpfObjects.ObiContinueProtocolHttp,   // 1  k_tail_continue_protocol_http
+		p.bpfObjects.ObiContinue2ProtocolHttp,  // 2  k_tail_continue2_protocol_http
+		p.bpfObjects.ObiContinueProtocolHttpTp, // 3  k_tail_continue_protocol_http_tp
+		// TCP
+		p.bpfObjects.ObiProtocolTcp, // 4  k_tail_protocol_tcp
+		// Generic
+		p.bpfObjects.ObiHandleBufWithArgs, // 5  k_tail_handle_buf_with_args
+		p.bpfObjects.ObiContinueNetfdRead, // 6  k_tail_continue_netfd_read
+		// HTTP/2 + gRPC
+		p.bpfObjects.ObiProtocolHttp2,                                   // 7
+		p.bpfObjects.ObiProtocolHttp2GrpcFrames,                         // 8
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame,               // 9
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,                 // 10
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
@@ -305,8 +311,8 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		}
 	}
 
-	if err := p.bpfObjects.GoOffsetsMap.Put(fileInfo.Ino, offTable); err != nil {
-		p.log.Error("error setting offset in map for", "pid", fileInfo.Pid, "ino", fileInfo.Ino)
+	if err := p.bpfObjects.GoOffsetsMap.Put(fileInfo.Ino(), offTable); err != nil {
+		p.log.Error("error setting offset in map for", "pid", fileInfo.Pid(), "ino", fileInfo.Ino())
 	}
 }
 
@@ -469,6 +475,14 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {{
 			Start: p.bpfObjects.ObiUprobeTransportHttp2ClientNewStream,
 			End:   p.bpfObjects.ObiUprobeTransportHttp2ClientNewStreamReturns,
+		}},
+		// Closes the loopyWriter race for stream registration — see
+		// the two-hop bridge in go_grpc.c (executeAndPut → originateStream)
+		"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut": {{
+			Start: p.bpfObjects.ObiUprobeGrpcControlBufferExecuteAndPut,
+		}},
+		"google.golang.org/grpc/internal/transport.(*loopyWriter).originateStream": {{
+			Start: p.bpfObjects.ObiUprobeGrpcLoopyWriterOriginateStream,
 		}},
 		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {{
 			Start: p.bpfObjects.ObiUprobeHttp2ServerOperateHeaders,

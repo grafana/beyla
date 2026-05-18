@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
@@ -29,13 +30,13 @@ const (
 var readNamespacePIDs = procs.FindNamespacedPids
 
 type PIDInfo struct {
-	service        *svc.Attrs
+	fileInfo       *exec.FileInfo
 	pidTypes       PIDType
 	otherKnownPids []app.PID
 }
 
 type ServiceFilter interface {
-	AllowPID(app.PID, uint32, *svc.Attrs, PIDType)
+	AllowPID(app.PID, uint32, *exec.FileInfo, PIDType)
 	BlockPID(app.PID, uint32)
 	ValidPID(app.PID, uint32, PIDType) bool
 	Filter(inputSpans []request.Span) []request.Span
@@ -67,10 +68,10 @@ func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetri
 	}
 }
 
-func (pf *PIDsFilter) AllowPID(pid app.PID, ns uint32, svc *svc.Attrs, pidType PIDType) {
+func (pf *PIDsFilter) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo, pidType PIDType) {
 	pf.mux.Lock()
 	defer pf.mux.Unlock()
-	pf.addPID(pid, ns, svc, pidType)
+	pf.addPID(pid, ns, fi, pidType)
 }
 
 func (pf *PIDsFilter) BlockPID(pid app.PID, ns uint32) {
@@ -101,7 +102,7 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[app.PID]svc.Attrs {
 		cVal := map[app.PID]svc.Attrs{}
 		for kv, vv := range v {
 			if vv.pidTypes&t != 0 {
-				cVal[kv] = *vv.service
+				cVal[kv] = vv.fileInfo.ServiceAttrs()
 			}
 		}
 		cp[k] = cVal
@@ -141,12 +142,12 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// of container layers. The Host PID is always the outer most layer.
 		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
 			if pf.ignoreOtel {
-				pf.checkIfExportsOTel(info.service, span, pf.defaultOtlpGRPCPort)
+				pf.checkIfExportsOTel(info.fileInfo, span, pf.defaultOtlpGRPCPort)
 			}
 			if pf.ignoreOtelSpan {
-				pf.checkIfExportsOTelSpanMetrics(info.service, span, pf.defaultOtlpGRPCPort)
+				pf.checkIfExportsOTelSpanMetrics(info.fileInfo, span, pf.defaultOtlpGRPCPort)
 			}
-			inputSpans[i].Service = *info.service
+			inputSpans[i].Service = info.fileInfo.ServiceAttrs()
 			pf.normalizeTraceContext(&inputSpans[i])
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
@@ -161,7 +162,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
-func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, s *svc.Attrs, t PIDType) {
+func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, fi *exec.FileInfo, t PIDType) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		ns = make(map[app.PID]PIDInfo)
@@ -176,7 +177,7 @@ func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, s *svc.Attrs, t PIDType) 
 
 	for _, p := range allPids {
 		pidInfo := ns[p]
-		pidInfo.service = s
+		pidInfo.fileInfo = fi
 		pidInfo.pidTypes |= t
 		pidInfo.otherKnownPids = allPids
 		ns[p] = pidInfo
@@ -205,7 +206,7 @@ func (pf *PIDsFilter) removePID(pid app.PID, nsid uint32) {
 // for concrete cases like GPU tracer
 type IdentityPidsFilter struct{}
 
-func (pf *IdentityPidsFilter) AllowPID(_ app.PID, _ uint32, _ *svc.Attrs, _ PIDType) {}
+func (pf *IdentityPidsFilter) AllowPID(_ app.PID, _ uint32, _ *exec.FileInfo, _ PIDType) {}
 
 func (pf *IdentityPidsFilter) BlockPID(_ app.PID, _ uint32) {}
 
@@ -221,41 +222,34 @@ func (pf *IdentityPidsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return inputSpans
 }
 
-func (pf *PIDsFilter) checkIfExportsOTel(svc *svc.Attrs, span *request.Span, defaultOtlpGRPCPort int) {
-	if !svc.ExportsOTelMetrics() && span.IsExportMetricsSpan(defaultOtlpGRPCPort) {
-		svc.SetExportsOTelMetrics()
-		pf.reportAvoidedService(svc, "metrics")
-	} else if !svc.ExportsOTelTraces() && span.IsExportTracesSpan(defaultOtlpGRPCPort) {
-		svc.SetExportsOTelTraces()
-		pf.reportAvoidedService(svc, "traces")
+func (pf *PIDsFilter) checkIfExportsOTel(fi *exec.FileInfo, span *request.Span, defaultOtlpGRPCPort int) {
+	if span.IsExportMetricsSpan(defaultOtlpGRPCPort) && fi.EnsureExportsOTelMetrics() {
+		pf.reportAvoidedService(fi, "metrics")
+	} else if span.IsExportTracesSpan(defaultOtlpGRPCPort) && fi.EnsureExportsOTelTraces() {
+		pf.reportAvoidedService(fi, "traces")
 	}
 }
 
-func (pf *PIDsFilter) checkIfExportsOTelSpanMetrics(svc *svc.Attrs, span *request.Span, defaultOtlpGRPCPort int) {
-	if span.IsExportTracesSpan(defaultOtlpGRPCPort) && !svc.ExportsOTelMetricsSpan() {
-		svc.SetExportsOTelMetricsSpan()
-		pf.reportAvoidedService(svc, "metrics_span")
+func (pf *PIDsFilter) checkIfExportsOTelSpanMetrics(fi *exec.FileInfo, span *request.Span, defaultOtlpGRPCPort int) {
+	if span.IsExportTracesSpan(defaultOtlpGRPCPort) && fi.EnsureExportsOTelMetricsSpan() {
+		pf.reportAvoidedService(fi, "metrics_span")
 	}
 }
 
-// reportAvoidedService calls the appropriate internal metrics method based on telemetry type
-func (pf *PIDsFilter) reportAvoidedService(svc *svc.Attrs, telemetryType string) {
+func (pf *PIDsFilter) reportAvoidedService(fi *exec.FileInfo, telemetryType string) {
 	if pf.metrics == nil || imetrics.IsBuiltinNoopReporter(pf.metrics) {
 		return
 	}
 
-	// Extract service attributes
-	serviceName := svc.UID.Name
-	serviceNamespace := svc.UID.Namespace
-	serviceInstance := svc.UID.Instance
+	snap := fi.ServiceAttrs()
+	serviceName := snap.UID.Name
+	serviceNamespace := snap.UID.Namespace
+	serviceInstance := snap.UID.Instance
 
 	switch telemetryType {
-	case "metrics":
+	case "metrics", "metrics_span":
 		pf.metrics.AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstance)
 	case "traces":
 		pf.metrics.AvoidInstrumentationTraces(serviceName, serviceNamespace, serviceInstance)
-	case "metrics_span":
-		// For metrics_span, we call the metrics method since it's related to metrics export
-		pf.metrics.AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstance)
 	}
 }

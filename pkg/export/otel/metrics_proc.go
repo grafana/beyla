@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strconv"
 
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -222,8 +221,8 @@ func getFilteredProcessResourceAttrs(nodeMeta *meta.NodeMeta, procID *process.ID
 		semconv.ServiceInstanceID(procID.UID.Instance),
 		extranames.ProcCommand.OTEL().String(procID.Command),
 		extranames.ProcOwner.OTEL().String(procID.User),
-		extranames.ProcParentPid.OTEL().String(strconv.Itoa(int(procID.ParentProcessID))),
-		extranames.ProcPid.OTEL().String(strconv.Itoa(int(procID.ProcessID))),
+		extranames.ProcParentPid.OTEL().Int(int(procID.ParentProcessID)),
+		extranames.ProcPid.OTEL().Int(int(procID.ProcessID)),
 		extranames.ProcCommandLine.OTEL().String(procID.CommandLine),
 		extranames.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
 		extranames.ProcExecName.OTEL().String(procID.ExecName),

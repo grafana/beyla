@@ -248,6 +248,7 @@ const (
 	GenAIMetadata     = Name("gen_ai.metadata")
 	GenAITools        = Name(semconv.GenAIToolDefinitionsKey)
 	GenAIToolName     = Name("gen_ai.tool.name")
+	GenAIToolCallID   = Name("gen_ai.tool.call.id")
 	GenAIPromptName   = Name("gen_ai.prompt.name")
 )
 

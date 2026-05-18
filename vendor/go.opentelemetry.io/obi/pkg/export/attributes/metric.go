@@ -149,6 +149,11 @@ var (
 		Prom:    "obi_stat_tcp_failed_connections",
 		OTEL:    "obi.stat.tcp.failed.connections",
 	}
+	StatTCPRetransmits = Name{
+		Section: "obi.stat.tcp.retransmits",
+		Prom:    "obi_stat_tcp_retransmits",
+		OTEL:    "obi.stat.tcp.retransmits",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

@@ -93,6 +93,7 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 	}
 
 	parsedResponse.Request = parsedRequest
+	parsedResponse.ToolCalls = extractToolCalls(parsedResponse.Choices)
 
 	baseSpan.SubType = request.HTTPSubtypeQwen
 	baseSpan.GenAI = &request.GenAI{

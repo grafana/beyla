@@ -25,6 +25,7 @@ const (
 	FeatureNetwork
 	FeatureStatsTCPRtt
 	FeatureStatsTCPFailedConnections
+	FeatureStatsTCPRetransmits
 	FeatureNetworkInterZone
 	FeatureApplicationRED
 	FeatureSpanLegacy
@@ -37,7 +38,7 @@ const (
 )
 
 // FeatureStats enables all stat metrics.
-const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections
+const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections | FeatureStatsTCPRetransmits
 
 // FeatureMapper stays public so any extension package can add and remove feature
 // definitions before loading them.
@@ -45,6 +46,7 @@ var FeatureMapper = map[string]Features{
 	"stats":                        FeatureStats,
 	"stats_tcp_rtt":                FeatureStatsTCPRtt,
 	"stats_tcp_failed_connections": FeatureStatsTCPFailedConnections,
+	"stats_tcp_retransmits":        FeatureStatsTCPRetransmits,
 	"network":                      FeatureNetwork,
 	"network_inter_zone":           FeatureNetworkInterZone,
 	"application":                  FeatureApplicationRED,
@@ -190,6 +192,10 @@ func (f Features) StatsTCPRtt() bool {
 
 func (f Features) StatsTCPFailedConnections() bool {
 	return f.any(FeatureStatsTCPFailedConnections)
+}
+
+func (f Features) StatsTCPRetransmits() bool {
+	return f.any(FeatureStatsTCPRetransmits)
 }
 
 func (f Features) NetworkInterZone() bool {

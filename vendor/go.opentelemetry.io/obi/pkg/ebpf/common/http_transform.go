@@ -180,6 +180,16 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		}
 	}
 
+	// Retrieval detection runs alongside embedding: both are host-anchored
+	// and target dedicated vector database endpoints that do not overlap
+	// with LLM providers, so ordering between them does not matter.
+	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Retrieval.Enabled {
+		span, ok := ebpfhttp.RetrievalSpan(&httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAI.Enabled {
 		span, ok := ebpfhttp.OpenAISpan(&httpSpan, req, resp)
 		if ok {

@@ -371,7 +371,7 @@ func getResourceAttribute(kind string) attribute.Key {
 // injector as disabled instrumentation for that language.
 func (pm *PodMutator) disableUndesiredSDKs(c *corev1.Container) {
 	for _, supported := range supportedSDKLangs {
-		if !pm.CanInstrument(supported) {
+		if !pm.CanInstrumentLanguage(supported) {
 			switch supported {
 			case svc.InstrumentableDotnet:
 				setEnvVarEvenIfEmpty(c, envDotnetEnabledName, "")

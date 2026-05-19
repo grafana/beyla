@@ -58,8 +58,9 @@ func findJavaAgentArg(args []string) string {
 //   - tokens are separated by whitespace (space, tab, newline, carriage return)
 //   - single or double quotes preserve whitespace within a token; quotes are
 //     stripped from the output
-//   - within a quoted run, a backslash escapes only the matching quote;
-//     backslash is otherwise a literal character
+//   - quoted runs have no escape sequences: every byte up to the matching
+//     close quote is copied verbatim (so a literal " cannot appear inside a
+//     "..." run — use '...' to embed the other quote, or vice versa)
 //   - quotes may begin/end mid-token: foo"bar baz"qux is one token "foobar bazqux"
 func parseJVMArgs(s string) []string {
 	var args []string
@@ -75,6 +76,8 @@ func parseJVMArgs(s string) []string {
 	}
 
 	i := 0
+	// Matches what Hotspot does in parse_options_buffer
+	// https://raw.githubusercontent.com/openjdk/jdk/master/src/hotspot/share/runtime/arguments.cpp
 	for i < len(s) {
 		c := s[i]
 		if isJVMSpace(c) {
@@ -86,12 +89,10 @@ func parseJVMArgs(s string) []string {
 			quote := c
 			i++
 			for i < len(s) && s[i] != quote {
-				if s[i] == '\\' && i+1 < len(s) && s[i+1] == quote {
-					i++
-				}
 				cur.WriteByte(s[i])
 				i++
 			}
+			// don't copy close quote
 			if i < len(s) {
 				i++
 			}

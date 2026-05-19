@@ -103,11 +103,6 @@ func TestParseJVMArgs(t *testing.T) {
 			want: []string{"-Dpath=/opt/otel agent/agent.jar"},
 		},
 		{
-			name: "backslash escapes matching quote",
-			in:   `"-Dmessage=hello \"otel\"" -jar app.jar`,
-			want: []string{`-Dmessage=hello "otel"`, "-jar", "app.jar"},
-		},
-		{
 			name: "backslash is literal outside matching quote escape",
 			in:   `'-Dpath=C:\otel' "-Dother=C:\otel"`,
 			want: []string{`-Dpath=C:\otel`, `-Dother=C:\otel`},

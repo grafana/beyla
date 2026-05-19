@@ -7,12 +7,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/grafana/beyla/v3/pkg/webhook/lang"
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/process"
 	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+
+	"github.com/grafana/beyla/v3/pkg/webhook/lang"
 )
 
 type LocalProcessScanner struct {
@@ -78,34 +79,50 @@ func (s *LocalProcessScanner) EnrichProcessInfoWithContainerData(v *ProcessInfo)
 	return true
 }
 
+func (s *LocalProcessScanner) computeIncompatibleJava(v *ProcessInfo) {
+	s.EnrichProcessInfoWithEnvironment(v)
+	if proc, err := newProcessFunc(int32(v.pid)); err == nil {
+		if cmdLine, err := proc.CmdlineSlice(); err == nil {
+			agent := lang.FindJavaAgent(cmdLine, v.env)
+
+			v.incompatible = (agent != nil)
+		}
+	}
+}
+
+func (s *LocalProcessScanner) computeIncompatiblePython(v *ProcessInfo) {
+	if maps, err := findLibMapsFunc(int32(v.pid)); err == nil {
+		ver := lang.DetectPythonVersion(maps)
+
+		v.incompatible = (ver != nil) && (ver.Major < 3 || (ver.Major == 3 && ver.Minor <= 8))
+	}
+}
+
+func (s *LocalProcessScanner) computeIncompatibleNodejs(v *ProcessInfo) {
+	s.EnrichProcessInfoWithEnvironment(v)
+	if proc, err := newProcessFunc(int32(v.pid)); err == nil {
+		if cmdLine, err := proc.CmdlineSlice(); err == nil {
+			v.incompatible = lang.HasNodeJSAutoInstrumentation(cmdLine, v.env)
+		}
+	}
+}
+
+func (s *LocalProcessScanner) computeIncompatibleDotnet(v *ProcessInfo) {
+	s.EnrichProcessInfoWithEnvironment(v)
+
+	v.incompatible = lang.HasDotnetInstrumentation(v.env)
+}
+
 func (s *LocalProcessScanner) computeIncompatible(v *ProcessInfo) {
 	switch v.kind {
 	case svc.InstrumentableDotnet:
-		s.EnrichProcessInfoWithEnvironment(v)
-
-		v.incompatible = lang.HasDotnetInstrumentation(v.env)
+		s.computeIncompatibleDotnet(v)
 	case svc.InstrumentableJava:
-		s.EnrichProcessInfoWithEnvironment(v)
-		if proc, err := newProcessFunc(int32(v.pid)); err == nil {
-			if cmdLine, err := proc.CmdlineSlice(); err == nil {
-				agent := lang.FindJavaAgent(cmdLine, v.env)
-
-				v.incompatible = (agent != nil)
-			}
-		}
+		s.computeIncompatibleJava(v)
 	case svc.InstrumentablePython:
-		if maps, err := findLibMapsFunc(int32(v.pid)); err == nil {
-			ver := lang.DetectPythonVersion(maps)
-
-			v.incompatible = (ver != nil) && (ver.Major < 3 || (ver.Major == 3 && ver.Minor <= 8))
-		}
+		s.computeIncompatiblePython(v)
 	case svc.InstrumentableNodejs:
-		s.EnrichProcessInfoWithEnvironment(v)
-		if proc, err := newProcessFunc(int32(v.pid)); err == nil {
-			if cmdLine, err := proc.CmdlineSlice(); err == nil {
-				v.incompatible = lang.HasNodeJSAutoInstrumentation(cmdLine, v.env)
-			}
-		}
+		s.computeIncompatibleNodejs(v)
 	}
 }
 

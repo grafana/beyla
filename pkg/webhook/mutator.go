@@ -157,6 +157,15 @@ func (pm *PodMutator) CanInstrument(info *ProcessInfo) bool {
 	return false
 }
 
+func (pm *PodMutator) CanInstrumentLanguage(kind svc.InstrumentableType) bool {
+	for _, k := range pm.cfg.Injector.EnabledSDKs {
+		if k.InstrumentableType == kind {
+			return true
+		}
+	}
+	return false
+}
+
 func (pm *PodMutator) PreloadsSomethingElse(info *ProcessInfo) bool {
 	// If there's an LD_PRELOAD on this process, don't touch it if it's not us
 	if injector, ok := info.env[envVarLdPreloadName]; ok {

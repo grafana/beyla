@@ -78,6 +78,35 @@ func extractHostname(req *http.Request) string {
 	return host
 }
 
+type geminiPart struct {
+	FunctionCall *struct {
+		Name string `json:"name"`
+	} `json:"functionCall,omitempty"`
+}
+
+func extractGeminiFunctionCalls(resp *request.GeminiResponse) []request.ToolCall {
+	var result []request.ToolCall
+	for i := range resp.Candidates {
+		c := &resp.Candidates[i]
+		if c.Content == nil || len(c.Content.Parts) == 0 {
+			continue
+		}
+		var parts []geminiPart
+		if err := json.Unmarshal(c.Content.Parts, &parts); err != nil {
+			continue
+		}
+		for j := range parts {
+			if parts[j].FunctionCall == nil || parts[j].FunctionCall.Name == "" {
+				continue
+			}
+			result = append(result, request.ToolCall{
+				Name: parts[j].FunctionCall.Name,
+			})
+		}
+	}
+	return result
+}
+
 func GeminiSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
 	if !isGemini(req, resp.Header) {
 		return *baseSpan, false
@@ -108,6 +137,7 @@ func GeminiSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 
 	model := extractGeminiModel(req)
 	operation := extractGeminiOperation(req)
+	toolCalls := extractGeminiFunctionCalls(&parsedResponse)
 
 	baseSpan.SubType = request.HTTPSubtypeGemini
 	baseSpan.GenAI = &request.GenAI{
@@ -116,6 +146,7 @@ func GeminiSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 			Output:    parsedResponse,
 			Model:     model,
 			Operation: operation,
+			ToolCalls: toolCalls,
 		},
 	}
 

@@ -45,10 +45,10 @@ func (i *NodeInjector) NewExecutable(ie *ebpf.Instrumentable) {
 		return
 	}
 
-	i.log.Info("loading NodeJS instrumentation", "pid", ie.FileInfo.Pid)
+	i.log.Info("loading NodeJS instrumentation", "pid", ie.FileInfo.Pid())
 
-	if err := i.attachAgent(int(ie.FileInfo.Pid), ie.FileInfo.ELF); err != nil {
-		i.log.Error("couldn't attach NodeJS injector", "pid", ie.FileInfo.Pid, "error", err)
+	if err := i.attachAgent(int(ie.FileInfo.Pid()), ie.FileInfo.ELF()); err != nil {
+		i.log.Error("couldn't attach NodeJS injector", "pid", ie.FileInfo.Pid(), "error", err)
 		i.log.Error("trace-context propagation will not work for NodeJS services!")
 	}
 }

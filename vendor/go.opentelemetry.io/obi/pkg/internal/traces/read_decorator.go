@@ -62,7 +62,12 @@ func ReadFromChannel(r *ReadDecorator) swarm.InstanceFunc {
 // by the tracers (for example, the instance ID)
 type Decorator func(s *svc.Attrs, pid int)
 
-func HostNamePIDDecorator(cfg *config.InstanceIDConfig) Decorator {
+// HostInstance carries the resolved hostname used to compose service instance IDs.
+type HostInstance struct {
+	HostName string
+}
+
+func NewHostInstance(cfg *config.InstanceIDConfig) HostInstance {
 	// TODO: periodically update in case the current OBI instance is created from a VM snapshot running as a different hostname
 	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
 	fullHostName, _, err := resolver.Query()
@@ -73,10 +78,17 @@ func HostNamePIDDecorator(cfg *config.InstanceIDConfig) Decorator {
 	} else {
 		log.Info("using hostname", "hostname", fullHostName)
 	}
+	return HostInstance{HostName: fullHostName}
+}
 
-	// caching instance ID composition for speed and saving memory generation
+func (h HostInstance) ComposeInstance(hostPID int) string {
+	return h.HostName + ":" + strconv.Itoa(hostPID)
+}
+
+func HostNamePIDDecorator(cfg *config.InstanceIDConfig) Decorator {
+	hi := NewHostInstance(cfg)
 	return func(s *svc.Attrs, hostPID int) {
-		s.UID.Instance = fullHostName + ":" + strconv.Itoa(hostPID)
-		s.HostName = fullHostName
+		s.UID.Instance = hi.ComposeInstance(hostPID)
+		s.HostName = hi.HostName
 	}
 }

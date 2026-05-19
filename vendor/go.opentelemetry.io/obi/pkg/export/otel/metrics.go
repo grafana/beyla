@@ -792,24 +792,28 @@ func (mr *MetricsReporter) otelHistogramConfig(
 	metricName string,
 	buckets []float64,
 ) metric.View {
-	if mr.isExponentialAggregation() {
+	return newHistogramView(metricName, reporterName, buckets, mr.isExponentialAggregation(), mr.cfg.ExponentialHistogram)
+}
+
+func newHistogramView(metricName, scopeName string, buckets []float64, isExponential bool, expCfg otelcfg.ExponentialHistogramConfig) metric.View {
+	if isExponential {
 		return metric.NewView(
 			metric.Instrument{
 				Name:  metricName,
-				Scope: instrumentation.Scope{Name: reporterName},
+				Scope: instrumentation.Scope{Name: scopeName},
 			},
 			metric.Stream{
 				Name: metricName,
 				Aggregation: sdkmetric.AggregationBase2ExponentialHistogram{
-					MaxScale: mr.cfg.ExponentialHistogram.MaxScale,
-					MaxSize:  mr.cfg.ExponentialHistogram.MaxSize,
+					MaxScale: expCfg.MaxScale,
+					MaxSize:  expCfg.MaxSize,
 				},
 			})
 	}
 	return metric.NewView(
 		metric.Instrument{
 			Name:  metricName,
-			Scope: instrumentation.Scope{Name: reporterName},
+			Scope: instrumentation.Scope{Name: scopeName},
 		},
 		metric.Stream{
 			Name: metricName,
@@ -1199,18 +1203,20 @@ func (mr *MetricsReporter) deleteTargetMetrics(uid *svc.UID) {
 }
 
 func (mr *MetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
-	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+	snap := pe.File.ServiceAttrs()
+	pid := pe.File.Pid()
+	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pid, "attrs", snap.UID)
 
 	if pe.Type == exec.ProcessEventCreated {
-		uid := pe.File.Service.UID
+		uid := snap.UID
 
 		// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
 		// There's no new PID, just an update to the metadata.
-		if staleUID, exists := mr.pidTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+		if staleUID, exists := mr.pidTracker.TracksPID(pid); exists && !staleUID.Equals(&uid) {
 			mr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
 			mr.pidTracker.ReplaceUID(staleUID, uid)
 			mr.deleteTargetMetrics(&staleUID)
-			mr.createTargetMetrics(&pe.File.Service)
+			mr.createTargetMetrics(&snap)
 			// we don't setup the pid again, we just replaced the metrics it's associated with
 			return
 		}
@@ -1223,13 +1229,13 @@ func (mr *MetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
 			mr.deleteTargetMetrics(&uid)
 		}
 
-		mr.createTargetMetrics(&pe.File.Service)
-		mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
+		mr.createTargetMetrics(&snap)
+		mr.setupPIDToServiceRelationship(pid, snap.UID)
 	} else {
-		if deleted, origUID := mr.disassociatePIDFromService(pe.File.Pid); deleted {
+		if deleted, origUID := mr.disassociatePIDFromService(pid); deleted {
 			// We only need the UID to look up in the pool, no need to cache
 			// the whole of the attrs in the pidTracker
-			mlog().Debug("deleting infos for", "pid", pe.File.Pid, "attrs", origUID)
+			mlog().Debug("deleting infos for", "pid", pid, "attrs", origUID)
 
 			mr.deleteTargetMetrics(&origUID)
 

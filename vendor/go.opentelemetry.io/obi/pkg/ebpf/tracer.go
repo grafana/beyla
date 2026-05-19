@@ -38,25 +38,14 @@ type Instrumentable struct {
 }
 
 func (ie *Instrumentable) CopyToServiceAttributes() {
-	// If the user does not override the service name via configuration
-	// the service name is the name of the found executable
-	if ie.FileInfo.Service.UID.Name == "" {
-		ie.FileInfo.Service.UID.Name = ie.FileInfo.ExecutableName()
-		// we mark the service ID as automatically named in case we want to look,
-		// in later stages of the pipeline, for better automatic service name
-		ie.FileInfo.Service.SetAutoName()
-	}
-
-	ie.FileInfo.Service.SDKLanguage = ie.Type
+	ie.FileInfo.ApplyServiceDefaults(ie.Type)
 }
 
 type PIDsAccounter interface {
-	// AllowPID notifies the tracer to accept traces from the process with the
-	// provided PID. The Tracer should discard
-	// traces from processes whose PID has not been allowed before
-	// We must use a pointer for svc.Attrs so that all child processes share the same
-	// object. This is important when we tag a service as exporting traces or metrics.
-	AllowPID(app.PID, uint32, *svc.Attrs)
+	// AllowPID notifies the tracer to accept traces from the given PID, sharing
+	// the FileInfo so mutable service state (flags, harvested routes, k8s
+	// metadata) goes through its synchronized API.
+	AllowPID(app.PID, uint32, *exec.FileInfo)
 	// BlockPID notifies the tracer to stop accepting traces from the process
 	// with the provided PID. After receiving them via ringbuffer, it should
 	// discard them.
@@ -160,15 +149,13 @@ type ProcessTracer struct {
 	Programs        []Tracer
 }
 
-func (pt *ProcessTracer) AllowPID(pid app.PID, ns uint32, svc *svc.Attrs) {
+func (pt *ProcessTracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	logEnricherEnabled := fi.LogEnricherEnabled()
 	for i := range pt.Programs {
-		_, ok := pt.Programs[i].(*logenricher.Tracer)
-		if ok {
-			if !svc.LogEnricherEnabled {
-				continue
-			}
+		if _, ok := pt.Programs[i].(*logenricher.Tracer); ok && !logEnricherEnabled {
+			continue
 		}
-		pt.Programs[i].AllowPID(pid, ns, svc)
+		pt.Programs[i].AllowPID(pid, ns, fi)
 	}
 }
 

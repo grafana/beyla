@@ -168,29 +168,30 @@ func (r *surveyMetricsReporter) disassociatePIDFromService(pid app.PID) (bool, s
 }
 
 func (r *surveyMetricsReporter) handleProcessEvent(pe exec.ProcessEvent, log *slog.Logger) {
-	log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+	svcAttrs := pe.File.ServiceAttrs()
+	log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid(), "attrs", svcAttrs.UID)
 
-	uid := pe.File.Service.UID
+	uid := svcAttrs.UID
 
 	switch pe.Type {
 	case exec.ProcessEventTerminated:
-		if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid); deleted {
-			log.Debug("deleting infos for", "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
-			r.deleteEventMetrics(origUID, &pe.File.Service)
+		if deleted, origUID := r.disassociatePIDFromService(pe.File.Pid()); deleted {
+			log.Debug("deleting infos for", "pid", pe.File.Pid(), "attrs", svcAttrs.UID)
+			r.deleteEventMetrics(origUID, &svcAttrs)
 			delete(r.serviceMap, origUID)
 		}
 	case exec.ProcessEventCreated:
 		// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
 		// There's no new PID, just an update to the metadata.
-		if staleUID, exists := r.pidsTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+		if staleUID, exists := r.pidsTracker.TracksPID(pe.File.Pid()); exists && !staleUID.Equals(&uid) {
 			log.Debug("updating older service definition", "from", staleUID, "new", uid)
 			r.pidsTracker.ReplaceUID(staleUID, uid)
 			if origAttrs, ok := r.serviceMap[staleUID]; ok {
 				log.Debug("updating service attributes for", "service", uid)
 				r.deleteEventMetrics(staleUID, &origAttrs)
 				delete(r.serviceMap, staleUID)
-				r.serviceMap[uid] = pe.File.Service
-				r.createEventMetrics(&pe.File.Service)
+				r.serviceMap[uid] = svcAttrs
+				r.createEventMetrics(&svcAttrs)
 				// we don't setup the pid again, we just replaced the metrics it's associated with
 			}
 			return
@@ -204,9 +205,9 @@ func (r *surveyMetricsReporter) handleProcessEvent(pe exec.ProcessEvent, log *sl
 			r.deleteEventMetrics(uid, &origAttrs)
 		}
 
-		r.createEventMetrics(&pe.File.Service)
-		r.serviceMap[uid] = pe.File.Service
-		r.setupPIDToServiceRelationship(pe.File.Pid, uid)
+		r.createEventMetrics(&svcAttrs)
+		r.serviceMap[uid] = svcAttrs
+		r.setupPIDToServiceRelationship(pe.File.Pid(), uid)
 	}
 }
 

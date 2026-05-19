@@ -432,16 +432,18 @@ func (mr *SvcGraphMetricsReporter) reportMetrics(ctx context.Context) {
 }
 
 func (mr *SvcGraphMetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
-	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+	snap := pe.File.ServiceAttrs()
+	pid := pe.File.Pid()
+	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pid, "attrs", snap.UID)
 
 	if pe.Type == exec.ProcessEventCreated {
-		mr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
+		mr.setupPIDToServiceRelationship(pid, snap.UID)
 	} else {
-		if deleted, origUID := mr.disassociatePIDFromService(pe.File.Pid); deleted {
+		if deleted, origUID := mr.disassociatePIDFromService(pid); deleted {
 			mr.log.Debug("deleting infos for",
-				"pid", pe.File.Pid,
+				"pid", pid,
 				"uid", origUID,
-				"attrs", pe.File.Service)
+				"attrs", snap)
 		}
 	}
 }

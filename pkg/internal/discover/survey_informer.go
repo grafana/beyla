@@ -62,7 +62,7 @@ func (m *surveyor) run(_ context.Context) {
 			} else {
 				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pe.Obj.FileInfo})
 			}
-			m.log.Debug("survey info generation", "pid", pe.Obj.FileInfo.Pid, "ns", pe.Obj.FileInfo.Ns, "cmd", pe.Obj.FileInfo.CmdExePath, "service", pe.Obj.FileInfo.Service.UID)
+			m.log.Debug("survey info generation", "pid", pe.Obj.FileInfo.Pid(), "ns", pe.Obj.FileInfo.Ns(), "cmd", pe.Obj.FileInfo.CmdExePath(), "service", pe.Obj.FileInfo.ServiceAttrs().UID)
 		}
 	}
 }
@@ -75,8 +75,8 @@ func (m *surveyor) fetchMetadata(i *ebpf.Instrumentable) {
 	if m.store != nil {
 		// we can do this because there is a previous ContainerDBUpdater pipeline stage
 		// that has provided this information
-		if objectMeta, containerName := m.store.PodContainerByPIDNs(i.FileInfo.Ns, i.FileInfo.Pid); objectMeta != nil {
-			transform.AppendKubeMetadata(m.store, &i.FileInfo.Service, objectMeta, m.clusterName, containerName)
+		if objectMeta, containerName := m.store.PodContainerByPIDNs(i.FileInfo.Ns(), i.FileInfo.Pid()); objectMeta != nil {
+			transform.AppendKubeMetadata(m.store, i.FileInfo, objectMeta, m.clusterName, containerName)
 		}
 	}
 }

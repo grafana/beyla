@@ -96,6 +96,9 @@ BEHAVIORAL_TRANSFORMS=(
     'obi\.ip|beyla.ip'
     'obi\.network\.flow|beyla.network.flow'
     'obi\.network\.inter\.zone|beyla.network.inter.zone'
+    'obi\.version|beyla.version'
+    'obi\.revision|beyla.revision'
+    'obi\.stat\.tcp\.|beyla.stat.tcp.'
 
     # --- Telemetry SDK/scope identity ---
     'Value: "go\.opentelemetry\.io/obi"|Value: "github.com/grafana/beyla"'
@@ -684,6 +687,12 @@ copy_schemas() {
     fi
 }
 
+apply_schema_transforms() {
+    local jobs="$1"
+    find "$SCHEMAS_DEST/obi/groups" -name "*.yaml" -type f \
+        | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
+}
+
 generate() {
     echo "Generating OBI tests from $OBI_SRC..."
     local jobs
@@ -728,6 +737,7 @@ generate() {
     # -----------------------------------------------------------------
     fetch_upstream_semconv   # ← populate .deps/ before copying
     copy_schemas
+    apply_schema_transforms "$jobs"
 
     echo ""
     echo "Generated integration tests at $OBI_DEST"

@@ -14,7 +14,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
@@ -43,7 +42,7 @@ func New(cfg *obi.Config) *Tracer {
 	}
 }
 
-func (p *Tracer) AllowPID(app.PID, uint32, *svc.Attrs) {}
+func (p *Tracer) AllowPID(app.PID, uint32, *exec.FileInfo) {}
 
 func (p *Tracer) BlockPID(app.PID, uint32) {}
 

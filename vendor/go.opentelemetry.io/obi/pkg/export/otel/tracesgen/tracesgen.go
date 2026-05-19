@@ -325,6 +325,38 @@ var (
 	spanMetricsSkip     = attribute.Bool(string(attr.SkipSpanMetrics), true)
 )
 
+// genAIToolCallAttributes returns trace attributes for LLM tool calls.
+// Only tool calls with non-empty names are included. Names and IDs are kept
+// aligned so that the same index refers to the same tool call.
+func genAIToolCallAttributes(toolCalls []request.ToolCall) []attribute.KeyValue {
+	if len(toolCalls) == 0 {
+		return nil
+	}
+
+	var names []string
+	var ids []string
+	hasIDs := false
+	for _, tc := range toolCalls {
+		if tc.Name == "" {
+			continue
+		}
+		names = append(names, tc.Name)
+		ids = append(ids, tc.ID)
+		if tc.ID != "" {
+			hasIDs = true
+		}
+	}
+
+	var attrs []attribute.KeyValue
+	if len(names) > 0 {
+		attrs = append(attrs, attribute.StringSlice(string(attr.GenAIToolName), names))
+	}
+	if hasIDs {
+		attrs = append(attrs, attribute.StringSlice(string(attr.GenAIToolCallID), ids))
+	}
+	return attrs
+}
+
 // mcpAttributes returns MCP span attributes following the OTEL MCP semantic conventions.
 func mcpAttributes(span *request.Span) []attribute.KeyValue {
 	if span.SubType != request.HTTPSubtypeMCP || span.GenAI == nil || span.GenAI.MCP == nil {
@@ -591,6 +623,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			if ai.OperationName == request.EmbeddingOperationName && ai.Request.Dimensions > 0 {
 				attrs = append(attrs, attribute.Int("gen_ai.request.embedding.dimensions", ai.Request.Dimensions))
 			}
+			attrs = append(attrs, genAIToolCallAttributes(ai.ToolCalls)...)
 		}
 
 		if span.SubType == request.HTTPSubtypeAnthropic && span.GenAI != nil && span.GenAI.Anthropic != nil {
@@ -627,6 +660,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Type))
 				attrs = append(attrs, semconv.ErrorMessage(ai.Output.Error.Message))
 			}
+			attrs = append(attrs, genAIToolCallAttributes(ai.ToolCalls)...)
 		}
 
 		if span.SubType == request.HTTPSubtypeGemini && span.GenAI != nil && span.GenAI.Gemini != nil {
@@ -696,6 +730,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Status))
 				attrs = append(attrs, semconv.ErrorMessage(ai.Output.Error.Message))
 			}
+			attrs = append(attrs, genAIToolCallAttributes(ai.ToolCalls)...)
 		}
 
 		if span.SubType == request.HTTPSubtypeQwen && span.GenAI != nil && span.GenAI.Qwen != nil {
@@ -742,6 +777,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Error.Type))
 				attrs = append(attrs, semconv.ErrorMessage(ai.Error.Message))
 			}
+			attrs = append(attrs, genAIToolCallAttributes(ai.ToolCalls)...)
 		}
 
 		if span.SubType == request.HTTPSubtypeAWSBedrock && span.GenAI != nil && span.GenAI.Bedrock != nil {
@@ -832,6 +868,29 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 			if count := ai.Input.InputCount(); count > 0 {
 				attrs = append(attrs, attribute.Int("gen_ai.request.embedding.input_count", count))
+			}
+		}
+
+		if span.SubType == request.HTTPSubtypeRetrieval && span.GenAI != nil && span.GenAI.Retrieval != nil {
+			ai := span.GenAI.Retrieval
+			attrs = append(attrs, semconv.GenAIProviderNameKey.String(ai.Provider))
+			attrs = append(attrs, semconv.GenAIOperationNameKey.String(ai.OperationName()))
+			if ai.Input.Model != "" {
+				attrs = append(attrs, semconv.GenAIRequestModel(ai.Input.Model))
+			}
+			if ai.Output.Model != "" {
+				attrs = append(attrs, semconv.GenAIResponseModel(ai.Output.Model))
+			} else if ai.Input.Model != "" {
+				attrs = append(attrs, semconv.GenAIResponseModel(ai.Input.Model))
+			}
+			if ai.Output.ID != "" {
+				attrs = append(attrs, semconv.GenAIResponseID(ai.Output.ID))
+			}
+			if tokens := ai.GetInputTokens(); tokens > 0 {
+				attrs = append(attrs, semconv.GenAIUsageInputTokens(tokens))
+			}
+			if collection := ai.GetCollection(); collection != "" {
+				attrs = append(attrs, semconv.GenAIDataSourceID(collection))
 			}
 		}
 
@@ -1038,8 +1097,11 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.ClientAddr(request.SpanHost(span)),
 			request.ServerAddr(request.PeerAsClient(span)),
 			request.ServerPort(span.HostPort),
-			semconv.DNSQuestionName(span.Path),
 			request.DNSAnswers(span.Statement),
+		}
+		// Include DNSQuestionName only when selected via attribute config.
+		if _, ok := optionalAttrs[attr.DNSQuestionName]; ok {
+			attrs = append(attrs, semconv.DNSQuestionName(span.Path))
 		}
 
 		if span.Status != 0 {

@@ -73,7 +73,6 @@ func DefaultConfig() *Config {
 	maxWebhookRequest := resource.MustParse("3Mi")
 
 	def.Injector.Webhook = WebhookConfig{
-		Enable:   false,
 		Port:     8443,
 		Timeout:  30 * time.Second,
 		CertPath: "/etc/webhook/certs/tls.crt",
@@ -396,9 +395,9 @@ type SDKResource struct {
 }
 
 // WebhookConfig contains the configuration for the mutating webhook
+// Functionality under active development
+// TODO: most of the following options are not having effect. They must be moved to k8s-injection-controller
 type WebhookConfig struct {
-	// Enable enables the mutating webhook server
-	Enable bool `yaml:"enable" env:"BEYLA_WEBHOOK_ENABLE"`
 	// Port is the port the webhook server listens on
 	Port int `yaml:"port" env:"BEYLA_WEBHOOK_LISTEN_PORT"`
 	// CertPath is the path to the TLS certificate file
@@ -415,12 +414,8 @@ type WebhookConfig struct {
 	ExternalWebhook string `yaml:"external_deployment_name" env:"BEYLA_EXTERNAL_WEBHOOK_DEPLOYMENT_NAME"`
 }
 
-func (w WebhookConfig) UsesExternalWebhook() bool {
-	return w.ExternalWebhook != ""
-}
-
 func (w WebhookConfig) Enabled() bool {
-	return (w.Enable && w.Port > 0 && w.CertPath != "" && w.KeyPath != "") || w.UsesExternalWebhook()
+	return w.ExternalWebhook != ""
 }
 
 type ConfigError string

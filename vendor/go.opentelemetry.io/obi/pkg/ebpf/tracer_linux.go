@@ -307,17 +307,17 @@ func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext, cfg *obi.Co
 }
 
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
-	if i, ok := pt.Instrumentables[ie.FileInfo.Ino]; ok {
+	if i, ok := pt.Instrumentables[ie.FileInfo.Ino()]; ok {
 		for _, p := range pt.Programs {
 			p.ProcessBinary(ie.FileInfo)
 			// Uprobes to be used for native module instrumentation points
-			if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
+			if err := i.uprobes(ie.FileInfo.Pid(), p); err != nil {
 				printVerifierErrorInfo(err)
 				return err
 			}
 		}
 	} else {
-		pt.log.Warn("Attempted to update non-existent tracer", "path", ie.FileInfo.CmdExePath, "pid", ie.FileInfo.Pid)
+		pt.log.Warn("Attempted to update non-existent tracer", "path", ie.FileInfo.CmdExePath(), "pid", ie.FileInfo.Pid())
 	}
 
 	return nil
@@ -329,7 +329,7 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 		offsets:     ie.Offsets, // this is needed for the function offsets, not fields
 		modules:     map[uint64]struct{}{},
 		metrics:     pt.metrics,
-		processName: ie.FileInfo.CmdExePath,
+		processName: ie.FileInfo.ExecutableName(),
 	}
 
 	for _, p := range pt.Programs {
@@ -342,19 +342,19 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 		}
 
 		// Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(ie.FileInfo.Pid, p); err != nil {
+		if err := i.uprobes(ie.FileInfo.Pid(), p); err != nil {
 			printVerifierErrorInfo(err)
 			return err
 		}
 	}
 
-	pt.Instrumentables[ie.FileInfo.Ino] = &i
+	pt.Instrumentables[ie.FileInfo.Ino()] = &i
 
 	return nil
 }
 
 func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
-	if i, ok := pt.Instrumentables[info.Ino]; ok {
+	if i, ok := pt.Instrumentables[info.Ino()]; ok {
 		for _, c := range i.closables {
 			if err := c.Close(); err != nil {
 				pt.log.Debug("Unable to close on unlink", "closable", c)
@@ -365,12 +365,12 @@ func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
 				p.UnlinkInstrumentedLib(ino)
 			}
 		}
-		delete(pt.Instrumentables, info.Ino)
+		delete(pt.Instrumentables, info.Ino())
 	} else {
 		pt.log.Warn("Unable to find executable to unlink",
-			"path", info.CmdExePath,
-			"pid", info.Pid,
-			"inode", info.Ino)
+			"path", info.CmdExePath(),
+			"pid", info.Pid(),
+			"inode", info.Ino())
 	}
 }
 

@@ -188,10 +188,6 @@ func (i *Attrs) ExportsOTelTraces() bool {
 	return i.getFlag(exportsOTelTraces)
 }
 
-func (i *Attrs) SetHarvestedRoutes(matcher route.Matcher) {
-	i.HarvestedRouteMatcher = matcher
-}
-
 func (i *Attrs) SetCustomRoutes(config *services.CustomRoutesConfig) {
 	i.CustomInRouteMatcher = route.NewMatcher(config.Incoming)
 	i.CustomOutRouteMatcher = route.NewMatcher(config.Outgoing)

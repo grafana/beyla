@@ -6,46 +6,16 @@
 package ebpf // import "go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 
 import (
-	"structs"
-
 	ciliumebpf "github.com/cilium/ebpf"
 
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 )
 
 type StatsFetcher struct{}
 
-type StatsTCPRtt struct {
-	_      structs.HostLayout
-	Flags  uint8
-	Pad    [3]uint8
-	SrttUs uint32
-	Conn   struct {
-		_      structs.HostLayout
-		S_addr [16]uint8 //nolint:revive,staticcheck
-		D_addr [16]uint8 //nolint:revive,staticcheck
-		S_port uint16    //nolint:revive,staticcheck
-		D_port uint16    //nolint:revive,staticcheck
-	}
-}
-
-type StatsTCPFailedConnection struct {
-	_      structs.HostLayout
-	Flags  uint8
-	Reason uint8
-	Role   uint8
-	Pad    [1]uint8
-	Conn   struct {
-		_      structs.HostLayout
-		S_addr [16]uint8 //nolint:revive,staticcheck
-		D_addr [16]uint8 //nolint:revive,staticcheck
-		S_port uint16    //nolint:revive,staticcheck
-		D_port uint16    //nolint:revive,staticcheck
-	}
-}
-
-func NewStatsFetcher(_ *config.EBPFTracer, _ *export.Features) (*StatsFetcher, error) {
+func NewStatsFetcher(_ *config.EBPFTracer, _ *export.Features, _ *attributes.SelectorConfig) (*StatsFetcher, error) {
 	return nil, nil
 }
 

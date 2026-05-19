@@ -104,27 +104,28 @@ func newSurveyMetricsReporter(
 }
 
 func (smr *SurveyMetricsReporter) onProcessEvent(ctx context.Context, pe *exec.ProcessEvent) {
-	log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid, "attrs", pe.File.Service.UID)
+	svcAttrs := pe.File.ServiceAttrs()
+	log := smr.log.With("event_type", pe.Type, "pid", pe.File.Pid(), "attrs", svcAttrs.UID)
 	log.Debug("process event received")
 
 	switch pe.Type {
 	case exec.ProcessEventTerminated:
-		if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid); deleted {
+		if deleted, origUID := smr.disassociatePIDFromService(pe.File.Pid()); deleted {
 			// We only need the UID to look up in the pool, no need to cache
 			// the whole of the attrs in the pidTracker
 			log.Debug("deleting survey_info", "origuid", origUID)
 			smr.deleteEventMetrics(ctx, origUID)
 		}
 	case exec.ProcessEventCreated:
-		uid := pe.File.Service.UID
+		uid := svcAttrs.UID
 
 		// Handle the case when the PID changed its feathers, e.g. got new metadata impacting the service name.
 		// There's no new PID, just an update to the metadata.
-		if staleUID, exists := smr.pidTracker.TracksPID(pe.File.Pid); exists && !staleUID.Equals(&uid) {
+		if staleUID, exists := smr.pidTracker.TracksPID(pe.File.Pid()); exists && !staleUID.Equals(&uid) {
 			smr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
 			smr.pidTracker.ReplaceUID(staleUID, uid)
 			smr.deleteEventMetrics(ctx, staleUID)
-			smr.createEventMetrics(ctx, &pe.File.Service)
+			smr.createEventMetrics(ctx, &svcAttrs)
 			// we don't setup the pid again, we just replaced the metrics it's associated with
 			return
 		}
@@ -137,8 +138,8 @@ func (smr *SurveyMetricsReporter) onProcessEvent(ctx context.Context, pe *exec.P
 			smr.deleteEventMetrics(ctx, uid)
 		}
 
-		smr.createEventMetrics(ctx, &pe.File.Service)
-		smr.setupPIDToServiceRelationship(pe.File.Pid, pe.File.Service.UID)
+		smr.createEventMetrics(ctx, &svcAttrs)
+		smr.setupPIDToServiceRelationship(pe.File.Pid(), uid)
 	}
 }
 

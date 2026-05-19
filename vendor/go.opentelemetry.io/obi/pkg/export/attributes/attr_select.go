@@ -12,8 +12,9 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
-// Selection specifies which attributes are allowed for each metric.
-// The key is the metric name (either in Prometheus or OpenTelemetry format)
+// Selection specifies which attributes are allowed for each signal.
+// The key is usually the metric name (either in Prometheus or OpenTelemetry format);
+// the key "traces" selects optional attributes for exported OTLP traces.
 // The value is the enumeration of included/excluded attribute globs
 type Selection map[Section]InclusionLists
 

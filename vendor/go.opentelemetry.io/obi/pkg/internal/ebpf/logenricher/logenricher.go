@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -26,7 +27,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
@@ -52,7 +52,8 @@ type Tracer struct {
 	log         *slog.Logger
 	fdCache     *expirable.LRU[string, *os.File]
 	asyncWriter *shardedqueue.ShardedQueue[LogEvent]
-	pids        map[uint64][]uint64 // pid:[]nsPids
+	pids        map[uint64][]uint64       // pid:[]nsPids
+	pidServices map[uint32]*exec.FileInfo // host pid -> file info, for run-time OTel-export check in handle()
 	pidsMU      sync.Mutex
 }
 
@@ -70,7 +71,8 @@ func New(cfg *obi.Config) *Tracer {
 		fdCache: expirable.NewLRU[string, *os.File](cfg.EBPF.LogEnricher.CacheSize, func(_ string, f *os.File) {
 			f.Close()
 		}, cfg.EBPF.LogEnricher.CacheTTL),
-		pids: make(map[uint64][]uint64),
+		pids:        make(map[uint64][]uint64),
+		pidServices: make(map[uint32]*exec.FileInfo),
 	}
 
 	asyncWriter := shardedqueue.NewShardedQueue[LogEvent](
@@ -214,6 +216,32 @@ func (p *Tracer) pidKey(nsid, pid uint32) uint64 {
 	return (uint64(nsid) << 32) | uint64(pid)
 }
 
+func (p *Tracer) shouldOmitSpanID(hostPID uint32) bool {
+	if !p.cfg.Discovery.ExcludeOTelInstrumentedServices {
+		return false
+	}
+
+	p.pidsMU.Lock()
+	s := p.pidServices[hostPID]
+	p.pidsMU.Unlock()
+
+	return s != nil && s.ExportsOTelTraces()
+}
+
+func applyTraceContext(m map[string]any, traceID, spanID string, includeSpan bool) {
+	if _, present := m["trace_id"]; !present {
+		m["trace_id"] = traceID
+	}
+
+	if !includeSpan {
+		return
+	}
+
+	if _, present := m["span_id"]; !present {
+		m["span_id"] = spanID
+	}
+}
+
 func (p *Tracer) addPID(key uint64) error {
 	p.log.Debug("adding pid", "pid", uint32(key), "ns", key>>32)
 	if err := p.bpfObjects.LogEnricherPids.Put(key, uint8(1)); err != nil {
@@ -225,14 +253,21 @@ func (p *Tracer) addPID(key uint64) error {
 func (p *Tracer) removePID(key uint64) error {
 	p.log.Debug("removing pid", "pid", uint32(key), "ns", key>>32)
 	if err := p.bpfObjects.LogEnricherPids.Delete(key); err != nil {
+		if errors.Is(err, ebpf.ErrKeyNotExist) {
+			return nil
+		}
 		return fmt.Errorf("error removing pid %d (ns=%d) from bpf map: %w", uint32(key), key>>32, err)
 	}
 	return nil
 }
 
-func (p *Tracer) AllowPID(pid app.PID, ns uint32, _ *svc.Attrs) {
+func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	p.pidsMU.Lock()
 	defer p.pidsMU.Unlock()
+
+	if fi != nil {
+		p.pidServices[uint32(pid)] = fi
+	}
 
 	pk := p.pidKey(ns, uint32(pid))
 	if err := p.addPID(pk); err != nil {
@@ -261,6 +296,8 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, _ *svc.Attrs) {
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.pidsMU.Lock()
 	defer p.pidsMU.Unlock()
+
+	delete(p.pidServices, uint32(pid))
 
 	pk := p.pidKey(ns, uint32(pid))
 	if err := p.removePID(pk); err != nil {
@@ -371,16 +408,15 @@ func (p *Tracer) handle(e LogEvent) {
 	}
 
 	var (
-		b       bytes.Buffer
-		spanID  = trace.SpanID(e.orig.Ctx.SpanId)
-		traceID = trace.TraceID(e.orig.Ctx.TraceId)
+		b           bytes.Buffer
+		spanID      = trace.SpanID(e.orig.Ctx.SpanId)
+		traceID     = trace.TraceID(e.orig.Ctx.TraceId)
+		includeSpan = !p.shouldOmitSpanID(e.orig.Tgid)
 	)
 
 	var m map[string]any
 	if err := json.Unmarshal([]byte(e.logLine), &m); err == nil {
-		// JSON -> enrich with context
-		m["trace_id"] = traceID.String()
-		m["span_id"] = spanID.String()
+		applyTraceContext(m, traceID.String(), spanID.String(), includeSpan)
 
 		out, err2 := json.Marshal(m)
 		if err2 != nil {

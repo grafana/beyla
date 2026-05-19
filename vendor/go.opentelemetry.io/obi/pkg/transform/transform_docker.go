@@ -106,17 +106,21 @@ func DockerProcessEventDecoratorProvider(
 				}
 				switch ev.Type {
 				case exec.ProcessEventCreated:
-					ci, ok := containerByPID[ev.File.Pid]
+					pid := ev.File.Pid()
+					ci, ok := containerByPID[pid]
 					if !ok {
-						if ci, ok = containers.ContainerInfo(ctx, ev.File.Pid); ok {
-							containerByPID[ev.File.Pid] = ci
+						if ci, ok = containers.ContainerInfo(ctx, pid); ok {
+							containerByPID[pid] = ci
 						}
 					}
 					if ok {
-						ci.DecorateService(&ev.File.Service)
+						snap := ev.File.ServiceAttrs()
+						ci.DecorateService(&snap)
+						ev.File.SetUID(snap.UID)
+						ev.File.SetMetadata(snap.Metadata)
 					}
 				case exec.ProcessEventTerminated:
-					delete(containerByPID, ev.File.Pid)
+					delete(containerByPID, ev.File.Pid())
 				}
 				output.SendCtx(ctx, ev)
 			})

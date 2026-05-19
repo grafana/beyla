@@ -34,21 +34,21 @@ func InspectOffsets(execElf *exec.FileInfo, funcs []string) (*Offsets, error) {
 	}
 
 	// Analyze executable ELF file and find instrumentation points
-	found, err := instrumentationPoints(execElf.ELF, funcs)
+	found, err := instrumentationPoints(execElf.ELF(), funcs)
 	if err != nil {
 		return nil, fmt.Errorf("finding instrumentation points: %w", err)
 	}
 	if len(found) == 0 {
-		return nil, fmt.Errorf("couldn't find any instrumentation point in %s", execElf.CmdExePath)
+		return nil, fmt.Errorf("couldn't find any instrumentation point in %s", execElf.CmdExePath())
 	}
 
 	// check the offsets of the required fields from the method arguments
-	structFieldOffsets, err := structMemberOffsets(execElf.ELF)
+	structFieldOffsets, err := structMemberOffsets(execElf.ELF())
 	if err != nil {
-		return nil, fmt.Errorf("checking struct members in file %s: %w", execElf.ProExeLinkPath, err)
+		return nil, fmt.Errorf("checking struct members in file %s: %w", execElf.ProExeLinkPath(), err)
 	}
 
-	itypes, err := findInterfaceImpls(execElf.ELF)
+	itypes, err := findInterfaceImpls(execElf.ELF())
 	if err != nil {
 		slog.Warn("error reading itab section in Go program, manual spans will not work", "error", err)
 	}

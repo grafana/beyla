@@ -163,7 +163,7 @@ func (md *metadataDecorator) nodeLoop(ctx context.Context) {
 
 func (md *metadataDecorator) do(span *request.Span) {
 	if podMeta, containerName := md.store.PodContainerByPIDNs(span.Pid.Namespace, span.Pid.HostPID); podMeta != nil {
-		AppendKubeMetadata(md.store, &span.Service, podMeta, md.clusterName, containerName)
+		applyKubeMetadata(md.store, &span.Service, podMeta, md.clusterName, containerName)
 	} else if span.Service.Metadata == nil {
 		// do not leave the service attributes map as nil
 		span.Service.Metadata = map[attr.Name]string{}
@@ -224,8 +224,9 @@ func (t *pidContainerTracker) track(containerID string, pe *exec.ProcessEvent) {
 	}
 	t.missedPodsMux.Lock()
 	defer t.missedPodsMux.Unlock()
-	t.missedPods.Put(containerID, pe.File.Pid, pe)
-	t.missedPodPids[pe.File.Pid] = containerID
+	pid := pe.File.Pid()
+	t.missedPods.Put(containerID, pid, pe)
+	t.missedPodPids[pid] = containerID
 }
 
 func (t *pidContainerTracker) remove(pid app.PID) {
@@ -293,21 +294,21 @@ mainLoop:
 			}
 			md.log.Debug("annotating process event", "event", pe)
 
-			if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns, pe.File.Pid); podMeta != nil {
-				AppendKubeMetadata(md.store, &pe.File.Service, podMeta, md.clusterName, containerName)
+			if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns(), pe.File.Pid()); podMeta != nil {
+				AppendKubeMetadata(md.store, pe.File, podMeta, md.clusterName, containerName)
 			} else {
 				// do not leave the service attributes map as nil
-				pe.File.Service.Metadata = map[attr.Name]string{}
+				pe.File.SetMetadata(map[attr.Name]string{})
 
 				md.log.Debug("no metadata for event", "event", pe)
 
 				if pe.Type == exec.ProcessEventCreated {
-					if containerInfo, err := md.getContainerInfo(pe.File.Pid); err == nil {
-						md.log.Debug("storing pid info", "pid", pe.File.Pid, "containerId", containerInfo.ContainerID)
+					if containerInfo, err := md.getContainerInfo(pe.File.Pid()); err == nil {
+						md.log.Debug("storing pid info", "pid", pe.File.Pid(), "containerId", containerInfo.ContainerID)
 						md.tracker.track(containerInfo.ContainerID, &pe)
 					}
 				} else {
-					md.tracker.remove(pe.File.Pid)
+					md.tracker.remove(pe.File.Pid())
 				}
 			}
 
@@ -343,9 +344,9 @@ func (md *procEventMetadataDecorator) handlePodUpdateEvent(pod *informer.ObjectM
 		if peMap, ok := md.tracker.info(cnt.Id); ok {
 			md.log.Debug("found missed pid info", "containerId", cnt.Id)
 			for _, pe := range peMap {
-				if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns, pe.File.Pid); podMeta != nil {
+				if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns(), pe.File.Pid()); podMeta != nil {
 					md.log.Debug("resubmitting process event", "event", pe)
-					AppendKubeMetadata(md.store, &pe.File.Service, podMeta, md.clusterName, containerName)
+					AppendKubeMetadata(md.store, pe.File, podMeta, md.clusterName, containerName)
 					md.output.Send(*pe)
 				}
 			}
@@ -364,22 +365,29 @@ func (md *procEventMetadataDecorator) cleanupPodData(pod *informer.ObjectMeta) {
 // AppendKubeMetadata populates some metadata values in the passed svc.Attrs.
 // This method should be invoked by any entity willing to follow a common policy for
 // setting metadata attributes. For example this metadataDecorator or the survey informer
-func AppendKubeMetadata(store *kube.Store, svc *svc.Attrs, meta *ikube.CachedObjMeta, clusterName, containerName string) {
+func AppendKubeMetadata(store *kube.Store, fi *exec.FileInfo, meta *ikube.CachedObjMeta, clusterName, containerName string) {
+	snap := fi.ServiceAttrs()
+	if !applyKubeMetadata(store, &snap, meta, clusterName, containerName) {
+		return
+	}
+	fi.SetUID(snap.UID)
+	fi.SetMetadata(snap.Metadata)
+	fi.SetHostName(snap.HostName)
+}
+
+func applyKubeMetadata(store *kube.Store, s *svc.Attrs, meta *ikube.CachedObjMeta, clusterName, containerName string) bool {
 	if meta.Meta.Pod == nil {
 		// if this message happen, there is a bug
 		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
-		return
+		return false
 	}
 	topOwner := ikube.TopOwner(meta.Meta.Pod)
 	name, namespace := store.ServiceNameNamespaceForMetadata(meta.Meta, containerName)
-	// If the user has not defined criteria values for the reported
-	// service name and namespace, we will automatically set it from
-	// the kubernetes metadata
-	if svc.AutoName() {
-		svc.UID.Name = name
+	if s.AutoName() {
+		s.UID.Name = name
 	}
-	if svc.UID.Namespace == "" {
-		svc.UID.Namespace = namespace
+	if s.UID.Namespace == "" {
+		s.UID.Namespace = namespace
 	}
 	// overriding the Instance here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information
@@ -387,10 +395,8 @@ func AppendKubeMetadata(store *kube.Store, svc *svc.Attrs, meta *ikube.CachedObj
 	// (related issue: https://github.com/grafana/beyla/issues/1124)
 	// Service Instance ID is set according to OTEL collector conventions:
 	// (related issue: https://github.com/grafana/k8s-monitoring-helm/issues/942)
-	svc.UID.Instance = meta.Meta.Namespace + "." + meta.Meta.Name + "." + containerName
+	s.UID.Instance = meta.Meta.Namespace + "." + meta.Meta.Name + "." + containerName
 
-	// if, in the future, other pipeline steps modify the service metadata, we should
-	// replace the map literal by individual entry insertions
 	k8sMeta := map[attr.Name]string{
 		attr.K8sNamespaceName: meta.Meta.Namespace,
 		attr.K8sPodName:       meta.Meta.Name,
@@ -401,15 +407,10 @@ func AppendKubeMetadata(store *kube.Store, svc *svc.Attrs, meta *ikube.CachedObj
 		attr.K8sClusterName:   clusterName,
 	}
 
-	// Create a new map to avoid concurrent map writes on svc.Metadata.
 	m := make(map[attr.Name]string)
-
-	// Thread-safe copy for the existing metadata.
-	if svcMetadata := svc.Metadata; svcMetadata != nil {
-		maps.Copy(m, svcMetadata)
+	if s.Metadata != nil {
+		maps.Copy(m, s.Metadata)
 	}
-
-	// Thread-safe copy for the new k8s metadata.
 	maps.Copy(m, k8sMeta)
 
 	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
@@ -428,14 +429,11 @@ func AppendKubeMetadata(store *kube.Store, svc *svc.Attrs, meta *ikube.CachedObj
 		}
 	}
 
-	// append resource metadata from cached object
 	maps.Copy(m, meta.OTELResourceMeta)
 
-	// Thread-safe assignment of the new metadata map.
-	svc.Metadata = m
-
-	// override hostname by the Pod name
-	svc.HostName = meta.Meta.Name
+	s.Metadata = m
+	s.HostName = meta.Meta.Name
+	return true
 }
 
 func OwnerLabelName(kind string) attr.Name {

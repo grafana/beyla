@@ -37,14 +37,15 @@ func (p StatsPrometheusConfig) Enabled() bool {
 type statMetricsReporter struct {
 	cfg *PrometheusConfig
 
-	tcpRtt *Expirer[prometheus.Histogram]
-
+	tcpRtt               *Expirer[prometheus.Histogram]
 	tcpFailedConnections *Expirer[prometheus.Counter]
+	tcpRetransmits       *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
 	tcpRttAttrs               []attributes.Field[*ebpf.Stat, string]
 	tcpFailedConnectionsAttrs []attributes.Field[*ebpf.Stat, string]
+	tcpRetransmitsAttrs       []attributes.Field[*ebpf.Stat, string]
 
 	clock *expire.CachedClock
 
@@ -106,15 +107,29 @@ func newStatsReporter(
 			provider.For(attributes.StatTCPRtt))
 
 		mr.tcpRtt = NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: attributes.StatTCPRtt.Prom,
-			Help: "measures the smoothed TCP RTT as calculated by the kernel in seconds",
-			// TODO define a default bucket for stat metrics when we have enough metrics to have something standard
-			Buckets:                         []float64{0.0005, 0.001, 0.002, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0},
-			NativeHistogramBucketFactor:     DefaultNativeHistogramConfig.BucketFactor,
-			NativeHistogramMaxBucketNumber:  DefaultNativeHistogramConfig.MaxBucketNumber,
-			NativeHistogramMinResetDuration: DefaultNativeHistogramConfig.MinResetDuration,
+			Name:                            attributes.StatTCPRtt.Prom,
+			Help:                            "measures the smoothed TCP RTT as calculated by the kernel in seconds",
+			Buckets:                         cfg.Config.Buckets.StatTCPRttHistogram,
+			NativeHistogramBucketFactor:     cfg.Config.NativeHistogram.BucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.Config.NativeHistogram.MaxBucketNumber,
+			NativeHistogramMinResetDuration: cfg.Config.NativeHistogram.MinResetDuration,
 		}, labelNames(mr.tcpRttAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
 		register = append(register, mr.tcpRtt)
+	}
+
+	if cfg.CommonCfg.Features.StatsTCPRetransmits() {
+		log.Debug("registering stat tcp retransmits metric")
+
+		mr.tcpRetransmitsAttrs = attributes.PrometheusGetters(
+			ebpf.StatStringGetters,
+			provider.For(attributes.StatTCPRetransmits))
+
+		mr.tcpRetransmits = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.StatTCPRetransmits.Prom,
+			Help: "counts the TCP retransmits between 2 endpoints",
+		}, labelNames(mr.tcpRetransmitsAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+
+		register = append(register, mr.tcpRetransmits)
 	}
 
 	if cfg.CommonCfg.Features.StatsTCPFailedConnections() {
@@ -155,6 +170,7 @@ func (r *statMetricsReporter) collectMetrics(_ context.Context) {
 		for _, stat := range stats {
 			r.observeTCPRtt(stat)
 			r.observeTCPFailedConnections(stat)
+			r.observeTCPRetransmits(stat)
 		}
 	}
 }
@@ -172,5 +188,13 @@ func (r *statMetricsReporter) observeTCPFailedConnections(stat *ebpf.Stat) {
 		return
 	}
 	r.tcpFailedConnections.WithLabelValues(labelValues(stat, r.tcpFailedConnectionsAttrs)...).
+		Metric.Add(1)
+}
+
+func (r *statMetricsReporter) observeTCPRetransmits(stat *ebpf.Stat) {
+	if r.tcpRetransmits == nil || !stat.TCPRetransmit {
+		return
+	}
+	r.tcpRetransmits.WithLabelValues(labelValues(stat, r.tcpRetransmitsAttrs)...).
 		Metric.Add(1)
 }

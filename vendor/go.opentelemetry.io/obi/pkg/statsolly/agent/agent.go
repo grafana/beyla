@@ -16,6 +16,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/logger"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	stats "go.opentelemetry.io/obi/pkg/internal/statsolly/stats"
@@ -101,7 +102,11 @@ func StatsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Stats, error) {
 	}
 	alog.Debug("agent IP: " + agentIP.String())
 
-	statsFetcher, err = newFetcher(&cfg.EBPF, &cfg.Metrics.Features)
+	selectorCfg := &attributes.SelectorConfig{
+		SelectionCfg:            cfg.Attributes.Select,
+		ExtraGroupAttributesCfg: cfg.Attributes.ExtraGroupAttributes,
+	}
+	statsFetcher, err = newFetcher(&cfg.EBPF, &cfg.Metrics.Features, selectorCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +114,8 @@ func StatsAgent(ctxInfo *global.ContextInfo, cfg *obi.Config) (*Stats, error) {
 	return statsAgent(ctxInfo, cfg, statsFetcher, agentIP)
 }
 
-func newFetcher(cfg *config.EBPFTracer, features *export.Features) (ebpFetcher, error) {
-	return ebpf.NewStatsFetcher(cfg, features)
+func newFetcher(cfg *config.EBPFTracer, features *export.Features, selectorCfg *attributes.SelectorConfig) (ebpFetcher, error) {
+	return ebpf.NewStatsFetcher(cfg, features, selectorCfg)
 }
 
 // statsAgent is a private constructor with injectable dependencies, usable for tests

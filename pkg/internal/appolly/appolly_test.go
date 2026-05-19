@@ -40,7 +40,7 @@ func TestProcessEventsLoopDoesntBlock(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		events <- discover.Event[*ebpf.Instrumentable]{
-			Obj:  &ebpf.Instrumentable{FileInfo: &exec.FileInfo{Pid: app.PID(i)}},
+			Obj:  &ebpf.Instrumentable{FileInfo: exec.New(exec.Init{Pid: app.PID(i)})},
 			Type: discover.EventCreated,
 		}
 	}

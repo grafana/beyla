@@ -109,4 +109,9 @@ func OverrideOBIGlobalConfig() {
 		Prom:    "beyla_stat_tcp_failed_connections",
 		OTEL:    "beyla.stat.tcp.failed.connections",
 	}
+	attributes.StatTCPRetransmits = attributes.Name{
+		Section: "beyla.stat.tcp.retransmits",
+		Prom:    "beyla_stat_tcp_retransmits",
+		OTEL:    "beyla.stat.tcp.retransmits",
+	}
 }

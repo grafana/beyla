@@ -2374,11 +2374,6 @@
           "description": "CertPath is the path to the TLS certificate file",
           "x-env-var": "BEYLA_WEBHOOK_CERT_PATH"
         },
-        "enable": {
-          "type": "boolean",
-          "description": "Enable enables the mutating webhook server",
-          "x-env-var": "BEYLA_WEBHOOK_ENABLE"
-        },
         "external_deployment_name": {
           "type": "string",
           "description": "ExternalWebhook delegates the functionality of the mutating webhook to an external controller/operator",
@@ -2417,7 +2412,7 @@
         }
       },
       "type": "object",
-      "description": "WebhookConfig contains the configuration for the mutating webhook"
+      "description": "WebhookConfig contains the configuration for the mutating webhook Functionality under active development TODO: most of the following options are not having effect. They must be moved to k8s-injection-controller"
     },
     "WebhookInstrument": {
       "items": {

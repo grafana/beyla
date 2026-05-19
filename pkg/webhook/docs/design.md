@@ -4,50 +4,9 @@ Beyla can operate it's own Kubernetes webhook for SDK injection, or use an exter
 When using an external controller, Beyla does the job of existing local process discovery, so that
 the controller can automatically restart deployments which are deemed as eligible for instrumentation.
 
-
-## General local webhook operation (will be deprecated soon)
-
-1. Requires that certmanager is installed on the cluster, so that Beyla can get TLS credentials from it.
-2. Once the TLS credentials are acquired, Beyla launches the webhook, meaning it can intercept any
-   new pod launches. These new pods are instrumented using the OpenTelemetry Injector with only 4
-   supported languages at the moment: Java, .NET, Node.js and Python.
-3. Apart from the new pods, we want to instrument all existing eligible deployments in the cluster.
-   This means we'll need to restart certain deployments with a proper rollout in Kubernetes. For
-   this purpose Beyla establishes an initial process state after it has registered the webhook.
-   The local processes are then enriched with information about:
-    - Their programming language
-    - Their environment variables
-    - Their container information
-
-   This creates the so called initial process state. It's created when the k8s informers send the first pod information.
-4. Beyla then registers with the k8 informers and starts receiving the new pod events, listing all
-   existing pods. When the pod information comes we:
-    - Discard any pods for nodes that don't belong to this current node where Beyla is running.
-      This is important since Beyla typically is configured to see cluster wide information.
-    - For each pod, consult the local process state. If matched we correlate the pod information with
-      the process attributes, by the container ID, and then decide if this deployment should be 
-      restarted. The restart happens by adding a label to the deployment, which in turn creates
-      graceful rollout of the deployment.
-    - If we fail to find the process attributes we do a rebuild of the process state, while we
-      haven't received all of the initial state from the k8s informers. Once all of the inital 
-      k8s state is received we don't try to rebuild the local process state.
-5. After the initial state is processed, new events from the k8s informers typically don't find 
-   a thing, and we purely rely on the webhook to add instrumentation.
-
 ## Instrumentation modes
 
-We currently support two instrumentation modes:
-
-### Using host path (for old kubernetes versions, prior to 1.31)
-
-In this mode, we register a host path volume on each Beyla deployment and then we run the
-injector package as an init container on the Beyla deployment. This mode requires that we
-set the volume path and the SDK version, so that Beyla can manage the volume appropriately.
-The injector Docker image default command `copy-to-volume.sh` puts all the injector files,
-versioned with the SDK version config field, in this volume. 
-
-Beyla then adds this volume for each newly instrumented pod. The volume is read-only and the
-same volume is attached to all pods.
+We currently support one instrumentation modes:
 
 ### Using the image volume directly (Kubernetes versions 1.31+)
 

@@ -1,13 +1,9 @@
 package webhook
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -15,8 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -28,10 +22,7 @@ import (
 )
 
 var (
-	runtimeScheme     = runtime.NewScheme()
-	codecFactory      = serializer.NewCodecFactory(runtimeScheme)
-	deserializer      = codecFactory.UniversalDeserializer()
-	supportedSDKLangs = []svc.InstrumentableType{svc.InstrumentableDotnet, svc.InstrumentableJava, svc.InstrumentableNodejs, svc.InstrumentablePython}
+	runtimeScheme = runtime.NewScheme()
 )
 
 const (
@@ -40,37 +31,11 @@ const (
 	// this value is hardcoded in the config file
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
-	envVarLdPreloadName               = "LD_PRELOAD"
-	envVarLdPreloadValue              = internalMountPath + "/dist/injector/libotelinject.so"
-	envOtelInjectorConfigFileName     = "OTEL_INJECTOR_CONFIG_FILE"
-	envOtelInjectorConfigFileValue    = internalMountPath + "/dist/injector/otelinject.conf"
-	envOtelExporterOtlpEndpointName   = "OTEL_EXPORTER_OTLP_ENDPOINT"
-	envOtelExporterOtlpProtocolName   = "OTEL_EXPORTER_OTLP_PROTOCOL"
-	envOtelSemConvStabilityName       = "OTEL_SEMCONV_STABILITY_OPT_IN"
-	envInjectorOtelExtraResourceAttrs = "OTEL_INJECTOR_RESOURCE_ATTRIBUTES"
-	envInjectorOtelServiceName        = "OTEL_INJECTOR_SERVICE_NAME"
-	envInjectorOtelServiceVersion     = "OTEL_INJECTOR_SERVICE_VERSION"
-	envInjectorOtelServiceNamespace   = "OTEL_INJECTOR_SERVICE_NAMESPACE"
-	envInjectorOtelK8sNamespaceName   = "OTEL_INJECTOR_K8S_NAMESPACE_NAME"
-	envInjectorOtelK8sPodName         = "OTEL_INJECTOR_K8S_POD_NAME"
-	envInjectorOtelK8sPodUID          = "OTEL_INJECTOR_K8S_POD_UID"
-	envInjectorOtelK8sContainerName   = "OTEL_INJECTOR_K8S_CONTAINER_NAME"
-	envInjectorDebugName              = "OTEL_INJECTOR_LOG_LEVEL"
-	envOtelK8sNodeName                = "OTEL_RESOURCE_ATTRIBUTES_NODE_NAME" // stored in OTEL_INJECTOR_RESOURCE_ATTRIBUTES, since there's no individual OTEL_INJECTOR_K8S_NODE_NAME
-	envOtelK8sPodIP                   = "OTEL_RESOURCE_ATTRIBUTES_POD_IP"
-	envVarSDKVersion                  = "BEYLA_INJECTOR_SDK_PKG_VERSION"
-	envOtelTracesSamplerName          = "OTEL_TRACES_SAMPLER"
-	envOtelTracesSamplerArgName       = "OTEL_TRACES_SAMPLER_ARG"
-	envOtelPropagatorsName            = "OTEL_PROPAGATORS"
-	envOtelMetricsExporterName        = "OTEL_METRICS_EXPORTER"
-	envOtelTracesExporterName         = "OTEL_TRACES_EXPORTER"
-	envOtelLogsExporterName           = "OTEL_LOGS_EXPORTER"
-
-	// Enabling/disabling of language specific SDKs
-	envDotnetEnabledName = "DOTNET_AUTO_INSTRUMENTATION_AGENT_PATH_PREFIX"
-	envJavaEnabledName   = "JVM_AUTO_INSTRUMENTATION_AGENT_PATH"
-	envNodejsEnabledName = "NODEJS_AUTO_INSTRUMENTATION_AGENT_PATH"
-	envPythonEnabledName = "PYTHON_AUTO_INSTRUMENTATION_AGENT_PATH_PREFIX"
+	envVarLdPreloadName            = "LD_PRELOAD"
+	envVarLdPreloadValue           = internalMountPath + "/dist/injector/libotelinject.so"
+	envOtelInjectorConfigFileName  = "OTEL_INJECTOR_CONFIG_FILE"
+	envOtelInjectorConfigFileValue = internalMountPath + "/dist/injector/otelinject.conf"
+	envVarSDKVersion               = "BEYLA_INJECTOR_SDK_PKG_VERSION"
 )
 
 func init() {
@@ -102,6 +67,7 @@ func (pm *PodMutator) Endpoint() string { return pm.endpoint }
 func (pm *PodMutator) Protocol() string { return pm.proto }
 
 // NewPodMutator creates a new PodMutator
+// TODO: we don't need most of the code, as this is already mutated in the external webhook. Cleanup
 func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjectionMetrics) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions
 	var err error
@@ -182,265 +148,6 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 	return false
 }
 
-// HandleMutate is the HTTP handler for the mutating webhook
-func (pm *PodMutator) HandleMutate(w http.ResponseWriter, r *http.Request) {
-	pm.logger.Info("received mutation request", "remoteAddr", r.RemoteAddr)
-
-	if release := pm.acquireRequestSlot(w, r); release == nil {
-		return
-	} else {
-		defer release()
-	}
-
-	admReview := pm.parseAdmissionReview(w, r)
-	if admReview == nil {
-		return
-	}
-
-	admResponse := &admissionv1.AdmissionResponse{
-		UID:     admReview.Request.UID,
-		Allowed: true,
-	}
-
-	if pm.cfg.Injector.PackageVersion() == "" {
-		errorResponse(admResponse, "Image Volume Path or SDK package version must be set")
-		if pm.metrics != nil {
-			pm.metrics.RecordRequest(admReview.Request.Namespace, "", "", "", ErrorTypeMissingSDKVersion)
-		}
-		pm.mutateResponse(w, admResponse)
-		return
-	}
-
-	if admReview.Request.Kind.Kind == "Pod" {
-		pm.processPodRequest(admReview.Request, admResponse)
-	}
-
-	pm.mutateResponse(w, admResponse)
-}
-
-func (pm *PodMutator) parseAdmissionReview(w http.ResponseWriter, r *http.Request) *admissionv1.AdmissionReview {
-	defer r.Body.Close()
-
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, pm.maxAdmissionSize))
-
-	if err != nil {
-		pm.logger.Error("failed to read request body", "error", err)
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
-			return nil
-		}
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		return nil
-	}
-
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" {
-		pm.logger.Error("invalid content type", "contentType", contentType)
-		http.Error(w, "invalid Content-Type, expect application/json", http.StatusUnsupportedMediaType)
-		return nil
-	}
-
-	admReview := admissionv1.AdmissionReview{}
-	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		pm.logger.Error("failed to decode admission review", "error", err)
-		http.Error(w, fmt.Sprintf("failed to decode admission review: %v", err), http.StatusBadRequest)
-		return nil
-	}
-
-	if admReview.Request == nil {
-		pm.logger.Error("admission review request is nil")
-		http.Error(w, "admission review request is nil", http.StatusBadRequest)
-		return nil
-	}
-
-	pm.logger.Info("processing admission request", "uid", admReview.Request.UID, "kind", admReview.Request.Kind.Kind)
-	return &admReview
-}
-
-func (pm *PodMutator) processPodRequest(req *admissionv1.AdmissionRequest, admResponse *admissionv1.AdmissionResponse) {
-	pod := corev1.Pod{}
-	if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
-		pm.logger.Error("failed to unmarshal pod", "error", err)
-		errorResponse(admResponse, fmt.Sprintf("failed to unmarshal pod: %v", err))
-		if pm.metrics != nil {
-			pm.metrics.RecordRequest(req.Namespace, "", "", "", ErrorTypeAdmissionRejected)
-		}
-		return
-	}
-
-	pm.logger.Info("mutating pod", "name", pod.Name, "namespace", pod.Namespace)
-	wlKind, wlName := resolveWorkload(&pod)
-	lang := detectLanguageFromPodSpec(&pod)
-	selector, matched := pm.matchesSelection(&pod.ObjectMeta)
-
-	if !matched {
-		pm.logger.Info("pod doesn't match selection criteria", "pod", pod.Name, "namespace", pod.Namespace)
-		if pm.metrics != nil {
-			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoMatchingSelector)
-		}
-		return
-	}
-
-	pm.applyMutation(req.Object.Raw, &pod, wlKind, wlName, lang, admResponse, selector)
-}
-
-func (pm *PodMutator) applyMutation(originalRaw []byte, pod *corev1.Pod, wlKind, wlName, lang string, admResponse *admissionv1.AdmissionResponse, selector services.Selector) {
-	modified, skipReason := pm.mutatePod(pod, selector)
-	if !modified {
-		pm.logger.Info("no mutations needed", "pod", pod.Name, "namespace", pod.Namespace, "reason", skipReason)
-		if pm.metrics != nil && skipReason != "" {
-			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, skipReason)
-		}
-		return
-	}
-
-	pm.buildAndApplyPatch(originalRaw, pod, wlKind, wlName, lang, admResponse)
-}
-
-func (pm *PodMutator) buildAndApplyPatch(originalRaw []byte, pod *corev1.Pod, wlKind, wlName, lang string, admResponse *admissionv1.AdmissionResponse) {
-	marshalled, err := json.Marshal(pod)
-	if err != nil {
-		pm.logger.Error("failed to marshall modified pod", "error", err, "pod", pod.Name, "namespace", pod.Namespace)
-		errorResponse(admResponse, fmt.Sprintf("failed to marshall modified pod: %v", err))
-		if pm.metrics != nil {
-			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
-		}
-		return
-	}
-
-	pm.logger.Debug("generating patch", "originalSize", len(originalRaw), "modifiedSize", len(marshalled))
-	patchResponse := admission.PatchResponseFromRaw(originalRaw, marshalled)
-
-	if len(patchResponse.Patches) == 0 {
-		errorResponse(admResponse, "no changes")
-		if pm.metrics != nil {
-			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypeNoChangesDetected)
-		}
-		return
-	}
-
-	patchBytes, err := json.Marshal(patchResponse.Patches)
-	if err != nil {
-		pm.logger.Error("failed to marshal patches", "error", err)
-		errorResponse(admResponse, fmt.Sprintf("failed to marshal patches: %v", err))
-		if pm.metrics != nil {
-			pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, ErrorTypePatchGenerationFailed)
-		}
-		return
-	}
-
-	pm.logger.Info("mutated pod", "pod", pod.Name, "namespace", pod.Namespace)
-	admResponse.Patch = patchBytes
-	patchType := admissionv1.PatchTypeJSONPatch
-	admResponse.PatchType = &patchType
-	if pm.metrics != nil {
-		pm.metrics.RecordRequest(pod.Namespace, wlKind, wlName, lang, OutcomeSuccess)
-	}
-}
-
-func (pm *PodMutator) acquireRequestSlot(w http.ResponseWriter, r *http.Request) func() {
-	if pm.requestLimiter == nil {
-		return func() {}
-	}
-
-	select {
-	case pm.requestLimiter <- struct{}{}:
-		return func() {
-			<-pm.requestLimiter
-		}
-	case <-r.Context().Done():
-		pm.logger.Warn("mutation request canceled before acquiring request slot", "error", r.Context().Err())
-		http.Error(w, "request canceled", http.StatusRequestTimeout)
-		return nil
-	default:
-		pm.logger.Warn("too many concurrent mutation requests")
-		http.Error(w, "too many concurrent mutation requests", http.StatusServiceUnavailable)
-		return nil
-	}
-}
-
-func (pm *PodMutator) mutateResponse(w http.ResponseWriter, admResponse *admissionv1.AdmissionResponse) {
-	// Construct the response
-	admReviewResponse := admissionv1.AdmissionReview{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "admission.k8s.io/v1",
-			Kind:       "AdmissionReview",
-		},
-		Response: admResponse,
-	}
-
-	respBytes, err := json.Marshal(admReviewResponse)
-	if err != nil {
-		pm.logger.Error("failed to marshal response", "error", err)
-		http.Error(w, fmt.Sprintf("failed to marshal response: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	pm.logger.Info("sending admission response", "uid", admResponse.UID, "allowed", admResponse.Allowed, "responseSize", len(respBytes))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(respBytes); err != nil {
-		pm.logger.Error("failed to write response", "error", err)
-		return
-	}
-
-	pm.logger.Info("admission response sent successfully", "uid", admResponse.UID)
-}
-
-func (pm *PodMutator) mutatePod(pod *corev1.Pod, selector services.Selector) (bool, string) {
-	spec := &pod.Spec
-	meta := &pod.ObjectMeta
-
-	// check if maybe someone is adding instrumentation manually
-	if pm.alreadyInstrumented(spec, meta) {
-		return false, ErrorTypeAlreadyInstrumented
-	}
-
-	// Check if all containers have LD_PRELOAD conflicts (nothing to instrument)
-	allHaveConflict := len(spec.Containers) > 0
-	for i := range spec.Containers {
-		if !isLDPreloadConflict(&spec.Containers[i]) {
-			allHaveConflict = false
-			break
-		}
-	}
-	if allHaveConflict {
-		for i := range spec.Containers {
-			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", spec.Containers[i].Name)
-		}
-		return false, ErrorTypeLDPreloadConflict
-	}
-
-	originalSpec := spec.DeepCopy()
-
-	// mount the shared hostPath volume with the injector and SDKs
-	pm.mountVolume(spec, meta)
-
-	// instrument all containers, skipping those with a conflicting LD_PRELOAD
-	for i := range spec.Containers {
-		c := &spec.Containers[i]
-		if isLDPreloadConflict(c) {
-			pm.logger.Warn("container already using LD_PRELOAD, ignoring...", "container", c.Name)
-			continue
-		}
-		pm.instrumentContainer(meta, c, selector)
-	}
-
-	pm.addLabel(meta, instrumentedLabel, pm.cfg.Injector.PackageVersion())
-
-	return !reflect.DeepEqual(originalSpec, spec), ""
-}
-
-func (pm *PodMutator) alreadyInstrumented(spec *corev1.PodSpec, meta *metav1.ObjectMeta) bool {
-	if alreadyInstrumentedByOther(spec, meta) {
-		pm.logger.Debug("pod already instrumented, ignoring...")
-		return true
-	}
-	return false
-}
-
 func (pm *PodMutator) buildVolumeDefinition() corev1.Volume {
 	if pm.cfg.Injector.UsesImageVolume() {
 		// Use image volume path directly if the configuration
@@ -470,49 +177,6 @@ func (pm *PodMutator) buildVolumeDefinition() corev1.Volume {
 				},
 			},
 		}
-	}
-}
-
-func (pm *PodMutator) mountVolume(spec *corev1.PodSpec, meta *metav1.ObjectMeta) {
-	if spec.Volumes == nil {
-		spec.Volumes = make([]corev1.Volume, 0)
-	}
-
-	v := pm.buildVolumeDefinition()
-
-	pos := slices.IndexFunc(spec.Volumes, func(c corev1.Volume) bool {
-		return c.Name == injectVolumeName
-	})
-
-	if pos < 0 {
-		spec.Volumes = append(spec.Volumes, v)
-	} else {
-		spec.Volumes[pos] = v
-	}
-}
-
-func (pm *PodMutator) instrumentContainer(meta *metav1.ObjectMeta, c *corev1.Container, selector services.Selector) {
-	pm.addMount(c)
-	pm.addEnvVars(meta, c, selector)
-}
-
-func (pm *PodMutator) addMount(c *corev1.Container) {
-	if c.VolumeMounts == nil {
-		c.VolumeMounts = make([]corev1.VolumeMount, 0)
-	}
-	idx := slices.IndexFunc(c.VolumeMounts, func(c corev1.VolumeMount) bool {
-		return c.Name == injectVolumeName
-	})
-
-	volume := &corev1.VolumeMount{
-		Name:      injectVolumeName,
-		MountPath: internalMountPath,
-		ReadOnly:  true,
-	}
-	if idx < 0 {
-		c.VolumeMounts = append(c.VolumeMounts, *volume)
-	} else {
-		c.VolumeMounts[idx] = *volume
 	}
 }
 
@@ -573,34 +237,6 @@ func setEnvVar(c *corev1.Container, envVarName, value string) {
 	}
 }
 
-func (pm *PodMutator) addEnvVars(meta *metav1.ObjectMeta, c *corev1.Container, selector services.Selector) {
-	if c.Env == nil {
-		c.Env = []corev1.EnvVar{}
-	}
-
-	// we set the SDK version on the environment variable so that
-	// we can tell on start, when we scan the processes of the oldest
-	// SDK version in use.
-	setEnvVar(c, envVarSDKVersion, pm.cfg.Injector.PackageVersion())
-	setEnvVar(c, envVarLdPreloadName, envVarLdPreloadValue)
-	setEnvVar(c, envOtelInjectorConfigFileName, envOtelInjectorConfigFileValue)
-	setEnvVar(c, envOtelExporterOtlpEndpointName, pm.endpoint)
-	setEnvVar(c, envOtelExporterOtlpProtocolName, pm.proto)
-	setEnvVar(c, envOtelSemConvStabilityName, "http")
-	if pm.cfg.Injector.Debug {
-		setEnvVar(c, envInjectorDebugName, "debug")
-	}
-
-	pm.configureContainerEnvVars(meta, c, selector)
-	pm.disableUndesiredSDKs(c)
-
-	for k, v := range pm.exportHeaders {
-		setEnvVar(c, k, v)
-	}
-
-	pm.logger.Debug("env vars", "vars", c.Env)
-}
-
 func ownersFrom(meta *metav1.ObjectMeta) []*informer.Owner {
 	if len(meta.OwnerReferences) == 0 {
 		// If no owner references' found, return itself as owner
@@ -655,11 +291,6 @@ func processMetadata(meta *metav1.ObjectMeta) *ProcessInfo {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
 	}
 	return &ret
-}
-
-func (pm *PodMutator) matchesSelection(meta *metav1.ObjectMeta) (services.Selector, bool) {
-	info := processMetadata(meta)
-	return pm.matcher.MatchProcessInfo(info)
 }
 
 // HealthCheck is a simple health check endpoint

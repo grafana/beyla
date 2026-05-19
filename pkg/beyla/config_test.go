@@ -395,7 +395,6 @@ network:
 		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
 		Injector: SDKInject{
 			Webhook: WebhookConfig{
-				Enable:                false,
 				Port:                  8443,
 				Timeout:               30 * time.Second,
 				CertPath:              "/etc/webhook/certs/tls.crt",
@@ -776,7 +775,7 @@ func TestConfigRunsWithJustInjector(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
-    enable: true
+    external_deployment_name: foo/bar
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
@@ -794,7 +793,7 @@ func TestConfigRunsWithJustInjectorButNotWithoutSDKPackage(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
-    enable: true
+    external_deployment_name: foo/bar
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
@@ -811,7 +810,7 @@ func TestConfigRunsWithJustInjectorButNotWithoutHostPath(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
-    enable: true
+    external_deployment_name: foo/bar
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
@@ -828,7 +827,7 @@ func TestConfigRunsWithJustInjectorButNotWithoutTraces(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
-    enable: true
+    external_deployment_name: foo/bar
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key

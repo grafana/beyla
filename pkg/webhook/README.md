@@ -70,7 +70,7 @@ discovery:
 # Webhook injection configuration
 injector:
   webhook:
-    enable: true
+    external_deployment_name: foo/bar
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
@@ -250,7 +250,7 @@ discovery:
 
 injector:
   webhook:
-    enable: true
+    external_deployment_name: foo/bar
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key

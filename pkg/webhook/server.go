@@ -3,11 +3,11 @@ package webhook
 
 import (
 	"context"
-	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,8 +16,6 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"golang.org/x/mod/semver"
 
-	"go.opentelemetry.io/obi/pkg/appolly/services"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -26,12 +24,13 @@ import (
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
-// Server represents the webhook server
+// Server communicates with the external webhook server to coordinate who should
+// instrument/decorate/restart injected pods
+// TODO: rename
 type Server struct {
 	cfg                     *beyla.Config
 	ctxInfo                 *global.ContextInfo
 	mutator                 *PodMutator
-	bouncer                 *PodBouncer
 	scanner                 *LocalProcessScanner
 	matcher                 *PodMatcher
 	logger                  *slog.Logger
@@ -53,6 +52,8 @@ type Server struct {
 	uuid                    string
 }
 
+func (s *Server) ID() string { return s.uuid }
+
 const (
 	stateConfigMapDebounceDelay     = 10 * time.Second
 	rebuildDeploymentsDebounceDelay = 10 * time.Second
@@ -63,7 +64,6 @@ const (
 // NewServer creates a new webhook server
 func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
 	matcher := NewPodMatcher(cfg)
-	var bouncer *PodBouncer
 
 	logger := slog.Default().With("component", "webhook-server")
 
@@ -87,24 +87,14 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		return nil, err
 	}
 
-	if matcher.HasSelectionCriteria() && configuredToBounceDeployments(cfg) {
-		bouncer, err = NewPodBouncer(ctxInfo, metrics)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	nodeName := OwnNodeName()
 
-	var stateWriter *StateConfigMapWriter
-	if cfg.Injector.Webhook.UsesExternalWebhook() {
-		stateWriter, err = NewStateConfigMapWriter(cfg, ctxInfo, nodeName)
-		if err != nil {
-			return nil, fmt.Errorf("error creating configmap state writer: %w", err)
-		}
-		if err := stateWriter.Init(context.Background()); err != nil {
-			return nil, fmt.Errorf("error initializing configmap state writer: %w", err)
-		}
+	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("error creating configmap state writer: %w", err)
+	}
+	if err := stateWriter.Init(context.Background()); err != nil {
+		return nil, fmt.Errorf("error initializing configmap state writer: %w", err)
 	}
 
 	now := time.Now()
@@ -117,7 +107,6 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	s := &Server{
 		cfg:                    cfg,
 		mutator:                mutator,
-		bouncer:                bouncer,
 		scanner:                NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
 		matcher:                matcher,
 		logger:                 logger,
@@ -138,43 +127,8 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	return s, nil
 }
 
-func (s *Server) makeHTTPServer() *http.Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/mutate", s.mutator.HandleMutate)
-	mux.HandleFunc("/health", s.mutator.HealthCheck)
-	mux.HandleFunc("/readyz", s.mutator.HealthCheck)
-
-	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.cfg.Injector.Webhook.Port),
-		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	// Load TLS certificates
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-	}
-
-	server.TLSConfig = tlsConfig
-
-	return server
-}
-
-func configuredToBounceDeployments(cfg *beyla.Config) bool {
-	return !cfg.Injector.NoAutoRestart && !cfg.Injector.Webhook.UsesExternalWebhook()
-}
-
-// Start starts the webhook server
+// Start starts the webhook coordinator
 func (s *Server) Start(ctx context.Context) error {
-	var server *http.Server
-	if !s.cfg.Injector.Webhook.UsesExternalWebhook() {
-		if err := waitForTLSFiles(ctx, s.cfg.Injector.Webhook.CertPath, s.cfg.Injector.Webhook.KeyPath, s.cfg.Injector.Webhook.Timeout, time.Second); err != nil {
-			return fmt.Errorf("webhook TLS not ready: %w", err)
-		}
-		server = s.makeHTTPServer()
-	}
-
 	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
 
 	if err := s.instrumentationManager.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
@@ -205,8 +159,13 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.ctxInfo.Prometheus.StartHTTP(ctx)
 	}
 
-	errChan := s.setupWebhookServer(server)
-	return s.waitForCancellation(ctx, server, errChan)
+	<-ctx.Done()
+	s.logger.Debug("shutting down webhook coordinator")
+	// Don't return ctx.Err() as an error - graceful shutdown is expected
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return nil
+	}
+	return ctx.Err()
 }
 
 func (s *Server) setOrUpdateInitialProcessState() error {
@@ -392,24 +351,6 @@ func sortEligible(eligible []*configmap.EligibleDeployment) {
 	})
 }
 
-func (s *Server) restartDeployment(a *ProcessInfo) {
-	namespace := a.metadata[services.AttrNamespace]
-	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
-
-	if !s.bouncer.CanBeBounced(namespace, deployment) {
-		s.logger.Debug("ignoring non kubernetes process", "info", a)
-		return
-	}
-	if s.bouncer.AlreadyBounced(namespace, deployment) {
-		s.logger.Debug("already restarted", "namespace", namespace, "deployment", deployment)
-		return
-	}
-	lang := languageLabel(a.kind)
-	if err := s.bouncer.RestartDeployment(context.Background(), namespace, deployment, "Deployment", lang); err != nil {
-		s.logger.Info("failed to restart pods", "error", err)
-	}
-}
-
 func (s *Server) isMyNodeEvent(event *informer.Event) bool {
 	if s.nodeName == "" || event.Resource.Pod.NodeName == "" {
 		return false
@@ -426,7 +367,7 @@ func (s *Server) On(event *informer.Event) error {
 
 	s.logger.Debug("new pod event", "pod", event.Resource, "type", event.Type)
 
-	if s.cfg.Injector.Webhook.UsesExternalWebhook() && s.handleExternalWebhookEvent(event) {
+	if s.handleExternalWebhookEvent(event) {
 		return nil
 	}
 
@@ -490,23 +431,11 @@ func (s *Server) processAttributes(event *informer.Event) ([]*ProcessInfo, error
 }
 
 func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
-	if s.mutator.AlreadyInstrumented(a) {
-		// If this pod was instrumented, but the new Beyla config says don't anymore
-		// we bounce the pods to undo the instrumentation
-		if _, matched := s.matcher.MatchProcessInfo(a); matched {
-			return
-		}
-		if configuredToBounceDeployments(s.cfg) {
-			s.restartDeployment(a)
-		}
-		return
-	}
-
 	// It's important to check here for the SDK supported programming languages.
 	// Go would be the killer here, since many of the Kubernetes services are written in
 	// Go, and we don't want to say bounce coredns.
-	if !s.mutator.CanInstrument(a) || s.mutator.PreloadsSomethingElse(a) {
-		s.logger.Debug("ignoring process because of unsupported programming language, incompatible version/options or pre-existing LD_PRELOAD", "info", a)
+	if !s.mutator.CanInstrument(a.kind) || s.mutator.PreloadsSomethingElse(a) {
+		s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
 		return
 	}
 
@@ -516,9 +445,6 @@ func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
 	// they'll get seen by the webhook when the pods start, before there's info.
 	if _, matched := s.matcher.MatchProcessInfo(a); matched {
 		s.recordEligibleDeployment(a)
-		if configuredToBounceDeployments(s.cfg) {
-			s.restartDeployment(a)
-		}
 	}
 }
 
@@ -567,6 +493,14 @@ func (s *Server) isExternalWebhookEvent(info *informer.ObjectMeta) bool {
 	}
 
 	return false
+}
+
+func mutationKey(namespace, deploymentName string) string {
+	return trimmedName(namespace) + "/" + trimmedName(deploymentName)
+}
+
+func trimmedName(name string) string {
+	return strings.TrimSpace(name)
 }
 
 func (s *Server) needsToUpdateEligibleDeployments() bool {

@@ -434,7 +434,7 @@ func (s *Server) handleNewProcessEvent(a *ProcessInfo) {
 	// It's important to check here for the SDK supported programming languages.
 	// Go would be the killer here, since many of the Kubernetes services are written in
 	// Go, and we don't want to say bounce coredns.
-	if !s.mutator.CanInstrument(a.kind) || s.mutator.PreloadsSomethingElse(a) {
+	if !s.mutator.CanInstrument(a) || s.mutator.PreloadsSomethingElse(a) {
 		s.logger.Debug("ignoring process because of unsupported programming language or LD_PRELOAD", "info", a)
 		return
 	}

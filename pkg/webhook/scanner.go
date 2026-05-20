@@ -12,6 +12,8 @@ import (
 	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+
+	"github.com/grafana/beyla/v3/pkg/webhook/lang"
 )
 
 type LocalProcessScanner struct {
@@ -27,6 +29,7 @@ type ProcessInfo struct {
 	podAnnotations map[string]string
 	env            map[string]string
 	kind           svc.InstrumentableType
+	incompatible   bool
 	containerInfo  *Info
 }
 
@@ -76,11 +79,64 @@ func (s *LocalProcessScanner) EnrichProcessInfoWithContainerData(v *ProcessInfo)
 	return true
 }
 
+func (s *LocalProcessScanner) computeIncompatibleJava(v *ProcessInfo) {
+	s.EnrichProcessInfoWithEnvironment(v)
+	if proc, err := newProcessFunc(int32(v.pid)); err == nil {
+		if cmdLine, err := proc.CmdlineSlice(); err == nil {
+			agent := lang.FindJavaAgent(cmdLine, v.env)
+
+			v.incompatible = (agent != nil)
+		}
+	}
+}
+
+func (s *LocalProcessScanner) computeIncompatiblePython(v *ProcessInfo) {
+	if maps, err := findLibMapsFunc(int32(v.pid)); err == nil {
+		ver := lang.DetectPythonVersion(maps)
+
+		v.incompatible = (ver != nil) && (ver.Major < 3 || (ver.Major == 3 && ver.Minor <= 8))
+	}
+}
+
+func (s *LocalProcessScanner) computeIncompatibleNodejs(v *ProcessInfo) {
+	s.EnrichProcessInfoWithEnvironment(v)
+	if proc, err := newProcessFunc(int32(v.pid)); err == nil {
+		if cmdLine, err := proc.CmdlineSlice(); err == nil {
+			v.incompatible = lang.HasNodeJSAutoInstrumentation(cmdLine, v.env)
+		}
+	}
+}
+
+func (s *LocalProcessScanner) computeIncompatibleDotnet(v *ProcessInfo) {
+	s.EnrichProcessInfoWithEnvironment(v)
+
+	v.incompatible = lang.HasDotnetInstrumentation(v.env)
+}
+
+func (s *LocalProcessScanner) computeIncompatible(v *ProcessInfo) {
+	switch v.kind {
+	case svc.InstrumentableDotnet:
+		s.computeIncompatibleDotnet(v)
+	case svc.InstrumentableJava:
+		s.computeIncompatibleJava(v)
+	case svc.InstrumentablePython:
+		s.computeIncompatiblePython(v)
+	case svc.InstrumentableNodejs:
+		s.computeIncompatibleNodejs(v)
+	}
+}
+
 func (s *LocalProcessScanner) EnrichProcessInfoWithLanguage(v *ProcessInfo) {
 	v.kind = findProcLanguageCheap(int32(v.pid))
+
+	s.computeIncompatible(v)
 }
 
 func (s *LocalProcessScanner) EnrichProcessInfoWithEnvironment(v *ProcessInfo) bool {
+	if v.env != nil {
+		return true
+	}
+
 	proc, err := newProcessFunc(int32(v.pid))
 	if err != nil {
 		s.logger.Debug("cannot find executable info", "pid", v.pid, "error", err)
@@ -99,15 +155,15 @@ func (s *LocalProcessScanner) EnrichProcessInfoWithEnvironment(v *ProcessInfo) b
 }
 
 func (s *LocalProcessScanner) EnrichProcessInfo(v *ProcessInfo) bool {
-	s.EnrichProcessInfoWithLanguage(v)
+	if !s.EnrichProcessInfoWithContainerData(v) {
+		return false
+	}
 
 	if !s.EnrichProcessInfoWithEnvironment(v) {
 		return false
 	}
 
-	if !s.EnrichProcessInfoWithContainerData(v) {
-		return false
-	}
+	s.EnrichProcessInfoWithLanguage(v)
 
 	return true
 }

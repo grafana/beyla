@@ -114,7 +114,16 @@ func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {
 	}
 }
 
-func (pm *PodMutator) CanInstrument(kind svc.InstrumentableType) bool {
+func (pm *PodMutator) CanInstrument(info *ProcessInfo) bool {
+	for _, k := range pm.cfg.Injector.EnabledSDKs {
+		if k.InstrumentableType == info.kind {
+			return !info.incompatible
+		}
+	}
+	return false
+}
+
+func (pm *PodMutator) CanInstrumentLanguage(kind svc.InstrumentableType) bool {
 	for _, k := range pm.cfg.Injector.EnabledSDKs {
 		if k.InstrumentableType == kind {
 			return true

@@ -118,7 +118,7 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mutator.CanInstrument(tt.kind)
+			result := mutator.CanInstrumentLanguage(tt.kind)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

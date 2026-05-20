@@ -129,7 +129,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 // Start starts the webhook coordinator
 func (s *Server) Start(ctx context.Context) error {
-	s.logger.Info("starting webhook server", "port", s.cfg.Injector.Webhook.Port, "certPath", s.cfg.Injector.Webhook.CertPath)
+	s.logger.Info("starting communication to Injection controller")
 
 	if err := s.instrumentationManager.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
 		return err

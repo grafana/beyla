@@ -53,9 +53,6 @@ type PodMutator struct {
 	endpoint      string
 	proto         string
 	exportHeaders map[string]string
-
-	requestLimiter   chan struct{}
-	maxAdmissionSize int64
 }
 
 // Endpoint returns the OTLP endpoint the mutator stamps onto matched pods.
@@ -93,17 +90,14 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjection
 		proto = string(otelcfg.ProtocolHTTPProtobuf)
 	}
 
-	cfg.Injector.Webhook.MaxAdmissionBodySize.AsInt64()
 	return &PodMutator{
-		logger:           logger,
-		matcher:          matcher,
-		cfg:              cfg,
-		metrics:          metrics,
-		endpoint:         opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
-		exportHeaders:    opts.Headers,
-		proto:            proto,
-		requestLimiter:   make(chan struct{}, cfg.Injector.Webhook.MaxConcurrentRequests),
-		maxAdmissionSize: cfg.Injector.Webhook.MaxAdmissionBodySize.Value(),
+		logger:        logger,
+		matcher:       matcher,
+		cfg:           cfg,
+		metrics:       metrics,
+		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
+		exportHeaders: opts.Headers,
+		proto:         proto,
 	}, nil
 }
 

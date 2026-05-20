@@ -1751,14 +1751,6 @@
       },
       "type": "object"
     },
-    "Quantity": {
-      "properties": {
-        "Format": {
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
     "QwenConfig": {
       "properties": {
         "enabled": {
@@ -2369,46 +2361,10 @@
     },
     "WebhookConfig": {
       "properties": {
-        "cert_path": {
-          "type": "string",
-          "description": "CertPath is the path to the TLS certificate file",
-          "x-env-var": "BEYLA_WEBHOOK_CERT_PATH"
-        },
         "external_deployment_name": {
           "type": "string",
           "description": "ExternalWebhook delegates the functionality of the mutating webhook to an external controller/operator",
           "x-env-var": "BEYLA_EXTERNAL_WEBHOOK_DEPLOYMENT_NAME"
-        },
-        "key_path": {
-          "type": "string",
-          "description": "KeyPath is the path to the TLS key file",
-          "x-env-var": "BEYLA_WEBHOOK_KEY_PATH"
-        },
-        "max_admission_body_size": {
-          "$ref": "#/$defs/Quantity",
-          "description": "MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive",
-          "x-env-var": "BEYLA_WEBHOOK_MAX_ADMISSION_BODY_SIZE"
-        },
-        "max_concurrent_requests": {
-          "type": "integer",
-          "description": "MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive",
-          "x-env-var": "BEYLA_WEBHOOK_MAX_CONCURRENT_REQUESTS"
-        },
-        "port": {
-          "type": "integer",
-          "description": "Port is the port the webhook server listens on",
-          "x-env-var": "BEYLA_WEBHOOK_LISTEN_PORT"
-        },
-        "timeout": {
-          "type": "string",
-          "pattern": "^[0-9]+(ms|s|m)$",
-          "description": "Timeout is the time we wait for the TLS webhook to get initialized",
-          "examples": [
-            "30s",
-            "5m",
-            "1ms"
-          ],
-          "x-env-var": "BEYLA_WEBHOOK_TIMEOUT"
         }
       },
       "type": "object",

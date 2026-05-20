@@ -13,7 +13,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	obimeta "go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -70,18 +69,6 @@ func DefaultConfig() *Config {
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
 
-	maxWebhookRequest := resource.MustParse("3Mi")
-
-	def.Injector.Webhook = WebhookConfig{
-		Port:     8443,
-		Timeout:  30 * time.Second,
-		CertPath: "/etc/webhook/certs/tls.crt",
-		KeyPath:  "/etc/webhook/certs/tls.key",
-		// we are technically allowing the memory here to grow 1_000 * 3MB by default
-		// the concurrency is set high to allow for massive node drains or cluster upgrades
-		MaxConcurrentRequests: 1_000,
-		MaxAdmissionBodySize:  maxWebhookRequest,
-	}
 	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
 	def.Injector.ManageSDKVersions = true
 	def.Injector.EnabledSDKs = []servicesextra.InstrumentableType{
@@ -398,18 +385,6 @@ type SDKResource struct {
 // Functionality under active development
 // TODO: most of the following options are not having effect. They must be moved to k8s-injection-controller
 type WebhookConfig struct {
-	// Port is the port the webhook server listens on
-	Port int `yaml:"port" env:"BEYLA_WEBHOOK_LISTEN_PORT"`
-	// CertPath is the path to the TLS certificate file
-	CertPath string `yaml:"cert_path" env:"BEYLA_WEBHOOK_CERT_PATH"`
-	// KeyPath is the path to the TLS key file
-	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
-	// Timeout is the time we wait for the TLS webhook to get initialized
-	Timeout time.Duration `yaml:"timeout" env:"BEYLA_WEBHOOK_TIMEOUT"`
-	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
-	MaxConcurrentRequests int `yaml:"max_concurrent_requests" env:"BEYLA_WEBHOOK_MAX_CONCURRENT_REQUESTS"`
-	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
-	MaxAdmissionBodySize resource.Quantity `yaml:"max_admission_body_size" env:"BEYLA_WEBHOOK_MAX_ADMISSION_BODY_SIZE"`
 	// ExternalWebhook delegates the functionality of the mutating webhook to an external controller/operator
 	ExternalWebhook string `yaml:"external_deployment_name" env:"BEYLA_EXTERNAL_WEBHOOK_DEPLOYMENT_NAME"`
 }

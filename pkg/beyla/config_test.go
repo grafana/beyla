@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -141,8 +140,6 @@ network:
 	// sort some deduplicated values so we can compare consistently
 	slices.Sort(cfg.OTELMetrics.ExtraSpanResourceLabels)
 	slices.Sort(cfg.Prometheus.ExtraSpanResourceLabels)
-
-	maxWebhookRequest := resource.MustParse("3Mi")
 
 	assert.Equal(t, &Config{
 		Exec:        cfg.Exec,
@@ -394,14 +391,6 @@ network:
 		NodeJS: obi.NodeJSConfig{Enabled: true},
 		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
 		Injector: SDKInject{
-			Webhook: WebhookConfig{
-				Port:                  8443,
-				Timeout:               30 * time.Second,
-				CertPath:              "/etc/webhook/certs/tls.crt",
-				KeyPath:               "/etc/webhook/certs/tls.key",
-				MaxConcurrentRequests: 1_000,
-				MaxAdmissionBodySize:  maxWebhookRequest,
-			},
 			HostPathVolumeDir: "/var/lib/beyla/instrumentation",
 			ManageSDKVersions: true,
 			EnabledSDKs: []servicesextra.InstrumentableType{

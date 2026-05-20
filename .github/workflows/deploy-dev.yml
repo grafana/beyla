@@ -50,7 +50,7 @@ jobs:
         id: get-github-app-token
         uses: grafana/shared-workflows/actions/create-github-app-token@580590a644e82e79bb2598bdaba0be245a14dda0 # create-github-app-token/v0.2.2
         with:
-          github_app: updater-app
+          github_app: updater-for-ci
 
       - name: Update deployment_tools dev wave
         env:

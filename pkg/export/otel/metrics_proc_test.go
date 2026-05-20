@@ -169,7 +169,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 
 	attrMap := make(map[string]string)
 	for _, attr := range result {
-		attrMap[string(attr.Key)] = attr.Value.AsString()
+		attrMap[string(attr.Key)] = attr.Value.Emit()
 	}
 
 	expectedBaseAttrs := []string{
@@ -210,7 +210,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 
 	attrMap = make(map[string]string)
 	for _, attr := range result {
-		attrMap[string(attr.Key)] = attr.Value.AsString()
+		attrMap[string(attr.Key)] = attr.Value.Emit()
 	}
 
 	for _, attrName := range expectedBaseAttrs {

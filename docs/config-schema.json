@@ -2052,13 +2052,9 @@
     },
     "SDKInject": {
       "properties": {
-        "debug": {
-          "type": "boolean",
-          "description": "Enables injection debugging"
-        },
         "disable_auto_restart": {
           "type": "boolean",
-          "description": "Option to disable automatic bouncing of pods, it will be a responsibility of the end-user to bounce the pods to be instrumented"
+          "description": "Option to disable automatic bouncing of pods, it will be a responsibility of the end-user to bounce the pods to be instrumented TODO: move to controller?"
         },
         "enabled_sdks": {
           "items": {
@@ -2071,25 +2067,13 @@
           "$ref": "#/$defs/SDKExport",
           "description": "Export configuration for SDK instrumentation Controls which signals (traces, metrics, logs) should be exported from injected SDKs"
         },
-        "host_mount_path": {
-          "type": "string",
-          "description": "The host mount path where the SDK copy init container copies the files. This is the root path, sdk_version is appended on top"
-        },
-        "host_path_volume": {
-          "type": "string",
-          "description": "The host path volume directory which gets mounted into pods"
-        },
         "image_volume_path": {
           "type": "string",
-          "description": "OCI image mount instead of host volume, supported on k8s 1.31+"
+          "description": "OCI image mount, supported on k8s 1.31+. Must not be empty."
         },
         "instrument": {
           "$ref": "#/$defs/WebhookInstrument",
           "description": "OTel SDK instrumentation criteria"
-        },
-        "manage_sdk_versions": {
-          "type": "boolean",
-          "description": "Tells Beyla that it should delete old SDK versions on the host mount volume. Default true."
         },
         "propagators": {
           "items": {
@@ -2105,10 +2089,6 @@
         "sampler": {
           "$ref": "#/$defs/SamplerConfig",
           "description": "Default sampler configuration for SDK instrumentation This is used when no sampler is specified in the selector"
-        },
-        "sdk_package_version": {
-          "type": "string",
-          "description": "The mutator will set the version on pods if this value is set This is used to let Beyla upgrade already instrumented services If the version doesn't match we still bounce existing pods"
         },
         "webhook": {
           "$ref": "#/$defs/WebhookConfig",

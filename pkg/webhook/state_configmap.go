@@ -99,7 +99,7 @@ func (w *StateConfigMapWriter) Write(
 	config *configmap.InjectConfig,
 	eligible []*configmap.EligibleDeployment,
 ) error {
-	criteriaYAML, err := yaml.Marshal(config)
+	configYAML, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("marshal criteria: %w", err)
 	}
@@ -127,7 +127,7 @@ func (w *StateConfigMapWriter) Write(
 			},
 		},
 		Data: map[string]string{
-			configmap.KeyInstrumentation:    string(criteriaYAML),
+			configmap.KeyInstrumentation:    string(configYAML),
 			configmap.KeyEligibleForRestart: string(eligibleYAML),
 		},
 	}

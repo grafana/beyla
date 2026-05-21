@@ -2,7 +2,7 @@ package beyla
 
 import (
 	"crypto/sha256"
-	"fmt"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,89 +10,25 @@ import (
 )
 
 func TestSDKInject_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		inject  SDKInject
-		wantErr string
-	}{
-		{
-			name: "image_volume_path with host_mount_path is invalid",
-			inject: SDKInject{
-				ImageVolumePath: "/mnt/image",
-				HostMountPath:   "/mnt/host",
-			},
-			wantErr: "image_volume_path and host_mount_path are mutually exclusive",
-		},
-		{
-			name: "image_volume_path with sdk_package_version is invalid",
-			inject: SDKInject{
-				ImageVolumePath: "/mnt/image",
-				SDKPkgVersion:   "v1.2.3",
-			},
-			wantErr: "image_volume_path and sdk_package_version are mutually exclusive",
-		},
-		{
-			name: "image_volume_path alone is valid",
-			inject: SDKInject{
-				ImageVolumePath: "/mnt/image",
-			},
-		},
-		{
-			name:    "no image_volume_path and no sdk_package_version is invalid",
-			inject:  SDKInject{},
-			wantErr: "sdk_package_version must be supplied",
-		},
-		{
-			name: "invalid sdk_package_version format is invalid",
-			inject: SDKInject{
-				SDKPkgVersion: "1.2.3", // missing 'v' prefix
-			},
-			wantErr: "sdk_package_version must be in valid semantic versioning format",
-		},
-		{
-			name: "manage_sdk_versions without host_mount_path is invalid",
-			inject: SDKInject{
-				SDKPkgVersion:     "v1.2.3",
-				ManageSDKVersions: true,
-			},
-			wantErr: "host_mount_path must be supplied",
-		},
-		{
-			name: "valid config without manage_sdk_versions",
-			inject: SDKInject{
-				SDKPkgVersion: "v1.2.3",
-			},
-		},
-		{
-			name: "valid config with manage_sdk_versions and host_mount_path",
-			inject: SDKInject{
-				SDKPkgVersion:     "v1.2.3",
-				ManageSDKVersions: true,
-				HostMountPath:     "/mnt/host",
-			},
-		},
-	}
+	t.Run("image_volume_path set is valid", func(t *testing.T) {
+		s := SDKInject{ImageVolumePath: "/mnt/image"}
+		require.NoError(t, s.Validate())
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.inject.Validate()
-			if tt.wantErr != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErr)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
+	t.Run("missing image_volume_path is invalid", func(t *testing.T) {
+		s := SDKInject{}
+		err := s.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "image volume path is required")
+	})
 }
 
 func TestSDKInject_PackageVersion(t *testing.T) {
-	t.Run("returns sha256 hash of image_volume_path when set", func(t *testing.T) {
+	t.Run("returns sha256 hash of image_volume_path", func(t *testing.T) {
 		path := "/mnt/oci/image"
 		s := SDKInject{ImageVolumePath: path}
 		h := sha256.Sum224([]byte(path))
-		expected := fmt.Sprintf("%x", h)
-		assert.Equal(t, expected, s.PackageVersion())
+		assert.Equal(t, hex.EncodeToString(h[:]), s.PackageVersion())
 		assert.Len(t, s.PackageVersion(), 56) // 224-bit hash → 56 hex chars
 	})
 
@@ -100,16 +36,6 @@ func TestSDKInject_PackageVersion(t *testing.T) {
 		s1 := SDKInject{ImageVolumePath: "/mnt/image/v1"}
 		s2 := SDKInject{ImageVolumePath: "/mnt/image/v2"}
 		assert.NotEqual(t, s1.PackageVersion(), s2.PackageVersion())
-	})
-
-	t.Run("returns sdk_package_version when no image_volume_path", func(t *testing.T) {
-		s := SDKInject{SDKPkgVersion: "v1.2.3"}
-		assert.Equal(t, "v1.2.3", s.PackageVersion())
-	})
-
-	t.Run("returns empty string when both fields are unset", func(t *testing.T) {
-		s := SDKInject{}
-		assert.Equal(t, "", s.PackageVersion())
 	})
 }
 

@@ -2,6 +2,7 @@ package beyla
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,9 +12,7 @@ import (
 	"github.com/caarlos0/env/v9"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
-	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	obimeta "go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -70,20 +69,6 @@ func DefaultConfig() *Config {
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
 
-	maxWebhookRequest := resource.MustParse("3Mi")
-
-	def.Injector.Webhook = WebhookConfig{
-		Port:     8443,
-		Timeout:  30 * time.Second,
-		CertPath: "/etc/webhook/certs/tls.crt",
-		KeyPath:  "/etc/webhook/certs/tls.key",
-		// we are technically allowing the memory here to grow 1_000 * 3MB by default
-		// the concurrency is set high to allow for massive node drains or cluster upgrades
-		MaxConcurrentRequests: 1_000,
-		MaxAdmissionBodySize:  maxWebhookRequest,
-	}
-	def.Injector.HostPathVolumeDir = "/var/lib/beyla/instrumentation"
-	def.Injector.ManageSDKVersions = true
 	def.Injector.EnabledSDKs = []servicesextra.InstrumentableType{
 		{InstrumentableType: svc.InstrumentableJava},
 		{InstrumentableType: svc.InstrumentableDotnet},
@@ -254,21 +239,10 @@ type SDKInject struct {
 	Webhook WebhookConfig `yaml:"webhook"`
 	// Option to disable automatic bouncing of pods, it will be
 	// a responsibility of the end-user to bounce the pods to be instrumented
+	// TODO: move to controller?
 	NoAutoRestart bool `yaml:"disable_auto_restart"`
-	// OCI image mount instead of host volume, supported on k8s 1.31+
+	// OCI image mount, supported on k8s 1.31+. Must not be empty.
 	ImageVolumePath string `yaml:"image_volume_path"`
-	// The host path volume directory which gets mounted into pods
-	HostPathVolumeDir string `yaml:"host_path_volume"`
-	// The mutator will set the version on pods if this value is set
-	// This is used to let Beyla upgrade already instrumented services
-	// If the version doesn't match we still bounce existing pods
-	SDKPkgVersion string `yaml:"sdk_package_version"`
-	// The host mount path where the SDK copy init container copies the files.
-	// This is the root path, sdk_version is appended on top
-	HostMountPath string `yaml:"host_mount_path"`
-	// Tells Beyla that it should delete old SDK versions on the
-	// host mount volume. Default true.
-	ManageSDKVersions bool `yaml:"manage_sdk_versions"`
 	// Default sampler configuration for SDK instrumentation
 	// This is used when no sampler is specified in the selector
 	DefaultSampler *services.SamplerConfig `yaml:"sampler"`
@@ -283,41 +257,18 @@ type SDKInject struct {
 	// List of enabled SDK auto-instrumentations. Can be used to disable specific
 	// language instrumentations.
 	EnabledSDKs []servicesextra.InstrumentableType `yaml:"enabled_sdks"`
-	// Enables injection debugging
-	Debug bool `yaml:"debug"`
 }
 
 func (s *SDKInject) Validate() error {
-	if s.ImageVolumePath != "" {
-		if s.HostMountPath != "" {
-			return ConfigError("image_volume_path and host_mount_path are mutually exclusive, use image_volume_path on k8s 1.31+ and host_mount_path on older versions")
-		}
-
-		if s.SDKPkgVersion != "" {
-			return ConfigError("image_volume_path and sdk_package_version are mutually exclusive, use image_volume_path on k8s 1.31+ and sdk_package_version with host mount paths on older versions")
-		}
-	} else {
-		if s.SDKPkgVersion == "" {
-			return ConfigError("sdk_package_version must be supplied for the Injector component and this version must match the version used in the SDK init container")
-		} else if !semver.IsValid(s.SDKPkgVersion) {
-			return ConfigError("sdk_package_version must be in valid semantic versioning format, e.g. v0.0.1 (the v prefix is required)")
-		}
-
-		if s.ManageSDKVersions && s.HostMountPath == "" {
-			return ConfigError("host_mount_path must be supplied for the Injector component otherwise we cannot clean-up stale SDK versions")
-		}
+	if s.ImageVolumePath == "" {
+		return fmt.Errorf("image volume path is required")
 	}
-
 	return nil
 }
 
 func (s *SDKInject) PackageVersion() string {
-	if s.ImageVolumePath != "" {
-		h := sha256.Sum224([]byte(s.ImageVolumePath))
-		return fmt.Sprintf("%x", h) // 56 chars, fits in 63-char label limit
-	}
-
-	return s.SDKPkgVersion
+	h := sha256.Sum224([]byte(s.ImageVolumePath))
+	return hex.EncodeToString(h[:]) // 56 chars, fits in 63-char label limit
 }
 
 func (s *SDKInject) UsesImageVolume() bool {
@@ -398,18 +349,6 @@ type SDKResource struct {
 // Functionality under active development
 // TODO: most of the following options are not having effect. They must be moved to k8s-injection-controller
 type WebhookConfig struct {
-	// Port is the port the webhook server listens on
-	Port int `yaml:"port" env:"BEYLA_WEBHOOK_LISTEN_PORT"`
-	// CertPath is the path to the TLS certificate file
-	CertPath string `yaml:"cert_path" env:"BEYLA_WEBHOOK_CERT_PATH"`
-	// KeyPath is the path to the TLS key file
-	KeyPath string `yaml:"key_path" env:"BEYLA_WEBHOOK_KEY_PATH"`
-	// Timeout is the time we wait for the TLS webhook to get initialized
-	Timeout time.Duration `yaml:"timeout" env:"BEYLA_WEBHOOK_TIMEOUT"`
-	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
-	MaxConcurrentRequests int `yaml:"max_concurrent_requests" env:"BEYLA_WEBHOOK_MAX_CONCURRENT_REQUESTS"`
-	// MaxConcurrentRequests limits the number of concurrent pod mutation requests we can receive
-	MaxAdmissionBodySize resource.Quantity `yaml:"max_admission_body_size" env:"BEYLA_WEBHOOK_MAX_ADMISSION_BODY_SIZE"`
 	// ExternalWebhook delegates the functionality of the mutating webhook to an external controller/operator
 	ExternalWebhook string `yaml:"external_deployment_name" env:"BEYLA_EXTERNAL_WEBHOOK_DEPLOYMENT_NAME"`
 }

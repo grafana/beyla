@@ -2029,26 +2029,23 @@
       },
       "type": "object"
     },
-    "SDKExport": {
+    "SDKExportedSignals": {
       "properties": {
         "logs": {
           "type": "boolean",
-          "description": "Logs enables log export from injected SDKs via OTLP Defaults to false (disabled) when not explicitly set",
-          "x-env-var": "BEYLA_SDK_EXPORT_LOGS"
+          "description": "Logs enables log export from injected SDKs via OTLP Defaults to false (disabled) when not explicitly set"
         },
         "metrics": {
           "type": "boolean",
-          "description": "Metrics enables metric export from injected SDKs via OTLP Defaults to true (enabled) when not explicitly set Note: SDKs can only export via OTLP, not Prometheus scraping",
-          "x-env-var": "BEYLA_SDK_EXPORT_METRICS"
+          "description": "Metrics enables metric export from injected SDKs via OTLP Defaults to true (enabled) when not explicitly set Note: SDKs can only export via OTLP, not Prometheus scraping"
         },
         "traces": {
           "type": "boolean",
-          "description": "Traces enables trace export from injected SDKs via OTLP Defaults to true (enabled) when not explicitly set",
-          "x-env-var": "BEYLA_SDK_EXPORT_TRACES"
+          "description": "Traces enables trace export from injected SDKs via OTLP Defaults to true (enabled) when not explicitly set"
         }
       },
       "type": "object",
-      "description": "SDKExport defines which telemetry signals should be exported from injected SDKs. These settings are independent from the global export configuration and allow the injector to export metrics/traces/logs even when Beyla uses Prometheus for metrics."
+      "description": "SDKExportedSignals defines which telemetry signals should be exported from injected SDKs. These settings are independent from the global export configuration and allow the injector to export metrics/traces/logs even when Beyla uses Prometheus for metrics."
     },
     "SDKInject": {
       "properties": {
@@ -2063,10 +2060,6 @@
           "type": "array",
           "description": "List of enabled SDK auto-instrumentations. Can be used to disable specific language instrumentations."
         },
-        "export": {
-          "$ref": "#/$defs/SDKExport",
-          "description": "Export configuration for SDK instrumentation Controls which signals (traces, metrics, logs) should be exported from injected SDKs"
-        },
         "image_volume_path": {
           "type": "string",
           "description": "OCI image mount, supported on k8s 1.31+. Must not be empty."
@@ -2075,18 +2068,22 @@
           "$ref": "#/$defs/WebhookInstrument",
           "description": "OTel SDK instrumentation criteria"
         },
-        "propagators": {
+        "otel_exported_signals": {
+          "$ref": "#/$defs/SDKExportedSignals",
+          "description": "Export configuration for SDK instrumentation Controls which signals (traces, metrics, logs) should be exported from injected SDKs"
+        },
+        "resources": {
+          "$ref": "#/$defs/SDKResource",
+          "description": "Resource attributes related settings"
+        },
+        "trace_propagators": {
           "items": {
             "type": "string"
           },
           "type": "array",
           "description": "Propagators configuration for SDK instrumentation Common values: tracecontext, baggage, b3, b3multi, jaeger, xray"
         },
-        "resources": {
-          "$ref": "#/$defs/SDKResource",
-          "description": "Resource attributes related settings"
-        },
-        "sampler": {
+        "trace_sampler": {
           "$ref": "#/$defs/SamplerConfig",
           "description": "Default sampler configuration for SDK instrumentation This is used when no sampler is specified in the selector"
         },
@@ -2100,28 +2097,24 @@
     },
     "SDKResource": {
       "properties": {
-        "addK8sIPAttribute": {
+        "add_k8s_ip_attribute": {
           "type": "boolean",
-          "description": "AddK8sIPAttribute defines whether the k8s.pod.ip resource attribute should be set from the Kubernetes downward API (status.podIP). Useful for environments where the OTel k8sattributesprocessor cannot infer the pod IP from the connection source (e.g. clusters behind a NAT gateway). +optional",
-          "x-env-var": "BEYLA_RESOURCE_ADD_K8S_IP_ATTRIBUTE"
+          "description": "AddK8sIPAttribute defines whether the k8s.pod.ip resource attribute should be set from the Kubernetes downward API (status.podIP). Useful for environments where the OTel k8sattributesprocessor cannot infer the pod IP from the connection source (e.g. clusters behind a NAT gateway). +optional"
         },
-        "addK8sUIDAttributes": {
+        "add_k8s_uid_attributes": {
           "type": "boolean",
-          "description": "AddK8sUIDAttributes defines whether K8s UID attributes should be collected (e.g. k8s.deployment.uid). +optional",
-          "x-env-var": "BEYLA_RESOURCE_ADD_K8S_UID_ATTRIBUTES"
+          "description": "AddK8sUIDAttributes defines whether K8s UID attributes should be collected (e.g. k8s.deployment.uid). +optional"
         },
-        "resourceAttributes": {
+        "attributes": {
           "additionalProperties": {
             "type": "string"
           },
           "type": "object",
-          "description": "Attributes defines attributes that are added to the resource. For example environment: dev +optional",
-          "x-env-var": "BEYLA_RESOURCE_ATTRIBUTES"
+          "description": "Attributes defines attributes that are added to the resource. For example environment: dev +optional"
         },
-        "useLabelsForResourceAttributes": {
+        "use_k8s_labels_for_resource_attributes": {
           "type": "boolean",
-          "description": "UseLabelsForResourceAttributes defines whether to use common labels for resource attributes: Note: first entry wins:   - `app.kubernetes.io/instance` becomes `service.name`   - `app.kubernetes.io/name` becomes `service.name`   - `app.kubernetes.io/version` becomes `service.version`",
-          "x-env-var": "BEYLA_RESOURCE_USE_LABELS_FOR_RESOURCE_ATTRIBUTES"
+          "description": "UseLabelsForResourceAttributes defines whether to use common labels for resource attributes: Note: first entry wins:   - `app.kubernetes.io/instance` becomes `service.name`   - `app.kubernetes.io/name` becomes `service.name`   - `app.kubernetes.io/version` becomes `service.version`"
         }
       },
       "type": "object",

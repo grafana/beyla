@@ -52,6 +52,8 @@ type WebhookKubeOnlySelector struct {
 // service-selection globs and the OTLP destination to stamp onto matched
 // pods.
 type InjectConfig struct {
+	NodeName string `yaml:"node_name"`
+
 	// Discovery is a list of service-selection criteria reused verbatim from
 	// Beyla's own configuration shape. The injection controller picks the
 	// kubernetes metadata fields (k8s_namespace, k8s_pod_name, ...) out of

@@ -3,6 +3,7 @@ package webhook
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/prometheus/procfs"
@@ -402,6 +403,463 @@ func TestEnvStrsToMap(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestLocalProcessScanner_EnrichProcessInfoWithLanguage(t *testing.T) {
+	tests := []struct {
+		name        string
+		pid         int32
+		mockLibMaps func(pid int32) ([]*procfs.ProcMap, error)
+		mockReadEnv func(pid int32) ([]byte, error)
+		expected    svc.InstrumentableType
+	}{
+		{
+			name: "java from libjvm.so",
+			pid:  100,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{
+					{Pathname: "/usr/lib/jvm/java-17-openjdk/lib/server/libjvm.so"},
+				}, nil
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil },
+			expected:    svc.InstrumentableJava,
+		},
+		{
+			name: "nodejs from node binary",
+			pid:  200,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{{Pathname: "/usr/bin/node"}}, nil
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil },
+			expected:    svc.InstrumentableNodejs,
+		},
+		{
+			name: "python from python binary",
+			pid:  300,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{{Pathname: "/usr/bin/python3.11"}}, nil
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil },
+			expected:    svc.InstrumentablePython,
+		},
+		{
+			name: "ruby from ruby binary",
+			pid:  400,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{{Pathname: "/usr/bin/ruby3.2"}}, nil
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil },
+			expected:    svc.InstrumentableRuby,
+		},
+		{
+			name: "dotnet from libcoreclr.so",
+			pid:  500,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{
+					{Pathname: "/opt/dotnet/shared/Microsoft.NETCore.App/8.0.0/libcoreclr.so"},
+				}, nil
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil },
+			expected:    svc.InstrumentableDotnet,
+		},
+		{
+			name: "dotnet from environ when libs are unknown",
+			pid:  600,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{{Pathname: "/lib/x86_64-linux-gnu/libc.so.6"}}, nil
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) {
+				return []byte("PATH=/usr/bin\x00DOTNET_ROOT=/opt/dotnet"), nil
+			},
+			expected: svc.InstrumentableDotnet,
+		},
+		{
+			name: "dotnet from environ when lib maps lookup fails",
+			pid:  700,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return nil, errors.New("maps unavailable")
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) {
+				return []byte("ASPNETCORE_ENVIRONMENT=Production"), nil
+			},
+			expected: svc.InstrumentableDotnet,
+		},
+		{
+			name: "generic when nothing matches",
+			pid:  800,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return []*procfs.ProcMap{{Pathname: "/lib/x86_64-linux-gnu/libc.so.6"}}, nil
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil },
+			expected:    svc.InstrumentableGeneric,
+		},
+		{
+			name: "generic when both lookups fail",
+			pid:  900,
+			mockLibMaps: func(_ int32) ([]*procfs.ProcMap, error) {
+				return nil, errors.New("maps unavailable")
+			},
+			mockReadEnv: func(_ int32) ([]byte, error) {
+				return nil, errors.New("environ unavailable")
+			},
+			expected: svc.InstrumentableGeneric,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalLibMaps := findLibMapsFunc
+			originalReadEnv := readEnvFunc
+			defer func() {
+				findLibMapsFunc = originalLibMaps
+				readEnvFunc = originalReadEnv
+			}()
+
+			// Capture the pid that the lookups were called with so we can
+			// verify EnrichProcessInfoWithLanguage forwards ProcessInfo.pid.
+			var libMapsPID, readEnvPID int32
+			findLibMapsFunc = func(pid int32) ([]*procfs.ProcMap, error) {
+				libMapsPID = pid
+				return tt.mockLibMaps(pid)
+			}
+			readEnvFunc = func(pid int32) ([]byte, error) {
+				readEnvPID = pid
+				return tt.mockReadEnv(pid)
+			}
+
+			scanner := NewInitialStateScanner("v0.0.1")
+			info := &ProcessInfo{
+				pid:      tt.pid,
+				metadata: map[string]string{"preserved": "yes"},
+			}
+			scanner.EnrichProcessInfoWithLanguage(info)
+
+			assert.Equal(t, tt.expected, info.kind, "kind should be set on ProcessInfo")
+			assert.Equal(t, tt.pid, info.pid, "pid should not be mutated")
+			assert.Equal(t, "yes", info.metadata["preserved"], "other fields should not be touched")
+			assert.Equal(t, tt.pid, libMapsPID, "findLibMapsFunc should be called with ProcessInfo.pid")
+			// readEnvFunc is only consulted if module-map lookup didn't yield a match.
+			// When it is consulted, the same pid must be forwarded.
+			if readEnvPID != 0 {
+				assert.Equal(t, tt.pid, readEnvPID, "readEnvFunc should be called with ProcessInfo.pid")
+			}
+		})
+	}
+
+	t.Run("overwrites previous kind on re-invocation", func(t *testing.T) {
+		originalLibMaps := findLibMapsFunc
+		originalReadEnv := readEnvFunc
+		defer func() {
+			findLibMapsFunc = originalLibMaps
+			readEnvFunc = originalReadEnv
+		}()
+
+		findLibMapsFunc = func(_ int32) ([]*procfs.ProcMap, error) {
+			return []*procfs.ProcMap{{Pathname: "/usr/bin/node"}}, nil
+		}
+		readEnvFunc = func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil }
+
+		scanner := NewInitialStateScanner("v0.0.1")
+		info := &ProcessInfo{pid: 42, kind: svc.InstrumentableJava}
+		scanner.EnrichProcessInfoWithLanguage(info)
+
+		assert.Equal(t, svc.InstrumentableNodejs, info.kind)
+	})
+}
+
+func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
+	// Helper to save/restore all the global function vars touched by
+	// computeIncompatible. Returns the deferred restore func.
+	saveMocks := func() func() {
+		origLibMaps := findLibMapsFunc
+		origReadEnv := readEnvFunc
+		origNewProcess := newProcessFunc
+		origProcEnviron := procEnvironFunc
+		return func() {
+			findLibMapsFunc = origLibMaps
+			readEnvFunc = origReadEnv
+			newProcessFunc = origNewProcess
+			procEnvironFunc = origProcEnviron
+		}
+	}
+
+	t.Run("unhandled kind leaves incompatible false", func(t *testing.T) {
+		defer saveMocks()()
+		// All dispatch arms are language-specific; Ruby and Generic fall
+		// through without touching incompatible or any I/O. Use mocks that
+		// would panic the test if reached, to prove no I/O happens.
+		panicked := func(_ int32) ([]*procfs.ProcMap, error) {
+			t.Fatal("findLibMapsFunc should not be called for Ruby/Generic")
+			return nil, nil
+		}
+		findLibMapsFunc = panicked
+		newProcessFunc = func(_ int32) (*process.Process, error) {
+			t.Fatal("newProcessFunc should not be called for Ruby/Generic")
+			return nil, nil
+		}
+
+		scanner := NewInitialStateScanner("v0.0.1")
+		for _, kind := range []svc.InstrumentableType{svc.InstrumentableRuby, svc.InstrumentableGeneric} {
+			info := &ProcessInfo{pid: 1, kind: kind}
+			scanner.computeIncompatible(info)
+			assert.False(t, info.incompatible, "kind=%v should leave incompatible false", kind)
+		}
+	})
+
+	t.Run("dotnet", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			envStrs  []string
+			expected bool
+		}{
+			{
+				name:     "incompatible when CORECLR_ENABLE_PROFILING=1",
+				envStrs:  []string{"PATH=/usr/bin", "CORECLR_ENABLE_PROFILING=1"},
+				expected: true,
+			},
+			{
+				name:     "incompatible when DOTNET_STARTUP_HOOKS set",
+				envStrs:  []string{"DOTNET_STARTUP_HOOKS=/opt/hook.dll"},
+				expected: true,
+			},
+			{
+				name:     "incompatible when OTEL_DOTNET_AUTO_HOME set",
+				envStrs:  []string{"OTEL_DOTNET_AUTO_HOME=/opt/otel"},
+				expected: true,
+			},
+			{
+				name:     "compatible when CORECLR_ENABLE_PROFILING=0",
+				envStrs:  []string{"CORECLR_ENABLE_PROFILING=0"},
+				expected: false,
+			},
+			{
+				name:     "compatible when no dotnet instrumentation vars",
+				envStrs:  []string{"PATH=/usr/bin", "HOME=/home/user"},
+				expected: false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				defer saveMocks()()
+				newProcessFunc = func(_ int32) (*process.Process, error) {
+					return &process.Process{}, nil
+				}
+				procEnvironFunc = func(_ *process.Process) ([]string, error) {
+					return tc.envStrs, nil
+				}
+
+				scanner := NewInitialStateScanner("v0.0.1")
+				info := &ProcessInfo{pid: 1, kind: svc.InstrumentableDotnet}
+				scanner.computeIncompatible(info)
+
+				assert.Equal(t, tc.expected, info.incompatible)
+			})
+		}
+
+		t.Run("compatible when env lookup fails", func(t *testing.T) {
+			defer saveMocks()()
+			newProcessFunc = func(_ int32) (*process.Process, error) {
+				return nil, errors.New("no process")
+			}
+			scanner := NewInitialStateScanner("v0.0.1")
+			info := &ProcessInfo{pid: 1, kind: svc.InstrumentableDotnet}
+			scanner.computeIncompatible(info)
+			assert.False(t, info.incompatible)
+		})
+	})
+
+	t.Run("python", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			maps     []*procfs.ProcMap
+			mapsErr  error
+			expected bool
+		}{
+			{
+				name:     "python 2.7 is incompatible",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libpython2.7.so.1.0"}},
+				expected: true,
+			},
+			{
+				name:     "python 3.7 is incompatible",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libpython3.7.so.1.0"}},
+				expected: true,
+			},
+			{
+				name:     "python 3.8 is incompatible (boundary)",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libpython3.8.so.1.0"}},
+				expected: true,
+			},
+			{
+				name:     "python 3.9 is compatible (boundary)",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libpython3.9.so.1.0"}},
+				expected: false,
+			},
+			{
+				name:     "python 3.11 is compatible",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libpython3.11.so.1.0"}},
+				expected: false,
+			},
+			{
+				name:     "no libpython mapped  compatible (version unknown)",
+				maps:     []*procfs.ProcMap{{Pathname: "/lib/x86_64-linux-gnu/libc.so.6"}},
+				expected: false,
+			},
+			{
+				name:     "version-less libpython3.so is ignored compatible",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libpython3.so"}},
+				expected: false,
+			},
+			{
+				name:     "maps lookup failure leaves incompatible false",
+				mapsErr:  errors.New("maps unavailable"),
+				expected: false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				defer saveMocks()()
+				findLibMapsFunc = func(_ int32) ([]*procfs.ProcMap, error) {
+					if tc.mapsErr != nil {
+						return nil, tc.mapsErr
+					}
+					return tc.maps, nil
+				}
+				// Python branch must NOT touch newProcessFunc.
+				newProcessFunc = func(_ int32) (*process.Process, error) {
+					t.Fatal("newProcessFunc should not be called on the python path")
+					return nil, nil
+				}
+
+				scanner := NewInitialStateScanner("v0.0.1")
+				info := &ProcessInfo{pid: 1, kind: svc.InstrumentablePython}
+				scanner.computeIncompatible(info)
+
+				assert.Equal(t, tc.expected, info.incompatible)
+			})
+		}
+	})
+
+	// Java and NodeJS branches call proc.CmdlineSlice() on a real Process,
+	// which reads /proc/<pid>/cmdline directly (no mockable indirection).
+	// We work around this by using the test binary's own pid — its cmdline
+	// is guaranteed not to contain -javaagent: or the OTel require path,
+	// so any "incompatible=true" outcome must come from the env we control
+	// via the mocked procEnvironFunc.
+	realPID := int32(os.Getpid())
+
+	t.Run("java", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			envStrs  []string
+			expected bool
+		}{
+			{
+				name:     "incompatible when JAVA_TOOL_OPTIONS sets -javaagent",
+				envStrs:  []string{"JAVA_TOOL_OPTIONS=    -javaagent:/opt/agent.jar"},
+				expected: true,
+			},
+			{
+				name:     "incompatible when OPENJ9_JAVA_OPTIONS sets -javaagent",
+				envStrs:  []string{"OPENJ9_JAVA_OPTIONS=-Xmx1g -javaagent:/opt/agent.jar"},
+				expected: true,
+			},
+			{
+				name:     "compatible when env has no -javaagent",
+				envStrs:  []string{"PATH=/usr/bin", "JAVA_HOME=/opt/java"},
+				expected: false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				defer saveMocks()()
+				newProcessFunc = func(pid int32) (*process.Process, error) {
+					return &process.Process{Pid: pid}, nil
+				}
+				procEnvironFunc = func(_ *process.Process) ([]string, error) {
+					return tc.envStrs, nil
+				}
+
+				scanner := NewInitialStateScanner("v0.0.1")
+				info := &ProcessInfo{pid: realPID, kind: svc.InstrumentableJava}
+				scanner.computeIncompatible(info)
+
+				assert.Equal(t, tc.expected, info.incompatible)
+			})
+		}
+
+		t.Run("compatible when newProcessFunc fails on cmdline lookup", func(t *testing.T) {
+			defer saveMocks()()
+			// EnrichProcessInfoWithEnvironment is called first; it also uses
+			// newProcessFunc, so on the second call we'd need to fail. Easier:
+			// fail both. With no env populated, FindJavaAgent never runs and
+			// incompatible stays false.
+			newProcessFunc = func(_ int32) (*process.Process, error) {
+				return nil, errors.New("no process")
+			}
+			scanner := NewInitialStateScanner("v0.0.1")
+			info := &ProcessInfo{pid: realPID, kind: svc.InstrumentableJava}
+			scanner.computeIncompatible(info)
+			assert.False(t, info.incompatible)
+		})
+	})
+
+	t.Run("nodejs", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			envStrs  []string
+			expected bool
+		}{
+			{
+				name: "incompatible when NODE_OPTIONS has --require @opentelemetry/auto-instrumentations-node/register",
+				envStrs: []string{
+					"NODE_OPTIONS=--require @opentelemetry/auto-instrumentations-node/register",
+				},
+				expected: true,
+			},
+			{
+				name: "incompatible when NODE_OPTIONS has -r @opentelemetry/auto-instrumentations-node/register",
+				envStrs: []string{
+					"NODE_OPTIONS=-r @opentelemetry/auto-instrumentations-node/register",
+				},
+				expected: true,
+			},
+			{
+				name: "incompatible when NODE_OPTIONS uses --require=...",
+				envStrs: []string{
+					"NODE_OPTIONS=--require=@opentelemetry/auto-instrumentations-node/register",
+				},
+				expected: true,
+			},
+			{
+				name:     "compatible when NODE_OPTIONS has no opentelemetry require",
+				envStrs:  []string{"NODE_OPTIONS=--max-old-space-size=4096"},
+				expected: false,
+			},
+			{
+				name:     "compatible when NODE_OPTIONS is unset",
+				envStrs:  []string{"PATH=/usr/bin"},
+				expected: false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				defer saveMocks()()
+				newProcessFunc = func(pid int32) (*process.Process, error) {
+					return &process.Process{Pid: pid}, nil
+				}
+				procEnvironFunc = func(_ *process.Process) ([]string, error) {
+					return tc.envStrs, nil
+				}
+
+				scanner := NewInitialStateScanner("v0.0.1")
+				info := &ProcessInfo{pid: realPID, kind: svc.InstrumentableNodejs}
+				scanner.computeIncompatible(info)
+
+				assert.Equal(t, tc.expected, info.incompatible)
+			})
+		}
+	})
 }
 
 func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {

@@ -152,34 +152,14 @@ func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
 }
 
 func (pm *PodMutator) buildVolumeDefinition() corev1.Volume {
-	if pm.cfg.Injector.UsesImageVolume() {
-		// Use image volume path directly if the configuration
-		// specifies this mode. Supported on k8s 1.31+
-		return corev1.Volume{
-			Name: injectVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Image: &corev1.ImageVolumeSource{
-					Reference:  pm.cfg.Injector.ImageVolumePath,
-					PullPolicy: corev1.PullIfNotPresent,
-				},
+	return corev1.Volume{
+		Name: injectVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Image: &corev1.ImageVolumeSource{
+				Reference:  pm.cfg.Injector.ImageVolumePath,
+				PullPolicy: corev1.PullIfNotPresent,
 			},
-		}
-	} else {
-		// Use hostPath volume shared across all pods on the node
-		// The Beyla DaemonSet deployment populates this directory once per node
-		// and it must be setup before Beyla launches
-		return corev1.Volume{
-			Name: injectVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: strings.Join([]string{pm.cfg.Injector.HostPathVolumeDir, pm.cfg.Injector.SDKPkgVersion}, "/"),
-					Type: func() *corev1.HostPathType {
-						t := corev1.HostPathDirectoryOrCreate
-						return &t
-					}(),
-				},
-			},
-		}
+		},
 	}
 }
 

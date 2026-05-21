@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
@@ -107,7 +106,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	s := &Server{
 		cfg:                    cfg,
 		mutator:                mutator,
-		scanner:                NewInitialStateScanner(cfg.Injector.SDKPkgVersion),
+		scanner:                NewInitialStateScanner(),
 		matcher:                matcher,
 		logger:                 logger,
 		ctxInfo:                ctxInfo,
@@ -181,23 +180,7 @@ func (s *Server) setOrUpdateInitialProcessState() error {
 }
 
 func (s *Server) establishInitialProcessState() error {
-	if err := s.setOrUpdateInitialProcessState(); err != nil {
-		return err
-	}
-
-	if !s.cfg.Injector.UsesImageVolume() && s.cfg.Injector.ManageSDKVersions {
-		oldestSDK := s.scanner.OldestSDKVersion()
-		// we could be downgrading the SDK, check if the oldest version is not
-		// newer than what we are launching with now
-		if semver.Compare(oldestSDK, s.cfg.Injector.SDKPkgVersion) > 0 {
-			oldestSDK = s.cfg.Injector.SDKPkgVersion
-		}
-
-		if err := s.instrumentationManager.cleanupOldInstrumentationVersions(s.cfg.Injector.HostMountPath, oldestSDK); err != nil {
-			s.logger.Warn("error cleaning up old instrumentation versions", "error", err)
-		}
-	}
-	return nil
+	return s.setOrUpdateInitialProcessState()
 }
 
 func (s *Server) getInitialState(ctx context.Context) error {

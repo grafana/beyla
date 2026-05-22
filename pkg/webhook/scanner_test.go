@@ -14,47 +14,10 @@ import (
 )
 
 func TestNewInitialStateScanner(t *testing.T) {
-	scanner := NewInitialStateScanner("v0.0.1")
+	scanner := NewInitialStateScanner()
 
 	assert.NotNil(t, scanner)
 	assert.NotNil(t, scanner.logger)
-	assert.Equal(t, dummySDKVersion, scanner.oldestSDKVersion)
-}
-
-func TestLocalProcessScanner_OldestSDKVersion(t *testing.T) {
-	tests := []struct {
-		name        string
-		version     string
-		expectError bool
-		expectedVer string
-	}{
-		{
-			name:        "no SDK version found",
-			version:     dummySDKVersion,
-			expectedVer: "",
-		},
-		{
-			name:        "valid SDK version",
-			version:     "v0.0.3",
-			expectedVer: "v0.0.3",
-		},
-		{
-			name:        "another valid SDK version",
-			version:     "v1.2.5",
-			expectedVer: "v1.2.5",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			scanner := &LocalProcessScanner{
-				oldestSDKVersion: tt.version,
-			}
-
-			ver := scanner.OldestSDKVersion()
-			assert.Equal(t, tt.expectedVer, ver)
-		})
-	}
 }
 
 func TestFetchProcesses(t *testing.T) {
@@ -527,7 +490,7 @@ func TestLocalProcessScanner_EnrichProcessInfoWithLanguage(t *testing.T) {
 				return tt.mockReadEnv(pid)
 			}
 
-			scanner := NewInitialStateScanner("v0.0.1")
+			scanner := NewInitialStateScanner()
 			info := &ProcessInfo{
 				pid:      tt.pid,
 				metadata: map[string]string{"preserved": "yes"},
@@ -559,7 +522,7 @@ func TestLocalProcessScanner_EnrichProcessInfoWithLanguage(t *testing.T) {
 		}
 		readEnvFunc = func(_ int32) ([]byte, error) { return []byte("PATH=/usr/bin"), nil }
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		info := &ProcessInfo{pid: 42, kind: svc.InstrumentableJava}
 		scanner.EnrichProcessInfoWithLanguage(info)
 
@@ -598,7 +561,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 			return nil, nil
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		for _, kind := range []svc.InstrumentableType{svc.InstrumentableRuby, svc.InstrumentableGeneric} {
 			info := &ProcessInfo{pid: 1, kind: kind}
 			scanner.computeIncompatible(info)
@@ -648,7 +611,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 					return tc.envStrs, nil
 				}
 
-				scanner := NewInitialStateScanner("v0.0.1")
+				scanner := NewInitialStateScanner()
 				info := &ProcessInfo{pid: 1, kind: svc.InstrumentableDotnet}
 				scanner.computeIncompatible(info)
 
@@ -661,7 +624,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 			newProcessFunc = func(_ int32) (*process.Process, error) {
 				return nil, errors.New("no process")
 			}
-			scanner := NewInitialStateScanner("v0.0.1")
+			scanner := NewInitialStateScanner()
 			info := &ProcessInfo{pid: 1, kind: svc.InstrumentableDotnet}
 			scanner.computeIncompatible(info)
 			assert.False(t, info.incompatible)
@@ -731,7 +694,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 					return nil, nil
 				}
 
-				scanner := NewInitialStateScanner("v0.0.1")
+				scanner := NewInitialStateScanner()
 				info := &ProcessInfo{pid: 1, kind: svc.InstrumentablePython}
 				scanner.computeIncompatible(info)
 
@@ -780,7 +743,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 					return tc.envStrs, nil
 				}
 
-				scanner := NewInitialStateScanner("v0.0.1")
+				scanner := NewInitialStateScanner()
 				info := &ProcessInfo{pid: realPID, kind: svc.InstrumentableJava}
 				scanner.computeIncompatible(info)
 
@@ -797,7 +760,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 			newProcessFunc = func(_ int32) (*process.Process, error) {
 				return nil, errors.New("no process")
 			}
-			scanner := NewInitialStateScanner("v0.0.1")
+			scanner := NewInitialStateScanner()
 			info := &ProcessInfo{pid: realPID, kind: svc.InstrumentableJava}
 			scanner.computeIncompatible(info)
 			assert.False(t, info.incompatible)
@@ -852,7 +815,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 					return tc.envStrs, nil
 				}
 
-				scanner := NewInitialStateScanner("v0.0.1")
+				scanner := NewInitialStateScanner()
 				info := &ProcessInfo{pid: realPID, kind: svc.InstrumentableNodejs}
 				scanner.computeIncompatible(info)
 
@@ -911,7 +874,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: "container-2"}, nil
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -992,16 +955,12 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: fmt.Sprintf("container-%d", pid)}, nil
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
 		assert.NotNil(t, containers)
 		assert.Len(t, containers, 3)
-
-		// Verify the oldest SDK version was found
-		oldestVer := scanner.OldestSDKVersion()
-		assert.Equal(t, "v0.0.3", oldestVer)
 
 		// Verify all processes were added to containers
 		assert.Contains(t, containers, "container-123")
@@ -1051,7 +1010,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: "same-container"}, nil
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -1110,7 +1069,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: fmt.Sprintf("container-%d", pid)}, nil
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -1132,7 +1091,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return nil, fmt.Errorf("failed to fetch processes")
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.Error(t, err)
@@ -1175,7 +1134,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return nil, fmt.Errorf("process not found")
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -1224,7 +1183,7 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{}, fmt.Errorf("container not found")
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
@@ -1271,14 +1230,11 @@ func TestLocalProcessScanner_FindExistingProcesses(t *testing.T) {
 			return Info{ContainerID: "container-1"}, nil
 		}
 
-		scanner := NewInitialStateScanner("v0.0.1")
+		scanner := NewInitialStateScanner()
 		containers, err := scanner.FindExistingProcesses()
 
 		assert.NoError(t, err)
 		assert.NotNil(t, containers)
-		// Process should still be added even without valid SDK version
 		assert.Len(t, containers, 1)
-		// Scanner should still have dummy version since no valid versions found
-		assert.Equal(t, dummySDKVersion, scanner.oldestSDKVersion)
 	})
 }

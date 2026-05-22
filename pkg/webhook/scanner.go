@@ -9,7 +9,6 @@ import (
 
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/process"
-	"golang.org/x/mod/semver"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 
@@ -18,9 +17,7 @@ import (
 )
 
 type LocalProcessScanner struct {
-	logger            *slog.Logger
-	oldestSDKVersion  string
-	currentSDKVersion string
+	logger *slog.Logger
 }
 
 type ProcessInfo struct {
@@ -45,29 +42,15 @@ var (
 	containerInfoFunc  = containerInfoForPID
 )
 
-const (
-	dummySDKVersion = "v999.999.999"
-)
-
 var (
 	rubyModule   = regexp.MustCompile(`^(.*/)?ruby[\d.]*$`)
 	pythonModule = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
 )
 
-func NewInitialStateScanner(currentSDKVersion string) *LocalProcessScanner {
+func NewInitialStateScanner() *LocalProcessScanner {
 	return &LocalProcessScanner{
-		logger:            slog.With("component", "webhook.Scanner"),
-		oldestSDKVersion:  dummySDKVersion,
-		currentSDKVersion: currentSDKVersion,
+		logger: slog.With("component", "webhook.Scanner"),
 	}
-}
-
-func (s *LocalProcessScanner) OldestSDKVersion() string {
-	if s.oldestSDKVersion == dummySDKVersion {
-		return s.currentSDKVersion
-	}
-
-	return s.oldestSDKVersion
 }
 
 func (s *LocalProcessScanner) EnrichProcessInfoWithContainerData(v *ProcessInfo) bool {
@@ -146,11 +129,6 @@ func (s *LocalProcessScanner) EnrichProcessInfoWithEnvironment(v *ProcessInfo) b
 	}
 	if env, err := procEnvironFunc(proc); err == nil {
 		v.env = envStrsToMap(env)
-		if ver, ok := v.env[envVarSDKVersion]; ok && semver.IsValid(ver) {
-			if semver.Compare(ver, s.oldestSDKVersion) < 0 {
-				s.oldestSDKVersion = ver
-			}
-		}
 	}
 
 	return true

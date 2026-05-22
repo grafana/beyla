@@ -597,19 +597,19 @@ func TestClassifyFromInformer(t *testing.T) {
 
 func TestPodStateCache_On(t *testing.T) {
 	const (
-		ns      = "prod"
-		node    = "node-1"
-		version = "v1.2.3"
+		ns   = "prod"
+		node = "node-1"
 	)
 
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
-			SDKPkgVersion: version,
+			ImageVolumePath: "/img/v1.2.3",
 			Instrument: configmap.WebhookInstrument{
 				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}
+	version := cfg.Injector.PackageVersion()
 	matcher := nsMatcher(ns)
 
 	t.Run("created_event_populates_cache", func(t *testing.T) {
@@ -679,19 +679,19 @@ func TestPodStateCache_On(t *testing.T) {
 
 func TestPodStateCache_Collect(t *testing.T) {
 	const (
-		ns      = "prod"
-		node    = "node-1"
-		version = "v1.2.3"
+		ns   = "prod"
+		node = "node-1"
 	)
 
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
-			SDKPkgVersion: version,
+			ImageVolumePath: "/img/v1.2.3",
 			Instrument: configmap.WebhookInstrument{
 				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}
+	version := cfg.Injector.PackageVersion()
 	matcher := nsMatcher(ns)
 
 	t.Run("no_metrics_before_sync", func(t *testing.T) {

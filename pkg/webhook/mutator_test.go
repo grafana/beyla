@@ -194,19 +194,17 @@ func TestPodMutator_PreloadsSomethingElse(t *testing.T) {
 }
 
 func TestPodMutator_AlreadyInstrumented(t *testing.T) {
+	cfg := &beyla.Config{Injector: beyla.SDKInject{ImageVolumePath: "/img/current"}}
+	currentVer := cfg.Injector.PackageVersion()
+	oldVer := (&beyla.SDKInject{ImageVolumePath: "/img/old"}).PackageVersion()
+
 	tests := []struct {
 		name     string
-		cfg      *beyla.Config
 		info     *ProcessInfo
 		expected bool
 	}{
 		{
 			name: "not instrumented - no labels or env",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
 				podLabels: map[string]string{},
 				env:       map[string]string{},
@@ -215,118 +213,62 @@ func TestPodMutator_AlreadyInstrumented(t *testing.T) {
 		},
 		{
 			name: "instrumented - matching label version",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
-				podLabels: map[string]string{
-					instrumentedLabel: "v0.0.3",
-				},
-				env: map[string]string{},
+				podLabels: map[string]string{instrumentedLabel: currentVer},
+				env:       map[string]string{},
 			},
 			expected: true,
 		},
 		{
 			name: "not instrumented - different label version",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
-				podLabels: map[string]string{
-					instrumentedLabel: "v0.0.2",
-				},
-				env: map[string]string{},
+				podLabels: map[string]string{instrumentedLabel: oldVer},
+				env:       map[string]string{},
 			},
 			expected: false,
 		},
 		{
 			name: "instrumented - matching env var version",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
 				podLabels: map[string]string{},
-				env: map[string]string{
-					envVarSDKVersion: "v0.0.3",
-				},
+				env:       map[string]string{envVarSDKVersion: currentVer},
 			},
 			expected: true,
 		},
 		{
 			name: "not instrumented - different env var version",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
 				podLabels: map[string]string{},
-				env: map[string]string{
-					envVarSDKVersion: "v0.0.2",
-				},
+				env:       map[string]string{envVarSDKVersion: oldVer},
 			},
 			expected: false,
 		},
 		{
 			name: "instrumented - label takes precedence",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
-				podLabels: map[string]string{
-					instrumentedLabel: "v0.0.3",
-				},
-				env: map[string]string{
-					envVarSDKVersion: "v0.0.2", // different version in env
-				},
+				podLabels: map[string]string{instrumentedLabel: currentVer},
+				env:       map[string]string{envVarSDKVersion: oldVer},
 			},
 			expected: true,
 		},
 		{
 			name: "not instrumented - empty label value",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
-				podLabels: map[string]string{
-					instrumentedLabel: "",
-				},
-				env: map[string]string{},
+				podLabels: map[string]string{instrumentedLabel: ""},
+				env:       map[string]string{},
 			},
 			expected: false,
 		},
 		{
 			name: "not instrumented - empty env var value",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
 				podLabels: map[string]string{},
-				env: map[string]string{
-					envVarSDKVersion: "",
-				},
+				env:       map[string]string{envVarSDKVersion: ""},
 			},
 			expected: false,
 		},
 		{
 			name: "not instrumented - nil maps",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					SDKPkgVersion: "v0.0.3",
-				},
-			},
 			info: &ProcessInfo{
 				podLabels: nil,
 				env:       nil,
@@ -337,11 +279,8 @@ func TestPodMutator_AlreadyInstrumented(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mutator := &PodMutator{
-				cfg: tt.cfg,
-			}
-			result := mutator.AlreadyInstrumented(tt.info)
-			assert.Equal(t, tt.expected, result)
+			mutator := &PodMutator{cfg: cfg}
+			assert.Equal(t, tt.expected, mutator.AlreadyInstrumented(tt.info))
 		})
 	}
 }
@@ -862,21 +801,6 @@ func TestPodMutator_BuildVolumeDefinition(t *testing.T) {
 				assert.Nil(t, vol.HostPath)
 				assert.Equal(t, "my-registry/sdk-image:v1.0.0", vol.Image.Reference)
 				assert.Equal(t, corev1.PullIfNotPresent, vol.Image.PullPolicy)
-			},
-		},
-		{
-			name: "hostPath volume when ImageVolumePath is empty",
-			injector: beyla.SDKInject{
-				HostPathVolumeDir: "/var/lib/beyla/instrumentation",
-				SDKPkgVersion:     "v0.0.3",
-			},
-			check: func(t *testing.T, vol corev1.Volume) {
-				assert.Equal(t, injectVolumeName, vol.Name)
-				assert.Nil(t, vol.Image)
-				assert.NotNil(t, vol.HostPath)
-				assert.Equal(t, "/var/lib/beyla/instrumentation/v0.0.3", vol.HostPath.Path)
-				assert.NotNil(t, vol.HostPath.Type)
-				assert.Equal(t, corev1.HostPathDirectoryOrCreate, *vol.HostPath.Type)
 			},
 		},
 	}

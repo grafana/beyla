@@ -157,7 +157,7 @@ func setupStatsO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla
 }
 
 func setupWebhook(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
-	slog.Info("starting Beyla mutating webhook server", "port", cfg.Injector.Webhook.Port)
+	slog.Info("setting up SDK Injection controller")
 
 	server, err := webhook.NewServer(cfg, ctxInfo)
 	if err != nil {

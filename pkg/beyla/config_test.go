@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
@@ -141,8 +140,6 @@ network:
 	// sort some deduplicated values so we can compare consistently
 	slices.Sort(cfg.OTELMetrics.ExtraSpanResourceLabels)
 	slices.Sort(cfg.Prometheus.ExtraSpanResourceLabels)
-
-	maxWebhookRequest := resource.MustParse("3Mi")
 
 	assert.Equal(t, &Config{
 		Exec:        cfg.Exec,
@@ -394,16 +391,6 @@ network:
 		NodeJS: obi.NodeJSConfig{Enabled: true},
 		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
 		Injector: SDKInject{
-			Webhook: WebhookConfig{
-				Port:                  8443,
-				Timeout:               30 * time.Second,
-				CertPath:              "/etc/webhook/certs/tls.crt",
-				KeyPath:               "/etc/webhook/certs/tls.key",
-				MaxConcurrentRequests: 1_000,
-				MaxAdmissionBodySize:  maxWebhookRequest,
-			},
-			HostPathVolumeDir: "/var/lib/beyla/instrumentation",
-			ManageSDKVersions: true,
 			EnabledSDKs: []servicesextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},
 				{InstrumentableType: svc.InstrumentableDotnet},
@@ -779,8 +766,7 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  sdk_package_version: v0.0.1
-  host_mount_path: /test
+  image_volume_path: my-registry/sdk-image:v1.0.0
 otel_traces_export:
   endpoint: http://localhost:4317/v1/traces
 `)
@@ -789,7 +775,7 @@ otel_traces_export:
 	require.NoError(t, cfg.Validate())
 }
 
-func TestConfigRunsWithJustInjectorButNotWithoutSDKPackage(t *testing.T) {
+func TestConfigRunsWithJustInjectorButNotWithoutImageVolume(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
@@ -797,24 +783,6 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  host_mount_path: /test
-otel_traces_export:
-  endpoint: http://localhost:4317/v1/traces
-`)
-	cfg, err := LoadConfig(userConfig)
-	require.NoError(t, err)
-	require.Error(t, cfg.Validate())
-}
-
-func TestConfigRunsWithJustInjectorButNotWithoutHostPath(t *testing.T) {
-	userConfig := bytes.NewBufferString(`
-injector:
-  webhook:
-    external_deployment_name: foo/bar
-    port: 8443
-    cert_path: /etc/webhook/certs/tls.crt
-    key_path: /etc/webhook/certs/tls.key
-  sdk_package_version: v0.0.1
 otel_traces_export:
   endpoint: http://localhost:4317/v1/traces
 `)
@@ -831,7 +799,7 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  sdk_package_version: v0.0.2
+  image_volume_path: my-registry/sdk-image:v1.0.0
 `)
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)

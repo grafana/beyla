@@ -215,6 +215,10 @@ jobs:
           mv rootfs.qcow2 compiled-tests/rootfs.qcow2
           ls -lh compiled-tests/rootfs.qcow2
 
+      - name: Stage generated test tree
+        run: |
+          tar cf compiled-tests/testgenerated.tar internal/testgenerated
+
       - name: Upload prep artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -275,6 +279,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-utils qemu-system-x86
+
+      - name: Restore generated test tree
+        run: |
+          tar xf compiled-tests/testgenerated.tar
+          rm compiled-tests/testgenerated.tar
 
       - name: Stage rootfs.qcow2
         run: |

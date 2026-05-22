@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 func TestSDKExport_TracesEnabled(t *testing.T) {
@@ -12,22 +14,22 @@ func TestSDKExport_TracesEnabled(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		export   SDKExport
+		export   configmap.SDKExportedSignals
 		expected bool
 	}{
 		{
 			name:     "nil traces defaults to enabled",
-			export:   SDKExport{Traces: nil},
+			export:   configmap.SDKExportedSignals{Traces: nil},
 			expected: true,
 		},
 		{
 			name:     "explicitly enabled",
-			export:   SDKExport{Traces: &trueVal},
+			export:   configmap.SDKExportedSignals{Traces: &trueVal},
 			expected: true,
 		},
 		{
 			name:     "explicitly disabled",
-			export:   SDKExport{Traces: &falseVal},
+			export:   configmap.SDKExportedSignals{Traces: &falseVal},
 			expected: false,
 		},
 	}
@@ -45,22 +47,22 @@ func TestSDKExport_MetricsEnabled(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		export   SDKExport
+		export   configmap.SDKExportedSignals
 		expected bool
 	}{
 		{
 			name:     "nil metrics defaults to enabled",
-			export:   SDKExport{Metrics: nil},
+			export:   configmap.SDKExportedSignals{Metrics: nil},
 			expected: true,
 		},
 		{
 			name:     "explicitly enabled",
-			export:   SDKExport{Metrics: &trueVal},
+			export:   configmap.SDKExportedSignals{Metrics: &trueVal},
 			expected: true,
 		},
 		{
 			name:     "explicitly disabled",
-			export:   SDKExport{Metrics: &falseVal},
+			export:   configmap.SDKExportedSignals{Metrics: &falseVal},
 			expected: false,
 		},
 	}
@@ -78,22 +80,22 @@ func TestSDKExport_LogsEnabled(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		export   SDKExport
+		export   configmap.SDKExportedSignals
 		expected bool
 	}{
 		{
 			name:     "nil logs defaults to disabled",
-			export:   SDKExport{Logs: nil},
+			export:   configmap.SDKExportedSignals{Logs: nil},
 			expected: false,
 		},
 		{
 			name:     "explicitly enabled",
-			export:   SDKExport{Logs: &trueVal},
+			export:   configmap.SDKExportedSignals{Logs: &trueVal},
 			expected: true,
 		},
 		{
 			name:     "explicitly disabled",
-			export:   SDKExport{Logs: &falseVal},
+			export:   configmap.SDKExportedSignals{Logs: &falseVal},
 			expected: false,
 		},
 	}

@@ -315,11 +315,17 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	sortEligible(eligible)
 
 	config := configmap.InjectConfig{
+		NodeName:  s.nodeName,
 		Discovery: s.cfg.Injector.Instrument,
 		OtelExport: configmap.OtelExport{
 			Endpoint: s.mutator.Endpoint(),
 			Protocol: s.mutator.Protocol(),
 		},
+		ExportedSignals: s.cfg.Injector.ExportedSignals,
+		ImageVolumePath: s.cfg.Injector.ImageVolumePath,
+		DefaultSampler:  s.cfg.Injector.DefaultSampler,
+		Propagators:     s.cfg.Injector.Propagators,
+		Resources:       s.cfg.Injector.Resources,
 	}
 
 	return s.stateWriter.Write(ctx, &config, eligible)

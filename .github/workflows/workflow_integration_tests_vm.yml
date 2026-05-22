@@ -66,6 +66,9 @@ jobs:
     needs: vm-test-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Free up disk space
         run: |

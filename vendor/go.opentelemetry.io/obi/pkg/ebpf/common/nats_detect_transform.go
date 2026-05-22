@@ -15,6 +15,25 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
+// https://docs.nats.io/reference/reference-protocols/nats-protocol
+// https://docs.nats.io/reference/reference-protocols/nats-server-protocol
+// natsCmdFirstByteBitmap is the set of valid first-byte characters for any NATS
+// control frame: +OK, -ERR, PING, PONG, INFO, CONNECT, SUB, UNSUB, PUB, MSG,
+// HPUB, HMSG. Case-insensitive (lowercase variants accepted by the parser).
+// Used as an O(1) prefilter that rejects ~94% of random byte values.
+
+var natsCmdFirstByteBitmap = func() [4]uint64 {
+	var m [4]uint64
+	for _, c := range []byte("+-PpIiCcSsUuMmHhRr") {
+		m[c>>6] |= 1 << (c & 63)
+	}
+	return m
+}()
+
+func isNATSCmdFirstByte(b byte) bool {
+	return natsCmdFirstByteBitmap[b>>6]&(1<<(b&63)) != 0
+}
+
 var (
 	natsCRLF       = []byte("\r\n")
 	natsCmdOK      = []byte("+OK")
@@ -29,6 +48,37 @@ var (
 	natsCmdMsg     = []byte("MSG")
 	natsCmdHPub    = []byte("HPUB")
 	natsCmdHMsg    = []byte("HMSG")
+)
+
+var (
+	errMissingNatsTerminator               = errors.New("missing NATS control line terminator")
+	errPacketTooShortForNATS               = errors.New("packet too short for NATS")
+	errNotLikelyNATS                       = errors.New("packet does not look like NATS")
+	errEmptyNATSCommand                    = errors.New("empty NATS command")
+	errUnsupportedNATSCommand              = errors.New("unsupported NATS command")
+	errInvalidNATSJSONPayload              = errors.New("invalid NATS JSON payload")
+	errMissingNATSJSONPayload              = errors.New("missing NATS JSON payload")
+	errInvalidSUBControlLine               = errors.New("invalid SUB control line")
+	errInvalidUNSUBControlLine             = errors.New("invalid UNSUB control line")
+	errInvalidUNSUBMaxMsgs                 = errors.New("invalid UNSUB max_msgs")
+	errInvalidMSGControlLine               = errors.New("invalid MSG control line")
+	errInvalidMSGPayloadSize               = errors.New("invalid MSG payload size")
+	errInvalidHMSGControlLine              = errors.New("invalid HMSG control line")
+	errInvalidHMSGHeaderSize               = errors.New("invalid HMSG header size")
+	errInvalidHMSGTotalSize                = errors.New("invalid HMSG total size")
+	errHMSGHeaderSizeExceedsTotal          = errors.New("HMSG header size exceeds total size")
+	errInvalidIntegerField                 = errors.New("invalid integer field")
+	errInvalidNATSPayloadControlLine       = errors.New("invalid NATS payload control line")
+	errInvalidNATSPayloadSize              = errors.New("invalid NATS payload size")
+	errInvalidNATSHeaderPayloadControlLine = errors.New("invalid NATS header payload control line")
+	errInvalidNATSHeaderSize               = errors.New("invalid NATS header size")
+	errInvalidNATSTotalSize                = errors.New("invalid NATS total size")
+	errNATSHeaderSizeExceedsTotal          = errors.New("NATS header size exceeds total size")
+	errNegativeNATSPayloadSize             = errors.New("negative NATS payload size")
+	errTruncatedNATSPayload                = errors.New("truncated NATS payload")
+	errMissingNATSPayloadTerminator        = errors.New("missing NATS payload terminator")
+	errEmptyNATSControlLine                = errors.New("empty NATS control line")
+	errInvalidNATSSID                      = errors.New("invalid NATS sid")
 )
 
 type NATSInfo struct {
@@ -91,7 +141,17 @@ func ProcessPossibleNATSEvent(event *TCPRequestInfo, pkt *largebuf.LargeBuffer, 
 // contains non-span control frames.
 func ProcessNATSEvent(pkt *largebuf.LargeBuffer) (*NATSInfo, bool, error) {
 	if pkt == nil || pkt.Len() == 0 {
-		return nil, true, errors.New("packet too short for NATS")
+		return nil, true, errPacketTooShortForNATS
+	}
+
+	first, err := pkt.U8At(0)
+
+	// Cheap prefilter: every NATS frame starts with the first letter of one of
+	// the protocol commands (+OK, -ERR, PING/PONG/PUB, INFO, CONNECT, SUB,
+	// UNSUB, MSG, HPUB/HMSG). Reject anything else without invoking the
+	// frame parser.
+	if err != nil || !isNATSCmdFirstByte(first) {
+		return nil, true, errNotLikelyNATS
 	}
 
 	reader := pkt.NewReader()
@@ -123,7 +183,7 @@ func parseNATSFrame(reader *largebuf.LargeBufferReader) (natsFrame, error) {
 
 	fields := bytes.Fields(line)
 	if len(fields) == 0 {
-		return natsFrame{}, errors.New("empty NATS command")
+		return natsFrame{}, errEmptyNATSCommand
 	}
 
 	command := fields[0]
@@ -149,7 +209,7 @@ func parseNATSFrame(reader *largebuf.LargeBufferReader) (natsFrame, error) {
 	case equalFoldASCII(command, natsCmdHMsg):
 		return parseNATSHMSGFrame(reader, fields)
 	default:
-		return natsFrame{}, errors.New("unsupported NATS command")
+		return natsFrame{}, errUnsupportedNATSCommand
 	}
 }
 
@@ -167,7 +227,7 @@ func parseNATSInfoOrConnectFrame(command, line []byte) (natsFrame, error) {
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(rest, &meta); err != nil {
-		return natsFrame{}, errors.New("invalid NATS JSON payload")
+		return natsFrame{}, errInvalidNATSJSONPayload
 	}
 
 	return natsFrame{clientID: meta.Name, valid: true}, nil
@@ -175,7 +235,7 @@ func parseNATSInfoOrConnectFrame(command, line []byte) (natsFrame, error) {
 
 func parseNATSSubFrame(fields [][]byte) (natsFrame, error) {
 	if len(fields) != 3 && len(fields) != 4 {
-		return natsFrame{}, errors.New("invalid SUB control line")
+		return natsFrame{}, errInvalidSUBControlLine
 	}
 	if err := validateNATSSID(fields[len(fields)-1]); err != nil {
 		return natsFrame{}, err
@@ -185,14 +245,14 @@ func parseNATSSubFrame(fields [][]byte) (natsFrame, error) {
 
 func parseNATSUnsubFrame(fields [][]byte) (natsFrame, error) {
 	if len(fields) != 2 && len(fields) != 3 {
-		return natsFrame{}, errors.New("invalid UNSUB control line")
+		return natsFrame{}, errInvalidUNSUBControlLine
 	}
 	if err := validateNATSSID(fields[1]); err != nil {
 		return natsFrame{}, err
 	}
 	if len(fields) == 3 {
 		if _, err := parseIntField(fields[2]); err != nil {
-			return natsFrame{}, errors.New("invalid UNSUB max_msgs")
+			return natsFrame{}, errInvalidUNSUBMaxMsgs
 		}
 	}
 	return natsFrame{valid: true}, nil
@@ -214,14 +274,14 @@ func parseNATSPUBFrame(reader *largebuf.LargeBufferReader, fields [][]byte) (nat
 
 func parseNATSMSGFrame(reader *largebuf.LargeBufferReader, fields [][]byte) (natsFrame, error) {
 	if len(fields) != 4 && len(fields) != 5 {
-		return natsFrame{}, errors.New("invalid MSG control line")
+		return natsFrame{}, errInvalidMSGControlLine
 	}
 	if err := validateNATSSID(fields[2]); err != nil {
 		return natsFrame{}, err
 	}
 	size, err := parseIntField(fields[len(fields)-1])
 	if err != nil {
-		return natsFrame{}, errors.New("invalid MSG payload size")
+		return natsFrame{}, errInvalidMSGPayloadSize
 	}
 	if err := consumeNATSPayload(reader, size); err != nil {
 		return natsFrame{}, err
@@ -248,21 +308,21 @@ func parseNATSHPUBFrame(reader *largebuf.LargeBufferReader, fields [][]byte) (na
 
 func parseNATSHMSGFrame(reader *largebuf.LargeBufferReader, fields [][]byte) (natsFrame, error) {
 	if len(fields) != 5 && len(fields) != 6 {
-		return natsFrame{}, errors.New("invalid HMSG control line")
+		return natsFrame{}, errInvalidHMSGControlLine
 	}
 	if err := validateNATSSID(fields[2]); err != nil {
 		return natsFrame{}, err
 	}
 	hdrSize, err := parseIntField(fields[len(fields)-2])
 	if err != nil {
-		return natsFrame{}, errors.New("invalid HMSG header size")
+		return natsFrame{}, errInvalidHMSGHeaderSize
 	}
 	totalSize, err := parseIntField(fields[len(fields)-1])
 	if err != nil {
-		return natsFrame{}, errors.New("invalid HMSG total size")
+		return natsFrame{}, errInvalidHMSGTotalSize
 	}
 	if hdrSize > totalSize {
-		return natsFrame{}, errors.New("HMSG header size exceeds total size")
+		return natsFrame{}, errHMSGHeaderSizeExceedsTotal
 	}
 	if err := consumeNATSPayload(reader, totalSize); err != nil {
 		return natsFrame{}, err
@@ -275,19 +335,19 @@ func parseNATSHMSGFrame(reader *largebuf.LargeBufferReader, fields [][]byte) (na
 
 func parseIntField(field []byte) (int, error) {
 	if len(field) == 0 {
-		return 0, errors.New("invalid integer field")
+		return 0, errInvalidIntegerField
 	}
 	return strconv.Atoi(unsafe.String(unsafe.SliceData(field), len(field)))
 }
 
 func parseNATSPayloadFields(fields [][]byte) (string, int, error) {
 	if len(fields) != 3 && len(fields) != 4 {
-		return "", 0, errors.New("invalid NATS payload control line")
+		return "", 0, errInvalidNATSPayloadControlLine
 	}
 
 	size, err := parseIntField(fields[len(fields)-1])
 	if err != nil {
-		return "", 0, errors.New("invalid NATS payload size")
+		return "", 0, errInvalidNATSPayloadSize
 	}
 
 	return string(fields[1]), size, nil
@@ -295,19 +355,19 @@ func parseNATSPayloadFields(fields [][]byte) (string, int, error) {
 
 func parseNATSHeaderPayloadFields(fields [][]byte) (string, int, error) {
 	if len(fields) != 4 && len(fields) != 5 {
-		return "", 0, errors.New("invalid NATS header payload control line")
+		return "", 0, errInvalidNATSHeaderPayloadControlLine
 	}
 
 	hdrSize, err := parseIntField(fields[len(fields)-2])
 	if err != nil {
-		return "", 0, errors.New("invalid NATS header size")
+		return "", 0, errInvalidNATSHeaderSize
 	}
 	totalSize, err := parseIntField(fields[len(fields)-1])
 	if err != nil {
-		return "", 0, errors.New("invalid NATS total size")
+		return "", 0, errInvalidNATSTotalSize
 	}
 	if hdrSize > totalSize {
-		return "", 0, errors.New("NATS header size exceeds total size")
+		return "", 0, errNATSHeaderSizeExceedsTotal
 	}
 
 	return string(fields[1]), totalSize, nil
@@ -315,19 +375,19 @@ func parseNATSHeaderPayloadFields(fields [][]byte) (string, int, error) {
 
 func consumeNATSPayload(reader *largebuf.LargeBufferReader, size int) error {
 	if size < 0 {
-		return errors.New("negative NATS payload size")
+		return errNegativeNATSPayloadSize
 	}
 
 	if err := reader.Skip(size); err != nil {
-		return errors.New("truncated NATS payload")
+		return errTruncatedNATSPayload
 	}
 
 	terminator, err := reader.ReadN(len(natsCRLF))
 	if err != nil {
-		return errors.New("truncated NATS payload")
+		return errTruncatedNATSPayload
 	}
 	if !bytes.Equal(terminator, natsCRLF) {
-		return errors.New("missing NATS payload terminator")
+		return errMissingNATSPayloadTerminator
 	}
 
 	return nil
@@ -336,22 +396,22 @@ func consumeNATSPayload(reader *largebuf.LargeBufferReader, size int) error {
 func readNATSControlLine(reader *largebuf.LargeBufferReader) ([]byte, error) {
 	crPos := reader.IndexByte('\r')
 	if crPos < 0 {
-		return nil, errors.New("missing NATS control line terminator")
+		return nil, errMissingNatsTerminator
 	}
 
 	line, err := reader.ReadN(crPos)
 	if err != nil {
-		return nil, errors.New("missing NATS control line terminator")
+		return nil, errMissingNatsTerminator
 	}
 
 	terminator, err := reader.ReadN(len(natsCRLF))
 	if err != nil || !bytes.Equal(terminator, natsCRLF) {
-		return nil, errors.New("missing NATS control line terminator")
+		return nil, errMissingNatsTerminator
 	}
 
 	line = bytes.TrimSpace(line)
 	if len(line) == 0 {
-		return nil, errors.New("empty NATS control line")
+		return nil, errEmptyNATSControlLine
 	}
 
 	return line, nil
@@ -359,12 +419,12 @@ func readNATSControlLine(reader *largebuf.LargeBufferReader) ([]byte, error) {
 
 func natsJSONPayload(line, command []byte) ([]byte, error) {
 	if len(line) <= len(command) {
-		return nil, errors.New("missing NATS JSON payload")
+		return nil, errMissingNATSJSONPayload
 	}
 
 	rest := bytes.TrimSpace(line[len(command):])
 	if !json.Valid(rest) {
-		return nil, errors.New("invalid NATS JSON payload")
+		return nil, errInvalidNATSJSONPayload
 	}
 
 	return rest, nil
@@ -372,7 +432,7 @@ func natsJSONPayload(line, command []byte) ([]byte, error) {
 
 func validateNATSSID(field []byte) error {
 	if !isASCIIAlnumBytes(field) {
-		return errors.New("invalid NATS sid")
+		return errInvalidNATSSID
 	}
 	return nil
 }

@@ -513,14 +513,6 @@ func SupportsEBPFLoops(log *slog.Logger, overrideKernelVersion bool) bool {
 }
 
 func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
-	if !SupportsEBPFLoops(ptlog(), overrideKernelVersion) {
-		// Hack: instead of redefining bpf2go generated struct for mutually exclusive conditional programs,
-		// use one predefined field name to store either of them.
-		spec.Programs["obi_protocol_http"] = spec.Programs["obi_protocol_http_legacy"]
-		spec.Programs["obi_protocol_http"].Name = "obi_protocol_http"
-		spec.Programs["obi_continue_protocol_http"] = spec.Programs["obi_continue_protocol_http_legacy"]
-		spec.Programs["obi_continue_protocol_http"].Name = "obi_continue_protocol_http"
-	}
 	dummy := &ebpf.ProgramSpec{
 		Name: "obi_dummy",
 		Type: ebpf.Kprobe,
@@ -530,8 +522,30 @@ func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
 		},
 		License: "MIT",
 	}
-	// Hack: insert dummy unused programs in order to be able to use bpf2go generated struct to load
-	// the collection.
+
+	if !SupportsEBPFLoops(ptlog(), overrideKernelVersion) {
+		// Swap the bpf_loop-based programs with their legacy counterparts so
+		// bpf2go-generated struct fields still bind on kernels without bpf_loop.
+		spec.Programs["obi_protocol_http"] = spec.Programs["obi_protocol_http_legacy"]
+		spec.Programs["obi_protocol_http"].Name = "obi_protocol_http"
+		spec.Programs["obi_continue_protocol_http"] = spec.Programs["obi_continue_protocol_http_legacy"]
+		spec.Programs["obi_continue_protocol_http"].Name = "obi_continue_protocol_http"
+
+		// gotracer's obi_uprobe_readMimeHeader inlines a bpf_loop call. The
+		// runtime probe map (see gotracer.Tracer.UProbes) only attaches it on
+		// kernels >= 5.17, but the program still loads as part of the spec.
+		// Const-DCE removes the bpf_loop call when g_bpf_loop_enabled=false,
+		// orphaning the tp_match subprog. Pre-5.13 kernels then reject the
+		// load with "number of funcs in func_info doesn't match number of
+		// subprogs" because their func_info validator runs before DCE-aware
+		// subprog reconciliation. Replace with a dummy so it loads safely.
+		if _, ok := spec.Programs["obi_uprobe_readMimeHeader"]; ok {
+			spec.Programs["obi_uprobe_readMimeHeader"] = dummy
+		}
+	}
+
+	// Slot dummies in place of the legacy programs we already moved, so the
+	// bpf2go struct binding still resolves them.
 	spec.Programs["obi_protocol_http_legacy"] = dummy
 	spec.Programs["obi_continue_protocol_http_legacy"] = dummy
 }

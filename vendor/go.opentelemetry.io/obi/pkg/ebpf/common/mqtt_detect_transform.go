@@ -14,6 +14,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
+var (
+	errPacketTooShortForMQTT     = errors.New("packet too short for MQTT")
+	errNoMQTTPacketsFound        = errors.New("no MQTT packets found")
+	errNoSpanWorthyMQTTPackets   = errors.New("no span-worthy MQTT packets found")
+	errUnsupportedMQTTPacketType = errors.New("unsupported MQTT packet type")
+	errNoMQTTSubscriptionsFound  = errors.New("no subscriptions found")
+)
+
 // MQTTInfo holds parsed information from an MQTT packet.
 type MQTTInfo struct {
 	// PacketType is the MQTT packet type (PUBLISH, SUBSCRIBE, etc.)
@@ -48,11 +56,14 @@ func packetTypeToMethod(packetType mqttparser.PacketType) string {
 // Otherwise, returns MQTTInfo with the processed data. The ignore bool indicates whether the event
 // should be ignored for span creation (e.g., control packets like CONNECT).
 func ProcessPossibleMQTTEvent(event *TCPRequestInfo, pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer) (*MQTTInfo, bool, error) {
-	m, ignore, err := ProcessMQTTEvent(pkt.UnsafeView())
+	pktView := pkt.UnsafeView()
+	rpktView := rpkt.UnsafeView()
+
+	m, ignore, err := ProcessMQTTEvent(pktView)
 	if err != nil {
 		// If we are getting the information in the response buffer, the event
 		// must be reversed and that's how we captured it.
-		m, ignore, err = ProcessMQTTEvent(rpkt.UnsafeView())
+		m, ignore, err = ProcessMQTTEvent(rpktView)
 		if err == nil && !ignore {
 			reverseTCPEvent(event)
 		}
@@ -64,7 +75,7 @@ func ProcessPossibleMQTTEvent(event *TCPRequestInfo, pkt *largebuf.LargeBuffer, 
 // Returns MQTTInfo for span-worthy packets, or ignore=true for control packets.
 func ProcessMQTTEvent(pkt []byte) (*MQTTInfo, bool, error) {
 	if len(pkt) < mqttparser.MinPacketLen {
-		return nil, true, errors.New("packet too short for MQTT")
+		return nil, true, errPacketTooShortForMQTT
 	}
 
 	packets, err := mqttparser.ParseMQTTPackets(pkt)
@@ -73,7 +84,7 @@ func ProcessMQTTEvent(pkt []byte) (*MQTTInfo, bool, error) {
 	}
 
 	if len(packets) == 0 {
-		return nil, true, errors.New("no MQTT packets found")
+		return nil, true, errNoMQTTPacketsFound
 	}
 
 	// Process the first packet that we can extract span information from
@@ -94,11 +105,11 @@ func ProcessMQTTEvent(pkt []byte) (*MQTTInfo, bool, error) {
 		offset += packet.Length()
 	}
 
-	return nil, true, errors.New("no span-worthy MQTT packets found")
+	return nil, true, errNoSpanWorthyMQTTPackets
 }
 
 // processMQTTPacket processes a single MQTT packet based on its type.
-func processMQTTPacket(pkt []byte, startOffset int, packet mqttparser.MQTTControlPacket) (*MQTTInfo, bool, error) {
+func processMQTTPacket(pkt []byte, startOffset int, packet *mqttparser.MQTTControlPacket) (*MQTTInfo, bool, error) {
 	// Variable header starts after fixed header
 	varHeaderOffset := startOffset + packet.FixedHeader.Length
 
@@ -124,7 +135,7 @@ func processMQTTPacket(pkt []byte, startOffset int, packet mqttparser.MQTTContro
 		// Control packets - ignore for span creation
 		return nil, true, nil
 	default:
-		return nil, true, errors.New("unsupported MQTT packet type")
+		return nil, true, errUnsupportedMQTTPacketType
 	}
 }
 
@@ -149,7 +160,7 @@ func processSubscribePacket(pkt []byte, offset int, remainingLength int) (*MQTTI
 	}
 
 	if len(subscribe.Subscriptions) == 0 {
-		return nil, true, errors.New("no subscriptions found")
+		return nil, true, errNoMQTTSubscriptionsFound
 	}
 
 	// Use the first subscription for the span

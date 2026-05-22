@@ -137,6 +137,7 @@ func GeminiSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 
 	model := extractGeminiModel(req)
 	operation := extractGeminiOperation(req)
+	isStream := isGeminiStream(req)
 	toolCalls := extractGeminiFunctionCalls(&parsedResponse)
 
 	baseSpan.SubType = request.HTTPSubtypeGemini
@@ -146,11 +147,21 @@ func GeminiSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 			Output:    parsedResponse,
 			Model:     model,
 			Operation: operation,
+			IsStream:  isStream,
 			ToolCalls: toolCalls,
 		},
 	}
 
 	return *baseSpan, true
+}
+
+// isGeminiStream detects whether the Gemini call is a streaming request
+// by checking if the URL path contains "streamGenerateContent".
+func isGeminiStream(req *http.Request) bool {
+	if req == nil || req.URL == nil {
+		return false
+	}
+	return strings.Contains(req.URL.Path, "streamGenerateContent")
 }
 
 // extractGeminiModel extracts the model name from the URL path.

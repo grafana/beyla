@@ -363,7 +363,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return semconv.GenAIInputMessagesKey.String(s.GenAI.OpenAI.Request.GetInput())
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
-				return semconv.GenAIInputMessagesKey.String(string(s.GenAI.Anthropic.Input.Messages))
+				return semconv.GenAIInputMessagesKey.String(NormalizeAnthropicInput(s.GenAI.Anthropic.Input.Messages))
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
 				return semconv.GenAIInputMessagesKey.String(s.GenAI.Gemini.GetInput())
@@ -379,18 +379,27 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.GenAIOutput:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
+				if s.GenAI.OpenAI.OperationName == EmbeddingOperationName {
+					return semconv.GenAIOutputMessagesKey.String("")
+				}
 				return semconv.GenAIOutputMessagesKey.String(s.GenAI.OpenAI.GetOutput())
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
-				return semconv.GenAIOutputMessagesKey.String(string(s.GenAI.Anthropic.Output.Content))
+				return semconv.GenAIOutputMessagesKey.String(NormalizeAnthropicOutput(&s.GenAI.Anthropic.Output))
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
 				return semconv.GenAIOutputMessagesKey.String(s.GenAI.Gemini.GetOutput())
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
+				if s.GenAI.Qwen.OperationName == EmbeddingOperationName {
+					return semconv.GenAIOutputMessagesKey.String("")
+				}
 				return semconv.GenAIOutputMessagesKey.String(s.GenAI.Qwen.GetOutput())
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
+				if len(s.GenAI.Bedrock.Output.Content) > 0 {
+					return semconv.GenAIOutputMessagesKey.String(NormalizeBedrockOutput(&s.GenAI.Bedrock.Output))
+				}
 				return semconv.GenAIOutputMessagesKey.String(s.GenAI.Bedrock.GetOutput())
 			}
 			return semconv.GenAIOutputMessagesKey.String("")
@@ -398,16 +407,16 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.GenAIInstructions:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
-				return semconv.GenAISystemInstructionsKey.String(s.GenAI.OpenAI.Request.Instructions)
+				return semconv.GenAISystemInstructionsKey.String(NormalizeSystemInstructions(s.GenAI.OpenAI.Request.Instructions))
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
-				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Anthropic.Input.System)
+				return semconv.GenAISystemInstructionsKey.String(NormalizeSystemInstructions(s.GenAI.Anthropic.Input.System))
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
 				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Gemini.GetSystemInstruction())
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
-				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Qwen.Request.Instructions)
+				return semconv.GenAISystemInstructionsKey.String(NormalizeSystemInstructions(s.GenAI.Qwen.Request.Instructions))
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
 				return semconv.GenAISystemInstructionsKey.String(s.GenAI.Bedrock.GetSystemInstruction())
@@ -416,14 +425,20 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.GenAITools:
 		getter = func(s *Span) attribute.KeyValue {
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
+				return semconv.GenAIToolDefinitionsKey.String(NormalizeToolDefinitions(s.GenAI.OpenAI.Request.Tools))
+			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
-				return semconv.GenAIToolDefinitionsKey.String(string(s.GenAI.Anthropic.Input.Tools))
+				return semconv.GenAIToolDefinitionsKey.String(NormalizeToolDefinitions(s.GenAI.Anthropic.Input.Tools))
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
-				return semconv.GenAIToolDefinitionsKey.String(string(s.GenAI.Gemini.Input.Tools))
+				return semconv.GenAIToolDefinitionsKey.String(NormalizeToolDefinitions(s.GenAI.Gemini.Input.Tools))
+			}
+			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
+				return semconv.GenAIToolDefinitionsKey.String(NormalizeToolDefinitions(s.GenAI.Qwen.Request.Tools))
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
-				return semconv.GenAIToolDefinitionsKey.String(string(s.GenAI.Bedrock.Input.Tools))
+				return semconv.GenAIToolDefinitionsKey.String(NormalizeToolDefinitions(s.GenAI.Bedrock.Input.Tools))
 			}
 			return semconv.GenAIToolDefinitionsKey.String("")
 		}

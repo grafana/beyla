@@ -11,6 +11,12 @@ const (
 	MinPacketLen = 2 // fixed header (1 byte) + remaining length (1 byte)
 )
 
+var (
+	errIncompletePacket  = errors.New("incomplete packet")
+	errPacketTooShort    = errors.New("packet too short for MQTT fixed header")
+	errInvalidPacketType = errors.New("invalid MQTT packet type")
+)
+
 type (
 	// PacketType is the type of MQTT Control Packet.
 	PacketType uint8
@@ -64,10 +70,46 @@ type FixedHeader struct {
 	Length int
 }
 
+// IsLikelyMQTT is an O(1) prefilter that validates the MQTT fixed-header byte 0
+// against the strict per-type flag constraints from the MQTT 3.1.1 / 5.0 spec.
+// Roughly 90% of random byte values fail this check, allowing callers to avoid
+// the more expensive remaining-length + variable-header parsing when a payload
+// is obviously not MQTT.
+// https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html
+// https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html
+func IsLikelyMQTT(first byte, pktLen int) bool {
+	if pktLen < MinPacketLen {
+		return false
+	}
+	pt := PacketType((first >> 4) & 0x0F)
+	flags := first & 0x0F
+	switch pt {
+	case PacketTypePUBLISH:
+		// QoS occupies bits 2-1 of the flag nibble; QoS=3 is invalid.
+		return (flags>>1)&0x03 != 3
+	case PacketTypePUBREL, PacketTypeSUBSCRIBE, PacketTypeUNSUBSCRIBE:
+		return flags == 0x02
+	case PacketTypeCONNECT,
+		PacketTypeCONNACK,
+		PacketTypePUBACK,
+		PacketTypePUBREC,
+		PacketTypePUBCOMP,
+		PacketTypeSUBACK,
+		PacketTypeUNSUBACK,
+		PacketTypePINGREQ,
+		PacketTypePINGRESP,
+		PacketTypeDISCONNECT,
+		PacketTypeAUTH:
+		return flags == 0x00
+	default:
+		return false
+	}
+}
+
 // ParseMQTTPackets parses multiple MQTT packets from a single byte slice, as
 // there may be cases where multiple MQTT packets are present in one TCP segment.
-func ParseMQTTPackets(segment []byte) ([]MQTTControlPacket, error) {
-	var packets []MQTTControlPacket
+func ParseMQTTPackets(segment []byte) ([]*MQTTControlPacket, error) {
+	var packets []*MQTTControlPacket
 	offset := 0
 
 	for offset < len(segment) {
@@ -81,7 +123,7 @@ func ParseMQTTPackets(segment []byte) ([]MQTTControlPacket, error) {
 		}
 
 		if offset+packet.Length() > len(segment) {
-			return packets, errors.New("incomplete packet")
+			return packets, errIncompletePacket
 		}
 
 		packets = append(packets, packet)
@@ -92,9 +134,9 @@ func ParseMQTTPackets(segment []byte) ([]MQTTControlPacket, error) {
 }
 
 // NewMQTTControlPacket parses the MQTT fixed header from a packet.
-func NewMQTTControlPacket(pkt []byte) (MQTTControlPacket, error) {
+func NewMQTTControlPacket(pkt []byte) (*MQTTControlPacket, error) {
 	if len(pkt) < MinPacketLen {
-		return MQTTControlPacket{}, errors.New("packet too short for MQTT fixed header")
+		return nil, errPacketTooShort
 	}
 
 	// Parse first byte: packet type (bits 7-4) and flags (bits 3-0)
@@ -104,17 +146,17 @@ func NewMQTTControlPacket(pkt []byte) (MQTTControlPacket, error) {
 
 	// Validate packet type (0 is reserved, valid range is 1-15)
 	if packetType < PacketTypeCONNECT || packetType > PacketTypeAUTH {
-		return MQTTControlPacket{}, errors.New("invalid MQTT packet type")
+		return nil, errInvalidPacketType
 	}
 
 	// Parse remaining length (variable-length encoding)
 	r := NewPacketReader(pkt, 1)
 	rl, err := r.ReadVariableByteInteger()
 	if err != nil {
-		return MQTTControlPacket{}, err
+		return nil, err
 	}
 
-	return MQTTControlPacket{
+	return &MQTTControlPacket{
 		FixedHeader: FixedHeader{
 			PacketType:      packetType,
 			Flags:           flags,

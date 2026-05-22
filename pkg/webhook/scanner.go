@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 	"github.com/grafana/beyla/v3/pkg/webhook/lang"
 )
 
@@ -25,6 +26,7 @@ type LocalProcessScanner struct {
 type ProcessInfo struct {
 	pid            int32
 	metadata       map[string]string
+	ownerChain     []configmap.Owner
 	podLabels      map[string]string
 	podAnnotations map[string]string
 	env            map[string]string

@@ -187,7 +187,7 @@ func TestClassify(t *testing.T) {
 		{
 			name:    "out_of_scope_system_namespace",
 			pod:     pod("kube-system", "my-pod"),
-			matcher: &PodMatcher{logger: slog.Default(), selectors: []services.Selector{&services.GlobAttributes{Metadata: services.MetadataGlobMap{}}}},
+			matcher: &PodMatcher{logger: slog.Default(), instrument: configmap.WebhookInstrument{{}}},
 			cfg:     wildcardCfg(),
 			wantNil: true,
 		},

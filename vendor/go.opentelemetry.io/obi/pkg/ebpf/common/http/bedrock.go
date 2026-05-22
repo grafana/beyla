@@ -69,13 +69,17 @@ func BedrockSpan(baseSpan *request.Span, req *http.Request, resp *http.Response)
 	parsedResponse.OutputTokens, _ = strconv.Atoi(resp.Header.Get("X-Amzn-Bedrock-Output-Token-Count"))
 
 	model := extractBedrockModel(req)
+	isStream := isBedrockStream(req)
+	guardrailID := extractBedrockGuardrailID(req, resp)
 
 	baseSpan.SubType = request.HTTPSubtypeAWSBedrock
 	baseSpan.GenAI = &request.GenAI{
 		Bedrock: &request.VendorBedrock{
-			Input:  parsedRequest,
-			Output: parsedResponse,
-			Model:  model,
+			Input:       parsedRequest,
+			Output:      parsedResponse,
+			Model:       model,
+			IsStream:    isStream,
+			GuardrailID: guardrailID,
 		},
 	}
 
@@ -100,4 +104,35 @@ func extractBedrockModel(req *http.Request) string {
 		return remainder
 	}
 	return remainder[:slashIdx]
+}
+
+// isBedrockStream detects streaming Bedrock calls by checking the URL path
+// for the invoke-with-response-stream suffix.
+func isBedrockStream(req *http.Request) bool {
+	if req == nil || req.URL == nil {
+		return false
+	}
+	return strings.Contains(req.URL.Path, "invoke-with-response-stream")
+}
+
+// extractBedrockGuardrailID extracts the guardrail identifier from the
+// response header or the request URL path.
+func extractBedrockGuardrailID(req *http.Request, resp *http.Response) string {
+	if id := resp.Header.Get("X-Amzn-Bedrock-Guardrail-Id"); id != "" {
+		return id
+	}
+
+	if req != nil && req.URL != nil {
+		path := req.URL.Path
+		const prefix = "/guardrail/"
+		if idx := strings.Index(path, prefix); idx >= 0 {
+			remainder := path[idx+len(prefix):]
+			if slashIdx := strings.Index(remainder, "/"); slashIdx >= 0 {
+				return remainder[:slashIdx]
+			}
+			return remainder
+		}
+	}
+
+	return ""
 }

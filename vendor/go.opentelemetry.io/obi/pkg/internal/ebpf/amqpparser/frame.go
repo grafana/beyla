@@ -5,7 +5,6 @@ package amqpparser // import "go.opentelemetry.io/obi/pkg/internal/ebpf/amqppars
 
 import (
 	"errors"
-	"fmt"
 
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
@@ -48,9 +47,19 @@ const (
 	descriptorSASLOutcome    descriptor = 0x44
 )
 
-// errIncompleteFrame signals the buffer ends before the full frame body; callers may
-// try to recover the performative from the available prefix.
-var errIncompleteFrame = errors.New("incomplete AMQP frame")
+var (
+	errIncompleteFrame   = errors.New("incomplete AMQP frame")
+	errTooShort          = errors.New("packet too short")
+	errInvalidFrameSize  = errors.New("invalid frame size")
+	errInvalidDataOffset = errors.New("invalid AMQP frame data offset")
+	errInvalidBodyOffset = errors.New("invalid AMQP frame body offset")
+	errInvalidType       = errors.New("invalid AMQP frame type")
+	errBodyTooShort      = errors.New("AMQP frame body too short")
+	errNotDescribed      = errors.New("AMQP performative is not described")
+	errTruncated         = errors.New("AMQP ulong descriptor truncated")
+	errBadEncoding       = errors.New("unsupported AMQP descriptor encoding")
+	errUnknownDescriptor = errors.New("unknown AMQP performative descriptor")
+)
 
 type frameType uint8
 
@@ -70,7 +79,7 @@ func (h frameHeader) bodyOffset() int {
 func parseFrameHeader(r *largebuf.LargeBufferReader) (frameHeader, error) {
 	remaining := r.Remaining()
 	if remaining < frameHeaderSize {
-		return frameHeader{}, fmt.Errorf("packet too short for AMQP frame header: have %d bytes, need %d", remaining, frameHeaderSize)
+		return frameHeader{}, errTooShort
 	}
 
 	size, err := r.ReadU32BE()
@@ -78,7 +87,7 @@ func parseFrameHeader(r *largebuf.LargeBufferReader) (frameHeader, error) {
 		return frameHeader{}, err
 	}
 	if size < frameHeaderSize {
-		return frameHeader{}, fmt.Errorf("invalid AMQP frame size %d (must be >= %d)", size, frameHeaderSize)
+		return frameHeader{}, errInvalidFrameSize
 	}
 
 	doff, err := r.ReadU8()
@@ -86,7 +95,7 @@ func parseFrameHeader(r *largebuf.LargeBufferReader) (frameHeader, error) {
 		return frameHeader{}, err
 	}
 	if doff < minDataOffsetWords {
-		return frameHeader{}, fmt.Errorf("invalid AMQP frame data offset %d (must be >= %d)", doff, minDataOffsetWords)
+		return frameHeader{}, errInvalidDataOffset
 	}
 
 	ft, err := r.ReadU8()
@@ -104,13 +113,13 @@ func parseFrameHeader(r *largebuf.LargeBufferReader) (frameHeader, error) {
 	}
 
 	if h.bodyOffset() > int(h.Size) {
-		return frameHeader{}, fmt.Errorf("invalid AMQP frame body offset %d (exceeds frame size %d)", h.bodyOffset(), h.Size)
+		return frameHeader{}, errInvalidBodyOffset
 	}
 
 	switch h.Type {
 	case frameTypeAMQP, frameTypeSASL:
 	default:
-		return frameHeader{}, fmt.Errorf("invalid AMQP frame type 0x%02X", byte(h.Type))
+		return frameHeader{}, errInvalidType
 	}
 
 	if int(size) > remaining {
@@ -147,7 +156,7 @@ func parseDescriptor(r *largebuf.LargeBufferReader, ft frameType, bodyLen int) (
 		return 0, false, nil
 	}
 	if bodyLen < smallULongDescriptorSize {
-		return 0, false, fmt.Errorf("AMQP frame body too short for performative: %d bytes", bodyLen)
+		return 0, false, errBodyTooShort
 	}
 
 	constructor, err := r.ReadU8()
@@ -155,7 +164,7 @@ func parseDescriptor(r *largebuf.LargeBufferReader, ft frameType, bodyLen int) (
 		return 0, false, err
 	}
 	if constructor != describedTypeConstructor {
-		return 0, false, fmt.Errorf("AMQP performative is not described (first byte 0x%02X)", constructor)
+		return 0, false, errNotDescribed
 	}
 
 	formatCode, err := r.ReadU8()
@@ -173,7 +182,7 @@ func parseDescriptor(r *largebuf.LargeBufferReader, ft frameType, bodyLen int) (
 		desc = descriptor(value)
 	case formatCodeULong:
 		if bodyLen < uLongDescriptorSize {
-			return 0, false, fmt.Errorf("AMQP ulong descriptor truncated: %d bytes, need %d", bodyLen, uLongDescriptorSize)
+			return 0, false, errTruncated
 		}
 		value, err := r.ReadU64BE()
 		if err != nil {
@@ -181,11 +190,11 @@ func parseDescriptor(r *largebuf.LargeBufferReader, ft frameType, bodyLen int) (
 		}
 		desc = descriptor(value)
 	default:
-		return 0, false, fmt.Errorf("unsupported AMQP descriptor encoding 0x%02X", formatCode)
+		return 0, false, errBadEncoding
 	}
 
 	if !isKnownPerformativeDescriptor(ft, desc) {
-		return 0, false, fmt.Errorf("unknown AMQP performative descriptor 0x%X on frame type 0x%02X", uint64(desc), byte(ft))
+		return 0, false, errUnknownDescriptor
 	}
 
 	return desc, true, nil

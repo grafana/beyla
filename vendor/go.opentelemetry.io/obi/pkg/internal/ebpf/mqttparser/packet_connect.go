@@ -32,13 +32,19 @@ type ConnectPacket struct {
 	ClientID string
 }
 
+var (
+	errInsufficientConnectData       = errors.New("insufficient data for CONNECT packet")
+	errUnrecognizedMQTTProtocolName  = errors.New("unrecognized mqtt protocol name")
+	errUnrecognizedMQTTProtocolLevel = errors.New("unrecognized mqtt protocol level")
+)
+
 // ParseConnectPacket parses an MQTT CONNECT packet.
 // offset should point to the start of the variable header (after fixed header).
 func ParseConnectPacket(pkt []byte, offset Offset) (*ConnectPacket, Offset, error) {
 	var connect ConnectPacket
 
 	if offset >= len(pkt) {
-		return &connect, offset, errors.New("insufficient data for CONNECT packet")
+		return &connect, offset, errInsufficientConnectData
 	}
 
 	r := NewConnectPacketReader(pkt, offset)
@@ -183,7 +189,7 @@ func NewProtocolName(name string) (ProtocolName, error) {
 	case string(ProtocolNameMQTT), string(ProtocolNameMQIsdp):
 		return ProtocolName(name), nil
 	default:
-		return "", fmt.Errorf("%q is not a recognized mqtt protocol name", name)
+		return "", errUnrecognizedMQTTProtocolName
 	}
 }
 
@@ -208,7 +214,7 @@ func NewProtocolLevel(level uint8) (ProtocolLevel, error) {
 	case 5:
 		return ProtocolLevelMQTT50, nil
 	}
-	return 0, fmt.Errorf("%d is not a recognized mqtt protocol level", level)
+	return 0, errUnrecognizedMQTTProtocolLevel
 }
 
 func (pl ProtocolLevel) String() string {

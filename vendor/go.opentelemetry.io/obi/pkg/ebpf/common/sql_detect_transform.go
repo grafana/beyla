@@ -75,6 +75,34 @@ var sqlKeywords = [][]byte{
 
 var sqlExecuteKeyword = []byte("EXECUTE ")
 
+const minSQLPrintableRun = len("SELECT 1")
+
+// isSQLByte reports whether b is a byte that can appear inside a SQL statement
+// (printable ASCII plus the common whitespace characters).
+func isSQLByte(b byte) bool {
+	return (b >= 0x20 && b < 0x7f) || b == '\t' || b == '\n' || b == '\r'
+}
+
+// firstSQLRun returns the start index of the first contiguous run of at least
+// minLen SQL-plausible bytes in buf, or -1 if no such run exists.
+func firstSQLRun(buf []byte, minLen int) int {
+	if len(buf) < minLen {
+		return -1
+	}
+	run := 0
+	for i, b := range buf {
+		if isSQLByte(b) {
+			run++
+			if run >= minLen {
+				return i - minLen + 1
+			}
+		} else {
+			run = 0
+		}
+	}
+	return -1
+}
+
 func detectSQLPayload(useHeuristics bool, b *largebuf.LargeBuffer) (string, string, string, request.SQLKind) {
 	sqlKind := sqlKind(b)
 
@@ -101,16 +129,25 @@ func detectSQLPayload(useHeuristics bool, b *largebuf.LargeBuffer) (string, stri
 }
 
 func detectSQL(buf []byte) (string, string, string) {
+	// Cheap prefilter: most SQL wire protocols carry a small binary header
+	// followed by the statement as plain text. If no printable-ASCII run long
+	// enough to fit the shortest valid SQL exists, skip the case-fold scan.
+	start := firstSQLRun(buf, minSQLPrintableRun)
+	if start < 0 {
+		return "", "", ""
+	}
+	scan := buf[start:]
+
 	minIdx := -1
 	for _, q := range sqlKeywords {
-		i := asciiIndexFold(buf, q)
+		i := asciiIndexFold(scan, q)
 		if i >= 0 && (minIdx < 0 || i < minIdx) {
 			minIdx = i
 		}
 	}
 
 	if minIdx >= 0 {
-		sql := cstr(buf[minIdx:])
+		sql := cstr(scan[minIdx:])
 		op, table := sqlprune.SQLParseOperationAndTable(sql)
 		return op, table, sql
 	}

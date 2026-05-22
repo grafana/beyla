@@ -7,6 +7,13 @@ import (
 	"errors"
 )
 
+var (
+	errSubscribeInsufficientData   = errors.New("insufficient data for SUBSCRIBE packet")
+	errSubscribeReadTopicFilter    = errors.New("failed to read topic filter")
+	errSubscribeReadOptions        = errors.New("failed to read subscription options")
+	errSubscribeRequiresAtLeastOne = errors.New("SUBSCRIBE packet must contain at least one subscription")
+)
+
 // Subscription represents a single topic subscription with its QoS level.
 type Subscription struct {
 	// TopicFilter is the topic filter string for the subscription.
@@ -41,7 +48,7 @@ func ParseSubscribePacket(pkt []byte, offset Offset, remainingLength int) (*Subs
 	var subscribe SubscribePacket
 
 	if offset+remainingLength > len(pkt) {
-		return &subscribe, offset, errors.New("insufficient data for SUBSCRIBE packet")
+		return &subscribe, offset, errSubscribeInsufficientData
 	}
 
 	// Create a bounded slice to prevent reading beyond this packet
@@ -136,7 +143,7 @@ func (r *SubscribePacketReader) readSubscriptions(targetVersion ProtocolLevel) (
 			if targetVersion < ProtocolLevelMQTT50 {
 				return nil, ErrProtocolMismatch
 			}
-			return nil, errors.New("failed to read topic filter")
+			return nil, errSubscribeReadTopicFilter
 		}
 
 		options, err := r.ReadUint8()
@@ -147,7 +154,7 @@ func (r *SubscribePacketReader) readSubscriptions(targetVersion ProtocolLevel) (
 			if targetVersion < ProtocolLevelMQTT50 {
 				return nil, ErrProtocolMismatch
 			}
-			return nil, errors.New("failed to read subscription options")
+			return nil, errSubscribeReadOptions
 		}
 
 		// In MQTT 3.1.1, options byte contains only QoS (0, 1, or 2).
@@ -166,7 +173,7 @@ func (r *SubscribePacketReader) readSubscriptions(targetVersion ProtocolLevel) (
 		if targetVersion < ProtocolLevelMQTT50 {
 			return nil, ErrProtocolMismatch
 		}
-		return nil, errors.New("SUBSCRIBE packet must contain at least one subscription")
+		return nil, errSubscribeRequiresAtLeastOne
 	}
 
 	return subscriptions, nil

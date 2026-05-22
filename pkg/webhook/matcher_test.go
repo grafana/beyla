@@ -324,10 +324,8 @@ func TestNewPodMatcher(t *testing.T) {
 
 	t.Run("creates matcher with instrumentation criteria", func(t *testing.T) {
 		globs := configmap.WebhookInstrument{{
-			Metadata: services.MetadataGlobMap{
-				"k8s_namespace": strToGlob("prod*"),
-			}},
-		}
+			Namespaces: []services.GlobAttr{services.NewGlob("prod*")},
+		}}
 		cfg := &beyla.Config{
 			Injector: beyla.SDKInject{
 				Instrument: globs,

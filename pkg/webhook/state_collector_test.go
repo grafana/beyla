@@ -55,11 +55,7 @@ func nsCfg(ns string) *beyla.Config {
 	return &beyla.Config{
 		Injector: beyla.SDKInject{
 			Instrument: configmap.WebhookInstrument{
-				{
-					Metadata: services.MetadataGlobMap{
-						services.AttrNamespace: strToGlob(ns),
-					},
-				},
+				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}
@@ -71,9 +67,7 @@ func wildcardCfg() *beyla.Config {
 		Injector: beyla.SDKInject{
 			// A selector with no k8s_namespace key matches any namespace.
 			Instrument: configmap.WebhookInstrument{
-				{
-					Metadata: services.MetadataGlobMap{},
-				},
+				{},
 			},
 		},
 	}
@@ -368,8 +362,8 @@ func TestIsInScope(t *testing.T) {
 			cfg: &beyla.Config{
 				Injector: beyla.SDKInject{
 					Instrument: configmap.WebhookInstrument{
-						{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("prod")}},
-						{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("staging")}},
+						{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
+						{Namespaces: []services.GlobAttr{services.NewGlob("staging")}},
 					},
 				},
 			},
@@ -569,7 +563,7 @@ func TestPodStateCache_On(t *testing.T) {
 		Injector: beyla.SDKInject{
 			SDKPkgVersion: version,
 			Instrument: configmap.WebhookInstrument{
-				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
+				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}
@@ -651,7 +645,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 		Injector: beyla.SDKInject{
 			SDKPkgVersion: version,
 			Instrument: configmap.WebhookInstrument{
-				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
+				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}

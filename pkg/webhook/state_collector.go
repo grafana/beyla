@@ -131,15 +131,15 @@ type nsScope struct {
 
 // scopedNamespaces analyzes the injector configuration and returns an nsScope.
 func scopedNamespaces(cfg *beyla.Config) nsScope {
-	for i := range cfg.Injector.Instrument {
-		if _, hasNs := cfg.Injector.Instrument[i].Metadata[services.AttrNamespace]; !hasNs {
+	for _, sel := range cfg.Injector.Instrument {
+		if len(sel.Namespaces) == 0 {
 			return nsScope{clusterWide: true}
 		}
 	}
-	globs := make([]*services.GlobAttr, 0, len(cfg.Injector.Instrument))
-	for i := range cfg.Injector.Instrument {
-		if g, ok := cfg.Injector.Instrument[i].Metadata[services.AttrNamespace]; ok {
-			globs = append(globs, g)
+	var globs []*services.GlobAttr
+	for _, sel := range cfg.Injector.Instrument {
+		for i := range sel.Namespaces {
+			globs = append(globs, &sel.Namespaces[i])
 		}
 	}
 	return nsScope{globs: globs}

@@ -224,6 +224,27 @@ func trimContainerIDScheme(containerID string) string {
 	return containerID
 }
 
+// buildInjectConfig constructs an InjectConfig from the Beyla instrument selectors
+// and the configured OTLP endpoint/protocol. Each selector becomes one Rule whose
+// Config.Env carries the OTLP destination env vars.
+func buildInjectConfig(instrument configmap.WebhookInstrument, endpoint, protocol string) configmap.InjectConfig {
+	var otlpEnv []corev1.EnvVar
+	if endpoint != "" {
+		otlpEnv = append(otlpEnv, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint})
+	}
+	if protocol != "" {
+		otlpEnv = append(otlpEnv, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol})
+	}
+	rules := make([]configmap.Rule, 0, len(instrument))
+	for _, sel := range instrument {
+		rules = append(rules, configmap.Rule{
+			Selector: sel,
+			Config:   configmap.RuleConfig{Env: otlpEnv},
+		})
+	}
+	return configmap.InjectConfig{Rules: rules}
+}
+
 func stateConfigMapName(daemonSetName, nodeName string) string {
 	return daemonSetName + stateConfigMapNameSuffix + "-" + sanitizeDNS1123(nodeName)
 }

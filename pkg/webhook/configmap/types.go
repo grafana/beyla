@@ -8,12 +8,14 @@
 package configmap
 
 import (
+	corev1 "k8s.io/api/core/v1"
+
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
 const (
 	// KeyInstrumentation is the ConfigMap.Data key holding the injection
-	// criteria + OTLP destination (an InjectConfig serialized as YAML).
+	// criteria + per-rule config (an InjectConfig serialized as YAML).
 	KeyInstrumentation = "instrumentation.yaml"
 
 	// KeyEligibleForRestart is the ConfigMap.Data key holding the list of
@@ -28,47 +30,57 @@ const (
 	SelectorAnnotation = "beyla.grafana.com/node"
 )
 
-// WebhookInstrument is a subset of services.GlobDefinitionCriteria because
-// GlobDefinitionCriteria is only designed for unmarshaling and the
-// marshal+unmarshal operation is not idempotent (and makes the injector controller
-// to fail).
-// GlobDefinitionCriteria contains many attributes that are not
-// part of the webhook discovery so we copy here only the ones that are
-// actually needed.
-type WebhookInstrument []WebhookKubeOnlySelector
+// WebhookInstrument is the list of selectors from the Beyla injector config
+// that determine which pods to instrument.
+type WebhookInstrument []Selector
 
-type WebhookKubeOnlySelector struct {
-	// PodLabels allows matching against the labels of a pod
-	PodLabels map[string]*services.GlobAttr `yaml:"k8s_pod_labels,omitempty"`
-
-	// PodAnnotations allows matching against the annotations of a pod
-	PodAnnotations map[string]*services.GlobAttr `yaml:"k8s_pod_annotations,omitempty"`
-
-	// Metadata stores other Kubernetes object metadata
-	Metadata services.MetadataGlobMap `yaml:",inline" mapstructure:",remain"`
-}
-
-// InjectConfig is the YAML document under KeyInstrumentation: a list of
-// service-selection globs and the OTLP destination to stamp onto matched
-// pods.
+// InjectConfig is the YAML document under KeyInstrumentation. Rules are
+// evaluated in order; the first rule whose selector matches a pod wins.
+// No match means no instrumentation.
 type InjectConfig struct {
-	// Discovery is a list of service-selection criteria reused verbatim from
-	// Beyla's own configuration shape. The injection controller picks the
-	// kubernetes metadata fields (k8s_namespace, k8s_pod_name, ...) out of
-	// each entry; non-kubernetes fields (open_ports, exe_path, ...) are
-	// ignored on the consumer side.
-	Discovery WebhookInstrument `yaml:"discovery,omitempty"`
-
-	// OtelExport tells the injection controller what OTLP endpoint and
-	// protocol to set on instrumented containers. Empty fields are pruned
-	// by Marshal so the document stays minimal.
-	OtelExport OtelExport `yaml:"otel_export,omitempty"`
+	Rules []Rule `yaml:"rules,omitempty"`
 }
 
-// OtelExport is the per-ConfigMap OTLP destination applied to matched pods.
-type OtelExport struct {
-	Endpoint string `yaml:"endpoint,omitempty"`
-	Protocol string `yaml:"protocol,omitempty"`
+// Rule pairs a selector with the instrumentation config to apply when the
+// selector matches.
+type Rule struct {
+	// Name is optional and used only for debuggability.
+	Name     string     `yaml:"name,omitempty"`
+	Selector Selector   `yaml:"selector,omitempty"`
+	Config   RuleConfig `yaml:"config,omitempty"`
+}
+
+// Selector determines which pods a Rule applies to. All populated fields must
+// match (AND). An empty field is a wildcard.
+type Selector struct {
+	// Namespaces lists namespace name globs. Empty means all namespaces.
+	// A pod matches if its namespace matches any entry (OR semantics).
+	Namespaces []services.GlobAttr `yaml:"namespaces,omitempty"`
+	// OwnerName is a glob matched against the pod's resolved owning resource
+	// name. For a pod owned by a ReplicaSet that is itself owned by a
+	// Deployment, both the ReplicaSet name and the Deployment name are tried.
+	// Empty means any owner name.
+	OwnerName services.GlobAttr `yaml:"ownerName,omitempty"`
+	// OwnerKind restricts matching to a specific owner kind: Deployment,
+	// ReplicaSet, StatefulSet, or DaemonSet. Empty means any kind.
+	OwnerKind string `yaml:"ownerKind,omitempty"`
+	// PodLabels maps label keys to value globs. Empty means all pods.
+	// All entries must match (AND semantics).
+	PodLabels map[string]services.GlobAttr `yaml:"podLabels,omitempty"`
+	// PodAnnotations maps annotation keys to value globs. Empty means all pods.
+	// All entries must match (AND semantics).
+	PodAnnotations map[string]services.GlobAttr `yaml:"podAnnotations,omitempty"`
+}
+
+// RuleConfig is the instrumentation configuration stamped onto matched pods.
+type RuleConfig struct {
+	// Env is the list of environment variables to set on instrumented containers.
+	// Supports all corev1.EnvVar sources (valueFrom.secretKeyRef, etc.).
+	Env []corev1.EnvVar `yaml:"env,omitempty"`
+	// DeclarativeConfig holds an inline OTel declarative config document
+	// (file_format: "1.0"). When set, the operator mounts it as a ConfigMap
+	// and sets OTEL_CONFIG_FILE on matched containers.
+	DeclarativeConfig map[string]interface{} `yaml:"declarativeConfig,omitempty"`
 }
 
 // EligibleDeployment names one workload whose pre-existing pods are

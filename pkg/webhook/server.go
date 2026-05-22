@@ -331,13 +331,7 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	eligible = append(eligible, s.eligibleDeployments.Values()...)
 	sortEligible(eligible)
 
-	config := configmap.InjectConfig{
-		Discovery: s.cfg.Injector.Instrument,
-		OtelExport: configmap.OtelExport{
-			Endpoint: s.mutator.Endpoint(),
-			Protocol: s.mutator.Protocol(),
-		},
-	}
+	config := buildInjectConfig(s.cfg.Injector.Instrument, s.mutator.Endpoint(), s.mutator.Protocol())
 
 	return s.stateWriter.Write(ctx, &config, eligible)
 }

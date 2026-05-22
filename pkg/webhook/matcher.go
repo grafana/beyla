@@ -30,13 +30,49 @@ func NewPodMatcher(cfg *beyla.Config) *PodMatcher {
 func asProcessDiscoverySelector(in configmap.WebhookInstrument) []services.Selector {
 	out := make(services.GlobDefinitionCriteria, 0, len(in))
 	for _, selector := range in {
-		out = append(out, services.GlobAttributes{
-			Metadata:       selector.Metadata,
-			PodLabels:      selector.PodLabels,
-			PodAnnotations: selector.PodAnnotations,
-		})
+		labels := globAttrPtrMap(selector.PodLabels)
+		annotations := globAttrPtrMap(selector.PodAnnotations)
+		metadata := services.MetadataGlobMap{}
+		if selector.OwnerName.IsSet() {
+			own := selector.OwnerName
+			metadata[services.AttrOwnerName] = &own
+		}
+		if len(selector.Namespaces) == 0 {
+			out = append(out, services.GlobAttributes{
+				Metadata:       metadata,
+				PodLabels:      labels,
+				PodAnnotations: annotations,
+			})
+		} else {
+			// Expand one entry per namespace so OR semantics are preserved.
+			for _, ns := range selector.Namespaces {
+				nsGlob := ns
+				nsMetadata := make(services.MetadataGlobMap, len(metadata)+1)
+				for k, v := range metadata {
+					nsMetadata[k] = v
+				}
+				nsMetadata[services.AttrNamespace] = &nsGlob
+				out = append(out, services.GlobAttributes{
+					Metadata:       nsMetadata,
+					PodLabels:      labels,
+					PodAnnotations: annotations,
+				})
+			}
+		}
 	}
 	return discover.NormalizeGlobCriteria(out)
+}
+
+func globAttrPtrMap(in map[string]services.GlobAttr) map[string]*services.GlobAttr {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]*services.GlobAttr, len(in))
+	for k := range in {
+		v := in[k]
+		out[k] = &v
+	}
+	return out
 }
 
 func (m *PodMatcher) HasSelectionCriteria() bool {

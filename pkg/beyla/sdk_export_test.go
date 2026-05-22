@@ -3,8 +3,9 @@ package beyla
 import (
 	"testing"
 
-	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 func TestSDKExport_TracesEnabled(t *testing.T) {

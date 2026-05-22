@@ -217,7 +217,7 @@ jobs:
 
       - name: Stage generated test tree
         run: |
-          tar cf compiled-tests/testgenerated.tar internal/testgenerated
+          tar cf compiled-tests/testgenerated.tar internal/testgenerated schemas
 
       - name: Upload prep artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

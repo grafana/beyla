@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 var (
@@ -295,9 +296,14 @@ func processMetadata(meta *metav1.ObjectMeta) *ProcessInfo {
 	ret.podLabels = meta.Labels
 	ret.podAnnotations = meta.Annotations
 
-	// add any other owner name (they might be several, e.g. replicaset and deployment)
+	// Always include the pod itself first so pods are selectable by name.
+	// ownersFrom returns {Kind: "Pod"} for bare pods; skip that to avoid duplicates.
+	ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: meta.Name, Kind: "Pod"})
 	for _, owner := range owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+		if owner.Kind != "Pod" {
+			ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: owner.Name, Kind: owner.Kind})
+		}
 	}
 	return &ret
 }

@@ -19,6 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
+
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 func TestContainerIDMatches(t *testing.T) {
@@ -502,4 +504,81 @@ func installNodeNameFieldSelectorReactor(client *fake.Clientset) {
 		}
 		return true, filtered, nil
 	})
+}
+
+func TestBuildInjectConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		instrument configmap.WebhookInstrument
+		endpoint   string
+		protocol   string
+		want       configmap.InjectConfig
+	}{
+		{
+			name:       "empty instrument yields empty rules",
+			instrument: configmap.WebhookInstrument{},
+			endpoint:   "http://otel:4318",
+			protocol:   "http/protobuf",
+			want:       configmap.InjectConfig{},
+		},
+		{
+			name:       "single selector becomes one rule carrying endpoint and protocol",
+			instrument: configmap.WebhookInstrument{{OwnerKind: "Deployment"}},
+			endpoint:   "http://otel:4318",
+			protocol:   "http/protobuf",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{{
+				Selector: configmap.Selector{OwnerKind: "Deployment"},
+				Config: configmap.RuleConfig{Env: []corev1.EnvVar{
+					{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://otel:4318"},
+					{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: "http/protobuf"},
+				}},
+			}}},
+		},
+		{
+			name: "multiple selectors each get the same env",
+			instrument: configmap.WebhookInstrument{
+				{OwnerKind: "Deployment"},
+				{OwnerKind: "StatefulSet"},
+			},
+			endpoint: "http://otel:4318",
+			protocol: "grpc",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{
+				{
+					Selector: configmap.Selector{OwnerKind: "Deployment"},
+					Config: configmap.RuleConfig{Env: []corev1.EnvVar{
+						{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://otel:4318"},
+						{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: "grpc"},
+					}},
+				},
+				{
+					Selector: configmap.Selector{OwnerKind: "StatefulSet"},
+					Config: configmap.RuleConfig{Env: []corev1.EnvVar{
+						{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://otel:4318"},
+						{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: "grpc"},
+					}},
+				},
+			}},
+		},
+		{
+			// Both vars are always stamped; empty values are not filtered out.
+			name:       "empty endpoint and protocol produce env vars with empty values",
+			instrument: configmap.WebhookInstrument{{OwnerKind: "Deployment"}},
+			endpoint:   "",
+			protocol:   "",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{{
+				Selector: configmap.Selector{OwnerKind: "Deployment"},
+				Config: configmap.RuleConfig{Env: []corev1.EnvVar{
+					{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: ""},
+					{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: ""},
+				}},
+			}}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildInjectConfig(tt.instrument, tt.endpoint, tt.protocol)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

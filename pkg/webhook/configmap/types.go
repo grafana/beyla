@@ -2,9 +2,9 @@
 // that Beyla writes and the external k8s injection controller consumes. It is
 // the public, shared schema between the two repositories.
 //
-// Only the schema, the keys, and the (un)marshal helpers live here; the
-// runtime writer/reader logic lives next to its caller (Beyla's
-// StateConfigMapWriter; the injector's ConfigMapReconciler).
+// The package contains the schema types, the ConfigMap key constants, and the
+// Selector.Match logic (in match.go). Runtime writer/reader logic lives next
+// to its caller (Beyla's StateConfigMapWriter; the injector's ConfigMapReconciler).
 package configmap
 
 import (
@@ -31,7 +31,10 @@ const (
 )
 
 // WebhookInstrument is the list of selectors from the Beyla injector config
-// that determine which pods to instrument.
+// that determine which pods to instrument. It carries selectors only — no
+// per-rule config. When Beyla writes the state ConfigMap it promotes each
+// Selector into a full Rule by pairing it with the OTLP destination env vars
+// derived from Beyla's own export configuration (see buildInjectConfig).
 type WebhookInstrument []Selector
 
 // InjectConfig is the YAML document under KeyInstrumentation. Rules are
@@ -44,8 +47,6 @@ type InjectConfig struct {
 // Rule pairs a selector with the instrumentation config to apply when the
 // selector matches.
 type Rule struct {
-	// Name is optional and used only for debuggability.
-	Name     string     `yaml:"name,omitempty"`
 	Selector Selector   `yaml:"selector,omitempty"`
 	Config   RuleConfig `yaml:"config,omitempty"`
 }
@@ -77,10 +78,10 @@ type RuleConfig struct {
 	// Env is the list of environment variables to set on instrumented containers.
 	// Supports all corev1.EnvVar sources (valueFrom.secretKeyRef, etc.).
 	Env []corev1.EnvVar `yaml:"env,omitempty"`
-	// DeclarativeConfig holds an inline OTel declarative config document
-	// (file_format: "1.0"). When set, the operator mounts it as a ConfigMap
-	// and sets OTEL_CONFIG_FILE on matched containers.
-	DeclarativeConfig map[string]interface{} `yaml:"declarativeConfig,omitempty"`
+	// TODO: add declarativeConfig support — when set, mount the inline OTel
+	// declarative config (file_format: "1.0") as a ConfigMap and set
+	// OTEL_CONFIG_FILE on matched containers. Requires volume mount + env var
+	// injection in the mutator before this field can be added to the schema.
 }
 
 // EligibleDeployment names one workload whose pre-existing pods are

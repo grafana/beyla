@@ -23,6 +23,7 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 		instrument configmap.WebhookInstrument
 		process    *ProcessInfo
 		want       bool
+		wantSel    *configmap.Selector // non-nil: assert the exact selector returned
 	}{
 		{
 			name:       "nil process — no match",
@@ -75,7 +76,7 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 			want: true,
 		},
 		{
-			// Verifies first-match semantics across multiple selectors.
+			// Verifies first-match semantics: second selector matches and is returned.
 			name: "first matching selector wins",
 			instrument: configmap.WebhookInstrument{
 				{Namespaces: []services.GlobAttr{services.NewGlob("staging")}},
@@ -83,6 +84,43 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 			},
 			process: &ProcessInfo{metadata: map[string]string{"k8s_namespace": "prod"}},
 			want:    true,
+			wantSel: &configmap.Selector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
+		},
+
+		// Negative wiring: each field must propagate mismatches correctly.
+		{
+			name: "namespace mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
+			}},
+			process: &ProcessInfo{metadata: map[string]string{"k8s_namespace": "staging"}},
+			want:    false,
+		},
+		{
+			name: "labels mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")},
+			}},
+			process: &ProcessInfo{podLabels: map[string]string{"app": "other-app"}},
+			want:    false,
+		},
+		{
+			name: "annotations mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				PodAnnotations: map[string]services.GlobAttr{"ver": services.NewGlob("v1")},
+			}},
+			process: &ProcessInfo{podAnnotations: map[string]string{"ver": "v2"}},
+			want:    false,
+		},
+		{
+			name: "ownerChain mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				OwnerName: services.NewGlob("my-app"),
+			}},
+			process: &ProcessInfo{
+				ownerChain: []configmap.Owner{{Name: "other-app", Kind: "Deployment"}},
+			},
+			want: false,
 		},
 	}
 
@@ -92,8 +130,11 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 				instrument: tt.instrument,
 				logger:     slog.With("component", "webhook.Matcher"),
 			}
-			_, matched := matcher.MatchProcessInfo(tt.process)
+			sel, matched := matcher.MatchProcessInfo(tt.process)
 			assert.Equal(t, tt.want, matched)
+			if tt.wantSel != nil {
+				assert.Equal(t, *tt.wantSel, sel)
+			}
 		})
 	}
 }
@@ -117,9 +158,4 @@ func TestNewPodMatcher(t *testing.T) {
 		assert.NotNil(t, matcher)
 		assert.True(t, matcher.HasSelectionCriteria())
 	})
-}
-
-func strToGlob(s string) *services.GlobAttr {
-	v := services.NewGlob(s)
-	return &v
 }

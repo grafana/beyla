@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 // Status represents the injection state of a pod.
@@ -394,8 +395,10 @@ func processMetadataFromInformer(pod *informer.ObjectMeta) *ProcessInfo {
 	ret.podLabels = pod.Labels
 	ret.podAnnotations = pod.Annotations
 
+	ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: pod.Name, Kind: "Pod"})
 	for _, owner := range owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+		ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: owner.Name, Kind: owner.Kind})
 	}
 	return &ret
 }

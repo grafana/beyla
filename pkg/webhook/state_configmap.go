@@ -228,12 +228,9 @@ func trimContainerIDScheme(containerID string) string {
 // and the configured OTLP endpoint/protocol. Each selector becomes one Rule whose
 // Config.Env carries the OTLP destination env vars.
 func buildInjectConfig(instrument configmap.WebhookInstrument, endpoint, protocol string) configmap.InjectConfig {
-	var otlpEnv []corev1.EnvVar
-	if endpoint != "" {
-		otlpEnv = append(otlpEnv, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint})
-	}
-	if protocol != "" {
-		otlpEnv = append(otlpEnv, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol})
+	otlpEnv := []corev1.EnvVar{
+		{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint},
+		{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol},
 	}
 	rules := make([]configmap.Rule, 0, len(instrument))
 	for _, sel := range instrument {

@@ -1,5 +1,11 @@
 package configmap
 
+import (
+	"slices"
+
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+)
+
 // Owner is a single link in a pod's ownership chain (e.g. ReplicaSet, Deployment).
 type Owner struct {
 	Name string
@@ -20,33 +26,17 @@ type MatchInput struct {
 // An empty or unset field is a wildcard.
 func (s Selector) Match(in MatchInput) bool {
 	// Namespaces: any must match (OR), empty = all namespaces
-	if len(s.Namespaces) > 0 {
-		matched := false
-		for i := range s.Namespaces {
-			if s.Namespaces[i].MatchString(in.Namespace) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
+	if len(s.Namespaces) > 0 && !slices.ContainsFunc(s.Namespaces, func(g services.GlobAttr) bool {
+		return g.MatchString(in.Namespace)
+	}) {
+		return false
 	}
 
 	// OwnerName + OwnerKind: any link in the chain must satisfy both (OR across chain)
-	if s.OwnerName.IsSet() || s.OwnerKind != "" {
-		matched := false
-		for _, o := range in.OwnerChain {
-			kindOK := s.OwnerKind == "" || s.OwnerKind == o.Kind
-			nameOK := s.OwnerName.MatchString(o.Name)
-			if kindOK && nameOK {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
+	if (s.OwnerName.IsSet() || s.OwnerKind != "") && !slices.ContainsFunc(in.OwnerChain, func(o Owner) bool {
+		return (s.OwnerKind == "" || s.OwnerKind == o.Kind) && s.OwnerName.MatchString(o.Name)
+	}) {
+		return false
 	}
 
 	// PodLabels: all must match (AND), empty = all pods

@@ -15,6 +15,7 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	svcextra "github.com/grafana/beyla/v3/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 func TestErrorResponse(t *testing.T) {
@@ -899,6 +900,7 @@ func TestProcessMetadata(t *testing.T) {
 		checkMetadata    map[string]string
 		checkLabels      map[string]string
 		checkAnnotations map[string]string
+		checkOwnerChain  []configmap.Owner
 	}{
 		{
 			name: "simple pod metadata",
@@ -962,6 +964,22 @@ func TestProcessMetadata(t *testing.T) {
 				services.AttrOwnerName: "my-cronjob",
 			},
 		},
+		{
+			// ownersFrom heuristically expands a ReplicaSet into [ReplicaSet, Deployment].
+			// ownerChain must contain both so OwnerName/OwnerKind selectors can match either.
+			name: "pod with replicaset expands to deployment chain",
+			meta: &metav1.ObjectMeta{
+				Name:      "my-pod-abc-xyz",
+				Namespace: "prod",
+				OwnerReferences: []metav1.OwnerReference{
+					{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "my-deploy-abc"},
+				},
+			},
+			checkOwnerChain: []configmap.Owner{
+				{Name: "my-deploy-abc", Kind: "ReplicaSet"},
+				{Name: "my-deploy", Kind: "Deployment"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -984,6 +1002,10 @@ func TestProcessMetadata(t *testing.T) {
 
 			if tt.checkAnnotations != nil {
 				assert.Equal(t, tt.checkAnnotations, info.podAnnotations)
+			}
+
+			if tt.checkOwnerChain != nil {
+				assert.Equal(t, tt.checkOwnerChain, info.ownerChain)
 			}
 		})
 	}

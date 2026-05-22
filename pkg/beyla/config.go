@@ -182,6 +182,8 @@ type Config struct {
 	// WARNING: This is purely experimental and undocumented feature and can be removed in the future without warning.
 	Injector SDKInject `yaml:"injector"`
 
+	HealthCheck obi.HealthCheckConfig `yaml:"health_check"`
+
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
 }

@@ -13,8 +13,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"gopkg.in/yaml.v3"
+
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
 const (

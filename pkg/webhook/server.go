@@ -314,7 +314,7 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	eligible = append(eligible, s.eligibleDeployments.Values()...)
 	sortEligible(eligible)
 
-	config := buildInjectConfig(s.cfg.Injector.Instrument, s.mutator.Endpoint(), s.mutator.Protocol())
+	config := buildInjectConfig(s.cfg.Injector, s.mutator.Endpoint(), s.mutator.Protocol())
 
 	return s.stateWriter.Write(ctx, &config, eligible)
 }

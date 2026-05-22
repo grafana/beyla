@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -224,22 +225,72 @@ func trimContainerIDScheme(containerID string) string {
 	return containerID
 }
 
-// buildInjectConfig constructs an InjectConfig from the Beyla instrument selectors
-// and the configured OTLP endpoint/protocol. Each selector becomes one Rule whose
-// Config.Env carries the OTLP destination env vars.
-func buildInjectConfig(instrument configmap.WebhookInstrument, endpoint, protocol string) configmap.InjectConfig {
-	otlpEnv := []corev1.EnvVar{
-		{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint},
-		{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol},
+// buildInjectConfig constructs an InjectConfig from the Beyla injector configuration.
+// Each selector becomes one Rule whose Config.Env carries all SDK configuration as
+// env vars, derived from Beyla as the single source of truth.
+func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) configmap.InjectConfig {
+	var env []corev1.EnvVar
+
+	// OTLP destination
+	env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint})
+	env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol})
+
+	// Signal exporters
+	env = append(env,
+		corev1.EnvVar{Name: "OTEL_TRACES_EXPORTER", Value: otlpOrNone(injCfg.Export.TracesEnabled())},
+		corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: otlpOrNone(injCfg.Export.MetricsEnabled())},
+		corev1.EnvVar{Name: "OTEL_LOGS_EXPORTER", Value: otlpOrNone(injCfg.Export.LogsEnabled())},
+	)
+
+	// Propagators
+	if len(injCfg.Propagators) > 0 {
+		env = append(env, corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: strings.Join(injCfg.Propagators, ",")})
 	}
-	rules := make([]configmap.Rule, 0, len(instrument))
-	for _, sel := range instrument {
+
+	// Sampler
+	if injCfg.DefaultSampler != nil {
+		if injCfg.DefaultSampler.Name != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER", Value: string(injCfg.DefaultSampler.Name)})
+		}
+		if injCfg.DefaultSampler.Arg != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER_ARG", Value: injCfg.DefaultSampler.Arg})
+		}
+	}
+
+	// Debug
+	if injCfg.Debug {
+		env = append(env, corev1.EnvVar{Name: "OTEL_INJECTOR_LOG_LEVEL", Value: "debug"})
+	}
+
+	// Static resource attributes
+	if len(injCfg.Resources.Attributes) > 0 {
+		keys := make([]string, 0, len(injCfg.Resources.Attributes))
+		for k := range injCfg.Resources.Attributes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		attrs := make([]string, 0, len(keys))
+		for _, k := range keys {
+			attrs = append(attrs, fmt.Sprintf("%s=%s", k, injCfg.Resources.Attributes[k]))
+		}
+		env = append(env, corev1.EnvVar{Name: "OTEL_INJECTOR_RESOURCE_ATTRIBUTES", Value: strings.Join(attrs, ",")})
+	}
+
+	rules := make([]configmap.Rule, 0, len(injCfg.Instrument))
+	for _, sel := range injCfg.Instrument {
 		rules = append(rules, configmap.Rule{
 			Selector: sel,
-			Config:   configmap.RuleConfig{Env: otlpEnv},
+			Config:   configmap.RuleConfig{Env: env},
 		})
 	}
 	return configmap.InjectConfig{Rules: rules}
+}
+
+func otlpOrNone(enabled bool) string {
+	if enabled {
+		return "otlp"
+	}
+	return "none"
 }
 
 func stateConfigMapName(daemonSetName, nodeName string) string {

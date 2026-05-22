@@ -47,6 +47,9 @@ func processAMQPBuffer(pkt *largebuf.LargeBuffer, direction uint8) (bool, []AMQP
 	}
 
 	reader := pkt.NewReader()
+	if !amqpparser.IsLikelyAMQP(&reader) {
+		return false, nil, nil
+	}
 	result, err := amqpparser.Parse(&reader)
 	if err != nil {
 		if errors.Is(err, amqpparser.ErrNotAMQP) {

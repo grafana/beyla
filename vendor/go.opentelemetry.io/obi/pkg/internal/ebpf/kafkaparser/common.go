@@ -30,6 +30,35 @@ const (
 	KafkaMaxPayloadLen = 20 * 1024 * 1024 // 20 MB max, 1MB is default for most Kafka installations
 )
 
+var (
+	errKafkaPacketTooShortForRequestHeader  = errors.New("packet too short for Kafka request header")
+	errKafkaInvalidClientIDSize             = errors.New("invalid client ID size")
+	errKafkaPacketTooShortForClientID       = errors.New("packet too short for client ID")
+	errKafkaPacketTooShortForResponseHeader = errors.New("packet too short for Kafka response header")
+	errKafkaTaggedFieldValueExceedsBuffer   = errors.New("tagged field value exceeds buffer")
+	errKafkaVarintIncomplete                = errors.New("data ended before varint was complete")
+	errKafkaIllegalVarint                   = errors.New("illegal varint")
+	errKafkaReqMessageSizeTooSmall          = errors.New("invalid Kafka request header: message size too small")
+	errKafkaReqAPIVersionNegative           = errors.New("invalid Kafka request header: API version is negative")
+	errKafkaReqMessageSizeTooLarge          = errors.New("invalid Kafka request header: message size exceeds maximum payload length")
+	errKafkaReqUnsupportedFetchVersion      = errors.New("invalid Kafka request header: unsupported API key version for Fetch")
+	errKafkaReqUnsupportedProduceVersion    = errors.New("invalid Kafka request header: unsupported API key version for Produce")
+	errKafkaReqUnsupportedMetadataVersion   = errors.New("invalid Kafka request header: unsupported API key version for Metadata")
+	errKafkaReqUnsupportedAPIKey            = errors.New("invalid Kafka request header: unsupported API key")
+	errKafkaReqCorrelationIDNegative        = errors.New("invalid Kafka request header: correlation ID is negative")
+	errKafkaRespSizeTooSmall                = errors.New("invalid Kafka response header: size too small")
+	errKafkaRespMessageSizeTooLarge         = errors.New("invalid Kafka response header: message size exceeds maximum payload length")
+	errKafkaRespCorrelationIDNegative       = errors.New("invalid Kafka response header: correlation ID is negative")
+	errKafkaRespCorrelationIDMismatch       = errors.New("invalid Kafka response header: correlation ID does not match request header")
+	errKafkaPacketTooShortForTopicUUID      = errors.New("packet too short for topic UUID")
+	errKafkaStringSizeExceedsPacket         = errors.New("string size exceeds packet size")
+	errKafkaInvalidCharactersInString       = errors.New("invalid characters in string")
+	errKafkaPacketTooShortForStringLength   = errors.New("packet too short for string length")
+	errKafkaInvalidStringSize               = errors.New("invalid string size")
+	errKafkaDataTooShortForInt32            = errors.New("data too short for int32")
+	errKafkaDataTooShortForInt64            = errors.New("data too short for int64")
+)
+
 type KafkaAPIKey int8
 
 const (
@@ -93,7 +122,7 @@ func (h KafkaRequestHeader) NewBodyReader() (largebuf.LargeBufferReader, error) 
 
 func NewKafkaRequestHeader(lb *largebuf.LargeBuffer) (KafkaRequestHeader, error) {
 	if lb.Len() < MinKafkaRequestLen {
-		return KafkaRequestHeader{}, errors.New("packet too short for Kafka request header")
+		return KafkaRequestHeader{}, errKafkaPacketTooShortForRequestHeader
 	}
 
 	h := KafkaRequestHeader{lb: lb}
@@ -109,12 +138,12 @@ func NewKafkaRequestHeader(lb *largebuf.LargeBuffer) (KafkaRequestHeader, error)
 	}
 
 	if clientIDLen < 0 {
-		return KafkaRequestHeader{}, errors.New("invalid client ID size")
+		return KafkaRequestHeader{}, errKafkaInvalidClientIDSize
 	}
 
 	clientIDEnd := 14 + int(clientIDLen)
 	if lb.Len() < clientIDEnd {
-		return KafkaRequestHeader{}, errors.New("packet too short for client ID")
+		return KafkaRequestHeader{}, errKafkaPacketTooShortForClientID
 	}
 
 	h.clientIDLen = clientIDLen
@@ -137,7 +166,7 @@ type KafkaResponseHeader struct {
 
 func ParseKafkaResponseHeader(r *largebuf.LargeBufferReader, requestHeader KafkaRequestHeader) (*KafkaResponseHeader, error) {
 	if r.Remaining() < MinKafkaResponseLen {
-		return nil, errors.New("packet too short for Kafka response header")
+		return nil, errKafkaPacketTooShortForResponseHeader
 	}
 	msgSizeBytes, err := r.ReadN(Int32Len)
 	if err != nil {
@@ -203,7 +232,7 @@ func skipTaggedFieldsAt(lb *largebuf.LargeBuffer, off int) (int, error) {
 			return 0, err
 		}
 		if tagLen < 0 || tagLen > lb.Len()-off-n {
-			return 0, errors.New("tagged field value exceeds buffer")
+			return 0, errKafkaTaggedFieldValueExceedsBuffer
 		}
 		off += n + tagLen
 	}
@@ -217,7 +246,7 @@ func readUVarintAt(lb *largebuf.LargeBuffer, off int) (int, int, error) {
 	for {
 		b, err := lb.U8At(off + n)
 		if err != nil {
-			return 0, 0, errors.New("data ended before varint was complete")
+			return 0, 0, errKafkaVarintIncomplete
 		}
 		n++
 		if b&0x80 == 0 {
@@ -227,60 +256,60 @@ func readUVarintAt(lb *largebuf.LargeBuffer, off int) (int, int, error) {
 		value |= int(b&0x7F) << shift
 		shift += 7
 		if shift > 28 {
-			return 0, 0, errors.New("illegal varint")
+			return 0, 0, errKafkaIllegalVarint
 		}
 	}
 }
 
 func (h KafkaRequestHeader) validate() error {
 	if h.MessageSize() < int32(MinKafkaRequestLen) {
-		return errors.New("invalid Kafka request header: message size too small")
+		return errKafkaReqMessageSizeTooSmall
 	}
 
 	if h.APIVersion() < 0 {
-		return errors.New("invalid Kafka request header: API version is negative")
+		return errKafkaReqAPIVersionNegative
 	}
 
 	if h.MessageSize() > KafkaMaxPayloadLen {
-		return errors.New("invalid Kafka request header: message size exceeds maximum payload length")
+		return errKafkaReqMessageSizeTooLarge
 	}
 
 	switch h.APIKey() {
 	case APIKeyFetch:
 		if h.APIVersion() > 18 { // latest: Fetch Request (Version: 17)
-			return errors.New("invalid Kafka request header: unsupported API key version for Fetch")
+			return errKafkaReqUnsupportedFetchVersion
 		}
 	case APIKeyProduce:
 		if h.APIVersion() > 13 { // latest: Produce Request (Version: 13)
-			return errors.New("invalid Kafka request header: unsupported API key version for Produce")
+			return errKafkaReqUnsupportedProduceVersion
 		}
 	case APIKeyMetadata:
 		if h.APIVersion() < 10 || h.APIVersion() > 13 { // latest: Metadata Request (Version: 13), only versions 10-13 contain topic_id which we are interested in
-			return errors.New("invalid Kafka request header: unsupported API key version for Metadata")
+			return errKafkaReqUnsupportedMetadataVersion
 		}
 	default:
-		return errors.New("invalid Kafka request header: unsupported API key")
+		return errKafkaReqUnsupportedAPIKey
 	}
 	if h.CorrelationID() < 0 {
-		return errors.New("invalid Kafka request header: correlation ID is negative")
+		return errKafkaReqCorrelationIDNegative
 	}
 	return nil
 }
 
 func validateKafkaResponseHeader(header *KafkaResponseHeader, requestHeader KafkaRequestHeader) error {
 	if header.MessageSize < MinKafkaResponseLen {
-		return errors.New("invalid Kafka response header: size too small")
+		return errKafkaRespSizeTooSmall
 	}
 
 	if header.MessageSize > KafkaMaxPayloadLen {
-		return errors.New("invalid Kafka response header: message size exceeds maximum payload length")
+		return errKafkaRespMessageSizeTooLarge
 	}
 
 	if header.CorrelationID < 0 {
-		return errors.New("invalid Kafka response header: correlation ID is negative")
+		return errKafkaRespCorrelationIDNegative
 	}
 	if header.CorrelationID != requestHeader.CorrelationID() {
-		return errors.New("invalid Kafka response header: correlation ID does not match request header")
+		return errKafkaRespCorrelationIDMismatch
 	}
 	return nil
 }
@@ -321,7 +350,7 @@ func readArrayLength(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (
 func readUUID(r *largebuf.LargeBufferReader) (*UUID, error) {
 	b, err := r.ReadN(UUIDLen)
 	if err != nil {
-		return nil, errors.New("packet too short for topic UUID")
+		return nil, errKafkaPacketTooShortForTopicUUID
 	}
 	var uuid UUID
 	copy(uuid[:], b)
@@ -337,14 +366,14 @@ func readString(r *largebuf.LargeBufferReader, header KafkaRequestHeader, nullab
 		return "", nil // return empty string for null
 	}
 	if r.Remaining() < size {
-		return "", errors.New("string size exceeds packet size")
+		return "", errKafkaStringSizeExceedsPacket
 	}
 	b, err := r.ReadN(size)
 	if err != nil {
-		return "", errors.New("string size exceeds packet size")
+		return "", errKafkaStringSizeExceedsPacket
 	}
 	if !validateKafkaString(b, size) {
-		return "", errors.New("invalid characters in string")
+		return "", errKafkaInvalidCharactersInString
 	}
 	return string(b), nil
 }
@@ -364,18 +393,18 @@ func readStringLength(r *largebuf.LargeBufferReader, header KafkaRequestHeader, 
 	if !isFlexible(header) {
 		// length is stored as a fixed size int16
 		if r.Remaining() < Int16Len {
-			return 0, errors.New("packet too short for string length")
+			return 0, errKafkaPacketTooShortForStringLength
 		}
 		b, err := r.ReadN(Int16Len)
 		if err != nil {
-			return 0, errors.New("packet too short for string length")
+			return 0, errKafkaPacketTooShortForStringLength
 		}
 		size := int16(binary.BigEndian.Uint16(b))
 		if nullable && size == -1 {
 			return 0, nil // return 0 for null
 		}
 		if size < 1 {
-			return 0, errors.New("invalid string size")
+			return 0, errKafkaInvalidStringSize
 		}
 		return int(size), nil
 	}
@@ -389,11 +418,11 @@ func readStringLength(r *largebuf.LargeBufferReader, header KafkaRequestHeader, 
 		return 0, nil // return 0 for null
 	}
 	if size <= 0 {
-		return 0, errors.New("invalid string size")
+		return 0, errKafkaInvalidStringSize
 	}
 	size-- // size is stored as a varint, so we subtract 1
 	if size < 0 {
-		return 0, errors.New("invalid string size")
+		return 0, errKafkaInvalidStringSize
 	}
 	return size, nil
 }
@@ -403,7 +432,7 @@ func readUnsignedVarint(r *largebuf.LargeBufferReader) (int, error) {
 	i := 0
 	for {
 		if r.Remaining() == 0 {
-			return 0, errors.New("data ended before varint was complete")
+			return 0, errKafkaVarintIncomplete
 		}
 		b, err := r.ReadN(1)
 		if err != nil {
@@ -416,7 +445,7 @@ func readUnsignedVarint(r *largebuf.LargeBufferReader) (int, error) {
 		value |= int(b[0]&0x7F) << i
 		i += 7
 		if i > 28 {
-			return 0, errors.New("illegal varint")
+			return 0, errKafkaIllegalVarint
 		}
 	}
 }
@@ -424,7 +453,7 @@ func readUnsignedVarint(r *largebuf.LargeBufferReader) (int, error) {
 func readInt32(r *largebuf.LargeBufferReader) (int, error) {
 	b, err := r.ReadN(Int32Len)
 	if err != nil {
-		return 0, errors.New("data too short for int32")
+		return 0, errKafkaDataTooShortForInt32
 	}
 	return int(binary.BigEndian.Uint32(b)), nil
 }
@@ -432,7 +461,7 @@ func readInt32(r *largebuf.LargeBufferReader) (int, error) {
 func readInt64(r *largebuf.LargeBufferReader) (int64, error) {
 	b, err := r.ReadN(Int64Len)
 	if err != nil {
-		return 0, errors.New("data too short for int64")
+		return 0, errKafkaDataTooShortForInt64
 	}
 	return int64(binary.BigEndian.Uint64(b)), nil
 }

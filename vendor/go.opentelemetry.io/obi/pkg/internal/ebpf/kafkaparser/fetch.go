@@ -23,19 +23,24 @@ type FetchRequest struct {
 	Topics []*FetchTopic
 }
 
+var (
+	errOffsetExceedsPacketSize = errors.New("offset exceeds packet size")
+	errNoTopics                = errors.New("no Topics found in fetch request")
+)
+
 func ParseFetchRequest(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*FetchRequest, error) {
 	if err := fetchRequestSkipUntilTopics(r, header); err != nil {
 		return nil, err
 	}
 	if r.Remaining() == 0 {
-		return nil, errors.New("offset exceeds packet size")
+		return nil, errOffsetExceedsPacketSize
 	}
 	topics, err := parseFetchTopics(r, header)
 	if err != nil {
 		return nil, err
 	}
 	if len(topics) == 0 {
-		return nil, errors.New("no Topics found in fetch request")
+		return nil, errNoTopics
 	}
 	return &FetchRequest{
 		Topics: topics,

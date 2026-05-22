@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"strconv"
 	"unsafe"
@@ -25,7 +24,17 @@ const (
 	responseStatusKey       = "Status: "
 )
 
-const fcgiFrameTypeParams = 4
+const (
+	fcgiVersion1          = 1
+	fcgiFrameTypeBeginReq = 1
+	fcgiFrameTypeUnknown  = 11
+	fcgiFrameTypeParams   = 4
+)
+
+var (
+	errFastCGIPayloadTooShort  = errors.New("payload too short")
+	errFastCGIHeaderReadFailed = errors.New("failed to read FastCGI header")
+)
 
 // fastCGIHeader represents the structure of a FastCGI header
 type fastCGIHeader struct {
@@ -43,7 +52,7 @@ func readFastCGIHeader(b []byte) (*fastCGIHeader, error) {
 	// FastCGI header is always 8 bytes
 	headerBytes := make([]byte, fastCGIRequestHeaderLen)
 	if _, err := io.ReadFull(reader, headerBytes); err != nil {
-		return nil, fmt.Errorf("failed to read FastCGI header: %w", err)
+		return nil, errFastCGIHeaderReadFailed
 	}
 
 	// Parse the header
@@ -51,22 +60,22 @@ func readFastCGIHeader(b []byte) (*fastCGIHeader, error) {
 	buffer := bytes.NewReader(headerBytes)
 
 	if err := binary.Read(buffer, binary.BigEndian, &header.Version); err != nil {
-		return nil, fmt.Errorf("failed to read version: %w", err)
+		return nil, errFastCGIHeaderReadFailed
 	}
 	if err := binary.Read(buffer, binary.BigEndian, &header.Type); err != nil {
-		return nil, fmt.Errorf("failed to read type: %w", err)
+		return nil, errFastCGIHeaderReadFailed
 	}
 	if err := binary.Read(buffer, binary.BigEndian, &header.RequestID); err != nil {
-		return nil, fmt.Errorf("failed to read request ID: %w", err)
+		return nil, errFastCGIHeaderReadFailed
 	}
 	if err := binary.Read(buffer, binary.BigEndian, &header.ContentLength); err != nil {
-		return nil, fmt.Errorf("failed to read content length: %w", err)
+		return nil, errFastCGIHeaderReadFailed
 	}
 	if err := binary.Read(buffer, binary.BigEndian, &header.PaddingLength); err != nil {
-		return nil, fmt.Errorf("failed to read padding length: %w", err)
+		return nil, errFastCGIHeaderReadFailed
 	}
 	if err := binary.Read(buffer, binary.BigEndian, &header.Reserved); err != nil {
-		return nil, fmt.Errorf("failed to read reserved byte: %w", err)
+		return nil, errFastCGIHeaderReadFailed
 	}
 
 	return header, nil
@@ -113,6 +122,22 @@ func maybeFastCGI(b *largebuf.LargeBuffer) bool {
 	if b.Len() <= fastCGIRequestHeaderLen {
 		return false
 	}
+	// FastCGI 1.0: every record starts with version=1 and a record type in
+	// 1..11. Cheap 2-byte check that filters ~99.98% of non-FastCGI payloads
+	// before the more expensive REQUEST_METHOD substring scan.
+
+	ver, err := b.U8At(0)
+
+	if err != nil || ver != fcgiVersion1 {
+		return false
+	}
+
+	frameType, err := b.U8At(1)
+
+	if err != nil || frameType < fcgiFrameTypeBeginReq || frameType > fcgiFrameTypeUnknown {
+		return false
+	}
+
 	return bytes.Contains(b.UnsafeView(), []byte(requestMethodKey))
 }
 
@@ -120,27 +145,27 @@ func parseHeader(b *largebuf.LargeBuffer) ([]byte, error) {
 	r := b.NewReader()
 	for {
 		if r.Remaining() < fastCGIRequestHeaderLen {
-			return nil, errors.New("payload too short")
+			return nil, errFastCGIPayloadTooShort
 		}
 		hdrBytes, err := r.ReadN(fastCGIRequestHeaderLen)
 		if err != nil {
-			return nil, errors.New("payload too short")
+			return nil, errFastCGIPayloadTooShort
 		}
 		hdr, err := readFastCGIHeader(hdrBytes)
 		if err != nil {
-			return nil, errors.New("payload too short")
+			return nil, errFastCGIPayloadTooShort
 		}
 
 		if hdr.Type == fcgiFrameTypeParams {
 			if r.Remaining() == 0 {
-				return nil, errors.New("payload too short")
+				return nil, errFastCGIPayloadTooShort
 			}
 			rest, _ := r.ReadN(r.Remaining())
 			return rest, nil
 		}
 		payloadOffset := int(hdr.ContentLength) + int(hdr.PaddingLength)
 		if err := r.Skip(payloadOffset); err != nil {
-			return nil, errors.New("payload too short")
+			return nil, errFastCGIPayloadTooShort
 		}
 	}
 }

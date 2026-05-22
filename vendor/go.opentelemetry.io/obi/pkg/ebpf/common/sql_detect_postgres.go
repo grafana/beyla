@@ -38,6 +38,17 @@ const (
 	pgHeaderLen = 5
 )
 
+var (
+	errPGTooShort                     = errors.New("too short")
+	errPGTooShortStatement            = errors.New("too short, while parsing statement")
+	errPGTooShortPortal               = errors.New("too short, while parsing portal")
+	errPGTooShortFormatCodes          = errors.New("too short, while parsing format codes")
+	errPGTooShortParams               = errors.New("too short, while parsing params")
+	errPGRemainingTooShortHeader      = errors.New("remaining buffer too short for message header")
+	errPGMalformedMessage             = errors.New("malformed Postgres message")
+	errPGRemainingTooShortMessageData = errors.New("remaining buffer too short for message data")
+)
+
 func isPostgres(b *largebuf.LargeBuffer) bool {
 	op, ok := isValidPostgresPayload(b)
 
@@ -80,13 +91,13 @@ func isValidPostgresPayload(b *largebuf.LargeBuffer) (byte, bool) {
 func msgBody(b *largebuf.LargeBuffer) ([]byte, error) {
 	size, err := b.I32BEAt(1)
 	if err != nil {
-		return nil, errors.New("too short")
+		return nil, errPGTooShort
 	}
 
 	msgSize := min(1+int(size), b.Len())
 
 	if msgSize < pgHeaderLen {
-		return nil, errors.New("too short")
+		return nil, errPGTooShort
 	}
 
 	return b.UnsafeViewAt(pgHeaderLen, msgSize-pgHeaderLen)
@@ -97,11 +108,11 @@ func msgBody(b *largebuf.LargeBuffer) ([]byte, error) {
 func msgBodyReader(b *largebuf.LargeBuffer) (largebuf.LargeBufferReader, error) {
 	size, err := b.I32BEAt(1)
 	if err != nil {
-		return largebuf.LargeBufferReader{}, errors.New("too short")
+		return largebuf.LargeBufferReader{}, errPGTooShort
 	}
 	end := min(1+int(size), b.Len())
 	if end < pgHeaderLen {
-		return largebuf.LargeBufferReader{}, errors.New("too short")
+		return largebuf.LargeBufferReader{}, errPGTooShort
 	}
 	return b.NewLimitedReader(pgHeaderLen, end)
 }
@@ -115,29 +126,29 @@ func parsePostgresBindCommand(b *largebuf.LargeBuffer) (string, string, []string
 
 	stmtBytes, err := r.ReadCStr()
 	if err != nil {
-		return "", "", nil, errors.New("too short, while parsing statement")
+		return "", "", nil, errPGTooShortStatement
 	}
 
 	portalBytes, err := r.ReadCStr()
 	if err != nil {
-		return "", "", nil, errors.New("too short, while parsing portal")
+		return "", "", nil, errPGTooShortPortal
 	}
 
 	// skip format codes: Int16 count + count*Int16 entries
 	formats, err := r.ReadI16BE()
 	if err != nil {
-		return "", "", nil, errors.New("too short, while parsing format codes")
+		return "", "", nil, errPGTooShortFormatCodes
 	}
 	if formats > 0 {
 		if err := r.Skip(2 * int(formats)); err != nil {
-			return "", "", nil, errors.New("too short, while parsing format codes")
+			return "", "", nil, errPGTooShortFormatCodes
 		}
 	}
 
 	// parse parameter values: Int16 count + repeated (Int32 length + bytes)
 	params, err := r.ReadI16BE()
 	if err != nil {
-		return "", "", nil, errors.New("too short, while parsing params")
+		return "", "", nil, errPGTooShortParams
 	}
 	if params <= 0 {
 		return string(stmtBytes), string(portalBytes), nil, nil
@@ -146,7 +157,7 @@ func parsePostgresBindCommand(b *largebuf.LargeBuffer) (string, string, []string
 	for range int(params) {
 		argLen, err := r.ReadI32BE()
 		if err != nil {
-			return "", "", nil, errors.New("too short, while parsing params")
+			return "", "", nil, errPGTooShortParams
 		}
 		if argLen < 0 {
 			// NULL parameter value (-1 in the protocol)
@@ -155,7 +166,7 @@ func parsePostgresBindCommand(b *largebuf.LargeBuffer) (string, string, []string
 		n := min(int(argLen), r.Remaining())
 		arg, err := r.ReadN(n)
 		if err != nil {
-			return "", "", nil, errors.New("too short, while parsing params")
+			return "", "", nil, errPGTooShortParams
 		}
 		args = append(args, string(arg))
 	}
@@ -239,7 +250,7 @@ func (it *postgresMessageIterator) next() (msg postgresMessage) {
 		return
 	}
 	if it.r.Remaining() < sqlprune.PostgresHdrSize {
-		it.err = errors.New("remaining buffer too short for message header")
+		it.err = errPGRemainingTooShortHeader
 		return
 	}
 
@@ -254,13 +265,13 @@ func (it *postgresMessageIterator) next() (msg postgresMessage) {
 	size := int32(binary.BigEndian.Uint32(hdrBuf[1:5]))
 
 	if size < sqlprune.PostgresHdrSize-1 {
-		it.err = errors.New("malformed Postgres message")
+		it.err = errPGMalformedMessage
 		return
 	}
 
 	payloadSize := size - sqlprune.PostgresHdrSize + 1
 	if it.r.Remaining() < int(payloadSize) {
-		it.err = fmt.Errorf("remaining buffer too short for message data: expected %d bytes, got %d", payloadSize, it.r.Remaining())
+		it.err = errPGRemainingTooShortMessageData
 		return
 	}
 

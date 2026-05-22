@@ -5,8 +5,16 @@ package couchbasekv // import "go.opentelemetry.io/obi/pkg/internal/ebpf/couchba
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"iter"
+)
+
+var (
+	errPacketTooShort   = errors.New("packet too short")
+	errInvalidMagic     = errors.New("invalid magic byte")
+	errInvalidKeyLength = errors.New("invalid key length")
+	errInvalidDataType  = errors.New("invalid data type")
+	errInvalidBodyType  = errors.New("invalid body length")
 )
 
 // Header is a view into a 24-byte memcached binary protocol header.
@@ -84,12 +92,12 @@ func (h Header) IsResponse() bool { return h.Magic().IsResponse() }
 // underlying memory of pkt.
 func ParseHeader(pkt []byte) (Header, error) {
 	if len(pkt) < HeaderLen {
-		return nil, fmt.Errorf("packet too short for header: got %d bytes, need %d", len(pkt), HeaderLen)
+		return nil, errPacketTooShort
 	}
 
 	magic := Magic(pkt[0])
 	if !magic.IsValid() {
-		return nil, fmt.Errorf("invalid magic byte: 0x%02x", pkt[0])
+		return nil, errInvalidMagic
 	}
 
 	h := Header(pkt[:HeaderLen])
@@ -240,17 +248,16 @@ func (p Packet) valueEnd() int {
 // validateHeader checks for basic validity of the parsed header.
 func validateHeader(h Header) error {
 	if int(h.KeyLen()) > MaxKeyLen {
-		return fmt.Errorf("invalid key length: %d > max(%d)", h.KeyLen(), MaxKeyLen)
+		return errInvalidKeyLength
 	}
 
 	if !h.DataType().IsValid() {
-		return fmt.Errorf("invalid data type: 0x%02x has reserved bits set", byte(h.DataType()))
+		return errInvalidDataType
 	}
 
 	minBodyLen := int(h.FramingExtrasLen()) + int(h.ExtrasLen()) + int(h.KeyLen())
 	if int(h.BodyLen()) < minBodyLen {
-		return fmt.Errorf("invalid body length: %d < framingExtras(%d) + extras(%d) + key(%d)",
-			h.BodyLen(), h.FramingExtrasLen(), h.ExtrasLen(), h.KeyLen())
+		return errInvalidBodyType
 	}
 
 	return nil

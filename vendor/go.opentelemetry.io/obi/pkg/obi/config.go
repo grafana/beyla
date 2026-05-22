@@ -332,6 +332,9 @@ var DefaultConfig = Config{
 		Enabled: true,
 		Timeout: 10 * time.Second,
 	},
+	HealthCheck: HealthCheckConfig{
+		Port: 0,
+	},
 }
 
 type Config struct {
@@ -421,6 +424,12 @@ type Config struct {
 
 	NodeJS NodeJSConfig `yaml:"nodejs"`
 	Java   JavaConfig   `yaml:"javaagent"`
+
+	HealthCheck HealthCheckConfig `yaml:"health_check"`
+}
+
+type HealthCheckConfig struct {
+	Port int `yaml:"port" env:"OTEL_EBPF_HEALTH_CHECK_PORT"`
 }
 
 func (c *Config) Unmarshal(component *confmap.Conf) error {

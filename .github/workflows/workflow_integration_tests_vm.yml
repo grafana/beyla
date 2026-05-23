@@ -25,9 +25,10 @@ jobs:
   vm-test-matrix:
     name: "Build VM integration matrix"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
+      kernels: ${{ steps.build-kernel-matrix.outputs.kernels }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -37,7 +38,7 @@ jobs:
       - name: Generate OBI tests
         run: make generate-obi-tests
 
-      - name: build matrix
+      - name: Build test matrix
         id: build-matrix
         env:
           # 5 partitions, one for each of:
@@ -52,28 +53,22 @@ jobs:
           echo -n "matrix=" >> $GITHUB_OUTPUT
           make vm-integration-test-matrix-json >> $GITHUB_OUTPUT
 
-  test:
-    name: kernel ${{ matrix.kernel.kernel-version }} ${{ matrix.kernel.arch }} ${{ matrix.test.description }}
+      - name: Build kernel matrix
+        id: build-kernel-matrix
+        env:
+          OBI_KERNELS_YAML: .obi-src/internal/test/vm/kernels.yaml
+        run: |
+          echo -n "kernels=" >> "$GITHUB_OUTPUT"
+          bash .obi-src/scripts/kernel-matrix-json.sh --kind=integration >> "$GITHUB_OUTPUT"
+
+  prep:
+    name: "Prep VM test artifacts"
     needs: vm-test-matrix
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
-      pull-requests: write
-      # required for CODECOV token
       id-token: write
-      checks: write
-      # Required for uploading artifacts
-      actions: write
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        kernel:
-          - kernel-version: "5.15.152"
-            arch: "x86_64"
-          - kernel-version: "6.10.6"
-            arch: "x86_64"
-        test: ${{ fromJson(needs.vm-test-matrix.outputs.matrix).include }}
     steps:
       - name: Free up disk space
         run: |
@@ -140,17 +135,25 @@ jobs:
       - name: Generate files
         run: make prereqs vendor-obi
 
-      - name: Install QEMU and musl-tools
+      - name: Install qemu-utils and musl-tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-utils qemu-system-x86 musl-tools
+          sudo apt-get install -y --no-install-recommends qemu-utils musl-tools
 
       - name: Pre-compile Go integration tests
         run: |
           mkdir compiled-tests
           CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/testgenerated/integration
 
+      - name: Cache Docker images
+        id: docker-images-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 # zizmor: ignore[cache-poisoning] keyed on hash of compose+Dockerfile inputs
+        with:
+          path: compiled-tests/docker-images.tar
+          key: vm-docker-images-${{ hashFiles('internal/testgenerated/integration/docker-compose-multiexec*.yml', 'internal/testgenerated/integration/**/Dockerfile*', 'internal/test/beyla_extensions/**/Dockerfile*') }}
+
       - name: Pre-build Docker images for VM tests
+        if: steps.docker-images-cache.outputs.cache-hit != 'true'
         run: |
           # Auto-discover Docker images from compose files and build them on
           # the host at native speed, avoiding slow in-VM builds under QEMU
@@ -197,6 +200,116 @@ jobs:
             docker builder prune -af
           fi
 
+      - name: Cache rootfs.qcow2
+        id: rootfs-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 # zizmor: ignore[cache-poisoning] keyed on hash of VM Dockerfile
+        with:
+          path: compiled-tests/rootfs.qcow2
+          key: vm-rootfs-${{ hashFiles('internal/testgenerated/vm/Dockerfile') }}
+
+      - name: Build rootfs.qcow2
+        if: steps.rootfs-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo make -C internal/testgenerated/vm WORKDIR="$(pwd)" build-rootfs
+          sudo chown "$(id -u):$(id -g)" rootfs.qcow2
+          mv rootfs.qcow2 compiled-tests/rootfs.qcow2
+          ls -lh compiled-tests/rootfs.qcow2
+
+      - name: Stage generated test tree
+        run: |
+          tar cf compiled-tests/testgenerated.tar internal/testgenerated schemas
+
+      - name: Upload prep artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vm-prep-${{ github.run_id }}
+          path: compiled-tests
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  test:
+    name: kernel ${{ matrix.kernel.id }} ${{ matrix.test.description }}
+    needs: [vm-test-matrix, prep]
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+      # required for CODECOV token
+      id-token: write
+      checks: write
+      # Required for uploading artifacts
+      actions: write
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: ${{ fromJson(needs.vm-test-matrix.outputs.kernels).include }}
+        test: ${{ fromJson(needs.vm-test-matrix.outputs.matrix).include }}
+    steps:
+      - name: Free up disk space
+        run: |
+          # Free disk space without pruning docker — we will load cached
+          # images from the prep artifact.
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft /opt/google
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Download prep artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: vm-prep-${{ github.run_id }}
+          path: compiled-tests
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-utils qemu-system-x86
+
+      - name: Restore generated test tree
+        run: |
+          tar xf compiled-tests/testgenerated.tar
+          rm compiled-tests/testgenerated.tar
+
+      - name: Stage rootfs.qcow2
+        run: |
+          mv compiled-tests/rootfs.qcow2 ./rootfs.qcow2
+
+      - name: Cache LVH kernel artifacts
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 # zizmor: ignore[cache-poisoning] keyed on pinned LVH tag from kernels.yaml
+        with:
+          path: |
+            .obi-src/internal/test/vm/lvh/out/vmlinuz-${{ matrix.kernel.id }}-amd64
+            .obi-src/internal/test/vm/lvh/out/vmlinuz-${{ matrix.kernel.id }}-amd64.config
+            .obi-src/internal/test/vm/lvh/out/vmlinuz-${{ matrix.kernel.id }}-amd64.buildinfo
+            .obi-src/internal/test/vm/lvh/out/modules-${{ matrix.kernel.id }}-amd64
+          key: lvh-${{ matrix.kernel.lvh_tag }}-amd64
+
+      - name: Resolve kernel (pull from LVH if needed)
+        id: kernel
+        env:
+          KERNEL_ID: ${{ matrix.kernel.id }}
+        run: |
+          eval "$(bash .obi-src/internal/test/vm/prepare-kernel.sh "$KERNEL_ID" amd64)"
+          echo "kernel=$KERNEL" >> "$GITHUB_OUTPUT"
+          echo "modules-dir=$MODULES_DIR" >> "$GITHUB_OUTPUT"
+          echo "Kernel:  $KERNEL"
+          echo "Modules: $MODULES_DIR"
+
       - name: Run VM integration tests (${{ matrix.test.description }})
         env:
           # zizmor template-injection fixes: pass data as env vars
@@ -204,10 +317,11 @@ jobs:
           MATRIX_JSON: ${{ toJson(matrix.test) }}
           MATRIX_TEST_PATTERN: ${{ matrix.test.test_pattern }}
           RUN_NUMBER: ${{ github.run_number }}
-          ARCH: ${{ matrix.kernel.arch }}
-          KERNEL_VERSION: ${{ matrix.kernel.kernel-version }}
+          KERNEL_ID: ${{ matrix.kernel.id }}
+          KERNEL: ${{ steps.kernel.outputs.kernel }}
+          MODULES_DIR: ${{ steps.kernel.outputs.modules-dir }}
         run: |
-          echo "VM Partition for kernel $KERNEL_VERSION"
+          echo "VM Partition for kernel ${KERNEL_ID}"
           echo "${MATRIX_JSON}"
 
           if [ -z "${MATRIX_TEST_PATTERN}" ]; then
@@ -217,8 +331,10 @@ jobs:
 
           # Run VM tests with pre-compiled tests
           sudo make -C internal/testgenerated/vm \
-            KERNEL_VER=${KERNEL_VERSION} \
-            ARCH=${ARCH} \
+            WORKDIR="$(pwd)" \
+            KERNEL="$KERNEL" \
+            MODULES_DIR="$MODULES_DIR" \
+            ARCH=amd64 \
             TEST_PATTERN="${MATRIX_TEST_PATTERN}" \
             RUN_NUMBER="${RUN_NUMBER}" \
             PRECOMPILED_TESTS_DIR="$(pwd)/compiled-tests" \
@@ -239,14 +355,14 @@ jobs:
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: ./testoutput/itest-covdata.txt
-          flags: integration-test-vm-${{ matrix.kernel.arch }}-${{ matrix.kernel.kernel-version }}
-          name: vm-integration-test-coverage-${{ matrix.kernel.kernel-version }}-${{ matrix.kernel.arch }}-${{ matrix.test.id }}-${{ github.run_number }}
+          flags: integration-test-vm-${{ matrix.kernel.id }}
+          name: vm-integration-test-coverage-${{ matrix.kernel.id }}-${{ matrix.test.id }}-${{ github.run_number }}
 
       - name: Upload integration test logs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: vm-integration-test-logs-${{ matrix.kernel.kernel-version }}-${{ matrix.kernel.arch }}-${{ matrix.test.id }}-${{ github.run_number }}
+          name: vm-integration-test-logs-${{ matrix.kernel.id }}-${{ matrix.test.id }}-${{ github.run_number }}
           path: |
             testoutput/*.log
             testoutput/kind

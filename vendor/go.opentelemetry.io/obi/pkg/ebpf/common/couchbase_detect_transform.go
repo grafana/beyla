@@ -32,6 +32,8 @@ type CouchbaseInfo struct {
 	IsError    bool
 }
 
+var errInvalidCouchbase = errors.New("no valid Couchbase request packets found")
+
 // buildCouchbaseStatement builds a db.query.text string for a KV request packet.
 // See devdocs/protocols/tcp/couchbase.md for the full format specification.
 //
@@ -241,7 +243,7 @@ func processCouchbaseEvent(connInfo BpfConnectionInfoT, requestBuf []byte, respo
 	for reqPacket, err := range couchbasekv.ParsePackets(requestBuf) {
 		if err != nil {
 			if !hasPackets {
-				return nil, true, errors.New("no valid Couchbase request packets found")
+				return nil, true, errInvalidCouchbase
 			}
 			break
 		}

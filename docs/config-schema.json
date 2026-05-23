@@ -979,6 +979,15 @@
         "response"
       ]
     },
+    "HealthCheckConfig": {
+      "properties": {
+        "port": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_HEALTH_CHECK_PORT"
+        }
+      },
+      "type": "object"
+    },
     "HostIDConfig": {
       "properties": {
         "override": {
@@ -2424,6 +2433,9 @@
     "grafana": {
       "$ref": "#/$defs/GrafanaConfig",
       "description": "Grafana overrides some values of the otel.MetricsConfig and otel.TracesConfig below for a simpler submission of OTEL metrics to Grafana Cloud"
+    },
+    "health_check": {
+      "$ref": "#/$defs/HealthCheckConfig"
     },
     "injector": {
       "$ref": "#/$defs/SDKInject",

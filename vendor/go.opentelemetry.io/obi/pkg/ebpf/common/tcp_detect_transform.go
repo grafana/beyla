@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
@@ -405,6 +406,17 @@ func matchAMQP(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer,
 }
 
 func matchMQTT(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
+	isLikelyMQTT := func(pkt *largebuf.LargeBuffer) bool {
+		first, err := pkt.U8At(0)
+
+		return err == nil && mqttparser.IsLikelyMQTT(first, pkt.Len())
+	}
+	// Cheap prefilter: if neither buffer has a plausible MQTT fixed-header
+	// byte 0, skip the variable-length parsing entirely.
+	if !isLikelyMQTT(requestBuffer) && !isLikelyMQTT(responseBuffer) {
+		return request.Span{}, false, false, nil
+	}
+
 	if !isMQTT(requestBuffer) && !isMQTT(responseBuffer) {
 		return request.Span{}, false, false, nil
 	}

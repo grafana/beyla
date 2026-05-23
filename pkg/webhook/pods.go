@@ -59,7 +59,7 @@ func addMetadata(pp *ProcessInfo, info *informer.ObjectMeta) *ProcessInfo {
 	return ret
 }
 
-func deploymentFromProcess(a *ProcessInfo) *configmap.EligibleDeployment {
+func deploymentFromProcess(a *ProcessInfo, stateHash string) *configmap.EligibleDeployment {
 	namespace := a.metadata[services.AttrNamespace]
 	deployment := a.metadata[attr.K8sDeploymentName.Prom()]
 
@@ -70,6 +70,7 @@ func deploymentFromProcess(a *ProcessInfo) *configmap.EligibleDeployment {
 		Kind:      "Deployment",
 		Name:      deployment,
 		Language:  language,
+		Hash:      stateHash,
 	}
 }
 

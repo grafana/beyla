@@ -27,6 +27,8 @@ type MetadataResponse struct {
 	Topics []*MetadataTopic
 }
 
+var errNoTopicsInMetadata = errors.New("no Topics found in metadata response")
+
 func ParseMetadataResponse(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*MetadataResponse, error) {
 	if err := metadataResponseSkipUntilTopics(r, header); err != nil {
 		return nil, err
@@ -36,7 +38,7 @@ func ParseMetadataResponse(r *largebuf.LargeBufferReader, header KafkaRequestHea
 		return nil, err
 	}
 	if len(topics) == 0 {
-		return nil, errors.New("no Topics found in metadata response")
+		return nil, errNoTopicsInMetadata
 	}
 	return &MetadataResponse{
 		Topics: topics,

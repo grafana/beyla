@@ -27,6 +27,8 @@ type PublishPacket struct {
 	PacketID uint16
 }
 
+var errInsufficientPublishData = errors.New("insufficient data for PUBLISH packet")
+
 // ParsePublishPacket parses an MQTT PUBLISH packet.
 // offset should point to the start of the variable header (after fixed header).
 // flags should contain the flags byte from the fixed header.
@@ -34,7 +36,7 @@ func ParsePublishPacket(pkt []byte, offset Offset, flags uint8) (*PublishPacket,
 	var publish PublishPacket
 
 	if offset >= len(pkt) {
-		return &publish, offset, errors.New("insufficient data for PUBLISH packet")
+		return &publish, offset, errInsufficientPublishData
 	}
 
 	r := NewPublishPacketReader(pkt, offset)

@@ -5,7 +5,13 @@ package mqttparser // import "go.opentelemetry.io/obi/pkg/internal/ebpf/mqttpars
 
 import (
 	"errors"
-	"fmt"
+)
+
+var (
+	errNotEnoughData          = errors.New("not enough data for variable byte integer")
+	errBadIntEncoding         = errors.New("variable byte integer encoding exceeds 4 bytes or incomplete")
+	errNotEnoughStringLen     = errors.New("not enough data for string length")
+	errNotEnoughStringContent = errors.New("not enough data for string content")
 )
 
 // PacketReader provides primitive binary reading operations for MQTT packets.
@@ -39,7 +45,7 @@ func (r *PacketReader) Remaining() int {
 // Skip advances the offset by n bytes.
 func (r *PacketReader) Skip(n int) error {
 	if r.offset+n > len(r.pkt) {
-		return fmt.Errorf("not enough data to skip by %d bytes, remaining: %d", n, r.Remaining())
+		return errNotEnoughData
 	}
 	r.offset += n
 	return nil
@@ -48,7 +54,7 @@ func (r *PacketReader) Skip(n int) error {
 // ReadUint8 reads a single byte.
 func (r *PacketReader) ReadUint8() (uint8, error) {
 	if r.offset >= len(r.pkt) {
-		return 0, errors.New("not enough data for uint8")
+		return 0, errNotEnoughData
 	}
 	value := r.pkt[r.offset]
 	r.offset++
@@ -58,7 +64,7 @@ func (r *PacketReader) ReadUint8() (uint8, error) {
 // ReadUint16 reads a big-endian 16-bit unsigned integer.
 func (r *PacketReader) ReadUint16() (uint16, error) {
 	if r.offset+2 > len(r.pkt) {
-		return 0, errors.New("not enough data for uint16")
+		return 0, errNotEnoughData
 	}
 	value := uint16(r.pkt[r.offset])<<8 | uint16(r.pkt[r.offset+1])
 	r.offset += 2
@@ -73,7 +79,7 @@ func (r *PacketReader) ReadUint16() (uint16, error) {
 //   - Maximum 4 bytes (max value: 268,435,455 = 2^28 - 1)
 func (r *PacketReader) ReadVariableByteInteger() (int, error) {
 	if r.offset >= len(r.pkt) {
-		return 0, errors.New("not enough data for variable byte integer")
+		return 0, errNotEnoughData
 	}
 
 	multiplier := 1 // Multiplier for current byte position (1, 128, 128^2, 128^3)
@@ -94,18 +100,18 @@ func (r *PacketReader) ReadVariableByteInteger() (int, error) {
 		pos++
 	}
 
-	return 0, errors.New("variable byte integer encoding exceeds 4 bytes or incomplete")
+	return 0, errBadIntEncoding
 }
 
 // ReadString reads an MQTT string (2-byte length prefix + UTF-8 string).
 func (r *PacketReader) ReadString() (string, error) {
 	strLen, err := r.ReadUint16()
 	if err != nil {
-		return "", errors.New("not enough data for string length")
+		return "", errNotEnoughStringLen
 	}
 
 	if r.offset+int(strLen) > len(r.pkt) {
-		return "", errors.New("not enough data for string content")
+		return "", errNotEnoughStringContent
 	}
 
 	str := string(r.pkt[r.offset : r.offset+int(strLen)])

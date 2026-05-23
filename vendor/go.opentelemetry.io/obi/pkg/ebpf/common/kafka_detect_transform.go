@@ -22,6 +22,11 @@ const (
 	Fetch   Operation = 1
 )
 
+var (
+	errKafkaUnsupportedAPIKey           = errors.New("unsupported Kafka API key")
+	errKafkaNoResponseBufferForMetadata = errors.New("no response buffer for metadata request")
+)
+
 type PartitionInfo struct {
 	Partition int
 	Offset    int64
@@ -73,7 +78,7 @@ func ProcessKafkaEvent(pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, ka
 	case kafkaparser.APIKeyMetadata:
 		return processMetadataResponse(rpkt, hdr, kafkaTopicUUIDToName)
 	default:
-		return nil, true, errors.New("unsupported Kafka API key")
+		return nil, true, errKafkaUnsupportedAPIKey
 	}
 }
 
@@ -153,7 +158,7 @@ func processFetchRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToNam
 
 func processMetadataResponse(rpkt *largebuf.LargeBuffer, hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
 	if rpkt == nil {
-		return nil, true, errors.New("no response buffer for metadata request")
+		return nil, true, errKafkaNoResponseBufferForMetadata
 	}
 	// only interested in response
 	r := rpkt.NewReader()
@@ -182,7 +187,7 @@ func ProcessKafkaRequest(pkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simple
 	case kafkaparser.APIKeyFetch:
 		return processFetchRequest(hdr, kafkaTopicUUIDToName)
 	default:
-		return nil, true, errors.New("unsupported Kafka API key")
+		return nil, true, errKafkaUnsupportedAPIKey
 	}
 }
 

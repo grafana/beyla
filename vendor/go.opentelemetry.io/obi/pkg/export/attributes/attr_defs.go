@@ -388,6 +388,7 @@ func getDefinitions(
 				attr.GenAIOutput:       false,
 				attr.GenAIInstructions: false,
 				attr.GenAIMetadata:     false,
+				attr.GenAITools:        false,
 				attr.DBResponseError:   false,
 			},
 		},

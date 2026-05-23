@@ -18,7 +18,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
-	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
@@ -45,7 +44,7 @@ type StateConfigMapWriter struct {
 	owner        *metav1.OwnerReference
 }
 
-func NewStateConfigMapWriter(cfg *beyla.Config, ctxInfo *global.ContextInfo, nodeName string) (*StateConfigMapWriter, error) {
+func NewStateConfigMapWriter(ctxInfo *global.ContextInfo, nodeName string) (*StateConfigMapWriter, error) {
 	logger := slog.Default().With("component", "webhook.StateConfigMapWriter")
 
 	ownContainer, err := ownContainerID()

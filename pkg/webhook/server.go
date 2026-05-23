@@ -49,6 +49,8 @@ type Server struct {
 	nodeName                string
 	initialPodScan          atomic.Bool
 	uuid                    string
+	stateCfg                *configmap.InjectConfig
+	stateHash               string
 }
 
 func (s *Server) ID() string { return s.uuid }
@@ -88,7 +90,25 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	nodeName := OwnNodeName()
 
-	stateWriter, err := NewStateConfigMapWriter(cfg, ctxInfo, nodeName)
+	stateCfg := configmap.InjectConfig{
+		NodeName:  nodeName,
+		Discovery: cfg.Injector.Instrument,
+		OtelExport: configmap.OtelExport{
+			Endpoint: mutator.Endpoint(),
+			Protocol: mutator.Protocol(),
+		},
+		ExportedSignals: cfg.Injector.ExportedSignals,
+		ImageVolumePath: cfg.Injector.ImageVolumePath,
+		DefaultSampler:  cfg.Injector.DefaultSampler,
+		Propagators:     cfg.Injector.Propagators,
+		Resources:       cfg.Injector.Resources,
+	}
+
+	stateHash := stateCfg.Hash()
+
+	logger.Info("SDK injection config established", "hash", stateHash)
+
+	stateWriter, err := NewStateConfigMapWriter(ctxInfo, nodeName)
 	if err != nil {
 		return nil, fmt.Errorf("error creating configmap state writer: %w", err)
 	}
@@ -117,6 +137,8 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		instrumentationManager: NewInstrumentationManager(cfg),
 		nodeName:               nodeName,
 		uuid:                   uuid.NewString(),
+		stateCfg:               &stateCfg,
+		stateHash:              stateHash,
 	}
 
 	s.lastEligiblePodLaunchNS.Store(now.UnixNano())
@@ -218,7 +240,12 @@ func (s *Server) recordEligibleDeployment(a *ProcessInfo) {
 	defer s.eligibleDeploymentsMux.Unlock()
 
 	key := deploymentKeyFromProcess(a)
-	d := deploymentFromProcess(a)
+	d := deploymentFromProcess(a, s.stateHash)
+
+	if !d.Valid() {
+		s.logger.Debug("invalid deployment", "key", key, "deployment", d)
+		return
+	}
 
 	s.eligibleDeployments.Add(key, d)
 

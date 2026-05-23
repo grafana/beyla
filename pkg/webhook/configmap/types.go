@@ -8,6 +8,12 @@
 package configmap
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"log/slog"
+
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -96,6 +102,7 @@ type EligibleDeployment struct {
 	Kind      string `yaml:"kind,omitempty"`
 	Name      string `yaml:"name"`
 	Language  string `yaml:"language,omitempty"`
+	Hash      string `yaml:"hash,omitempty"`
 }
 
 // SDKExportedSignals defines which telemetry signals should be exported from injected SDKs.
@@ -166,4 +173,27 @@ type SDKResource struct {
 	//   - `app.kubernetes.io/name` becomes `service.name`
 	//   - `app.kubernetes.io/version` becomes `service.version`
 	UseLabelsForResourceAttributes bool `yaml:"use_k8s_labels_for_resource_attributes,omitempty" env:"BEYLA_RESOURCE_USE_LABELS_FOR_RESOURCE_ATTRIBUTES"`
+}
+
+func (d *EligibleDeployment) Valid() bool {
+	return d.Name != "" && d.Namespace != ""
+}
+
+func (c *InjectConfig) PackageVersion() string {
+	h := sha256.Sum224([]byte(c.ImageVolumePath))
+	return fmt.Sprintf("%x", h)
+}
+
+// Hash returns a stable SHA-256 hex digest of the YAML serialization of c,
+// suitable for detecting whether any field value has changed between two
+// InjectConfig instances. Equality of the returned strings implies the two
+// configs marshal identically (which is what gets written to the ConfigMap).
+func (c *InjectConfig) Hash() string {
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		slog.Error("cannot marshal injector config, using the package version instead", "error", err)
+		return c.PackageVersion()
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }

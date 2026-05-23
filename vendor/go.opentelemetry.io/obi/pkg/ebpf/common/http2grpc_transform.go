@@ -488,8 +488,25 @@ const (
 
 const frameHeaderLen = 9
 
+// maxPlausibleHTTP2FrameLen is a deliberately loose upper bound on HTTP/2
+// frame payload length, chosen well above any realistic SETTINGS_MAX_FRAME_SIZE
+// negotiation. Per RFC 7540 6.5.2 the spec default is 2^14 and the absolute
+// maximum is 2^24 - 1; we pick 4 MiB so that eBPF captures starting after a
+// peer has bumped the limit (e.g. gRPC streaming workloads) still pass the
+// prefilter, while ~75% of random 24-bit length values are still rejected.
+// Bump this if real traffic is dropped - false negatives are worse than
+// false positives here, since the downstream parser rejects garbage anyway.
+const maxPlausibleHTTP2FrameLen = 1 << 22
+
 func readHTTP2Frame(buf []uint8, length int) (*frameHeader, bool) {
 	if length < frameHeaderLen {
+		return nil, false
+	}
+
+	// RFC 7540 4.1: the high bit of the stream-identifier word is reserved
+	// and MUST be 0 when sent. Real HTTP/2 implementations set it to 0;
+	// rejecting it filters ~50% of random byte sequences with one bit test.
+	if buf[5]&0x80 != 0 {
 		return nil, false
 	}
 
@@ -515,6 +532,69 @@ func isInvalidFrame(frame *frameHeader) bool {
 	return frame.Length == 0 && frame.Type == FrameData
 }
 
+// http2FlagsMask returns the bitmask of flag bits that have spec-defined
+// semantics for the given frame type. RFC 7540 4.1 requires senders to leave
+// all other flag bits zero (receivers MUST ignore them), so a non-zero bit
+// outside this mask is a strong signal that the bytes did not come from a
+// real HTTP/2 sender.
+func http2FlagsMask(t http2FrameType) uint8 {
+	switch t {
+	case FrameData:
+		return 0x09 // END_STREAM | PADDED
+	case FrameHeaders:
+		return 0x2D // END_STREAM | END_HEADERS | PADDED | PRIORITY
+	case FrameSettings, FramePing:
+		return 0x01 // ACK
+	case FramePushPromise:
+		return 0x0C // END_HEADERS | PADDED
+	case FrameContinuation:
+		return 0x04 // END_HEADERS
+	case FramePriority, FrameRSTStream, FrameGoAway, FrameWindowUpdate:
+		return 0x00 // no defined flags
+	}
+	return 0x00
+}
+
+// isPlausibleHTTP2Frame applies the per-frame-type stream-ID, payload-length
+// and flag constraints from RFC 7540 6 + 4.1. Real HTTP/2 implementations
+// cannot send frames that violate these rules, so we can safely abort the
+// prefilter walk when a candidate frame fails them - almost no random byte
+// sequence satisfies the fixed-length / stream-zero / known-flag rules.
+func isPlausibleHTTP2Frame(fr *frameHeader) bool {
+	// Reserved flag bits must be zero (4.1).
+	if fr.Flags & ^http2FlagsMask(fr.Type) != 0 {
+		return false
+	}
+
+	switch fr.Type {
+	case FrameData, FrameHeaders, FramePushPromise, FrameContinuation:
+		// 6.1 / 6.2 / 6.6 / 6.10: MUST be associated with a stream. Length
+		// is capped by SETTINGS_MAX_FRAME_SIZE.
+		return fr.StreamID != 0 && fr.Length <= maxPlausibleHTTP2FrameLen
+	case FramePriority:
+		// 6.3: stream-associated, length MUST be 5.
+		return fr.StreamID != 0 && fr.Length == 5
+	case FrameRSTStream:
+		// 6.4: stream-associated, length MUST be 4.
+		return fr.StreamID != 0 && fr.Length == 4
+	case FrameSettings:
+		// 6.5: MUST be on stream 0, length MUST be a multiple of 6 and
+		// bounded by SETTINGS_MAX_FRAME_SIZE.
+		return fr.StreamID == 0 && fr.Length%6 == 0 && fr.Length <= maxPlausibleHTTP2FrameLen
+	case FramePing:
+		// 6.7: MUST be on stream 0, length MUST be 8.
+		return fr.StreamID == 0 && fr.Length == 8
+	case FrameGoAway:
+		// 6.8: MUST be on stream 0, length MUST be at least 8 and bounded
+		// by SETTINGS_MAX_FRAME_SIZE.
+		return fr.StreamID == 0 && fr.Length >= 8 && fr.Length <= maxPlausibleHTTP2FrameLen
+	case FrameWindowUpdate:
+		// 6.9: length MUST be 4; allowed on any stream.
+		return fr.Length == 4
+	}
+	return false
+}
+
 func isLikelyHTTP2(data []uint8, eventLen int) bool {
 	pos := 0
 	l := min(eventLen, len(data))
@@ -525,6 +605,13 @@ func isLikelyHTTP2(data []uint8, eventLen int) bool {
 
 		fr, ok := readHTTP2Frame(data[pos:], l)
 		if !ok {
+			break
+		}
+
+		// A frame that violates the per-type spec rules cannot have come
+		// from a real HTTP/2 sender; bail out of the walk so random bytes
+		// can't accidentally land on a HEADERS frame later in the buffer.
+		if !isPlausibleHTTP2Frame(fr) {
 			break
 		}
 
@@ -557,6 +644,7 @@ func isHTTP2(data *largebuf.LargeBuffer, eventLen int) bool {
 	}
 
 	dataReader := data.NewReader()
+
 	framer := http2.NewFramer(io.Discard, &dataReader)
 
 	for {

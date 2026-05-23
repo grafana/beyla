@@ -19,6 +19,8 @@ type ProduceRequest struct {
 	Topics []*ProduceTopic
 }
 
+var errNoTopicsInProduce = errors.New("no Topics found in produce request")
+
 func ParseProduceRequest(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*ProduceRequest, error) {
 	if err := produceRequestSkipUntilTopics(r, header); err != nil {
 		return nil, err
@@ -28,7 +30,7 @@ func ParseProduceRequest(r *largebuf.LargeBufferReader, header KafkaRequestHeade
 		return nil, err
 	}
 	if len(topics) == 0 {
-		return nil, errors.New("no Topics found in produce request")
+		return nil, errNoTopicsInProduce
 	}
 	return &ProduceRequest{
 		Topics: topics,

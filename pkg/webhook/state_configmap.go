@@ -18,6 +18,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
+	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 

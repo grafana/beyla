@@ -237,9 +237,9 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 
 	// Signal exporters
 	env = append(env,
-		corev1.EnvVar{Name: "OTEL_TRACES_EXPORTER", Value: otlpOrNone(injCfg.Export.TracesEnabled())},
-		corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: otlpOrNone(injCfg.Export.MetricsEnabled())},
-		corev1.EnvVar{Name: "OTEL_LOGS_EXPORTER", Value: otlpOrNone(injCfg.Export.LogsEnabled())},
+		corev1.EnvVar{Name: "OTEL_TRACES_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.TracesEnabled())},
+		corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.MetricsEnabled())},
+		corev1.EnvVar{Name: "OTEL_LOGS_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.LogsEnabled())},
 	)
 
 	// Propagators
@@ -255,11 +255,6 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 		if injCfg.DefaultSampler.Arg != "" {
 			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER_ARG", Value: injCfg.DefaultSampler.Arg})
 		}
-	}
-
-	// Debug
-	if injCfg.Debug {
-		env = append(env, corev1.EnvVar{Name: "OTEL_INJECTOR_LOG_LEVEL", Value: "debug"})
 	}
 
 	// Static resource attributes

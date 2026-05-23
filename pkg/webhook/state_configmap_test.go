@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
 
+	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
@@ -507,77 +508,96 @@ func installNodeNameFieldSelectorReactor(client *fake.Clientset) {
 }
 
 func TestBuildInjectConfig(t *testing.T) {
+	// defaultEnv returns the minimum env var set produced for any rule when no
+	// optional fields (propagators, sampler, debug, resources) are set.
+	defaultEnv := func(endpoint, protocol string) []corev1.EnvVar {
+		return []corev1.EnvVar{
+			{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint},
+			{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol},
+			{Name: "OTEL_TRACES_EXPORTER", Value: "otlp"},
+			{Name: "OTEL_METRICS_EXPORTER", Value: "otlp"},
+			{Name: "OTEL_LOGS_EXPORTER", Value: "none"},
+		}
+	}
+
 	tests := []struct {
-		name       string
-		instrument configmap.WebhookInstrument
-		endpoint   string
-		protocol   string
-		want       configmap.InjectConfig
+		name     string
+		injCfg   beyla.SDKInject
+		endpoint string
+		protocol string
+		want     configmap.InjectConfig
 	}{
 		{
-			name:       "empty instrument yields empty rules",
-			instrument: configmap.WebhookInstrument{},
-			endpoint:   "http://otel:4318",
-			protocol:   "http/protobuf",
-			want:       configmap.InjectConfig{},
+			name:     "empty instrument yields empty config",
+			injCfg:   beyla.SDKInject{},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want:     configmap.InjectConfig{},
 		},
 		{
-			name:       "single selector becomes one rule carrying endpoint and protocol",
-			instrument: configmap.WebhookInstrument{{OwnerKind: "Deployment"}},
-			endpoint:   "http://otel:4318",
-			protocol:   "http/protobuf",
+			name: "single selector becomes one rule with all default env vars",
+			injCfg: beyla.SDKInject{
+				Instrument: configmap.WebhookInstrument{{OwnerKind: "Deployment"}},
+			},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{
 				Selector: configmap.Selector{OwnerKind: "Deployment"},
-				Config: configmap.RuleConfig{Env: []corev1.EnvVar{
-					{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://otel:4318"},
-					{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: "http/protobuf"},
-				}},
+				Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
 			}}},
 		},
 		{
 			name: "multiple selectors each get the same env",
-			instrument: configmap.WebhookInstrument{
-				{OwnerKind: "Deployment"},
-				{OwnerKind: "StatefulSet"},
+			injCfg: beyla.SDKInject{
+				Instrument: configmap.WebhookInstrument{
+					{OwnerKind: "Deployment"},
+					{OwnerKind: "StatefulSet"},
+				},
 			},
 			endpoint: "http://otel:4318",
 			protocol: "grpc",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{
-				{
-					Selector: configmap.Selector{OwnerKind: "Deployment"},
-					Config: configmap.RuleConfig{Env: []corev1.EnvVar{
-						{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://otel:4318"},
-						{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: "grpc"},
-					}},
-				},
-				{
-					Selector: configmap.Selector{OwnerKind: "StatefulSet"},
-					Config: configmap.RuleConfig{Env: []corev1.EnvVar{
-						{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://otel:4318"},
-						{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: "grpc"},
-					}},
-				},
+				{Selector: configmap.Selector{OwnerKind: "Deployment"}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
+				{Selector: configmap.Selector{OwnerKind: "StatefulSet"}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
 			}},
 		},
 		{
-			// Both vars are always stamped; empty values are not filtered out.
-			name:       "empty endpoint and protocol produce env vars with empty values",
-			instrument: configmap.WebhookInstrument{{OwnerKind: "Deployment"}},
-			endpoint:   "",
-			protocol:   "",
+			name: "ImageVolumePath is set at the top level",
+			injCfg: beyla.SDKInject{
+				ImageVolumePath: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
+				Instrument:      configmap.WebhookInstrument{{OwnerKind: "Deployment"}},
+			},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want: configmap.InjectConfig{
+				ImageVolumePath: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
+				Rules: []configmap.Rule{{
+					Selector: configmap.Selector{OwnerKind: "Deployment"},
+					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
+				}},
+			},
+		},
+		{
+			name: "propagators written as OTEL_PROPAGATORS",
+			injCfg: beyla.SDKInject{
+				Instrument:  configmap.WebhookInstrument{{OwnerKind: "Deployment"}},
+				Propagators: []string{"tracecontext", "baggage"},
+			},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{
 				Selector: configmap.Selector{OwnerKind: "Deployment"},
-				Config: configmap.RuleConfig{Env: []corev1.EnvVar{
-					{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: ""},
-					{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: ""},
-				}},
+				Config: configmap.RuleConfig{Env: append(
+					defaultEnv("http://otel:4318", "http/protobuf"),
+					corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: "tracecontext,baggage"},
+				)},
 			}}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildInjectConfig(tt.instrument, tt.endpoint, tt.protocol)
+			got := buildInjectConfig(tt.injCfg, tt.endpoint, tt.protocol)
 			assert.Equal(t, tt.want, got)
 		})
 	}

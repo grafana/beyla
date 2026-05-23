@@ -283,7 +283,10 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 			Config:   configmap.RuleConfig{Env: env},
 		})
 	}
-	return configmap.InjectConfig{Rules: rules}
+	return configmap.InjectConfig{
+		ImageVolumePath: injCfg.ImageVolumePath,
+		Rules:           rules,
+	}
 }
 
 func otlpOrNone(enabled bool) string {

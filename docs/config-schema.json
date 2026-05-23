@@ -2352,31 +2352,47 @@
       "type": "object",
       "description": "WebhookConfig contains the configuration for the mutating webhook Functionality under active development TODO: most of the following options are not having effect. They must be moved to k8s-injection-controller"
     },
-    "WebhookInstrument": {
-      "items": {
-        "$ref": "#/$defs/WebhookKubeOnlySelector"
-      },
-      "type": "array",
-      "description": "WebhookInstrument is a subset of services.GlobDefinitionCriteria because GlobDefinitionCriteria is only designed for unmarshaling and the marshal+unmarshal operation is not idempotent (and makes the injector controller to fail). GlobDefinitionCriteria contains many attributes that are not part of the webhook discovery so we copy here only the ones that are actually needed."
-    },
-    "WebhookKubeOnlySelector": {
+    "Selector": {
       "properties": {
-        "k8s_pod_annotations": {
-          "additionalProperties": {
+        "namespaces": {
+          "items": {
             "$ref": "#/$defs/GlobAttr"
           },
-          "type": "object",
-          "description": "PodAnnotations allows matching against the annotations of a pod"
+          "type": "array",
+          "description": "Namespaces lists namespace name globs. Empty means all namespaces. A pod matches if its namespace matches any entry (OR semantics)."
         },
-        "k8s_pod_labels": {
+        "ownerKind": {
+          "type": "string",
+          "description": "OwnerKind restricts matching to a specific owner kind: Deployment, ReplicaSet, StatefulSet, or DaemonSet. Empty means any kind."
+        },
+        "ownerName": {
+          "$ref": "#/$defs/GlobAttr",
+          "description": "OwnerName is a glob matched against the pod's resolved owning resource name. For a pod owned by a ReplicaSet that is itself owned by a Deployment, both the ReplicaSet name and the Deployment name are tried. Empty means any owner name."
+        },
+        "podAnnotations": {
           "additionalProperties": {
             "$ref": "#/$defs/GlobAttr"
           },
           "type": "object",
-          "description": "PodLabels allows matching against the labels of a pod"
+          "description": "PodAnnotations maps annotation keys to value globs. Empty means all pods. All entries must match (AND semantics)."
+        },
+        "podLabels": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object",
+          "description": "PodLabels maps label keys to value globs. Empty means all pods. All entries must match (AND semantics)."
         }
       },
-      "type": "object"
+      "type": "object",
+      "description": "Selector determines which pods a Rule applies to. All populated fields must match (AND). An empty field is a wildcard."
+    },
+    "WebhookInstrument": {
+      "items": {
+        "$ref": "#/$defs/Selector"
+      },
+      "type": "array",
+      "description": "WebhookInstrument is the list of selectors from the Beyla injector config that determine which pods to instrument. It carries selectors only — no per-rule config. When Beyla writes the state ConfigMap it promotes each Selector into a full Rule by pairing it with the OTLP destination env vars derived from Beyla's own export configuration (see buildInjectConfig)."
     }
   },
   "properties": {

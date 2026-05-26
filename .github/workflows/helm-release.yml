@@ -4,7 +4,7 @@ on:
 
 jobs:
   release-beyla-helm-chart:
-    uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@8522a28e16bc2c84c9339c22c6bdf5446b5e431a
+    uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@77e5ea2de369fa1ff3441b08765c164be209eaa2
     permissions:
       contents: "write"
       id-token: "write"
@@ -13,7 +13,4 @@ jobs:
       charts_dir: charts/beyla
       cr_configfile: .github/configs/cr.yml
       ct_configfile: .github/configs/ct.yml
-    secrets:
-      # "mimir-helm-release" is a GitHub app, that has permissions to push to grafana/helm-charts.
-      # We created there a private key that seat in the Beyla repo's vault (ref https://github.com/grafana/shared-workflows/tree/main/actions/get-vault-secrets).
-      vault_repo_secret_name: beyla-helm-release
+      github_app: mimir-helm-release

@@ -1,17 +1,8 @@
-name: Push to DockerHub (pre-release)
+name: Push to GAR (release)
 on:
   push:
     tags:
-      # pre-release tags, examples:
-      # v1.0.0-alpha
-      # v1.0.0-alpha.1
-      # v1.0.0-alpha.beta
-      # v1.0.0-beta
-      # v1.0.0-beta.2
-      # v1.0.0-beta.11
-      # v1.0.0-rc.1
-      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet
-      - "v[0-9]+.[0-9]+.[0-9]+-*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: read
@@ -21,28 +12,28 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-      # required for DockerHub access
+      # required for GAR OIDC authentication
       id-token: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - image: grafana/beyla
+          - image: us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla
             file: Dockerfile
             platform: linux/amd64
             runner: ubuntu-latest
             artifact_suffix: beyla-amd64
-          - image: grafana/beyla
+          - image: us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla
             file: Dockerfile
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             artifact_suffix: beyla-arm64
-          - image: grafana/beyla-k8s-cache
+          - image: us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla-k8s-cache
             file: k8scache.Dockerfile
             platform: linux/amd64
             runner: ubuntu-latest
             artifact_suffix: k8s-cache-amd64
-          - image: grafana/beyla-k8s-cache
+          - image: us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla-k8s-cache
             file: k8scache.Dockerfile
             platform: linux/arm64
             runner: ubuntu-24.04-arm
@@ -53,8 +44,13 @@ jobs:
           persist-credentials: "false"
           submodules: "recursive"
 
-      - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - name: Log into GAR
+        uses: grafana/shared-workflows/actions/login-to-gar@c7ad5f57693ac858c698d95783685a9cbfd91223 # login-to-gar/v1.0.1
+        with:
+          registry: us-docker.pkg.dev
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -88,18 +84,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # required for DockerHub access
+      # required for GAR OIDC authentication
       id-token: write
     strategy:
       matrix:
         include:
-          - image: grafana/beyla
+          - image: us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla
             artifact_prefix: beyla
-          - image: grafana/beyla-k8s-cache
+          - image: us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla-k8s-cache
             artifact_prefix: k8s-cache
     steps:
-      - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - name: Log into GAR
+        uses: grafana/shared-workflows/actions/login-to-gar@c7ad5f57693ac858c698d95783685a9cbfd91223 # login-to-gar/v1.0.1
+        with:
+          registry: us-docker.pkg.dev
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -109,6 +110,8 @@ jobs:
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ matrix.image }}
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}}
 
@@ -136,3 +139,12 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${META_JSON}") \
             "${IMAGE}@sha256:${AMD64_DIGEST}" \
             "${IMAGE}@sha256:${ARM64_DIGEST}"
+
+  deploy-dev:
+    needs: create-manifest
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-dev.yml
+    with:
+      version: ${{ github.ref_name }}

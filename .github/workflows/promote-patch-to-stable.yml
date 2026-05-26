@@ -135,8 +135,13 @@ jobs:
       id-token: write
       actions: write
     steps:
-      - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - name: Log into GAR
+        uses: grafana/shared-workflows/actions/login-to-gar@c7ad5f57693ac858c698d95783685a9cbfd91223 # login-to-gar/v1.0.1
+        with:
+          registry: us-docker.pkg.dev
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -148,7 +153,7 @@ jobs:
           DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
         run: |
           set -euo pipefail
-          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
+          for IMAGE in us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla-k8s-cache; do
             echo "Re-tagging ${IMAGE}:${DOCKER_PATCH_TAG} -> latest, ${DOCKER_MINOR_TAG}, ${DOCKER_MAJOR_TAG}"
             docker buildx imagetools create \
               --tag "${IMAGE}:latest" \
@@ -164,7 +169,7 @@ jobs:
           DOCKER_MAJOR_TAG: ${{ needs.validate.outputs.docker_major_tag }}
         run: |
           set -euo pipefail
-          for IMAGE in grafana/beyla grafana/beyla-k8s-cache; do
+          for IMAGE in us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla-k8s-cache; do
             SOURCE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${DOCKER_PATCH_TAG}" | awk '/^Digest:/{print $2}')
             echo "${IMAGE}:${DOCKER_PATCH_TAG} digest: ${SOURCE_DIGEST}"
             for TAG in "latest" "${DOCKER_MINOR_TAG}" "${DOCKER_MAJOR_TAG}"; do
@@ -213,8 +218,8 @@ jobs:
             echo "## Promotion Complete"
             echo ""
             echo "### Docker Images"
-            echo "- \`grafana/beyla:${DOCKER_PATCH_TAG}\`, \`grafana/beyla:${DOCKER_MINOR_TAG}\`, \`grafana/beyla:${DOCKER_MAJOR_TAG}\`, \`grafana/beyla:latest\`"
-            echo "- \`grafana/beyla-k8s-cache:${DOCKER_PATCH_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MINOR_TAG}\`, \`grafana/beyla-k8s-cache:${DOCKER_MAJOR_TAG}\`, \`grafana/beyla-k8s-cache:latest\`"
+            echo "- \`us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla:${DOCKER_PATCH_TAG}\`, \`:${DOCKER_MINOR_TAG}\`, \`:${DOCKER_MAJOR_TAG}\`, \`:latest\`"
+            echo "- \`us-docker.pkg.dev/grafanalabs-global/dockerhub-beyla-prod-mirror/beyla-k8s-cache:${DOCKER_PATCH_TAG}\`, \`:${DOCKER_MINOR_TAG}\`, \`:${DOCKER_MAJOR_TAG}\`, \`:latest\`"
             echo ""
             echo "### GitHub Release"
             echo "- [${VERSION_TAG}](https://github.com/${{ github.repository }}/releases/tag/${VERSION_TAG}) marked as stable/latest"

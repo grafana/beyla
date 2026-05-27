@@ -119,7 +119,7 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - uses: ./.github/actions/harden
+      - uses: ./source/.github/actions/harden
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)

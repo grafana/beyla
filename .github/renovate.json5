@@ -15,6 +15,22 @@
     "configs/offsets/shopify/**",
     "vendor/**",
   ],
+  customManagers: [
+    {
+      // Track the SHA pin of grafana/grafana-github-actions used by backport.yml.
+      // It's checked out via actions/checkout with `ref: <sha>`, which Renovate's
+      // github-actions manager does not understand, so we drive it with a regex.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/backport\\.yml$/"],
+      matchStrings: [
+        "ref:\\s+(?<currentDigest>[a-f0-9]{40})\\s+#\\s+main as of",
+      ],
+      depNameTemplate: "grafana/grafana-github-actions",
+      packageNameTemplate: "https://github.com/grafana/grafana-github-actions",
+      datasourceTemplate: "git-refs",
+      currentValueTemplate: "main",
+    },
+  ],
   packageRules: [
     {
       groupName: "all patch and digest versions",

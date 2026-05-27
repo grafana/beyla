@@ -130,7 +130,6 @@ __check_defined = \
 # prereqs binary dependencies
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 BPF2GO ?= $(TOOLS_DIR)/bpf2go
-GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
@@ -165,7 +164,6 @@ prereqs: install-hooks bpf2go
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,v2.4.0)
-	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
 	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses/v2,v2.0.1)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
 	$(call download-release-tool,$(DASHBOARD_LINTER),$(DASHBOARD_LINTER_VERSION),$(DASHBOARD_LINTER_URL))
@@ -205,11 +203,6 @@ lint-dashboard: prereqs
 lint: prereqs checkfmt
 	@echo "### Linting code"
 	$(GOLANGCI_LINT) run ./... --timeout=6m
-
-.PHONY: update-offsets
-update-offsets: prereqs
-	@echo "### Updating pkg/internal/goexec/offsets.json"
-	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 .PHONY: generate
 generate: obi-submodule

@@ -60,21 +60,11 @@ jobs:
       - name: Log in to Google Artifact Registry
         uses: grafana/shared-workflows/actions/login-to-gar@00646b30431b955ec3c00982b23b1eeb7b66445b # v1.0.0
 
-      - name: Get updater-app secrets from Vault
-        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
-        with:
-          common_secrets: |
-            APP_ID=updater-app:app-id
-            APP_PRIVATE_KEY=updater-app:private-key
-
-      - name: Get GitHub App token for deployment_tools
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+      - name: Get GitHub App token
         id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@259ba21cb3ff07724f331e26d926d655d24b317b # create-github-app-token/v0.2.3
         with:
-          app-id: ${{ env.APP_ID }}
-          private-key: ${{ env.APP_PRIVATE_KEY }}
-          owner: grafana
-          repositories: deployment_tools
+          github_app: updater-for-ci
 
       - name: Update deployment_tools alloy-beyla dev wave
         env:

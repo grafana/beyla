@@ -49,19 +49,10 @@ jobs:
           go-version-file: "go.mod"
           cache: false
 
-      # SECURITY: this DockerHub token MUST be scoped read-only.
-      - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@081a366728379fd0426b9cfef190e9a21c2d5418 # dockerhub-login/v1.0.3
-
+      # make vendor-obi internally downloads the ghcr.io/open-telemetry/obi-generator image
+      # Since this task is executed daily, there is no risk we hit a ghcr.io rate limit.
       - name: Rebuild BPF and vendor OBI
         run: make vendor-obi
-
-      # Defense-in-depth: clear DockerHub credentials from the runner as soon
-      # as the upstream-controlled build step is done, so any subsequent step
-      # (or background process spawned by it) cannot reuse them.
-      - name: Log out of DockerHub
-        if: always()
-        run: docker logout || true
 
       - name: Get GitHub App token
         id: get-github-app-token

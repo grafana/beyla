@@ -70,6 +70,12 @@ jobs:
       contents: read
       id-token: write
     steps:
+      # SECURITY: audit-mode egress logging — see pull_request_integration_tests.yml for rationale.
+      - name: Harden runner (audit mode)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.19.4
+        with:
+          egress-policy: audit
+
       - name: Free up disk space
         run: |
           # Remove Java (JDKs)
@@ -113,8 +119,6 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
-
-      - uses: ./source/.github/actions/harden
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
@@ -249,6 +253,12 @@ jobs:
         kernel: ${{ fromJson(needs.vm-test-matrix.outputs.kernels).include }}
         test: ${{ fromJson(needs.vm-test-matrix.outputs.matrix).include }}
     steps:
+      # SECURITY: audit-mode egress logging — see pull_request_integration_tests.yml for rationale.
+      - name: Harden runner (audit mode)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.19.4
+        with:
+          egress-policy: audit
+
       - name: Free up disk space
         run: |
           # Free disk space without pruning docker — we will load cached
@@ -270,8 +280,6 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
-
-      - uses: ./source/.github/actions/harden
 
       - name: Download prep artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

@@ -66,12 +66,16 @@ jobs:
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
     timeout-minutes: 45
     steps:
+      # SECURITY: audit-mode egress logging — see pull_request_integration_tests.yml for rationale.
+      - name: Harden runner (audit mode)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.19.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           submodules: true
-
-      - uses: ./source/.github/actions/harden
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)

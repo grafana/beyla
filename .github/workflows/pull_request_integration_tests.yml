@@ -72,6 +72,18 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
     steps:
+      # SECURITY: audit-mode network logging. Logs every outbound connection
+      # from this job (which runs privileged containers and has the DockerHub
+      # + Codecov tokens in env). Review traffic in the step-security insights
+      # dashboard and flip individual workflows to `egress-policy: block` with
+      # an `allowed-endpoints` list once a baseline is established. Note: this
+      # action's `pre:` hook installs the monitoring agent, which is why it
+      # must be inlined here rather than wrapped in a local composite action.
+      - name: Harden runner (audit mode)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.19.4
+        with:
+          egress-policy: audit
+
       - name: Check initial disk usage
         run: df -h
 
@@ -118,8 +130,6 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
-
-      - uses: ./source/.github/actions/harden
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)

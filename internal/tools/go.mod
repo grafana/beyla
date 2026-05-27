@@ -6,7 +6,6 @@ tool (
 	github.com/cilium/ebpf/cmd/bpf2go
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/google/go-licenses/v2
-	github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker
 	github.com/onsi/ginkgo/v2/ginkgo
 	gotest.tools/gotestsum
 	sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -114,7 +113,6 @@ require (
 	github.com/gostaticanalysis/comment v1.5.0 // indirect
 	github.com/gostaticanalysis/forcetypeassert v0.2.0 // indirect
 	github.com/gostaticanalysis/nilerr v0.1.1 // indirect
-	github.com/grafana/go-offsets-tracker v0.1.7 // indirect
 	github.com/hashicorp/go-immutable-radix/v2 v2.1.0 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect

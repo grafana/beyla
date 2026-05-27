@@ -118,11 +118,10 @@ __check_defined = \
 # prereqs binary dependencies
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 BPF2GO ?= $(TOOLS_DIR)/bpf2go
-GO_OFFSETS_TRACKER = $(TOOLS_DIR)/go-offsets-tracker
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
 DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
-DASHBOARD_LINTER_VERSION = 0.1.0
+DASHBOARD_LINTER_VERSION = 0.1.1
 DASHBOARD_LINTER_URL = https://github.com/grafana/dashboard-linter/releases/download/v$(DASHBOARD_LINTER_VERSION)/dashboard-linter_$(DASHBOARD_LINTER_VERSION)_$(HOST_OS)_$(HOST_ARCH).tar.gz
 GINKGO = $(TOOLS_DIR)/ginkgo
 GOTESTSUM = $(TOOLS_DIR)/gotestsum
@@ -150,9 +149,6 @@ $(BPF2GO): $(TOOLS_MOD)
 $(GOLANGCI_LINT): $(TOOLS_MOD)
 	$(call go-install-tool,$@,github.com/golangci/golangci-lint/v2/cmd/golangci-lint)
 
-$(GO_OFFSETS_TRACKER): $(TOOLS_MOD)
-	$(call go-install-tool,$@,github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker)
-
 $(GO_LICENSES): $(TOOLS_MOD)
 	$(call go-install-tool,$@,github.com/google/go-licenses/v2)
 
@@ -172,7 +168,7 @@ $(DASHBOARD_LINTER):
 bpf2go: $(BPF2GO)
 
 .PHONY: prereqs
-prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_OFFSETS_TRACKER) $(GO_LICENSES) $(KIND) $(DASHBOARD_LINTER) $(ENVTEST) $(GOTESTSUM)
+prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_LICENSES) $(KIND) $(DASHBOARD_LINTER) $(ENVTEST) $(GOTESTSUM)
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
 
@@ -209,11 +205,6 @@ lint-dashboard: prereqs
 lint: prereqs checkfmt
 	@echo "### Linting code"
 	$(GOLANGCI_LINT) run ./... --timeout=6m
-
-.PHONY: update-offsets
-update-offsets: prereqs
-	@echo "### Updating pkg/internal/goexec/offsets.json"
-	$(GO_OFFSETS_TRACKER) -i configs/offsets/tracker_input.json pkg/internal/goexec/offsets.json
 
 .PHONY: generate
 generate: obi-submodule

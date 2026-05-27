@@ -849,6 +849,7 @@ go.opentelemetry.io/obi/pkg/export/otel/perapp
 go.opentelemetry.io/obi/pkg/export/otel/tracesgen
 go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
+go.opentelemetry.io/obi/pkg/health
 go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience

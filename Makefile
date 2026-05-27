@@ -44,41 +44,29 @@ CFLAGS := -O2 -g -Wunaligned-access -Wpacked -Wpadded -Wall -Werror $(CFLAGS)
 
 CLANG_TIDY ?= clang-tidy
 
-CILIUM_EBPF_VER ?= $(call gomod-version,cilium/ebpf)
-
 # regular expressions for excluded file patterns
 EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/beyla/v2/internal/test/)|(/beyla/v2/configs/)|(/v2/examples/)|(.pb.go)|(/beyla/v2/pkg/export/otel/metric/)"
 
 .DEFAULT_GOAL := all
 
-# go-install-tool will 'go install' any package $2 and install it locally to $1.
-# This will prevent that they are installed in the $USER/go/bin folder and different
-# projects ca have different versions of the tools
+# Tool versions are pinned declaratively in the tools sub-module at
+# $(TOOLS_MOD_DIR). Binaries are compiled into $(TOOLS_DIR) via `go install`,
+# invoked from the sub-module so the parent module's vendor/ directory is not
+# in scope. Bumping a tool version is `cd internal/tools && go get -tool pkg@vX`.
 PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
 
 TOOLS_DIR ?= $(PROJECT_DIR)/bin
+TOOLS_MOD_DIR := $(PROJECT_DIR)/internal/tools
+TOOLS_MOD := $(TOOLS_MOD_DIR)/go.mod $(TOOLS_MOD_DIR)/go.sum
 
-# $(1) command name
-# $(2) repo URL
-# $(3) version
+# go-install-tool installs $(2) (a package import path declared in the tools
+# sub-module) into $(1). Versions are resolved from $(TOOLS_MOD_DIR)/go.mod.
+# $(1) destination binary path
+# $(2) package import path
 define go-install-tool
-@[ -f "$(1)-$(3)" ] || { \
-set -e ;\
-TMP_DIR=$$(mktemp -d) ;\
-cd $$TMP_DIR ;\
-go mod init tmp ;\
-echo "Removing any outdated version of $(1)";\
-rm -f $(1)*;\
-echo "Downloading $(2)@$(3)" ;\
-GOBIN=$(TOOLS_DIR) GOFLAGS="-mod=mod" go install "$(2)@$(3)" ;\
-touch "$(1)-$(3)";\
-rm -rf $$TMP_DIR ;\
-}
-endef
-
-# gomod-version returns the version number of the go.mod dependency
-define gomod-version
-$(shell sh -c "echo $$(grep $(1) go.mod | awk '{print $$2}')")
+@mkdir -p $(TOOLS_DIR)
+@echo "### Installing $(2)"
+@cd $(TOOLS_MOD_DIR) && GOBIN=$(TOOLS_DIR) go install $(2)
 endef
 
 # host OS/ARCH normalized for matching pre-built release asset filenames
@@ -156,21 +144,37 @@ install-hooks:
 		echo "Pre-commit hook installed."; \
 	fi
 
+$(BPF2GO): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/cilium/ebpf/cmd/bpf2go)
+
+$(GOLANGCI_LINT): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/golangci/golangci-lint/v2/cmd/golangci-lint)
+
+$(GO_OFFSETS_TRACKER): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker)
+
+$(GO_LICENSES): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/google/go-licenses/v2)
+
+$(KIND): $(TOOLS_MOD)
+	$(call go-install-tool,$@,sigs.k8s.io/kind)
+
+$(ENVTEST): $(TOOLS_MOD)
+	$(call go-install-tool,$@,sigs.k8s.io/controller-runtime/tools/setup-envtest)
+
+$(GOTESTSUM): $(TOOLS_MOD)
+	$(call go-install-tool,$@,gotest.tools/gotestsum)
+
+$(DASHBOARD_LINTER):
+	$(call download-release-tool,$(DASHBOARD_LINTER),$(DASHBOARD_LINTER_VERSION),$(DASHBOARD_LINTER_URL))
+
 .PHONY: bpf2go
-bpf2go:
-	$(call go-install-tool,$(BPF2GO),github.com/cilium/ebpf/cmd/bpf2go,$(call gomod-version,cilium/ebpf))
+bpf2go: $(BPF2GO)
 
 .PHONY: prereqs
-prereqs: install-hooks bpf2go
+prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_OFFSETS_TRACKER) $(GO_LICENSES) $(KIND) $(DASHBOARD_LINTER) $(ENVTEST) $(GOTESTSUM)
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,v2.4.0)
-	$(call go-install-tool,$(GO_OFFSETS_TRACKER),github.com/grafana/go-offsets-tracker/cmd/go-offsets-tracker,$(call gomod-version,grafana/go-offsets-tracker))
-	$(call go-install-tool,$(GO_LICENSES),github.com/google/go-licenses/v2,v2.0.1)
-	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,v0.20.0)
-	$(call download-release-tool,$(DASHBOARD_LINTER),$(DASHBOARD_LINTER_VERSION),$(DASHBOARD_LINTER_URL))
-	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,v0.0.0-20260305142021-f9589b9f2b9d) # pin for Go version compatibility
-	$(call go-install-tool,$(GOTESTSUM),gotest.tools/gotestsum,v1.13.0)
 
 .PHONY: fmt
 fmt: prereqs
@@ -529,11 +533,11 @@ itest-coverage-data:
 	# exclude generated files from coverage data
 	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt || true
 
-bin/ginkgo:
-	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,latest)
+$(GINKGO): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/onsi/ginkgo/v2/ginkgo)
 
 .PHONY: oats-prereq
-oats-prereq: bin/ginkgo vendor-obi
+oats-prereq: $(GINKGO) vendor-obi
 	mkdir -p $(TEST_OUTPUT)/run
 
 .PHONY: oats-test-sql

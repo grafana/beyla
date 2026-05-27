@@ -64,9 +64,9 @@ TOOLS_MOD := $(TOOLS_MOD_DIR)/go.mod $(TOOLS_MOD_DIR)/go.sum
 # $(1) destination binary path
 # $(2) package import path
 define go-install-tool
-@mkdir -p $(TOOLS_DIR)
+@mkdir -p $(dir $(1))
 @echo "### Installing $(2)"
-@cd $(TOOLS_MOD_DIR) && GOBIN=$(TOOLS_DIR) go install $(2)
+@cd $(TOOLS_MOD_DIR) && GOBIN=$(abspath $(dir $(1))) go install $(2)
 endef
 
 # host OS/ARCH normalized for matching pre-built release asset filenames
@@ -161,14 +161,16 @@ $(ENVTEST): $(TOOLS_MOD)
 $(GOTESTSUM): $(TOOLS_MOD)
 	$(call go-install-tool,$@,gotest.tools/gotestsum)
 
-$(DASHBOARD_LINTER):
+# Target the versioned stamp file (not the bare binary) so that bumping
+# $(DASHBOARD_LINTER_VERSION) renames the prerequisite and re-triggers download.
+$(DASHBOARD_LINTER)-$(DASHBOARD_LINTER_VERSION):
 	$(call download-release-tool,$(DASHBOARD_LINTER),$(DASHBOARD_LINTER_VERSION),$(DASHBOARD_LINTER_URL))
 
 .PHONY: bpf2go
 bpf2go: $(BPF2GO)
 
 .PHONY: prereqs
-prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_LICENSES) $(KIND) $(DASHBOARD_LINTER) $(ENVTEST) $(GOTESTSUM)
+prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_LICENSES) $(KIND) $(DASHBOARD_LINTER)-$(DASHBOARD_LINTER_VERSION) $(ENVTEST) $(GOTESTSUM)
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
 

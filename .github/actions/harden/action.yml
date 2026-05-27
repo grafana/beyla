@@ -1,0 +1,61 @@
+# Shared wrapper around step-security/harden-runner so the allowed-endpoints
+# list lives in exactly one place. Each integration-test job calls this with
+# `uses: ./.github/actions/harden` right after `actions/checkout`.
+#
+# Default is `audit`: logs every outbound connection, blocks nothing — safe to
+# deploy and required to gather a baseline. Flip individual workflows to
+# `block` by passing `egress-policy: block` once the allowlist below is known
+# to cover their needs.
+
+name: Harden runner
+description: Apply Beyla's shared step-security/harden-runner policy to the current job.
+
+inputs:
+  egress-policy:
+    description: "audit (default, log only) or block (enforce allowed-endpoints)"
+    required: false
+    default: audit
+
+runs:
+  using: composite
+  steps:
+    - uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.19.4
+      with:
+        egress-policy: ${{ inputs.egress-policy }}
+        # Allowlist is ignored in audit mode. Curated from a first-pass review
+        # of what these workflows actually hit; refine using the step-security
+        # insights dashboard before flipping any workflow to block mode.
+        allowed-endpoints: >
+          api.github.com:443
+          github.com:443
+          codeload.github.com:443
+          objects.githubusercontent.com:443
+          release-assets.githubusercontent.com:443
+          raw.githubusercontent.com:443
+          ghcr.io:443
+          pkg-containers.githubusercontent.com:443
+          registry-1.docker.io:443
+          auth.docker.io:443
+          production.cloudflare.docker.com:443
+          quay.io:443
+          cdn.quay.io:443
+          cdn01.quay.io:443
+          cdn02.quay.io:443
+          cdn03.quay.io:443
+          vault.grafana.com:443
+          codecov.io:443
+          uploader.codecov.io:443
+          storage.googleapis.com:443
+          proxy.golang.org:443
+          sum.golang.org:443
+          go.dev:443
+          golang.org:443
+          registry.npmjs.org:443
+          pypi.org:443
+          files.pythonhosted.org:443
+          archive.ubuntu.com:80
+          security.ubuntu.com:80
+          ports.ubuntu.com:80
+          azure.archive.ubuntu.com:80
+          deb.debian.org:80
+          security.debian.org:80

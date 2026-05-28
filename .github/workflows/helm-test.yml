@@ -50,7 +50,7 @@ jobs:
         uses: docker://jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba327b1c6335cc15ce29267979c
         with:
           entrypoint: helm-docs
-          args: -c deployments/helm
+          args: -c charts/beyla
 
       - name: Check docs are up to date
         run: |

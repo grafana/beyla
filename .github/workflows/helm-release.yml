@@ -3,7 +3,22 @@ on:
   workflow_dispatch:
 
 jobs:
+  get-helm-charts-token:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      token: ${{ steps.get-github-app-token.outputs.token }}
+    steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+
   release-beyla-helm-chart:
+    needs: get-helm-charts-token
     uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@8522a28e16bc2c84c9339c22c6bdf5446b5e431a
     permissions:
       contents: "write"
@@ -14,6 +29,4 @@ jobs:
       cr_configfile: .github/configs/cr.yml
       ct_configfile: .github/configs/ct.yml
     secrets:
-      # "mimir-helm-release" is a GitHub app, that has permissions to push to grafana/helm-charts.
-      # We created there a private key that seat in the Beyla repo's vault (ref https://github.com/grafana/shared-workflows/tree/main/actions/get-vault-secrets).
-      vault_repo_secret_name: beyla-helm-release
+      helm_repo_token: ${{ needs.get-helm-charts-token.outputs.token }}

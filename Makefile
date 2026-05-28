@@ -38,6 +38,11 @@ COMPOSE_ARGS ?= -f internal/testgenerated/integration/docker-compose.yml
 
 OCI_BIN ?= docker
 
+# Single source of truth: extracted from the `uses: docker://...` line in the
+# helm-test workflow so Renovate's github-actions manager keeps it up to date
+# and we don't locally generate documents that later differ from the CI tests.
+HELM_DOCS_IMG ?= $(shell sed -n 's|.*docker://\(jnorwood/helm-docs[^[:space:]]*\).*|\1|p' .github/workflows/helm-test.yml | head -1)
+
 # BPF code generator dependencies
 CLANG ?= clang
 CFLAGS := -O2 -g -Wunaligned-access -Wpacked -Wpadded -Wall -Werror $(CFLAGS)
@@ -350,7 +355,7 @@ helm-unittest:
 .PHONY: helm-docs
 helm-docs:
 	@echo "### Generating Helm chart documentation"
-	cd charts && $(OCI_BIN) run --rm --volume "$$(pwd):/helm-docs" -u "$$(id -u)" jnorwood/helm-docs:v1.13.1
+	cd charts && $(OCI_BIN) run --rm --volume "$$(pwd):/helm-docs" -u "$$(id -u)" $(HELM_DOCS_IMG)
 
 .PHONY: cov-exclude-generated
 cov-exclude-generated:

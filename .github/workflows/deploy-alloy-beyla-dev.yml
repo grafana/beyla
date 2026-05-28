@@ -84,7 +84,6 @@ jobs:
             "pull_request_enabled": true,
             "pull_request_existing_strategy": "replace",
             "pull_request_message": "Update alloy-beyla dev wave to ${IMAGE_TAG}. Triggered by https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "pull_request_team_reviewers": ["ebpf"],
             "update_jsonnet_attribute_configs": [
               {
                 "file_path": "ksonnet/environments/beyla/alloy_beyla_versions.libsonnet",

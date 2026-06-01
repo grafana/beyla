@@ -114,4 +114,9 @@ func OverrideOBIGlobalConfig() {
 		Prom:    "beyla_stat_tcp_retransmits",
 		OTEL:    "beyla.stat.tcp.retransmits",
 	}
+	attributes.StatTCPIo = attributes.Name{
+		Section: "beyla.stat.tcp.io",
+		Prom:    "beyla_stat_tcp_io_bytes_total",
+		OTEL:    "beyla.stat.tcp.io",
+	}
 }

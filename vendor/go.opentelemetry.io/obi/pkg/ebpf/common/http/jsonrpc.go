@@ -35,7 +35,9 @@ type jsonRPCError struct {
 }
 
 const (
-	jsonRPCVersion     = "2.0"
+	// JSONRPCVersionV1 Golang net.rpc.jsonrpc only supports V1
+	JSONRPCVersionV1   = "1.0"
+	jsonRPCVersionV2   = "2.0"
 	jsonRPCContentType = "application/json-rpc"
 )
 
@@ -87,7 +89,7 @@ func JSONRPCSpanFromParsed(baseSpan *request.Span, resp *http.Response, parsed *
 
 	version := rpcReq.JSONRPC
 	if version == "" && parsed.headerDetected {
-		version = jsonRPCVersion
+		version = jsonRPCVersionV2
 	}
 
 	result := &request.JSONRPC{
@@ -180,7 +182,7 @@ func parseJSONRPCRequest(data []byte, headerDetected bool) (jsonRPCRequest, erro
 }
 
 func isValidJSONRPCVersion(version string, headerDetected bool) bool {
-	if version == jsonRPCVersion {
+	if version == jsonRPCVersionV2 {
 		return true
 	}
 	// Allow empty only when the header was the detection signal.

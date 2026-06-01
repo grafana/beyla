@@ -154,6 +154,11 @@ var (
 		Prom:    "obi_stat_tcp_retransmits",
 		OTEL:    "obi.stat.tcp.retransmits",
 	}
+	StatTCPIo = Name{
+		Section: "obi.stat.tcp.io",
+		Prom:    "obi_stat_tcp_io_bytes_total",
+		OTEL:    "obi.stat.tcp.io",
+	}
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

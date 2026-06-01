@@ -12,8 +12,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/gavv/monotime"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
@@ -21,6 +19,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
@@ -196,7 +195,7 @@ type converter struct {
 	monoClock func() time.Duration
 }
 
-var clocks = converter{monoClock: monotime.Now, clock: time.Now}
+var clocks = converter{monoClock: timing.MonoTimeNow, clock: time.Now}
 
 // PidInfo stores different views of the PID of the process that generated the span
 type PidInfo struct {

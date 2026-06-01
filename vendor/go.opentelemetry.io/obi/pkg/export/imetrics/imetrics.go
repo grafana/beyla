@@ -51,20 +51,11 @@ const (
 	InstrumentationErrorInvalidTracepoint              = "invalid_tracepoint"
 )
 
-func (t InternalMetricsExporter) Valid() bool {
-	switch t {
-	case InternalMetricsExporterDisabled, InternalMetricsExporterPrometheus, InternalMetricsExporterOTEL:
-		return true
-	}
-
-	return false
-}
-
 // InternalMetricsConfig options for the different metrics exporters
 type InternalMetricsConfig struct {
 	Prometheus              PrometheusConfig        `yaml:"prometheus,omitempty"`
-	Exporter                InternalMetricsExporter `yaml:"exporter,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_EXPORTER"`
-	BpfMetricScrapeInterval time.Duration           `yaml:"bpf_metric_scrape_interval" env:"OTEL_EBPF_BPF_METRIC_SCRAPE_INTERVAL"`
+	Exporter                InternalMetricsExporter `yaml:"exporter,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_EXPORTER" validate:"omitempty,oneof=disabled prometheus otel"`
+	BpfMetricScrapeInterval time.Duration           `yaml:"bpf_metric_scrape_interval" env:"OTEL_EBPF_BPF_METRIC_SCRAPE_INTERVAL" validate:"omitempty,gt=0"`
 }
 
 // Reporter of internal metrics

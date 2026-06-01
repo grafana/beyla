@@ -416,7 +416,7 @@ type Config struct {
 	ChannelSendTimeout      time.Duration `yaml:"channel_send_timeout" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT"`
 	ChannelSendTimeoutPanic bool          `yaml:"channel_send_timeout_panic" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT_PANIC"`
 
-	ProfilePort     int                            `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT"`
+	ProfilePort     int                            `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT" validate:"gte=0,lte=65535"`
 	InternalMetrics imetrics.InternalMetricsConfig `yaml:"internal_metrics"`
 
 	// LogConfig enables the logging of the configuration on startup.
@@ -429,7 +429,8 @@ type Config struct {
 }
 
 type HealthCheckConfig struct {
-	Port int `yaml:"port" env:"OTEL_EBPF_HEALTH_CHECK_PORT"`
+	// 0 (default) means disabled
+	Port int `yaml:"port" env:"OTEL_EBPF_HEALTH_CHECK_PORT" validate:"gte=0,lte=65535"`
 }
 
 func (c *Config) Unmarshal(component *confmap.Conf) error {
@@ -713,10 +714,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if len(c.Routes.WildcardChar) > 1 {
-		return ConfigError("wildcard_char can only be a single character, multiple characters are not allowed")
-	}
-
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && c.InternalMetrics.Prometheus.Port != 0 {
 		return ConfigError("you can't enable both OTEL and Prometheus internal metrics")
 	}
@@ -787,6 +784,18 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
 	cfg := DefaultConfig
+	// Note: deep-copy each pointer field so YAML/env unmarshal cannot mutate DefaultConfig through shared
+	// pointers. This is a one-level copy: slice fields inside (e.g. Patterns, Sources) still share
+	// their underlying arrays, which is safe because YAML unmarshal replaces slices rather than
+	// appending to them.
+	if cfg.Routes != nil {
+		routesCopy := *cfg.Routes
+		cfg.Routes = &routesCopy
+	}
+	if cfg.NameResolver != nil {
+		nrCopy := *cfg.NameResolver
+		cfg.NameResolver = &nrCopy
+	}
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
 		if err != nil {

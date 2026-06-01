@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: write
-      pull-requests: write
+      pull-requests: read
     timeout-minutes: 5
     outputs:
       should-label: ${{ steps.evaluate.outputs.should_label }}
@@ -52,7 +52,6 @@ jobs:
           set -euo pipefail
 
           MAX_ATTEMPTS=2
-          MARKER="<!-- ci-supervisor -->"
 
           # --- Resolve the associated PR ---
           PR_NUMBER=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty' 2>/dev/null || true)
@@ -81,10 +80,11 @@ jobs:
             REASON="Maximum re-run attempts reached (attempt ${ATTEMPT} of ${MAX_ATTEMPTS})"
           fi
 
-          # --- Build new table rows for this workflow's failed jobs ---
-          NEW_ROWS=""
+          # --- Scan this workflow's failed jobs ---
+          FOUND_FAILURE=0
 
           while IFS=$'\t' read -r job_name job_conclusion; do
+            FOUND_FAILURE=1
             # Unrecoverable: lint failure in "Pull request checks" -- re-run won't help
             if [ "$WORKFLOW_NAME" = "Pull request checks" ] && echo "$job_name" | grep -qi "lint"; then
               if [ "$VERDICT" != "skip" ]; then
@@ -92,18 +92,9 @@ jobs:
                 REASON="Lint job failed in '${WORKFLOW_NAME}' -- compile-level problem, re-run will not help"
               fi
             fi
-
-            if [ "$VERDICT" = "rerun" ]; then
-              rerunning="Yes"
-            else
-              rerunning="No"
-            fi
-
-            NEW_ROWS="${NEW_ROWS}| ${WORKFLOW_NAME} | ${job_name} | ${job_conclusion} | ${rerunning} | ${ATTEMPT}/${MAX_ATTEMPTS} |
-          "
           done < <(echo "$RUN_JSON" | jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | [.name, .conclusion] | @tsv')
 
-          if [ -z "$NEW_ROWS" ]; then
+          if [ "$FOUND_FAILURE" -eq 0 ]; then
             echo "No failed or timed-out jobs found. Exiting."
             exit 0
           fi
@@ -135,41 +126,6 @@ jobs:
           fi
 
           echo "should_label=${SHOULD_LABEL}" >> "$GITHUB_OUTPUT"
-
-          # --- Fetch existing sticky comment (if any) and merge rows ---
-          EXISTING_COMMENT=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments?per_page=100" 2>/dev/null \
-            | jq -s --arg marker "$MARKER" '[.[][] | select(.body | startswith($marker))] | last | {id, body}' \
-            || echo '{}')
-          EXISTING_COMMENT_ID=$(echo "$EXISTING_COMMENT" | jq -r '.id // empty')
-          EXISTING_BODY=$(echo "$EXISTING_COMMENT" | jq -r '.body // empty')
-
-          # Extract existing table rows, dropping rows that belong to the current workflow
-          # (they'll be replaced by NEW_ROWS).
-          KEPT_ROWS=""
-          if [ -n "$EXISTING_BODY" ]; then
-            KEPT_ROWS=$(echo "$EXISTING_BODY" | grep '^|' | grep -v '^| Workflow' | grep -v '^|---' | grep -v "^| ${WORKFLOW_NAME} |" || true)
-            if [ -n "$KEPT_ROWS" ]; then
-              KEPT_ROWS="${KEPT_ROWS}
-          "
-            fi
-          fi
-
-          # --- Build the full comment ---
-          COMMENT_BODY="${MARKER}
-          ### CI Supervisor
-
-          | Workflow | Job | Last state | Re-running? | Attempt |
-          |----------|-----|-----------|-------------|---------|
-          ${KEPT_ROWS}${NEW_ROWS}"
-
-          if [ -n "$EXISTING_COMMENT_ID" ]; then
-            gh api "repos/${REPO}/issues/comments/${EXISTING_COMMENT_ID}" \
-              --method PATCH --field body="$COMMENT_BODY" > /dev/null
-            echo "Updated CI Supervisor comment (id: ${EXISTING_COMMENT_ID}) on PR #${PR_NUMBER}"
-          else
-            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT_BODY"
-            echo "Posted CI Supervisor comment on PR #${PR_NUMBER}"
-          fi
 
   add-agent-label:
     name: Add agent/fix-obi-pending label

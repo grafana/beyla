@@ -244,7 +244,7 @@ type SDKInject struct {
 	// TODO: move to controller?
 	NoAutoRestart bool `yaml:"disable_auto_restart"`
 	// OCI image version to inject
-	ImageVolumeVersion string `yaml:"image_volume_version"`
+	ImageVersion string `yaml:"image_version"`
 	// Default sampler configuration for SDK instrumentation
 	// This is used when no sampler is specified in the selector
 	DefaultSampler *services.SamplerConfig `yaml:"trace_sampler"`
@@ -262,14 +262,14 @@ type SDKInject struct {
 }
 
 func (s *SDKInject) Validate() error {
-	if s.ImageVolumeVersion == "" {
+	if s.ImageVersion == "" {
 		return fmt.Errorf("image volume version is required")
 	}
 	return nil
 }
 
 func (s *SDKInject) PackageVersion() string {
-	h := sha256.Sum224([]byte(s.ImageVolumeVersion))
+	h := sha256.Sum224([]byte(s.ImageVersion))
 	return hex.EncodeToString(h[:]) // 56 chars, fits in 63-char label limit
 }
 

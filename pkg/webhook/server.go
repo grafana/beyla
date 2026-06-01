@@ -97,11 +97,11 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 			Endpoint: mutator.Endpoint(),
 			Protocol: mutator.Protocol(),
 		},
-		ExportedSignals:    cfg.Injector.ExportedSignals,
-		ImageVolumeVersion: cfg.Injector.ImageVolumeVersion,
-		DefaultSampler:     cfg.Injector.DefaultSampler,
-		Propagators:        cfg.Injector.Propagators,
-		Resources:          cfg.Injector.Resources,
+		ExportedSignals: cfg.Injector.ExportedSignals,
+		ImageVersion:    cfg.Injector.ImageVersion,
+		DefaultSampler:  cfg.Injector.DefaultSampler,
+		Propagators:     cfg.Injector.Propagators,
+		Resources:       cfg.Injector.Resources,
 	}
 
 	stateHash := stateCfg.Hash()

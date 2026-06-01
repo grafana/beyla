@@ -10,12 +10,12 @@ import (
 )
 
 func TestSDKInject_Validate(t *testing.T) {
-	t.Run("image_volume_version set is valid", func(t *testing.T) {
-		s := SDKInject{ImageVolumeVersion: "v1.0.0"}
+	t.Run("image_version set is valid", func(t *testing.T) {
+		s := SDKInject{ImageVersion: "v1.0.0"}
 		require.NoError(t, s.Validate())
 	})
 
-	t.Run("missing image_volume_version is invalid", func(t *testing.T) {
+	t.Run("missing image_version is invalid", func(t *testing.T) {
 		s := SDKInject{}
 		err := s.Validate()
 		require.Error(t, err)
@@ -24,17 +24,17 @@ func TestSDKInject_Validate(t *testing.T) {
 }
 
 func TestSDKInject_PackageVersion(t *testing.T) {
-	t.Run("returns sha256 hash of image_volume_version", func(t *testing.T) {
+	t.Run("returns sha256 hash of image_version", func(t *testing.T) {
 		path := "v1.0.0"
-		s := SDKInject{ImageVolumeVersion: path}
+		s := SDKInject{ImageVersion: path}
 		h := sha256.Sum224([]byte(path))
 		assert.Equal(t, hex.EncodeToString(h[:]), s.PackageVersion())
 		assert.Len(t, s.PackageVersion(), 56) // 224-bit hash → 56 hex chars
 	})
 
 	t.Run("different image versions produce different versions", func(t *testing.T) {
-		s1 := SDKInject{ImageVolumeVersion: "v1.0.0"}
-		s2 := SDKInject{ImageVolumeVersion: "v1.0.1"}
+		s1 := SDKInject{ImageVersion: "v1.0.0"}
+		s2 := SDKInject{ImageVersion: "v1.0.1"}
 		assert.NotEqual(t, s1.PackageVersion(), s2.PackageVersion())
 	})
 }

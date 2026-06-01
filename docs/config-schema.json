@@ -2070,9 +2070,9 @@
           "type": "array",
           "description": "List of enabled SDK auto-instrumentations. Can be used to disable specific language instrumentations."
         },
-        "image_volume_path": {
+        "image_version": {
           "type": "string",
-          "description": "OCI image mount, supported on k8s 1.31+. Must not be empty."
+          "description": "OCI image version to inject"
         },
         "instrument": {
           "$ref": "#/$defs/WebhookInstrument",

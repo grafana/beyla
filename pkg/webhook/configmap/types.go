@@ -78,7 +78,7 @@ type InjectConfig struct {
 	ExportedSignals SDKExportedSignals `yaml:"otel_exported_signals,omitempty"`
 
 	// OCI image version to inject. Must not be empty.
-	ImageVolumeVersion string `yaml:"image_volume_version,omitempty"`
+	ImageVersion string `yaml:"image_version,omitempty"`
 
 	// Default sampler configuration for SDK instrumentation
 	// This is used when no sampler is specified in the selector
@@ -184,7 +184,7 @@ func (d *EligibleDeployment) Valid() bool {
 }
 
 func (c *InjectConfig) PackageVersion() string {
-	h := sha256.Sum224([]byte(c.ImageVolumeVersion))
+	h := sha256.Sum224([]byte(c.ImageVersion))
 	return fmt.Sprintf("%x", h)
 }
 

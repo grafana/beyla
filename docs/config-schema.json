@@ -2172,6 +2172,41 @@
       },
       "type": "object"
     },
+    "Selector": {
+      "properties": {
+        "namespaces": {
+          "items": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "array",
+          "description": "Namespaces lists namespace name globs. Empty means all namespaces. A pod matches if its namespace matches any entry (OR semantics)."
+        },
+        "ownerKind": {
+          "type": "string",
+          "description": "OwnerKind restricts matching to a specific owner kind: Deployment, ReplicaSet, StatefulSet, or DaemonSet. Empty means any kind."
+        },
+        "ownerName": {
+          "$ref": "#/$defs/GlobAttr",
+          "description": "OwnerName is a glob matched against the pod's resolved owning resource name. For a pod owned by a ReplicaSet that is itself owned by a Deployment, both the ReplicaSet name and the Deployment name are tried. Empty means any owner name."
+        },
+        "podAnnotations": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object",
+          "description": "PodAnnotations maps annotation keys to value globs. Empty means all pods. All entries must match (AND semantics)."
+        },
+        "podLabels": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object",
+          "description": "PodLabels maps label keys to value globs. Empty means all pods. All entries must match (AND semantics)."
+        }
+      },
+      "type": "object",
+      "description": "Selector determines which pods a Rule applies to. All populated fields must match (AND). An empty field is a wildcard."
+    },
     "StatsConfig": {
       "properties": {
         "agent_ip": {
@@ -2351,41 +2386,6 @@
       },
       "type": "object",
       "description": "WebhookConfig contains the configuration for the mutating webhook Functionality under active development TODO: most of the following options are not having effect. They must be moved to k8s-injection-controller"
-    },
-    "Selector": {
-      "properties": {
-        "namespaces": {
-          "items": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "array",
-          "description": "Namespaces lists namespace name globs. Empty means all namespaces. A pod matches if its namespace matches any entry (OR semantics)."
-        },
-        "ownerKind": {
-          "type": "string",
-          "description": "OwnerKind restricts matching to a specific owner kind: Deployment, ReplicaSet, StatefulSet, or DaemonSet. Empty means any kind."
-        },
-        "ownerName": {
-          "$ref": "#/$defs/GlobAttr",
-          "description": "OwnerName is a glob matched against the pod's resolved owning resource name. For a pod owned by a ReplicaSet that is itself owned by a Deployment, both the ReplicaSet name and the Deployment name are tried. Empty means any owner name."
-        },
-        "podAnnotations": {
-          "additionalProperties": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "object",
-          "description": "PodAnnotations maps annotation keys to value globs. Empty means all pods. All entries must match (AND semantics)."
-        },
-        "podLabels": {
-          "additionalProperties": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "object",
-          "description": "PodLabels maps label keys to value globs. Empty means all pods. All entries must match (AND semantics)."
-        }
-      },
-      "type": "object",
-      "description": "Selector determines which pods a Rule applies to. All populated fields must match (AND). An empty field is a wildcard."
     },
     "WebhookInstrument": {
       "items": {

@@ -395,7 +395,9 @@ func processMetadataFromInformer(pod *informer.ObjectMeta) *ProcessInfo {
 	ret.podLabels = pod.Labels
 	ret.podAnnotations = pod.Annotations
 
-	ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: pod.Name, Kind: "Pod"})
+	// owners is the chain the OBI informer already resolved (e.g. ReplicaSet →
+	// Deployment); pass it through verbatim. Bare pods have no owners and so get
+	// an empty chain, matching processMetadata().
 	for _, owner := range owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
 		ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: owner.Name, Kind: owner.Kind})

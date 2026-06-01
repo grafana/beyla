@@ -271,7 +271,9 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 		env = append(env, corev1.EnvVar{Name: "OTEL_INJECTOR_RESOURCE_ATTRIBUTES", Value: strings.Join(attrs, ",")})
 	}
 
-	rules := make([]configmap.Rule, 0, len(injCfg.Instrument))
+	// nil (not an empty slice) when there are no selectors, so the marshalled
+	// config omits rules entirely rather than emitting an empty list.
+	var rules []configmap.Rule
 	for _, sel := range injCfg.Instrument {
 		rules = append(rules, configmap.Rule{
 			Selector: sel,

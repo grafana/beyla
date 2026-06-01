@@ -270,9 +270,9 @@ func processMetadata(meta *metav1.ObjectMeta) *ProcessInfo {
 	ret.podLabels = meta.Labels
 	ret.podAnnotations = meta.Annotations
 
-	// Always include the pod itself first so pods are selectable by name.
-	// ownersFrom returns {Kind: "Pod"} for bare pods; skip that to avoid duplicates.
-	ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: meta.Name, Kind: "Pod"})
+	// ownerChain carries the resolved owners (e.g. ReplicaSet → Deployment) so
+	// OwnerName/OwnerKind selectors can match any link. ownersFrom returns
+	// {Kind: "Pod"} for bare pods; skip it so a standalone pod has an empty chain.
 	for _, owner := range owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
 		if owner.Kind != "Pod" {

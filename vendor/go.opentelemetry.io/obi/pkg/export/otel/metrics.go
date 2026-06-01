@@ -312,8 +312,8 @@ func newMetricsReporter(
 			}
 
 			go func() {
-				if err := v.provider.ForceFlush(ctx); err != nil {
-					llog.Warn("error flushing evicted metrics provider", "error", err)
+				if err := v.provider.Shutdown(ctx); err != nil {
+					llog.Warn("error shutting down evicted metrics provider", "error", err)
 				}
 			}()
 		}, mr.newMetricSet)
@@ -699,7 +699,7 @@ func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 
 	opts := []metric.Option{
 		metric.WithResource(resources),
-		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
+		metric.WithReader(metric.NewPeriodicReader(sharedExporter{mr.exporter},
 			metric.WithInterval(mr.cfg.Interval))),
 	}
 
@@ -773,6 +773,15 @@ func (mr *MetricsReporter) close() {
 		mlog().Debug("Metrics reporter closed")
 	}()
 }
+
+// sharedExporter wraps an sdkmetric.Exporter so that Shutdown is a no-op.
+// Per-service MeterProviders own a PeriodicReader that cascades Shutdown into
+// the exporter; without this wrapper, evicting one service would shut down the
+// exporter shared by every other service. The owning MetricsReporter calls
+// Shutdown on the underlying exporter directly from its own close().
+type sharedExporter struct{ sdkmetric.Exporter }
+
+func (sharedExporter) Shutdown(_ context.Context) error { return nil }
 
 // instrumentMetricsExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed metrics exporter inside an instrumented exporter

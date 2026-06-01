@@ -137,8 +137,8 @@ func newSvcGraphMetricsReporter(
 			v.cleanupAllMetricsInstances()
 
 			go func() {
-				if err := v.provider.ForceFlush(ctx); err != nil {
-					llog.Warn("error flushing evicted metrics provider", "error", err)
+				if err := v.provider.Shutdown(ctx); err != nil {
+					llog.Warn("error shutting down evicted metrics provider", "error", err)
 				}
 			}()
 		}, mr.newMetricSet)
@@ -253,7 +253,7 @@ func (mr *SvcGraphMetricsReporter) newSvcGraphMetricsInstance(service *svc.Attrs
 
 	opts := []metric.Option{
 		metric.WithResource(resources),
-		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
+		metric.WithReader(metric.NewPeriodicReader(sharedExporter{mr.exporter},
 			metric.WithInterval(mr.cfg.Interval))),
 	}
 

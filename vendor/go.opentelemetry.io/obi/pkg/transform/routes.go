@@ -53,18 +53,20 @@ const wildCard = "/**"
 
 // RoutesConfig allows grouping URLs sharing a given pattern.
 type RoutesConfig struct {
-	// Unmatch specifies what to do when a route pattern is not matched
-	Unmatch UnmatchType `yaml:"unmatched"`
+	// Unmatch specifies what to do when a route pattern is not matched.
+	// Empty string is treated the same as "wildcard".
+	Unmatch UnmatchType `yaml:"unmatched" validate:"omitempty,oneof=unset path wildcard heuristic low-cardinality"`
 	// Patterns defines the URL path patterns that will match to a route
 	Patterns []string `yaml:"patterns"`
 	// Deprecated: To be removed and replaced by a collector-like filtering mechanism
 	IgnorePatterns []string `yaml:"ignored_patterns"`
 	// Deprecated: To be removed and replaced by a collector-like filtering mechanism
-	IgnoredEvents IgnoreMode `yaml:"ignore_mode"`
+	IgnoredEvents IgnoreMode `yaml:"ignore_mode" validate:"omitempty,oneof=metrics traces all"`
 	// Character that will be used to replace route segments
-	WildcardChar string `yaml:"wildcard_char,omitempty" jsonschema:"maxLength=1"`
+	WildcardChar string `yaml:"wildcard_char,omitempty" jsonschema:"maxLength=1" validate:"max=1"`
 	// Max allowed path segment cardinality (per service) for the heuristic matcher
-	MaxPathSegmentCardinality int `yaml:"max_path_segment_cardinality"`
+	// 0 = disabled
+	MaxPathSegmentCardinality int `yaml:"max_path_segment_cardinality" validate:"gte=0"`
 }
 
 func RoutesProvider(rc *RoutesConfig, input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {

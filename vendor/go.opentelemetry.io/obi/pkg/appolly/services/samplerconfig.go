@@ -25,7 +25,7 @@ const (
 // https://opentelemetry.io/docs/concepts/sdk-configuration/general-sdk-configuration/#otel_traces_sampler
 // We don't support, yet, the jaeger and xray samplers.
 type SamplerConfig struct {
-	Name SamplerName `yaml:"name" env:"OTEL_TRACES_SAMPLER"`
+	Name SamplerName `yaml:"name" env:"OTEL_TRACES_SAMPLER" validate:"omitempty,oneof=always_on always_off traceidratio parentbased_always_on parentbased_always_off parentbased_traceidratio"`
 	Arg  string      `yaml:"arg" env:"OTEL_TRACES_SAMPLER_ARG"`
 }
 

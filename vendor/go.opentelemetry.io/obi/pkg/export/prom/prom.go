@@ -111,9 +111,9 @@ var (
 
 // NativeHistogramConfig holds configuration for native histograms
 type NativeHistogramConfig struct {
-	BucketFactor     float64       `yaml:"bucket_factor" env:"OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_BUCKET_FACTOR"`
-	MaxBucketNumber  uint32        `yaml:"max_bucket_number" env:"OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_MAX_BUCKET_NUMBER"`
-	MinResetDuration time.Duration `yaml:"min_reset_duration" env:"OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_MIN_RESET_DURATION"`
+	BucketFactor     float64       `yaml:"bucket_factor" env:"OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_BUCKET_FACTOR" validate:"gt=1"`
+	MaxBucketNumber  uint32        `yaml:"max_bucket_number" env:"OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_MAX_BUCKET_NUMBER" validate:"gt=0"`
+	MinResetDuration time.Duration `yaml:"min_reset_duration" env:"OTEL_EBPF_PROMETHEUS_NATIVE_HISTOGRAM_MIN_RESET_DURATION" validate:"gt=0"`
 }
 
 var DefaultNativeHistogramConfig = NativeHistogramConfig{
@@ -125,7 +125,8 @@ var DefaultNativeHistogramConfig = NativeHistogramConfig{
 
 // TODO: TLS
 type PrometheusConfig struct {
-	Port int    `yaml:"port" env:"OTEL_EBPF_PROMETHEUS_PORT"`
+	// 0 means disabled
+	Port int    `yaml:"port" env:"OTEL_EBPF_PROMETHEUS_PORT" validate:"gte=0,lte=65535"`
 	Path string `yaml:"path" env:"OTEL_EBPF_PROMETHEUS_PATH"`
 
 	DisableBuildInfo bool `yaml:"disable_build_info" env:"OTEL_EBPF_PROMETHEUS_DISABLE_BUILD_INFO"`
@@ -144,7 +145,7 @@ type PrometheusConfig struct {
 	// TTL specifies the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
 	TTL                         time.Duration `yaml:"ttl" env:"OTEL_EBPF_PROMETHEUS_TTL"`
-	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
+	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size" validate:"gt=0"`
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 

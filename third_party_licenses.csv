@@ -42,7 +42,6 @@ github.com/foxboron/go-tpm-keyfiles,https://github.com/grafana/beyla/blob/HEAD/v
 github.com/fsnotify/fsnotify,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/fsnotify/fsnotify/LICENSE,BSD-3-Clause
 github.com/fxamacker/cbor/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/fxamacker/cbor/v2/LICENSE,MIT
 github.com/gabriel-vasile/mimetype,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gabriel-vasile/mimetype/LICENSE,MIT
-github.com/gavv/monotime,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gavv/monotime/LICENSE,Apache-2.0
 github.com/go-logr/logr,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-logr/logr/LICENSE,Apache-2.0
 github.com/go-logr/stdr,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-logr/stdr/LICENSE,Apache-2.0
 github.com/go-openapi/jsonpointer,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-openapi/jsonpointer/LICENSE,Apache-2.0

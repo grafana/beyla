@@ -40,7 +40,7 @@ type TracesConfig struct {
 
 	// BatchMaxSize is the maximum number of spans that the batcher will accumulate
 	// before flushing a batch to the sending queue.
-	BatchMaxSize int `yaml:"batch_max_size" env:"OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE"`
+	BatchMaxSize int `yaml:"batch_max_size" env:"OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE" validate:"omitempty,gt=0"`
 
 	// QueueSize is the maximum number of spans that the sending queue will hold
 	// before applying back-pressure. It must be >= `2 * BatchMaxSize`, otherwise the
@@ -54,17 +54,17 @@ type TracesConfig struct {
 	// Configuration options for BackOffConfig of the traces exporter.
 	// See https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configretry/backoff.go
 	// BackOffInitialInterval the time to wait after the first failure before retrying.
-	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"OTEL_EBPF_BACKOFF_INITIAL_INTERVAL"`
+	BackOffInitialInterval time.Duration `yaml:"backoff_initial_interval" env:"OTEL_EBPF_BACKOFF_INITIAL_INTERVAL" validate:"omitempty,gt=0"`
 	// BackOffMaxInterval specifies the upper bound on backoff interval.
-	BackOffMaxInterval time.Duration `yaml:"backoff_max_interval" env:"OTEL_EBPF_BACKOFF_MAX_INTERVAL"`
+	BackOffMaxInterval time.Duration `yaml:"backoff_max_interval" env:"OTEL_EBPF_BACKOFF_MAX_INTERVAL" validate:"omitempty,gt=0"`
 	// BackOffMaxElapsedTime specifies the maximum amount of time (including retries) spent trying to send a request/batch.
-	BackOffMaxElapsedTime time.Duration `yaml:"backoff_max_elapsed_time" env:"OTEL_EBPF_BACKOFF_MAX_ELAPSED_TIME"`
-	ReportersCacheLen     int           `yaml:"reporters_cache_len" env:"OTEL_EBPF_TRACES_REPORT_CACHE_LEN"`
+	BackOffMaxElapsedTime time.Duration `yaml:"backoff_max_elapsed_time" env:"OTEL_EBPF_BACKOFF_MAX_ELAPSED_TIME" validate:"omitempty,gt=0"`
+	ReportersCacheLen     int           `yaml:"reporters_cache_len" env:"OTEL_EBPF_TRACES_REPORT_CACHE_LEN" validate:"omitempty,gt=0"`
 
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	// Accepted values: debug, info, warn, error (case-insensitive). dpanic/panic/fatal are mapped to error.
-	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL" validate:"omitempty,oneofci=debug info warn error"`
 
 	// OTLPEndpointProvider allows overriding the OTLP Endpoint. It needs to return an endpoint and
 	// a boolean indicating if the endpoint is common for both traces and metrics

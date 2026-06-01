@@ -17,13 +17,13 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/gavv/monotime"
 	"github.com/vishvananda/netlink"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
@@ -611,7 +611,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 
 func kernelTime(ktime uint64) time.Time {
 	now := time.Now()
-	delta := monotime.Now() - time.Duration(int64(ktime))
+	delta := timing.MonoTimeNow() - time.Duration(int64(ktime))
 
 	return now.Add(-delta)
 }

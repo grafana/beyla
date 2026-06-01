@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -26,10 +27,10 @@ const (
 
 var kernelVersion = ebpfcommon.KernelVersion
 
-// parseOSReleaseIsRHEL checks whether os-release content indicates an RHEL-based distro.
+var rhelIDs = []string{"rhel", "centos", "rocky", "alma"}
+
 func parseOSReleaseIsRHEL(data []byte) bool {
 	content := strings.ToLower(string(data))
-	// matches ID="rhel" or ID_LIKE containing "rhel" (e.g. Rocky, AlmaLinux, CentOS set ID_LIKE="rhel ...")
 	for _, line := range strings.Split(content, "\n") {
 		var val string
 		switch {
@@ -40,22 +41,31 @@ func parseOSReleaseIsRHEL(data []byte) bool {
 		default:
 			continue
 		}
-		val = strings.Trim(val, "\"'")
-		if strings.Contains(val, "rhel") || strings.Contains(val, "centos") ||
-			strings.Contains(val, "rocky") || strings.Contains(val, "alma") {
-			return true
+		val = strings.Trim(val, `"'`)
+		for _, id := range rhelIDs {
+			if strings.Contains(val, id) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// isRHELBased is a var so tests can override it.
+// Matches RHEL release tag (.elN) or rebuilt RHEL kernels via the gcc banner.
+var rhelKernelRE = regexp.MustCompile(`\.el\d+(_\d+)?\b|\(Red Hat \d+\.\d+\.\d+-\d+\)`)
+
+func parseProcVersionIsRHEL(data []byte) bool {
+	return rhelKernelRE.Match(data)
+}
+
 var isRHELBased = func() bool {
-	data, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		return false
+	if data, err := os.ReadFile("/etc/os-release"); err == nil && parseOSReleaseIsRHEL(data) {
+		return true
 	}
-	return parseOSReleaseIsRHEL(data)
+	if data, err := os.ReadFile("/proc/version"); err == nil && parseProcVersionIsRHEL(data) {
+		return true
+	}
+	return false
 }
 
 // hasBTF checks whether the kernel exposes BTF information by looking for the
@@ -91,17 +101,15 @@ var hasBTF = func() bool {
 	return false
 }
 
-// checkOSSupport contains the actual logic
-// tests call this directly.
+// checkOSSupport contains the actual logic; tests call it directly.
 func checkOSSupport() error {
 	major, minor := kernelVersion()
-	maj, mnr := minKernMaj, minKernMin
-	if isRHELBased() {
-		maj, mnr = minRHELKernMaj, minRHELKernMin
-	}
-	if major < maj || (major == maj && minor < mnr) {
+	general := major > minKernMaj || (major == minKernMaj && minor >= minKernMin)
+	// RHEL relaxation only applies at the 4.18 floor.
+	rhel418 := major == minRHELKernMaj && minor == minRHELKernMin && isRHELBased()
+	if !general && !rhel418 {
 		return fmt.Errorf("kernel version %d.%d not supported. Minimum required version is %d.%d",
-			major, minor, maj, mnr)
+			major, minor, minKernMaj, minKernMin)
 	}
 
 	if !hasBTF() {

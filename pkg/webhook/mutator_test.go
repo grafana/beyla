@@ -193,9 +193,9 @@ func TestPodMutator_PreloadsSomethingElse(t *testing.T) {
 }
 
 func TestPodMutator_AlreadyInstrumented(t *testing.T) {
-	cfg := &beyla.Config{Injector: beyla.SDKInject{ImageVolumePath: "/img/current"}}
+	cfg := &beyla.Config{Injector: beyla.SDKInject{ImageVolumeVersion: "v1.0.1"}}
 	currentVer := cfg.Injector.PackageVersion()
-	oldVer := (&beyla.SDKInject{ImageVolumePath: "/img/old"}).PackageVersion()
+	oldVer := (&beyla.SDKInject{ImageVolumeVersion: "v1.0.0"}).PackageVersion()
 
 	tests := []struct {
 		name     string
@@ -792,13 +792,13 @@ func TestPodMutator_BuildVolumeDefinition(t *testing.T) {
 		{
 			name: "image volume when ImageVolumePath is set",
 			injector: beyla.SDKInject{
-				ImageVolumePath: "my-registry/sdk-image:v1.0.0",
+				ImageVolumeVersion: "v1.0.0",
 			},
 			check: func(t *testing.T, vol corev1.Volume) {
 				assert.Equal(t, injectVolumeName, vol.Name)
 				assert.NotNil(t, vol.Image)
 				assert.Nil(t, vol.HostPath)
-				assert.Equal(t, "my-registry/sdk-image:v1.0.0", vol.Image.Reference)
+				assert.Equal(t, "v1.0.0", vol.Image.Reference)
 				assert.Equal(t, corev1.PullIfNotPresent, vol.Image.PullPolicy)
 			},
 		},

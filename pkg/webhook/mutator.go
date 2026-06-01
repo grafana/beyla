@@ -156,7 +156,7 @@ func (pm *PodMutator) buildVolumeDefinition() corev1.Volume {
 		Name: injectVolumeName,
 		VolumeSource: corev1.VolumeSource{
 			Image: &corev1.ImageVolumeSource{
-				Reference:  pm.cfg.Injector.ImageVolumePath,
+				Reference:  pm.cfg.Injector.ImageVolumeVersion,
 				PullPolicy: corev1.PullIfNotPresent,
 			},
 		},

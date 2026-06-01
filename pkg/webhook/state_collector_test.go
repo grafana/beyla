@@ -566,7 +566,7 @@ func TestPodStateCache_On(t *testing.T) {
 
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
-			ImageVolumePath: "/img/v1.2.3",
+			ImageVolumeVersion: "v1.2.3",
 			Instrument: configmap.WebhookInstrument{
 				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
 			},
@@ -648,7 +648,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
-			ImageVolumePath: "/img/v1.2.3",
+			ImageVolumeVersion: "v1.2.3",
 			Instrument: configmap.WebhookInstrument{
 				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
 			},

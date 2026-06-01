@@ -766,7 +766,7 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  image_volume_path: my-registry/sdk-image:v1.0.0
+  image_volume_version: v1.0.0
 otel_traces_export:
   endpoint: http://localhost:4317/v1/traces
 `)
@@ -799,7 +799,7 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  image_volume_path: my-registry/sdk-image:v1.0.0
+  image_volume_version: v1.0.0
 `)
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)

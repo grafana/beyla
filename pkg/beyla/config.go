@@ -243,8 +243,8 @@ type SDKInject struct {
 	// a responsibility of the end-user to bounce the pods to be instrumented
 	// TODO: move to controller?
 	NoAutoRestart bool `yaml:"disable_auto_restart"`
-	// OCI image mount, supported on k8s 1.31+. Must not be empty.
-	ImageVolumePath string `yaml:"image_volume_path"`
+	// OCI image version to inject
+	ImageVolumeVersion string `yaml:"image_volume_version"`
 	// Default sampler configuration for SDK instrumentation
 	// This is used when no sampler is specified in the selector
 	DefaultSampler *services.SamplerConfig `yaml:"trace_sampler"`
@@ -262,19 +262,15 @@ type SDKInject struct {
 }
 
 func (s *SDKInject) Validate() error {
-	if s.ImageVolumePath == "" {
-		return fmt.Errorf("image volume path is required")
+	if s.ImageVolumeVersion == "" {
+		return fmt.Errorf("image volume version is required")
 	}
 	return nil
 }
 
 func (s *SDKInject) PackageVersion() string {
-	h := sha256.Sum224([]byte(s.ImageVolumePath))
+	h := sha256.Sum224([]byte(s.ImageVolumeVersion))
 	return hex.EncodeToString(h[:]) // 56 chars, fits in 63-char label limit
-}
-
-func (s *SDKInject) UsesImageVolume() bool {
-	return s.ImageVolumePath != ""
 }
 
 // WebhookConfig contains the configuration for the mutating webhook

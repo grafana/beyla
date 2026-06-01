@@ -39,9 +39,9 @@ const (
 // WebhookInstrument is the list of selectors from the Beyla injector config
 // that determine which pods to instrument. It carries selectors only — no
 // per-rule config. When Beyla writes the state ConfigMap it promotes each
-// Selector into a full Rule by pairing it with the OTLP destination env vars
+// K8sSelector into a full Rule by pairing it with the OTLP destination env vars
 // derived from Beyla's own export configuration (see buildInjectConfig).
-type WebhookInstrument []Selector
+type WebhookInstrument []K8sSelector
 
 // InjectConfig is the YAML document under KeyInstrumentation. Rules are
 // evaluated in order; the first rule whose selector matches a pod wins.
@@ -57,24 +57,29 @@ type InjectConfig struct {
 // Rule pairs a selector with the instrumentation config to apply when the
 // selector matches.
 type Rule struct {
-	Selector Selector   `yaml:"selector,omitempty"`
-	Config   RuleConfig `yaml:"config,omitempty"`
+	Selector K8sSelector `yaml:"k8s_selector,omitempty"`
+	Config   RuleConfig  `yaml:"config,omitempty"`
 }
 
-// Selector determines which pods a Rule applies to. All populated fields must
-// match (AND). An empty field is a wildcard.
-type Selector struct {
+// K8sSelector determines which pods a Rule applies to. All populated fields must
+// match (AND). An empty field is a wildcard. Every field describes Kubernetes
+// pod metadata, hence the k8s_ prefix on the YAML key.
+type K8sSelector struct {
 	// Namespaces lists namespace name globs. Empty means all namespaces.
 	// A pod matches if its namespace matches any entry (OR semantics).
 	Namespaces []services.GlobAttr `yaml:"namespaces,omitempty"`
-	// OwnerName is a glob matched against the pod's resolved owning resource
-	// name. For a pod owned by a ReplicaSet that is itself owned by a
-	// Deployment, both the ReplicaSet name and the Deployment name are tried.
-	// Empty means any owner name.
-	OwnerName services.GlobAttr `yaml:"ownerName,omitempty"`
-	// OwnerKind restricts matching to a specific owner kind: Deployment,
-	// ReplicaSet, StatefulSet, or DaemonSet. Empty means any kind.
-	OwnerKind string `yaml:"ownerKind,omitempty"`
+	// OwnerNames lists globs matched against the names in the pod's resolved
+	// owner chain. For a pod owned by a ReplicaSet that is itself owned by a
+	// Deployment, every link in the chain is tried. Empty means any owner name.
+	// OwnerNames and OwnerKinds combine per link: a pod matches when a single
+	// owner-chain link satisfies both (kind ∈ OwnerKinds AND name matches some
+	// OwnerNames glob).
+	OwnerNames []services.GlobAttr `yaml:"ownerNames,omitempty"`
+	// OwnerKinds restricts matching to specific owner kinds (e.g. Deployment,
+	// ReplicaSet, StatefulSet, DaemonSet). A link matches if its kind equals any
+	// entry (OR semantics). Empty means any kind. See OwnerNames for how kinds
+	// and names combine.
+	OwnerKinds []string `yaml:"ownerKinds,omitempty"`
 	// PodLabels maps label keys to value globs. Empty means all pods.
 	// All entries must match (AND semantics).
 	PodLabels map[string]services.GlobAttr `yaml:"podLabels,omitempty"`
@@ -83,8 +88,24 @@ type Selector struct {
 	PodAnnotations map[string]services.GlobAttr `yaml:"podAnnotations,omitempty"`
 }
 
+// Mode controls what a Rule does when its selector matches a pod.
+type Mode string
+
+const (
+	// ModeInstall instruments matched pods. It is the default when Mode is unset.
+	ModeInstall Mode = "install"
+	// ModeSkip explicitly excludes matched pods from instrumentation. Because
+	// rules are evaluated in order (first match wins), a skip rule placed before
+	// a broader install rule carves an exception out of it — e.g. "instrument
+	// everything except serviceA".
+	ModeSkip Mode = "skip"
+)
+
 // RuleConfig is the instrumentation configuration stamped onto matched pods.
 type RuleConfig struct {
+	// Mode selects whether matched pods are instrumented (install, the default
+	// when unset) or explicitly excluded (skip). See Mode.
+	Mode Mode `yaml:"mode,omitempty"`
 	// Env is the list of environment variables to set on instrumented containers.
 	// Supports all corev1.EnvVar sources (valueFrom.secretKeyRef, etc.).
 	Env []corev1.EnvVar `yaml:"env,omitempty"`
@@ -92,6 +113,13 @@ type RuleConfig struct {
 	// declarative config (file_format: "1.0") as a ConfigMap and set
 	// OTEL_CONFIG_FILE on matched containers. Requires volume mount + env var
 	// injection in the mutator before this field can be added to the schema.
+}
+
+// Skips reports whether this config excludes matched pods from instrumentation.
+// An unset Mode (and any unrecognized value) defaults to install, so only an
+// explicit ModeSkip excludes.
+func (c RuleConfig) Skips() bool {
+	return c.Mode == ModeSkip
 }
 
 // EligibleDeployment names one workload whose pre-existing pods are

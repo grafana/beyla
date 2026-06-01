@@ -1140,6 +1140,47 @@
       },
       "type": "object"
     },
+    "K8sSelector": {
+      "properties": {
+        "namespaces": {
+          "items": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "array",
+          "description": "Namespaces lists namespace name globs. Empty means all namespaces. A pod matches if its namespace matches any entry (OR semantics)."
+        },
+        "ownerKinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "OwnerKinds restricts matching to specific owner kinds (e.g. Deployment, ReplicaSet, StatefulSet, DaemonSet). A link matches if its kind equals any entry (OR semantics). Empty means any kind. See OwnerNames for how kinds and names combine."
+        },
+        "ownerNames": {
+          "items": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "array",
+          "description": "OwnerNames lists globs matched against the names in the pod's resolved owner chain. For a pod owned by a ReplicaSet that is itself owned by a Deployment, every link in the chain is tried. Empty means any owner name. OwnerNames and OwnerKinds combine per link: a pod matches when a single owner-chain link satisfies both (kind ∈ OwnerKinds AND name matches some OwnerNames glob)."
+        },
+        "podAnnotations": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object",
+          "description": "PodAnnotations maps annotation keys to value globs. Empty means all pods. All entries must match (AND semantics)."
+        },
+        "podLabels": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object",
+          "description": "PodLabels maps label keys to value globs. Empty means all pods. All entries must match (AND semantics)."
+        }
+      },
+      "type": "object",
+      "description": "K8sSelector determines which pods a Rule applies to. All populated fields must match (AND). An empty field is a wildcard. Every field describes Kubernetes pod metadata, hence the k8s_ prefix on the YAML key."
+    },
     "KubernetesDecorator": {
       "properties": {
         "cluster_name": {
@@ -2172,41 +2213,6 @@
       },
       "type": "object"
     },
-    "Selector": {
-      "properties": {
-        "namespaces": {
-          "items": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "array",
-          "description": "Namespaces lists namespace name globs. Empty means all namespaces. A pod matches if its namespace matches any entry (OR semantics)."
-        },
-        "ownerKind": {
-          "type": "string",
-          "description": "OwnerKind restricts matching to a specific owner kind: Deployment, ReplicaSet, StatefulSet, or DaemonSet. Empty means any kind."
-        },
-        "ownerName": {
-          "$ref": "#/$defs/GlobAttr",
-          "description": "OwnerName is a glob matched against the pod's resolved owning resource name. For a pod owned by a ReplicaSet that is itself owned by a Deployment, both the ReplicaSet name and the Deployment name are tried. Empty means any owner name."
-        },
-        "podAnnotations": {
-          "additionalProperties": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "object",
-          "description": "PodAnnotations maps annotation keys to value globs. Empty means all pods. All entries must match (AND semantics)."
-        },
-        "podLabels": {
-          "additionalProperties": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "object",
-          "description": "PodLabels maps label keys to value globs. Empty means all pods. All entries must match (AND semantics)."
-        }
-      },
-      "type": "object",
-      "description": "Selector determines which pods a Rule applies to. All populated fields must match (AND). An empty field is a wildcard."
-    },
     "StatsConfig": {
       "properties": {
         "agent_ip": {
@@ -2389,10 +2395,10 @@
     },
     "WebhookInstrument": {
       "items": {
-        "$ref": "#/$defs/Selector"
+        "$ref": "#/$defs/K8sSelector"
       },
       "type": "array",
-      "description": "WebhookInstrument is the list of selectors from the Beyla injector config that determine which pods to instrument. It carries selectors only — no per-rule config. When Beyla writes the state ConfigMap it promotes each Selector into a full Rule by pairing it with the OTLP destination env vars derived from Beyla's own export configuration (see buildInjectConfig)."
+      "description": "WebhookInstrument is the list of selectors from the Beyla injector config that determine which pods to instrument. It carries selectors only — no per-rule config. When Beyla writes the state ConfigMap it promotes each K8sSelector into a full Rule by pairing it with the OTLP destination env vars derived from Beyla's own export configuration (see buildInjectConfig)."
     }
   },
   "properties": {

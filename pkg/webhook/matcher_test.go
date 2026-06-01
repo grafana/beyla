@@ -23,7 +23,7 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 		instrument configmap.WebhookInstrument
 		process    *ProcessInfo
 		want       bool
-		wantSel    *configmap.Selector // non-nil: assert the exact selector returned
+		wantSel    *configmap.K8sSelector // non-nil: assert the exact selector returned
 	}{
 		{
 			name:       "nil process — no match",
@@ -68,7 +68,7 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 			// Verifies ownerChain is wired to MatchInput.OwnerChain.
 			name: "ownerChain from processInfo",
 			instrument: configmap.WebhookInstrument{{
-				OwnerName: services.NewGlob("my-app"),
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
 			}},
 			process: &ProcessInfo{
 				ownerChain: []configmap.Owner{{Name: "my-app", Kind: "Deployment"}},
@@ -84,7 +84,7 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 			},
 			process: &ProcessInfo{metadata: map[string]string{"k8s_namespace": "prod"}},
 			want:    true,
-			wantSel: &configmap.Selector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
+			wantSel: &configmap.K8sSelector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
 		},
 
 		// Negative wiring: each field must propagate mismatches correctly.
@@ -115,7 +115,7 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 		{
 			name: "ownerChain mismatch — no match",
 			instrument: configmap.WebhookInstrument{{
-				OwnerName: services.NewGlob("my-app"),
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
 			}},
 			process: &ProcessInfo{
 				ownerChain: []configmap.Owner{{Name: "other-app", Kind: "Deployment"}},

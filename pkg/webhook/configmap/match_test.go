@@ -8,16 +8,16 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
-func TestSelector_Match(t *testing.T) {
+func TestK8sSelector_Match(t *testing.T) {
 	tests := []struct {
 		name     string
-		selector Selector
+		selector K8sSelector
 		input    MatchInput
 		want     bool
 	}{
 		{
 			name:     "empty selector matches everything",
-			selector: Selector{},
+			selector: K8sSelector{},
 			input:    MatchInput{Namespace: "prod", Labels: map[string]string{"app": "foo"}},
 			want:     true,
 		},
@@ -25,25 +25,25 @@ func TestSelector_Match(t *testing.T) {
 		// Namespace matching
 		{
 			name:     "namespace match",
-			selector: Selector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
+			selector: K8sSelector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
 			input:    MatchInput{Namespace: "prod"},
 			want:     true,
 		},
 		{
 			name:     "namespace no match",
-			selector: Selector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
+			selector: K8sSelector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
 			input:    MatchInput{Namespace: "staging"},
 			want:     false,
 		},
 		{
 			name:     "namespace glob pattern",
-			selector: Selector{Namespaces: []services.GlobAttr{services.NewGlob("prod*")}},
+			selector: K8sSelector{Namespaces: []services.GlobAttr{services.NewGlob("prod*")}},
 			input:    MatchInput{Namespace: "production"},
 			want:     true,
 		},
 		{
 			name: "namespace OR semantics — second matches",
-			selector: Selector{Namespaces: []services.GlobAttr{
+			selector: K8sSelector{Namespaces: []services.GlobAttr{
 				services.NewGlob("staging"),
 				services.NewGlob("prod*"),
 			}},
@@ -52,7 +52,7 @@ func TestSelector_Match(t *testing.T) {
 		},
 		{
 			name: "namespace OR semantics — none match",
-			selector: Selector{Namespaces: []services.GlobAttr{
+			selector: K8sSelector{Namespaces: []services.GlobAttr{
 				services.NewGlob("staging"),
 				services.NewGlob("dev"),
 			}},
@@ -60,16 +60,16 @@ func TestSelector_Match(t *testing.T) {
 			want:  false,
 		},
 
-		// OwnerName matching
+		// OwnerNames matching
 		{
-			name:     "ownerName matches direct owner",
-			selector: Selector{OwnerName: services.NewGlob("my-app")},
+			name:     "ownerNames matches direct owner",
+			selector: K8sSelector{OwnerNames: []services.GlobAttr{services.NewGlob("my-app")}},
 			input:    MatchInput{OwnerChain: []Owner{{Name: "my-app", Kind: "DaemonSet"}}},
 			want:     true,
 		},
 		{
-			name:     "ownerName matches deployment via chain",
-			selector: Selector{OwnerName: services.NewGlob("my-app")},
+			name:     "ownerNames matches deployment via chain",
+			selector: K8sSelector{OwnerNames: []services.GlobAttr{services.NewGlob("my-app")}},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "my-app-7d9f8b", Kind: "ReplicaSet"},
 				{Name: "my-app", Kind: "Deployment"},
@@ -77,46 +77,70 @@ func TestSelector_Match(t *testing.T) {
 			want: true,
 		},
 		{
-			name:     "ownerName no match",
-			selector: Selector{OwnerName: services.NewGlob("my-app")},
+			name:     "ownerNames no match",
+			selector: K8sSelector{OwnerNames: []services.GlobAttr{services.NewGlob("my-app")}},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "other-app", Kind: "Deployment"},
 			}},
 			want: false,
 		},
 		{
-			name:     "ownerName set but empty chain",
-			selector: Selector{OwnerName: services.NewGlob("my-app")},
+			name:     "ownerNames set but empty chain",
+			selector: K8sSelector{OwnerNames: []services.GlobAttr{services.NewGlob("my-app")}},
 			input:    MatchInput{OwnerChain: nil},
 			want:     false,
 		},
 		{
-			name:     "ownerName glob pattern",
-			selector: Selector{OwnerName: services.NewGlob("my-*")},
+			name:     "ownerNames glob pattern",
+			selector: K8sSelector{OwnerNames: []services.GlobAttr{services.NewGlob("my-*")}},
 			input:    MatchInput{OwnerChain: []Owner{{Name: "my-app", Kind: "Deployment"}}},
 			want:     true,
 		},
-
-		// OwnerKind matching
 		{
-			name:     "ownerKind match",
-			selector: Selector{OwnerKind: "Deployment"},
+			name: "ownerNames OR — second glob matches a chain link",
+			selector: K8sSelector{OwnerNames: []services.GlobAttr{
+				services.NewGlob("nope"),
+				services.NewGlob("my-app"),
+			}},
+			input: MatchInput{OwnerChain: []Owner{{Name: "my-app", Kind: "Deployment"}}},
+			want:  true,
+		},
+		{
+			name: "ownerNames OR — none match",
+			selector: K8sSelector{OwnerNames: []services.GlobAttr{
+				services.NewGlob("nope"),
+				services.NewGlob("nada"),
+			}},
+			input: MatchInput{OwnerChain: []Owner{{Name: "my-app", Kind: "Deployment"}}},
+			want:  false,
+		},
+
+		// OwnerKinds matching
+		{
+			name:     "ownerKinds match",
+			selector: K8sSelector{OwnerKinds: []string{"Deployment"}},
 			input:    MatchInput{OwnerChain: []Owner{{Name: "any", Kind: "Deployment"}}},
 			want:     true,
 		},
 		{
-			name:     "ownerKind no match",
-			selector: Selector{OwnerKind: "Deployment"},
+			name:     "ownerKinds no match",
+			selector: K8sSelector{OwnerKinds: []string{"Deployment"}},
 			input:    MatchInput{OwnerChain: []Owner{{Name: "any", Kind: "DaemonSet"}}},
 			want:     false,
 		},
-
-		// OwnerName + OwnerKind AND semantics
 		{
-			name: "ownerName and ownerKind both must match same link",
-			selector: Selector{
-				OwnerName: services.NewGlob("my-app"),
-				OwnerKind: "Deployment",
+			name:     "ownerKinds OR — kind is one of several",
+			selector: K8sSelector{OwnerKinds: []string{"Deployment", "StatefulSet"}},
+			input:    MatchInput{OwnerChain: []Owner{{Name: "any", Kind: "StatefulSet"}}},
+			want:     true,
+		},
+
+		// OwnerKinds + OwnerNames combine per link (kind ∈ kinds AND name ∈ names)
+		{
+			name: "ownerNames and ownerKinds both satisfied by the same link",
+			selector: K8sSelector{
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
+				OwnerKinds: []string{"Deployment"},
 			},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "my-app-7d9f8b", Kind: "ReplicaSet"},
@@ -125,39 +149,65 @@ func TestSelector_Match(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "ownerName matches but ownerKind does not on same link",
-			selector: Selector{
-				OwnerName: services.NewGlob("my-app"),
-				OwnerKind: "StatefulSet",
+			name: "name and kind satisfied by different links does not match",
+			selector: K8sSelector{
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app-7d9f8b")},
+				OwnerKinds: []string{"Deployment"},
+			},
+			input: MatchInput{OwnerChain: []Owner{
+				{Name: "my-app-7d9f8b", Kind: "ReplicaSet"}, // name matches, kind does not
+				{Name: "my-app", Kind: "Deployment"},        // kind matches, name does not
+			}},
+			want: false,
+		},
+		{
+			name: "ownerNames matches but ownerKinds does not on same link",
+			selector: K8sSelector{
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
+				OwnerKinds: []string{"StatefulSet"},
 			},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "my-app", Kind: "Deployment"},
 			}},
 			want: false,
 		},
+		{
+			// kinds: [Deployment, ReplicaSet], names: [my-app-rs] — the ReplicaSet
+			// link satisfies both, so the pod matches.
+			name: "multiple kinds with single name matched by the replicaset link",
+			selector: K8sSelector{
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app-rs")},
+				OwnerKinds: []string{"Deployment", "ReplicaSet"},
+			},
+			input: MatchInput{OwnerChain: []Owner{
+				{Name: "my-app-rs", Kind: "ReplicaSet"},
+				{Name: "my-app", Kind: "Deployment"},
+			}},
+			want: true,
+		},
 
 		// PodLabels matching
 		{
 			name:     "label match",
-			selector: Selector{PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")}},
+			selector: K8sSelector{PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")}},
 			input:    MatchInput{Labels: map[string]string{"app": "my-app"}},
 			want:     true,
 		},
 		{
 			name:     "label no match",
-			selector: Selector{PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")}},
+			selector: K8sSelector{PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")}},
 			input:    MatchInput{Labels: map[string]string{"app": "other"}},
 			want:     false,
 		},
 		{
 			name:     "label key missing",
-			selector: Selector{PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")}},
+			selector: K8sSelector{PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")}},
 			input:    MatchInput{Labels: map[string]string{"env": "prod"}},
 			want:     false,
 		},
 		{
 			name: "multiple labels AND semantics — all match",
-			selector: Selector{PodLabels: map[string]services.GlobAttr{
+			selector: K8sSelector{PodLabels: map[string]services.GlobAttr{
 				"app": services.NewGlob("my-app"),
 				"env": services.NewGlob("prod"),
 			}},
@@ -166,7 +216,7 @@ func TestSelector_Match(t *testing.T) {
 		},
 		{
 			name: "multiple labels AND semantics — one missing",
-			selector: Selector{PodLabels: map[string]services.GlobAttr{
+			selector: K8sSelector{PodLabels: map[string]services.GlobAttr{
 				"app": services.NewGlob("my-app"),
 				"env": services.NewGlob("prod"),
 			}},
@@ -177,13 +227,13 @@ func TestSelector_Match(t *testing.T) {
 		// PodAnnotations matching
 		{
 			name:     "annotation match",
-			selector: Selector{PodAnnotations: map[string]services.GlobAttr{"version": services.NewGlob("v1.*")}},
+			selector: K8sSelector{PodAnnotations: map[string]services.GlobAttr{"version": services.NewGlob("v1.*")}},
 			input:    MatchInput{Annotations: map[string]string{"version": "v1.2"}},
 			want:     true,
 		},
 		{
 			name:     "annotation no match",
-			selector: Selector{PodAnnotations: map[string]services.GlobAttr{"version": services.NewGlob("v1.*")}},
+			selector: K8sSelector{PodAnnotations: map[string]services.GlobAttr{"version": services.NewGlob("v1.*")}},
 			input:    MatchInput{Annotations: map[string]string{"version": "v2.0"}},
 			want:     false,
 		},
@@ -191,7 +241,7 @@ func TestSelector_Match(t *testing.T) {
 		// Combined criteria
 		{
 			name: "namespace and labels — both match",
-			selector: Selector{
+			selector: K8sSelector{
 				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
 				PodLabels:  map[string]services.GlobAttr{"app": services.NewGlob("my-app")},
 			},
@@ -203,7 +253,7 @@ func TestSelector_Match(t *testing.T) {
 		},
 		{
 			name: "namespace and labels — namespace fails",
-			selector: Selector{
+			selector: K8sSelector{
 				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
 				PodLabels:  map[string]services.GlobAttr{"app": services.NewGlob("my-app")},
 			},

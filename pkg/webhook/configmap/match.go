@@ -12,11 +12,11 @@ type Owner struct {
 	Kind string
 }
 
-// MatchInput is the pod/process data evaluated against a Selector.
+// MatchInput is the pod/process data evaluated against a K8sSelector.
 type MatchInput struct {
 	Namespace string
 	// OwnerChain is the resolved ownership chain for the pod (e.g. ReplicaSet → Deployment).
-	// The selector's OwnerName/OwnerKind are checked against any link in the chain (OR semantics).
+	// The selector's OwnerKinds/OwnerNames are checked against the links in the chain.
 	OwnerChain  []Owner
 	Labels      map[string]string
 	Annotations map[string]string
@@ -24,7 +24,7 @@ type MatchInput struct {
 
 // Match reports whether the given input satisfies all populated selector fields.
 // An empty or unset field is a wildcard.
-func (s Selector) Match(in MatchInput) bool {
+func (s K8sSelector) Match(in MatchInput) bool {
 	return s.matchNamespace(in.Namespace) &&
 		s.matchOwner(in.OwnerChain) &&
 		matchAllGlobs(s.PodLabels, in.Labels) &&
@@ -33,7 +33,7 @@ func (s Selector) Match(in MatchInput) bool {
 
 // matchNamespace reports whether the namespace matches any entry (OR);
 // empty = all namespaces.
-func (s Selector) matchNamespace(namespace string) bool {
+func (s K8sSelector) matchNamespace(namespace string) bool {
 	if len(s.Namespaces) == 0 {
 		return true
 	}
@@ -42,14 +42,36 @@ func (s Selector) matchNamespace(namespace string) bool {
 	})
 }
 
-// matchOwner reports whether any link in the chain satisfies both OwnerName and
-// OwnerKind (OR across chain); unset name and empty kind = any owner.
-func (s Selector) matchOwner(chain []Owner) bool {
-	if !s.OwnerName.IsSet() && s.OwnerKind == "" {
+// matchOwner reports whether some single owner-chain link satisfies both the
+// OwnerKinds and OwnerNames constraints (kind ∈ OwnerKinds AND name matches some
+// OwnerNames glob). Within each list entries are OR'd; an empty list leaves that
+// dimension unconstrained, and both empty means no owner constraint at all.
+func (s K8sSelector) matchOwner(chain []Owner) bool {
+	if len(s.OwnerKinds) == 0 && len(s.OwnerNames) == 0 {
 		return true
 	}
 	return slices.ContainsFunc(chain, func(o Owner) bool {
-		return (s.OwnerKind == "" || s.OwnerKind == o.Kind) && s.OwnerName.MatchString(o.Name)
+		return s.kindMatches(o.Kind) && s.nameMatches(o.Name)
+	})
+}
+
+// kindMatches reports whether kind equals any OwnerKinds entry (OR);
+// empty OwnerKinds = any kind.
+func (s K8sSelector) kindMatches(kind string) bool {
+	if len(s.OwnerKinds) == 0 {
+		return true
+	}
+	return slices.Contains(s.OwnerKinds, kind)
+}
+
+// nameMatches reports whether name matches any OwnerNames glob (OR);
+// empty OwnerNames = any name.
+func (s K8sSelector) nameMatches(name string) bool {
+	if len(s.OwnerNames) == 0 {
+		return true
+	}
+	return slices.ContainsFunc(s.OwnerNames, func(g services.GlobAttr) bool {
+		return g.MatchString(name)
 	})
 }
 

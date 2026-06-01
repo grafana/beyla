@@ -27,9 +27,9 @@ func (m *PodMatcher) HasSelectionCriteria() bool {
 	return len(m.instrument) > 0
 }
 
-func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (configmap.Selector, bool) {
+func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (configmap.K8sSelector, bool) {
 	if info == nil {
-		return configmap.Selector{}, false
+		return configmap.K8sSelector{}, false
 	}
 	input := configmap.MatchInput{
 		Namespace:   info.metadata[services.AttrNamespace],
@@ -42,5 +42,5 @@ func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (configmap.Selector, bo
 			return sel, true
 		}
 	}
-	return configmap.Selector{}, false
+	return configmap.K8sSelector{}, false
 }

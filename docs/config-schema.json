@@ -619,6 +619,7 @@
           "network_inter_zone",
           "stats",
           "stats_tcp_failed_connections",
+          "stats_tcp_io",
           "stats_tcp_retransmits",
           "stats_tcp_rtt"
         ]

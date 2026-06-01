@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
-	"go.opentelemetry.io/obi/pkg/internal/split"
 )
 
 const (
@@ -120,40 +119,39 @@ func isValidRedisChar(c byte) bool {
 }
 
 func parseRedisRequest(buf []byte) (string, string, bool) {
-	lines := split.NewBytesIterator(buf, redisDelimBytes)
-
-	_, eof := lines.Next()
-
-	if eof {
+	// We need at least two CRLF-delimited lines: a first delimiter must exist with
+	// content following it. Walking the buffer directly with bytes.Index avoids the
+	// generic split.Iterator's per-call indirect dispatch and the double scan its
+	// peek-then-Reset pattern required.
+	firstDelim := bytes.Index(buf, redisDelimBytes)
+	if firstDelim < 0 || firstDelim+len(redisDelimBytes) >= len(buf) {
 		return "", "", false
 	}
-
-	// we need at least 2 lines
-	if _, eof = lines.Next(); eof {
-		return "", "", false
-	}
-
-	// we are good, start over
-	lines.Reset()
-
-	line, _ := lines.Next()
 
 	// It's not a command, something else?
-	if line[0] != '*' {
+	if buf[0] != '*' {
 		return "", "", true
 	}
 
 	op := ""
 
 	var text strings.Builder
+	// The assembled text is always shorter than the raw frame (it drops the RESP
+	// length markers and CRLFs), so a single Grow sizes the builder once and avoids
+	// the geometric re-allocations Write would otherwise trigger as tokens accumulate.
+	text.Grow(len(buf))
 
 	read := false
 
-	for {
-		line, eof = lines.Next()
-
-		if eof {
-			break
+	// Resume past the array-header line; subsequent lines alternate length markers
+	// and data tokens.
+	for pos := firstDelim + len(redisDelimBytes); pos < len(buf); {
+		line := buf[pos:]
+		if rel := bytes.Index(line, redisDelimBytes); rel >= 0 {
+			end := rel + len(redisDelimBytes)
+			line, pos = line[:end], pos+end
+		} else {
+			pos = len(buf)
 		}
 
 		if bytes.Equal(line, redisDelimBytes) {

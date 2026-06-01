@@ -64,12 +64,12 @@ type MetricsConfig struct {
 	HistogramAggregation HistogramAggregation       `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 	ExponentialHistogram ExponentialHistogramConfig `yaml:"exponential_histogram"`
 
-	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN"`
+	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN" validate:"omitempty,gt=0"`
 
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	// Accepted values: debug, info, warn, error (case-insensitive).
-	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL" validate:"omitempty,oneofci=debug info warn error"`
 
 	// Features specifies which metric features to export. Accepted values: application, network,
 	// application_span, application_service_graph, ...

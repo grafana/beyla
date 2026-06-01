@@ -104,8 +104,8 @@ type DiscoveryConfig struct {
 	DefaultExcludeInstrument GlobDefinitionCriteria `yaml:"default_exclude_instrument"`
 
 	// PollInterval specifies, for the poll service watcher, the interval time between
-	// process inspections
-	PollInterval time.Duration `yaml:"poll_interval" env:"OTEL_EBPF_DISCOVERY_POLL_INTERVAL"`
+	// process inspections. 0 is treated as a default (5s) by the process watcher.
+	PollInterval time.Duration `yaml:"poll_interval" env:"OTEL_EBPF_DISCOVERY_POLL_INTERVAL" validate:"gte=0"`
 
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
 	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"OTEL_EBPF_SKIP_GO_SPECIFIC_TRACERS"`
@@ -118,15 +118,15 @@ type DiscoveryConfig struct {
 
 	// DefaultOtlpGRPCPort specifies the default OTLP gRPC port (4317) to fallback on when missing environment variables on service, for
 	// checking for grpc export requests, defaults to 4317
-	DefaultOtlpGRPCPort int `yaml:"default_otlp_grpc_port" env:"OTEL_EBPF_DEFAULT_OTLP_GRPC_PORT"`
+	DefaultOtlpGRPCPort int `yaml:"default_otlp_grpc_port" env:"OTEL_EBPF_DEFAULT_OTLP_GRPC_PORT" validate:"gte=0,lte=65535"`
 
 	// Min process age to be considered for discovery.
-	MinProcessAge time.Duration `yaml:"min_process_age" env:"OTEL_EBPF_MIN_PROCESS_AGE"`
+	MinProcessAge time.Duration `yaml:"min_process_age" env:"OTEL_EBPF_MIN_PROCESS_AGE" validate:"gte=0"`
 
 	// Disables generation of span metrics of services which are already instrumented
 	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
 
-	RouteHarvesterTimeout time.Duration `yaml:"route_harvester_timeout" env:"OTEL_EBPF_ROUTE_HARVESTER_TIMEOUT"`
+	RouteHarvesterTimeout time.Duration `yaml:"route_harvester_timeout" env:"OTEL_EBPF_ROUTE_HARVESTER_TIMEOUT" validate:"gt=0"`
 
 	DisabledRouteHarvesters []RouteHarvesterLanguage `yaml:"disabled_route_harvesters"`
 

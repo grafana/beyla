@@ -298,4 +298,5 @@ const (
 const (
 	TCPFailedConnectionReason = Name("reason")
 	NetworkTCPHandshakeRole   = Name("network.tcp.handshake.role")
+	NetworkIoDirection        = Name("network.io.direction")
 )

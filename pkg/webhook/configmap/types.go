@@ -47,11 +47,9 @@ type WebhookInstrument []K8sSelector
 // evaluated in order; the first rule whose selector matches a pod wins.
 // No match means no instrumentation.
 type InjectConfig struct {
-	// ImageVolumePath is the OCI image reference mounted into instrumented pods
-	// via Kubernetes ImageVolumeSource. Written by Beyla as the single source of
-	// truth for the SDK image version.
-	ImageVolumePath string `yaml:"imageVolumePath,omitempty"`
-	Rules           []Rule `yaml:"rules,omitempty"`
+	// OCI image version to inject. Must not be empty.
+	ImageVersion string `yaml:"image_version,omitempty"`
+	Rules        []Rule `yaml:"rules,omitempty"`
 }
 
 // Rule pairs a selector with the instrumentation config to apply when the
@@ -208,7 +206,7 @@ func (d *EligibleDeployment) Valid() bool {
 }
 
 func (c *InjectConfig) PackageVersion() string {
-	h := sha256.Sum224([]byte(c.ImageVolumePath))
+	h := sha256.Sum224([]byte(c.ImageVersion))
 	return fmt.Sprintf("%x", h)
 }
 

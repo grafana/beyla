@@ -64,12 +64,12 @@ type MetricsConfig struct {
 	HistogramAggregation HistogramAggregation       `yaml:"histogram_aggregation" env:"OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION"`
 	ExponentialHistogram ExponentialHistogramConfig `yaml:"exponential_histogram"`
 
-	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN"`
+	ReportersCacheLen int `yaml:"reporters_cache_len" env:"OTEL_EBPF_METRICS_REPORT_CACHE_LEN" validate:"omitempty,gt=0"`
 
 	// SDKLogLevel works independently from the global LogLevel because it prints GBs of logs in Debug mode
 	// and the Info messages leak internal details that are not usually valuable for the final user.
 	// Accepted values: debug, info, warn, error (case-insensitive).
-	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL"`
+	SDKLogLevel string `yaml:"otel_sdk_log_level" env:"OTEL_EBPF_SDK_LOG_LEVEL" validate:"omitempty,oneofci=debug info warn error"`
 
 	// Features specifies which metric features to export. Accepted values: application, network,
 	// application_span, application_service_graph, ...
@@ -164,7 +164,52 @@ func (m *MetricsConfig) EndpointEnabled() bool {
 	return ep != ""
 }
 
+func unixMetricsHTTPOptions(cfg *MetricsConfig, addr string) (OTLPOptions, error) {
+	opts := OTLPOptions{Headers: map[string]string{}}
+	if err := validateUnixSocketAddr(addr); err != nil {
+		return opts, err
+	}
+
+	setMetricsProtocol(cfg)
+	opts.UnixSocketAddr = addr
+	opts.Endpoint = "localhost"
+	opts.Insecure = true
+
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
+
+	return opts, nil
+}
+
+func unixMetricsGRPCOptions(cfg *MetricsConfig, addr string) (OTLPOptions, error) {
+	opts := OTLPOptions{Headers: map[string]string{}}
+	if err := validateUnixSocketAddr(addr); err != nil {
+		return opts, err
+	}
+
+	setMetricsProtocol(cfg)
+	opts.UnixSocketAddr = addr
+	opts.Endpoint = grpcUnixTarget(addr)
+	opts.Insecure = true
+
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envMetricsHeaders))
+
+	return opts, nil
+}
+
 func httpMetricEndpointOptions(cfg *MetricsConfig) (OTLPOptions, error) {
+	rawEndpoint, _ := cfg.OTLPMetricsEndpoint()
+	if addr, ok := unixSocketEndpoint(rawEndpoint); ok {
+		return unixMetricsHTTPOptions(cfg, addr)
+	}
+
 	opts := OTLPOptions{Headers: map[string]string{}}
 	log := mlog().With("transport", "http")
 	murl, isCommon, err := parseMetricsEndpoint(cfg)
@@ -176,7 +221,7 @@ func httpMetricEndpointOptions(cfg *MetricsConfig) (OTLPOptions, error) {
 
 	setMetricsProtocol(cfg)
 	opts.Endpoint = murl.Host
-	if murl.Scheme == "http" || murl.Scheme == "unix" {
+	if murl.Scheme == "http" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts.Insecure = true
 	}
@@ -207,6 +252,11 @@ func httpMetricEndpointOptions(cfg *MetricsConfig) (OTLPOptions, error) {
 }
 
 func grpcMetricEndpointOptions(cfg *MetricsConfig) (OTLPOptions, error) {
+	rawEndpoint, _ := cfg.OTLPMetricsEndpoint()
+	if addr, ok := unixSocketEndpoint(rawEndpoint); ok {
+		return unixMetricsGRPCOptions(cfg, addr)
+	}
+
 	opts := OTLPOptions{Headers: map[string]string{}}
 	log := mlog().With("transport", "grpc")
 	murl, _, err := parseMetricsEndpoint(cfg)
@@ -218,7 +268,7 @@ func grpcMetricEndpointOptions(cfg *MetricsConfig) (OTLPOptions, error) {
 
 	setMetricsProtocol(cfg)
 	opts.Endpoint = murl.Host
-	if murl.Scheme == "http" || murl.Scheme == "unix" {
+	if murl.Scheme == "http" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts.Insecure = true
 	}

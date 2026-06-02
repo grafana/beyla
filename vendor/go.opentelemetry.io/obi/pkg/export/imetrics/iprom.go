@@ -21,7 +21,7 @@ import (
 var pipelineBufferLengths = []float64{0, 10, 20, 40, 80, 160, 320}
 
 type PrometheusConfig struct {
-	Port int    `yaml:"port,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT"`
+	Port int    `yaml:"port,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT" validate:"gte=0,lte=65535"`
 	Path string `yaml:"path,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 

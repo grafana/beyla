@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"math"
 	"strconv"
-	"strings"
 	"unsafe"
 
 	"go.opentelemetry.io/otel/trace"
@@ -42,10 +41,20 @@ func isMemcachedFirstByte(b byte) bool {
 }
 
 var (
-	memcachedDelimBytes = []byte(memcachedDelim)
-	memcachedCommands   = map[string]struct{}{
-		"get": {}, "gets": {}, "gat": {}, "gats": {}, "set": {}, "add": {}, "replace": {}, "append": {}, "prepend": {}, "cas": {},
-		"delete": {}, "incr": {}, "decr": {}, "touch": {}, "flush_all": {}, "stats": {}, "version": {},
+	memcachedDelimBytes   = []byte(memcachedDelim)
+	memcachedNoreplyBytes = []byte("noreply")
+	// memcachedCommands maps each recognized ASCII request verb to its canonical,
+	// upper-case operation name. GETS/GATS collapse onto GET/GAT because they differ
+	// from the base command only in the response. The map doubles as the set of valid
+	// request verbs: a missing key means "not a memcached command", so a single
+	// alloc-free `memcachedCommands[string(token)]` lookup replaces a separate
+	// membership test plus an upper-casing pass.
+	memcachedCommands = map[string]string{
+		"get": "GET", "gets": "GET", "gat": "GAT", "gats": "GAT",
+		"set": "SET", "add": "ADD", "replace": "REPLACE", "append": "APPEND",
+		"prepend": "PREPEND", "cas": "CAS", "delete": "DELETE", "incr": "INCR",
+		"decr": "DECR", "touch": "TOUCH", "flush_all": "FLUSH_ALL",
+		"stats": "STATS", "version": "VERSION",
 	}
 	memcachedResponses = map[string]struct{}{
 		"VALUE": {}, "END": {}, "STORED": {}, "NOT_STORED": {}, "EXISTS": {}, "NOT_FOUND": {}, "DELETED": {}, "TOUCHED": {},
@@ -90,7 +99,11 @@ func isMemcachedBuf(buf *largebuf.LargeBuffer) bool {
 		return false
 	}
 
-	return isMemcachedToken(token, memcachedCommands) || isMemcachedToken(token, memcachedResponses)
+	if _, ok := memcachedCommands[string(token)]; ok {
+		return true
+	}
+
+	return isMemcachedToken(token, memcachedResponses)
 }
 
 func isMemcached(req, resp *largebuf.LargeBuffer) bool {
@@ -298,7 +311,12 @@ func parseMemcachedRequestOperation(r *largebuf.LargeBufferReader) (memcachedReq
 		return memcachedRequestOp{}, false
 	}
 
-	fields := bytes.Fields(line)
+	// Split into a stack-allocated buffer: bytes.Fields would heap-allocate the
+	// [][]byte on every line. memcachedFieldsBufLen covers the longest fixed-arity
+	// command (cas: 6 tokens + noreply); longer lines (e.g. multi-key get) spill to
+	// a heap slice via append, which is acceptable for that less common case.
+	var fieldBuf [memcachedFieldsBufLen][]byte
+	fields := memcachedSplitFields(line, fieldBuf[:0])
 	if len(fields) == 0 {
 		return memcachedRequestOp{}, false
 	}
@@ -307,11 +325,14 @@ func parseMemcachedRequestOperation(r *largebuf.LargeBufferReader) (memcachedReq
 	if isMemcachedToken(token, memcachedResponses) || isMemcachedNumericLine(line) {
 		return memcachedRequestOp{}, false
 	}
-	if !isMemcachedToken(token, memcachedCommands) {
+
+	// One alloc-free map lookup both validates the verb and yields its canonical
+	// upper-case form (string(token) on a map index is special-cased by the compiler).
+	op, ok := memcachedCommands[string(token)]
+	if !ok {
 		return memcachedRequestOp{}, false
 	}
 
-	op := memcachedNormalizeCommand(string(token))
 	noreply := memcachedFieldsHaveNoreply(fields)
 	if noreply && !memcachedCommandSupportsNoreply(op) {
 		return memcachedRequestOp{}, false
@@ -335,16 +356,32 @@ func parseMemcachedRequestOperation(r *largebuf.LargeBufferReader) (memcachedReq
 	return opInfo, true
 }
 
-func memcachedNormalizeCommand(token string) string {
-	op := strings.ToUpper(token)
-	if op == "GETS" { // GETS is a variant of GET that only differs in the response.
-		return "GET"
-	}
-	if op == "GATS" { // GATS is the CAS-aware variant of GAT.
-		return "GAT"
+// memcachedFieldsBufLen is the stack-buffer capacity for memcachedSplitFields.
+// It comfortably covers the longest fixed-arity command (cas: 6 tokens + noreply)
+// and a typical multi-key get. Larger multigets will spill to a heap slice.
+const memcachedFieldsBufLen = 16
+
+// memcachedSplitFields splits line on runs of spaces into dst (reusing its backing
+// array), mirroring bytes.Fields without the heap allocation. The memcached ASCII
+// protocol separates tokens with single spaces, so splitting on ' ' alone is
+// sufficient. The returned sub slices alias the argument line, therefore when using
+// this helper, the returned array they must not outlive line.
+func memcachedSplitFields(line []byte, dst [][]byte) [][]byte {
+	dst = dst[:0]
+	for i := 0; i < len(line); {
+		for i < len(line) && line[i] == ' ' {
+			i++
+		}
+		start := i
+		for i < len(line) && line[i] != ' ' {
+			i++
+		}
+		if start < i {
+			dst = append(dst, line[start:i])
+		}
 	}
 
-	return op
+	return dst
 }
 
 func memcachedConsumeStoragePayload(r *largebuf.LargeBufferReader, fields [][]byte, op string) bool {
@@ -391,7 +428,7 @@ func memcachedFieldsHaveNoreply(fields [][]byte) bool {
 		return false
 	}
 
-	return bytes.Equal(fields[len(fields)-1], []byte("noreply"))
+	return bytes.Equal(fields[len(fields)-1], memcachedNoreplyBytes)
 }
 
 // memcachedCommandHasPayload identifies commands whose request line is followed by a data block.

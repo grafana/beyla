@@ -55,6 +55,13 @@ type EBPFTracer struct {
 	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
 	WakeupLen int `yaml:"wakeup_len" env:"OTEL_EBPF_BPF_WAKEUP_LEN" validate:"gte=0"`
 
+	// StatsWakeupDataBytes specifies the minimum number of bytes that must be available in the
+	// stats eBPF ring buffer before waking up the userspace consumer.
+	// When 0, every submission wakes up userspace immediately.
+	// Higher values reduce wakeup overhead under high traffic at the cost of delivery latency.
+	// The value should be well below ring buffer size / flushInterval to avoid event loss.
+	StatsWakeupDataBytes int `yaml:"stats_wakeup_data_bytes" env:"OTEL_EBPF_STATS_WAKEUP_DATA_BYTES" validate:"gte=0"`
+
 	// BatchLength allows specifying how many items (traces/metrics) will be batched at the initial
 	// stage before being forwarded to the next stage
 	// Must be at least 1
@@ -124,10 +131,10 @@ type EBPFTracer struct {
 	// Maximum time allowed for two requests to be correlated as parent -> child
 	// Some programs (e.g. load generators) keep on generating requests from the same thread in perpetuity,
 	// which can generate very large traces. We want to mark the parent trace as invalid if this happens.
-	MaxTransactionTime time.Duration `yaml:"max_transaction_time" env:"OTEL_EBPF_BPF_MAX_TRANSACTION_TIME"`
+	MaxTransactionTime time.Duration `yaml:"max_transaction_time" env:"OTEL_EBPF_BPF_MAX_TRANSACTION_TIME" validate:"gt=0"`
 
 	// DNS timeout after which we report failed event
-	DNSRequestTimeout time.Duration `yaml:"dns_request_timeout" env:"OTEL_EBPF_BPF_DNS_REQUEST_TIMEOUT"`
+	DNSRequestTimeout time.Duration `yaml:"dns_request_timeout" env:"OTEL_EBPF_BPF_DNS_REQUEST_TIMEOUT" validate:"gt=0"`
 
 	// Log trace-context enricher config
 	LogEnricher LogEnricherConfig `yaml:"log_enricher"`

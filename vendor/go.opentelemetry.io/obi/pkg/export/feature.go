@@ -26,6 +26,7 @@ const (
 	FeatureStatsTCPRtt
 	FeatureStatsTCPFailedConnections
 	FeatureStatsTCPRetransmits
+	FeatureStatsTCPIo
 	FeatureNetworkInterZone
 	FeatureApplicationRED
 	FeatureSpanLegacy
@@ -37,8 +38,11 @@ const (
 	FeatureAll = Features(^uint(0)) // all bits to 1
 )
 
-// FeatureStats enables all stat metrics.
-const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections | FeatureStatsTCPRetransmits
+// FeatureStats enables all stat metrics, including TCP IO.
+// Note: FeatureStatsTCPIo fires on every tcp_sendmsg and tcp_cleanup_rbuf call — significantly
+// higher event volume than the other stat metrics (which fire on close, failure, or retransmit).
+// If overhead is a concern, enable the lower-frequency metrics individually and opt into stats_tcp_io explicitly.
+const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections | FeatureStatsTCPRetransmits | FeatureStatsTCPIo
 
 // FeatureMapper stays public so any extension package can add and remove feature
 // definitions before loading them.
@@ -47,6 +51,7 @@ var FeatureMapper = map[string]Features{
 	"stats_tcp_rtt":                FeatureStatsTCPRtt,
 	"stats_tcp_failed_connections": FeatureStatsTCPFailedConnections,
 	"stats_tcp_retransmits":        FeatureStatsTCPRetransmits,
+	"stats_tcp_io":                 FeatureStatsTCPIo,
 	"network":                      FeatureNetwork,
 	"network_inter_zone":           FeatureNetworkInterZone,
 	"application":                  FeatureApplicationRED,
@@ -196,6 +201,10 @@ func (f Features) StatsTCPFailedConnections() bool {
 
 func (f Features) StatsTCPRetransmits() bool {
 	return f.any(FeatureStatsTCPRetransmits)
+}
+
+func (f Features) StatsTCPIo() bool {
+	return f.any(FeatureStatsTCPIo)
 }
 
 func (f Features) NetworkInterZone() bool {

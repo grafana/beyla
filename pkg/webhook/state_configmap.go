@@ -281,8 +281,8 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 		})
 	}
 	return configmap.InjectConfig{
-		ImageVolumePath: injCfg.ImageVolumePath,
-		Rules:           rules,
+		ImageVersion: injCfg.ImageVersion,
+		Rules:        rules,
 	}
 }
 

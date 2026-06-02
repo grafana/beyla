@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/health"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/netolly/agent"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
@@ -49,6 +50,12 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 
 	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
+
+	if cfg.HealthCheck.Port != 0 {
+		g.Go(func() error {
+			return health.ListenAndServe(ctx, cfg.HealthCheck.Port)
+		})
+	}
 
 	if app {
 		g.Go(func() error {

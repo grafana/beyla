@@ -30,6 +30,7 @@ jobs:
       docker_patch_tag: ${{ steps.derive.outputs.docker_patch_tag }}
       docker_minor_tag: ${{ steps.derive.outputs.docker_minor_tag }}
       docker_major_tag: ${{ steps.derive.outputs.docker_major_tag }}
+      obi_tag: ${{ steps.obi.outputs.obi_tag }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -103,12 +104,51 @@ jobs:
             echo "docker_major_tag=${DOCKER_MAJOR_TAG}"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Resolve OBI tag from submodule
+        id: obi
+        env:
+          VERSION_TAG: ${{ steps.derive.outputs.version_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Read the OBI submodule SHA pinned at the Beyla release tag.
+          OBI_SHA=$(git ls-tree "refs/tags/${VERSION_TAG}" .obi-src | awk '{print $3}')
+          if [[ -z "${OBI_SHA}" ]]; then
+            echo "::error::Could not read OBI submodule SHA at ${VERSION_TAG}"
+            exit 1
+          fi
+          echo "OBI submodule SHA at ${VERSION_TAG}: ${OBI_SHA}"
+
+          # Find a tag in the OBI repo whose commit SHA matches the submodule pin.
+          OBI_TAGS=$(gh api --paginate \
+            repos/grafana/opentelemetry-ebpf-instrumentation/tags \
+            --jq ".[] | select(.commit.sha == \"${OBI_SHA}\") | .name")
+          OBI_TAG="${OBI_TAGS%%$'\n'*}"
+
+          if [[ -z "${OBI_TAG}" ]]; then
+            echo "::error::OBI submodule SHA ${OBI_SHA} at Beyla ${VERSION_TAG} does not correspond to any tag in grafana/opentelemetry-ebpf-instrumentation"
+            exit 1
+          fi
+          echo "OBI tag: ${OBI_TAG}"
+
+          # Verify the OBI release exists.
+          if ! gh release view "${OBI_TAG}" \
+            --repo grafana/opentelemetry-ebpf-instrumentation \
+            --json tagName >/dev/null 2>&1; then
+            echo "::error::OBI release ${OBI_TAG} not found in grafana/opentelemetry-ebpf-instrumentation"
+            exit 1
+          fi
+
+          echo "obi_tag=${OBI_TAG}" >> "${GITHUB_OUTPUT}"
+
       - name: Print promotion summary
         env:
           VERSION_TAG: ${{ steps.derive.outputs.version_tag }}
           DOCKER_PATCH_TAG: ${{ steps.derive.outputs.docker_patch_tag }}
           DOCKER_MINOR_TAG: ${{ steps.derive.outputs.docker_minor_tag }}
           DOCKER_MAJOR_TAG: ${{ steps.derive.outputs.docker_major_tag }}
+          OBI_TAG: ${{ steps.obi.outputs.obi_tag }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           {
@@ -119,6 +159,7 @@ jobs:
             echo "| Version tag | \`${VERSION_TAG}\` |"
             echo "| Docker source tag | \`${DOCKER_PATCH_TAG}\` |"
             echo "| Docker new tags | \`latest\`, \`${DOCKER_MINOR_TAG}\`, \`${DOCKER_MAJOR_TAG}\` |"
+            echo "| OBI tag | \`${OBI_TAG}\` |"
             echo "| Dry run | \`${DRY_RUN}\` |"
             echo ""
             if [[ "${DRY_RUN}" == "true" ]]; then
@@ -273,3 +314,41 @@ jobs:
             --ref main \
             -f beyla_release_tag="${VERSION_TAG}"
           echo "Alloy bump workflow triggered"
+
+  promote-obi:
+    needs: [validate, promote]
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        with:
+          github_app: grafana-beyla-bot
+          permission_set: promote-obi-release
+
+      - name: Promote OBI release to latest
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          OBI_TAG: ${{ needs.validate.outputs.obi_tag }}
+        run: |
+          set -euo pipefail
+          echo "Promoting grafana/opentelemetry-ebpf-instrumentation ${OBI_TAG} to stable/latest"
+          gh release edit "${OBI_TAG}" \
+            --repo grafana/opentelemetry-ebpf-instrumentation \
+            --prerelease=false \
+            --latest
+          echo "OBI release ${OBI_TAG} updated to stable/latest"
+
+      - name: Print summary
+        env:
+          OBI_TAG: ${{ needs.validate.outputs.obi_tag }}
+        run: |
+          {
+            echo "## OBI Promotion Complete"
+            echo ""
+            echo "- [${OBI_TAG}](https://github.com/grafana/opentelemetry-ebpf-instrumentation/releases/tag/${OBI_TAG}) marked as stable/latest"
+          } >> "${GITHUB_STEP_SUMMARY}"

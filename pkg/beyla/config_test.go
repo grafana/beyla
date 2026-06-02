@@ -156,14 +156,15 @@ network:
 		EnforceSysCaps:  false,
 		TracePrinter:    "json",
 		EBPF: obiconfig.EBPFTracer{
-			BatchLength:        100,
-			BatchTimeout:       time.Second,
-			WakeupLen:          500,
-			HTTPRequestTimeout: 0,
-			MaxTransactionTime: 5 * time.Minute,
-			TCBackend:          obiconfig.TCBackendAuto,
-			DNSRequestTimeout:  5 * time.Second,
-			ContextPropagation: obiconfig.ContextPropagationDisabled,
+			BatchLength:          100,
+			BatchTimeout:         time.Second,
+			WakeupLen:            500,
+			StatsWakeupDataBytes: 4096,
+			HTTPRequestTimeout:   0,
+			MaxTransactionTime:   5 * time.Minute,
+			TCBackend:            obiconfig.TCBackendAuto,
+			DNSRequestTimeout:    5 * time.Second,
+			ContextPropagation:   obiconfig.ContextPropagationDisabled,
 			RedisDBCache: obiconfig.RedisDBCacheConfig{
 				Enabled: false,
 				MaxSize: 1000,
@@ -766,7 +767,7 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  image_volume_path: my-registry/sdk-image:v1.0.0
+  image_version: v1.0.0
 otel_traces_export:
   endpoint: http://localhost:4317/v1/traces
 `)
@@ -799,7 +800,7 @@ injector:
     port: 8443
     cert_path: /etc/webhook/certs/tls.crt
     key_path: /etc/webhook/certs/tls.key
-  image_volume_path: my-registry/sdk-image:v1.0.0
+  image_version: v1.0.0
 `)
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)

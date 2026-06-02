@@ -40,12 +40,14 @@ type statMetricsReporter struct {
 	tcpRtt               *Expirer[prometheus.Histogram]
 	tcpFailedConnections *Expirer[prometheus.Counter]
 	tcpRetransmits       *Expirer[prometheus.Counter]
+	tcpIo                *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
 	tcpRttAttrs               []attributes.Field[*ebpf.Stat, string]
 	tcpFailedConnectionsAttrs []attributes.Field[*ebpf.Stat, string]
 	tcpRetransmitsAttrs       []attributes.Field[*ebpf.Stat, string]
+	tcpIoAttrs                []attributes.Field[*ebpf.Stat, string]
 
 	clock *expire.CachedClock
 
@@ -132,6 +134,21 @@ func newStatsReporter(
 		register = append(register, mr.tcpRetransmits)
 	}
 
+	if cfg.CommonCfg.Features.StatsTCPIo() {
+		log.Debug("registering stat tcp io metric")
+
+		mr.tcpIoAttrs = attributes.PrometheusGetters(
+			ebpf.StatStringGetters,
+			provider.For(attributes.StatTCPIo))
+
+		mr.tcpIo = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.StatTCPIo.Prom,
+			Help: "count bytes transferred at the socket layer",
+		}, labelNames(mr.tcpIoAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+
+		register = append(register, mr.tcpIo)
+	}
+
 	if cfg.CommonCfg.Features.StatsTCPFailedConnections() {
 		log.Debug("registering stat tcp failed connections metric")
 
@@ -171,6 +188,7 @@ func (r *statMetricsReporter) collectMetrics(_ context.Context) {
 			r.observeTCPRtt(stat)
 			r.observeTCPFailedConnections(stat)
 			r.observeTCPRetransmits(stat)
+			r.observeTCPIo(stat)
 		}
 	}
 }
@@ -197,4 +215,12 @@ func (r *statMetricsReporter) observeTCPRetransmits(stat *ebpf.Stat) {
 	}
 	r.tcpRetransmits.WithLabelValues(labelValues(stat, r.tcpRetransmitsAttrs)...).
 		Metric.Add(1)
+}
+
+func (r *statMetricsReporter) observeTCPIo(stat *ebpf.Stat) {
+	if r.tcpIo == nil || stat.TCPIo == nil {
+		return
+	}
+	r.tcpIo.WithLabelValues(labelValues(stat, r.tcpIoAttrs)...).
+		Metric.Add(float64(stat.TCPIo.Bytes))
 }

@@ -520,6 +520,10 @@
         "redis_db_cache": {
           "$ref": "#/$defs/RedisDBCacheConfig"
         },
+        "stats_wakeup_data_bytes": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_STATS_WAKEUP_DATA_BYTES"
+        },
         "track_request_headers": {
           "type": "boolean",
           "x-env-var": "OTEL_EBPF_BPF_TRACK_REQUEST_HEADERS"
@@ -619,6 +623,7 @@
           "network_inter_zone",
           "stats",
           "stats_tcp_failed_connections",
+          "stats_tcp_io",
           "stats_tcp_retransmits",
           "stats_tcp_rtt"
         ]
@@ -984,6 +989,10 @@
         "port": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_HEALTH_CHECK_PORT"
+        },
+        "unix_socket_path": {
+          "type": "string",
+          "x-env-var": "OTEL_EBPF_HEALTH_CHECK_UNIX_SOCKET_PATH"
         }
       },
       "type": "object"
@@ -2110,9 +2119,9 @@
           "type": "array",
           "description": "List of enabled SDK auto-instrumentations. Can be used to disable specific language instrumentations."
         },
-        "image_volume_path": {
+        "image_version": {
           "type": "string",
-          "description": "OCI image mount, supported on k8s 1.31+. Must not be empty."
+          "description": "OCI image version to inject"
         },
         "instrument": {
           "$ref": "#/$defs/WebhookInstrument",

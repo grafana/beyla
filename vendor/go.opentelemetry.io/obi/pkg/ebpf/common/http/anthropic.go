@@ -83,30 +83,24 @@ func AnthropicSpan(baseSpan *request.Span, req *http.Request, resp *http.Respons
 		return *baseSpan, false
 	}
 
-	reqB, err := io.ReadAll(req.Body)
-	if err != nil {
+	reqB, ok := readHTTPRequestBody("AnthropicSpan", req, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
-	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
 
-	respB, err := getResponseBody(resp)
-	if err != nil && len(respB) == 0 {
+	respB, ok := readHTTPResponseBody("AnthropicSpan", resp, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
 
 	slog.Debug("Anthropic", "request", string(reqB), "response", string(respB))
 
-	var parsedRequest request.AnthropicRequest
-	if err := json.Unmarshal(reqB, &parsedRequest); err != nil {
-		slog.Debug("failed to parse Anthropic request", "error", err)
-	}
+	parsedRequest := parseAnthropicRequest(reqB)
 
 	var parsedResponse request.AnthropicResponse
 	var toolCalls []request.ToolCall
 	if len(respB) > 0 && respB[0] == '{' {
-		if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-			slog.Debug("failed to parse Anthropic response", "error", err)
-		}
+		parsedResponse = parseAnthropicResponse(respB)
 		toolCalls = extractAnthropicToolCalls(parsedResponse.Content)
 	} else {
 		reader := bytes.NewReader(respB)

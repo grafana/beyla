@@ -562,15 +562,15 @@ func TestBuildInjectConfig(t *testing.T) {
 			}},
 		},
 		{
-			name: "ImageVolumePath is set at the top level",
+			name: "ImageVersion is set at the top level",
 			injCfg: beyla.SDKInject{
-				ImageVolumePath: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
-				Instrument:      configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
+				Instrument:   configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
 			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{
-				ImageVolumePath: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
+				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
 				Rules: []configmap.Rule{{
 					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
 					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},

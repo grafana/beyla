@@ -98,7 +98,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 			Protocol: mutator.Protocol(),
 		},
 		ExportedSignals: cfg.Injector.ExportedSignals,
-		ImageVolumePath: cfg.Injector.ImageVolumePath,
+		ImageVersion:    cfg.Injector.ImageVersion,
 		DefaultSampler:  cfg.Injector.DefaultSampler,
 		Propagators:     cfg.Injector.Propagators,
 		Resources:       cfg.Injector.Resources,

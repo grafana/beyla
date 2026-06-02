@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/netolly/agent"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
 
@@ -51,11 +52,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
 
-	if cfg.HealthCheck.Port != 0 {
-		g.Go(func() error {
-			return health.ListenAndServe(ctx, cfg.HealthCheck.Port)
-		})
-	}
+	startHealthCheck(ctx, g, cfg.HealthCheck)
 
 	if app {
 		g.Go(func() error {
@@ -98,6 +95,19 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 	}
 
 	return nil
+}
+
+func startHealthCheck(ctx context.Context, g *errgroup.Group, cfg obi.HealthCheckConfig) {
+	switch {
+	case cfg.UnixSocketPath != "":
+		g.Go(func() error {
+			return health.ListenAndServeUDS(ctx, cfg.UnixSocketPath)
+		})
+	case cfg.Port != 0:
+		g.Go(func() error {
+			return health.ListenAndServe(ctx, cfg.Port)
+		})
+	}
 }
 
 // normalizeConfig normalizes user input to a common set of assumptions that are global to Beyla

@@ -4,9 +4,7 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -66,27 +64,26 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 		return *baseSpan, false
 	}
 
-	reqB, err := io.ReadAll(req.Body)
-	if err != nil {
+	reqB, ok := readHTTPRequestBody("OpenAISpan", req, baseSpan, "headers", resp.Header)
+	if !ok {
 		return *baseSpan, false
 	}
-	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
 
-	respB, err := getResponseBody(resp)
-	if err != nil && len(respB) == 0 {
+	respB, ok := readHTTPResponseBody("OpenAISpan", resp, baseSpan, "headers", resp.Header)
+	if !ok {
 		return *baseSpan, false
 	}
 
 	slog.Debug("OpenAI", "request", string(reqB), "response", string(respB))
 
-	var parsedRequest request.OpenAIInput
-	if err := json.Unmarshal(reqB, &parsedRequest); err != nil {
-		slog.Debug("failed to parse OpenAI request", "error", err)
-	}
+	parsedRequest := parseOpenAIInput(reqB)
+	parsedResponse := parseVendorOpenAI(respB)
 
-	var parsedResponse request.VendorOpenAI
-	if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-		slog.Debug("failed to parse OpenAI response", "error", err)
+	if parsedResponse.ResponseModel == "" {
+		parsedResponse.ResponseModel = parsedRequest.Model
+	}
+	if parsedRequest.Model == "" {
+		parsedRequest.Model = parsedResponse.ResponseModel
 	}
 
 	parsedResponse.Request = parsedRequest

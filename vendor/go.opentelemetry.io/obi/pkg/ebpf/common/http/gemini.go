@@ -4,9 +4,7 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -112,27 +110,26 @@ func GeminiSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 		return *baseSpan, false
 	}
 
-	reqB, err := io.ReadAll(req.Body)
-	if err != nil {
+	reqB, ok := readHTTPRequestBody("GeminiSpan", req, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
-	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
 
-	respB, err := getResponseBody(resp)
-	if err != nil && len(respB) == 0 {
+	respB, ok := readHTTPResponseBody("GeminiSpan", resp, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
 
 	slog.Debug("Gemini", "request", string(reqB), "response", string(respB))
 
 	var parsedRequest request.GeminiRequest
-	if err := json.Unmarshal(reqB, &parsedRequest); err != nil {
-		slog.Debug("failed to parse Gemini request", "error", err)
+	if !unmarshalJSON(reqB, &parsedRequest) {
+		slog.Debug("failed to parse Gemini request, continuing with partial fields")
 	}
 
 	var parsedResponse request.GeminiResponse
-	if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-		slog.Debug("failed to parse Gemini response", "error", err)
+	if !unmarshalJSON(respB, &parsedResponse) {
+		slog.Debug("failed to parse Gemini response, continuing with partial fields")
 	}
 
 	model := extractGeminiModel(req)

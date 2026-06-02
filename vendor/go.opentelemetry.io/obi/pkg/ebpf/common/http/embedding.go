@@ -4,9 +4,6 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -61,39 +58,16 @@ func EmbeddingSpan(baseSpan *request.Span, req *http.Request, resp *http.Respons
 		return *baseSpan, false
 	}
 
-	// Request body parsing is best-effort: since the provider is already
-	// confirmed by hostname+path, a body read failure should not prevent
-	// classification — otherwise the request falls through to downstream
-	// detectors and may be misclassified.
-	var reqB []byte
-	if req.Body != nil {
-		var err error
-		reqB, err = io.ReadAll(req.Body)
-		if err != nil {
-			slog.Debug("EmbeddingSpan: failed to read request body, continuing without it", "provider", provider, "error", err)
-		}
-		req.Body = io.NopCloser(bytes.NewBuffer(reqB))
-	}
-
-	// Response body parsing is best-effort: truncated responses may fail
-	// to parse but should not prevent provider detection.
-	respB, err := getResponseBody(resp)
-	if err != nil {
-		slog.Debug("EmbeddingSpan: failed to read response body, continuing without it", "provider", provider, "error", err)
-	}
+	reqB := readHTTPRequestBodyLenient("EmbeddingSpan", req, baseSpan, "provider", provider)
+	respB := readHTTPResponseBodyLenient("EmbeddingSpan", resp, baseSpan, "provider", provider)
 
 	slog.Debug("Embedding", "provider", provider, "request", string(reqB), "response", string(respB))
 
-	var parsedRequest request.EmbeddingRequest
-	if err := json.Unmarshal(reqB, &parsedRequest); err != nil {
-		slog.Debug("failed to parse embedding request", "provider", provider, "error", err)
-	}
+	parsedRequest := parseEmbeddingRequest(reqB)
 
 	var parsedResponse request.EmbeddingResponse
-	if len(respB) > 0 {
-		if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-			slog.Debug("failed to parse embedding response", "provider", provider, "error", err)
-		}
+	if len(respB) > 0 && !unmarshalJSON(respB, &parsedResponse) {
+		slog.Debug("failed to parse embedding response", "provider", provider)
 	}
 
 	baseSpan.SubType = request.HTTPSubtypeEmbedding

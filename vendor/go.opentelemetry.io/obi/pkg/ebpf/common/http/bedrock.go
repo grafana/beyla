@@ -4,9 +4,6 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -39,29 +36,26 @@ func BedrockSpan(baseSpan *request.Span, req *http.Request, resp *http.Response)
 		return *baseSpan, false
 	}
 
-	reqB, err := io.ReadAll(req.Body)
-	if err != nil {
+	reqB, ok := readHTTPRequestBody("BedrockSpan", req, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
-	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
 
-	respB, err := getResponseBody(resp)
-	if err != nil && len(respB) == 0 {
+	respB, ok := readHTTPResponseBody("BedrockSpan", resp, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
 
 	slog.Debug("Bedrock", "request", string(reqB), "response", string(respB))
 
 	var parsedRequest request.BedrockRequest
-	if err := json.Unmarshal(reqB, &parsedRequest); err != nil {
-		slog.Debug("failed to parse Bedrock request", "error", err)
+	if len(reqB) > 0 && !unmarshalJSON(reqB, &parsedRequest) {
+		slog.Debug("failed to parse Bedrock request, continuing with partial fields")
 	}
 
 	var parsedResponse request.BedrockResponse
-	if len(respB) > 0 {
-		if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-			slog.Debug("failed to parse Bedrock response", "error", err)
-		}
+	if len(respB) > 0 && !unmarshalJSON(respB, &parsedResponse) {
+		slog.Debug("failed to parse Bedrock response, continuing with partial fields")
 	}
 
 	// Token counts are reliably present in response headers for successful calls.

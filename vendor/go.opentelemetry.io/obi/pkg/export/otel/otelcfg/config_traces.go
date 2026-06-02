@@ -171,7 +171,52 @@ func ParseTracesEndpoint(cfg *TracesConfig) (*url.URL, bool, error) {
 	return murl, isCommon, nil
 }
 
+func unixTracesHTTPOptions(cfg *TracesConfig, addr string) (OTLPOptions, error) {
+	opts := OTLPOptions{Headers: map[string]string{}}
+	if err := validateUnixSocketAddr(addr); err != nil {
+		return opts, err
+	}
+
+	setTracesProtocol(cfg)
+	opts.UnixSocketAddr = addr
+	opts.Scheme = "http"
+	opts.Endpoint = "localhost"
+	opts.Insecure = true
+
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
+
+	return opts, nil
+}
+
+func unixTracesGRPCOptions(cfg *TracesConfig, addr string) (OTLPOptions, error) {
+	opts := OTLPOptions{Headers: map[string]string{}}
+	if err := validateUnixSocketAddr(addr); err != nil {
+		return opts, err
+	}
+
+	opts.UnixSocketAddr = addr
+	opts.Endpoint = grpcUnixTarget(addr)
+	opts.Insecure = true
+
+	if cfg.InjectHeaders != nil {
+		cfg.InjectHeaders(opts.Headers)
+	}
+	maps.Copy(opts.Headers, HeadersFromEnv(envHeaders))
+	maps.Copy(opts.Headers, HeadersFromEnv(envTracesHeaders))
+
+	return opts, nil
+}
+
 func HTTPTracesEndpointOptions(cfg *TracesConfig) (OTLPOptions, error) {
+	rawEndpoint, _ := cfg.OTLPTracesEndpoint()
+	if addr, ok := unixSocketEndpoint(rawEndpoint); ok {
+		return unixTracesHTTPOptions(cfg, addr)
+	}
+
 	opts := OTLPOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "http")
 
@@ -185,7 +230,7 @@ func HTTPTracesEndpointOptions(cfg *TracesConfig) (OTLPOptions, error) {
 	setTracesProtocol(cfg)
 	opts.Scheme = murl.Scheme
 	opts.Endpoint = murl.Host
-	if murl.Scheme == "http" || murl.Scheme == "unix" {
+	if murl.Scheme == "http" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts.Insecure = true
 	}
@@ -213,6 +258,11 @@ func HTTPTracesEndpointOptions(cfg *TracesConfig) (OTLPOptions, error) {
 }
 
 func GRPCTracesEndpointOptions(cfg *TracesConfig) (OTLPOptions, error) {
+	rawEndpoint, _ := cfg.OTLPTracesEndpoint()
+	if addr, ok := unixSocketEndpoint(rawEndpoint); ok {
+		return unixTracesGRPCOptions(cfg, addr)
+	}
+
 	opts := OTLPOptions{Headers: map[string]string{}}
 	log := tlog().With("transport", "grpc")
 	murl, _, err := ParseTracesEndpoint(cfg)
@@ -223,7 +273,7 @@ func GRPCTracesEndpointOptions(cfg *TracesConfig) (OTLPOptions, error) {
 	log.Debug("Configuring exporter", "protocol",
 		cfg.Protocol, "tracesProtocol", cfg.TracesProtocol, "endpoint", murl.Host)
 	opts.Endpoint = murl.Host
-	if murl.Scheme == "http" || murl.Scheme == "unix" {
+	if murl.Scheme == "http" {
 		log.Debug("Specifying insecure connection", "scheme", murl.Scheme)
 		opts.Insecure = true
 	}

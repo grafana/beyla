@@ -330,10 +330,11 @@ type OTLPOptions struct {
 	Insecure bool
 	// BaseURLPath, only for traces export, excludes the /v1/traces suffix.
 	// E.g. for a URLPath == "/otlp/v1/traces", BaseURLPath will be = "/otlp"
-	BaseURLPath   string
-	URLPath       string
-	SkipTLSVerify bool
-	Headers       map[string]string
+	BaseURLPath    string
+	URLPath        string
+	SkipTLSVerify  bool
+	Headers        map[string]string
+	UnixSocketAddr string
 }
 
 func (o *OTLPOptions) AsMetricHTTP() []otlpmetrichttp.Option {
@@ -351,6 +352,9 @@ func (o *OTLPOptions) AsMetricHTTP() []otlpmetrichttp.Option {
 	}
 	if len(o.Headers) > 0 {
 		opts = append(opts, otlpmetrichttp.WithHeaders(o.Headers))
+	}
+	if o.UnixSocketAddr != "" {
+		opts = append(opts, otlpmetrichttp.WithHTTPClient(unixHTTPClient(o.UnixSocketAddr)))
 	}
 	return opts
 }

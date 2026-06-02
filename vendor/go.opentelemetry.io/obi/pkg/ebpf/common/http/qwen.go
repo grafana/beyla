@@ -4,9 +4,7 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -28,40 +26,20 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 		return *baseSpan, false
 	}
 
-	reqB, err := io.ReadAll(req.Body)
-	if err != nil && len(reqB) == 0 {
+	reqB, ok := readHTTPRequestBody("QwenSpan", req, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
-	if err != nil {
-		slog.Debug("failed to fully read Qwen request body", "error", err)
-	}
-	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
 
-	respB, err := getResponseBody(resp)
-	if err != nil && len(respB) == 0 {
+	respB, ok := readHTTPResponseBody("QwenSpan", resp, baseSpan)
+	if !ok {
 		return *baseSpan, false
 	}
 
 	slog.Debug("Qwen", "request", string(reqB), "response", string(respB))
 
-	var parsedRequest request.OpenAIInput
-	if err := json.Unmarshal(reqB, &parsedRequest); err != nil {
-		slog.Debug("failed to parse Qwen request", "error", err)
-	}
-	if parsedRequest.Model == "" {
-		window := reqB
-		if len(window) > modelSearchWindow {
-			window = window[:modelSearchWindow]
-		}
-		if matches := modelFieldRegexp.FindSubmatch(window); len(matches) == 2 {
-			parsedRequest.Model = strings.TrimSpace(string(matches[1]))
-		}
-	}
-
-	var parsedResponse request.VendorOpenAI
-	if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-		slog.Debug("failed to parse Qwen response", "error", err)
-	}
+	parsedRequest := parseOpenAIInput(reqB)
+	parsedResponse := parseVendorOpenAI(respB)
 
 	if parsedResponse.ID == "" {
 		var responseID struct {

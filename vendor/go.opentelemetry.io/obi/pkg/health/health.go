@@ -55,6 +55,16 @@ func ListenAndServe(ctx context.Context, port int) error {
 	return Serve(ctx, lis)
 }
 
+func ListenAndServeUDS(ctx context.Context, addr string) error {
+	lis, err := net.Listen("unix", addr)
+	if err != nil {
+		log().With("addr", addr).Error("can't bind health endpoint", "err", err)
+		return nil
+	}
+
+	return Serve(ctx, lis)
+}
+
 func Serve(ctx context.Context, lis net.Listener) error {
 	mux := http.NewServeMux()
 	mux.Handle(path, &endpoint{start: time.Now()})

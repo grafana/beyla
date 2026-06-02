@@ -55,6 +55,13 @@ type EBPFTracer struct {
 	// TODO: see if there is a way to force eBPF to wakeup userspace on timeout
 	WakeupLen int `yaml:"wakeup_len" env:"OTEL_EBPF_BPF_WAKEUP_LEN" validate:"gte=0"`
 
+	// StatsWakeupDataBytes specifies the minimum number of bytes that must be available in the
+	// stats eBPF ring buffer before waking up the userspace consumer.
+	// When 0, every submission wakes up userspace immediately.
+	// Higher values reduce wakeup overhead under high traffic at the cost of delivery latency.
+	// The value should be well below ring buffer size / flushInterval to avoid event loss.
+	StatsWakeupDataBytes int `yaml:"stats_wakeup_data_bytes" env:"OTEL_EBPF_STATS_WAKEUP_DATA_BYTES" validate:"gte=0"`
+
 	// BatchLength allows specifying how many items (traces/metrics) will be batched at the initial
 	// stage before being forwarded to the next stage
 	// Must be at least 1

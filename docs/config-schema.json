@@ -520,6 +520,10 @@
         "redis_db_cache": {
           "$ref": "#/$defs/RedisDBCacheConfig"
         },
+        "stats_wakeup_data_bytes": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_STATS_WAKEUP_DATA_BYTES"
+        },
         "track_request_headers": {
           "type": "boolean",
           "x-env-var": "OTEL_EBPF_BPF_TRACK_REQUEST_HEADERS"
@@ -985,6 +989,10 @@
         "port": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_HEALTH_CHECK_PORT"
+        },
+        "unix_socket_path": {
+          "type": "string",
+          "x-env-var": "OTEL_EBPF_HEALTH_CHECK_UNIX_SOCKET_PATH"
         }
       },
       "type": "object"

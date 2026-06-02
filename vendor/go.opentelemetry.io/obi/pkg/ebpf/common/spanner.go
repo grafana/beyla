@@ -10,6 +10,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	ebpfhttp "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 )
 
@@ -20,6 +21,17 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 	pattern := cstr(trace.Pattern[:])
 	scheme := cstr(trace.Scheme[:])
 	origHost := cstr(trace.Host[:])
+
+	var jsonRPC *request.JSONRPC
+	var subType int
+	if trace.IsJsonrpc {
+		jsonRPC = &request.JSONRPC{
+			Method:  pattern,
+			Version: ebpfhttp.JSONRPCVersionV1,
+		}
+		pattern = path
+		subType = request.HTTPSubtypeJSONRPC
+	}
 
 	if pattern != "" {
 		pattern = stripPattern(pattern)
@@ -69,6 +81,8 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
 			Namespace: trace.Pid.Ns,
 		},
 		Statement: schemeHost,
+		JSONRPC:   jsonRPC,
+		SubType:   subType,
 	}
 }
 

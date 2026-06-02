@@ -296,6 +296,7 @@ type BpfProgramSpecs struct {
 	ObiPacketExtenderDetectH2         *ebpf.ProgramSpec `ebpf:"obi_packet_extender_detect_h2"`
 	ObiPacketExtenderFindExistingH2Tp *ebpf.ProgramSpec `ebpf:"obi_packet_extender_find_existing_h2_tp"`
 	ObiPacketExtenderFindExistingTp   *ebpf.ProgramSpec `ebpf:"obi_packet_extender_find_existing_tp"`
+	ObiPacketExtenderValidateH2Tp     *ebpf.ProgramSpec `ebpf:"obi_packet_extender_validate_h2_tp"`
 	ObiPacketExtenderWriteH2Tp        *ebpf.ProgramSpec `ebpf:"obi_packet_extender_write_h2_tp"`
 	ObiPacketExtenderWriteMsgTp       *ebpf.ProgramSpec `ebpf:"obi_packet_extender_write_msg_tp"`
 	ObiSockmapTracker                 *ebpf.ProgramSpec `ebpf:"obi_sockmap_tracker"`
@@ -527,6 +528,7 @@ type BpfPrograms struct {
 	ObiPacketExtenderDetectH2         *ebpf.Program `ebpf:"obi_packet_extender_detect_h2"`
 	ObiPacketExtenderFindExistingH2Tp *ebpf.Program `ebpf:"obi_packet_extender_find_existing_h2_tp"`
 	ObiPacketExtenderFindExistingTp   *ebpf.Program `ebpf:"obi_packet_extender_find_existing_tp"`
+	ObiPacketExtenderValidateH2Tp     *ebpf.Program `ebpf:"obi_packet_extender_validate_h2_tp"`
 	ObiPacketExtenderWriteH2Tp        *ebpf.Program `ebpf:"obi_packet_extender_write_h2_tp"`
 	ObiPacketExtenderWriteMsgTp       *ebpf.Program `ebpf:"obi_packet_extender_write_msg_tp"`
 	ObiSockmapTracker                 *ebpf.Program `ebpf:"obi_sockmap_tracker"`
@@ -540,6 +542,7 @@ func (p *BpfPrograms) Close() error {
 		p.ObiPacketExtenderDetectH2,
 		p.ObiPacketExtenderFindExistingH2Tp,
 		p.ObiPacketExtenderFindExistingTp,
+		p.ObiPacketExtenderValidateH2Tp,
 		p.ObiPacketExtenderWriteH2Tp,
 		p.ObiPacketExtenderWriteMsgTp,
 		p.ObiSockmapTracker,

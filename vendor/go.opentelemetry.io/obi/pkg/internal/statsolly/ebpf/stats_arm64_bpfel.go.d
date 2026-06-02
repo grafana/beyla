@@ -3,8 +3,10 @@ pkg/internal/statsolly/ebpf/stats_arm64_bpfel.go: \
  bpf/statsolly/k_tcp.c \
  bpf/bpfcore/vmlinux.h \
  bpf/bpfcore/vmlinux_arm64.h \
+ bpf/bpfcore/bpf_builtins.h \
  bpf/bpfcore/bpf_helpers.h \
  bpf/bpfcore/bpf_helper_defs.h \
+ bpf/bpfcore/compiler.h \
  bpf/bpfcore/bpf_tracing.h \
  bpf/bpfcore/bpf_core_read.h \
  bpf/common/connection_info.h \
@@ -23,6 +25,8 @@ pkg/internal/statsolly/ebpf/stats_arm64_bpfel.go: \
  bpf/statsolly/types.h \
  bpf/statsolly/maps/stats_events.h \
  bpf/statsolly/maps/sock_role.h \
+ bpf/statsolly/maps/tcp_sendmsg_sock.h \
+ bpf/statsolly/maps/tcp_io_accum.h \
  bpf/statsolly/tp_tcp.c
 
 bpf/statsolly/k_tcp.c:
@@ -31,9 +35,13 @@ bpf/bpfcore/vmlinux.h:
 
 bpf/bpfcore/vmlinux_arm64.h:
 
+bpf/bpfcore/bpf_builtins.h:
+
 bpf/bpfcore/bpf_helpers.h:
 
 bpf/bpfcore/bpf_helper_defs.h:
+
+bpf/bpfcore/compiler.h:
 
 bpf/bpfcore/bpf_tracing.h:
 
@@ -70,6 +78,10 @@ bpf/statsolly/types.h:
 bpf/statsolly/maps/stats_events.h:
 
 bpf/statsolly/maps/sock_role.h:
+
+bpf/statsolly/maps/tcp_sendmsg_sock.h:
+
+bpf/statsolly/maps/tcp_io_accum.h:
 
 bpf/statsolly/tp_tcp.c:
 

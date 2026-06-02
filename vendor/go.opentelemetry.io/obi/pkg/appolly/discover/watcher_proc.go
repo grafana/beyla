@@ -18,7 +18,6 @@ import (
 
 	"github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
-	"github.com/tklauser/go-sysconf"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
@@ -480,10 +479,7 @@ func (r *procStatReader) getProcStatField(pid app.PID, field int) string {
 }
 
 func ticksToNanosecond(ticks uint64) uint64 {
-	clkTck, err := sysconf.Sysconf(sysconf.SC_CLK_TCK)
-	if err != nil {
-		clkTck = 100 // default for Linux
-	}
+	clkTck := 100 // default for Linux
 
 	return ticks * 1e9 / uint64(clkTck)
 }

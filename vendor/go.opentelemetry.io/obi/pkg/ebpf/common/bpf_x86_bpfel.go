@@ -122,11 +122,11 @@ type BpfHttpInfoT struct {
 type BpfHttpRequestTraceT struct {
 	_                 structs.HostLayout
 	Type              uint8
-	Pad0              [1]uint8
+	IsJsonrpc         bool
 	Status            uint16
 	Method            [7]uint8
 	Scheme            [10]uint8
-	Pad1              [11]uint8
+	Pad               [11]uint8
 	GoStartMonotimeNs uint64
 	StartMonotimeNs   uint64
 	EndMonotimeNs     uint64

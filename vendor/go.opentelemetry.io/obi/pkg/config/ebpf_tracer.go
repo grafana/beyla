@@ -124,10 +124,10 @@ type EBPFTracer struct {
 	// Maximum time allowed for two requests to be correlated as parent -> child
 	// Some programs (e.g. load generators) keep on generating requests from the same thread in perpetuity,
 	// which can generate very large traces. We want to mark the parent trace as invalid if this happens.
-	MaxTransactionTime time.Duration `yaml:"max_transaction_time" env:"OTEL_EBPF_BPF_MAX_TRANSACTION_TIME"`
+	MaxTransactionTime time.Duration `yaml:"max_transaction_time" env:"OTEL_EBPF_BPF_MAX_TRANSACTION_TIME" validate:"gt=0"`
 
 	// DNS timeout after which we report failed event
-	DNSRequestTimeout time.Duration `yaml:"dns_request_timeout" env:"OTEL_EBPF_BPF_DNS_REQUEST_TIMEOUT"`
+	DNSRequestTimeout time.Duration `yaml:"dns_request_timeout" env:"OTEL_EBPF_BPF_DNS_REQUEST_TIMEOUT" validate:"gt=0"`
 
 	// Log trace-context enricher config
 	LogEnricher LogEnricherConfig `yaml:"log_enricher"`

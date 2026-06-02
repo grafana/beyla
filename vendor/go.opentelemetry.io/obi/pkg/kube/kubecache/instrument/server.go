@@ -12,7 +12,7 @@ import (
 const defaultMetricsPath = "/metrics"
 
 type InternalMetricsConfig struct {
-	Port int    `yaml:"port,omitempty" env:"OTEL_EBPF_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT"`
+	Port int    `yaml:"port,omitempty" env:"OTEL_EBPF_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT" validate:"gte=0,lte=65535"`
 	Path string `yaml:"path,omitempty" env:"OTEL_EBPF_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
 

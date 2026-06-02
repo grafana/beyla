@@ -490,7 +490,8 @@ type BpfServerHttpFuncInvocationT struct {
 	Path            [100]uint8
 	Pattern         [96]uint8
 	IsTls           uint8
-	Pad             [4]uint8
+	IsJsonrpc       bool
+	Pad             [3]uint8
 }
 
 type BpfSockPortNs struct {

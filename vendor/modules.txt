@@ -229,9 +229,6 @@ github.com/gabriel-vasile/mimetype/internal/json
 github.com/gabriel-vasile/mimetype/internal/magic
 github.com/gabriel-vasile/mimetype/internal/markup
 github.com/gabriel-vasile/mimetype/internal/scan
-# github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
-## explicit
-github.com/gavv/monotime
 # github.com/go-logr/logr v1.4.3
 ## explicit; go 1.18
 github.com/go-logr/logr
@@ -827,6 +824,7 @@ go.opentelemetry.io/obi/pkg/ebpf/common
 go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser
 go.opentelemetry.io/obi/pkg/ebpf/common/http
 go.opentelemetry.io/obi/pkg/ebpf/tcmanager
+go.opentelemetry.io/obi/pkg/ebpf/timing
 go.opentelemetry.io/obi/pkg/export
 go.opentelemetry.io/obi/pkg/export/attributes
 go.opentelemetry.io/obi/pkg/export/attributes/names

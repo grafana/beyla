@@ -77,7 +77,7 @@ func MCPSpanFromParsed(baseSpan *request.Span, req *http.Request, resp *http.Res
 
 	// MCP requires an explicit JSON-RPC 2.0 version in the body,
 	// regardless of Content-Type header detection.
-	if rpcReq.JSONRPC != jsonRPCVersion {
+	if rpcReq.JSONRPC != jsonRPCVersionV2 {
 		return *baseSpan, false
 	}
 

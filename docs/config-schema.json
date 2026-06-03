@@ -2078,6 +2078,10 @@
           "type": "array",
           "description": "List of enabled SDK auto-instrumentations. Can be used to disable specific language instrumentations."
         },
+        "exclude_instrument": {
+          "$ref": "#/$defs/WebhookInstrument",
+          "description": "ExcludeInstrument lists selectors whose matching pods are excluded from SDK instrumentation, even when they also match Instrument. Exclusion always wins, mirroring discovery.exclude_instrument."
+        },
         "image_version": {
           "type": "string",
           "description": "OCI image version to inject"

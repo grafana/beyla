@@ -91,8 +91,9 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	nodeName := OwnNodeName()
 
 	stateCfg := configmap.InjectConfig{
-		NodeName:  nodeName,
-		Discovery: cfg.Injector.Instrument,
+		NodeName:         nodeName,
+		Discovery:        cfg.Injector.Instrument,
+		ExcludeDiscovery: cfg.Injector.ExcludeInstrument,
 		OtelExport: configmap.OtelExport{
 			Endpoint: mutator.Endpoint(),
 			Protocol: mutator.Protocol(),

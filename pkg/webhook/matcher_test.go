@@ -312,6 +312,73 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 	}
 }
 
+func TestPodMatcher_MatchProcessInfo_Exclusion(t *testing.T) {
+	nsC := func() *services.GlobAttributes {
+		return &services.GlobAttributes{Metadata: map[string]*services.GlobAttr{
+			"k8s_namespace": strToGlob("C"),
+		}}
+	}
+	nsCDeployD := func() *services.GlobAttributes {
+		return &services.GlobAttributes{Metadata: map[string]*services.GlobAttr{
+			"k8s_namespace":       strToGlob("C"),
+			"k8s_deployment_name": strToGlob("D"),
+		}}
+	}
+	tests := []struct {
+		name             string
+		selectors        []services.Selector
+		excludeSelectors []services.Selector
+		process          *ProcessInfo
+		expected         bool
+	}{
+		{
+			name:             "exclusion wins over a matching instrument selector",
+			selectors:        []services.Selector{nsC()},
+			excludeSelectors: []services.Selector{nsCDeployD()},
+			process:          &ProcessInfo{metadata: map[string]string{"k8s_namespace": "C", "k8s_deployment_name": "D"}},
+			expected:         false,
+		},
+		{
+			name:             "non-excluded pod in the same namespace is still instrumented",
+			selectors:        []services.Selector{nsC()},
+			excludeSelectors: []services.Selector{nsCDeployD()},
+			process:          &ProcessInfo{metadata: map[string]string{"k8s_namespace": "C", "k8s_deployment_name": "E"}},
+			expected:         true,
+		},
+		{
+			name:             "exclude selector that does not match leaves the instrument match intact",
+			selectors:        []services.Selector{nsC()},
+			excludeSelectors: []services.Selector{&services.GlobAttributes{Metadata: map[string]*services.GlobAttr{"k8s_namespace": strToGlob("other")}}},
+			process:          &ProcessInfo{metadata: map[string]string{"k8s_namespace": "C"}},
+			expected:         true,
+		},
+		{
+			name:             "exclude only, no instrument selectors, no match",
+			selectors:        []services.Selector{},
+			excludeSelectors: []services.Selector{nsC()},
+			process:          &ProcessInfo{metadata: map[string]string{"k8s_namespace": "C"}},
+			expected:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matcher := &PodMatcher{
+				selectors:        tt.selectors,
+				excludeSelectors: tt.excludeSelectors,
+				logger:           slog.With("component", "webhook.Matcher"),
+			}
+			selector, matched := matcher.MatchProcessInfo(tt.process)
+			assert.Equal(t, tt.expected, matched)
+			if matched {
+				assert.NotNil(t, selector)
+			} else {
+				assert.Nil(t, selector)
+			}
+		})
+	}
+}
+
 func TestNewPodMatcher(t *testing.T) {
 	t.Run("creates matcher with empty config", func(t *testing.T) {
 		cfg := &beyla.Config{}
@@ -337,6 +404,35 @@ func TestNewPodMatcher(t *testing.T) {
 
 		assert.NotNil(t, matcher)
 		assert.True(t, matcher.HasSelectionCriteria())
+	})
+
+	t.Run("builds exclude selectors from ExcludeInstrument and excludes wins", func(t *testing.T) {
+		cfg := &beyla.Config{
+			Injector: beyla.SDKInject{
+				Instrument: configmap.WebhookInstrument{{
+					Metadata: services.MetadataGlobMap{"k8s_namespace": strToGlob("C")},
+				}},
+				ExcludeInstrument: configmap.WebhookInstrument{{
+					Metadata: services.MetadataGlobMap{
+						"k8s_namespace":       strToGlob("C"),
+						"k8s_deployment_name": strToGlob("D"),
+					},
+				}},
+			},
+		}
+		matcher := NewPodMatcher(cfg)
+		assert.Len(t, matcher.excludeSelectors, 1)
+
+		// "all services in namespace C except service D"
+		_, matched := matcher.MatchProcessInfo(&ProcessInfo{metadata: map[string]string{
+			"k8s_namespace": "C", "k8s_deployment_name": "D",
+		}})
+		assert.False(t, matched, "service D in C should be excluded")
+
+		_, matched = matcher.MatchProcessInfo(&ProcessInfo{metadata: map[string]string{
+			"k8s_namespace": "C", "k8s_deployment_name": "E",
+		}})
+		assert.True(t, matched, "service E in C should be instrumented")
 	})
 }
 

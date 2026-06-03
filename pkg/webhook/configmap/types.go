@@ -68,6 +68,10 @@ type InjectConfig struct {
 	// ignored on the consumer side.
 	Discovery WebhookInstrument `yaml:"discovery,omitempty"`
 
+	// ExcludeDiscovery lists selectors whose matching pods must NOT be
+	// instrumented, even when they also match Discovery. Exclusion always wins.
+	ExcludeDiscovery WebhookInstrument `yaml:"exclude_discovery,omitempty"`
+
 	// OtelExport tells the injection controller what OTLP endpoint and
 	// protocol to set on instrumented containers. Empty fields are pruned
 	// by Marshal so the document stays minimal.

@@ -11,19 +11,22 @@ import (
 )
 
 type PodMatcher struct {
-	logger    *slog.Logger
-	selectors []services.Selector
+	logger           *slog.Logger
+	selectors        []services.Selector
+	excludeSelectors []services.Selector
 }
 
 func NewPodMatcher(cfg *beyla.Config) *PodMatcher {
 	selectors := asProcessDiscoverySelector(cfg.Injector.Instrument)
+	excludeSelectors := asProcessDiscoverySelector(cfg.Injector.ExcludeInstrument)
 	logger := slog.With("component", "webhook.Matcher")
 
-	logger.Debug("SDK instrumentation criteria", "selectors", selectors)
+	logger.Debug("SDK instrumentation criteria", "selectors", selectors, "excludeSelectors", excludeSelectors)
 
 	return &PodMatcher{
-		logger:    logger,
-		selectors: selectors,
+		logger:           logger,
+		selectors:        selectors,
+		excludeSelectors: excludeSelectors,
 	}
 }
 
@@ -44,6 +47,15 @@ func (m *PodMatcher) HasSelectionCriteria() bool {
 }
 
 func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (services.Selector, bool) {
+	// Exclusion always wins: a pod matching any exclude selector is never
+	// instrumented, even if it also matches an instrument selector. Mirrors
+	// discovery.exclude_instrument semantics.
+	for _, s := range m.excludeSelectors {
+		if m.matchProcess(info, s) {
+			return nil, false
+		}
+	}
+
 	for _, s := range m.selectors {
 		if m.matchProcess(info, s) {
 			return s, true

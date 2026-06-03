@@ -1,21 +1,16 @@
-# Args can be overriden like: docker build --build-arg DOTNET_SDK_VERSION=v1.10.0 --build-arg JAVA_SDK_VERSION=v2.20.0 ...
-ARG DOTNET_SDK_VERSION=v1.11.0
-ARG JAVA_SDK_VERSION=v2.27.0
-ARG INJECTOR_VERSION=v0.8.0
-
 # download the opentelemetry-injector binary for the target architecture
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-injector-binary
 ARG TARGETARCH
-ARG INJECTOR_VERSION
 
 RUN apk add --no-cache curl jq wget
 
+COPY opentelemetry-injector/version.txt .
 RUN case ${TARGETARCH} in \
     amd64) export INJECTOR_LIB="libotelinject_amd64.so" ;; \
     arm64) export INJECTOR_LIB="libotelinject_arm64.so" ;; \
     *)     echo "architecture unsupported: ${TARGETARCH}" && exit 1 ;; \
   esac && \
-  wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/${INJECTOR_VERSION}/${INJECTOR_LIB}"
+  wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/v$(cat version.txt)/${INJECTOR_LIB}"
 
 # Get the Python SDK for glibc
 FROM python:3.14.4-trixie@sha256:1692046a126f2841dfec22313e9a282b697e0aeca6c25c0434b476feba618e16 AS build-python-glibc
@@ -45,38 +40,37 @@ COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-java-sdk
-ARG JAVA_SDK_VERSION
 
 RUN apk add --no-cache curl unzip
 
 # Use Grafana's distro of the OpenTelemetry Java Agent
+COPY java/version.txt .
 RUN curl -sSfL -o opentelemetry-javaagent.jar \
-    "https://github.com/grafana/grafana-opentelemetry-java/releases/download/${JAVA_SDK_VERSION}/grafana-opentelemetry-java.jar"
+    "https://github.com/grafana/grafana-opentelemetry-java/releases/download/v$(cat version.txt)/grafana-opentelemetry-java.jar"
 
 # Get the OTel .NET SDK
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-dotnet-sdk
-ARG DOTNET_SDK_VERSION
 ARG TARGETARCH
 
 RUN apk add --no-cache curl unzip
 
+COPY dotnet/version.txt .
 RUN case ${TARGETARCH} in \
     amd64) export ARCH="x64" ;; \
     arm64) export ARCH="arm64" ;; \
     *)     echo "architecture unsupported: ${TARGETARCH}" && exit 1 ;; \
   esac && \
+  VERSION="v$(cat version.txt)" && \
   curl -sSfL -o dotnet-instrumentation.zip \
-    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_SDK_VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH}.zip" && \
+    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH}.zip" && \
     mkdir -p /glibc && \
     unzip -q dotnet-instrumentation.zip -d /glibc && \
     curl -sSfL -o dotnet-instrumentation-musl.zip \
-    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_SDK_VERSION}/opentelemetry-dotnet-instrumentation-linux-musl-${ARCH}.zip" && \
+    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${VERSION}/opentelemetry-dotnet-instrumentation-linux-musl-${ARCH}.zip" && \
     mkdir -p /musl && \
     unzip -q dotnet-instrumentation-musl.zip -d /musl
 
 # Build the Node.js artifacts
-# The version is hardcoded in package.json and copied from the OTel Operator
-# TODO: Can we allow this to be configurable just like the JVM and .NET
 FROM node:20@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5 AS build-nodejs-sdk
 
 WORKDIR /operator-build

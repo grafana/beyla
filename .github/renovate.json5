@@ -26,6 +26,33 @@
       datasourceTemplate: "git-refs",
       currentValueTemplate: "main",
     },
+    {
+      customType: "regex",
+      description: "Update opentelemetry-injector version",
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "open-telemetry/opentelemetry-injector",
+      extractVersionTemplate: "^v?(?<version>.*)$",
+      managerFilePatterns: ["(^|/)pkg/webhook/image/opentelemetry-injector/version\\.txt$"],
+      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
+    },
+    {
+      customType: "regex",
+      description: "Update Grafana OpenTelemetry Java agent version",
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "grafana/grafana-opentelemetry-java",
+      extractVersionTemplate: "^v?(?<version>.*)$",
+      managerFilePatterns: ["(^|/)pkg/webhook/image/java/version\\.txt$"],
+      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
+    },
+    {
+      customType: "regex",
+      description: "Update OpenTelemetry .NET instrumentation version",
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "open-telemetry/opentelemetry-dotnet-instrumentation",
+      extractVersionTemplate: "^v?(?<version>.*)$",
+      managerFilePatterns: ["(^|/)pkg/webhook/image/dotnet/version\\.txt$"],
+      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
+    },
   ],
   packageRules: [
     {
@@ -38,6 +65,37 @@
     {
       matchUpdateTypes: ["minor", "major"],
       schedule: ["before 8am on Monday"],
+    },
+    {
+      matchManagers: ["regex"],
+      matchFileNames: ["pkg/webhook/image/opentelemetry-injector/version.txt"],
+      commitMessageTopic: "inject-sdk-image: opentelemetry-injector version",
+    },
+    {
+      matchManagers: ["regex"],
+      matchFileNames: ["pkg/webhook/image/java/version.txt"],
+      commitMessageTopic: "inject-sdk-image: Grafana OpenTelemetry Java agent version",
+    },
+    {
+      matchManagers: ["regex"],
+      matchFileNames: ["pkg/webhook/image/dotnet/version.txt"],
+      commitMessageTopic: "inject-sdk-image: OpenTelemetry .NET instrumentation version",
+    },
+    {
+      matchManagers: ["pip_requirements"],
+      matchFileNames: ["pkg/webhook/image/python/requirements.txt"],
+      matchPackagePatterns: ["^opentelemetry-"],
+      groupName: "inject-sdk-image: OpenTelemetry Python packages",
+      group: {
+        commitMessageTopic: "inject-sdk-image: OpenTelemetry Python agent version to {{ upgrades.0.newVersion }}",
+      },
+      ignoreUnstable: false,
+    },
+    {
+      matchManagers: ["npm"],
+      matchFileNames: ["pkg/webhook/image/node.js/package.json"],
+      matchPackageNames: ["@opentelemetry/auto-instrumentations-node"],
+      commitMessageTopic: "inject-sdk-image: OpenTelemetry Node.js agent version",
     },
   ],
   labels: ["dependencies"],

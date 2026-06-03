@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 // Status represents the injection state of a pod.
@@ -131,15 +132,15 @@ type nsScope struct {
 
 // scopedNamespaces analyzes the injector configuration and returns an nsScope.
 func scopedNamespaces(cfg *beyla.Config) nsScope {
-	for i := range cfg.Injector.Instrument {
-		if _, hasNs := cfg.Injector.Instrument[i].Metadata[services.AttrNamespace]; !hasNs {
+	for _, sel := range cfg.Injector.Instrument {
+		if len(sel.Namespaces) == 0 {
 			return nsScope{clusterWide: true}
 		}
 	}
-	globs := make([]*services.GlobAttr, 0, len(cfg.Injector.Instrument))
-	for i := range cfg.Injector.Instrument {
-		if g, ok := cfg.Injector.Instrument[i].Metadata[services.AttrNamespace]; ok {
-			globs = append(globs, g)
+	var globs []*services.GlobAttr
+	for _, sel := range cfg.Injector.Instrument {
+		for i := range sel.Namespaces {
+			globs = append(globs, &sel.Namespaces[i])
 		}
 	}
 	return nsScope{globs: globs}
@@ -394,8 +395,12 @@ func processMetadataFromInformer(pod *informer.ObjectMeta) *ProcessInfo {
 	ret.podLabels = pod.Labels
 	ret.podAnnotations = pod.Annotations
 
+	// owners is the chain the OBI informer already resolved (e.g. ReplicaSet →
+	// Deployment); pass it through verbatim. Bare pods have no owners and so get
+	// an empty chain, matching processMetadata().
 	for _, owner := range owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+		ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: owner.Name, Kind: owner.Kind})
 	}
 	return &ret
 }

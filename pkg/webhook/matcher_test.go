@@ -13,334 +13,149 @@ import (
 )
 
 func TestPodMatcher_HasSelectionCriteria(t *testing.T) {
-	tests := []struct {
-		name      string
-		selectors []services.Selector
-		expected  bool
-	}{
-		{
-			name:      "no selectors",
-			selectors: []services.Selector{},
-			expected:  false,
-		},
-		{
-			name:      "with selectors",
-			selectors: []services.Selector{nil},
-			expected:  true,
-		},
-		{
-			name: "multiple selectors",
-			selectors: []services.Selector{
-				&services.GlobAttributes{},
-				&services.GlobAttributes{},
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			matcher := &PodMatcher{
-				selectors: tt.selectors,
-			}
-			result := matcher.HasSelectionCriteria()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	assert.False(t, (&PodMatcher{}).HasSelectionCriteria())
+	assert.True(t, (&PodMatcher{instrument: configmap.WebhookInstrument{{}}}).HasSelectionCriteria())
 }
 
 func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 	tests := []struct {
-		name      string
-		selectors []services.Selector
-		process   *ProcessInfo
-		expected  bool
+		name       string
+		instrument configmap.WebhookInstrument
+		process    *ProcessInfo
+		want       bool
+		wantSel    *configmap.K8sSelector // non-nil: assert the exact selector returned
 	}{
 		{
-			name: "no k8s attributes, doesn't match on executable name",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Path: *strToGlob("*node*"),
-				},
-			},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
-			},
-			expected: false,
+			name:       "nil process — no match",
+			instrument: configmap.WebhookInstrument{{}},
+			process:    nil,
+			want:       false,
 		},
 		{
-			name: "doesn't match on executable name, but has k8s attributes",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Path: *strToGlob("*node*"),
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("default"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
-			},
-			expected: true,
+			name:       "no instrument — no match",
+			instrument: configmap.WebhookInstrument{},
+			process:    &ProcessInfo{metadata: map[string]string{"k8s_namespace": "prod"}},
+			want:       false,
 		},
 		{
-			name:      "nil process info",
-			selectors: []services.Selector{&services.GlobAttributes{}},
-			process:   nil,
-			expected:  false,
+			// Verifies metadata["k8s_namespace"] is wired to MatchInput.Namespace.
+			name: "namespace from metadata",
+			instrument: configmap.WebhookInstrument{{
+				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
+			}},
+			process: &ProcessInfo{metadata: map[string]string{"k8s_namespace": "prod"}},
+			want:    true,
 		},
 		{
-			name:      "no selectors - no match",
-			selectors: []services.Selector{},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
-			},
-			expected: false,
+			// Verifies podLabels are wired to MatchInput.Labels.
+			name: "labels from podLabels",
+			instrument: configmap.WebhookInstrument{{
+				PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")},
+			}},
+			process: &ProcessInfo{podLabels: map[string]string{"app": "my-app"}},
+			want:    true,
 		},
 		{
-			name: "metadata match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("default"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
-			},
-			expected: true,
+			// Verifies podAnnotations are wired to MatchInput.Annotations.
+			name: "annotations from podAnnotations",
+			instrument: configmap.WebhookInstrument{{
+				PodAnnotations: map[string]services.GlobAttr{"ver": services.NewGlob("v1")},
+			}},
+			process: &ProcessInfo{podAnnotations: map[string]string{"ver": "v1"}},
+			want:    true,
 		},
 		{
-			name: "metadata no match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("production"),
-					},
-				},
-			},
+			// Verifies ownerChain is wired to MatchInput.OwnerChain.
+			name: "ownerChain from processInfo",
+			instrument: configmap.WebhookInstrument{{
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
+			}},
 			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
+				ownerChain: []configmap.Owner{{Name: "my-app", Kind: "Deployment"}},
 			},
-			expected: false,
+			want: true,
 		},
 		{
-			name: "pod labels match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					PodLabels: map[string]*services.GlobAttr{
-						"app": strToGlob("my-app"),
-					},
-				},
+			// Verifies first-match semantics: second selector matches and is returned.
+			name: "first matching selector wins",
+			instrument: configmap.WebhookInstrument{
+				{Namespaces: []services.GlobAttr{services.NewGlob("staging")}},
+				{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
 			},
-			process: &ProcessInfo{
-				podLabels: map[string]string{"app": "my-app"},
-			},
-			expected: true,
+			process: &ProcessInfo{metadata: map[string]string{"k8s_namespace": "prod"}},
+			want:    true,
+			wantSel: &configmap.K8sSelector{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
+		},
+
+		// Negative wiring: each field must propagate mismatches correctly.
+		{
+			name: "namespace mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
+			}},
+			process: &ProcessInfo{metadata: map[string]string{"k8s_namespace": "staging"}},
+			want:    false,
 		},
 		{
-			name: "pod labels no match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					PodLabels: map[string]*services.GlobAttr{
-						"app": strToGlob("my-app"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				podLabels: map[string]string{"app": "other-app"},
-			},
-			expected: false,
+			name: "labels mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				PodLabels: map[string]services.GlobAttr{"app": services.NewGlob("my-app")},
+			}},
+			process: &ProcessInfo{podLabels: map[string]string{"app": "other-app"}},
+			want:    false,
 		},
 		{
-			name: "pod annotations match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					PodAnnotations: map[string]*services.GlobAttr{
-						"version": strToGlob("v1.0"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				podAnnotations: map[string]string{"version": "v1.0"},
-			},
-			expected: true,
+			name: "annotations mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				PodAnnotations: map[string]services.GlobAttr{"ver": services.NewGlob("v1")},
+			}},
+			process: &ProcessInfo{podAnnotations: map[string]string{"ver": "v2"}},
+			want:    false,
 		},
 		{
-			name: "pod annotations no match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					PodAnnotations: map[string]*services.GlobAttr{
-						"version": strToGlob("v1.0"),
-					},
-				},
-			},
+			name: "ownerChain mismatch — no match",
+			instrument: configmap.WebhookInstrument{{
+				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
+			}},
 			process: &ProcessInfo{
-				podAnnotations: map[string]string{"version": "v2.0"},
+				ownerChain: []configmap.Owner{{Name: "other-app", Kind: "Deployment"}},
 			},
-			expected: false,
-		},
-		{
-			name: "multiple criteria all match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("default"),
-					},
-					PodLabels: map[string]*services.GlobAttr{
-						"app": strToGlob("my-app"),
-					},
-					PodAnnotations: map[string]*services.GlobAttr{
-						"version": strToGlob("v1.0"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata:       map[string]string{"k8s_namespace": "default"},
-				podLabels:      map[string]string{"app": "my-app"},
-				podAnnotations: map[string]string{"version": "v1.0"},
-			},
-			expected: true,
-		},
-		{
-			name: "multiple criteria one doesn't match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("default"),
-					},
-					PodLabels: map[string]*services.GlobAttr{
-						"app": strToGlob("my-app"),
-					},
-					PodAnnotations: map[string]*services.GlobAttr{
-						"version": strToGlob("v1.0"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata:       map[string]string{"k8s_namespace": "default"},
-				podLabels:      map[string]string{"app": "other-app"},
-				podAnnotations: map[string]string{"version": "v1.0"},
-			},
-			expected: false,
-		},
-		{
-			name: "multiple selectors - first matches",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("default"),
-					},
-				},
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("production"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
-			},
-			expected: true,
-		},
-		{
-			name: "multiple selectors - second matches",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("production"),
-					},
-				},
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("default"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
-			},
-			expected: true,
-		},
-		{
-			name: "regex pattern match",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("prod*"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "production"},
-			},
-			expected: true,
-		},
-		{
-			name: "missing required metadata field",
-			selectors: []services.Selector{
-				&services.GlobAttributes{
-					Metadata: map[string]*services.GlobAttr{
-						"k8s_namespace": strToGlob("default"),
-						"k8s_pod_name":  strToGlob("*"),
-					},
-				},
-			},
-			process: &ProcessInfo{
-				metadata: map[string]string{"k8s_namespace": "default"},
-				// k8s_pod_name is missing
-			},
-			expected: false,
+			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			matcher := &PodMatcher{
-				selectors: tt.selectors,
-				logger:    slog.With("component", "webhook.Matcher"),
+				instrument: tt.instrument,
+				logger:     slog.With("component", "webhook.Matcher"),
 			}
-			selector, matched := matcher.MatchProcessInfo(tt.process)
-			assert.Equal(t, tt.expected, matched)
-			if matched {
-				assert.NotNil(t, selector)
-			} else {
-				assert.Nil(t, selector)
+			sel, matched := matcher.MatchProcessInfo(tt.process)
+			assert.Equal(t, tt.want, matched)
+			if tt.wantSel != nil {
+				assert.Equal(t, *tt.wantSel, sel)
 			}
 		})
 	}
 }
 
 func TestNewPodMatcher(t *testing.T) {
-	t.Run("creates matcher with empty config", func(t *testing.T) {
-		cfg := &beyla.Config{}
-		matcher := NewPodMatcher(cfg)
-
+	t.Run("empty config", func(t *testing.T) {
+		matcher := NewPodMatcher(&beyla.Config{})
 		assert.NotNil(t, matcher)
-		assert.NotNil(t, matcher.logger)
-		assert.NotNil(t, matcher.selectors)
+		assert.False(t, matcher.HasSelectionCriteria())
 	})
 
-	t.Run("creates matcher with instrumentation criteria", func(t *testing.T) {
-		globs := configmap.WebhookInstrument{{
-			Metadata: services.MetadataGlobMap{
-				"k8s_namespace": strToGlob("prod*"),
-			}},
-		}
+	t.Run("with instrument criteria", func(t *testing.T) {
 		cfg := &beyla.Config{
 			Injector: beyla.SDKInject{
-				Instrument: globs,
+				Instrument: configmap.WebhookInstrument{{
+					Namespaces: []services.GlobAttr{services.NewGlob("prod*")},
+				}},
 			},
 		}
 		matcher := NewPodMatcher(cfg)
-
 		assert.NotNil(t, matcher)
 		assert.True(t, matcher.HasSelectionCriteria())
 	})
-}
-
-func strToGlob(s string) *services.GlobAttr {
-	v := services.NewGlob(s)
-	return &v
 }

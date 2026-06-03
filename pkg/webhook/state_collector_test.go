@@ -22,12 +22,8 @@ import (
 func nsMatcher(ns string) *PodMatcher {
 	return &PodMatcher{
 		logger: slog.Default(),
-		selectors: []services.Selector{
-			&services.GlobAttributes{
-				Metadata: services.MetadataGlobMap{
-					services.AttrNamespace: strToGlob(ns),
-				},
-			},
+		instrument: configmap.WebhookInstrument{
+			{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 		},
 	}
 }
@@ -37,14 +33,10 @@ func nsMatcher(ns string) *PodMatcher {
 func nsLabelMatcher(ns, labelKey, labelValue string) *PodMatcher {
 	return &PodMatcher{
 		logger: slog.Default(),
-		selectors: []services.Selector{
-			&services.GlobAttributes{
-				Metadata: services.MetadataGlobMap{
-					services.AttrNamespace: strToGlob(ns),
-				},
-				PodLabels: map[string]*services.GlobAttr{
-					labelKey: strToGlob(labelValue),
-				},
+		instrument: configmap.WebhookInstrument{
+			{
+				Namespaces: []services.GlobAttr{services.NewGlob(ns)},
+				PodLabels:  map[string]services.GlobAttr{labelKey: services.NewGlob(labelValue)},
 			},
 		},
 	}
@@ -55,11 +47,7 @@ func nsCfg(ns string) *beyla.Config {
 	return &beyla.Config{
 		Injector: beyla.SDKInject{
 			Instrument: configmap.WebhookInstrument{
-				{
-					Metadata: services.MetadataGlobMap{
-						services.AttrNamespace: strToGlob(ns),
-					},
-				},
+				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}
@@ -69,11 +57,9 @@ func nsCfg(ns string) *beyla.Config {
 func wildcardCfg() *beyla.Config {
 	return &beyla.Config{
 		Injector: beyla.SDKInject{
-			// A selector with no k8s_namespace key matches any namespace.
+			// An empty Selector is a wildcard — matches any pod.
 			Instrument: configmap.WebhookInstrument{
-				{
-					Metadata: services.MetadataGlobMap{},
-				},
+				{},
 			},
 		},
 	}
@@ -193,7 +179,7 @@ func TestClassify(t *testing.T) {
 		{
 			name:    "out_of_scope_system_namespace",
 			pod:     pod("kube-system", "my-pod"),
-			matcher: &PodMatcher{logger: slog.Default(), selectors: []services.Selector{&services.GlobAttributes{Metadata: services.MetadataGlobMap{}}}},
+			matcher: &PodMatcher{logger: slog.Default(), instrument: configmap.WebhookInstrument{{}}},
 			cfg:     wildcardCfg(),
 			wantNil: true,
 		},
@@ -368,8 +354,8 @@ func TestIsInScope(t *testing.T) {
 			cfg: &beyla.Config{
 				Injector: beyla.SDKInject{
 					Instrument: configmap.WebhookInstrument{
-						{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("prod")}},
-						{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob("staging")}},
+						{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
+						{Namespaces: []services.GlobAttr{services.NewGlob("staging")}},
 					},
 				},
 			},
@@ -464,6 +450,57 @@ func deletedEvent(pod *informer.ObjectMeta) *informer.Event {
 
 func syncFinishedEvent() *informer.Event {
 	return &informer.Event{Type: informer.EventType_SYNC_FINISHED}
+}
+
+func TestProcessMetadataFromInformer(t *testing.T) {
+	tests := []struct {
+		name           string
+		pod            *informer.ObjectMeta
+		wantNamespace  string
+		wantOwnerChain []configmap.Owner
+	}{
+		{
+			name:           "no owners — chain is empty",
+			pod:            informerPod("prod", "my-pod", "uid-1", "node-1"),
+			wantNamespace:  "prod",
+			wantOwnerChain: nil,
+		},
+		{
+			name: "single deployment owner",
+			pod: informerPod("prod", "my-pod", "uid-2", "node-1",
+				withInformerOwners([]*informer.Owner{
+					{Kind: "Deployment", Name: "my-app"},
+				}),
+			),
+			wantNamespace:  "prod",
+			wantOwnerChain: []configmap.Owner{{Name: "my-app", Kind: "Deployment"}},
+		},
+		{
+			// The OBI informer resolves [ReplicaSet, Deployment] before handing it to us;
+			// processMetadataFromInformer must pass both into ownerChain so that
+			// OwnerName/OwnerKind selectors can match either link.
+			name: "replicaset and deployment chain",
+			pod: informerPod("prod", "my-pod", "uid-3", "node-1",
+				withInformerOwners([]*informer.Owner{
+					{Kind: "ReplicaSet", Name: "my-app-abc"},
+					{Kind: "Deployment", Name: "my-app"},
+				}),
+			),
+			wantNamespace: "prod",
+			wantOwnerChain: []configmap.Owner{
+				{Name: "my-app-abc", Kind: "ReplicaSet"},
+				{Name: "my-app", Kind: "Deployment"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := processMetadataFromInformer(tt.pod)
+			assert.Equal(t, tt.wantNamespace, info.metadata[services.AttrNamespace])
+			assert.Equal(t, tt.wantOwnerChain, info.ownerChain)
+		})
+	}
 }
 
 func TestClassifyFromInformer(t *testing.T) {
@@ -568,7 +605,7 @@ func TestPodStateCache_On(t *testing.T) {
 		Injector: beyla.SDKInject{
 			ImageVersion: "v1.2.3",
 			Instrument: configmap.WebhookInstrument{
-				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
+				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}
@@ -650,7 +687,7 @@ func TestPodStateCache_Collect(t *testing.T) {
 		Injector: beyla.SDKInject{
 			ImageVersion: "v1.2.3",
 			Instrument: configmap.WebhookInstrument{
-				{Metadata: services.MetadataGlobMap{services.AttrNamespace: strToGlob(ns)}},
+				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
 			},
 		},
 	}

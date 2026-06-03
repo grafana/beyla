@@ -1,7 +1,7 @@
 # Args can be overriden like: docker build --build-arg DOTNET_SDK_VERSION=v1.10.0 --build-arg JAVA_SDK_VERSION=v2.20.0 ...
 ARG DOTNET_SDK_VERSION=v1.11.0
 ARG JAVA_SDK_VERSION=v2.27.0
-ARG INJECTOR_VERSION=v0.8.0
+ARG INJECTOR_VERSION=v0.9.0
 
 # download the opentelemetry-injector binary for the target architecture
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-injector-binary

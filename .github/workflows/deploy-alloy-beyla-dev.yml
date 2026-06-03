@@ -66,7 +66,7 @@ jobs:
         with:
           github_app: updater-for-ci
 
-      - name: Update deployment_tools alloy-beyla dev wave
+      - name: Update deployment_tools beyla and alloy-beyla dev wave
         env:
           GITHUB_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
@@ -83,8 +83,18 @@ jobs:
             "pull_request_branch_prefix": "auto-merge/alloy-beyla-dev",
             "pull_request_enabled": true,
             "pull_request_existing_strategy": "replace",
-            "pull_request_message": "Update alloy-beyla dev wave to ${IMAGE_TAG}. Triggered by https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "pull_request_message": "Update Beyla and alloy-beyla dev wave to ${IMAGE_TAG}. Triggered by https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
             "update_jsonnet_attribute_configs": [
+              {
+                "file_path": "ksonnet/environments/beyla/versions.libsonnet",
+                "jsonnet_key_path": "dev.container_image_tag",
+                "jsonnet_value": "${IMAGE_TAG}"
+              },
+              {
+                "file_path": "ksonnet/environments/beyla/versions.libsonnet",
+                "jsonnet_key_path": "dev.release_git_tag",
+                "jsonnet_value": "${SHORT_SHA}"
+              },
               {
                 "file_path": "ksonnet/environments/beyla/alloy_beyla_versions.libsonnet",
                 "jsonnet_key_path": "dev.container_image_tag",

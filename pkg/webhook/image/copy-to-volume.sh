@@ -2,11 +2,8 @@
 
 set -e  # Exit immediately if any command fails
 
-# Validate if MOUNT_PATH is set
-if [ -z "${MOUNT_PATH}" ]; then
-  echo "ERROR: MOUNT_PATH environment variable is not set"
-  exit 1
-fi
+# Default MOUNT_PATH if not set
+MOUNT_PATH="${MOUNT_PATH:-/__otel_sdk_auto_instrumentation__}"
 
 echo "Starting instrumentation population..."
 

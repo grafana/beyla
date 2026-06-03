@@ -7,7 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -41,6 +44,63 @@ func TestServiceNameTemplate(t *testing.T) {
 
 	assert.Nil(t, temp)
 	assert.Nil(t, err)
+}
+
+func TestHasCloudProvider(t *testing.T) {
+	t.Run("empty metadata returns false", func(t *testing.T) {
+		nm := meta.NodeMeta{}
+		assert.False(t, hasCloudProvider(nm))
+	})
+
+	t.Run("cloud.provider present returns true", func(t *testing.T) {
+		nm := meta.NodeMeta{
+			Metadata: []meta.Entry{
+				{Key: attr.Name(semconv.CloudProviderKey), Value: "aws"},
+			},
+		}
+		assert.True(t, hasCloudProvider(nm))
+	})
+
+	t.Run("other metadata without cloud.provider returns false", func(t *testing.T) {
+		nm := meta.NodeMeta{
+			Metadata: []meta.Entry{
+				{Key: attr.Name("cloud.region"), Value: "us-east-1"},
+				{Key: attr.Name("host.name"), Value: "web-01"},
+			},
+		}
+		assert.False(t, hasCloudProvider(nm))
+	})
+}
+
+func TestApplyHostIDFallback(t *testing.T) {
+	t.Run("adds grafana.host.id when no k8s and no cloud", func(t *testing.T) {
+		nm := meta.NodeMeta{}
+		applyHostIDFallback(&nm, false)
+
+		require.Len(t, nm.Metadata, 1)
+		assert.Equal(t, attr.Name(grafanaHostIDAttr), nm.Metadata[0].Key)
+		assert.NotEmpty(t, nm.Metadata[0].Value)
+	})
+
+	t.Run("skips when kubernetes is enabled", func(t *testing.T) {
+		nm := meta.NodeMeta{}
+		applyHostIDFallback(&nm, true)
+
+		assert.Empty(t, nm.Metadata)
+	})
+
+	t.Run("skips when cloud provider is present", func(t *testing.T) {
+		nm := meta.NodeMeta{
+			Metadata: []meta.Entry{
+				{Key: attr.Name(semconv.CloudProviderKey), Value: "gcp"},
+			},
+		}
+		applyHostIDFallback(&nm, false)
+
+		require.Len(t, nm.Metadata, 1)
+		assert.Equal(t, attr.Name(semconv.CloudProviderKey), nm.Metadata[0].Key)
+		assert.Equal(t, "gcp", nm.Metadata[0].Value)
+	})
 }
 
 // See: https://github.com/grafana/beyla/issues/2410

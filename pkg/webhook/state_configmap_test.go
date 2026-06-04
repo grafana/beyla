@@ -593,6 +593,25 @@ func TestBuildInjectConfig(t *testing.T) {
 				)},
 			}}},
 		},
+		{
+			name: "exclude_instrument becomes a leading skip rule",
+			injCfg: beyla.SDKInject{
+				Instrument:        configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				ExcludeInstrument: configmap.WebhookInstrument{{OwnerKinds: []string{"DaemonSet"}}},
+			},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{
+				{
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"DaemonSet"}},
+					Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
+				},
+				{
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
+				},
+			}},
+		},
 	}
 
 	for _, tt := range tests {

@@ -139,6 +139,76 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 	}
 }
 
+func TestPodMatcher_MatchProcessInfo_Exclusion(t *testing.T) {
+	instrument := configmap.WebhookInstrument{{
+		Namespaces: []services.GlobAttr{services.NewGlob("demo")},
+	}}
+	exclude := configmap.WebhookInstrument{{
+		Namespaces: []services.GlobAttr{services.NewGlob("demo")},
+		OwnerNames: []services.GlobAttr{services.NewGlob("skip-me")},
+	}}
+
+	tests := []struct {
+		name       string
+		instrument configmap.WebhookInstrument
+		exclude    configmap.WebhookInstrument
+		process    *ProcessInfo
+		want       bool
+	}{
+		{
+			name:       "exclusion wins over a matching instrument selector",
+			instrument: instrument,
+			exclude:    exclude,
+			process: &ProcessInfo{
+				metadata:   map[string]string{"k8s_namespace": "demo"},
+				ownerChain: []configmap.Owner{{Name: "skip-me", Kind: "Deployment"}},
+			},
+			want: false,
+		},
+		{
+			name:       "non-excluded pod in the same namespace is still instrumented",
+			instrument: instrument,
+			exclude:    exclude,
+			process: &ProcessInfo{
+				metadata:   map[string]string{"k8s_namespace": "demo"},
+				ownerChain: []configmap.Owner{{Name: "keep-me", Kind: "Deployment"}},
+			},
+			want: true,
+		},
+		{
+			name:       "exclude selector that does not match leaves the instrument match intact",
+			instrument: instrument,
+			exclude: configmap.WebhookInstrument{{
+				Namespaces: []services.GlobAttr{services.NewGlob("other")},
+			}},
+			process: &ProcessInfo{metadata: map[string]string{"k8s_namespace": "demo"}},
+			want:    true,
+		},
+		{
+			name:       "exclude only, no instrument, no match",
+			instrument: configmap.WebhookInstrument{},
+			exclude:    exclude,
+			process: &ProcessInfo{
+				metadata:   map[string]string{"k8s_namespace": "demo"},
+				ownerChain: []configmap.Owner{{Name: "skip-me", Kind: "Deployment"}},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matcher := &PodMatcher{
+				instrument: tt.instrument,
+				exclude:    tt.exclude,
+				logger:     slog.With("component", "webhook.Matcher"),
+			}
+			_, matched := matcher.MatchProcessInfo(tt.process)
+			assert.Equal(t, tt.want, matched)
+		})
+	}
+}
+
 func TestNewPodMatcher(t *testing.T) {
 	t.Run("empty config", func(t *testing.T) {
 		matcher := NewPodMatcher(&beyla.Config{})
@@ -157,5 +227,30 @@ func TestNewPodMatcher(t *testing.T) {
 		matcher := NewPodMatcher(cfg)
 		assert.NotNil(t, matcher)
 		assert.True(t, matcher.HasSelectionCriteria())
+	})
+
+	t.Run("wires exclude_instrument and exclusion wins", func(t *testing.T) {
+		cfg := &beyla.Config{
+			Injector: beyla.SDKInject{
+				Instrument: configmap.WebhookInstrument{{
+					Namespaces: []services.GlobAttr{services.NewGlob("demo")},
+				}},
+				ExcludeInstrument: configmap.WebhookInstrument{{
+					Namespaces: []services.GlobAttr{services.NewGlob("demo")},
+					OwnerNames: []services.GlobAttr{services.NewGlob("skip-me")},
+				}},
+			},
+		}
+		matcher := NewPodMatcher(cfg)
+		_, matched := matcher.MatchProcessInfo(&ProcessInfo{
+			metadata:   map[string]string{"k8s_namespace": "demo"},
+			ownerChain: []configmap.Owner{{Name: "skip-me", Kind: "Deployment"}},
+		})
+		assert.False(t, matched, "skip-me should be excluded")
+		_, matched = matcher.MatchProcessInfo(&ProcessInfo{
+			metadata:   map[string]string{"k8s_namespace": "demo"},
+			ownerChain: []configmap.Owner{{Name: "keep-me", Kind: "Deployment"}},
+		})
+		assert.True(t, matched, "keep-me should be instrumented")
 	})
 }

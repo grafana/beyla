@@ -274,6 +274,16 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 	// nil (not an empty slice) when there are no selectors, so the marshalled
 	// config omits rules entirely rather than emitting an empty list.
 	var rules []configmap.Rule
+	// Exclusions are emitted first as skip rules. Rules are evaluated in order
+	// (first match wins), so a skip rule ahead of the install rules carves the
+	// excluded workloads out — e.g. "instrument all except serviceA". Skip rules
+	// carry no env; the injector only needs to know not to instrument.
+	for _, sel := range injCfg.ExcludeInstrument {
+		rules = append(rules, configmap.Rule{
+			Selector: sel,
+			Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
+		})
+	}
 	for _, sel := range injCfg.Instrument {
 		rules = append(rules, configmap.Rule{
 			Selector: sel,

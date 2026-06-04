@@ -185,6 +185,17 @@ discovery:
         name: always_on
 ```
 
+#### Exclude Services
+
+```yaml
+discovery:
+  instrument:
+    - k8s_namespace_name: "production"
+  exclude_instrument:
+    - k8s_namespace_name: "production"
+      k8s_deployment_name: "legacy-api"  # instrument production, except legacy-api
+```
+
 ### Propagator Configuration
 
 Configure trace context propagators:

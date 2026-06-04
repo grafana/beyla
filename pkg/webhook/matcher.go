@@ -12,14 +12,17 @@ import (
 type PodMatcher struct {
 	logger     *slog.Logger
 	instrument configmap.WebhookInstrument
+	exclude    configmap.WebhookInstrument
 }
 
 func NewPodMatcher(cfg *beyla.Config) *PodMatcher {
 	logger := slog.With("component", "webhook.Matcher")
-	logger.Debug("SDK instrumentation criteria", "selectors", cfg.Injector.Instrument)
+	logger.Debug("SDK instrumentation criteria",
+		"selectors", cfg.Injector.Instrument, "exclude", cfg.Injector.ExcludeInstrument)
 	return &PodMatcher{
 		logger:     logger,
 		instrument: cfg.Injector.Instrument,
+		exclude:    cfg.Injector.ExcludeInstrument,
 	}
 }
 
@@ -36,6 +39,14 @@ func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (configmap.K8sSelector,
 		OwnerChain:  info.ownerChain,
 		Labels:      info.podLabels,
 		Annotations: info.podAnnotations,
+	}
+	// Exclusion always wins: a pod matching any exclude selector is never
+	// instrumented, even if it also matches an instrument selector. This mirrors
+	// the skip rules buildInjectConfig emits for the external injector.
+	for _, sel := range m.exclude {
+		if sel.Match(input) {
+			return configmap.K8sSelector{}, false
+		}
 	}
 	for _, sel := range m.instrument {
 		if sel.Match(input) {

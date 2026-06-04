@@ -32,7 +32,7 @@ func otelUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) 
 	return func(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
 		getter, ok := spanOTELGetters(name)
 		switch name {
-		case attr.Client:
+		case attr.Client, attr.ClientAddr:
 			return func(s *Span) attribute.KeyValue {
 				kv := getter(s)
 				if s.IsClientSpan() {
@@ -42,7 +42,7 @@ func otelUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) 
 				}
 				return kv
 			}, true
-		case attr.Server:
+		case attr.Server, attr.ServerAddr:
 			return func(s *Span) attribute.KeyValue {
 				kv := getter(s)
 				if s.IsClientSpan() {
@@ -86,7 +86,7 @@ func promUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) 
 	return func(name attr.Name) (attributes.Getter[*Span, string], bool) {
 		getter := spanPromGetters(name)
 		switch name {
-		case attr.Client:
+		case attr.Client, attr.ClientAddr:
 			return func(span *Span) string {
 				val := getter(span)
 				if span.IsClientSpan() {
@@ -94,7 +94,7 @@ func promUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) 
 				}
 				return unresolvedValue(val, unresolved.Incoming)
 			}, true
-		case attr.Server:
+		case attr.Server, attr.ServerAddr:
 			return func(span *Span) string {
 				val := getter(span)
 				if span.IsClientSpan() {

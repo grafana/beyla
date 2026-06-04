@@ -1090,7 +1090,6 @@ func spanAttributes(s *Span) SpanAttributes {
 			"serverPort":  strconv.Itoa(s.HostPort),
 		}
 		if s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {
-			attrs["graphqlDocument"] = s.GraphQL.Document
 			attrs["graphqlOperationName"] = s.GraphQL.OperationName
 			attrs["graphqlOperationType"] = s.GraphQL.OperationType
 		}

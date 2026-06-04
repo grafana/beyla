@@ -127,7 +127,7 @@
         },
         "default_exclude_services": {
           "$ref": "#/$defs/RegexDefinitionCriteria",
-          "description": "DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector) It must be set to an empty string or a different value if self-instrumentation is desired. Use DefaultExcludeInstrument instead",
+          "description": "DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector) It must be set to an empty string or a different value if self-instrumentation is desired.  Use DefaultExcludeInstrument instead",
           "deprecated": true
         },
         "default_otlp_grpc_port": {
@@ -162,7 +162,7 @@
         },
         "exclude_services": {
           "$ref": "#/$defs/RegexDefinitionCriteria",
-          "description": "ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented even if they match the Services selection. Use ExcludeInstrument instead",
+          "description": "ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented even if they match the Services selection.  Use ExcludeInstrument instead",
           "deprecated": true
         },
         "excluded_linux_system_paths": {
@@ -213,7 +213,7 @@
         },
         "services": {
           "$ref": "#/$defs/RegexDefinitionCriteria",
-          "description": "Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically added to the services definition criteria, with the lowest preference. Use Instrument instead",
+          "description": "Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically added to the services definition criteria, with the lowest preference.  Use Instrument instead",
           "deprecated": true
         },
         "skip_go_specific_tracers": {
@@ -2454,7 +2454,7 @@
     },
     "executable_name": {
       "$ref": "#/$defs/RegexpAttr",
-      "description": "Exec allows selecting the instrumented executable whose complete path contains the Exec value. Use BEYLA_AUTO_TARGET_EXE",
+      "description": "Exec allows selecting the instrumented executable whose complete path contains the Exec value.  Use BEYLA_AUTO_TARGET_EXE",
       "deprecated": true,
       "x-env-var": "BEYLA_EXECUTABLE_NAME"
     },
@@ -2540,7 +2540,7 @@
     },
     "service_name": {
       "type": "string",
-      "description": "ServiceName is taken from either BEYLA_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility) Using env and envDefault is a trick to get the value either from one of either variables. Service name should be set in the instrumentation target (env vars, kube metadata...) as this is a reminiscence of past times when we only supported one executable per instance.",
+      "description": "ServiceName is taken from either BEYLA_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility) Using env and envDefault is a trick to get the value either from one of either variables.  Service name should be set in the instrumentation target (env vars, kube metadata...) as this is a reminiscence of past times when we only supported one executable per instance.",
       "deprecated": true,
       "x-env-var": "OTEL_SERVICE_NAME"
     },

@@ -83,7 +83,7 @@ type K8sSelector struct {
 	// ReplicaSet, StatefulSet, DaemonSet). A link matches if its kind equals any
 	// entry (OR semantics). Empty means any kind. See OwnerNames for how kinds
 	// and names combine.
-	OwnerKinds []services.GlobAttr `yaml:"ownerKinds,omitempty"`
+	OwnerKinds []string `yaml:"ownerKinds,omitempty"`
 	// PodLabels maps label keys to value globs. Empty means all pods.
 	// All entries must match (AND semantics).
 	PodLabels map[string]services.GlobAttr `yaml:"podLabels,omitempty"`

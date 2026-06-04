@@ -17,7 +17,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -321,17 +320,44 @@ func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) configm
 		}
 	}
 
-	metaGlob := func(name attr.Name) []services.GlobAttr {
-		if g := a.Metadata[string(name.Prom())]; g != nil {
+	metaGlob := func(name string) []services.GlobAttr {
+		if g := a.Metadata[name]; g != nil {
 			return []services.GlobAttr{*g}
 		}
 		return nil
 	}
 
+	// First check to see if the user used k8s_owner_name
+	ownerNames := metaGlob(services.AttrOwnerName)
+	var kinds []string
+	// If no owner name, then we check the specific types of definitions.
+	// In this case we set both the owner name and the kind to match the new
+	// service definition format.
+	if ownerNames == nil {
+		for _, owner := range []struct {
+			metadataKey string
+			kind        string
+		}{
+			{metadataKey: services.AttrDeploymentName, kind: "Deployment"},
+			{metadataKey: services.AttrDaemonSetName, kind: "DaemonSet"},
+			{metadataKey: services.AttrReplicaSetName, kind: "ReplicaSet"},
+			{metadataKey: services.AttrStatefulSetName, kind: "StatefulSet"},
+			{metadataKey: services.AttrJobName, kind: "Job"},
+			{metadataKey: services.AttrCronJobName, kind: "CronJob"},
+			{metadataKey: services.AttrPodName, kind: "Pod"},
+		} {
+			if names := metaGlob(owner.metadataKey); names != nil {
+				ownerNames = names
+				kinds = []string{owner.kind}
+				break
+			}
+		}
+	}
+
 	sel := configmap.K8sSelector{
-		Namespaces:     metaGlob(attr.K8sNamespaceName),
-		OwnerNames:     metaGlob(attr.K8sOwnerName),
-		OwnerKinds:     metaGlob(attr.K8sKind),
+		Namespaces:     metaGlob(services.AttrNamespace),
+		OwnerNames:     ownerNames,
+		OwnerKinds:     kinds,
 		PodLabels:      podLabels,
 		PodAnnotations: podAnnotations,
 	}

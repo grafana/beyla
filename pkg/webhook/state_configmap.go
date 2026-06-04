@@ -306,20 +306,33 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 }
 
 func ruleFromDefinition(a services.GlobAttributes, mode configmap.Mode) configmap.Rule {
-	podLabels := map[string]services.GlobAttr{}
-	for k, v := range a.PodLabels {
-		podLabels[k] = *v
+	var podLabels map[string]services.GlobAttr
+	if len(a.PodLabels) > 0 {
+		podLabels = make(map[string]services.GlobAttr, len(a.PodLabels))
+		for k, v := range a.PodLabels {
+			podLabels[k] = *v
+		}
 	}
 
-	podAnnotations := map[string]services.GlobAttr{}
-	for k, v := range a.PodAnnotations {
-		podAnnotations[k] = *v
+	var podAnnotations map[string]services.GlobAttr
+	if len(a.PodAnnotations) > 0 {
+		podAnnotations = make(map[string]services.GlobAttr, len(a.PodAnnotations))
+		for k, v := range a.PodAnnotations {
+			podAnnotations[k] = *v
+		}
+	}
+
+	metaGlob := func(name attr.Name) []services.GlobAttr {
+		if g := a.Metadata[string(name.Prom())]; g != nil {
+			return []services.GlobAttr{*g}
+		}
+		return nil
 	}
 
 	sel := configmap.K8sSelector{
-		Namespaces:     []services.GlobAttr{*a.Metadata[string(attr.K8sNamespaceName.Prom())]},
-		OwnerNames:     []services.GlobAttr{*a.Metadata[string(attr.K8sOwnerName.Prom())]},
-		OwnerKinds:     []services.GlobAttr{*a.Metadata[string(attr.K8sKind.Prom())]},
+		Namespaces:     metaGlob(attr.K8sNamespaceName),
+		OwnerNames:     metaGlob(attr.K8sOwnerName),
+		OwnerKinds:     metaGlob(attr.K8sKind),
 		PodLabels:      podLabels,
 		PodAnnotations: podAnnotations,
 	}
@@ -342,7 +355,7 @@ func rulesFromDiscoveryInstrument(d *servicesextra.BeylaDiscoveryConfig) []confi
 	}
 
 	for _, a := range d.Instrument {
-		rules = append(rules, ruleFromDefinition(a, configmap.ModeSkip))
+		rules = append(rules, ruleFromDefinition(a, configmap.ModeInstall))
 	}
 
 	return rules

@@ -118,19 +118,19 @@ func TestK8sSelector_Match(t *testing.T) {
 		// OwnerKinds matching
 		{
 			name:     "ownerKinds match",
-			selector: K8sSelector{OwnerKinds: []string{"Deployment"}},
+			selector: K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}},
 			input:    MatchInput{OwnerChain: []Owner{{Name: "any", Kind: "Deployment"}}},
 			want:     true,
 		},
 		{
 			name:     "ownerKinds no match",
-			selector: K8sSelector{OwnerKinds: []string{"Deployment"}},
+			selector: K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}},
 			input:    MatchInput{OwnerChain: []Owner{{Name: "any", Kind: "DaemonSet"}}},
 			want:     false,
 		},
 		{
 			name:     "ownerKinds OR — kind is one of several",
-			selector: K8sSelector{OwnerKinds: []string{"Deployment", "StatefulSet"}},
+			selector: K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment"), services.NewGlob("StatefulSet")}},
 			input:    MatchInput{OwnerChain: []Owner{{Name: "any", Kind: "StatefulSet"}}},
 			want:     true,
 		},
@@ -140,7 +140,7 @@ func TestK8sSelector_Match(t *testing.T) {
 			name: "ownerNames and ownerKinds both satisfied by the same link",
 			selector: K8sSelector{
 				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
-				OwnerKinds: []string{"Deployment"},
+				OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")},
 			},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "my-app-7d9f8b", Kind: "ReplicaSet"},
@@ -152,7 +152,7 @@ func TestK8sSelector_Match(t *testing.T) {
 			name: "name and kind satisfied by different links does not match",
 			selector: K8sSelector{
 				OwnerNames: []services.GlobAttr{services.NewGlob("my-app-7d9f8b")},
-				OwnerKinds: []string{"Deployment"},
+				OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")},
 			},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "my-app-7d9f8b", Kind: "ReplicaSet"}, // name matches, kind does not
@@ -164,7 +164,7 @@ func TestK8sSelector_Match(t *testing.T) {
 			name: "ownerNames matches but ownerKinds does not on same link",
 			selector: K8sSelector{
 				OwnerNames: []services.GlobAttr{services.NewGlob("my-app")},
-				OwnerKinds: []string{"StatefulSet"},
+				OwnerKinds: []services.GlobAttr{services.NewGlob("StatefulSet")},
 			},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "my-app", Kind: "Deployment"},
@@ -177,7 +177,7 @@ func TestK8sSelector_Match(t *testing.T) {
 			name: "multiple kinds with single name matched by the replicaset link",
 			selector: K8sSelector{
 				OwnerNames: []services.GlobAttr{services.NewGlob("my-app-rs")},
-				OwnerKinds: []string{"Deployment", "ReplicaSet"},
+				OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment"), services.NewGlob("ReplicaSet")},
 			},
 			input: MatchInput{OwnerChain: []Owner{
 				{Name: "my-app-rs", Kind: "ReplicaSet"},

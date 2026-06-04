@@ -61,7 +61,9 @@ func (s K8sSelector) kindMatches(kind string) bool {
 	if len(s.OwnerKinds) == 0 {
 		return true
 	}
-	return slices.Contains(s.OwnerKinds, kind)
+	return slices.ContainsFunc(s.OwnerKinds, func(g services.GlobAttr) bool {
+		return g.MatchString(kind)
+	})
 }
 
 // nameMatches reports whether name matches any OwnerNames glob (OR);

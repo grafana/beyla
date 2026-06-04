@@ -68,6 +68,7 @@ var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 type BeylaDiscoveryConfig struct {
 	// Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically
 	// added to the services definition criteria, with the lowest preference.
+	//
 	// Deprecated: Use Instrument instead
 	Services services.RegexDefinitionCriteria `yaml:"services"`
 
@@ -76,11 +77,13 @@ type BeylaDiscoveryConfig struct {
 
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.
+	//
 	// Deprecated: Use ExcludeInstrument instead
 	ExcludeServices services.RegexDefinitionCriteria `yaml:"exclude_services"`
 
 	// DefaultExcludeServices by default prevents self-instrumentation of Beyla as well as related services (Alloy and OpenTelemetry collector)
 	// It must be set to an empty string or a different value if self-instrumentation is desired.
+	//
 	// Deprecated: Use DefaultExcludeInstrument instead
 	DefaultExcludeServices services.RegexDefinitionCriteria `yaml:"default_exclude_services"`
 

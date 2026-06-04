@@ -16,7 +16,11 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
+
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
@@ -228,7 +232,7 @@ func trimContainerIDScheme(containerID string) string {
 // buildInjectConfig constructs an InjectConfig from the Beyla injector configuration.
 // Each selector becomes one Rule whose Config.Env carries all SDK configuration as
 // env vars, derived from Beyla as the single source of truth.
-func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) configmap.InjectConfig {
+func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.InjectConfig {
 	var env []corev1.EnvVar
 
 	// OTLP destination
@@ -237,36 +241,36 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 
 	// Signal exporters
 	env = append(env,
-		corev1.EnvVar{Name: "OTEL_TRACES_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.TracesEnabled())},
-		corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.MetricsEnabled())},
-		corev1.EnvVar{Name: "OTEL_LOGS_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.LogsEnabled())},
+		corev1.EnvVar{Name: "OTEL_TRACES_EXPORTER", Value: otlpOrNone(cfg.Injector.ExportedSignals.TracesEnabled())},
+		corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: otlpOrNone(cfg.Injector.ExportedSignals.MetricsEnabled())},
+		corev1.EnvVar{Name: "OTEL_LOGS_EXPORTER", Value: otlpOrNone(cfg.Injector.ExportedSignals.LogsEnabled())},
 	)
 
 	// Propagators
-	if len(injCfg.Propagators) > 0 {
-		env = append(env, corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: strings.Join(injCfg.Propagators, ",")})
+	if len(cfg.Injector.Propagators) > 0 {
+		env = append(env, corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: strings.Join(cfg.Injector.Propagators, ",")})
 	}
 
 	// Sampler
-	if injCfg.DefaultSampler != nil {
-		if injCfg.DefaultSampler.Name != "" {
-			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER", Value: string(injCfg.DefaultSampler.Name)})
+	if cfg.Injector.DefaultSampler != nil {
+		if cfg.Injector.DefaultSampler.Name != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER", Value: string(cfg.Injector.DefaultSampler.Name)})
 		}
-		if injCfg.DefaultSampler.Arg != "" {
-			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER_ARG", Value: injCfg.DefaultSampler.Arg})
+		if cfg.Injector.DefaultSampler.Arg != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER_ARG", Value: cfg.Injector.DefaultSampler.Arg})
 		}
 	}
 
 	// Static resource attributes
-	if len(injCfg.Resources.Attributes) > 0 {
-		keys := make([]string, 0, len(injCfg.Resources.Attributes))
-		for k := range injCfg.Resources.Attributes {
+	if len(cfg.Injector.Resources.Attributes) > 0 {
+		keys := make([]string, 0, len(cfg.Injector.Resources.Attributes))
+		for k := range cfg.Injector.Resources.Attributes {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		attrs := make([]string, 0, len(keys))
 		for _, k := range keys {
-			attrs = append(attrs, fmt.Sprintf("%s=%s", k, injCfg.Resources.Attributes[k]))
+			attrs = append(attrs, fmt.Sprintf("%s=%s", k, cfg.Injector.Resources.Attributes[k]))
 		}
 		env = append(env, corev1.EnvVar{Name: "OTEL_INJECTOR_RESOURCE_ATTRIBUTES", Value: strings.Join(attrs, ",")})
 	}
@@ -278,22 +282,70 @@ func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) config
 	// (first match wins), so a skip rule ahead of the install rules carves the
 	// excluded workloads out — e.g. "instrument all except serviceA". Skip rules
 	// carry no env; the injector only needs to know not to instrument.
-	for _, sel := range injCfg.ExcludeInstrument {
+	for _, sel := range cfg.Injector.ExcludeInstrument {
 		rules = append(rules, configmap.Rule{
 			Selector: sel,
 			Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
 		})
 	}
-	for _, sel := range injCfg.Instrument {
+	for _, sel := range cfg.Injector.Instrument {
 		rules = append(rules, configmap.Rule{
 			Selector: sel,
 			Config:   configmap.RuleConfig{Env: env},
 		})
 	}
+
 	return configmap.InjectConfig{
-		ImageVersion: injCfg.ImageVersion,
+		ImageVersion: cfg.Injector.ImageVersion,
 		Rules:        rules,
+		BPFConfig: configmap.BPFConfig{
+			SpanMetrics: cfg.AsOBI().SpanMetricsEnabledForTraces(),
+			Rules:       rulesFromDiscoveryInstrument(&cfg.Discovery),
+		},
 	}
+}
+
+func ruleFromDefinition(a services.GlobAttributes, mode configmap.Mode) configmap.Rule {
+	podLabels := map[string]services.GlobAttr{}
+	for k, v := range a.PodLabels {
+		podLabels[k] = *v
+	}
+
+	podAnnotations := map[string]services.GlobAttr{}
+	for k, v := range a.PodAnnotations {
+		podAnnotations[k] = *v
+	}
+
+	sel := configmap.K8sSelector{
+		Namespaces:     []services.GlobAttr{*a.Metadata[string(attr.K8sNamespaceName.Prom())]},
+		OwnerNames:     []services.GlobAttr{*a.Metadata[string(attr.K8sOwnerName.Prom())]},
+		OwnerKinds:     []services.GlobAttr{*a.Metadata[string(attr.K8sKind.Prom())]},
+		PodLabels:      podLabels,
+		PodAnnotations: podAnnotations,
+	}
+
+	return configmap.Rule{
+		Selector: sel,
+		Config:   configmap.RuleConfig{Mode: mode},
+	}
+}
+
+func rulesFromDiscoveryInstrument(d *servicesextra.BeylaDiscoveryConfig) []configmap.Rule {
+	var rules []configmap.Rule
+
+	exc := make(services.GlobDefinitionCriteria, 0, len(d.DefaultExcludeInstrument)+len(d.ExcludeInstrument))
+	exc = append(exc, d.DefaultExcludeInstrument...)
+	exc = append(exc, d.ExcludeInstrument...)
+
+	for _, a := range exc {
+		rules = append(rules, ruleFromDefinition(a, configmap.ModeSkip))
+	}
+
+	for _, a := range d.Instrument {
+		rules = append(rules, ruleFromDefinition(a, configmap.ModeSkip))
+	}
+
+	return rules
 }
 
 func otlpOrNone(enabled bool) string {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -522,71 +523,71 @@ func TestBuildInjectConfig(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		injCfg   beyla.SDKInject
+		cfg      beyla.Config
 		endpoint string
 		protocol string
 		want     configmap.InjectConfig
 	}{
 		{
 			name:     "empty instrument yields empty config",
-			injCfg:   beyla.SDKInject{},
+			cfg:      beyla.Config{Injector: beyla.SDKInject{}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want:     configmap.InjectConfig{},
 		},
 		{
 			name: "single selector becomes one rule with all default env vars",
-			injCfg: beyla.SDKInject{
-				Instrument: configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
-			},
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument: configmap.WebhookInstrument{{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}}},
+			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{
-				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+				Selector: configmap.K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}},
 				Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
 			}}},
 		},
 		{
 			name: "multiple selectors each get the same env",
-			injCfg: beyla.SDKInject{
+			cfg: beyla.Config{Injector: beyla.SDKInject{
 				Instrument: configmap.WebhookInstrument{
-					{OwnerKinds: []string{"Deployment"}},
-					{OwnerKinds: []string{"StatefulSet"}},
+					{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}},
+					{OwnerKinds: []services.GlobAttr{services.NewGlob("StatefulSet")}},
 				},
-			},
+			}},
 			endpoint: "http://otel:4318",
 			protocol: "grpc",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{
-				{Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
-				{Selector: configmap.K8sSelector{OwnerKinds: []string{"StatefulSet"}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
+				{Selector: configmap.K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
+				{Selector: configmap.K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("StatefulSet")}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
 			}},
 		},
 		{
 			name: "ImageVersion is set at the top level",
-			injCfg: beyla.SDKInject{
+			cfg: beyla.Config{Injector: beyla.SDKInject{
 				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
-				Instrument:   configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
-			},
+				Instrument:   configmap.WebhookInstrument{{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}}},
+			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{
 				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
 				Rules: []configmap.Rule{{
-					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+					Selector: configmap.K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}},
 					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
 				}},
 			},
 		},
 		{
 			name: "propagators written as OTEL_PROPAGATORS",
-			injCfg: beyla.SDKInject{
-				Instrument:  configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument:  configmap.WebhookInstrument{{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}}},
 				Propagators: []string{"tracecontext", "baggage"},
-			},
+			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{
-				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+				Selector: configmap.K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}},
 				Config: configmap.RuleConfig{Env: append(
 					defaultEnv("http://otel:4318", "http/protobuf"),
 					corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: "tracecontext,baggage"},
@@ -595,19 +596,19 @@ func TestBuildInjectConfig(t *testing.T) {
 		},
 		{
 			name: "exclude_instrument becomes a leading skip rule",
-			injCfg: beyla.SDKInject{
-				Instrument:        configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
-				ExcludeInstrument: configmap.WebhookInstrument{{OwnerKinds: []string{"DaemonSet"}}},
-			},
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument:        configmap.WebhookInstrument{{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}}},
+				ExcludeInstrument: configmap.WebhookInstrument{{OwnerKinds: []services.GlobAttr{services.NewGlob("DaemonSet")}}},
+			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{
 				{
-					Selector: configmap.K8sSelector{OwnerKinds: []string{"DaemonSet"}},
+					Selector: configmap.K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("DaemonSet")}},
 					Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
 				},
 				{
-					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+					Selector: configmap.K8sSelector{OwnerKinds: []services.GlobAttr{services.NewGlob("Deployment")}},
 					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
 				},
 			}},
@@ -616,7 +617,7 @@ func TestBuildInjectConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildInjectConfig(tt.injCfg, tt.endpoint, tt.protocol)
+			got := buildInjectConfig(&tt.cfg, tt.endpoint, tt.protocol)
 			assert.Equal(t, tt.want, got)
 		})
 	}

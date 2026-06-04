@@ -48,8 +48,14 @@ type WebhookInstrument []K8sSelector
 // No match means no instrumentation.
 type InjectConfig struct {
 	// OCI image version to inject. Must not be empty.
-	ImageVersion string `yaml:"image_version,omitempty"`
-	Rules        []Rule `yaml:"rules,omitempty"`
+	ImageVersion string    `yaml:"image_version,omitempty"`
+	Rules        []Rule    `yaml:"rules,omitempty"`
+	BPFConfig    BPFConfig `yaml:"bpf,omitempty"`
+}
+
+type BPFConfig struct {
+	Rules       []Rule `yaml:"rules,omitempty"`
+	SpanMetrics bool   `yaml:"span_metrics,omitempty"`
 }
 
 // Rule pairs a selector with the instrumentation config to apply when the
@@ -77,7 +83,7 @@ type K8sSelector struct {
 	// ReplicaSet, StatefulSet, DaemonSet). A link matches if its kind equals any
 	// entry (OR semantics). Empty means any kind. See OwnerNames for how kinds
 	// and names combine.
-	OwnerKinds []string `yaml:"ownerKinds,omitempty"`
+	OwnerKinds []services.GlobAttr `yaml:"ownerKinds,omitempty"`
 	// PodLabels maps label keys to value globs. Empty means all pods.
 	// All entries must match (AND semantics).
 	PodLabels map[string]services.GlobAttr `yaml:"podLabels,omitempty"`

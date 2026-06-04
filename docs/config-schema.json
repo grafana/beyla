@@ -1160,7 +1160,7 @@
         },
         "ownerKinds": {
           "items": {
-            "$ref": "#/$defs/GlobAttr"
+            "type": "string"
           },
           "type": "array",
           "description": "OwnerKinds restricts matching to specific owner kinds (e.g. Deployment, ReplicaSet, StatefulSet, DaemonSet). A link matches if its kind equals any entry (OR semantics). Empty means any kind. See OwnerNames for how kinds and names combine."

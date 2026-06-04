@@ -3,7 +3,6 @@ package webhook
 import (
 	"log/slog"
 
-	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -11,96 +10,48 @@ import (
 )
 
 type PodMatcher struct {
-	logger           *slog.Logger
-	selectors        []services.Selector
-	excludeSelectors []services.Selector
+	logger     *slog.Logger
+	instrument configmap.WebhookInstrument
+	exclude    configmap.WebhookInstrument
 }
 
 func NewPodMatcher(cfg *beyla.Config) *PodMatcher {
-	selectors := asProcessDiscoverySelector(cfg.Injector.Instrument)
-	excludeSelectors := asProcessDiscoverySelector(cfg.Injector.ExcludeInstrument)
 	logger := slog.With("component", "webhook.Matcher")
-
-	logger.Debug("SDK instrumentation criteria", "selectors", selectors, "excludeSelectors", excludeSelectors)
-
+	logger.Debug("SDK instrumentation criteria",
+		"selectors", cfg.Injector.Instrument, "exclude", cfg.Injector.ExcludeInstrument)
 	return &PodMatcher{
-		logger:           logger,
-		selectors:        selectors,
-		excludeSelectors: excludeSelectors,
+		logger:     logger,
+		instrument: cfg.Injector.Instrument,
+		exclude:    cfg.Injector.ExcludeInstrument,
 	}
-}
-
-func asProcessDiscoverySelector(in configmap.WebhookInstrument) []services.Selector {
-	out := make(services.GlobDefinitionCriteria, 0, len(in))
-	for _, selector := range in {
-		out = append(out, services.GlobAttributes{
-			Metadata:       selector.Metadata,
-			PodLabels:      selector.PodLabels,
-			PodAnnotations: selector.PodAnnotations,
-		})
-	}
-	return discover.NormalizeGlobCriteria(out)
 }
 
 func (m *PodMatcher) HasSelectionCriteria() bool {
-	return len(m.selectors) > 0
+	return len(m.instrument) > 0
 }
 
-func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (services.Selector, bool) {
+func (m *PodMatcher) MatchProcessInfo(info *ProcessInfo) (configmap.K8sSelector, bool) {
+	if info == nil {
+		return configmap.K8sSelector{}, false
+	}
+	input := configmap.MatchInput{
+		Namespace:   info.metadata[services.AttrNamespace],
+		OwnerChain:  info.ownerChain,
+		Labels:      info.podLabels,
+		Annotations: info.podAnnotations,
+	}
 	// Exclusion always wins: a pod matching any exclude selector is never
-	// instrumented, even if it also matches an instrument selector. Mirrors
-	// discovery.exclude_instrument semantics.
-	for _, s := range m.excludeSelectors {
-		if m.matchProcess(info, s) {
-			return nil, false
+	// instrumented, even if it also matches an instrument selector. This mirrors
+	// the skip rules buildInjectConfig emits for the external injector.
+	for _, sel := range m.exclude {
+		if sel.Match(input) {
+			return configmap.K8sSelector{}, false
 		}
 	}
-
-	for _, s := range m.selectors {
-		if m.matchProcess(info, s) {
-			return s, true
+	for _, sel := range m.instrument {
+		if sel.Match(input) {
+			return sel, true
 		}
 	}
-
-	return nil, false
-}
-
-func (m *PodMatcher) matchProcess(actual *ProcessInfo, required services.Selector) bool {
-	if required == nil {
-		return false
-	}
-	if actual == nil {
-		return false
-	}
-
-	matchedAny := false
-
-	// match metadata
-	for attrName, criteriaRegexp := range required.RangeMetadata() {
-		if attrValue, ok := actual.metadata[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
-			m.logger.Debug("metadata does not match", "attr", attrName, "value", attrValue)
-			return false
-		}
-		matchedAny = true
-	}
-
-	// match pod labels
-	for labelName, criteriaRegexp := range required.RangePodLabels() {
-		if actualPodLabelValue, ok := actual.podLabels[labelName]; !ok || !criteriaRegexp.MatchString(actualPodLabelValue) {
-			m.logger.Debug("pod label does not match", "label", labelName, "value", actualPodLabelValue)
-			return false
-		}
-		matchedAny = true
-	}
-
-	// match pod annotations
-	for annotationName, criteriaRegexp := range required.RangePodAnnotations() {
-		if actualPodAnnotationValue, ok := actual.podAnnotations[annotationName]; !ok || !criteriaRegexp.MatchString(actualPodAnnotationValue) {
-			m.logger.Debug("pod annotation does not match", "annotation", annotationName, "value", actualPodAnnotationValue)
-			return false
-		}
-		matchedAny = true
-	}
-
-	return matchedAny
+	return configmap.K8sSelector{}, false
 }

@@ -48,9 +48,13 @@ func addMetadata(pp *ProcessInfo, info *informer.ObjectMeta) *ProcessInfo {
 	ret.podLabels = info.Labels
 	ret.podAnnotations = info.Annotations
 
+	// Always include the pod itself as the first chain entry so pods are
+	// selectable by name via ownerKind: Pod, ownerName: <glob>.
+	ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: info.Name, Kind: "Pod"})
 	// add any other owner name (they might be several, e.g. replicaset and deployment)
 	for _, owner := range info.Pod.Owners {
 		ret.metadata[transform.OwnerLabelName(owner.Kind).Prom()] = owner.Name
+		ret.ownerChain = append(ret.ownerChain, configmap.Owner{Name: owner.Name, Kind: owner.Kind})
 	}
 	return ret
 }

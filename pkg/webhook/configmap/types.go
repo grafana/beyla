@@ -2,9 +2,9 @@
 // that Beyla writes and the external k8s injection controller consumes. It is
 // the public, shared schema between the two repositories.
 //
-// Only the schema, the keys, and the (un)marshal helpers live here; the
-// runtime writer/reader logic lives next to its caller (Beyla's
-// StateConfigMapWriter; the injector's ConfigMapReconciler).
+// The package contains the schema types, the ConfigMap key constants, and the
+// Selector.Match logic (in match.go). Runtime writer/reader logic lives next
+// to its caller (Beyla's StateConfigMapWriter; the injector's ConfigMapReconciler).
 package configmap
 
 import (
@@ -14,13 +14,14 @@ import (
 	"log/slog"
 
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
 const (
 	// KeyInstrumentation is the ConfigMap.Data key holding the injection
-	// criteria + OTLP destination (an InjectConfig serialized as YAML).
+	// criteria + per-rule config (an InjectConfig serialized as YAML).
 	KeyInstrumentation = "instrumentation.yaml"
 
 	// KeyEligibleForRestart is the ConfigMap.Data key holding the list of
@@ -35,71 +36,88 @@ const (
 	SelectorAnnotation = "beyla.grafana.com/node"
 )
 
-// WebhookInstrument is a subset of services.GlobDefinitionCriteria because
-// GlobDefinitionCriteria is only designed for unmarshaling and the
-// marshal+unmarshal operation is not idempotent (and makes the injector controller
-// to fail).
-// GlobDefinitionCriteria contains many attributes that are not
-// part of the webhook discovery so we copy here only the ones that are
-// actually needed.
-type WebhookInstrument []WebhookKubeOnlySelector
+// WebhookInstrument is the list of selectors from the Beyla injector config
+// that determine which pods to instrument. It carries selectors only — no
+// per-rule config. When Beyla writes the state ConfigMap it promotes each
+// K8sSelector into a full Rule by pairing it with the OTLP destination env vars
+// derived from Beyla's own export configuration (see buildInjectConfig).
+type WebhookInstrument []K8sSelector
 
-type WebhookKubeOnlySelector struct {
-	// PodLabels allows matching against the labels of a pod
-	PodLabels map[string]*services.GlobAttr `yaml:"k8s_pod_labels,omitempty"`
-
-	// PodAnnotations allows matching against the annotations of a pod
-	PodAnnotations map[string]*services.GlobAttr `yaml:"k8s_pod_annotations,omitempty"`
-
-	// Metadata stores other Kubernetes object metadata
-	Metadata services.MetadataGlobMap `yaml:",inline" mapstructure:",remain"`
-}
-
-// InjectConfig is the YAML document under KeyInstrumentation: a list of
-// service-selection globs and the OTLP destination to stamp onto matched
-// pods.
+// InjectConfig is the YAML document under KeyInstrumentation. Rules are
+// evaluated in order; the first rule whose selector matches a pod wins.
+// No match means no instrumentation.
 type InjectConfig struct {
-	NodeName string `yaml:"node_name"`
-
-	// Discovery is a list of service-selection criteria reused verbatim from
-	// Beyla's own configuration shape. The injection controller picks the
-	// kubernetes metadata fields (k8s_namespace, k8s_pod_name, ...) out of
-	// each entry; non-kubernetes fields (open_ports, exe_path, ...) are
-	// ignored on the consumer side.
-	Discovery WebhookInstrument `yaml:"discovery,omitempty"`
-
-	// ExcludeDiscovery lists selectors whose matching pods must NOT be
-	// instrumented, even when they also match Discovery. Exclusion always wins.
-	ExcludeDiscovery WebhookInstrument `yaml:"exclude_discovery,omitempty"`
-
-	// OtelExport tells the injection controller what OTLP endpoint and
-	// protocol to set on instrumented containers. Empty fields are pruned
-	// by Marshal so the document stays minimal.
-	OtelExport OtelExport `yaml:"otel_export,omitempty"`
-
-	// ExportedSignals configuration for SDK instrumentation
-	// Controls which signals (traces, metrics, logs) should be exported from injected SDKs
-	ExportedSignals SDKExportedSignals `yaml:"otel_exported_signals,omitempty"`
-
 	// OCI image version to inject. Must not be empty.
 	ImageVersion string `yaml:"image_version,omitempty"`
-
-	// Default sampler configuration for SDK instrumentation
-	// This is used when no sampler is specified in the selector
-	DefaultSampler *services.SamplerConfig `yaml:"trace_sampler,omitempty"`
-
-	// Propagators configuration for SDK instrumentation
-	// Common values: tracecontext, baggage, b3, b3multi, jaeger, xray
-	Propagators []string `yaml:"trace_propagators,omitempty"`
-
-	// Resource attributes related settings
-	Resources SDKResource `yaml:"resources,omitempty"`
+	Rules        []Rule `yaml:"rules,omitempty"`
 }
 
-// OtelExport is the per-ConfigMap OTLP destination applied to matched pods.
-type OtelExport struct {
-	Endpoint string `yaml:"endpoint,omitempty"`
-	Protocol string `yaml:"protocol,omitempty"`
+// Rule pairs a selector with the instrumentation config to apply when the
+// selector matches.
+type Rule struct {
+	Selector K8sSelector `yaml:"k8s_selector,omitempty"`
+	Config   RuleConfig  `yaml:"config,omitempty"`
+}
+
+// K8sSelector determines which pods a Rule applies to. All populated fields must
+// match (AND). An empty field is a wildcard. Every field describes Kubernetes
+// pod metadata, hence the k8s_ prefix on the YAML key.
+type K8sSelector struct {
+	// Namespaces lists namespace name globs. Empty means all namespaces.
+	// A pod matches if its namespace matches any entry (OR semantics).
+	Namespaces []services.GlobAttr `yaml:"namespaces,omitempty"`
+	// OwnerNames lists globs matched against the names in the pod's resolved
+	// owner chain. For a pod owned by a ReplicaSet that is itself owned by a
+	// Deployment, every link in the chain is tried. Empty means any owner name.
+	// OwnerNames and OwnerKinds combine per link: a pod matches when a single
+	// owner-chain link satisfies both (kind ∈ OwnerKinds AND name matches some
+	// OwnerNames glob).
+	OwnerNames []services.GlobAttr `yaml:"ownerNames,omitempty"`
+	// OwnerKinds restricts matching to specific owner kinds (e.g. Deployment,
+	// ReplicaSet, StatefulSet, DaemonSet). A link matches if its kind equals any
+	// entry (OR semantics). Empty means any kind. See OwnerNames for how kinds
+	// and names combine.
+	OwnerKinds []string `yaml:"ownerKinds,omitempty"`
+	// PodLabels maps label keys to value globs. Empty means all pods.
+	// All entries must match (AND semantics).
+	PodLabels map[string]services.GlobAttr `yaml:"podLabels,omitempty"`
+	// PodAnnotations maps annotation keys to value globs. Empty means all pods.
+	// All entries must match (AND semantics).
+	PodAnnotations map[string]services.GlobAttr `yaml:"podAnnotations,omitempty"`
+}
+
+// Mode controls what a Rule does when its selector matches a pod.
+type Mode string
+
+const (
+	// ModeInstall instruments matched pods. It is the default when Mode is unset.
+	ModeInstall Mode = "install"
+	// ModeSkip explicitly excludes matched pods from instrumentation. Because
+	// rules are evaluated in order (first match wins), a skip rule placed before
+	// a broader install rule carves an exception out of it — e.g. "instrument
+	// everything except serviceA".
+	ModeSkip Mode = "skip"
+)
+
+// RuleConfig is the instrumentation configuration stamped onto matched pods.
+type RuleConfig struct {
+	// Mode selects whether matched pods are instrumented (install, the default
+	// when unset) or explicitly excluded (skip). See Mode.
+	Mode Mode `yaml:"mode,omitempty"`
+	// Env is the list of environment variables to set on instrumented containers.
+	// Supports all corev1.EnvVar sources (valueFrom.secretKeyRef, etc.).
+	Env []corev1.EnvVar `yaml:"env,omitempty"`
+	// TODO: add declarativeConfig support — when set, mount the inline OTel
+	// declarative config (file_format: "1.0") as a ConfigMap and set
+	// OTEL_CONFIG_FILE on matched containers. Requires volume mount + env var
+	// injection in the mutator before this field can be added to the schema.
+}
+
+// Skips reports whether this config excludes matched pods from instrumentation.
+// An unset Mode (and any unrecognized value) defaults to install, so only an
+// explicit ModeSkip excludes.
+func (c RuleConfig) Skips() bool {
+	return c.Mode == ModeSkip
 }
 
 // EligibleDeployment names one workload whose pre-existing pods are

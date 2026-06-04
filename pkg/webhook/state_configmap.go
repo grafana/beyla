@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -17,6 +18,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
+	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
@@ -221,6 +223,84 @@ func trimContainerIDScheme(containerID string) string {
 		return id
 	}
 	return containerID
+}
+
+// buildInjectConfig constructs an InjectConfig from the Beyla injector configuration.
+// Each selector becomes one Rule whose Config.Env carries all SDK configuration as
+// env vars, derived from Beyla as the single source of truth.
+func buildInjectConfig(injCfg beyla.SDKInject, endpoint, protocol string) configmap.InjectConfig {
+	var env []corev1.EnvVar
+
+	// OTLP destination
+	env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint})
+	env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol})
+
+	// Signal exporters
+	env = append(env,
+		corev1.EnvVar{Name: "OTEL_TRACES_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.TracesEnabled())},
+		corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.MetricsEnabled())},
+		corev1.EnvVar{Name: "OTEL_LOGS_EXPORTER", Value: otlpOrNone(injCfg.ExportedSignals.LogsEnabled())},
+	)
+
+	// Propagators
+	if len(injCfg.Propagators) > 0 {
+		env = append(env, corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: strings.Join(injCfg.Propagators, ",")})
+	}
+
+	// Sampler
+	if injCfg.DefaultSampler != nil {
+		if injCfg.DefaultSampler.Name != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER", Value: string(injCfg.DefaultSampler.Name)})
+		}
+		if injCfg.DefaultSampler.Arg != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER_ARG", Value: injCfg.DefaultSampler.Arg})
+		}
+	}
+
+	// Static resource attributes
+	if len(injCfg.Resources.Attributes) > 0 {
+		keys := make([]string, 0, len(injCfg.Resources.Attributes))
+		for k := range injCfg.Resources.Attributes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		attrs := make([]string, 0, len(keys))
+		for _, k := range keys {
+			attrs = append(attrs, fmt.Sprintf("%s=%s", k, injCfg.Resources.Attributes[k]))
+		}
+		env = append(env, corev1.EnvVar{Name: "OTEL_INJECTOR_RESOURCE_ATTRIBUTES", Value: strings.Join(attrs, ",")})
+	}
+
+	// nil (not an empty slice) when there are no selectors, so the marshalled
+	// config omits rules entirely rather than emitting an empty list.
+	var rules []configmap.Rule
+	// Exclusions are emitted first as skip rules. Rules are evaluated in order
+	// (first match wins), so a skip rule ahead of the install rules carves the
+	// excluded workloads out — e.g. "instrument all except serviceA". Skip rules
+	// carry no env; the injector only needs to know not to instrument.
+	for _, sel := range injCfg.ExcludeInstrument {
+		rules = append(rules, configmap.Rule{
+			Selector: sel,
+			Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
+		})
+	}
+	for _, sel := range injCfg.Instrument {
+		rules = append(rules, configmap.Rule{
+			Selector: sel,
+			Config:   configmap.RuleConfig{Env: env},
+		})
+	}
+	return configmap.InjectConfig{
+		ImageVersion: injCfg.ImageVersion,
+		Rules:        rules,
+	}
+}
+
+func otlpOrNone(enabled bool) string {
+	if enabled {
+		return "otlp"
+	}
+	return "none"
 }
 
 func stateConfigMapName(daemonSetName, nodeName string) string {

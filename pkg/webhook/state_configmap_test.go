@@ -11,8 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
+
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	servicesextra "github.com/grafana/beyla/v3/pkg/services"
@@ -664,7 +665,7 @@ func TestRuleFromDefinition(t *testing.T) {
 
 	t.Run("maps metadata onto selector fields and carries the mode", func(t *testing.T) {
 		def := newGlobDef("prod", "checkout", "Deployment", nil, nil)
-		got := ruleFromDefinition(def, configmap.ModeSkip)
+		got := ruleFromDefinition(&def, configmap.ModeSkip)
 		assert.Equal(t, configmap.Rule{
 			Selector: configmap.K8sSelector{
 				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
@@ -680,21 +681,21 @@ func TestRuleFromDefinition(t *testing.T) {
 			map[string]string{"app": "checkout", "tier": "web-*"},
 			map[string]string{"team": "payments"},
 		)
-		got := ruleFromDefinition(def, configmap.ModeSkip)
+		got := ruleFromDefinition(&def, configmap.ModeSkip)
 		assert.Equal(t, valGlobs(map[string]string{"app": "checkout", "tier": "web-*"}), got.Selector.PodLabels)
 		assert.Equal(t, valGlobs(map[string]string{"team": "payments"}), got.Selector.PodAnnotations)
 	})
 
 	t.Run("absent label/annotation maps stay nil", func(t *testing.T) {
 		def := newGlobDef("ns", "owner", "Kind", nil, nil)
-		got := ruleFromDefinition(def, configmap.ModeSkip)
+		got := ruleFromDefinition(&def, configmap.ModeSkip)
 		assert.Nil(t, got.Selector.PodLabels)
 		assert.Nil(t, got.Selector.PodAnnotations)
 	})
 
 	t.Run("mode is passed through unchanged", func(t *testing.T) {
 		def := newGlobDef("ns", "owner", "Kind", nil, nil)
-		got := ruleFromDefinition(def, configmap.Mode(""))
+		got := ruleFromDefinition(&def, configmap.Mode(""))
 		assert.Equal(t, configmap.Mode(""), got.Config.Mode)
 	})
 
@@ -709,7 +710,7 @@ func TestRuleFromDefinition(t *testing.T) {
 		}
 
 		var got configmap.Rule
-		require.NotPanics(t, func() { got = ruleFromDefinition(def, configmap.ModeSkip) })
+		require.NotPanics(t, func() { got = ruleFromDefinition(&def, configmap.ModeSkip) })
 
 		assert.Nil(t, got.Selector.Namespaces)
 		assert.Nil(t, got.Selector.OwnerNames)
@@ -720,7 +721,7 @@ func TestRuleFromDefinition(t *testing.T) {
 		def := services.GlobAttributes{}
 
 		var got configmap.Rule
-		require.NotPanics(t, func() { got = ruleFromDefinition(def, configmap.ModeSkip) })
+		require.NotPanics(t, func() { got = ruleFromDefinition(&def, configmap.ModeSkip) })
 
 		assert.Nil(t, got.Selector.Namespaces)
 		assert.Nil(t, got.Selector.OwnerNames)

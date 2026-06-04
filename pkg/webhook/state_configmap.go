@@ -20,9 +20,8 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
-	servicesextra "github.com/grafana/beyla/v3/pkg/services"
-
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
@@ -305,7 +304,7 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 	}
 }
 
-func ruleFromDefinition(a services.GlobAttributes, mode configmap.Mode) configmap.Rule {
+func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) configmap.Rule {
 	var podLabels map[string]services.GlobAttr
 	if len(a.PodLabels) > 0 {
 		podLabels = make(map[string]services.GlobAttr, len(a.PodLabels))
@@ -350,12 +349,12 @@ func rulesFromDiscoveryInstrument(d *servicesextra.BeylaDiscoveryConfig) []confi
 	exc = append(exc, d.DefaultExcludeInstrument...)
 	exc = append(exc, d.ExcludeInstrument...)
 
-	for _, a := range exc {
-		rules = append(rules, ruleFromDefinition(a, configmap.ModeSkip))
+	for i := range exc {
+		rules = append(rules, ruleFromDefinition(&exc[i], configmap.ModeSkip))
 	}
 
-	for _, a := range d.Instrument {
-		rules = append(rules, ruleFromDefinition(a, configmap.ModeInstall))
+	for i := range d.Instrument {
+		rules = append(rules, ruleFromDefinition(&d.Instrument[i], configmap.ModeInstall))
 	}
 
 	return rules

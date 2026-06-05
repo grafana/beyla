@@ -303,7 +303,7 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 	}
 }
 
-func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) configmap.Rule {
+func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) *configmap.Rule {
 	var podLabels map[string]services.GlobAttr
 	if len(a.PodLabels) > 0 {
 		podLabels = make(map[string]services.GlobAttr, len(a.PodLabels))
@@ -362,7 +362,11 @@ func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) configm
 		PodAnnotations: podAnnotations,
 	}
 
-	return configmap.Rule{
+	if sel.IsEmpty() {
+		return nil
+	}
+
+	return &configmap.Rule{
 		Selector: sel,
 		Config:   configmap.RuleConfig{Mode: mode},
 	}
@@ -376,11 +380,15 @@ func rulesFromDiscoveryInstrument(d *servicesextra.BeylaDiscoveryConfig) []confi
 	exc = append(exc, d.ExcludeInstrument...)
 
 	for i := range exc {
-		rules = append(rules, ruleFromDefinition(&exc[i], configmap.ModeSkip))
+		if rule := ruleFromDefinition(&exc[i], configmap.ModeSkip); rule != nil {
+			rules = append(rules, *rule)
+		}
 	}
 
 	for i := range d.Instrument {
-		rules = append(rules, ruleFromDefinition(&d.Instrument[i], configmap.ModeInstall))
+		if rule := ruleFromDefinition(&d.Instrument[i], configmap.ModeInstall); rule != nil {
+			rules = append(rules, *rule)
+		}
 	}
 
 	return rules

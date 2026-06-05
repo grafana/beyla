@@ -92,6 +92,12 @@ type K8sSelector struct {
 	PodAnnotations map[string]services.GlobAttr `yaml:"podAnnotations,omitempty"`
 }
 
+func (k *K8sSelector) IsEmpty() bool {
+	return len(k.Namespaces) == 0 && len(k.OwnerNames) == 0 &&
+		len(k.OwnerKinds) == 0 && len(k.PodLabels) == 0 &&
+		len(k.PodAnnotations) == 0
+}
+
 // Mode controls what a Rule does when its selector matches a pod.
 type Mode string
 

@@ -48,8 +48,14 @@ type WebhookInstrument []K8sSelector
 // No match means no instrumentation.
 type InjectConfig struct {
 	// OCI image version to inject. Must not be empty.
-	ImageVersion string `yaml:"image_version,omitempty"`
-	Rules        []Rule `yaml:"rules,omitempty"`
+	ImageVersion string    `yaml:"image_version,omitempty"`
+	Rules        []Rule    `yaml:"rules,omitempty"`
+	BPFConfig    BPFConfig `yaml:"bpf,omitempty"`
+}
+
+type BPFConfig struct {
+	Rules       []Rule `yaml:"rules,omitempty"`
+	SpanMetrics bool   `yaml:"span_metrics,omitempty"`
 }
 
 // Rule pairs a selector with the instrumentation config to apply when the

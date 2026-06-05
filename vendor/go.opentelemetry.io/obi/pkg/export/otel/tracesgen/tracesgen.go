@@ -467,7 +467,9 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			attrs = append(attrs, semconv.HTTPRoute(span.Route))
 		}
 		if span.SubType == request.HTTPSubtypeGraphQL && span.GraphQL != nil {
-			attrs = append(attrs, semconv.GraphQLDocument(span.GraphQL.Document))
+			if _, ok := optionalAttrs[attr.GraphQLDocument]; ok {
+				attrs = append(attrs, semconv.GraphQLDocument(span.GraphQL.Document))
+			}
 			attrs = append(attrs, semconv.GraphQLOperationName(span.GraphQL.OperationName))
 			attrs = append(attrs, request.GraphqlOperationType(span.GraphQL.OperationType))
 		}

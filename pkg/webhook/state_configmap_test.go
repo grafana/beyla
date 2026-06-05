@@ -681,7 +681,7 @@ func TestRuleFromDefinition(t *testing.T) {
 	t.Run("maps metadata onto selector fields and carries the mode", func(t *testing.T) {
 		def := newGlobDef("prod", "checkout", "Deployment", nil, nil)
 		got := ruleFromDefinition(&def, configmap.ModeSkip)
-		assert.Equal(t, configmap.Rule{
+		assert.Equal(t, &configmap.Rule{
 			Selector: configmap.K8sSelector{
 				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
 				OwnerNames: []services.GlobAttr{services.NewGlob("checkout")},
@@ -726,7 +726,7 @@ func TestRuleFromDefinition(t *testing.T) {
 		}
 
 		var got configmap.Rule
-		require.NotPanics(t, func() { got = ruleFromDefinition(&def, configmap.ModeSkip) })
+		require.NotPanics(t, func() { got = *ruleFromDefinition(&def, configmap.ModeSkip) })
 
 		assert.Nil(t, got.Selector.Namespaces)
 		assert.Equal(t, []services.GlobAttr{services.NewGlob("checkout")}, got.Selector.OwnerNames)
@@ -767,12 +767,10 @@ func TestRuleFromDefinition(t *testing.T) {
 	t.Run("empty metadata yields an all-wildcard selector without panicking", func(t *testing.T) {
 		def := services.GlobAttributes{}
 
-		var got configmap.Rule
+		var got *configmap.Rule
 		require.NotPanics(t, func() { got = ruleFromDefinition(&def, configmap.ModeSkip) })
 
-		assert.Nil(t, got.Selector.Namespaces)
-		assert.Nil(t, got.Selector.OwnerNames)
-		assert.Nil(t, got.Selector.OwnerKinds)
+		assert.Nil(t, got)
 	})
 }
 
@@ -826,4 +824,17 @@ func TestRulesFromDiscoveryInstrument(t *testing.T) {
 			assert.Equal(t, w.mode, got[i].Config.Mode, "rule %d mode", i)
 		}
 	})
+
+	t.Run("emits default-exclude, then instrument rules in order", func(t *testing.T) {
+		d := &servicesextra.BeylaDiscoveryConfig{
+			DefaultExcludeInstrument: servicesextra.DefaultExcludeInstrument,
+			Instrument: services.GlobDefinitionCriteria{
+				newGlobDef("ns", "checkout", "Deployment", nil, nil),
+				newGlobDef("ns", "cart", "StatefulSet", nil, nil),
+			},
+		}
+		got := rulesFromDiscoveryInstrument(d)
+		require.Len(t, got, 3)
+	})
+
 }

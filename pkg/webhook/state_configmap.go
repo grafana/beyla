@@ -231,7 +231,7 @@ func trimContainerIDScheme(containerID string) string {
 // Each selector becomes one Rule whose Config.Env carries all SDK configuration as
 // env vars, derived from Beyla as the single source of truth.
 func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.InjectConfig {
-	var env []corev1.EnvVar
+	var env configmap.EnvVars
 
 	// OTLP destination
 	env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint})

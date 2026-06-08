@@ -1,0 +1,76 @@
+suite: test injector role template
+templates:
+  - injector-role.yaml
+tests:
+  - it: should render nothing when injector is disabled
+    set:
+      injector:
+        enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should render nothing when rbac.create is false even if injector enabled
+    set:
+      rbac:
+        create: false
+      injector:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should render a Role and RoleBinding when injector is enabled
+    set:
+      injector:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - documentIndex: 0
+        isKind:
+          of: Role
+      - documentIndex: 1
+        isKind:
+          of: RoleBinding
+
+  - it: should grant configmap write permissions in the Role
+    template: injector-role.yaml
+    documentIndex: 0
+    set:
+      injector:
+        enabled: true
+    asserts:
+      - isKind:
+          of: Role
+      - equal:
+          path: rules[0].apiGroups
+          value: [""]
+      - equal:
+          path: rules[0].resources
+          value: ["configmaps"]
+      - equal:
+          path: rules[0].verbs
+          value: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  - it: should bind the Role to the Beyla service account
+    template: injector-role.yaml
+    documentIndex: 1
+    set:
+      injector:
+        enabled: true
+    asserts:
+      - isKind:
+          of: RoleBinding
+      - equal:
+          path: roleRef.kind
+          value: Role
+      - equal:
+          path: roleRef.name
+          value: RELEASE-NAME-beyla-injector
+      - equal:
+          path: subjects[0].kind
+          value: ServiceAccount
+      - equal:
+          path: subjects[0].name
+          value: RELEASE-NAME-beyla

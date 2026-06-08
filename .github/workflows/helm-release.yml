@@ -2,31 +2,18 @@ name: Release Helm chart
 on:
   workflow_dispatch:
 
-jobs:
-  get-helm-charts-token:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      token: ${{ steps.get-github-app-token.outputs.token }}
-    steps:
-      - name: Get GitHub App token
-        id: get-github-app-token
-        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
-        with:
-          github_app: grafana-beyla-bot
+permissions:
+  contents: read
 
+jobs:
   release-beyla-helm-chart:
-    needs: get-helm-charts-token
-    uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@8522a28e16bc2c84c9339c22c6bdf5446b5e431a
+    uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@77e5ea2de369fa1ff3441b08765c164be209eaa2
     permissions:
       contents: "write"
       id-token: "write"
       packages: "write"
     with:
+      github_app: grafana-beyla-bot
       charts_dir: charts/beyla
       cr_configfile: .github/configs/cr.yml
       ct_configfile: .github/configs/ct.yml
-    secrets:
-      helm_repo_token: ${{ needs.get-helm-charts-token.outputs.token }}

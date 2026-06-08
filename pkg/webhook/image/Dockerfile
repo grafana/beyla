@@ -12,10 +12,20 @@ RUN case ${TARGETARCH} in \
   esac && \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/v$(cat version.txt)/${INJECTOR_LIB}"
 
+# Fetch the operator's Python requirements and append beyla-specific additions
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS prepare-python-deps
+WORKDIR /build
+RUN apk add --no-cache curl
+COPY opentelemetry-operator/version.txt .
+COPY python/requirements.extra.txt .
+RUN OPERATOR_VERSION=$(cat version.txt) && \
+    curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/python/requirements.txt" -o requirements.txt && \
+    cat requirements.extra.txt >> requirements.txt
+
 # Get the Python SDK for glibc
 FROM python:3.14.4-trixie@sha256:1692046a126f2841dfec22313e9a282b697e0aeca6c25c0434b476feba618e16 AS build-python-glibc
 WORKDIR /operator-build
-COPY python/requirements.txt .
+COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
 COPY python/deps_analyser.py .
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -28,7 +38,7 @@ COPY python/sitecustomize.py .
 # Get the Python SDK for musl
 FROM python:3.14.4-alpine3.23@sha256:dd4d2bd5b53d9b25a51da13addf2be586beebd5387e289e798e4083d94ca837a AS build-python-musl
 WORKDIR /operator-build
-COPY python/requirements.txt .
+COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
 COPY python/deps_analyser.py .
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -70,11 +80,22 @@ RUN case ${TARGETARCH} in \
     mkdir -p /musl && \
     unzip -q dotnet-instrumentation-musl.zip -d /musl
 
+# Fetch the operator's Node.js package.json and merge in beyla-specific dependencies
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS prepare-nodejs-deps
+WORKDIR /build
+RUN apk add --no-cache curl jq
+COPY opentelemetry-operator/version.txt .
+COPY node.js/package.extra.json .
+RUN OPERATOR_VERSION=$(cat version.txt) && \
+    curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/nodejs/package.json" -o package-operator.json && \
+    jq -s '.[0] + {dependencies: (.[0].dependencies + .[1].dependencies)}' \
+        package-operator.json package.extra.json > package.json
+
 # Build the Node.js artifacts
 FROM node:20@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5 AS build-nodejs-sdk
 
 WORKDIR /operator-build
-COPY node.js/package.json .
+COPY --from=prepare-nodejs-deps /build/package.json .
 COPY node.js/tsconfig.json .
 
 RUN npm install

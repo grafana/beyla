@@ -53,6 +53,15 @@
       managerFilePatterns: ["(^|/)pkg/webhook/image/dotnet/version\\.txt$"],
       matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
     },
+    {
+      customType: "regex",
+      description: "Update OpenTelemetry Operator version (drives Python and Node.js SDK versions)",
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "open-telemetry/opentelemetry-operator",
+      extractVersionTemplate: "^v?(?<version>.*)$",
+      managerFilePatterns: ["(^|/)pkg/webhook/image/opentelemetry-operator/version\\.txt$"],
+      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
+    },
   ],
   packageRules: [
     {
@@ -82,20 +91,9 @@
       commitMessageTopic: "inject-sdk-image: OpenTelemetry .NET instrumentation version",
     },
     {
-      matchManagers: ["pip_requirements"],
-      matchFileNames: ["pkg/webhook/image/python/requirements.txt"],
-      matchPackagePatterns: ["^opentelemetry-"],
-      groupName: "inject-sdk-image: OpenTelemetry Python packages",
-      group: {
-        commitMessageTopic: "inject-sdk-image: OpenTelemetry Python agent version to {{ upgrades.0.newVersion }}",
-      },
-      ignoreUnstable: false,
-    },
-    {
-      matchManagers: ["npm"],
-      matchFileNames: ["pkg/webhook/image/node.js/package.json"],
-      matchPackageNames: ["@opentelemetry/auto-instrumentations-node"],
-      commitMessageTopic: "inject-sdk-image: OpenTelemetry Node.js agent version",
+      matchManagers: ["regex"],
+      matchFileNames: ["pkg/webhook/image/opentelemetry-operator/version.txt"],
+      commitMessageTopic: "inject-sdk-image: OpenTelemetry Operator version",
     },
   ],
   labels: ["dependencies"],

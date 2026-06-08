@@ -64,13 +64,14 @@ ARG TARGETARCH
 
 RUN apk add --no-cache curl unzip
 
-COPY dotnet/version.txt .
-RUN case ${TARGETARCH} in \
+COPY opentelemetry-operator/version.txt .
+RUN OPERATOR_VERSION=$(cat version.txt) && \
+  VERSION="v$(curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/dotnet/version.txt")" && \
+  case ${TARGETARCH} in \
     amd64) export ARCH="x64" ;; \
     arm64) export ARCH="arm64" ;; \
     *)     echo "architecture unsupported: ${TARGETARCH}" && exit 1 ;; \
   esac && \
-  VERSION="v$(cat version.txt)" && \
   curl -sSfL -o dotnet-instrumentation.zip \
     "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH}.zip" && \
     mkdir -p /glibc && \

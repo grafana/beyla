@@ -6,6 +6,13 @@ on:
       - main
     paths:
       - 'pkg/webhook/image/**'
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "This workflow normally runs automatically on pushes to main that touch pkg/webhook/image/**. Only run manually for an out-of-band republish."
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -28,6 +35,12 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
     steps:
+      - name: Validate manual dispatch
+        if: github.event_name == 'workflow_dispatch' && inputs.confirm != true
+        run: |
+          echo "::error::You must acknowledge the confirmation checkbox to run this workflow manually."
+          exit 1
+
       - name: Resolve target version
         id: resolve
         env:
@@ -167,6 +180,7 @@ jobs:
           ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
           docker buildx imagetools create \
             -t "${IMAGE_NAME}:${VERSION}" \
+            -t "${IMAGE_NAME}:latest" \
             "${IMAGE_NAME}@sha256:${AMD64_DIGEST}" \
             "${IMAGE_NAME}@sha256:${ARM64_DIGEST}"
 
@@ -178,5 +192,5 @@ jobs:
             echo "## inject-sdk-image published"
             echo
             echo "- Image: \`${IMAGE_NAME}\`"
-            echo "- Version: \`${VERSION}\`"
+            echo "- Tags: \`${VERSION}\`, \`latest\`"
           } >> "${GITHUB_STEP_SUMMARY}"

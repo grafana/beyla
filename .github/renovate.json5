@@ -46,16 +46,7 @@
     },
     {
       customType: "regex",
-      description: "Update OpenTelemetry .NET instrumentation version",
-      datasourceTemplate: "github-releases",
-      depNameTemplate: "open-telemetry/opentelemetry-dotnet-instrumentation",
-      extractVersionTemplate: "^v?(?<version>.*)$",
-      managerFilePatterns: ["(^|/)pkg/webhook/image/dotnet/version\\.txt$"],
-      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
-    },
-    {
-      customType: "regex",
-      description: "Update OpenTelemetry Operator version (drives Python and Node.js SDK versions)",
+      description: "Update OpenTelemetry Operator version (drives Python, Node.js, and .NET SDK versions)",
       datasourceTemplate: "github-releases",
       depNameTemplate: "open-telemetry/opentelemetry-operator",
       extractVersionTemplate: "^v?(?<version>.*)$",
@@ -84,11 +75,6 @@
       matchManagers: ["regex"],
       matchFileNames: ["pkg/webhook/image/java/version.txt"],
       commitMessageTopic: "inject-sdk-image: Grafana OpenTelemetry Java agent version",
-    },
-    {
-      matchManagers: ["regex"],
-      matchFileNames: ["pkg/webhook/image/dotnet/version.txt"],
-      commitMessageTopic: "inject-sdk-image: OpenTelemetry .NET instrumentation version",
     },
     {
       matchManagers: ["regex"],

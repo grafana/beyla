@@ -16,6 +16,7 @@ package gotracer // import "go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"unsafe"
@@ -33,11 +34,18 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
+	"go.opentelemetry.io/obi/pkg/internal/runtimemetrics"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
+
+type runtimeMetricTargetKey struct {
+	pid app.PID
+	ns  uint32
+}
 
 type Tracer struct {
 	log                     *slog.Logger
@@ -48,9 +56,16 @@ type Tracer struct {
 	closers                 []io.Closer
 	disabledRouteHarvesting bool
 	supportsBPFLoop         bool
+	runtimeMetricTargetKeys map[runtimeMetricTargetKey]BpfPidInfo
+	runtimeMetrics          *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
 }
 
-func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
+func New(
+	pidFilter ebpfcommon.ServiceFilter,
+	cfg *obi.Config,
+	metrics imetrics.Reporter,
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+) *Tracer {
 	log := slog.With("component", "go.Tracer")
 
 	disabledRouteHarvesting := false
@@ -69,14 +84,18 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 		metrics:                 metrics,
 		disabledRouteHarvesting: disabledRouteHarvesting,
 		supportsBPFLoop:         ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
+		runtimeMetricTargetKeys: map[runtimeMetricTargetKey]BpfPidInfo{},
+		runtimeMetrics:          runtimeMetrics,
 	}
 }
 
 func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	p.pidsFilter.AllowPID(pid, ns, fi, ebpfcommon.PIDTypeGo)
+	p.registerRuntimeMetricTarget(pid, ns, fi)
 }
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
+	p.deleteRuntimeMetricTarget(pid, ns)
 	p.pidsFilter.BlockPID(pid, ns)
 }
 
@@ -279,6 +298,11 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.PgxConfigHostPos,
 		goexec.MuxTemplatePos,
 		goexec.GinFullpathPos,
+		// Go runtime metrics
+		goexec.RuntimeMemstatsNumGCPos,
+		goexec.RuntimeMemstatsNumForcedGCPos,
+		goexec.RuntimeGCControllerMemoryLimitPos,
+		goexec.RuntimeGCControllerGCPercentPos,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -316,6 +340,83 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 	}
 }
 
+// registerRuntimeMetricTarget writes per-process Go runtime global addresses
+// into BPF. Offsets stay inode-scoped in go_offsets_map, but these addresses
+// are process-scoped for PIE/ASLR and must follow the PID allow lifecycle.
+func (p *Tracer) registerRuntimeMetricTarget(pid app.PID, ns uint32, fileInfo *exec.FileInfo) {
+	if fileInfo == nil || p.bpfObjects.GoRuntimeMetricTargets == nil {
+		return
+	}
+
+	pidInfo, err := runtimeMetricPIDInfo(pid, ns)
+	if err != nil {
+		p.log.Debug("runtime metrics PID key lookup failed", "pid", pid, "ns", ns, "error", err)
+		return
+	}
+
+	symbols, err := goexec.ResolveRuntimeMetricSymbols(fileInfo, pid)
+	if err != nil {
+		p.log.Debug("runtime metrics disabled for executable", "pid", pid, "ino", fileInfo.Ino(), "error", err)
+		return
+	}
+
+	value := BpfGoRuntimeMetricTargetT{
+		MemstatsAddr:     symbols.MemstatsAddr,
+		GcControllerAddr: symbols.GCControllerAddr,
+		GomaxprocsAddr:   symbols.GOMAXPROCSAddr,
+	}
+
+	if err := p.bpfObjects.GoRuntimeMetricTargets.Put(pidInfo, value); err != nil {
+		p.log.Debug("setting runtime metric target failed", "pid", pid, "ino", fileInfo.Ino(), "error", err)
+		return
+	}
+
+	if p.runtimeMetricTargetKeys == nil {
+		p.runtimeMetricTargetKeys = map[runtimeMetricTargetKey]BpfPidInfo{}
+	}
+	p.runtimeMetricTargetKeys[runtimeMetricTargetKey{pid: pid, ns: ns}] = pidInfo
+}
+
+// deleteRuntimeMetricTarget removes the userspace-provided address metadata for
+// a process when that PID is blocked, so stale runtime metrics cannot survive
+// PID reuse.
+func (p *Tracer) deleteRuntimeMetricTarget(pid app.PID, ns uint32) {
+	pidInfo, ok := p.runtimeMetricTargetKeys[runtimeMetricTargetKey{pid: pid, ns: ns}]
+	if !ok {
+		var err error
+		pidInfo, err = runtimeMetricPIDInfo(pid, ns)
+		if err != nil {
+			p.log.Debug("runtime metrics PID key lookup failed", "pid", pid, "ns", ns, "error", err)
+			return
+		}
+	}
+
+	if p.bpfObjects.GoRuntimeMetricTargets != nil {
+		_ = p.bpfObjects.GoRuntimeMetricTargets.Delete(pidInfo)
+	}
+	delete(p.runtimeMetricTargetKeys, runtimeMetricTargetKey{pid: pid, ns: ns})
+}
+
+func runtimeMetricPIDInfo(pid app.PID, ns uint32) (BpfPidInfo, error) {
+	pidInfo := BpfPidInfo{
+		HostPid: uint32(pid),
+		UserPid: uint32(pid),
+		Ns:      ns,
+	}
+
+	pids, err := procs.FindNamespacedPids(pid)
+	if err != nil {
+		return BpfPidInfo{}, fmt.Errorf("reading namespaced PIDs: %w", err)
+	}
+	if len(pids) == 0 {
+		return pidInfo, nil
+	}
+
+	pidInfo.HostPid = uint32(pids[0])
+	pidInfo.UserPid = uint32(pids[len(pids)-1])
+	return pidInfo, nil
+}
+
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
 
 func (p *Tracer) AddCloser(c ...io.Closer) {
@@ -337,6 +438,9 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"runtime.mexit": {{
 			Start: p.bpfObjects.ObiUprobeRuntimeMexit,
+		}},
+		"runtime.gcMarkDone": {{
+			End: p.bpfObjects.ObiUprobeRuntimeGcMarkDone,
 		}},
 		// Go net/http
 		"net/http.serverHandler.ServeHTTP": {{
@@ -765,6 +869,9 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 		p.cfg,
 		p.bpfObjects.Events,
 		func(record *ringbuf.Record) (request.Span, bool, error) {
+			if handled, err := p.handleRuntimeMetricRecord(ctx, record); handled {
+				return request.Span{}, true, err
+			}
 			s, ignore, err := ebpfcommon.ReadBPFTraceAsSpan(parseContext, p.cfg, record, p.pidsFilter)
 			if !ignore && err == nil && !s.IsValid() {
 				return s, true, nil
@@ -775,6 +882,18 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 		slog.With("component", "ringbuf.Tracer"),
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
+}
+
+func (p *Tracer) handleRuntimeMetricRecord(ctx context.Context, record *ringbuf.Record) (bool, error) {
+	if !runtimemetrics.IsGoRuntimeMetricRecord(record) {
+		return false, nil
+	}
+
+	snapshot, ignore, err := runtimemetrics.SnapshotFromRingbuf(record, p.pidsFilter)
+	if !ignore && err == nil && p.runtimeMetrics != nil {
+		p.runtimeMetrics.SendCtx(ctx, []runtimemetrics.RuntimeMetricSnapshot{snapshot})
+	}
+	return true, err
 }
 
 func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext) {}

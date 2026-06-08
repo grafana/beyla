@@ -1181,6 +1181,10 @@ func (mr *MetricsReporter) createTargetMetrics(service *svc.Attrs) {
 		return
 	}
 
+	if !service.ExportModes.CanExportMetrics() {
+		return
+	}
+
 	targetMetrics := mr.ensureTargetMetrics(service)
 
 	if targetMetrics == nil {

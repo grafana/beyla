@@ -139,6 +139,26 @@ var (
 		Prom:    "gen_ai_client_operation_duration_seconds",
 		OTEL:    "gen_ai.client.operation.duration",
 	}
+	GoRuntimeMemoryLimit = Name{
+		Section: "go.memory.limit",
+		Prom:    "go_memory_limit_bytes",
+		OTEL:    "go.memory.limit",
+	}
+	GoRuntimeMemoryGCCycles = Name{
+		Section: "go.memory.gc.cycles",
+		Prom:    "go_memory_gc_cycles_total",
+		OTEL:    "go.memory.gc.cycles",
+	}
+	GoRuntimeProcessorLimit = Name{
+		Section: "go.processor.limit",
+		Prom:    "go_processor_limit",
+		OTEL:    "go.processor.limit",
+	}
+	GoRuntimeConfigGOGC = Name{
+		Section: "go.config.gogc",
+		Prom:    "go_config_gogc_percent",
+		OTEL:    "go.config.gogc",
+	}
 	StatTCPRtt = Name{
 		Section: "obi.stat.tcp.rtt",
 		Prom:    "obi_stat_tcp_rtt_seconds",

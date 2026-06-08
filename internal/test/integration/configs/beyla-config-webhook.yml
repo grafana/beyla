@@ -10,7 +10,8 @@ injector:
   disable_auto_restart: true
   disable_state_metrics: true
   instrument:
-    - k8s_namespace: "test-ns"
+    - namespaces:
+        - "test-ns"
 # required by config validation when webhook is enabled
 otel_traces_export:
   endpoint: http://localhost:4318

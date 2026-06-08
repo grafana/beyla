@@ -39,6 +39,8 @@ type evalParams struct {
 	IncludeCommandLineAPI bool   `json:"includeCommandLineAPI"`
 }
 
+const inspectorRequestTimeout = 5 * time.Second
+
 // IMPORTANT: the code in this file needs to run in the network namespace of the
 // target process in order to be able to connect to its inspector port - the
 // network namespace switching is done by the withNetNS function, which locks
@@ -109,10 +111,21 @@ func connectWait(ip string, port int, timeout time.Duration, interval time.Durat
 }
 
 func httpGet(conn net.Conn, path string) ([]byte, error) {
+	return httpGetWithTimeout(conn, path, inspectorRequestTimeout)
+}
+
+func httpGetWithTimeout(conn net.Conn, path string, timeout time.Duration) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return []byte{}, fmt.Errorf("request error: %w", err)
 	}
+
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return []byte{}, fmt.Errorf("connection deadline error: %w", err)
+	}
+	defer func() {
+		_ = conn.SetDeadline(time.Time{})
+	}()
 
 	if err = req.Write(conn); err != nil {
 		return []byte{}, fmt.Errorf("error writing request: %w", err)
@@ -155,7 +168,19 @@ func (i *NodeInjector) requestDebuggerURL(conn net.Conn) (string, error) {
 }
 
 func upgradeConn(conn net.Conn, wsURL string) (*websocket.Conn, *http.Response, error) {
+	return upgradeConnWithTimeout(conn, wsURL, inspectorRequestTimeout)
+}
+
+func upgradeConnWithTimeout(conn net.Conn, wsURL string, timeout time.Duration) (*websocket.Conn, *http.Response, error) {
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, nil, fmt.Errorf("connection deadline error: %w", err)
+	}
+	defer func() {
+		_ = conn.SetDeadline(time.Time{})
+	}()
+
 	dialer := websocket.Dialer{
+		HandshakeTimeout: timeout,
 		NetDial: func(_, _ string) (net.Conn, error) {
 			return conn, nil
 		},
@@ -166,6 +191,10 @@ func upgradeConn(conn net.Conn, wsURL string) (*websocket.Conn, *http.Response, 
 }
 
 func sendEvaluate(wsConn *websocket.Conn, exp string, id int) error {
+	return sendEvaluateWithTimeout(wsConn, exp, id, inspectorRequestTimeout)
+}
+
+func sendEvaluateWithTimeout(wsConn *websocket.Conn, exp string, id int, timeout time.Duration) error {
 	req := cdpRequest{
 		ID:     id,
 		Method: "Runtime.evaluate",
@@ -178,6 +207,20 @@ func sendEvaluate(wsConn *websocket.Conn, exp string, id int) error {
 	data, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to serialize request: %w", err)
+	}
+
+	deadline := time.Now().Add(timeout)
+
+	if err := wsConn.SetWriteDeadline(deadline); err != nil {
+		return fmt.Errorf("websocket write deadline error: %w", err)
+	}
+	defer func() {
+		_ = wsConn.SetWriteDeadline(time.Time{})
+		_ = wsConn.SetReadDeadline(time.Time{})
+	}()
+
+	if err := wsConn.SetReadDeadline(deadline); err != nil {
+		return fmt.Errorf("websocket read deadline error: %w", err)
 	}
 
 	if err := wsConn.WriteMessage(websocket.TextMessage, data); err != nil {

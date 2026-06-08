@@ -19,6 +19,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
+
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
 func TestContainerIDMatches(t *testing.T) {
@@ -502,4 +508,333 @@ func installNodeNameFieldSelectorReactor(client *fake.Clientset) {
 		}
 		return true, filtered, nil
 	})
+}
+
+func TestBuildInjectConfig(t *testing.T) {
+	// defaultEnv returns the minimum env var set produced for any rule when no
+	// optional fields (propagators, sampler, debug, resources) are set.
+	defaultEnv := func(endpoint, protocol string) []corev1.EnvVar {
+		return []corev1.EnvVar{
+			{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint},
+			{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol},
+			{Name: "OTEL_TRACES_EXPORTER", Value: "otlp"},
+			{Name: "OTEL_METRICS_EXPORTER", Value: "otlp"},
+			{Name: "OTEL_LOGS_EXPORTER", Value: "none"},
+		}
+	}
+
+	tests := []struct {
+		name     string
+		cfg      beyla.Config
+		endpoint string
+		protocol string
+		want     configmap.InjectConfig
+	}{
+		{
+			name:     "empty instrument yields empty config",
+			cfg:      beyla.Config{Injector: beyla.SDKInject{}},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want:     configmap.InjectConfig{},
+		},
+		{
+			name: "single selector becomes one rule with all default env vars",
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument: configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+			}},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{{
+				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+				Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
+			}}},
+		},
+		{
+			name: "multiple selectors each get the same env",
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument: configmap.WebhookInstrument{
+					{OwnerKinds: []string{"Deployment"}},
+					{OwnerKinds: []string{"StatefulSet"}},
+				},
+			}},
+			endpoint: "http://otel:4318",
+			protocol: "grpc",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{
+				{Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
+				{Selector: configmap.K8sSelector{OwnerKinds: []string{"StatefulSet"}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
+			}},
+		},
+		{
+			name: "ImageVersion is set at the top level",
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
+				Instrument:   configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+			}},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want: configmap.InjectConfig{
+				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
+				Rules: []configmap.Rule{{
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
+				}},
+			},
+		},
+		{
+			name: "propagators written as OTEL_PROPAGATORS",
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument:  configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				Propagators: []string{"tracecontext", "baggage"},
+			}},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{{
+				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+				Config: configmap.RuleConfig{Env: append(
+					defaultEnv("http://otel:4318", "http/protobuf"),
+					corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: "tracecontext,baggage"},
+				)},
+			}}},
+		},
+		{
+			name: "exclude_instrument becomes a leading skip rule",
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument:        configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				ExcludeInstrument: configmap.WebhookInstrument{{OwnerKinds: []string{"DaemonSet"}}},
+			}},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{
+				{
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"DaemonSet"}},
+					Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
+				},
+				{
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
+				},
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildInjectConfig(&tt.cfg, tt.endpoint, tt.protocol)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func newGlobDef(namespace, ownerName, kind string, labels, annotations map[string]string) services.GlobAttributes {
+	ptrGlobs := func(m map[string]string) map[string]*services.GlobAttr {
+		if m == nil {
+			return nil
+		}
+		out := make(map[string]*services.GlobAttr, len(m))
+		for k, v := range m {
+			g := services.NewGlob(v)
+			out[k] = &g
+		}
+		return out
+	}
+	ns := services.NewGlob(namespace)
+	owner := services.NewGlob(ownerName)
+	metadata := services.MetadataGlobMap{
+		services.AttrNamespace: &ns,
+	}
+	switch kind {
+	case "Deployment":
+		metadata[services.AttrDeploymentName] = &owner
+	case "DaemonSet":
+		metadata[services.AttrDaemonSetName] = &owner
+	case "ReplicaSet":
+		metadata[services.AttrReplicaSetName] = &owner
+	case "StatefulSet":
+		metadata[services.AttrStatefulSetName] = &owner
+	case "Job":
+		metadata[services.AttrJobName] = &owner
+	case "CronJob":
+		metadata[services.AttrCronJobName] = &owner
+	case "Pod":
+		metadata[services.AttrPodName] = &owner
+	default:
+		metadata[services.AttrOwnerName] = &owner
+	}
+	return services.GlobAttributes{
+		Metadata:       metadata,
+		PodLabels:      ptrGlobs(labels),
+		PodAnnotations: ptrGlobs(annotations),
+	}
+}
+
+func TestRuleFromDefinition(t *testing.T) {
+	// valGlobs mirrors newGlobDef's pointer maps as the by-value maps the
+	// resulting K8sSelector carries.
+	valGlobs := func(m map[string]string) map[string]services.GlobAttr {
+		out := map[string]services.GlobAttr{}
+		for k, v := range m {
+			out[k] = services.NewGlob(v)
+		}
+		return out
+	}
+
+	t.Run("maps metadata onto selector fields and carries the mode", func(t *testing.T) {
+		def := newGlobDef("prod", "checkout", "Deployment", nil, nil)
+		got := ruleFromDefinition(&def, configmap.ModeSkip)
+		assert.Equal(t, &configmap.Rule{
+			Selector: configmap.K8sSelector{
+				Namespaces: []services.GlobAttr{services.NewGlob("prod")},
+				OwnerNames: []services.GlobAttr{services.NewGlob("checkout")},
+				OwnerKinds: []string{"Deployment"},
+			},
+			Config: configmap.RuleConfig{Mode: configmap.ModeSkip},
+		}, got)
+	})
+
+	t.Run("copies pod labels and annotations", func(t *testing.T) {
+		def := newGlobDef("*", "*", "*",
+			map[string]string{"app": "checkout", "tier": "web-*"},
+			map[string]string{"team": "payments"},
+		)
+		got := ruleFromDefinition(&def, configmap.ModeSkip)
+		assert.Equal(t, valGlobs(map[string]string{"app": "checkout", "tier": "web-*"}), got.Selector.PodLabels)
+		assert.Equal(t, valGlobs(map[string]string{"team": "payments"}), got.Selector.PodAnnotations)
+	})
+
+	t.Run("absent label/annotation maps stay nil", func(t *testing.T) {
+		def := newGlobDef("ns", "owner", "Kind", nil, nil)
+		got := ruleFromDefinition(&def, configmap.ModeSkip)
+		assert.Nil(t, got.Selector.PodLabels)
+		assert.Nil(t, got.Selector.PodAnnotations)
+	})
+
+	t.Run("mode is passed through unchanged", func(t *testing.T) {
+		def := newGlobDef("ns", "owner", "Kind", nil, nil)
+		got := ruleFromDefinition(&def, configmap.Mode(""))
+		assert.Equal(t, configmap.Mode(""), got.Config.Mode)
+	})
+
+	t.Run("specific owner metadata infers kind without requiring namespace", func(t *testing.T) {
+		// A definition carrying only a deployment name, with namespace and
+		// generic owner-name absent from Metadata. The absent keys must not be
+		// dereferenced.
+		owner := services.NewGlob("checkout")
+		def := services.GlobAttributes{
+			Metadata: services.MetadataGlobMap{
+				services.AttrDeploymentName: &owner,
+			},
+		}
+
+		var got configmap.Rule
+		require.NotPanics(t, func() { got = *ruleFromDefinition(&def, configmap.ModeSkip) })
+
+		assert.Nil(t, got.Selector.Namespaces)
+		assert.Equal(t, []services.GlobAttr{services.NewGlob("checkout")}, got.Selector.OwnerNames)
+		assert.Equal(t, []string{"Deployment"}, got.Selector.OwnerKinds)
+	})
+
+	t.Run("maps all specific owner metadata keys onto owner kinds", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			metadataKey string
+			kind        string
+		}{
+			{name: "deployment", metadataKey: services.AttrDeploymentName, kind: "Deployment"},
+			{name: "daemonset", metadataKey: services.AttrDaemonSetName, kind: "DaemonSet"},
+			{name: "replicaset", metadataKey: services.AttrReplicaSetName, kind: "ReplicaSet"},
+			{name: "statefulset", metadataKey: services.AttrStatefulSetName, kind: "StatefulSet"},
+			{name: "job", metadataKey: services.AttrJobName, kind: "Job"},
+			{name: "cronjob", metadataKey: services.AttrCronJobName, kind: "CronJob"},
+			{name: "pod", metadataKey: services.AttrPodName, kind: "Pod"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				owner := services.NewGlob("owner-*")
+				def := services.GlobAttributes{
+					Metadata: services.MetadataGlobMap{
+						tt.metadataKey: &owner,
+					},
+				}
+
+				got := ruleFromDefinition(&def, configmap.ModeSkip)
+				assert.Equal(t, []services.GlobAttr{services.NewGlob("owner-*")}, got.Selector.OwnerNames)
+				assert.Equal(t, []string{tt.kind}, got.Selector.OwnerKinds)
+			})
+		}
+	})
+
+	t.Run("empty metadata yields an all-wildcard selector without panicking", func(t *testing.T) {
+		def := services.GlobAttributes{}
+
+		var got *configmap.Rule
+		require.NotPanics(t, func() { got = ruleFromDefinition(&def, configmap.ModeSkip) })
+
+		assert.Nil(t, got)
+	})
+}
+
+func TestRulesFromDiscoveryInstrument(t *testing.T) {
+	t.Run("returns nil when nothing is configured", func(t *testing.T) {
+		got := rulesFromDiscoveryInstrument(&servicesextra.BeylaDiscoveryConfig{})
+		assert.Nil(t, got)
+	})
+
+	t.Run("instrument entries become install rules", func(t *testing.T) {
+		d := &servicesextra.BeylaDiscoveryConfig{
+			Instrument: services.GlobDefinitionCriteria{
+				newGlobDef("ns", "checkout", "Deployment", nil, nil),
+			},
+		}
+		got := rulesFromDiscoveryInstrument(d)
+		require.Len(t, got, 1)
+		assert.Equal(t, configmap.ModeInstall, got[0].Config.Mode)
+		assert.Equal(t, []services.GlobAttr{services.NewGlob("checkout")}, got[0].Selector.OwnerNames)
+	})
+
+	t.Run("emits default-exclude, then exclude, then instrument rules in order", func(t *testing.T) {
+		d := &servicesextra.BeylaDiscoveryConfig{
+			DefaultExcludeInstrument: services.GlobDefinitionCriteria{
+				newGlobDef("ns", "beyla", "DaemonSet", nil, nil),
+			},
+			ExcludeInstrument: services.GlobDefinitionCriteria{
+				newGlobDef("ns", "alloy", "Deployment", nil, nil),
+			},
+			Instrument: services.GlobDefinitionCriteria{
+				newGlobDef("ns", "checkout", "Deployment", nil, nil),
+				newGlobDef("ns", "cart", "StatefulSet", nil, nil),
+			},
+		}
+		got := rulesFromDiscoveryInstrument(d)
+		require.Len(t, got, 4)
+
+		// Order is default-excludes, then excludes, then instrument entries.
+		// Excludes are emitted as skip rules; instrument entries as install rules.
+		want := []struct {
+			owner string
+			mode  configmap.Mode
+		}{
+			{"beyla", configmap.ModeSkip},
+			{"alloy", configmap.ModeSkip},
+			{"checkout", configmap.ModeInstall},
+			{"cart", configmap.ModeInstall},
+		}
+		for i, w := range want {
+			assert.Equal(t, []services.GlobAttr{services.NewGlob(w.owner)}, got[i].Selector.OwnerNames, "rule %d owner", i)
+			assert.Equal(t, w.mode, got[i].Config.Mode, "rule %d mode", i)
+		}
+	})
+
+	t.Run("emits default-exclude, then instrument rules in order", func(t *testing.T) {
+		d := &servicesextra.BeylaDiscoveryConfig{
+			DefaultExcludeInstrument: servicesextra.DefaultExcludeInstrument,
+			Instrument: services.GlobDefinitionCriteria{
+				newGlobDef("ns", "checkout", "Deployment", nil, nil),
+				newGlobDef("ns", "cart", "StatefulSet", nil, nil),
+			},
+		}
+		got := rulesFromDiscoveryInstrument(d)
+		require.Len(t, got, 3)
+	})
+
 }

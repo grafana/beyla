@@ -49,7 +49,6 @@ type Server struct {
 	nodeName                string
 	initialPodScan          atomic.Bool
 	uuid                    string
-	stateCfg                *configmap.InjectConfig
 	stateHash               string
 }
 
@@ -90,21 +89,8 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 
 	nodeName := OwnNodeName()
 
-	stateCfg := configmap.InjectConfig{
-		NodeName:  nodeName,
-		Discovery: cfg.Injector.Instrument,
-		OtelExport: configmap.OtelExport{
-			Endpoint: mutator.Endpoint(),
-			Protocol: mutator.Protocol(),
-		},
-		ExportedSignals: cfg.Injector.ExportedSignals,
-		ImageVersion:    cfg.Injector.ImageVersion,
-		DefaultSampler:  cfg.Injector.DefaultSampler,
-		Propagators:     cfg.Injector.Propagators,
-		Resources:       cfg.Injector.Resources,
-	}
-
-	stateHash := stateCfg.Hash()
+	initialCfg := buildInjectConfig(cfg, mutator.Endpoint(), mutator.Protocol())
+	stateHash := initialCfg.Hash()
 
 	logger.Info("SDK injection config established", "hash", stateHash)
 
@@ -137,7 +123,6 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		instrumentationManager: NewInstrumentationManager(cfg),
 		nodeName:               nodeName,
 		uuid:                   uuid.NewString(),
-		stateCfg:               &stateCfg,
 		stateHash:              stateHash,
 	}
 
@@ -341,7 +326,9 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	eligible = append(eligible, s.eligibleDeployments.Values()...)
 	sortEligible(eligible)
 
-	return s.stateWriter.Write(ctx, s.stateCfg, eligible)
+	config := buildInjectConfig(s.cfg, s.mutator.Endpoint(), s.mutator.Protocol())
+
+	return s.stateWriter.Write(ctx, &config, eligible)
 }
 
 func sortEligible(eligible []*configmap.EligibleDeployment) {

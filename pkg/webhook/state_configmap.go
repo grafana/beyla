@@ -6,17 +6,23 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
 
@@ -25,6 +31,14 @@ const (
 
 	daemonSetOwnerKind       = "DaemonSet"
 	daemonSetOwnerAPIVersion = "apps/v1"
+
+	// ownPodLookupTimeout bounds how long Init waits for the kubelet to publish
+	// this pod's container status before giving up. The container ID we match on
+	// is written to status.containerStatuses asynchronously after the container
+	// starts, so a freshly-started Beyla (the container's own entrypoint) can
+	// race ahead of it; polling lets the status converge instead of crashing.
+	ownPodLookupTimeout      = 90 * time.Second
+	ownPodLookupPollInterval = time.Second
 )
 
 // overridable for testing
@@ -76,10 +90,30 @@ func NewStateConfigMapWriter(ctxInfo *global.ContextInfo, nodeName string) (*Sta
 }
 
 func (w *StateConfigMapWriter) Init(ctx context.Context) error {
-	owner, err := w.findDaemonSetOwner(ctx)
-
-	if err != nil {
-		return fmt.Errorf("error finding daemonset: %w", err)
+	// The kubelet publishes status.containerStatuses[].containerID (the field
+	// findOwnPod matches on) asynchronously, just after starting the container.
+	// Beyla is that container's entrypoint, so on a cold/slow node it routinely
+	// reaches this code before the status is populated and the lookup misses.
+	// Poll until it converges rather than failing the whole process on first try.
+	var owner *metav1.OwnerReference
+	var findErr error
+	pollErr := wait.PollUntilContextTimeout(ctx, ownPodLookupPollInterval, ownPodLookupTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			o, err := w.findDaemonSetOwner(ctx)
+			if err != nil {
+				findErr = err
+				w.logger.Debug("own pod not visible yet (kubelet may not have published the container status); retrying",
+					"error", err)
+				return false, nil
+			}
+			owner = o
+			return true, nil
+		})
+	if pollErr != nil {
+		if findErr != nil {
+			return fmt.Errorf("error finding daemonset (gave up after %s): %w", ownPodLookupTimeout, findErr)
+		}
+		return fmt.Errorf("error finding daemonset: %w", pollErr)
 	}
 	if owner == nil {
 		return fmt.Errorf("no DaemonSet owner found for own pod in namespace %s on node %s", w.ownNamespace, w.nodeName)
@@ -221,6 +255,180 @@ func trimContainerIDScheme(containerID string) string {
 		return id
 	}
 	return containerID
+}
+
+// buildInjectConfig constructs an InjectConfig from the Beyla injector configuration.
+// Each selector becomes one Rule whose Config.Env carries all SDK configuration as
+// env vars, derived from Beyla as the single source of truth.
+func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.InjectConfig {
+	var env configmap.EnvVars
+
+	// OTLP destination
+	env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: endpoint})
+	env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_PROTOCOL", Value: protocol})
+
+	// Signal exporters
+	env = append(env,
+		corev1.EnvVar{Name: "OTEL_TRACES_EXPORTER", Value: otlpOrNone(cfg.Injector.ExportedSignals.TracesEnabled())},
+		corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: otlpOrNone(cfg.Injector.ExportedSignals.MetricsEnabled())},
+		corev1.EnvVar{Name: "OTEL_LOGS_EXPORTER", Value: otlpOrNone(cfg.Injector.ExportedSignals.LogsEnabled())},
+	)
+
+	// Propagators
+	if len(cfg.Injector.Propagators) > 0 {
+		env = append(env, corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: strings.Join(cfg.Injector.Propagators, ",")})
+	}
+
+	// Sampler
+	if cfg.Injector.DefaultSampler != nil {
+		if cfg.Injector.DefaultSampler.Name != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER", Value: string(cfg.Injector.DefaultSampler.Name)})
+		}
+		if cfg.Injector.DefaultSampler.Arg != "" {
+			env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER_ARG", Value: cfg.Injector.DefaultSampler.Arg})
+		}
+	}
+
+	// Static resource attributes
+	if len(cfg.Injector.Resources.Attributes) > 0 {
+		keys := make([]string, 0, len(cfg.Injector.Resources.Attributes))
+		for k := range cfg.Injector.Resources.Attributes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		attrs := make([]string, 0, len(keys))
+		for _, k := range keys {
+			attrs = append(attrs, fmt.Sprintf("%s=%s", k, cfg.Injector.Resources.Attributes[k]))
+		}
+		env = append(env, corev1.EnvVar{Name: "OTEL_INJECTOR_RESOURCE_ATTRIBUTES", Value: strings.Join(attrs, ",")})
+	}
+
+	// nil (not an empty slice) when there are no selectors, so the marshalled
+	// config omits rules entirely rather than emitting an empty list.
+	var rules []configmap.Rule
+	// Exclusions are emitted first as skip rules. Rules are evaluated in order
+	// (first match wins), so a skip rule ahead of the install rules carves the
+	// excluded workloads out — e.g. "instrument all except serviceA". Skip rules
+	// carry no env; the injector only needs to know not to instrument.
+	for _, sel := range cfg.Injector.ExcludeInstrument {
+		rules = append(rules, configmap.Rule{
+			Selector: sel,
+			Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
+		})
+	}
+	for _, sel := range cfg.Injector.Instrument {
+		rules = append(rules, configmap.Rule{
+			Selector: sel,
+			Config:   configmap.RuleConfig{Env: env},
+		})
+	}
+
+	return configmap.InjectConfig{
+		ImageVersion: cfg.Injector.ImageVersion,
+		Rules:        rules,
+		BPFConfig: configmap.BPFConfig{
+			SpanMetrics: cfg.AsOBI().SpanMetricsEnabledForTraces(),
+			Rules:       rulesFromDiscoveryInstrument(&cfg.Discovery),
+		},
+	}
+}
+
+func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) *configmap.Rule {
+	var podLabels map[string]services.GlobAttr
+	if len(a.PodLabels) > 0 {
+		podLabels = make(map[string]services.GlobAttr, len(a.PodLabels))
+		for k, v := range a.PodLabels {
+			podLabels[k] = *v
+		}
+	}
+
+	var podAnnotations map[string]services.GlobAttr
+	if len(a.PodAnnotations) > 0 {
+		podAnnotations = make(map[string]services.GlobAttr, len(a.PodAnnotations))
+		for k, v := range a.PodAnnotations {
+			podAnnotations[k] = *v
+		}
+	}
+
+	metaGlob := func(name string) []services.GlobAttr {
+		if g := a.Metadata[name]; g != nil {
+			return []services.GlobAttr{*g}
+		}
+		return nil
+	}
+
+	// First check to see if the user used k8s_owner_name
+	ownerNames := metaGlob(services.AttrOwnerName)
+	var kinds []string
+	// If no owner name, then we check the specific types of definitions.
+	// In this case we set both the owner name and the kind to match the new
+	// service definition format.
+	if ownerNames == nil {
+		for _, owner := range []struct {
+			metadataKey string
+			kind        string
+		}{
+			{metadataKey: services.AttrDeploymentName, kind: "Deployment"},
+			{metadataKey: services.AttrDaemonSetName, kind: "DaemonSet"},
+			{metadataKey: services.AttrReplicaSetName, kind: "ReplicaSet"},
+			{metadataKey: services.AttrStatefulSetName, kind: "StatefulSet"},
+			{metadataKey: services.AttrJobName, kind: "Job"},
+			{metadataKey: services.AttrCronJobName, kind: "CronJob"},
+			{metadataKey: services.AttrPodName, kind: "Pod"},
+		} {
+			if names := metaGlob(owner.metadataKey); names != nil {
+				ownerNames = names
+				kinds = []string{owner.kind}
+				break
+			}
+		}
+	}
+
+	sel := configmap.K8sSelector{
+		Namespaces:     metaGlob(services.AttrNamespace),
+		OwnerNames:     ownerNames,
+		OwnerKinds:     kinds,
+		PodLabels:      podLabels,
+		PodAnnotations: podAnnotations,
+	}
+
+	if sel.IsEmpty() {
+		return nil
+	}
+
+	return &configmap.Rule{
+		Selector: sel,
+		Config:   configmap.RuleConfig{Mode: mode},
+	}
+}
+
+func rulesFromDiscoveryInstrument(d *servicesextra.BeylaDiscoveryConfig) []configmap.Rule {
+	var rules []configmap.Rule
+
+	exc := make(services.GlobDefinitionCriteria, 0, len(d.DefaultExcludeInstrument)+len(d.ExcludeInstrument))
+	exc = append(exc, d.DefaultExcludeInstrument...)
+	exc = append(exc, d.ExcludeInstrument...)
+
+	for i := range exc {
+		if rule := ruleFromDefinition(&exc[i], configmap.ModeSkip); rule != nil {
+			rules = append(rules, *rule)
+		}
+	}
+
+	for i := range d.Instrument {
+		if rule := ruleFromDefinition(&d.Instrument[i], configmap.ModeInstall); rule != nil {
+			rules = append(rules, *rule)
+		}
+	}
+
+	return rules
+}
+
+func otlpOrNone(enabled bool) string {
+	if enabled {
+		return "otlp"
+	}
+	return "none"
 }
 
 func stateConfigMapName(daemonSetName, nodeName string) string {

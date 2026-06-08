@@ -510,6 +510,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		// Kafka Go
 		"github.com/segmentio/kafka-go.(*Writer).WriteMessages": {{ // runs on the same gorountine as other requests, finds traceparent info
 			Start: p.bpfObjects.ObiUprobeWriterWriteMessages,
+			End:   p.bpfObjects.ObiUprobeWriterWriteMessagesRet,
 		}},
 		"github.com/segmentio/kafka-go.(*Writer).produce": {{ // stores the current topic
 			Start: p.bpfObjects.ObiUprobeWriterProduce,

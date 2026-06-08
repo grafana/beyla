@@ -8,7 +8,7 @@ Then you can see what it does by running the image on a local folder:
 
 ```sh
 mkdir temp
-docker run -e SDK_PKG_VERSION=v0.0.10 -e MOUNT_PATH=/var/lib/beyla/instrumentation --rm \
-  -v $(pwd)/temp:/var/lib/beyla/instrumentation \
+docker run -e MOUNT_PATH=/__otel_sdk_auto_instrumentation__ --rm \
+  -v $(pwd)/temp:/__otel_sdk_auto_instrumentation__ \
   injector
 ```

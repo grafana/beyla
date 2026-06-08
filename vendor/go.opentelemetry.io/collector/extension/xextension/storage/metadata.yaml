@@ -1,5 +1,4 @@
 type: xextension/storage
-parent: xextension
 github_project: open-telemetry/opentelemetry-collector
 
 status:
@@ -9,4 +8,4 @@ status:
     active:
       - swiatekm
   stability:
-    alpha: [profiles]
+    development: [profiles]

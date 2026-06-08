@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -29,7 +28,7 @@ var (
 )
 
 func NewIPAddr() *IPAddr {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &IPAddr{}
 	}
 	return protoPoolIPAddr.Get().(*IPAddr)
@@ -40,7 +39,7 @@ func DeleteIPAddr(orig *IPAddr, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

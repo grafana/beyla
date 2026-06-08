@@ -8,12 +8,14 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -29,6 +31,14 @@ const (
 
 	daemonSetOwnerKind       = "DaemonSet"
 	daemonSetOwnerAPIVersion = "apps/v1"
+
+	// ownPodLookupTimeout bounds how long Init waits for the kubelet to publish
+	// this pod's container status before giving up. The container ID we match on
+	// is written to status.containerStatuses asynchronously after the container
+	// starts, so a freshly-started Beyla (the container's own entrypoint) can
+	// race ahead of it; polling lets the status converge instead of crashing.
+	ownPodLookupTimeout      = 90 * time.Second
+	ownPodLookupPollInterval = time.Second
 )
 
 // overridable for testing
@@ -80,10 +90,30 @@ func NewStateConfigMapWriter(ctxInfo *global.ContextInfo, nodeName string) (*Sta
 }
 
 func (w *StateConfigMapWriter) Init(ctx context.Context) error {
-	owner, err := w.findDaemonSetOwner(ctx)
-
-	if err != nil {
-		return fmt.Errorf("error finding daemonset: %w", err)
+	// The kubelet publishes status.containerStatuses[].containerID (the field
+	// findOwnPod matches on) asynchronously, just after starting the container.
+	// Beyla is that container's entrypoint, so on a cold/slow node it routinely
+	// reaches this code before the status is populated and the lookup misses.
+	// Poll until it converges rather than failing the whole process on first try.
+	var owner *metav1.OwnerReference
+	var findErr error
+	pollErr := wait.PollUntilContextTimeout(ctx, ownPodLookupPollInterval, ownPodLookupTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			o, err := w.findDaemonSetOwner(ctx)
+			if err != nil {
+				findErr = err
+				w.logger.Debug("own pod not visible yet (kubelet may not have published the container status); retrying",
+					"error", err)
+				return false, nil
+			}
+			owner = o
+			return true, nil
+		})
+	if pollErr != nil {
+		if findErr != nil {
+			return fmt.Errorf("error finding daemonset (gave up after %s): %w", ownPodLookupTimeout, findErr)
+		}
+		return fmt.Errorf("error finding daemonset: %w", pollErr)
 	}
 	if owner == nil {
 		return fmt.Errorf("no DaemonSet owner found for own pod in namespace %s on node %s", w.ownNamespace, w.nodeName)

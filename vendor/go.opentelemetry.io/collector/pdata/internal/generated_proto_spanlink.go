@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -37,7 +36,7 @@ var (
 )
 
 func NewSpanLink() *SpanLink {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &SpanLink{}
 	}
 	return protoPoolSpanLink.Get().(*SpanLink)
@@ -48,7 +47,7 @@ func DeleteSpanLink(orig *SpanLink, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

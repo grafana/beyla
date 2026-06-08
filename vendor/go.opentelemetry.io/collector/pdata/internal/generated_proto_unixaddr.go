@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -29,7 +28,7 @@ var (
 )
 
 func NewUnixAddr() *UnixAddr {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &UnixAddr{}
 	}
 	return protoPoolUnixAddr.Get().(*UnixAddr)
@@ -40,7 +39,7 @@ func DeleteUnixAddr(orig *UnixAddr, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -202,8 +201,8 @@ func (sc *ServerConfig) ToServer(ctx context.Context, extensions map[component.I
 	if len(sc.Middlewares) > 0 && extensions == nil {
 		return nil, errors.New("middlewares were configured but this component or its host does not support extensions")
 	}
-	for _, m := range slices.Backward(sc.Middlewares) {
-		wrapper, err := m.GetHTTPServerHandler(ctx, extensions)
+	for i := len(sc.Middlewares) - 1; i >= 0; i-- {
+		wrapper, err := sc.Middlewares[i].GetHTTPServerHandler(ctx, extensions)
 		// If we failed to get the middleware
 		if err != nil {
 			return nil, err

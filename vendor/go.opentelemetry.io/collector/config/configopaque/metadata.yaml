@@ -1,5 +1,4 @@
 type: config/configopaque
-parent: config
 github_project: open-telemetry/opentelemetry-collector
 
 status:

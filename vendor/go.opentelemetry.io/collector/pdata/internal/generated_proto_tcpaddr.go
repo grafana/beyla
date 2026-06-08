@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -30,7 +29,7 @@ var (
 )
 
 func NewTCPAddr() *TCPAddr {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &TCPAddr{}
 	}
 	return protoPoolTCPAddr.Get().(*TCPAddr)
@@ -41,7 +40,7 @@ func DeleteTCPAddr(orig *TCPAddr, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

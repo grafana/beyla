@@ -14,22 +14,13 @@ import (
 // EncoderConfig returns a default encoder.EncoderConfig that includes
 // an EncodeHook that handles both TextMarshaler and Marshaler
 // interfaces.
-func EncoderConfig(rawVal any, opts MarshalOptions) *encoder.EncoderConfig {
-	hooks := []mapstructure.DecodeHookFunc{
-		encoder.YamlMarshalerHookFunc(),
-	}
-
-	if opts.OpaqueUnredacted {
-		hooks = append(hooks, encoder.StringTextUnredactedHookFunc())
-	}
-
-	hooks = append(hooks,
-		encoder.TextMarshalerHookFunc(),
-		marshalerHookFunc(rawVal),
-	)
-
+func EncoderConfig(rawVal any, _ MarshalOptions) *encoder.EncoderConfig {
 	return &encoder.EncoderConfig{
-		EncodeHook: mapstructure.ComposeDecodeHookFunc(hooks...),
+		EncodeHook: mapstructure.ComposeDecodeHookFunc(
+			encoder.YamlMarshalerHookFunc(),
+			encoder.TextMarshalerHookFunc(),
+			marshalerHookFunc(rawVal),
+		),
 	}
 }
 

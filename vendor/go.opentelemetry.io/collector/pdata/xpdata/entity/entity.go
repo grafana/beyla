@@ -16,15 +16,6 @@ type Entity struct {
 	attributes pcommon.Map
 }
 
-func NewEntity(t string) Entity {
-	ref := NewEntityRef()
-	ref.SetType(t)
-	return Entity{
-		ref:        ref,
-		attributes: pcommon.NewMap(),
-	}
-}
-
 func (e Entity) Type() string {
 	return e.ref.Type()
 }
@@ -50,16 +41,5 @@ func (e Entity) DescriptiveAttributes() EntityAttributeMap {
 	return EntityAttributeMap{
 		keys:       e.ref.DescriptionKeys(),
 		attributes: e.attributes,
-	}
-}
-
-// CopyToResource moves the entity to the provided resource by overriding existing entities and attributes.
-func (e Entity) CopyToResource(res pcommon.Resource) {
-	ent := ResourceEntities(res).PutEmpty(e.Type())
-	for k, v := range e.IdentifyingAttributes().All() {
-		v.CopyTo(ent.IdentifyingAttributes().PutEmpty(k))
-	}
-	for k, v := range e.DescriptiveAttributes().All() {
-		v.CopyTo(ent.DescriptiveAttributes().PutEmpty(k))
 	}
 }

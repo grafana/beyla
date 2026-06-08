@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/internal/proto"
 )
 
@@ -31,7 +30,7 @@ var (
 )
 
 func NewMetricsRequest() *MetricsRequest {
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		return &MetricsRequest{}
 	}
 	return protoPoolMetricsRequest.Get().(*MetricsRequest)
@@ -42,7 +41,7 @@ func DeleteMetricsRequest(orig *MetricsRequest, nullable bool) {
 		return
 	}
 
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !UseProtoPooling.IsEnabled() {
 		orig.Reset()
 		return
 	}

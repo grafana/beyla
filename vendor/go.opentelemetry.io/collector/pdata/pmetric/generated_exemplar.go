@@ -8,7 +8,6 @@ package pmetric
 
 import (
 	"go.opentelemetry.io/collector/pdata/internal"
-	"go.opentelemetry.io/collector/pdata/internal/metadata"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 )
 
@@ -89,7 +88,7 @@ func (ms Exemplar) DoubleValue() float64 {
 func (ms Exemplar) SetDoubleValue(v float64) {
 	ms.state.AssertMutable()
 	var ov *internal.Exemplar_AsDouble
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !internal.UseProtoPooling.IsEnabled() {
 		ov = &internal.Exemplar_AsDouble{}
 	} else {
 		ov = internal.ProtoPoolExemplar_AsDouble.Get().(*internal.Exemplar_AsDouble)
@@ -105,7 +104,7 @@ func (ms Exemplar) IntValue() int64 {
 func (ms Exemplar) SetIntValue(v int64) {
 	ms.state.AssertMutable()
 	var ov *internal.Exemplar_AsInt
-	if !metadata.PdataUseProtoPoolingFeatureGate.IsEnabled() {
+	if !internal.UseProtoPooling.IsEnabled() {
 		ov = &internal.Exemplar_AsInt{}
 	} else {
 		ov = internal.ProtoPoolExemplar_AsInt.Get().(*internal.Exemplar_AsInt)

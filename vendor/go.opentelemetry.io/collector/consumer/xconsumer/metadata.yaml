@@ -3,10 +3,10 @@ github_project: open-telemetry/opentelemetry-collector
 
 status:
   disable_codecov_badge: true
-  class: pkg
+  class: consumer
   codeowners:
     active:
       - mx-psi
       - dmathieu
   stability:
-    alpha: [profiles]
+    development: [profiles]

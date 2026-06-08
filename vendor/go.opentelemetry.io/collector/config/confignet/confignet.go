@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -27,13 +26,12 @@ const (
 	TransportTypeUnix       TransportType = "unix"
 	TransportTypeUnixgram   TransportType = "unixgram"
 	TransportTypeUnixPacket TransportType = "unixpacket"
-	TransportTypeNpipe      TransportType = "npipe"
 	transportTypeEmpty      TransportType = ""
 )
 
 // UnmarshalText unmarshalls text to a TransportType.
 // Valid values are "tcp", "tcp4", "tcp6", "udp", "udp4",
-// "udp6", "ip", "ip4", "ip6", "unix", "unixgram", "unixpacket" and "npipe"
+// "udp6", "ip", "ip4", "ip6", "unix", "unixgram" and "unixpacket"
 func (tt *TransportType) UnmarshalText(in []byte) error {
 	typ := TransportType(in)
 	switch typ {
@@ -49,7 +47,6 @@ func (tt *TransportType) UnmarshalText(in []byte) error {
 		TransportTypeUnix,
 		TransportTypeUnixgram,
 		TransportTypeUnixPacket,
-		TransportTypeNpipe,
 		transportTypeEmpty:
 		*tt = typ
 		return nil
@@ -82,8 +79,7 @@ type AddrConfig struct {
 	Endpoint string `mapstructure:"endpoint,omitempty"`
 
 	// Transport to use. Allowed protocols are "tcp", "tcp4" (IPv4-only), "tcp6" (IPv6-only), "udp", "udp4" (IPv4-only),
-	// "udp6" (IPv6-only), "ip", "ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram", "unixpacket" and
-	// "npipe" (Windows named pipes, Windows-only).
+	// "udp6" (IPv6-only), "ip", "ip4" (IPv4-only), "ip6" (IPv6-only), "unix", "unixgram" and "unixpacket".
 	Transport TransportType `mapstructure:"transport,omitempty"`
 
 	// DialerConfig contains options for connecting to an address.
@@ -101,18 +97,12 @@ func NewDefaultAddrConfig() AddrConfig {
 
 // Dial equivalent with net.Dialer's DialContext for this address.
 func (na *AddrConfig) Dial(ctx context.Context) (net.Conn, error) {
-	if na.Transport == TransportTypeNpipe {
-		return dialNpipe(ctx, na.Endpoint, na.DialerConfig.Timeout)
-	}
 	d := net.Dialer{Timeout: na.DialerConfig.Timeout}
 	return d.DialContext(ctx, string(na.Transport), na.Endpoint)
 }
 
 // Listen equivalent with net.ListenConfig's Listen for this address.
 func (na *AddrConfig) Listen(ctx context.Context) (net.Listener, error) {
-	if na.Transport == TransportTypeNpipe {
-		return listenNpipe(na.Endpoint)
-	}
 	lc := net.ListenConfig{}
 	return lc.Listen(ctx, string(na.Transport), na.Endpoint)
 }
@@ -132,41 +122,9 @@ func (na *AddrConfig) Validate() error {
 		TransportTypeUnixgram,
 		TransportTypeUnixPacket:
 		return nil
-	case TransportTypeNpipe:
-		return validateNpipePath(na.Endpoint)
 	default:
 		return fmt.Errorf("invalid transport type %q", na.Transport)
 	}
-}
-
-// validateNpipePath validates a Windows named pipe path.
-// Named pipe paths must follow the format: \\<server>\pipe\<name>
-// See: https://learn.microsoft.com/en-us/windows/win32/ipc/pipe-names
-func validateNpipePath(endpoint string) error {
-	const maxLen = 256
-	if len(endpoint) > maxLen {
-		return fmt.Errorf("named pipe path %q exceeds maximum length of %d characters", endpoint, maxLen)
-	}
-	if !strings.HasPrefix(endpoint, `\\`) {
-		return fmt.Errorf(`named pipe path must start with "\\": %q`, endpoint)
-	}
-	// After \\, find the \pipe\ component (case-insensitive per Windows rules)
-	rest := strings.ToLower(endpoint[2:])
-	pipeIdx := strings.Index(rest, `\pipe\`)
-	if pipeIdx < 0 {
-		return fmt.Errorf(`named pipe path must contain "\pipe\": %q`, endpoint)
-	}
-	if pipeIdx == 0 {
-		return fmt.Errorf("named pipe path must have a non-empty server name: %q", endpoint)
-	}
-	pipeName := endpoint[2+pipeIdx+len(`\pipe\`):]
-	if pipeName == "" {
-		return fmt.Errorf(`named pipe path must have a non-empty pipe name after "\pipe\": %q`, endpoint)
-	}
-	if strings.ContainsRune(pipeName, '\\') {
-		return fmt.Errorf("named pipe name must not contain backslashes: %q", endpoint)
-	}
-	return nil
 }
 
 // TCPAddrConfig represents a TCP endpoint address.

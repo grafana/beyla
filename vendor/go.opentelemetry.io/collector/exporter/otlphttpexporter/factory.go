@@ -7,12 +7,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
-
-	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configcompression"
@@ -32,7 +28,7 @@ func NewFactory() exporter.Factory {
 	return xexporter.NewFactory(
 		metadata.Type,
 		createDefaultConfig,
-		xexporter.WithDeprecatedTypeAlias(metadata.DeprecatedType),
+		xexporter.WithDeprecatedTypeAlias(component.MustNewType("otlphttp")),
 		xexporter.WithTraces(createTraces, metadata.TracesStability),
 		xexporter.WithMetrics(createMetrics, metadata.MetricsStability),
 		xexporter.WithLogs(createLogs, metadata.LogsStability),
@@ -61,35 +57,22 @@ func createDefaultConfig() component.Config {
 // signalOverrideURL is the URL specified in the signal specific configuration (empty if not specified).
 // signalName is the name of the signal, e.g. "traces", "metrics", "logs".
 // signalVersion is the version of the signal, e.g. "v1" or "v1development".
-func composeSignalURL(oCfg *Config, signalOverrideURL, signalName, signalVersion string) (*url.URL, error) {
+func composeSignalURL(oCfg *Config, signalOverrideURL, signalName, signalVersion string) (string, error) {
 	switch {
 	case signalOverrideURL != "":
-		u, err := url.Parse(signalOverrideURL)
+		_, err := url.Parse(signalOverrideURL)
 		if err != nil {
-			return nil, fmt.Errorf("%s_endpoint must be a valid URL", signalName)
+			return "", fmt.Errorf("%s_endpoint must be a valid URL", signalName)
 		}
-		return u, nil
+		return signalOverrideURL, nil
 	case oCfg.ClientConfig.Endpoint == "":
-		return nil, fmt.Errorf("either endpoint or %s_endpoint must be specified", signalName)
+		return "", fmt.Errorf("either endpoint or %s_endpoint must be specified", signalName)
 	default:
 		if strings.HasSuffix(oCfg.ClientConfig.Endpoint, "/") {
-			return url.Parse(oCfg.ClientConfig.Endpoint + signalVersion + "/" + signalName)
+			return oCfg.ClientConfig.Endpoint + signalVersion + "/" + signalName, nil
 		}
-		return url.Parse(oCfg.ClientConfig.Endpoint + "/" + signalVersion + "/" + signalName)
+		return oCfg.ClientConfig.Endpoint + "/" + signalVersion + "/" + signalName, nil
 	}
-}
-
-func endpointAttributes(endpointURL *url.URL) []attribute.KeyValue {
-	out := []attribute.KeyValue{
-		semconv.ServerAddress(endpointURL.Hostname()),
-	}
-	if endpointURL.Path != "" {
-		out = append(out, semconv.URLPath(endpointURL.Path))
-	}
-	if portNumber, err := strconv.Atoi(endpointURL.Port()); err == nil {
-		out = append(out, semconv.ServerPort(portNumber))
-	}
-	return out
 }
 
 func createTraces(
@@ -103,11 +86,10 @@ func createTraces(
 	}
 	oCfg := cfg.(*Config)
 
-	endpointURL, err := composeSignalURL(oCfg, oCfg.TracesEndpoint, "traces", "v1")
+	oce.tracesURL, err = composeSignalURL(oCfg, oCfg.TracesEndpoint, "traces", "v1")
 	if err != nil {
 		return nil, err
 	}
-	oce.tracesURL = endpointURL.String()
 
 	return exporterhelper.NewTraces(ctx, set, cfg,
 		oce.pushTraces,
@@ -116,9 +98,7 @@ func createTraces(
 		// explicitly disable since we rely on http.Client timeout logic.
 		exporterhelper.WithTimeout(exporterhelper.TimeoutConfig{Timeout: 0}),
 		exporterhelper.WithRetry(oCfg.RetryConfig),
-		exporterhelper.WithQueue(oCfg.QueueConfig),
-		exporterhelper.WithAttrs(endpointAttributes(endpointURL)...),
-	)
+		exporterhelper.WithQueue(oCfg.QueueConfig))
 }
 
 func createMetrics(
@@ -132,11 +112,10 @@ func createMetrics(
 	}
 	oCfg := cfg.(*Config)
 
-	endpointURL, err := composeSignalURL(oCfg, oCfg.MetricsEndpoint, "metrics", "v1")
+	oce.metricsURL, err = composeSignalURL(oCfg, oCfg.MetricsEndpoint, "metrics", "v1")
 	if err != nil {
 		return nil, err
 	}
-	oce.metricsURL = endpointURL.String()
 
 	return exporterhelper.NewMetrics(ctx, set, cfg,
 		oce.pushMetrics,
@@ -145,9 +124,7 @@ func createMetrics(
 		// explicitly disable since we rely on http.Client timeout logic.
 		exporterhelper.WithTimeout(exporterhelper.TimeoutConfig{Timeout: 0}),
 		exporterhelper.WithRetry(oCfg.RetryConfig),
-		exporterhelper.WithQueue(oCfg.QueueConfig),
-		exporterhelper.WithAttrs(endpointAttributes(endpointURL)...),
-	)
+		exporterhelper.WithQueue(oCfg.QueueConfig))
 }
 
 func createLogs(
@@ -160,12 +137,10 @@ func createLogs(
 		return nil, err
 	}
 	oCfg := cfg.(*Config)
-
-	endpointURL, err := composeSignalURL(oCfg, oCfg.LogsEndpoint, "logs", "v1")
+	oce.logsURL, err = composeSignalURL(oCfg, oCfg.LogsEndpoint, "logs", "v1")
 	if err != nil {
 		return nil, err
 	}
-	oce.logsURL = endpointURL.String()
 
 	return exporterhelper.NewLogs(ctx, set, cfg,
 		oce.pushLogs,
@@ -174,9 +149,7 @@ func createLogs(
 		// explicitly disable since we rely on http.Client timeout logic.
 		exporterhelper.WithTimeout(exporterhelper.TimeoutConfig{Timeout: 0}),
 		exporterhelper.WithRetry(oCfg.RetryConfig),
-		exporterhelper.WithQueue(oCfg.QueueConfig),
-		exporterhelper.WithAttrs(endpointAttributes(endpointURL)...),
-	)
+		exporterhelper.WithQueue(oCfg.QueueConfig))
 }
 
 func createProfiles(
@@ -190,11 +163,10 @@ func createProfiles(
 	}
 	oCfg := cfg.(*Config)
 
-	endpointURL, err := composeSignalURL(oCfg, oCfg.ProfilesEndpoint, "profiles", "v1development")
+	oce.profilesURL, err = composeSignalURL(oCfg, oCfg.ProfilesEndpoint, "profiles", "v1development")
 	if err != nil {
 		return nil, err
 	}
-	oce.profilesURL = endpointURL.String()
 
 	return xexporterhelper.NewProfiles(ctx, set, cfg,
 		oce.pushProfiles,
@@ -203,7 +175,5 @@ func createProfiles(
 		// explicitly disable since we rely on http.Client timeout logic.
 		exporterhelper.WithTimeout(exporterhelper.TimeoutConfig{Timeout: 0}),
 		exporterhelper.WithRetry(oCfg.RetryConfig),
-		exporterhelper.WithQueue(oCfg.QueueConfig),
-		exporterhelper.WithAttrs(endpointAttributes(endpointURL)...),
-	)
+		exporterhelper.WithQueue(oCfg.QueueConfig))
 }

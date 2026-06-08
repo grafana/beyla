@@ -1,5 +1,4 @@
 type: config/configmiddleware
-parent: config
 github_project: open-telemetry/opentelemetry-collector
 
 status:

@@ -890,7 +890,6 @@ go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s
 go.opentelemetry.io/obi/pkg/internal/procs
 go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
-go.opentelemetry.io/obi/pkg/internal/runtimemetrics
 go.opentelemetry.io/obi/pkg/internal/shardedqueue
 go.opentelemetry.io/obi/pkg/internal/split
 go.opentelemetry.io/obi/pkg/internal/sqlprune

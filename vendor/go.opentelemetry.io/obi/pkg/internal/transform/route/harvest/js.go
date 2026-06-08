@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -18,10 +17,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 )
-
-// MaxJSFileScanBytes caps opportunistic JS/TS source scans to avoid spending
-// unbounded work on large application files.
-const MaxJSFileScanBytes int64 = 10 * 1024 * 1024
 
 // /root is purposefully missing, since we need it to star the file walk
 // we skip later any root directories we find that don't match our original
@@ -347,21 +342,17 @@ func (e *RouteExtractor) extractNextJSRoutesFromManifest(dir string) error {
 }
 
 // ScanJSFileLines opens a JS/TS file and calls fn for each non-empty,
-// non-comment line (trimmed). It skips non-regular files and files larger than
-// MaxJSFileScanBytes. The callback receives the trimmed line and returns true
-// to stop scanning early, or false to continue.
+// non-comment line (trimmed). The callback receives the trimmed line and
+// returns true to stop scanning early, or false to continue.
 func ScanJSFileLines(path string, fn func(line string) bool) error {
-	file, ok, err := openJSFileForScan(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return err
-	}
-	if !ok {
-		return nil
 	}
 	defer file.Close()
 
 	inBlockComment := false
-	scanner := bufio.NewScanner(io.LimitReader(file, MaxJSFileScanBytes))
+	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
@@ -392,16 +383,13 @@ func ScanJSFileLines(path string, fn func(line string) bool) error {
 }
 
 func (e *RouteExtractor) scanFile(filePath string) error {
-	file, ok, err := openJSFileForScan(filePath)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return nil
-	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(io.LimitReader(file, MaxJSFileScanBytes))
+	scanner := bufio.NewScanner(file)
 	lineNum := 0
 	var line string
 	var save string
@@ -626,10 +614,9 @@ func FindNodeJSAppDir(pid app.PID) (string, error) {
 }
 
 // WalkJSFiles walks a directory tree, skipping known non-application directories
-// (node_modules, .git, system dirs, etc.), and calls fn for each regular JS/TS
-// source file found (.js, .ts, .mjs, .cjs) that is not larger than
-// MaxJSFileScanBytes. The callback can return filepath.SkipAll to stop the walk
-// early.
+// (node_modules, .git, system dirs, etc.), and calls fn for each JS/TS source
+// file found (.js, .ts, .mjs, .cjs). The callback can return filepath.SkipAll
+// to stop the walk early.
 func WalkJSFiles(root string, fn func(path string) error) error {
 	return filepath.Walk(root, newJSFileWalker(root, fn))
 }
@@ -648,10 +635,6 @@ func newJSFileWalker(root string, fn func(path string) error) filepath.WalkFunc 
 			if _, ok := skipDirs[name]; ok {
 				return filepath.SkipDir
 			}
-			return nil
-		}
-
-		if !info.Mode().IsRegular() || info.Size() > MaxJSFileScanBytes {
 			return nil
 		}
 

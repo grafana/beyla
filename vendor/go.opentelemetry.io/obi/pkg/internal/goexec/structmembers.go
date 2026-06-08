@@ -131,11 +131,6 @@ const (
 	// route harvesting offsets
 	MuxTemplatePos
 	GinFullpathPos
-	// Go runtime metrics
-	RuntimeMemstatsNumGCPos
-	RuntimeMemstatsNumForcedGCPos
-	RuntimeGCControllerMemoryLimitPos
-	RuntimeGCControllerGCPercentPos
 )
 
 //go:embed offsets.json
@@ -504,20 +499,6 @@ var structMembers = map[string]structInfo{
 		lib: "github.com/gin-gonic/gin",
 		fields: map[string]GoOffset{
 			"fullPath": GinFullpathPos,
-		},
-	},
-	"runtime.mstats": {
-		lib: "go",
-		fields: map[string]GoOffset{
-			"numgc":       RuntimeMemstatsNumGCPos,
-			"numforcedgc": RuntimeMemstatsNumForcedGCPos,
-		},
-	},
-	"runtime.gcControllerState": {
-		lib: "go",
-		fields: map[string]GoOffset{
-			"memoryLimit": RuntimeGCControllerMemoryLimitPos,
-			"gcPercent":   RuntimeGCControllerGCPercentPos,
 		},
 	},
 }

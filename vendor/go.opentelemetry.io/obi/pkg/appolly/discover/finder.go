@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
 	msgh "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
-	"go.opentelemetry.io/obi/pkg/internal/runtimemetrics"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -29,7 +28,6 @@ type ProcessFinder struct {
 	cfg              *obi.Config
 	ctxInfo          *global.ContextInfo
 	tracesInput      *msg.Queue[[]request.Span]
-	runtimeMetrics   *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
 	ebpfEventContext *ebpfcommon.EBPFEventContext
 	doneChan         <-chan error
 }
@@ -38,16 +36,9 @@ func NewProcessFinder(
 	cfg *obi.Config,
 	ctxInfo *global.ContextInfo,
 	tracesInput *msg.Queue[[]request.Span],
-	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 	ebpfEventContext *ebpfcommon.EBPFEventContext,
 ) *ProcessFinder {
-	return &ProcessFinder{
-		cfg:              cfg,
-		ctxInfo:          ctxInfo,
-		tracesInput:      tracesInput,
-		runtimeMetrics:   runtimeMetrics,
-		ebpfEventContext: ebpfEventContext,
-	}
+	return &ProcessFinder{cfg: cfg, ctxInfo: ctxInfo, tracesInput: tracesInput, ebpfEventContext: ebpfEventContext}
 }
 
 type processFinderStartConfig struct {
@@ -143,7 +134,6 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		OutputTracerEvents:  tracerEvents,
 		Metrics:             pf.ctxInfo.Metrics,
 		SpanSignalsShortcut: pf.tracesInput,
-		RuntimeMetrics:      pf.runtimeMetrics,
 
 		InputInstrumentables: storedExecutableTypes,
 		EbpfEventContext:     pf.ebpfEventContext,
@@ -193,13 +183,8 @@ func newCommonTracersGroup(cfg *obi.Config, metrics imetrics.Reporter, pidFilter
 	return tracers
 }
 
-func newGoTracersGroup(
-	pidFilter ebpfcommon.ServiceFilter,
-	cfg *obi.Config,
-	metrics imetrics.Reporter,
-	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
-) []ebpf.Tracer {
-	return []ebpf.Tracer{gotracer.New(pidFilter, cfg, metrics, runtimeMetrics)}
+func newGoTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {
+	return []ebpf.Tracer{gotracer.New(pidFilter, cfg, metrics)}
 }
 
 func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {

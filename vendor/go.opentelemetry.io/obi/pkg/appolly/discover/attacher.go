@@ -21,7 +21,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	javaagent "go.opentelemetry.io/obi/pkg/internal/java"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
-	"go.opentelemetry.io/obi/pkg/internal/runtimemetrics"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -60,7 +59,6 @@ type traceAttacher struct {
 	// if no spans are detected. This would allow, for example, to start instrumenting this process
 	// from the Process metrics pipeline even before it starts to do/receive requests.
 	SpanSignalsShortcut *msg.Queue[[]request.Span]
-	RuntimeMetrics      *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
 
 	// InputInstrumentables is the input channel for the traceAttacher, where it receives information
 	// about the instrumentables that traversed the whole process discovery pipeline, so they need to
@@ -201,12 +199,7 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 				return ta.reuseTracer(ta.reusableGoTracer, ie)
 			}
 			tracerType = ebpf.Go
-			programs = ta.withCommonTracersGroup(newGoTracersGroup(
-				ta.EbpfEventContext.CommonPIDsFilter,
-				ta.Cfg,
-				ta.Metrics,
-				ta.RuntimeMetrics,
-			))
+			programs = ta.withCommonTracersGroup(newGoTracersGroup(ta.EbpfEventContext.CommonPIDsFilter, ta.Cfg, ta.Metrics))
 		}
 	case svc.InstrumentableNodejs, svc.InstrumentableJava, svc.InstrumentableJavaNative, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP, svc.InstrumentableCPP:
 		if ta.reusableTracer != nil {

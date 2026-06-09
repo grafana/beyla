@@ -523,6 +523,10 @@ func TestBuildInjectConfig(t *testing.T) {
 		}
 	}
 
+	deployment := services.NewGlob("Deployment")
+	statefulSet := services.NewGlob("StatefulSet")
+	daemonSet := services.NewGlob("DaemonSet")
+
 	tests := []struct {
 		name     string
 		cfg      beyla.Config
@@ -540,7 +544,7 @@ func TestBuildInjectConfig(t *testing.T) {
 		{
 			name: "single selector becomes one rule with all default env vars",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument: configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8s_kind": &deployment}}},
 			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
@@ -552,9 +556,9 @@ func TestBuildInjectConfig(t *testing.T) {
 		{
 			name: "multiple selectors each get the same env",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument: configmap.WebhookInstrument{
-					{OwnerKinds: []string{"Deployment"}},
-					{OwnerKinds: []string{"StatefulSet"}},
+				Instrument: services.GlobDefinitionCriteria{
+					{Metadata: services.MetadataGlobMap{"k8s_kind": &deployment}},
+					{Metadata: services.MetadataGlobMap{"k8s_kind": &statefulSet}},
 				},
 			}},
 			endpoint: "http://otel:4318",
@@ -568,7 +572,7 @@ func TestBuildInjectConfig(t *testing.T) {
 			name: "ImageVersion is set at the top level",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
 				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
-				Instrument:   configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				Instrument:   services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8s_kind": &deployment}}},
 			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
@@ -583,7 +587,7 @@ func TestBuildInjectConfig(t *testing.T) {
 		{
 			name: "propagators written as OTEL_PROPAGATORS",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument:  configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				Instrument:  services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8s_kind": &deployment}}},
 				Propagators: []string{"tracecontext", "baggage"},
 			}},
 			endpoint: "http://otel:4318",
@@ -599,8 +603,8 @@ func TestBuildInjectConfig(t *testing.T) {
 		{
 			name: "exclude_instrument becomes a leading skip rule",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument:        configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
-				ExcludeInstrument: configmap.WebhookInstrument{{OwnerKinds: []string{"DaemonSet"}}},
+				Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8s_kind": &deployment}}},
+				ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8s_kind": &daemonSet}}},
 			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",

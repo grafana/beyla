@@ -236,11 +236,11 @@ type HostIDConfig struct {
 // For SDK instrumentation on Kubernetes, use the OpenTelemetry Operator instead.
 type SDKInject struct {
 	// OTel SDK instrumentation criteria
-	Instrument configmap.WebhookInstrument `yaml:"instrument"`
+	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
 	// ExcludeInstrument lists selectors whose matching pods are excluded from SDK
 	// instrumentation, even when they also match Instrument. Exclusion always wins,
 	// mirroring discovery.exclude_instrument.
-	ExcludeInstrument configmap.WebhookInstrument `yaml:"exclude_instrument"`
+	ExcludeInstrument services.GlobDefinitionCriteria `yaml:"exclude_instrument"`
 	// Webhook configuration for a mutating admission controller
 	Webhook WebhookConfig `yaml:"webhook"`
 	// Option to disable automatic bouncing of pods, it will be

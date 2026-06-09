@@ -523,6 +523,8 @@ func TestBuildInjectConfig(t *testing.T) {
 		}
 	}
 
+	test := services.NewGlob("test")
+
 	tests := []struct {
 		name     string
 		cfg      beyla.Config
@@ -530,6 +532,25 @@ func TestBuildInjectConfig(t *testing.T) {
 		protocol string
 		want     configmap.InjectConfig
 	}{
+		{
+			name: "exclude_instrument becomes a leading skip rule",
+			cfg: beyla.Config{Injector: beyla.SDKInject{
+				Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
+				ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDaemonSetName: &test}}},
+			}},
+			endpoint: "http://otel:4318",
+			protocol: "http/protobuf",
+			want: configmap.InjectConfig{Rules: []configmap.Rule{
+				{
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"DaemonSet"}, OwnerNames: []services.GlobAttr{test}},
+					Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
+				},
+				{
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}, OwnerNames: []services.GlobAttr{test}},
+					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
+				},
+			}},
+		},
 		{
 			name:     "empty instrument yields empty config",
 			cfg:      beyla.Config{Injector: beyla.SDKInject{}},
@@ -540,42 +561,42 @@ func TestBuildInjectConfig(t *testing.T) {
 		{
 			name: "single selector becomes one rule with all default env vars",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument: configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
 			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{
-				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}, OwnerNames: []services.GlobAttr{test}},
 				Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
 			}}},
 		},
 		{
 			name: "multiple selectors each get the same env",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument: configmap.WebhookInstrument{
-					{OwnerKinds: []string{"Deployment"}},
-					{OwnerKinds: []string{"StatefulSet"}},
+				Instrument: services.GlobDefinitionCriteria{
+					{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}},
+					{Metadata: services.MetadataGlobMap{services.AttrStatefulSetName: &test}},
 				},
 			}},
 			endpoint: "http://otel:4318",
 			protocol: "grpc",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{
-				{Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
-				{Selector: configmap.K8sSelector{OwnerKinds: []string{"StatefulSet"}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
+				{Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}, OwnerNames: []services.GlobAttr{test}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
+				{Selector: configmap.K8sSelector{OwnerKinds: []string{"StatefulSet"}, OwnerNames: []services.GlobAttr{test}}, Config: configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "grpc")}},
 			}},
 		},
 		{
 			name: "ImageVersion is set at the top level",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
 				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
-				Instrument:   configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				Instrument:   services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
 			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{
 				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
 				Rules: []configmap.Rule{{
-					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}, OwnerNames: []services.GlobAttr{test}},
 					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
 				}},
 			},
@@ -583,37 +604,18 @@ func TestBuildInjectConfig(t *testing.T) {
 		{
 			name: "propagators written as OTEL_PROPAGATORS",
 			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument:  configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
+				Instrument:  services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
 				Propagators: []string{"tracecontext", "baggage"},
 			}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{
-				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
+				Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}, OwnerNames: []services.GlobAttr{test}},
 				Config: configmap.RuleConfig{Env: append(
 					defaultEnv("http://otel:4318", "http/protobuf"),
 					corev1.EnvVar{Name: "OTEL_PROPAGATORS", Value: "tracecontext,baggage"},
 				)},
 			}}},
-		},
-		{
-			name: "exclude_instrument becomes a leading skip rule",
-			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument:        configmap.WebhookInstrument{{OwnerKinds: []string{"Deployment"}}},
-				ExcludeInstrument: configmap.WebhookInstrument{{OwnerKinds: []string{"DaemonSet"}}},
-			}},
-			endpoint: "http://otel:4318",
-			protocol: "http/protobuf",
-			want: configmap.InjectConfig{Rules: []configmap.Rule{
-				{
-					Selector: configmap.K8sSelector{OwnerKinds: []string{"DaemonSet"}},
-					Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
-				},
-				{
-					Selector: configmap.K8sSelector{OwnerKinds: []string{"Deployment"}},
-					Config:   configmap.RuleConfig{Env: defaultEnv("http://otel:4318", "http/protobuf")},
-				},
-			}},
 		},
 	}
 

@@ -25,6 +25,9 @@ type MatchInput struct {
 // Match reports whether the given input satisfies all populated selector fields.
 // An empty or unset field is a wildcard.
 func (s K8sSelector) Match(in MatchInput) bool {
+	if s.IsEmpty() {
+		return false
+	}
 	return s.matchNamespace(in.Namespace) &&
 		s.matchOwner(in.OwnerChain) &&
 		matchAllGlobs(s.PodLabels, in.Labels) &&

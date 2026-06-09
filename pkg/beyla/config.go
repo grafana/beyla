@@ -236,17 +236,16 @@ type HostIDConfig struct {
 // For SDK instrumentation on Kubernetes, use the OpenTelemetry Operator instead.
 type SDKInject struct {
 	// OTel SDK instrumentation criteria
-	Instrument configmap.WebhookInstrument `yaml:"instrument"`
+	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
 	// ExcludeInstrument lists selectors whose matching pods are excluded from SDK
 	// instrumentation, even when they also match Instrument. Exclusion always wins,
 	// mirroring discovery.exclude_instrument.
-	ExcludeInstrument configmap.WebhookInstrument `yaml:"exclude_instrument"`
+	ExcludeInstrument services.GlobDefinitionCriteria `yaml:"exclude_instrument"`
+	// Override for the tracing endpoint, in case Beyla isn't configured to export traces
+	Endpoint string           `yaml:"exporter_otlp_endpoint"`
+	Protocol otelcfg.Protocol `yaml:"exporter_otlp_protocol"`
 	// Webhook configuration for a mutating admission controller
 	Webhook WebhookConfig `yaml:"webhook"`
-	// Option to disable automatic bouncing of pods, it will be
-	// a responsibility of the end-user to bounce the pods to be instrumented
-	// TODO: move to controller?
-	NoAutoRestart bool `yaml:"disable_auto_restart"`
 	// OCI image version to inject
 	ImageVersion string `yaml:"image_version"`
 	// Default sampler configuration for SDK instrumentation
@@ -269,6 +268,11 @@ func (s *SDKInject) Validate() error {
 	if s.ImageVersion == "" {
 		return fmt.Errorf("image volume version is required")
 	}
+
+	if s.Endpoint == "" && s.Protocol != "" {
+		return fmt.Errorf("please specify the exporter_otlp_endpoint when choosing your OTLP protocol %s", string(s.Protocol))
+	}
+
 	return nil
 }
 

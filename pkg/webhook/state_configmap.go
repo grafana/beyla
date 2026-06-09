@@ -310,15 +310,25 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 	// (first match wins), so a skip rule ahead of the install rules carves the
 	// excluded workloads out — e.g. "instrument all except serviceA". Skip rules
 	// carry no env; the injector only needs to know not to instrument.
-	for _, sel := range cfg.Injector.ExcludeInstrument {
+	for i := range cfg.Injector.ExcludeInstrument {
+		glob := &cfg.Injector.ExcludeInstrument[i]
+		sel := selectorFromGlob(glob)
+		if sel == nil {
+			continue
+		}
 		rules = append(rules, configmap.Rule{
-			Selector: sel,
+			Selector: *sel,
 			Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
 		})
 	}
-	for _, sel := range cfg.Injector.Instrument {
+	for i := range cfg.Injector.Instrument {
+		glob := &cfg.Injector.Instrument[i]
+		sel := selectorFromGlob(glob)
+		if sel == nil {
+			continue
+		}
 		rules = append(rules, configmap.Rule{
-			Selector: sel,
+			Selector: *sel,
 			Config:   configmap.RuleConfig{Env: env},
 		})
 	}
@@ -334,70 +344,14 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 }
 
 func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) *configmap.Rule {
-	var podLabels map[string]services.GlobAttr
-	if len(a.PodLabels) > 0 {
-		podLabels = make(map[string]services.GlobAttr, len(a.PodLabels))
-		for k, v := range a.PodLabels {
-			podLabels[k] = *v
-		}
-	}
+	sel := selectorFromGlob(a)
 
-	var podAnnotations map[string]services.GlobAttr
-	if len(a.PodAnnotations) > 0 {
-		podAnnotations = make(map[string]services.GlobAttr, len(a.PodAnnotations))
-		for k, v := range a.PodAnnotations {
-			podAnnotations[k] = *v
-		}
-	}
-
-	metaGlob := func(name string) []services.GlobAttr {
-		if g := a.Metadata[name]; g != nil {
-			return []services.GlobAttr{*g}
-		}
-		return nil
-	}
-
-	// First check to see if the user used k8s_owner_name
-	ownerNames := metaGlob(services.AttrOwnerName)
-	var kinds []string
-	// If no owner name, then we check the specific types of definitions.
-	// In this case we set both the owner name and the kind to match the new
-	// service definition format.
-	if ownerNames == nil {
-		for _, owner := range []struct {
-			metadataKey string
-			kind        string
-		}{
-			{metadataKey: services.AttrDeploymentName, kind: "Deployment"},
-			{metadataKey: services.AttrDaemonSetName, kind: "DaemonSet"},
-			{metadataKey: services.AttrReplicaSetName, kind: "ReplicaSet"},
-			{metadataKey: services.AttrStatefulSetName, kind: "StatefulSet"},
-			{metadataKey: services.AttrJobName, kind: "Job"},
-			{metadataKey: services.AttrCronJobName, kind: "CronJob"},
-			{metadataKey: services.AttrPodName, kind: "Pod"},
-		} {
-			if names := metaGlob(owner.metadataKey); names != nil {
-				ownerNames = names
-				kinds = []string{owner.kind}
-				break
-			}
-		}
-	}
-
-	sel := configmap.K8sSelector{
-		Namespaces:     metaGlob(services.AttrNamespace),
-		OwnerNames:     ownerNames,
-		OwnerKinds:     kinds,
-		PodLabels:      podLabels,
-		PodAnnotations: podAnnotations,
-	}
-
-	if sel.IsEmpty() {
+	if sel == nil || sel.IsEmpty() {
 		return nil
 	}
 
 	return &configmap.Rule{
-		Selector: sel,
+		Selector: *sel,
 		Config:   configmap.RuleConfig{Mode: mode},
 	}
 }

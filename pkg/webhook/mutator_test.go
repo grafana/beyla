@@ -5,18 +5,120 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	svcextra "github.com/grafana/beyla/v3/pkg/services"
 	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
+
+func TestNewPodMutator(t *testing.T) {
+	tests := []struct {
+		name             string
+		cfg              *beyla.Config
+		expectedEndpoint string
+		expectedProtocol string
+	}{
+		{
+			// When the injector is given an explicit endpoint, it is used
+			// verbatim and the Beyla traces configuration is ignored.
+			name: "injector endpoint overrides traces config (grpc)",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					Endpoint: "collector.example.com:4317",
+					Protocol: otelcfg.ProtocolGRPC,
+				},
+				// Deliberately different to prove it is NOT consulted.
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://should-not-be-used:4318",
+					Protocol:       otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "collector.example.com:4317",
+			expectedProtocol: "grpc",
+		},
+		{
+			name: "injector endpoint overrides traces config (http)",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					Endpoint: "https://otel.example.com/custom",
+					Protocol: otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "https://otel.example.com/custom",
+			expectedProtocol: "http/protobuf",
+		},
+		{
+			// No injector endpoint: fall back to deriving the destination from
+			// Beyla's own traces export configuration.
+			name: "falls back to traces http endpoint",
+			cfg: &beyla.Config{
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://otel-collector:4318",
+					Protocol:       otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4318",
+			expectedProtocol: "http/protobuf",
+		},
+		{
+			name: "falls back to traces grpc endpoint",
+			cfg: &beyla.Config{
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://otel-collector:4317",
+					Protocol:       otelcfg.ProtocolGRPC,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4317",
+			expectedProtocol: "grpc",
+		},
+		{
+			// An explicit (non-common) traces endpoint keeps its path, but the
+			// /v1/traces signal suffix is trimmed off.
+			name: "trims /v1/traces from explicit traces endpoint",
+			cfg: &beyla.Config{
+				Traces: otelcfg.TracesConfig{
+					TracesEndpoint: "http://otel-collector:4318/v1/traces",
+					Protocol:       otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4318",
+			expectedProtocol: "http/protobuf",
+		},
+		{
+			// Injector endpoint set but no protocol: protocol defaults to
+			// http/protobuf rather than being left empty.
+			name: "defaults protocol when injector protocol unset",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					Endpoint: "collector.example.com:4317",
+				},
+			},
+			expectedEndpoint: "collector.example.com:4317",
+			expectedProtocol: "http/protobuf",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matcher := NewPodMatcher(tt.cfg)
+
+			mutator, err := NewPodMutator(tt.cfg, matcher, nil)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedEndpoint, mutator.Endpoint())
+			assert.Equal(t, tt.expectedProtocol, mutator.Protocol())
+		})
+	}
+}
 
 func TestErrorResponse(t *testing.T) {
 	tests := []struct {

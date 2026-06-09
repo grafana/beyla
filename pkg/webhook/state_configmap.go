@@ -344,7 +344,7 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 func ruleFromDefinition(a *services.GlobAttributes, mode configmap.Mode) *configmap.Rule {
 	sel := selectorFromGlob(a)
 
-	if sel.IsEmpty() {
+	if sel == nil || sel.IsEmpty() {
 		return nil
 	}
 

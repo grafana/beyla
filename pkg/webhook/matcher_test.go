@@ -26,6 +26,12 @@ func TestPodMatcher_MatchProcessInfo(t *testing.T) {
 		wantSel    *configmap.K8sSelector // non-nil: assert the exact selector returned
 	}{
 		{
+			name:       "no instrument — no match",
+			instrument: configmap.WebhookInstrument{{}},
+			process:    &ProcessInfo{metadata: map[string]string{"k8s_namespace": "prod"}},
+			want:       false,
+		},
+		{
 			name:       "nil process — no match",
 			instrument: configmap.WebhookInstrument{{}},
 			process:    nil,
@@ -148,6 +154,12 @@ func TestPodMatcher_MatchProcessInfo_Exclusion(t *testing.T) {
 		OwnerNames: []services.GlobAttr{services.NewGlob("skip-me")},
 	}}
 
+	excludeReplicaSet := configmap.WebhookInstrument{{
+		Namespaces: []services.GlobAttr{services.NewGlob("demo")},
+		OwnerNames: []services.GlobAttr{services.NewGlob("skip-me")},
+		OwnerKinds: []string{"ReplicaSet"},
+	}}
+
 	tests := []struct {
 		name       string
 		instrument configmap.WebhookInstrument
@@ -155,6 +167,16 @@ func TestPodMatcher_MatchProcessInfo_Exclusion(t *testing.T) {
 		process    *ProcessInfo
 		want       bool
 	}{
+		{
+			name:       "exclusion is filtered out because skip-me is a Deployment and not a ReplicaSet",
+			instrument: instrument,
+			exclude:    excludeReplicaSet,
+			process: &ProcessInfo{
+				metadata:   map[string]string{"k8s_namespace": "demo"},
+				ownerChain: []configmap.Owner{{Name: "skip-me", Kind: "Deployment"}},
+			},
+			want: true,
+		},
 		{
 			name:       "exclusion wins over a matching instrument selector",
 			instrument: instrument,
@@ -217,11 +239,10 @@ func TestNewPodMatcher(t *testing.T) {
 	})
 
 	t.Run("with instrument criteria", func(t *testing.T) {
+		prod := services.NewGlob("prod*")
 		cfg := &beyla.Config{
 			Injector: beyla.SDKInject{
-				Instrument: configmap.WebhookInstrument{{
-					Namespaces: []services.GlobAttr{services.NewGlob("prod*")},
-				}},
+				Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrNamespace: &prod}}},
 			},
 		}
 		matcher := NewPodMatcher(cfg)
@@ -230,15 +251,13 @@ func TestNewPodMatcher(t *testing.T) {
 	})
 
 	t.Run("wires exclude_instrument and exclusion wins", func(t *testing.T) {
+		demo := services.NewGlob("demo")
+		skipMe := services.NewGlob("skip-me")
+
 		cfg := &beyla.Config{
 			Injector: beyla.SDKInject{
-				Instrument: configmap.WebhookInstrument{{
-					Namespaces: []services.GlobAttr{services.NewGlob("demo")},
-				}},
-				ExcludeInstrument: configmap.WebhookInstrument{{
-					Namespaces: []services.GlobAttr{services.NewGlob("demo")},
-					OwnerNames: []services.GlobAttr{services.NewGlob("skip-me")},
-				}},
+				Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrNamespace: &demo}}},
+				ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrNamespace: &demo, services.AttrOwnerName: &skipMe}}},
 			},
 		}
 		matcher := NewPodMatcher(cfg)

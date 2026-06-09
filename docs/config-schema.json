@@ -1149,47 +1149,6 @@
       },
       "type": "object"
     },
-    "K8sSelector": {
-      "properties": {
-        "namespaces": {
-          "items": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "array",
-          "description": "Namespaces lists namespace name globs. Empty means all namespaces. A pod matches if its namespace matches any entry (OR semantics)."
-        },
-        "ownerKinds": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array",
-          "description": "OwnerKinds restricts matching to specific owner kinds (e.g. Deployment, ReplicaSet, StatefulSet, DaemonSet). A link matches if its kind equals any entry (OR semantics). Empty means any kind. See OwnerNames for how kinds and names combine."
-        },
-        "ownerNames": {
-          "items": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "array",
-          "description": "OwnerNames lists globs matched against the names in the pod's resolved owner chain. For a pod owned by a ReplicaSet that is itself owned by a Deployment, every link in the chain is tried. Empty means any owner name. OwnerNames and OwnerKinds combine per link: a pod matches when a single owner-chain link satisfies both (kind ∈ OwnerKinds AND name matches some OwnerNames glob)."
-        },
-        "podAnnotations": {
-          "additionalProperties": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "object",
-          "description": "PodAnnotations maps annotation keys to value globs. Empty means all pods. All entries must match (AND semantics)."
-        },
-        "podLabels": {
-          "additionalProperties": {
-            "$ref": "#/$defs/GlobAttr"
-          },
-          "type": "object",
-          "description": "PodLabels maps label keys to value globs. Empty means all pods. All entries must match (AND semantics)."
-        }
-      },
-      "type": "object",
-      "description": "K8sSelector determines which pods a Rule applies to. All populated fields must match (AND). An empty field is a wildcard. Every field describes Kubernetes pod metadata, hence the k8s_ prefix on the YAML key."
-    },
     "KubernetesDecorator": {
       "properties": {
         "cluster_name": {
@@ -2108,10 +2067,6 @@
     },
     "SDKInject": {
       "properties": {
-        "disable_auto_restart": {
-          "type": "boolean",
-          "description": "Option to disable automatic bouncing of pods, it will be a responsibility of the end-user to bounce the pods to be instrumented TODO: move to controller?"
-        },
         "enabled_sdks": {
           "items": {
             "$ref": "#/$defs/InstrumentableType"
@@ -2120,15 +2075,29 @@
           "description": "List of enabled SDK auto-instrumentations. Can be used to disable specific language instrumentations."
         },
         "exclude_instrument": {
-          "$ref": "#/$defs/WebhookInstrument",
+          "$ref": "#/$defs/GlobDefinitionCriteria",
           "description": "ExcludeInstrument lists selectors whose matching pods are excluded from SDK instrumentation, even when they also match Instrument. Exclusion always wins, mirroring discovery.exclude_instrument."
+        },
+        "exporter_otlp_endpoint": {
+          "type": "string",
+          "description": "Override for the tracing endpoint, in case Beyla isn't configured to export traces"
+        },
+        "exporter_otlp_protocol": {
+          "type": "string",
+          "enum": [
+            "",
+            "debug",
+            "grpc",
+            "http/json",
+            "http/protobuf"
+          ]
         },
         "image_version": {
           "type": "string",
           "description": "OCI image version to inject"
         },
         "instrument": {
-          "$ref": "#/$defs/WebhookInstrument",
+          "$ref": "#/$defs/GlobDefinitionCriteria",
           "description": "OTel SDK instrumentation criteria"
         },
         "otel_exported_signals": {
@@ -2405,13 +2374,6 @@
       },
       "type": "object",
       "description": "WebhookConfig contains the configuration for the mutating webhook Functionality under active development TODO: most of the following options are not having effect. They must be moved to k8s-injection-controller"
-    },
-    "WebhookInstrument": {
-      "items": {
-        "$ref": "#/$defs/K8sSelector"
-      },
-      "type": "array",
-      "description": "WebhookInstrument is the list of selectors from the Beyla injector config that determine which pods to instrument. It carries selectors only — no per-rule config. When Beyla writes the state ConfigMap it promotes each K8sSelector into a full Rule by pairing it with the OTLP destination env vars derived from Beyla's own export configuration (see buildInjectConfig)."
     }
   },
   "properties": {

@@ -28,6 +28,17 @@ func nsMatcher(ns string) *PodMatcher {
 	}
 }
 
+func nsMatchers(namespaces []string) *PodMatcher {
+	i := configmap.WebhookInstrument{}
+	for _, ns := range namespaces {
+		i = append(i, configmap.K8sSelector{Namespaces: []services.GlobAttr{services.NewGlob(ns)}})
+	}
+	return &PodMatcher{
+		logger:     slog.Default(),
+		instrument: i,
+	}
+}
+
 // nsLabelMatcher builds a PodMatcher that matches pods in the given namespace
 // AND carrying the given pod label key=value.
 func nsLabelMatcher(ns, labelKey, labelValue string) *PodMatcher {
@@ -37,29 +48,6 @@ func nsLabelMatcher(ns, labelKey, labelValue string) *PodMatcher {
 			{
 				Namespaces: []services.GlobAttr{services.NewGlob(ns)},
 				PodLabels:  map[string]services.GlobAttr{labelKey: services.NewGlob(labelValue)},
-			},
-		},
-	}
-}
-
-// nsCfg builds a beyla.Config whose Injector.Instrument restricts to ns.
-func nsCfg(ns string) *beyla.Config {
-	return &beyla.Config{
-		Injector: beyla.SDKInject{
-			Instrument: configmap.WebhookInstrument{
-				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
-			},
-		},
-	}
-}
-
-// wildcardCfg returns a config with a selector that has no namespace constraint.
-func wildcardCfg() *beyla.Config {
-	return &beyla.Config{
-		Injector: beyla.SDKInject{
-			// An empty Selector is a wildcard — matches any pod.
-			Instrument: configmap.WebhookInstrument{
-				{},
 			},
 		},
 	}
@@ -118,7 +106,6 @@ func TestClassify(t *testing.T) {
 		name       string
 		pod        *corev1.Pod
 		matcher    *PodMatcher
-		cfg        *beyla.Config
 		wantNil    bool
 		wantStatus Status
 		wantSkip   string
@@ -128,21 +115,18 @@ func TestClassify(t *testing.T) {
 			name:       "instrumented_basic",
 			pod:        pod(prodNS, "my-pod", withEnv(envVarLdPreloadName, envVarLdPreloadValue)),
 			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusInstrumented,
 		},
 		{
 			name:       "pending_restart_basic",
 			pod:        pod(prodNS, "my-pod"),
 			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusPendingRestart,
 		},
 		{
 			name:       "skipped_conflict",
 			pod:        pod(prodNS, "my-pod", withEnv(envVarLdPreloadName, "/some/other/lib.so")),
 			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusSkipped,
 			wantSkip:   SkipReasonConflict,
 		},
@@ -150,7 +134,6 @@ func TestClassify(t *testing.T) {
 			name:       "skipped_already_instrumented_label",
 			pod:        pod(prodNS, "my-pod", withLabel(instrumentedLabel, "v1.2.3")),
 			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusSkipped,
 			wantSkip:   SkipReasonAlreadyInstrumented,
 		},
@@ -158,7 +141,6 @@ func TestClassify(t *testing.T) {
 			name:       "skipped_already_instrumented_env",
 			pod:        pod(prodNS, "my-pod", withEnv(envOtelInjectorConfigFileName, envOtelInjectorConfigFileValue)),
 			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusSkipped,
 			wantSkip:   SkipReasonAlreadyInstrumented,
 		},
@@ -166,35 +148,30 @@ func TestClassify(t *testing.T) {
 			name:       "unmatched_in_scope",
 			pod:        pod(prodNS, "other-app"),
 			matcher:    nsLabelMatcher(prodNS, "app", "specific-app"),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusUnmatched,
 		},
 		{
 			name:    "out_of_scope_different_namespace",
 			pod:     pod("staging", "my-pod"),
 			matcher: nsMatcher(prodNS),
-			cfg:     nsCfg(prodNS),
 			wantNil: true,
 		},
 		{
 			name:    "out_of_scope_system_namespace",
 			pod:     pod("kube-system", "my-pod"),
 			matcher: &PodMatcher{logger: slog.Default(), instrument: configmap.WebhookInstrument{{}}},
-			cfg:     wildcardCfg(),
 			wantNil: true,
 		},
 		{
 			name:    "out_of_scope_no_selectors",
 			pod:     pod(prodNS, "my-pod"),
 			matcher: &PodMatcher{logger: slog.Default()},
-			cfg:     &beyla.Config{},
 			wantNil: true,
 		},
 		{
 			name:       "node_name_propagated",
 			pod:        pod(prodNS, "my-pod", withEnv(envVarLdPreloadName, envVarLdPreloadValue), withNodeName("node-1")),
 			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusInstrumented,
 			wantNode:   "node-1",
 		},
@@ -205,7 +182,6 @@ func TestClassify(t *testing.T) {
 			name:       "skipped_already_instrumented_label_beats_conflict",
 			pod:        pod(prodNS, "my-pod", withLabel(instrumentedLabel, "v1.2.3"), withEnv(envVarLdPreloadName, "/foreign/lib.so")),
 			matcher:    nsMatcher(prodNS),
-			cfg:        nsCfg(prodNS),
 			wantStatus: StatusSkipped,
 			wantSkip:   SkipReasonAlreadyInstrumented,
 		},
@@ -213,7 +189,7 @@ func TestClassify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classify(tt.pod, tt.matcher, scopedNamespaces(tt.cfg))
+			got := classify(tt.pod, tt.matcher, tt.matcher.scopedNamespaces())
 			if tt.wantNil {
 				assert.Nil(t, got)
 				return
@@ -279,12 +255,11 @@ func TestClassifyWorkloadResolution(t *testing.T) {
 		},
 	}
 
-	cfg := nsCfg(ns)
 	matcher := nsMatcher(ns)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classify(tt.pod, matcher, scopedNamespaces(cfg))
+			got := classify(tt.pod, matcher, matcher.scopedNamespaces())
 			require.NotNil(t, got)
 			assert.Equal(t, tt.wantKind, got.WorkloadKind, "workload_kind")
 			assert.Equal(t, tt.wantWorkName, got.WorkloadName, "workload_name")
@@ -297,75 +272,70 @@ func TestIsInScope(t *testing.T) {
 	tests := []struct {
 		name      string
 		namespace string
-		cfg       *beyla.Config
+		matchNs   []string
 		want      bool
 	}{
 		{
 			name:      "in_scope_explicit_namespace",
 			namespace: "prod",
-			cfg:       nsCfg("prod"),
+			matchNs:   []string{"prod"},
 			want:      true,
 		},
 		{
 			name:      "in_scope_glob_namespace",
 			namespace: "production",
-			cfg:       nsCfg("prod*"),
+			matchNs:   []string{"prod*"},
 			want:      true,
 		},
 		{
 			name:      "out_of_scope_different_namespace",
 			namespace: "staging",
-			cfg:       nsCfg("prod"),
+			matchNs:   []string{"prod"},
 			want:      false,
 		},
 		{
 			name:      "in_scope_wildcard_selector",
 			namespace: "any-namespace",
-			cfg:       wildcardCfg(),
+			matchNs:   []string{"*"},
 			want:      true,
 		},
 		{
 			name:      "out_of_scope_system_namespace",
 			namespace: "kube-system",
-			cfg:       wildcardCfg(),
+			matchNs:   []string{"*"},
 			want:      false,
 		},
 		{
 			name:      "out_of_scope_kube_node_lease",
 			namespace: "kube-node-lease",
-			cfg:       wildcardCfg(),
+			matchNs:   []string{"*"},
 			want:      false,
 		},
 		{
 			name:      "out_of_scope_kube_public",
 			namespace: "kube-public",
-			cfg:       wildcardCfg(),
+			matchNs:   []string{"*"},
 			want:      false,
 		},
 		{
 			name:      "out_of_scope_no_selectors",
 			namespace: "prod",
-			cfg:       &beyla.Config{},
+			matchNs:   []string{},
 			want:      false,
 		},
 		{
 			name:      "in_scope_multi_selector_second_matches",
 			namespace: "staging",
-			cfg: &beyla.Config{
-				Injector: beyla.SDKInject{
-					Instrument: configmap.WebhookInstrument{
-						{Namespaces: []services.GlobAttr{services.NewGlob("prod")}},
-						{Namespaces: []services.GlobAttr{services.NewGlob("staging")}},
-					},
-				},
-			},
-			want: true,
+			matchNs:   []string{"prod", "staging"},
+			want:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := inScope(tt.namespace, scopedNamespaces(tt.cfg))
+			matcher := nsMatchers(tt.matchNs)
+
+			got := inScope(tt.namespace, matcher.scopedNamespaces())
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -510,9 +480,7 @@ func TestClassifyFromInformer(t *testing.T) {
 		version = "v1.2.3"
 	)
 
-	cfg := nsCfg(ns)
 	matcher := nsMatcher(ns)
-	scope := scopedNamespaces(cfg)
 
 	tests := []struct {
 		name       string
@@ -572,7 +540,7 @@ func TestClassifyFromInformer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classifyFromInformer(tt.pod, matcher, scope, version)
+			got := classifyFromInformer(tt.pod, matcher, matcher.scopedNamespaces(), version)
 			if tt.wantNil {
 				assert.Nil(t, got)
 				return
@@ -589,7 +557,7 @@ func TestClassifyFromInformer(t *testing.T) {
 
 	t.Run("unmatched_in_scope", func(t *testing.T) {
 		m := nsLabelMatcher(ns, "app", "specific-app")
-		got := classifyFromInformer(informerPod(ns, "other-app", "uid-u", node), m, scope, version)
+		got := classifyFromInformer(informerPod(ns, "other-app", "uid-u", node), m, m.scopedNamespaces(), version)
 		require.NotNil(t, got)
 		assert.Equal(t, StatusUnmatched, got.Status)
 	})
@@ -601,12 +569,12 @@ func TestPodStateCache_On(t *testing.T) {
 		node = "node-1"
 	)
 
+	prod := services.NewGlob(ns)
+
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
 			ImageVersion: "v1.2.3",
-			Instrument: configmap.WebhookInstrument{
-				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
-			},
+			Instrument:   services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8_namespace": &prod}}},
 		},
 	}
 	version := cfg.Injector.PackageVersion()
@@ -683,12 +651,12 @@ func TestPodStateCache_Collect(t *testing.T) {
 		node = "node-1"
 	)
 
+	prod := services.NewGlob(ns)
+
 	cfg := &beyla.Config{
 		Injector: beyla.SDKInject{
 			ImageVersion: "v1.2.3",
-			Instrument: configmap.WebhookInstrument{
-				{Namespaces: []services.GlobAttr{services.NewGlob(ns)}},
-			},
+			Instrument:   services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8_namespace": &prod}}},
 		},
 	}
 	version := cfg.Injector.PackageVersion()

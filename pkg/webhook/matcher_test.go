@@ -242,7 +242,7 @@ func TestNewPodMatcher(t *testing.T) {
 		prod := services.NewGlob("prod*")
 		cfg := &beyla.Config{
 			Injector: beyla.SDKInject{
-				Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8_namespace": &prod}}},
+				Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrNamespace: &prod}}},
 			},
 		}
 		matcher := NewPodMatcher(cfg)
@@ -256,8 +256,8 @@ func TestNewPodMatcher(t *testing.T) {
 
 		cfg := &beyla.Config{
 			Injector: beyla.SDKInject{
-				Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8_namespace": &demo}}},
-				ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{"k8_namespace": &demo, "k8s_owner_name": &skipMe}}},
+				Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrNamespace: &demo}}},
+				ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrNamespace: &demo, services.AttrOwnerName: &skipMe}}},
 			},
 		}
 		matcher := NewPodMatcher(cfg)

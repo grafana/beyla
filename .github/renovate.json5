@@ -26,6 +26,33 @@
       datasourceTemplate: "git-refs",
       currentValueTemplate: "main",
     },
+    {
+      customType: "regex",
+      description: "Update opentelemetry-injector version",
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "open-telemetry/opentelemetry-injector",
+      extractVersionTemplate: "^v?(?<version>.*)$",
+      managerFilePatterns: ["(^|/)pkg/webhook/image/opentelemetry-injector/version\\.txt$"],
+      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
+    },
+    {
+      customType: "regex",
+      description: "Update Grafana OpenTelemetry Java agent version",
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "grafana/grafana-opentelemetry-java",
+      extractVersionTemplate: "^v?(?<version>.*)$",
+      managerFilePatterns: ["(^|/)pkg/webhook/image/java/version\\.txt$"],
+      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
+    },
+    {
+      customType: "regex",
+      description: "Update OpenTelemetry Operator version (drives Python, Node.js, and .NET SDK versions)",
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "open-telemetry/opentelemetry-operator",
+      extractVersionTemplate: "^v?(?<version>.*)$",
+      managerFilePatterns: ["(^|/)pkg/webhook/image/opentelemetry-operator/version\\.txt$"],
+      matchStrings: ["^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$"],
+    },
   ],
   packageRules: [
     {
@@ -38,6 +65,21 @@
     {
       matchUpdateTypes: ["minor", "major"],
       schedule: ["before 8am on Monday"],
+    },
+    {
+      matchManagers: ["regex"],
+      matchFileNames: ["pkg/webhook/image/opentelemetry-injector/version.txt"],
+      commitMessageTopic: "inject-sdk-image: opentelemetry-injector version",
+    },
+    {
+      matchManagers: ["regex"],
+      matchFileNames: ["pkg/webhook/image/java/version.txt"],
+      commitMessageTopic: "inject-sdk-image: Grafana OpenTelemetry Java agent version",
+    },
+    {
+      matchManagers: ["regex"],
+      matchFileNames: ["pkg/webhook/image/opentelemetry-operator/version.txt"],
+      commitMessageTopic: "inject-sdk-image: OpenTelemetry Operator version",
     },
   ],
   labels: ["dependencies"],

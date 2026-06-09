@@ -1,19 +1,25 @@
-name: Publish inject-sdk-image (manual)
+name: Publish inject-sdk-image
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pkg/webhook/image/**'
   workflow_dispatch:
     inputs:
-      version:
-        description: "Semver to publish (for example 0.1.3). Leave empty to publish the next patch version."
-        required: false
-        type: string
+      confirm:
+        description: "This workflow normally runs automatically on pushes to main that touch pkg/webhook/image/**. Only run manually for an out-of-band republish."
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: publish-inject-sdk-image-${{ github.event.inputs.version || 'auto' }}
+  group: publish-inject-sdk-image
   cancel-in-progress: false
 
 env:
@@ -29,13 +35,20 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
     steps:
+      - name: Validate manual dispatch
+        if: github.event_name == 'workflow_dispatch' && inputs.confirm != true
+        run: |
+          echo "::error::You must acknowledge the confirmation checkbox to run this workflow manually."
+          exit 1
+
       - name: Resolve target version
         id: resolve
         env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
+          TODAY=$(date -u +%Y.%m.%d)
 
           if versions=$(
             gh api \
@@ -49,58 +62,26 @@ jobs:
             versions='[]'
           fi
 
-          existing_tags=$(
-            jq -r '
+          # Find the highest counter published today (e.g. for 2026.06.03.2, that's 2).
+          # Defaults to -1 if none exist so the first version of the day is .0.
+          existing_counter=$(
+            jq -r --arg today "${TODAY}" '
               [
                 .[]?[]
                 | .metadata.container.tags[]?
-                | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
-              ] | unique[]
+                | select(startswith($today + "."))
+                | ltrimstr($today + ".")
+                | select(test("^[0-9]+$"))
+                | tonumber
+              ] | max // -1
             ' <<< "${versions}"
           )
 
-          if [[ -n "${INPUT_VERSION}" ]]; then
-            if [[ ! "${INPUT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "::error::Invalid version '${INPUT_VERSION}'. Expected format X.Y.Z"
-              exit 1
-            fi
+          VERSION="${TODAY}.$((existing_counter + 1))"
 
-            if grep -Fxq "${INPUT_VERSION}" <<< "${existing_tags}"; then
-              echo "::error::Version '${INPUT_VERSION}' already exists in GHCR"
-              exit 1
-            fi
-
-            VERSION="${INPUT_VERSION}"
-            echo "Using version from workflow input: ${VERSION}"
-            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-
-          latest=$(
-            jq -r '
-              [
-                .[]?[]
-                | .metadata.container.tags[]?
-                | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
-              ]
-              | unique
-              | sort_by(split(".") | map(tonumber))
-              | last // empty
-            ' <<< "${versions}"
-          )
-
-          if [[ -z "${latest}" ]]; then
-            VERSION="0.0.1"
-            echo "No existing semver tags found in GHCR. Defaulting to ${VERSION}"
-            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-
-          IFS='.' read -r major minor patch <<< "${latest}"
-          VERSION="${major}.${minor}.$((patch + 1))"
-
-          echo "Latest published version: ${latest}"
-          echo "Next patch version: ${VERSION}"
+          echo "Today: ${TODAY}"
+          echo "Existing counter for today: ${existing_counter}"
+          echo "Publishing version: ${VERSION}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
   build:
@@ -199,6 +180,7 @@ jobs:
           ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
           docker buildx imagetools create \
             -t "${IMAGE_NAME}:${VERSION}" \
+            -t "${IMAGE_NAME}:latest" \
             "${IMAGE_NAME}@sha256:${AMD64_DIGEST}" \
             "${IMAGE_NAME}@sha256:${ARM64_DIGEST}"
 
@@ -210,5 +192,5 @@ jobs:
             echo "## inject-sdk-image published"
             echo
             echo "- Image: \`${IMAGE_NAME}\`"
-            echo "- Version: \`${VERSION}\`"
+            echo "- Tags: \`${VERSION}\`, \`latest\`"
           } >> "${GITHUB_STEP_SUMMARY}"

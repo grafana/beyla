@@ -310,8 +310,9 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 	// (first match wins), so a skip rule ahead of the install rules carves the
 	// excluded workloads out — e.g. "instrument all except serviceA". Skip rules
 	// carry no env; the injector only needs to know not to instrument.
-	for _, glob := range cfg.Injector.ExcludeInstrument {
-		sel := selectorFromGlob(&glob)
+	for i := range cfg.Injector.ExcludeInstrument {
+		glob := &cfg.Injector.ExcludeInstrument[i]
+		sel := selectorFromGlob(glob)
 		if sel == nil {
 			continue
 		}
@@ -320,8 +321,9 @@ func buildInjectConfig(cfg *beyla.Config, endpoint, protocol string) configmap.I
 			Config:   configmap.RuleConfig{Mode: configmap.ModeSkip},
 		})
 	}
-	for _, glob := range cfg.Injector.Instrument {
-		sel := selectorFromGlob(&glob)
+	for i := range cfg.Injector.Instrument {
+		glob := &cfg.Injector.Instrument[i]
+		sel := selectorFromGlob(glob)
 		if sel == nil {
 			continue
 		}

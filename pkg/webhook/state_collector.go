@@ -124,28 +124,6 @@ func alreadyInstrumentedByOther(spec *corev1.PodSpec, meta *metav1.ObjectMeta) b
 	return false
 }
 
-// nsScope is the pre-computed namespace scope derived from the injector config.
-type nsScope struct {
-	clusterWide bool
-	globs       []*services.GlobAttr
-}
-
-// scopedNamespaces analyzes the injector configuration and returns an nsScope.
-func scopedNamespaces(cfg *beyla.Config) nsScope {
-	for _, sel := range cfg.Injector.Instrument {
-		if len(sel.Namespaces) == 0 {
-			return nsScope{clusterWide: true}
-		}
-	}
-	var globs []*services.GlobAttr
-	for _, sel := range cfg.Injector.Instrument {
-		for i := range sel.Namespaces {
-			globs = append(globs, &sel.Namespaces[i])
-		}
-	}
-	return nsScope{globs: globs}
-}
-
 func inScope(namespace string, scope nsScope) bool {
 	if systemNamespaces[namespace] {
 		return false
@@ -261,7 +239,7 @@ func (c *PodStateCache) On(event *informer.Event) error {
 		if c.ownNode == "" || pod.Pod.NodeName != c.ownNode {
 			return nil
 		}
-		pc := classifyFromInformer(pod, c.matcher, scopedNamespaces(c.cfg), c.cfg.Injector.PackageVersion())
+		pc := classifyFromInformer(pod, c.matcher, c.matcher.scopedNamespaces(), c.cfg.Injector.PackageVersion())
 		c.mu.Lock()
 		if pc == nil {
 			delete(c.pods, uid)

@@ -16,10 +16,10 @@ func TestK8sSelector_Match(t *testing.T) {
 		want     bool
 	}{
 		{
-			name:     "empty selector matches everything",
+			name:     "empty selector doesn't match everything",
 			selector: K8sSelector{},
 			input:    MatchInput{Namespace: "prod", Labels: map[string]string{"app": "foo"}},
-			want:     true,
+			want:     false,
 		},
 
 		// Namespace matching

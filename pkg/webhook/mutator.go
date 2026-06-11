@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -68,37 +67,36 @@ func (pm *PodMutator) Protocol() string { return pm.proto }
 // TODO: we don't need most of the code, as this is already mutated in the external webhook. Cleanup
 func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjectionMetrics) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions
-	var err error
 
-	switch proto := cfg.Traces.GetProtocol(); proto {
-	case otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, "":
-		opts, err = otelcfg.HTTPTracesEndpointOptions(&cfg.Traces)
-		if err != nil {
-			return nil, err
+	// Beyla may not be configured to produce traces at all. We first check if the injector has
+	// been supplied an endpoint and protocol and if not, then we pull out the endpoint and the
+	// protocol from Beyla's traces configuration.
+	protocol := cfg.Injector.Protocol
+	endpoint := cfg.Injector.Endpoint
+
+	if endpoint == "" {
+		protocol = cfg.Traces.GetProtocol()
+		var common bool
+		endpoint, common = cfg.Traces.OTLPTracesEndpoint()
+		if !common {
+			endpoint = strings.TrimSuffix(endpoint, "/v1/traces")
 		}
-	case otelcfg.ProtocolGRPC:
-		opts, err = otelcfg.GRPCTracesEndpointOptions(&cfg.Traces)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("unsupported SDK export protocol %s", proto)
+	}
+
+	if protocol == "" {
+		protocol = otelcfg.ProtocolHTTPProtobuf
 	}
 
 	logger := slog.Default().With("component", "webhook")
-	proto := string(cfg.Traces.Protocol)
-	if proto == "" {
-		proto = string(otelcfg.ProtocolHTTPProtobuf)
-	}
 
 	return &PodMutator{
 		logger:        logger,
 		matcher:       matcher,
 		cfg:           cfg,
 		metrics:       metrics,
-		endpoint:      opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
+		endpoint:      endpoint,
 		exportHeaders: opts.Headers,
-		proto:         proto,
+		proto:         string(protocol),
 	}, nil
 }
 

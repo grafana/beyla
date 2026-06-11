@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -68,23 +69,9 @@ func (pm *PodMutator) Protocol() string { return pm.proto }
 func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjectionMetrics) (*PodMutator, error) {
 	var opts otelcfg.OTLPOptions
 
-	// Beyla may not be configured to produce traces at all. We first check if the injector has
-	// been supplied an endpoint and protocol and if not, then we pull out the endpoint and the
-	// protocol from Beyla's traces configuration.
-	protocol := cfg.Injector.Protocol
-	endpoint := cfg.Injector.Endpoint
-
-	if endpoint == "" {
-		protocol = cfg.Traces.GetProtocol()
-		var common bool
-		endpoint, common = cfg.Traces.OTLPTracesEndpoint()
-		if !common {
-			endpoint = strings.TrimSuffix(endpoint, "/v1/traces")
-		}
-	}
-
-	if protocol == "" {
-		protocol = otelcfg.ProtocolHTTPProtobuf
+	protocol, endpoint, err := protoEndpoint(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	logger := slog.Default().With("component", "webhook")
@@ -98,6 +85,50 @@ func NewPodMutator(cfg *beyla.Config, matcher *PodMatcher, metrics *SDKInjection
 		exportHeaders: opts.Headers,
 		proto:         string(protocol),
 	}, nil
+}
+
+// protoEnpoint returns the most likely endpoint from the Beyla configuration.
+// Known issue 1: there are some edge cases, like Beyla defining only a traces exporter
+// but configuring the injector to export only metrics. In this case, Beyla would
+// anyway silently assign the Traces OTLP endpoint to the SDK injector.
+// Known issue 2: Beyla might configure different endpoints for both metrics and traces,
+// but would pass only the traces endpoint to the injected SDK, to submit all the signals.
+func protoEndpoint(cfg *beyla.Config) (otelcfg.Protocol, string, error) {
+	// check if the injector has been supplied an endpoint and protocol and if not,
+	// then we pull out the endpoint and the protocol from Beyla's configuration.
+	protocol := cfg.Injector.Protocol
+	endpoint := cfg.Injector.Endpoint
+
+	// If the SDK injector is configured to export traces, try first to get the traces endpoint
+	if endpoint == "" && cfg.Injector.ExportedSignals.TracesEnabled() {
+		protocol = cfg.Traces.GetProtocol()
+		var common bool
+		endpoint, common = cfg.Traces.OTLPTracesEndpoint()
+		if !common {
+			endpoint = strings.TrimSuffix(endpoint, "/v1/traces")
+		}
+	}
+
+	// fallback to the metrics endpoint
+	if endpoint == "" {
+		protocol = cfg.OTELMetrics.GetProtocol()
+		var common bool
+		if endpoint, common = cfg.OTELMetrics.OTLPMetricsEndpoint(); !common {
+			endpoint = strings.TrimSuffix(endpoint, "/v1/metrics")
+		}
+	}
+
+	// edge case: Beyla is working in Prometheus-only mode and
+	// the user defines an inject section without an OTEL endpoint
+	if endpoint == "" {
+		return "", "", errors.New("working with OTEL SDK injection requires defining an OTLP endpoint")
+	}
+
+	if protocol == "" {
+		protocol = otelcfg.ProtocolHTTPProtobuf
+	}
+
+	return protocol, endpoint, nil
 }
 
 func errorResponse(admResponse *admissionv1.AdmissionResponse, message string) {

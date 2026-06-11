@@ -12,7 +12,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
+	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
@@ -124,6 +127,28 @@ type RuleConfig struct {
 	// declarative config (file_format: "1.0") as a ConfigMap and set
 	// OTEL_CONFIG_FILE on matched containers. Requires volume mount + env var
 	// injection in the mutator before this field can be added to the schema.
+}
+
+var delimiter = []byte{255}
+
+func (c *RuleConfig) Hash() uint64 {
+	hasher := fnv.New64()
+	hasher.Write([]byte(c.Mode))
+	slices.SortStableFunc(c.Env, func(a, b corev1.EnvVar) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	for i := range c.Env {
+		hasher.Write(delimiter)
+		hasher.Write([]byte(c.Env[i].Name))
+		hasher.Write(delimiter)
+		hasher.Write([]byte(c.Env[i].Value))
+		hasher.Write(delimiter)
+		if c.Env[i].ValueFrom != nil {
+			valueFrom, _ := c.Env[i].ValueFrom.Marshal()
+			hasher.Write(valueFrom)
+		}
+	}
+	return hasher.Sum64()
 }
 
 // Skips reports whether this config excludes matched pods from instrumentation.

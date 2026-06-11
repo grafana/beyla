@@ -45,6 +45,15 @@ rbac:
   # - apiGroups: []
   #   resources: []
 
+# -- Configures RBAC for the k8s-injection-controller OpenTelemetry SDK injector, which
+# writes per-node state ConfigMaps consumed by the injection controller.
+injector:
+  # -- Whether to grant the DaemonSet permission to create and update the
+  # injector state ConfigMaps in its own namespace (via a namespaced Role).
+  # Enable this alongside the `injector` settings in the Beyla
+  # configuration. Requires `rbac.create` to be true.
+  enabled: false
+
 serviceAccount:
   # -- Specifies whether a service account should be created
   create: true

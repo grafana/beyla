@@ -42,6 +42,7 @@ OCI_BIN ?= docker
 # helm-test workflow so Renovate's github-actions manager keeps it up to date
 # and we don't locally generate documents that later differ from the CI tests.
 HELM_DOCS_IMG ?= $(shell sed -n 's|.*docker://\(jnorwood/helm-docs[^[:space:]]*\).*|\1|p' .github/workflows/helm-test.yml | head -1)
+HELM_UNITTEST_IMG ?= helmunittest/helm-unittest:3.21.0-1.0.3
 
 # BPF code generator dependencies
 CLANG ?= clang
@@ -354,7 +355,9 @@ test-privileged:
 .PHONY: helm-unittest
 helm-unittest:
 	@echo "### Running Helm chart unit tests"
-	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps -u "$$(id -u)" helmunittest/helm-unittest -f 'tests/unit/*.yaml' charts/beyla
+	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps -u "$$(id -u)" \
+		-e HELM_CACHE_HOME=/tmp/.cache -e XDG_CACHE_HOME=/tmp/.cache -e HOME=/tmp \
+		$(HELM_UNITTEST_IMG) -f 'tests/unit/*.yaml' charts/beyla
 
 .PHONY: helm-docs
 helm-docs:

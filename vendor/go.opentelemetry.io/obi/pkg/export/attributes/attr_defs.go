@@ -383,6 +383,7 @@ func getDefinitions(
 			Attributes: map[attr.Name]Default{
 				attr.DNSQuestionName:   true,
 				attr.DBQueryText:       false,
+				attr.GraphQLDocument:   false,
 				attr.HTTPUrlQuery:      false,
 				attr.GenAIInput:        false,
 				attr.GenAIOutput:       false,

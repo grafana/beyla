@@ -1,26 +1,31 @@
-# Args can be overriden like: docker build --build-arg DOTNET_SDK_VERSION=v1.10.0 --build-arg JAVA_SDK_VERSION=v2.20.0 ...
-ARG DOTNET_SDK_VERSION=v1.11.0
-ARG JAVA_SDK_VERSION=v2.27.0
-ARG INJECTOR_VERSION=v0.9.0
-
 # download the opentelemetry-injector binary for the target architecture
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-injector-binary
 ARG TARGETARCH
-ARG INJECTOR_VERSION
 
 RUN apk add --no-cache curl jq wget
 
+COPY opentelemetry-injector/version.txt .
 RUN case ${TARGETARCH} in \
     amd64) export INJECTOR_LIB="libotelinject_amd64.so" ;; \
     arm64) export INJECTOR_LIB="libotelinject_arm64.so" ;; \
     *)     echo "architecture unsupported: ${TARGETARCH}" && exit 1 ;; \
   esac && \
-  wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/${INJECTOR_VERSION}/${INJECTOR_LIB}"
+  wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/v$(cat version.txt)/${INJECTOR_LIB}"
+
+# Fetch the operator's Python requirements and append beyla-specific additions
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS prepare-python-deps
+WORKDIR /build
+RUN apk add --no-cache curl
+COPY opentelemetry-operator/version.txt .
+COPY python/requirements.extra.txt .
+RUN OPERATOR_VERSION=$(cat version.txt) && \
+    curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/python/requirements.txt" -o requirements.txt && \
+    cat requirements.extra.txt >> requirements.txt
 
 # Get the Python SDK for glibc
 FROM python:3.14.4-trixie@sha256:1692046a126f2841dfec22313e9a282b697e0aeca6c25c0434b476feba618e16 AS build-python-glibc
 WORKDIR /operator-build
-COPY python/requirements.txt .
+COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
 COPY python/deps_analyser.py .
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -33,7 +38,7 @@ COPY python/sitecustomize.py .
 # Get the Python SDK for musl
 FROM python:3.14.4-alpine3.23@sha256:dd4d2bd5b53d9b25a51da13addf2be586beebd5387e289e798e4083d94ca837a AS build-python-musl
 WORKDIR /operator-build
-COPY python/requirements.txt .
+COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
 COPY python/deps_analyser.py .
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -45,42 +50,53 @@ COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-java-sdk
-ARG JAVA_SDK_VERSION
 
 RUN apk add --no-cache curl unzip
 
 # Use Grafana's distro of the OpenTelemetry Java Agent
+COPY java/version.txt .
 RUN curl -sSfL -o opentelemetry-javaagent.jar \
-    "https://github.com/grafana/grafana-opentelemetry-java/releases/download/${JAVA_SDK_VERSION}/grafana-opentelemetry-java.jar"
+    "https://github.com/grafana/grafana-opentelemetry-java/releases/download/v$(cat version.txt)/grafana-opentelemetry-java.jar"
 
 # Get the OTel .NET SDK
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-dotnet-sdk
-ARG DOTNET_SDK_VERSION
 ARG TARGETARCH
 
 RUN apk add --no-cache curl unzip
 
-RUN case ${TARGETARCH} in \
+COPY opentelemetry-operator/version.txt .
+RUN OPERATOR_VERSION=$(cat version.txt) && \
+  VERSION="v$(curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/dotnet/version.txt")" && \
+  case ${TARGETARCH} in \
     amd64) export ARCH="x64" ;; \
     arm64) export ARCH="arm64" ;; \
     *)     echo "architecture unsupported: ${TARGETARCH}" && exit 1 ;; \
   esac && \
   curl -sSfL -o dotnet-instrumentation.zip \
-    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_SDK_VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH}.zip" && \
+    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH}.zip" && \
     mkdir -p /glibc && \
     unzip -q dotnet-instrumentation.zip -d /glibc && \
     curl -sSfL -o dotnet-instrumentation-musl.zip \
-    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_SDK_VERSION}/opentelemetry-dotnet-instrumentation-linux-musl-${ARCH}.zip" && \
+    "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${VERSION}/opentelemetry-dotnet-instrumentation-linux-musl-${ARCH}.zip" && \
     mkdir -p /musl && \
     unzip -q dotnet-instrumentation-musl.zip -d /musl
 
+# Fetch the operator's Node.js package.json and merge in beyla-specific dependencies
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS prepare-nodejs-deps
+WORKDIR /build
+RUN apk add --no-cache curl jq
+COPY opentelemetry-operator/version.txt .
+COPY node.js/package.extra.json .
+RUN OPERATOR_VERSION=$(cat version.txt) && \
+    curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/nodejs/package.json" -o package-operator.json && \
+    jq -s '.[0] + {dependencies: (.[0].dependencies + .[1].dependencies)}' \
+        package-operator.json package.extra.json > package.json
+
 # Build the Node.js artifacts
-# The version is hardcoded in package.json and copied from the OTel Operator
-# TODO: Can we allow this to be configurable just like the JVM and .NET
 FROM node:20@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5 AS build-nodejs-sdk
 
 WORKDIR /operator-build
-COPY node.js/package.json .
+COPY --from=prepare-nodejs-deps /build/package.json .
 COPY node.js/tsconfig.json .
 
 RUN npm install

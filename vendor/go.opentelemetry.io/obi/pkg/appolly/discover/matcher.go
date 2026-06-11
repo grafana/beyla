@@ -357,7 +357,7 @@ func normalizeRegexCriteria(finderCriteria services.RegexDefinitionCriteria) []s
 	criteria := make([]services.Selector, 0, len(finderCriteria))
 	for i := range finderCriteria {
 		fc := &finderCriteria[i]
-		if !fc.Path.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
+		if !fc.Path.IsSet() && !fc.PathRegexp.IsSet() && fc.OpenPorts.Len() == 0 && (len(fc.Metadata) > 0 || len(fc.PodLabels) > 0 || len(fc.PodAnnotations) > 0) {
 			// match any executable path
 			if err := fc.Path.UnmarshalText([]byte(".")); err != nil {
 				panic("bug! " + err.Error())

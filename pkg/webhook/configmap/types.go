@@ -10,6 +10,7 @@ package configmap
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -48,8 +49,14 @@ type WebhookInstrument []K8sSelector
 // No match means no instrumentation.
 type InjectConfig struct {
 	// OCI image version to inject. Must not be empty.
-	ImageVersion string `yaml:"image_version,omitempty"`
-	Rules        []Rule `yaml:"rules,omitempty"`
+	ImageVersion string    `yaml:"image_version,omitempty"`
+	Rules        []Rule    `yaml:"rules,omitempty"`
+	BPFConfig    BPFConfig `yaml:"bpf,omitempty"`
+}
+
+type BPFConfig struct {
+	Rules       []Rule `yaml:"rules,omitempty"`
+	SpanMetrics bool   `yaml:"span_metrics,omitempty"`
 }
 
 // Rule pairs a selector with the instrumentation config to apply when the
@@ -86,6 +93,12 @@ type K8sSelector struct {
 	PodAnnotations map[string]services.GlobAttr `yaml:"podAnnotations,omitempty"`
 }
 
+func (k *K8sSelector) IsEmpty() bool {
+	return len(k.Namespaces) == 0 && len(k.OwnerNames) == 0 &&
+		len(k.OwnerKinds) == 0 && len(k.PodLabels) == 0 &&
+		len(k.PodAnnotations) == 0
+}
+
 // Mode controls what a Rule does when its selector matches a pod.
 type Mode string
 
@@ -106,7 +119,7 @@ type RuleConfig struct {
 	Mode Mode `yaml:"mode,omitempty"`
 	// Env is the list of environment variables to set on instrumented containers.
 	// Supports all corev1.EnvVar sources (valueFrom.secretKeyRef, etc.).
-	Env []corev1.EnvVar `yaml:"env,omitempty"`
+	Env EnvVars `yaml:"env,omitempty"`
 	// TODO: add declarativeConfig support — when set, mount the inline OTel
 	// declarative config (file_format: "1.0") as a ConfigMap and set
 	// OTEL_CONFIG_FILE on matched containers. Requires volume mount + env var
@@ -118,6 +131,52 @@ type RuleConfig struct {
 // explicit ModeSkip excludes.
 func (c RuleConfig) Skips() bool {
 	return c.Mode == ModeSkip
+}
+
+// EnvVars is a list of environment variables that (un)marshals through
+// Kubernetes' JSON field conventions rather than yaml.v3's defaults.
+// corev1.EnvVar carries only `json:` tags; yaml.v3 ignores them, so it emits
+// lowercased field names and `valuefrom: null` for the unset pointer. Routing
+// each entry through encoding/json honors the json tags — camelCase names and
+// omitempty — so unset optional fields (valueFrom, and the nested source
+// pointers) are dropped. JSON is a subset of YAML, so the round-trip is lossless.
+type EnvVars []corev1.EnvVar
+
+func (e EnvVars) MarshalYAML() (any, error) {
+	out := make([]any, 0, len(e))
+	for i := range e {
+		j, err := json.Marshal(e[i])
+		if err != nil {
+			return nil, fmt.Errorf("marshal env var %q: %w", e[i].Name, err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(j, &m); err != nil {
+			return nil, fmt.Errorf("unmarshal env var %q: %w", e[i].Name, err)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+func (e *EnvVars) UnmarshalYAML(value *yaml.Node) error {
+	var raw []any
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	out := make(EnvVars, 0, len(raw))
+	for _, item := range raw {
+		j, err := json.Marshal(item)
+		if err != nil {
+			return fmt.Errorf("marshal env var node: %w", err)
+		}
+		var ev corev1.EnvVar
+		if err := json.Unmarshal(j, &ev); err != nil {
+			return fmt.Errorf("unmarshal env var: %w", err)
+		}
+		out = append(out, ev)
+	}
+	*e = out
+	return nil
 }
 
 // EligibleDeployment names one workload whose pre-existing pods are

@@ -1,6 +1,6 @@
 # beyla
 
-![Version: 1.16.8](https://img.shields.io/badge/Version-1.16.8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 3.15.0](https://img.shields.io/badge/AppVersion-3.15.0-informational?style=flat-square)
+![Version: 1.16.8](https://img.shields.io/badge/Version-1.16.8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 3.20.0](https://img.shields.io/badge/AppVersion-3.20.0-informational?style=flat-square)
 
 eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network metrics.
 
@@ -46,6 +46,8 @@ eBPF-based autoinstrumentation HTTP, HTTP2 and gRPC services, as well as network
 | image.registry | string | `"docker.io"` | Beyla image registry (defaults to docker.io) |
 | image.repository | string | `"grafana/beyla"` | Beyla image repository. |
 | image.tag | string | `nil` | Beyla image tag. When empty, the Chart's appVersion is used. |
+| injector | object | `{"enabled":false}` | Configures RBAC for the k8s-injection-controller OpenTelemetry SDK injector, which writes per-node state ConfigMaps consumed by the injection controller. |
+| injector.enabled | bool | `false` | Whether to grant the DaemonSet permission to create and update the injector state ConfigMaps in its own namespace (via a namespaced Role). Enable this alongside the `injector` settings in the Beyla configuration. Requires `rbac.create` to be true. |
 | k8sCache | object | `{"affinity":{},"annotations":{},"env":{},"envValueFrom":{},"image":{"digest":null,"pullPolicy":"IfNotPresent","pullSecrets":[],"registry":"docker.io","repository":"grafana/beyla-k8s-cache","tag":null},"internalMetrics":{"path":"/metrics","port":0,"portName":"metrics"},"nodeSelector":{},"podAnnotations":{},"podLabels":{},"profilePort":0,"replicas":0,"resources":{},"service":{"annotations":{},"labels":{},"name":"beyla-k8s-cache","port":50055},"tolerations":[]}` | Options to deploy the Kubernetes metadata cache as a separate service |
 | k8sCache.affinity | object | `{}` | used for scheduling of cache pods based on affinity rules |
 | k8sCache.annotations | object | `{}` | Deployment annotations. |

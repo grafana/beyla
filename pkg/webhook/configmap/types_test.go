@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestRuleConfigSkips(t *testing.T) {
@@ -51,4 +52,44 @@ func TestRuleConfigModeRoundTrip(t *testing.T) {
 	require.Len(t, got.Rules, 2)
 	assert.True(t, got.Rules[0].Config.Skips())
 	assert.False(t, got.Rules[1].Config.Skips())
+}
+
+// corev1.EnvVar carries only json tags, which yaml.v3 ignores; the EnvVars
+// wrapper bridges through encoding/json so unset optional fields (notably the
+// valueFrom pointer) are omitted instead of serialized as `valuefrom: null`,
+// and field names follow k8s camelCase conventions. Both a plain value var and
+// a valueFrom.secretKeyRef var must survive the round trip intact.
+func TestEnvVarsRoundTrip(t *testing.T) {
+	in := InjectConfig{
+		Rules: []Rule{{
+			Config: RuleConfig{
+				Env: EnvVars{
+					{Name: "OTEL_LOGS_EXPORTER", Value: "none"},
+					{Name: "API_KEY", ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "creds"},
+							Key:                  "api-key",
+						},
+					}},
+				},
+			},
+		}},
+	}
+
+	out, err := yaml.Marshal(in)
+	require.NoError(t, err)
+	s := string(out)
+
+	// The unset pointer is dropped, not emitted as null, and the source nests
+	// using k8s camelCase keys.
+	assert.NotContains(t, s, "valuefrom")
+	assert.NotContains(t, s, "valueFrom: null")
+	assert.Contains(t, s, "value: none")
+	assert.Contains(t, s, "valueFrom:")
+	assert.Contains(t, s, "secretKeyRef:")
+
+	var got InjectConfig
+	require.NoError(t, yaml.Unmarshal(out, &got))
+	require.Len(t, got.Rules, 1)
+	assert.Equal(t, in.Rules[0].Config.Env, got.Rules[0].Config.Env)
 }

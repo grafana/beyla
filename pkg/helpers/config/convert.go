@@ -32,7 +32,7 @@ func convert(
 	fieldHints map[string]string,
 ) {
 	// Handle pointers - make sure dst is a non-nil pointer
-	if dst.Kind() != reflect.Ptr {
+	if dst.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("%s: destination must be a pointer, got %v", prefix, dst.Kind()))
 	}
 	if dst.IsNil() {
@@ -43,7 +43,7 @@ func convert(
 
 	// Handle src pointer if needed
 	srcValue := src
-	if src.Kind() == reflect.Ptr {
+	if src.Kind() == reflect.Pointer {
 		if src.IsNil() {
 			panic(prefix + ": source is nil pointer")
 		}
@@ -77,7 +77,7 @@ func handleFieldConversion(
 	}
 
 	// For pointer fields, create new instance if needed
-	if srcField.Kind() == reflect.Ptr && dstField.Kind() == reflect.Ptr {
+	if srcField.Kind() == reflect.Pointer && dstField.Kind() == reflect.Pointer {
 		if srcField.IsNil() {
 			// Source is nil, nothing to convert
 			return

@@ -144,8 +144,11 @@ func (c *RuleConfig) Hash() uint64 {
 		hasher.Write([]byte(c.Env[i].Value))
 		hasher.Write(delimiter)
 		if c.Env[i].ValueFrom != nil {
+			// Known limitation: if the referenced value changes (e.g. a referenced secret is rotated),
+			// we won't notice any change in the calculated hash
 			valueFrom, _ := c.Env[i].ValueFrom.Marshal()
 			hasher.Write(valueFrom)
+			hasher.Write(delimiter)
 		}
 	}
 	return hasher.Sum64()

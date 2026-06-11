@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -23,6 +24,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
 
@@ -34,15 +36,18 @@ type graphFunctions struct {
 }
 
 // Build instantiates the whole instrumentation --> processing --> submit
-// pipeline graph and returns it as a startable item
+// pipeline graph and returns it as a startable item.
+// Runtime metrics require a caller-owned queue shared with discovery.
 func Build(
 	ctx context.Context,
 	config *obi.Config,
 	ctxInfo *global.ContextInfo,
 	tracesCh *msg.Queue[[]request.Span],
+	jvmRuntimeEvents *msg.Queue[[]jvmruntime.JVMRuntimeEvent],
 	processEventsCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) (*Instrumenter, error) {
-	return newGraphBuilder(config, ctxInfo, tracesCh, processEventsCh).buildGraph(ctx)
+	return newGraphBuilder(config, ctxInfo, tracesCh, processEventsCh, runtimeMetrics, jvmRuntimeEvents).buildGraph(ctx)
 }
 
 // private constructor that can be instantiated from tests to override the node providers
@@ -52,7 +57,13 @@ func newGraphBuilder(
 	ctxInfo *global.ContextInfo,
 	tracesCh *msg.Queue[[]request.Span],
 	processEventsCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+	jvmRuntimeEventsOpt ...*msg.Queue[[]jvmruntime.JVMRuntimeEvent],
 ) *graphFunctions {
+	var jvmRuntimeEvents *msg.Queue[[]jvmruntime.JVMRuntimeEvent]
+	if len(jvmRuntimeEventsOpt) > 0 {
+		jvmRuntimeEvents = jvmRuntimeEventsOpt[0]
+	}
 	// First, we create a graph builder
 	swi := &swarm.Instancer{}
 	gb := &graphFunctions{
@@ -128,13 +139,14 @@ func newGraphBuilder(
 	// some nodes (ipNodesFilter, span name limiter...) are only passed to the metrics export nodes.
 	// Nodes directly handling raw traces will still get the unfiltered exportableSpans queue.
 	// If no metrics exporter is configured, we will not start the metrics subpipeline to save resources.
-	exportingMetrics := config.Metrics.Features.AnyAppO11yMetric() &&
+	jointMetricsConfig := JoinMetricsConfig(config)
+	exportingMetrics := jointMetricsConfig.Features.AnyAppO11yMetric() &&
 		(config.OTELMetrics.EndpointEnabled() || config.Prometheus.EndpointEnabled())
 	if exportingMetrics {
-		setupMetricsSubPipeline(config, ctxInfo, swi, exportableSpans, selectorCfg, processEventsCh)
+		setupMetricsSubPipeline(config, ctxInfo, swi, exportableSpans, jvmRuntimeEvents, selectorCfg, processEventsCh, jointMetricsConfig, runtimeMetrics)
 	}
 
-	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus, joinMetricsConfig(config)),
+	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus, jointMetricsConfig),
 		swarm.WithID("BPFMetrics"))
 
 	// The returned builder later invokes its "Build" function that, given
@@ -149,54 +161,86 @@ func setupMetricsSubPipeline(
 	ctxInfo *global.ContextInfo,
 	swi *swarm.Instancer,
 	exportableSpans *msg.Queue[[]request.Span],
+	jvmRuntimeEvents *msg.Queue[[]jvmruntime.JVMRuntimeEvent],
 	selectorCfg *attributes.SelectorConfig,
 	processEventsCh *msg.Queue[exec.ProcessEvent],
+	jointMetricsConfig *perapp.MetricsConfig,
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) {
-	jointMetricsConfig := joinMetricsConfig(config)
-
-	spanNameAggregatedMetrics := msg2.QueueFromConfig[[]request.Span](config, "spanNameAggregatedMetrics")
-
-	swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
-		Limit:      config.Attributes.MetricSpanNameAggregationLimit,
-		OTEL:       &config.OTELMetrics,
-		Prom:       &config.Prometheus,
-		MetricsCfg: jointMetricsConfig,
-	}, exportableSpans, spanNameAggregatedMetrics))
-
 	unresolvedCfg := request.UnresolvedNames{
 		Generic:  config.Attributes.RenameUnresolvedHosts,
 		Outgoing: config.Attributes.RenameUnresolvedHostsOutgoing,
 		Incoming: config.Attributes.RenameUnresolvedHostsIncoming,
 	}
 
-	swi.Add(otel.ReportMetrics(
-		ctxInfo,
-		&config.OTELMetrics,
-		jointMetricsConfig,
-		selectorCfg,
-		unresolvedCfg,
-		spanNameAggregatedMetrics,
-		processEventsCh,
-	), swarm.WithID("OTELMetricsExport"))
+	var spanNameAggregatedMetrics *msg.Queue[[]request.Span]
+	if jointMetricsConfig.Features.AppOrSpan() || jointMetricsConfig.Features.ServiceGraph() {
+		spanNameAggregatedMetrics = msg2.QueueFromConfig[[]request.Span](config, "spanNameAggregatedMetrics")
 
-	swi.Add(otel.ReportSvcGraphMetrics(
-		ctxInfo,
-		&config.OTELMetrics,
-		jointMetricsConfig,
-		unresolvedCfg,
-		spanNameAggregatedMetrics,
-		processEventsCh,
-	), swarm.WithID("OTELSvcGraphMetricsExport"))
+		swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
+			Limit:      config.Attributes.MetricSpanNameAggregationLimit,
+			OTEL:       &config.OTELMetrics,
+			Prom:       &config.Prometheus,
+			MetricsCfg: jointMetricsConfig,
+		}, exportableSpans, spanNameAggregatedMetrics))
 
-	swi.Add(prom.PrometheusEndpoint(
-		ctxInfo,
-		&config.Prometheus,
-		jointMetricsConfig,
-		selectorCfg,
-		unresolvedCfg,
-		spanNameAggregatedMetrics,
-		processEventsCh,
-	), swarm.WithID("PrometheusEndpoint"))
+		swi.Add(otel.ReportMetrics(
+			ctxInfo,
+			&config.OTELMetrics,
+			jointMetricsConfig,
+			selectorCfg,
+			unresolvedCfg,
+			spanNameAggregatedMetrics,
+			processEventsCh,
+		), swarm.WithID("OTELMetricsExport"))
+
+		swi.Add(otel.ReportSvcGraphMetrics(
+			ctxInfo,
+			&config.OTELMetrics,
+			jointMetricsConfig,
+			unresolvedCfg,
+			spanNameAggregatedMetrics,
+			processEventsCh,
+		), swarm.WithID("OTELSvcGraphMetricsExport"))
+	}
+
+	if jointMetricsConfig.Features.AppOrSpan() || jointMetricsConfig.Features.ServiceGraph() || jointMetricsConfig.Features.AppRuntime() {
+		swi.Add(prom.PrometheusEndpoint(
+			ctxInfo,
+			&config.Prometheus,
+			jointMetricsConfig,
+			selectorCfg,
+			unresolvedCfg,
+			spanNameAggregatedMetrics,
+			processEventsCh,
+			runtimeMetrics,
+		), swarm.WithID("PrometheusEndpoint"))
+	}
+
+	if jointMetricsConfig.Features.AppRuntime() {
+		swi.Add(otel.ReportRuntimeMetrics(
+			ctxInfo,
+			&config.OTELMetrics,
+			jointMetricsConfig,
+			runtimeMetrics,
+		), swarm.WithID("OTELRuntimeMetricsExport"))
+	}
+
+	if jointMetricsConfig.Features.AppJVM() {
+		swi.Add(otel.ReportJVMRuntimeMetrics(
+			ctxInfo,
+			&config.OTELMetrics,
+			jointMetricsConfig,
+			jvmRuntimeEvents,
+		), swarm.WithID("OTELJVMRuntimeMetricsExport"))
+
+		swi.Add(prom.JVMRuntimeMetricsEndpoint(
+			ctxInfo,
+			&config.Prometheus,
+			jointMetricsConfig,
+			jvmRuntimeEvents,
+		), swarm.WithID("PrometheusJVMRuntimeMetricsEndpoint"))
+	}
 }
 
 func (gb *graphFunctions) buildGraph(ctx context.Context) (*Instrumenter, error) {
@@ -245,11 +289,11 @@ func spanPtrPromGetters(cfg *obi.Config) attributes.NamedGetters[request.Span, s
 	}
 }
 
-// joinMetricsConfig returns a combination of the base and per-application metrics config
+// JoinMetricsConfig returns a combination of the base and per-application metrics config.
 // it is used to initialize some resources that should be only initialized if they are enabled
 // for any of the possible service matches.
 // Then they would be used or not for each service, based on the per-service features-.
-func joinMetricsConfig(cfg *obi.Config) *perapp.MetricsConfig {
+func JoinMetricsConfig(cfg *obi.Config) *perapp.MetricsConfig {
 	mc := cfg.Metrics
 	for _, d := range cfg.Discovery.Instrument {
 		mc.Features |= d.Metrics.Features

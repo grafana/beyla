@@ -15,6 +15,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -43,11 +44,16 @@ func (p *Tracer) RecordInstrumentedLib(_ uint64, _ []io.Closer)                 
 func (p *Tracer) AddInstrumentedLibRef(_ uint64)                                 {}
 func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                                 {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                           { return false }
-func (p *Tracer) Run(_ context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
+func (p *Tracer) Run(
+	_ context.Context,
+	_ *ebpfcommon.EBPFEventContext,
+	_ *msg.Queue[[]request.Span],
+) {
 }
-func (p *Tracer) SetupTailCalls()                                     {}
-func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
-func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                      {}
-func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext)      {}
-func (p *Tracer) Capabilities() ebpfcommon.TracerCapability           { return 0 }
-func (p *Tracer) Required() bool                                      { return false }
+func (p *Tracer) SetJVMRuntimeEvents(_ *msg.Queue[[]jvmruntime.JVMRuntimeEvent]) {}
+func (p *Tracer) SetupTailCalls()                                                {}
+func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets)            {}
+func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                                 {}
+func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext)                 {}
+func (p *Tracer) Capabilities() ebpfcommon.TracerCapability                      { return 0 }
+func (p *Tracer) Required() bool                                                 { return false }

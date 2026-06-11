@@ -45,6 +45,8 @@ func TestServiceNameTemplate(t *testing.T) {
 
 // See: https://github.com/grafana/beyla/issues/2410
 func TestGrafanaCloudEndpointInContextInfo(t *testing.T) {
+	isolateOTLPEnv(t)
+
 	// GIVEN a Beyla configuration with only Grafana Cloud settings (no explicit OTEL endpoint)
 	config, err := beyla.LoadConfig(strings.NewReader(`
 grafana:
@@ -74,4 +76,17 @@ grafana:
 		"OTELMetricsExporter should use Grafana Cloud endpoint when no explicit endpoint is set")
 	assert.True(t, isCommon,
 		"Endpoint should be marked as common (used for both metrics and traces)")
+}
+
+func isolateOTLPEnv(t *testing.T) {
+	for _, key := range []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+	} {
+		t.Setenv(key, "")
+	}
 }

@@ -8,7 +8,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 )
 
 func ReadFailedConnectIntoSpan(record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {

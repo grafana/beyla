@@ -14,8 +14,8 @@ import (
 	"github.com/cilium/ebpf/link"
 
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	convenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 )
 
 const (

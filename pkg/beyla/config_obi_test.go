@@ -23,6 +23,8 @@ import (
 )
 
 func TestGrafanaEndpointOverride(t *testing.T) {
+	isolateOTLPEnv(t)
+
 	// GIVEN a Grafana Cloud configuration
 	config, err := LoadConfig(strings.NewReader(`
 grafana:

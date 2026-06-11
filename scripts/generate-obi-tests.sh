@@ -236,7 +236,11 @@ run_parallel() {
 
     while IFS= read -r file; do
         [[ -n "$file" ]] || continue
-        "$worker" "$file" "${worker_args[@]}" &
+        if ((${#worker_args[@]} > 0)); then
+            "$worker" "$file" "${worker_args[@]}" &
+        else
+            "$worker" "$file" &
+        fi
         pids+=($!)
         running=$((running + 1))
 

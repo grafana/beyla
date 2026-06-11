@@ -222,6 +222,7 @@ network:
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
 			MetricsEndpoint:   "localhost:3030",
+			Protocol:          otelcfg.ProtocolHTTPProtobuf,
 			MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
 			ReportersCacheLen: ReporterLRUSize,
 			Buckets: export.Buckets{
@@ -253,6 +254,7 @@ network:
 			},
 		},
 		Traces: otelcfg.TracesConfig{
+			Protocol:          otelcfg.ProtocolHTTPProtobuf,
 			TracesProtocol:    otelcfg.ProtocolHTTPProtobuf,
 			CommonEndpoint:    "localhost:3131",
 			TracesEndpoint:    "localhost:3232",
@@ -389,8 +391,9 @@ network:
 			},
 			ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
 		},
-		NodeJS: obi.NodeJSConfig{Enabled: true},
-		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
+		NodeJS:            obi.NodeJSConfig{Enabled: true},
+		Java:              obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
+		JVMRuntimeMetrics: obi.JVMRuntimeMetricsConfig{SamplingInterval: time.Second},
 		Injector: SDKInject{
 			EnabledSDKs: []servicesextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},
@@ -793,6 +796,8 @@ otel_traces_export:
 }
 
 func TestConfigRunsWithJustInjectorButNotWithoutTraces(t *testing.T) {
+	isolateOTLPEnv(t)
+
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
@@ -808,13 +813,38 @@ injector:
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {
+	isolatedEnv := envMap{
+		"OTEL_EXPORTER_OTLP_ENDPOINT":         "",
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT":  "",
+		"OTEL_EXPORTER_OTLP_PROTOCOL":         "",
+		"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": "",
+		"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL":  "",
+		"BEYLA_JVM_RUNTIME_METRICS_ENABLED":   "false",
+	}
 	for k, v := range env {
+		isolatedEnv[k] = v
+	}
+	for k, v := range isolatedEnv {
 		t.Setenv(k, v)
 	}
 	cfg, err := LoadConfig(nil)
 	require.NoError(t, err)
 	unsetOBIEnv(t)
 	return cfg
+}
+
+func isolateOTLPEnv(t *testing.T) {
+	for _, key := range []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+	} {
+		t.Setenv(key, "")
+	}
 }
 
 func unsetOBIEnv(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
@@ -54,15 +55,6 @@ func FindProcLanguage(pid app.PID) svc.InstrumentableType {
 	}
 
 	t = instrumentableFromPath(filePath)
-	if t != svc.InstrumentableGeneric {
-		return t
-	}
-
-	bytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
-	if err != nil {
-		return svc.InstrumentableGeneric
-	}
-	t = instrumentableFromEnviron(string(bytes))
 	if t != svc.InstrumentableGeneric {
 		return t
 	}
@@ -115,7 +107,7 @@ func contains(slice []string, value string) bool {
 	return slices.Contains(slice, value)
 }
 
-func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string, types ...elf.SymType) {
+func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, symbolNames []string, matches func(string, []string) (string, bool), types ...elf.SymType) {
 	if len(types) == 0 {
 		types = []elf.SymType{elf.STT_FUNC}
 	}
@@ -123,7 +115,8 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, sy
 		if !slices.Contains(types, elf.ST_TYPE(s.Info)) {
 			continue
 		}
-		if !contains(symbolNames, s.Name) {
+		key, ok := matches(s.Name, symbolNames)
+		if !ok {
 			continue
 		}
 		address := s.Value
@@ -142,27 +135,51 @@ func collectSymbols(f *elf.File, syms []elf.Symbol, addresses map[string]Sym, sy
 				break
 			}
 		}
-		addresses[s.Name] = Sym{Off: address, Len: s.Size, Prog: p}
+		addresses[key] = Sym{Name: s.Name, Off: address, Len: s.Size, Prog: p}
 	}
 }
 
 func FindExeSymbols(f *elf.File, symbolNames []string, types ...elf.SymType) (map[string]Sym, error) {
+	return findExeSymbols(f, symbolNames, exactSymbolMatch, types...)
+}
+
+func FindExeSymbolsBySubstring(f *elf.File, symbolSubstrings []string, types ...elf.SymType) (map[string]Sym, error) {
+	return findExeSymbols(f, symbolSubstrings, substringSymbolMatch, types...)
+}
+
+func findExeSymbols(f *elf.File, symbolNames []string, matches func(string, []string) (string, bool), types ...elf.SymType) (map[string]Sym, error) {
 	addresses := map[string]Sym{}
 	syms, err := f.Symbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	collectSymbols(f, syms, addresses, symbolNames, types...)
+	collectSymbols(f, syms, addresses, symbolNames, matches, types...)
 
 	dynsyms, err := f.DynamicSymbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return nil, err
 	}
 
-	collectSymbols(f, dynsyms, addresses, symbolNames, types...)
+	collectSymbols(f, dynsyms, addresses, symbolNames, matches, types...)
 
 	return addresses, nil
+}
+
+func exactSymbolMatch(symbolName string, names []string) (string, bool) {
+	if contains(names, symbolName) {
+		return symbolName, true
+	}
+	return "", false
+}
+
+func substringSymbolMatch(symbolName string, substrings []string) (string, bool) {
+	for _, substring := range substrings {
+		if strings.Contains(symbolName, substring) {
+			return substring, true
+		}
+	}
+	return "", false
 }
 
 func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {

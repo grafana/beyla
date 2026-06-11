@@ -810,6 +810,7 @@ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 go.opentelemetry.io/obi/pkg/appolly
 go.opentelemetry.io/obi/pkg/appolly/app
 go.opentelemetry.io/obi/pkg/appolly/app/request
+go.opentelemetry.io/obi/pkg/appolly/app/runtime
 go.opentelemetry.io/obi/pkg/appolly/app/svc
 go.opentelemetry.io/obi/pkg/appolly/discover
 go.opentelemetry.io/obi/pkg/appolly/discover/exec
@@ -823,6 +824,7 @@ go.opentelemetry.io/obi/pkg/ebpf
 go.opentelemetry.io/obi/pkg/ebpf/common
 go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser
 go.opentelemetry.io/obi/pkg/ebpf/common/http
+go.opentelemetry.io/obi/pkg/ebpf/ringbuf
 go.opentelemetry.io/obi/pkg/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/ebpf/timing
 go.opentelemetry.io/obi/pkg/export
@@ -859,7 +861,6 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher
 go.opentelemetry.io/obi/pkg/internal/ebpf/logger
 go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser
-go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf
 go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector
 go.opentelemetry.io/obi/pkg/internal/ebpf/watcher
@@ -917,6 +918,8 @@ go.opentelemetry.io/obi/pkg/pipe/global
 go.opentelemetry.io/obi/pkg/pipe/msg
 go.opentelemetry.io/obi/pkg/pipe/swarm
 go.opentelemetry.io/obi/pkg/pipe/swarm/swarms
+go.opentelemetry.io/obi/pkg/runtimemetrics
+go.opentelemetry.io/obi/pkg/selection
 go.opentelemetry.io/obi/pkg/statsolly/agent
 go.opentelemetry.io/obi/pkg/test/integration
 go.opentelemetry.io/obi/pkg/transform

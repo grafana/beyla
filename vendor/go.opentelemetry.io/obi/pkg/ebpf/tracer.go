@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -119,6 +120,16 @@ type Tracer interface {
 	Run(context.Context, *ebpfcommon.EBPFEventContext, *msg.Queue[[]request.Span])
 }
 
+// JVMRuntimeEventTracer is implemented by tracers that can emit JVM runtime
+// metric events in addition to request spans.
+type JVMRuntimeEventTracer interface {
+	SetJVMRuntimeEvents(*msg.Queue[[]jvmruntime.JVMRuntimeEvent])
+}
+
+type USDTTracer interface {
+	USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc
+}
+
 // Subset of the above interface, which supports loading eBPF programs which
 // are not tied to service monitoring
 type UtilityTracer interface {
@@ -144,9 +155,10 @@ type ProcessTracer struct {
 	shutdownTimeout time.Duration
 	bpffsPath       string
 
-	Type            ProcessTracerType
-	Instrumentables map[uint64]*instrumenter
-	Programs        []Tracer
+	Type             ProcessTracerType
+	Instrumentables  map[uint64]*instrumenter
+	Programs         []Tracer
+	JVMRuntimeEvents *msg.Queue[[]jvmruntime.JVMRuntimeEvent]
 }
 
 func (pt *ProcessTracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {

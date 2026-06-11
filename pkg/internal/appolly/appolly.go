@@ -9,7 +9,9 @@ import (
 	"sync"
 	"time"
 
+	obiappolly "go.opentelemetry.io/obi/pkg/appolly"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/traces"
@@ -18,6 +20,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -43,11 +46,13 @@ type Instrumenter struct {
 	// tracesInput is used to communicate the found traces between the ProcessFinder and
 	// the ProcessTracer.
 	tracesInput       *msg.Queue[[]request.Span]
+	jvmRuntimeEvents  *msg.Queue[[]jvmruntime.JVMRuntimeEvent]
 	processEventInput *msg.Queue[exec.ProcessEvent]
 	peGraphBuilder    *swarm.Instancer
 
 	// global data structures for all eBPF tracers
 	ebpfEventContext *ebpfcommon.EBPFEventContext
+	runtimeMetrics   *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
 }
 
 // New Instrumenter, given a Config
@@ -58,6 +63,10 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 
 	swi := &swarm.Instancer{}
 	obiCfg := config.AsOBI()
+	var jvmRuntimeEvents *msg.Queue[[]jvmruntime.JVMRuntimeEvent]
+	if obiCfg.JVMRuntimeMetrics.Enabled {
+		jvmRuntimeEvents = msg2.QueueFromConfig[[]jvmruntime.JVMRuntimeEvent](obiCfg, "jvmRuntimeEvents")
+	}
 
 	processEventsInput := msg2.QueueFromConfig[exec.ProcessEvent](config.AsOBI(), "processEventsInput")
 	processEventsHostDecorated := msg2.QueueFromConfig[exec.ProcessEvent](config.AsOBI(), "processEventsHostDecorated")
@@ -83,7 +92,9 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventsDockerDecorated,
 	))
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsDockerDecorated)
+	runtimeMetrics := newRuntimeMetricsQueue(config)
+
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, jvmRuntimeEvents, processEventsDockerDecorated, runtimeMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
@@ -93,11 +104,26 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		ctxInfo:           ctxInfo,
 		tracersWg:         &sync.WaitGroup{},
 		tracesInput:       tracesInput,
+		jvmRuntimeEvents:  jvmRuntimeEvents,
 		processEventInput: processEventsInput,
 		bp:                bp,
 		peGraphBuilder:    swi,
 		ebpfEventContext:  ebpfcommon.NewEBPFEventContext(),
+		runtimeMetrics:    runtimeMetrics,
 	}, nil
+}
+
+func newRuntimeMetricsQueue(config *beyla.Config) *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot] {
+	obiCfg := config.AsOBI()
+	jointMetricsConfig := obiappolly.JoinMetricsConfig(obiCfg)
+
+	if !jointMetricsConfig.Features.AppRuntime() ||
+		!jointMetricsConfig.Features.AnyAppO11yMetric() ||
+		(!obiCfg.OTELMetrics.EndpointEnabled() && !obiCfg.Prometheus.EndpointEnabled()) {
+		return nil
+	}
+
+	return msg2.QueueFromConfig[[]runtimemetrics.RuntimeMetricSnapshot](obiCfg, "runtimeMetrics")
 }
 
 // FindAndInstrument searches in background for any new executable matching the
@@ -105,7 +131,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.ebpfEventContext)
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.runtimeMetrics, i.ebpfEventContext)
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)
@@ -148,6 +174,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 				log.Debug("running tracer for new process",
 					"inode", pt.FileInfo.Ino, "pid", pt.FileInfo.Pid, "exec", pt.FileInfo.CmdExePath)
 				if pt.Tracer != nil {
+					pt.Tracer.JVMRuntimeEvents = i.jvmRuntimeEvents
 					i.tracersWg.Add(1)
 					go func() {
 						defer i.tracersWg.Done()

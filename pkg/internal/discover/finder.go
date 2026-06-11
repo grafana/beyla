@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
@@ -31,11 +32,12 @@ func NewProcessFinder(
 	cfg *beyla.Config,
 	ctxInfo *global.ContextInfo,
 	tracesInput *msg.Queue[[]request.Span],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 	ebpfEventContext *ebpfcommon.EBPFEventContext) *ProcessFinder {
 	return &ProcessFinder{
 		cfg: cfg, ctxInfo: ctxInfo,
 		ebpfEventContext: ebpfEventContext,
-		obiProcessFinder: obiDiscover.NewProcessFinder(cfg.AsOBI(), ctxInfo, tracesInput, ebpfEventContext),
+		obiProcessFinder: obiDiscover.NewProcessFinder(cfg.AsOBI(), ctxInfo, tracesInput, runtimeMetrics, ebpfEventContext),
 	}
 }
 

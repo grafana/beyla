@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -1035,4 +1036,55 @@ func TestProcessMetadata(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProtocolEndpoint(t *testing.T) {
+	type testCase struct {
+		name           string
+		cfg            beyla.Config
+		expectEndpoint string
+		expectProtocol string
+	}
+	// TODO: replace by new(false) after we upgrade to Go 1.26
+	falseVal := false
+	for _, tc := range []testCase{{
+		name:           "Override endpoint and proto",
+		cfg:            beyla.Config{Injector: beyla.SDKInject{Endpoint: "http://foo:4356", Protocol: "grpc"}},
+		expectEndpoint: "http://foo:4356",
+		expectProtocol: "grpc",
+	}, {
+		name:           "Default protocol",
+		cfg:            beyla.Config{Injector: beyla.SDKInject{Endpoint: "http://foo:4356"}},
+		expectEndpoint: "http://foo:4356",
+		expectProtocol: "http/protobuf",
+	}, {
+		name: "Defines both OTLP endpoints. Traces enabled",
+		cfg: beyla.Config{
+			Traces:      otelcfg.TracesConfig{Protocol: "http/json", TracesEndpoint: "http://traces:4356/v1/traces"},
+			OTELMetrics: otelcfg.MetricsConfig{MetricsEndpoint: "http://metrics:4356/v1/metrics"},
+		},
+		expectProtocol: "http/json",
+		expectEndpoint: "http://traces:4356",
+	}, {
+		name: "Defines both OTLP endpoints. Traces disabled",
+		cfg: beyla.Config{
+			Injector:    beyla.SDKInject{ExportedSignals: configmap.SDKExportedSignals{Traces: &falseVal}},
+			Traces:      otelcfg.TracesConfig{TracesEndpoint: "http://traces:4356/v1/traces"},
+			OTELMetrics: otelcfg.MetricsConfig{Protocol: "http/json", MetricsEndpoint: "http://metrics:4356/v1/metrics"},
+		},
+		expectProtocol: "http/json",
+		expectEndpoint: "http://metrics:4356",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			protocol, endpoint, err := protoEndpoint(&tc.cfg)
+			require.NoError(t, err)
+			assert.EqualValues(t, tc.expectProtocol, protocol)
+			assert.Equal(t, tc.expectEndpoint, endpoint)
+		})
+	}
+}
+
+func TestProtocolEndpoit_Error(t *testing.T) {
+	_, _, err := protoEndpoint(&beyla.Config{Prometheus: prom.PrometheusConfig{Port: 9090}})
+	assert.Error(t, err)
 }

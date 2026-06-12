@@ -92,28 +92,6 @@ func selectorFromGlob(a *services.GlobAttributes) *configmap.K8sSelector {
 	return &sel
 }
 
-// nsScope is the pre-computed namespace scope derived from the injector config.
-type nsScope struct {
-	clusterWide bool
-	globs       []*services.GlobAttr
-}
-
-// scopedNamespaces analyzes the injector configuration and returns an nsScope.
-func (m *PodMatcher) scopedNamespaces() nsScope {
-	for _, sel := range m.instrument {
-		if len(sel.Namespaces) == 0 {
-			return nsScope{clusterWide: true}
-		}
-	}
-	var globs []*services.GlobAttr
-	for _, sel := range m.instrument {
-		for i := range sel.Namespaces {
-			globs = append(globs, &sel.Namespaces[i])
-		}
-	}
-	return nsScope{globs: globs}
-}
-
 func selectorsFromDefinitionCriteria(criteria services.GlobDefinitionCriteria) configmap.WebhookInstrument {
 	instr := configmap.WebhookInstrument{}
 

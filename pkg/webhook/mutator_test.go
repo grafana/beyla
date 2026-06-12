@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -791,39 +790,6 @@ func TestOwnersFrom(t *testing.T) {
 			if tt.checkOwners != nil {
 				tt.checkOwners(t, owners)
 			}
-		})
-	}
-}
-
-func TestPodMutator_BuildVolumeDefinition(t *testing.T) {
-	tests := []struct {
-		name     string
-		injector beyla.SDKInject
-		check    func(t *testing.T, vol corev1.Volume)
-	}{
-		{
-			name: "image volume when ImageVersion is set",
-			injector: beyla.SDKInject{
-				ImageVersion: "v1.0.0",
-			},
-			check: func(t *testing.T, vol corev1.Volume) {
-				assert.Equal(t, injectVolumeName, vol.Name)
-				assert.NotNil(t, vol.Image)
-				assert.Nil(t, vol.HostPath)
-				assert.Equal(t, "v1.0.0", vol.Image.Reference)
-				assert.Equal(t, corev1.PullIfNotPresent, vol.Image.PullPolicy)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pm := &PodMutator{
-				cfg:    &beyla.Config{Injector: tt.injector},
-				logger: slog.Default(),
-			}
-			vol := pm.buildVolumeDefinition()
-			tt.check(t, vol)
 		})
 	}
 }

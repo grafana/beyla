@@ -27,7 +27,6 @@ var (
 )
 
 const (
-	injectVolumeName = "otel-inject-instrumentation"
 	// this value is hardcoded in the config file
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
@@ -160,18 +159,6 @@ func (pm *PodMutator) PreloadsSomethingElse(info *ProcessInfo) bool {
 		}
 	}
 	return false
-}
-
-func (pm *PodMutator) buildVolumeDefinition() corev1.Volume {
-	return corev1.Volume{
-		Name: injectVolumeName,
-		VolumeSource: corev1.VolumeSource{
-			Image: &corev1.ImageVolumeSource{
-				Reference:  pm.cfg.Injector.ImageVersion,
-				PullPolicy: corev1.PullIfNotPresent,
-			},
-		},
-	}
 }
 
 func (pm *PodMutator) addLabel(meta *metav1.ObjectMeta, key string, value string) {

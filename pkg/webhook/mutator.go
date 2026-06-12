@@ -27,16 +27,12 @@ var (
 )
 
 const (
-	instrumentedLabel = "com.grafana.beyla/instrumented"
-	injectVolumeName  = "otel-inject-instrumentation"
+	injectVolumeName = "otel-inject-instrumentation"
 	// this value is hardcoded in the config file
 	internalMountPath = "/__otel_sdk_auto_instrumentation__"
 
-	envVarLdPreloadName            = "LD_PRELOAD"
-	envVarLdPreloadValue           = internalMountPath + "/dist/injector/libotelinject.so"
-	envOtelInjectorConfigFileName  = "OTEL_INJECTOR_CONFIG_FILE"
-	envOtelInjectorConfigFileValue = internalMountPath + "/dist/injector/otelinject.conf"
-	envVarSDKVersion               = "BEYLA_INJECTOR_SDK_PKG_VERSION"
+	envVarLdPreloadName  = "LD_PRELOAD"
+	envVarLdPreloadValue = internalMountPath + "/dist/injector/libotelinject.so"
 )
 
 func init() {
@@ -163,21 +159,6 @@ func (pm *PodMutator) PreloadsSomethingElse(info *ProcessInfo) bool {
 			return true
 		}
 	}
-	return false
-}
-
-func (pm *PodMutator) AlreadyInstrumented(info *ProcessInfo) bool {
-	// Consult the labels, if we instrumented the pod, we'd have set the
-	// instrumented label.
-	if label, ok := info.podLabels[instrumentedLabel]; ok && label != "" {
-		return label == pm.cfg.Injector.PackageVersion()
-	}
-
-	// this a duplicate of the check above, but done on environment variables
-	if ver, ok := info.env[envVarSDKVersion]; ok && ver != "" {
-		return ver == pm.cfg.Injector.PackageVersion()
-	}
-
 	return false
 }
 

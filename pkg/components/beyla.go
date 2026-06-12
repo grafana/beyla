@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"text/template"
 
@@ -15,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/docker"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
@@ -33,6 +35,8 @@ import (
 	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
 	"github.com/grafana/beyla/v3/pkg/webhook"
 )
+
+const grafanaHostIDAttr = "grafana.host.id"
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
@@ -291,6 +295,8 @@ func buildCommonContextInfo(
 		config.Attributes.MetadataRetry,
 	)
 
+	applyHostIDFallback(&ctxInfo.NodeMeta, ctxInfo.K8sInformer.IsKubeEnabled())
+
 	ctxInfo.DockerMetadata = docker.NewStore()
 
 	attributeGroups(config, ctxInfo)
@@ -318,4 +324,34 @@ func attributeGroups(config *beyla.Config, ctxInfo *global.ContextInfo) {
 	if config.NetworkFlows.GeoIP.Enabled() {
 		ctxInfo.MetricAttributeGroups.Add(attributes.GroupNetGeoIP)
 	}
+}
+
+// applyHostIDFallback sets grafana.host.id as a resource attribute with the
+// machine hostname when neither Kubernetes nor a cloud provider is available.
+func applyHostIDFallback(nodeMeta *meta.NodeMeta, kubeEnabled bool) {
+	if kubeEnabled || hasCloudProvider(*nodeMeta) {
+		return
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		slog.Warn("failed to get hostname for fallback resource attribute", "attribute", grafanaHostIDAttr, "error", err)
+		return
+	}
+
+	nodeMeta.Metadata = append(nodeMeta.Metadata, meta.Entry{
+		Key:   attr.Name(grafanaHostIDAttr),
+		Value: hostname,
+	})
+}
+
+// hasCloudProvider reports whether any cloud provider metadata was detected
+// during node metadata discovery (e.g. AWS, GCP, Azure).
+func hasCloudProvider(nodeMeta meta.NodeMeta) bool {
+	for _, entry := range nodeMeta.Metadata {
+		if entry.Key == attr.Name(semconv.CloudProviderKey) {
+			return true
+		}
+	}
+	return false
 }

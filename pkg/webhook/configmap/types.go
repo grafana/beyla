@@ -132,7 +132,7 @@ type RuleConfig struct {
 var delimiter = []byte{255}
 
 func (c *RuleConfig) Hash() uint64 {
-	hasher := fnv.New64()
+	hasher := fnv.New64a()
 	hasher.Write([]byte(c.Mode))
 	slices.SortStableFunc(c.Env, func(a, b corev1.EnvVar) int {
 		return strings.Compare(a.Name, b.Name)

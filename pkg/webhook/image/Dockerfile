@@ -23,7 +23,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
     cat requirements.extra.txt >> requirements.txt
 
 # Get the Python SDK for glibc
-FROM python:3.14.4-trixie@sha256:1692046a126f2841dfec22313e9a282b697e0aeca6c25c0434b476feba618e16 AS build-python-glibc
+FROM python:3.14.5-trixie@sha256:11591407222400cafc1b2bd03fe09a90988f091fc9ddff4a901f80ceb02b78b3 AS build-python-glibc
 WORKDIR /operator-build
 COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -36,7 +36,7 @@ RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
 
 # Get the Python SDK for musl
-FROM python:3.14.4-alpine3.23@sha256:dd4d2bd5b53d9b25a51da13addf2be586beebd5387e289e798e4083d94ca837a AS build-python-musl
+FROM python:3.14.5-alpine3.23@sha256:5a824eb82cc75361f98611f3cfc5091ea33f10a6ccea4d4ebdabbc523b9a1614 AS build-python-musl
 WORKDIR /operator-build
 COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .

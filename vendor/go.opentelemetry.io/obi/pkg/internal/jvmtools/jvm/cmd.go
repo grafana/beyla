@@ -1,4 +1,9 @@
-package jvm
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build linux
+
+package jvm // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 
 import (
 	"errors"
@@ -9,7 +14,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/grafana/jvmtools/util"
+	"go.opentelemetry.io/obi/pkg/internal/jvmtools/util"
 )
 
 type JAttacher struct {
@@ -21,6 +26,10 @@ type JAttacher struct {
 }
 
 func NewJAttacher(logger *slog.Logger) *JAttacher {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return &JAttacher{
 		logger:     logger,
 		j9attacher: nil,
@@ -38,21 +47,26 @@ func (j *JAttacher) Init() {
 }
 
 func (j *JAttacher) Cleanup() error {
+	var cleanupErr error
+
 	if j.j9attacher != nil {
-		j.j9attacher.detach()
+		cleanupErr = errors.Join(cleanupErr, j.j9attacher.detach())
 	}
 	if err := syscall.Seteuid(j.myUID); err != nil {
-		j.logger.Error("failed to restore uid", "error", err)
+		cleanupErr = errors.Join(cleanupErr, err)
 	}
 	if err := syscall.Setegid(j.myGID); err != nil {
-		j.logger.Error("failed to restore gid", "error", err)
+		cleanupErr = errors.Join(cleanupErr, err)
 	}
 
-	util.EnterNS(j.myPID, "net")
-	util.EnterNS(j.myPID, "ipc")
-	util.EnterNS(j.myPID, "mnt")
+	for _, nsType := range []string{"net", "ipc", "mnt"} {
+		if util.EnterNS(j.myPID, nsType) < 0 {
+			err := fmt.Errorf("failed to restore %s namespace", nsType)
+			cleanupErr = errors.Join(cleanupErr, err)
+		}
+	}
 
-	return nil
+	return cleanupErr
 }
 
 func (j *JAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
@@ -60,20 +74,27 @@ func (j *JAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadClos
 	targetGID := j.myGID
 	var nspid int
 
-	if util.GetProcessInfo(pid, &targetUID, &targetGID, &nspid) != nil {
-		return nil, fmt.Errorf("process not found: %v", pid)
+	if err := util.GetProcessInfo(pid, &targetUID, &targetGID, &nspid); err != nil {
+		return nil, fmt.Errorf("process not found: %d: %w", pid, err)
 	}
 
 	// Container support: switch to the target namespaces.
 	// Network and IPC namespaces are essential for OpenJ9 connection.
-	util.EnterNS(pid, "net")
-	util.EnterNS(pid, "ipc")
+	if util.EnterNS(pid, "net") < 0 {
+		return nil, errors.New("failed to enter target net namespace")
+	}
+	if util.EnterNS(pid, "ipc") < 0 {
+		return nil, errors.New("failed to enter target ipc namespace")
+	}
 	mntChanged := util.EnterNS(pid, "mnt")
+	if mntChanged < 0 {
+		return nil, errors.New("failed to enter target mnt namespace")
+	}
 
 	// In HotSpot, dynamic attach is allowed only for the clients with the same euid/egid.
 	// If we are running under root, switch to the required euid/egid automatically.
-	if (j.myGID != targetGID && syscall.Setegid(int(targetGID)) != nil) ||
-		(j.myUID != targetUID && syscall.Seteuid(int(targetUID)) != nil) {
+	if (j.myGID != targetGID && syscall.Setegid(targetGID) != nil) ||
+		(j.myUID != targetUID && syscall.Seteuid(targetUID) != nil) {
 		return nil, errors.New("failed to change credentials to match the target process")
 	}
 
@@ -93,7 +114,7 @@ func (j *JAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadClos
 		}
 		j9attacher := newJ9Attacher(j.logger)
 		j.j9attacher = j9attacher
-		return j.j9attacher.jattachOpenJ9(tmpPath, pid, nspid, argv)
+		return j.j9attacher.jattachOpenJ9(tmpPath, nspid, argv)
 	}
 
 	return jattachHotspot(pid, nspid, attachPid, argv, tmpPath, j.logger)

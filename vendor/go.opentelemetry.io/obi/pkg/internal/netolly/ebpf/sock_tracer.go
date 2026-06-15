@@ -36,9 +36,9 @@ import (
 	"golang.org/x/sys/unix"
 
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	convenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 )
 

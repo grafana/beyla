@@ -1,4 +1,9 @@
-package util
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build linux
+
+package util // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/util"
 
 import (
 	"bufio"
@@ -7,13 +12,13 @@ import (
 	"strconv"
 	"strings"
 
-	syscall "golang.org/x/sys/unix"
+	"golang.org/x/sys/unix"
 )
 
 // Constants
 const MaxPath = 4096
 
-// Called just once to fill in tmpPath buffer
+// GetTmpPath returns the target JVM temporary directory path.
 func GetTmpPath(pid int) string {
 	var tmpPath string
 	// Try user-provided alternative path first
@@ -51,17 +56,18 @@ func GetProcessInfo(pid int, uid *int, gid *int, nspid *int) error {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "Uid:") {
+		switch {
+		case strings.HasPrefix(line, "Uid:"):
 			fields := strings.Fields(line[4:])
 			if len(fields) > 1 {
 				*uid = int(parseUint32(fields[1]))
 			}
-		} else if strings.HasPrefix(line, "Gid:") {
+		case strings.HasPrefix(line, "Gid:"):
 			fields := strings.Fields(line[4:])
 			if len(fields) > 1 {
 				*gid = int(parseUint32(fields[1]))
 			}
-		} else if strings.HasPrefix(line, "NStgid:") {
+		case strings.HasPrefix(line, "NStgid:"):
 			fields := strings.Fields(line[7:])
 			if len(fields) > 0 {
 				*nspid = parseInt(fields[len(fields)-1])
@@ -106,9 +112,13 @@ func altLookupNspid(pid int) int {
 	}
 	defer dir.Close()
 
-	entries, _ := dir.Readdirnames(0)
+	entries, err := dir.Readdirnames(0)
+	if err != nil {
+		return pid
+	}
+
 	for _, entry := range entries {
-		if entry[0] >= '1' && entry[0] <= '9' {
+		if len(entry) > 0 && entry[0] >= '1' && entry[0] <= '9' {
 			// Check if /proc/<container-pid>/sched points back to <host-pid>
 			schedPath := fmt.Sprintf("/proc/%d/root/proc/%s/sched", pid, entry)
 			if schedGetHostPid(schedPath) == pid {
@@ -139,9 +149,27 @@ func schedGetHostPid(path string) int {
 	return -1
 }
 
+func namespaceFlag(nsType string) (int, bool) {
+	switch nsType {
+	case "net":
+		return unix.CLONE_NEWNET, true
+	case "ipc":
+		return unix.CLONE_NEWIPC, true
+	case "mnt":
+		return unix.CLONE_NEWNS, true
+	default:
+		return 0, false
+	}
+}
+
 func EnterNS(pid int, nsType string) int {
+	nsFlag, ok := namespaceFlag(nsType)
+	if !ok {
+		return -1
+	}
+
 	path := fmt.Sprintf("/proc/%d/ns/%s", pid, nsType)
-	selfPath := fmt.Sprintf("/proc/self/ns/%s", nsType)
+	selfPath := "/proc/self/ns/" + nsType
 
 	oldnsStat, _ := os.Stat(selfPath)
 	newnsStat, _ := os.Stat(path)
@@ -156,7 +184,7 @@ func EnterNS(pid int, nsType string) int {
 	defer newns.Close()
 
 	// Some ancient Linux distributions do not have setns() function
-	if _, _, err := syscall.RawSyscall(syscall.SYS_SETNS, newns.Fd(), syscall.CLONE_NEWNET, 0); err != 0 {
+	if err := unix.Setns(int(newns.Fd()), nsFlag); err != nil {
 		return -1
 	}
 

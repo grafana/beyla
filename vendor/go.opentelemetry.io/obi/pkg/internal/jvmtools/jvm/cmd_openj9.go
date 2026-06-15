@@ -1,16 +1,26 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build linux
+
 // Converted from C code from the jattach project
-package jvm
+package jvm // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 
 import (
 	"bytes"
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -24,9 +34,16 @@ type j9Attacher struct {
 }
 
 func newJ9Attacher(logger *slog.Logger) *j9Attacher {
-	return &j9Attacher{
-		logger: logger,
+	if logger == nil {
+		logger = slog.Default()
 	}
+
+	j := &j9Attacher{
+		logger: logger,
+		fd:     -1,
+	}
+
+	return j
 }
 
 // Translate HotSpot command to OpenJ9 equivalent
@@ -58,38 +75,35 @@ func translateCommand(argv []string) string {
 		if argc > 1 {
 			arg1 = argv[1]
 		}
-		result = fmt.Sprintf("ATTACH_DIAGNOSTICS:%s", arg1)
-		for i := 2; i < argc; i++ {
-			result += "," + argv[i]
-		}
+		result = "ATTACH_DIAGNOSTICS:" + strings.Join(append([]string{arg1}, argv[2:]...), ",")
 
 	case "threaddump":
 		arg1 := ""
 		if argc > 1 {
 			arg1 = argv[1]
 		}
-		result = fmt.Sprintf("ATTACH_DIAGNOSTICS:Thread.print,%s", arg1)
+		result = "ATTACH_DIAGNOSTICS:Thread.print," + arg1
 
 	case "dumpheap":
 		arg1 := ""
 		if argc > 1 {
 			arg1 = argv[1]
 		}
-		result = fmt.Sprintf("ATTACH_DIAGNOSTICS:Dump.heap,%s", arg1)
+		result = "ATTACH_DIAGNOSTICS:Dump.heap," + arg1
 
 	case "inspectheap":
 		arg1 := ""
 		if argc > 1 {
 			arg1 = argv[1]
 		}
-		result = fmt.Sprintf("ATTACH_DIAGNOSTICS:GC.class_histogram,%s", arg1)
+		result = "ATTACH_DIAGNOSTICS:GC.class_histogram," + arg1
 
 	case "datadump":
 		arg1 := ""
 		if argc > 1 {
 			arg1 = argv[1]
 		}
-		result = fmt.Sprintf("ATTACH_DIAGNOSTICS:Dump.java,%s", arg1)
+		result = "ATTACH_DIAGNOSTICS:Dump.java," + arg1
 
 	case "properties":
 		result = "ATTACH_GETSYSTEMPROPERTIES"
@@ -112,8 +126,11 @@ func writeCommand(fd int, cmd string) error {
 	off := 0
 	for off < len(data) {
 		n, err := syscall.Write(fd, data[off:])
-		if err != nil || n <= 0 {
-			return fmt.Errorf("write failed")
+		if err != nil {
+			return fmt.Errorf("write failed: %w", err)
+		}
+		if n <= 0 {
+			return fmt.Errorf("write failed: %w", io.ErrShortWrite)
 		}
 		off += n
 	}
@@ -121,28 +138,30 @@ func writeCommand(fd int, cmd string) error {
 }
 
 func closeWithErrno(fd int) {
-	syscall.Close(fd)
+	_ = syscall.Close(fd)
 }
 
 func acquireLock(tmpPath, subdir, filename string) (int, error) {
 	path := filepath.Join(tmpPath, ".com_ibm_tools_attach", subdir, filename)
 
-	fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_CREAT, 0666)
+	fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_CREAT, 0o666)
 	if err != nil {
 		return -1, err
 	}
 
 	if err := syscall.Flock(fd, syscall.LOCK_EX); err != nil {
-		syscall.Close(fd)
+		err = errors.Join(err, syscall.Close(fd))
 		return -1, err
 	}
 
 	return fd, nil
 }
 
-func releaseLock(lockFd int) {
-	syscall.Flock(lockFd, syscall.LOCK_UN)
-	syscall.Close(lockFd)
+func releaseLock(lockFd int) error {
+	return errors.Join(
+		syscall.Flock(lockFd, syscall.LOCK_UN),
+		syscall.Close(lockFd),
+	)
 }
 
 func createAttachSocket() (int, int, error) {
@@ -155,7 +174,7 @@ func createAttachSocket() (int, int, error) {
 				sa, err := syscall.Getsockname(s)
 				if err == nil {
 					if sa6, ok := sa.(*syscall.SockaddrInet6); ok {
-						return s, int(sa6.Port), nil
+						return s, sa6.Port, nil
 					}
 				}
 			}
@@ -187,31 +206,33 @@ func createAttachSocket() (int, int, error) {
 	}
 
 	if sa4, ok := sa.(*syscall.SockaddrInet4); ok {
-		return s, int(sa4.Port), nil
+		return s, sa4.Port, nil
 	}
 
 	closeWithErrno(s)
-	return -1, 0, fmt.Errorf("failed to get socket port")
+	return -1, 0, errors.New("failed to get socket port")
 }
 
-func closeAttachSocket(tmpPath string, s, pid int) {
+func closeAttachSocket(tmpPath string, s, pid int) error {
 	path := filepath.Join(tmpPath, ".com_ibm_tools_attach", strconv.Itoa(pid), "replyInfo")
-	syscall.Unlink(path)
-	syscall.Close(s)
+	var err error
+	if unlinkErr := syscall.Unlink(path); unlinkErr != nil && !errors.Is(unlinkErr, syscall.ENOENT) {
+		err = errors.Join(err, unlinkErr)
+	}
+
+	return errors.Join(err, syscall.Close(s))
 }
 
 func randomKey() uint64 {
 	key := uint64(time.Now().Unix()) * 0xc6a4a7935bd1e995
 
-	fd, err := syscall.Open("/dev/urandom", syscall.O_RDONLY, 0)
-	if err == nil {
-		buf := make([]byte, 8)
-		syscall.Read(fd, buf)
-		syscall.Close(fd)
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return key
+	}
 
-		for i := 0; i < 8; i++ {
-			key ^= uint64(buf[i]) << (uint(i) * 8)
-		}
+	for i, b := range buf {
+		key ^= uint64(b) << (uint(i) * 8)
 	}
 
 	return key
@@ -220,19 +241,15 @@ func randomKey() uint64 {
 func writeReplyInfo(tmpPath string, pid, port int, key uint64) error {
 	path := filepath.Join(tmpPath, ".com_ibm_tools_attach", strconv.Itoa(pid), "replyInfo")
 
-	fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_CREAT|syscall.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer syscall.Close(fd)
-
 	content := fmt.Sprintf("%016x\n%d\n", key, port)
-	syscall.Write(fd, []byte(content))
-
-	return nil
+	return os.WriteFile(path, []byte(content), 0o600)
 }
 
 func notifySemaphore(tmpPath string, value, notifyCount int) error {
+	if notifyCount <= 0 {
+		return nil
+	}
+
 	path := filepath.Join(tmpPath, ".com_ibm_tools_attach", "_notifier")
 
 	semKey, err := ftok(path, 0xa1)
@@ -240,20 +257,22 @@ func notifySemaphore(tmpPath string, value, notifyCount int) error {
 		return err
 	}
 
-	semID, err := semget(semKey, 1, IPC_CREAT|0666)
+	semID, err := semget(semKey, 1, unix.IPC_CREAT|0o666)
 	if err != nil {
 		return err
 	}
 
 	flags := int16(0)
 	if value < 0 {
-		flags = IPC_NOWAIT
+		flags = unix.IPC_NOWAIT
 	}
 
 	sb := createSembuf(0, int16(value), flags)
 
 	for range notifyCount {
-		semop(semID, []sembuf{sb})
+		if err := semop(semID, []sembuf{sb}); err != nil {
+			return fmt.Errorf("semop failed: %w", err)
+		}
 	}
 
 	return nil
@@ -261,33 +280,42 @@ func notifySemaphore(tmpPath string, value, notifyCount int) error {
 
 func acceptClient(s int, key uint64) (int, error) {
 	tv := syscall.Timeval{Sec: 5, Usec: 0}
-	syscall.SetsockoptTimeval(s, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv)
+	if err := syscall.SetsockoptTimeval(s, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv); err != nil {
+		return -1, fmt.Errorf("could not set JVM response timeout: %w", err)
+	}
 
 	nfd, _, err := syscall.Accept(s)
 	if err != nil {
-		return -1, fmt.Errorf("JVM did not respond: %w", err)
+		return -1, fmt.Errorf("jvm did not respond: %w", err)
 	}
 
 	buf := make([]byte, 35)
 	off := 0
 	for off < len(buf) {
 		n, err := syscall.Read(nfd, buf[off:])
-		if err != nil || n <= 0 {
-			syscall.Close(nfd)
-			return -1, fmt.Errorf("the JVM connection was prematurely closed")
+		if err != nil {
+			_ = syscall.Close(nfd)
+			return -1, fmt.Errorf("the JVM connection was prematurely closed: %w", err)
+		}
+		if n <= 0 {
+			_ = syscall.Close(nfd)
+			return -1, fmt.Errorf("the JVM connection was prematurely closed: %w", io.ErrUnexpectedEOF)
 		}
 		off += n
 	}
 
 	expected := fmt.Sprintf("ATTACH_CONNECTED %016x ", key)
 	if !bytes.Equal(buf[:len(expected)], []byte(expected)) {
-		syscall.Close(nfd)
+		_ = syscall.Close(nfd)
 		return -1, fmt.Errorf("unexpected JVM response %s", buf[:len(expected)])
 	}
 
 	// Reset the timeout, as the command execution may take arbitrary long time
 	tv0 := syscall.Timeval{Sec: 0, Usec: 0}
-	syscall.SetsockoptTimeval(nfd, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv0)
+	if err := syscall.SetsockoptTimeval(nfd, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv0); err != nil {
+		_ = syscall.Close(nfd)
+		return -1, fmt.Errorf("could not reset JVM response timeout: %w", err)
+	}
 
 	return nfd, nil
 }
@@ -323,12 +351,24 @@ func (j *j9Attacher) lockNotificationFiles(tmpPath string) int {
 	return count
 }
 
-func (j *j9Attacher) unlockNotificationFiles(count int) {
+func (j *j9Attacher) unlockNotificationFiles(count int) error {
+	var err error
+
 	for i := range count {
 		if j.notifyLock[i] >= 0 {
-			releaseLock(j.notifyLock[i])
+			err = errors.Join(err, releaseLock(j.notifyLock[i]))
+			j.notifyLock[i] = -1
 		}
 	}
+
+	return err
+}
+
+func (j *j9Attacher) releaseNotificationFiles(tmpPath string, count int) error {
+	return errors.Join(
+		j.unlockNotificationFiles(count),
+		notifySemaphore(tmpPath, -1, count),
+	)
 }
 
 func isOpenJ9Process(tmpPath string, pid int) bool {
@@ -337,25 +377,72 @@ func isOpenJ9Process(tmpPath string, pid int) bool {
 	return err == nil
 }
 
-func (j *j9Attacher) detach() {
-	if j.fd == 0 {
-		return
+type j9Reader struct {
+	attacher *j9Attacher
+}
+
+func (r *j9Reader) Read(p []byte) (int, error) {
+	if r.attacher.fd < 0 {
+		return 0, os.ErrClosed
 	}
 
-	if writeCommand(j.fd, "ATTACH_DETACHED") != nil {
-		return
-	}
-
-	buf := make([]byte, 256)
 	for {
-		n, err := syscall.Read(j.fd, buf)
-		if err != nil || n <= 0 || buf[n-1] == 0 {
-			break
+		n, err := syscall.Read(r.attacher.fd, p)
+		if errors.Is(err, syscall.EINTR) {
+			continue
 		}
+		if err != nil {
+			return 0, err
+		}
+		if n == 0 {
+			return 0, io.EOF
+		}
+
+		return n, nil
 	}
 }
 
-func (j *j9Attacher) jattachOpenJ9(tmpPath string, pid, nspid int, argv []string) (io.ReadCloser, error) {
+func (r *j9Reader) Close() error {
+	return r.attacher.detach()
+}
+
+func (j *j9Attacher) closeFD() error {
+	if j.fd < 0 {
+		return nil
+	}
+
+	fd := j.fd
+	j.fd = -1
+	return syscall.Close(fd)
+}
+
+func (j *j9Attacher) detach() error {
+	if j.fd < 0 {
+		return nil
+	}
+
+	fd := j.fd
+	j.fd = -1
+
+	var detachErr error
+	if err := writeCommand(fd, "ATTACH_DETACHED"); err != nil {
+		detachErr = errors.Join(detachErr, err)
+	}
+
+	buf := make([]byte, 256)
+	if detachErr == nil {
+		for {
+			n, err := syscall.Read(fd, buf)
+			if err != nil || n <= 0 || buf[n-1] == 0 {
+				break
+			}
+		}
+	}
+
+	return errors.Join(detachErr, syscall.Close(fd))
+}
+
+func (j *j9Attacher) jattachOpenJ9(tmpPath string, nspid int, argv []string) (reader io.ReadCloser, err error) {
 	attachLock, err := acquireLock(tmpPath, "", "_attachlock")
 	if err != nil {
 		return nil, fmt.Errorf("could not acquire attach lock: %w", err)
@@ -366,14 +453,22 @@ func (j *j9Attacher) jattachOpenJ9(tmpPath string, pid, nspid int, argv []string
 	var port int
 
 	defer func() {
+		var cleanupErr error
 		if s >= 0 {
-			closeAttachSocket(tmpPath, s, nspid)
+			cleanupErr = errors.Join(cleanupErr, closeAttachSocket(tmpPath, s, nspid))
 		}
 		if notifyCount > 0 {
-			j.unlockNotificationFiles(notifyCount)
-			notifySemaphore(tmpPath, -1, notifyCount)
+			cleanupErr = errors.Join(cleanupErr, j.releaseNotificationFiles(tmpPath, notifyCount))
 		}
-		releaseLock(attachLock)
+		if attachLock >= 0 {
+			cleanupErr = errors.Join(cleanupErr, releaseLock(attachLock))
+		}
+		if err != nil {
+			cleanupErr = errors.Join(cleanupErr, j.closeFD())
+		}
+		if cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
 	}()
 
 	s, port, err = createAttachSocket()
@@ -398,24 +493,31 @@ func (j *j9Attacher) jattachOpenJ9(tmpPath string, pid, nspid int, argv []string
 
 	j.fd = fd
 
-	closeAttachSocket(tmpPath, s, nspid)
+	closeErr := closeAttachSocket(tmpPath, s, nspid)
 	s = -1
-	j.unlockNotificationFiles(notifyCount)
-	notifySemaphore(tmpPath, -1, notifyCount)
-	notifyCount = 0
-	releaseLock(attachLock)
-	attachLock = -1
+	if closeErr != nil {
+		return nil, fmt.Errorf("could not close attach socket: %w", closeErr)
+	}
 
-	j.logger.Info("Connected to remote JVM")
+	notifyErr := j.releaseNotificationFiles(tmpPath, notifyCount)
+	notifyCount = 0
+	if notifyErr != nil {
+		return nil, fmt.Errorf("could not release OpenJ9 notification files: %w", notifyErr)
+	}
+
+	releaseErr := releaseLock(attachLock)
+	attachLock = -1
+	if releaseErr != nil {
+		return nil, fmt.Errorf("could not release OpenJ9 attach lock: %w", releaseErr)
+	}
+
+	j.logger.Info("connected to remote JVM")
 
 	cmd := translateCommand(argv)
 
-	if err := writeCommand(fd, cmd); err != nil {
-		syscall.Close(fd)
-		return nil, fmt.Errorf("error writing to socket: %w", err)
+	if writeErr := writeCommand(fd, cmd); writeErr != nil {
+		return nil, errors.Join(fmt.Errorf("error writing to socket: %w", writeErr), j.closeFD())
 	}
 
-	reader := os.NewFile(uintptr(fd), "socket")
-
-	return reader, nil
+	return &j9Reader{attacher: j}, nil
 }

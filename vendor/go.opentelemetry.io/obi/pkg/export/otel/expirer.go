@@ -96,6 +96,9 @@ func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttr
 
 	for _, attr := range ex.attrs {
 		kv := attr.Get(m)
+		if !kv.Valid() {
+			continue
+		}
 		keyVals = append(keyVals, kv)
 		vals = append(vals, kv.Value.Emit())
 	}

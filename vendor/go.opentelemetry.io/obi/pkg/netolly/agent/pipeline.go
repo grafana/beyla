@@ -108,6 +108,11 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		return flow.Decorate(ifaceNamer, commonDecoratedFlows, decoratedFlows), nil
 	}, swarm.WithID("FlowDecorator"))
 
+	dynamicFilteredFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dynamicFilteredFlows")
+	swi.Add(filter.ByDynamicPID(f.ctxInfo.DynamicPIDSelector, f.ctxInfo.K8sInformer,
+		recordAttrs, decoratedFlows, dynamicFilteredFlows),
+		swarm.WithID("DynamicPIDFilter"))
+
 	filteredFlows := f.ctxInfo.OverrideNetExportQueue
 	if filteredFlows == nil {
 		filteredFlows = msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "filteredFlows")
@@ -119,7 +124,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		ebpf.RecordStringGetters(ebpf.RecordGettersConfig{
 			PortGuessPolicy: f.cfg.NetworkFlows.GuessPorts,
 		}),
-		decoratedFlows,
+		dynamicFilteredFlows,
 		filteredFlows,
 	), swarm.WithID("AttributeFilter"))
 

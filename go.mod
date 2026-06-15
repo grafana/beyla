@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.10
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/invopop/jsonschema v0.13.0
+	github.com/invopop/jsonschema v0.14.0
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1

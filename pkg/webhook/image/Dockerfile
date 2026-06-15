@@ -1,5 +1,5 @@
 # download the opentelemetry-injector binary for the target architecture
-FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-injector-binary
+FROM alpine:3.24.0@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS download-injector-binary
 ARG TARGETARCH
 
 RUN apk add --no-cache curl jq wget
@@ -13,7 +13,7 @@ RUN case ${TARGETARCH} in \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/v$(cat version.txt)/${INJECTOR_LIB}"
 
 # Fetch the operator's Python requirements and append beyla-specific additions
-FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS prepare-python-deps
+FROM alpine:3.24.0@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS prepare-python-deps
 WORKDIR /build
 RUN apk add --no-cache curl
 COPY opentelemetry-operator/version.txt .
@@ -49,7 +49,7 @@ RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
 
 # Get the OTel Java SDK
-FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-java-sdk
+FROM alpine:3.24.0@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS download-java-sdk
 
 RUN apk add --no-cache curl unzip
 
@@ -59,7 +59,7 @@ RUN curl -sSfL -o opentelemetry-javaagent.jar \
     "https://github.com/grafana/grafana-opentelemetry-java/releases/download/v$(cat version.txt)/grafana-opentelemetry-java.jar"
 
 # Get the OTel .NET SDK
-FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS download-dotnet-sdk
+FROM alpine:3.24.0@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS download-dotnet-sdk
 ARG TARGETARCH
 
 RUN apk add --no-cache curl unzip
@@ -82,7 +82,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
     unzip -q dotnet-instrumentation-musl.zip -d /musl
 
 # Fetch the operator's Node.js package.json and merge in beyla-specific dependencies
-FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS prepare-nodejs-deps
+FROM alpine:3.24.0@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS prepare-nodejs-deps
 WORKDIR /build
 RUN apk add --no-cache curl jq
 COPY opentelemetry-operator/version.txt .
@@ -107,7 +107,7 @@ RUN cp build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/bu
 RUN ls -al *
 
 # build the final instrumentation image
-FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
+FROM alpine:3.24.0@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4
 COPY copy-to-volume.sh /
 RUN mkdir -p /dist
 

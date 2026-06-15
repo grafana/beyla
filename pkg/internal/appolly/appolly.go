@@ -9,15 +9,18 @@ import (
 	"sync"
 	"time"
 
+	obiAppolly "go.opentelemetry.io/obi/pkg/appolly"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/traces"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -48,6 +51,8 @@ type Instrumenter struct {
 
 	// global data structures for all eBPF tracers
 	ebpfEventContext *ebpfcommon.EBPFEventContext
+
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
 }
 
 // New Instrumenter, given a Config
@@ -83,7 +88,9 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventsDockerDecorated,
 	))
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsDockerDecorated)
+	runtimeMetrics := newRuntimeMetricsQueue(config.AsOBI())
+
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsDockerDecorated, runtimeMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
@@ -97,7 +104,18 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		bp:                bp,
 		peGraphBuilder:    swi,
 		ebpfEventContext:  ebpfcommon.NewEBPFEventContext(),
+		runtimeMetrics:    runtimeMetrics,
 	}, nil
+}
+
+func newRuntimeMetricsQueue(cfg *obi.Config) *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot] {
+	jmc := obiAppolly.JoinMetricsConfig(cfg)
+	if !jmc.Features.AppRuntime() ||
+		!jmc.Features.AnyAppO11yMetric() ||
+		(!cfg.OTELMetrics.EndpointEnabled() && !cfg.Prometheus.EndpointEnabled()) {
+		return nil
+	}
+	return msg2.QueueFromConfig[[]runtimemetrics.RuntimeMetricSnapshot](cfg, "runtimeMetrics")
 }
 
 // FindAndInstrument searches in background for any new executable matching the
@@ -105,7 +123,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 // Returns a channel that is closed when the Instrumenter completed all its tasks.
 // This is: when the context is cancelled, it has unloaded all the eBPF probes.
 func (i *Instrumenter) FindAndInstrument(ctx context.Context) error {
-	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.ebpfEventContext)
+	finder := discover.NewProcessFinder(i.config, i.ctxInfo, i.tracesInput, i.runtimeMetrics, i.ebpfEventContext)
 	processEvents, err := finder.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start Process Finder: %w", err)

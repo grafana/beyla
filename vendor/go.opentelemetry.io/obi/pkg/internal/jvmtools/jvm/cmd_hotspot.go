@@ -1,4 +1,9 @@
-package jvm
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build linux
+
+package jvm // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 
 import (
 	"errors"
@@ -19,7 +24,7 @@ func checkSocket(pid int, tmpPath string) bool {
 }
 
 // Check if a file is owned by current user
-func getFileOwner(path string) (uid int) {
+func getFileOwner(path string) int {
 	info, err := os.Stat(path)
 	if err != nil {
 		return -1
@@ -33,29 +38,38 @@ func getFileOwner(path string) (uid int) {
 func startAttachMechanism(pid, nspid, attachPid int, tmpPath string) bool {
 	path := fmt.Sprintf("/proc/%d/cwd/.attach_pid%d", attachPid, nspid)
 	fd, err := os.Create(path)
-	if err != nil || (fd.Close() == nil && getFileOwner(path) != os.Geteuid()) {
-		os.Remove(path)
+	if err == nil {
+		err = fd.Close()
+	}
+	if err != nil || getFileOwner(path) != os.Geteuid() {
+		_ = os.Remove(path)
 		path = fmt.Sprintf("%s/.attach_pid%d", tmpPath, nspid)
 		fd, err = os.Create(path)
 		if err != nil {
 			return false
 		}
-		fd.Close()
+		if err := fd.Close(); err != nil {
+			_ = os.Remove(path)
+			return false
+		}
 	}
 
-	syscall.Kill(pid, syscall.SIGQUIT)
+	if err := syscall.Kill(pid, syscall.SIGQUIT); err != nil {
+		_ = os.Remove(path)
+		return false
+	}
 
 	ts := 20 * time.Millisecond
 	for i := 0; i < 300; i++ {
 		time.Sleep(ts)
 		if checkSocket(nspid, tmpPath) {
-			os.Remove(path)
+			_ = os.Remove(path)
 			return true
 		}
 		ts += 20 * time.Millisecond
 	}
 
-	os.Remove(path)
+	_ = os.Remove(path)
 	return false
 }
 
@@ -95,6 +109,7 @@ func jattachHotspot(pid, nspid, attachPid int, args []string, tmpPath string, lo
 	logger.Debug("connected to the JVM")
 
 	if err := writeHotspotCommand(conn, args); err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("error writing to the JVM socket: %w", err)
 	}
 

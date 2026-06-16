@@ -58,15 +58,6 @@ func FindProcLanguage(pid app.PID) svc.InstrumentableType {
 		return t
 	}
 
-	bytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
-	if err != nil {
-		return svc.InstrumentableGeneric
-	}
-	t = instrumentableFromEnviron(string(bytes))
-	if t != svc.InstrumentableGeneric {
-		return t
-	}
-
 	// Last resort to tell Generic from C++ (and maybe others in the future)
 	for _, m := range maps {
 		t := instrumentableLastResort(m.Pathname)

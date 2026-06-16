@@ -15,10 +15,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
@@ -93,6 +93,8 @@ func dispatchKernelAssignedProtocol(parseCtx *EBPFParseContext, event *TCPReques
 		return dispatchPostgres(parseCtx, event, requestBuffer, responseBuffer)
 	case ProtocolTypeMSSQL:
 		return dispatchMSSQL(parseCtx, event, requestBuffer, responseBuffer)
+	case ProtocolTypeSunRPC:
+		return dispatchSunRPC(event, requestBuffer, responseBuffer)
 	}
 
 	return request.Span{}, false, false, nil
@@ -124,6 +126,20 @@ func dispatchMQTT(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf
 	}
 
 	return request.Span{}, true, true, fmt.Errorf("failed to handle MQTT event: %w", err)
+}
+
+func dispatchSunRPC(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) {
+	info, ignore, err := ProcessPossibleSunRPCEvent(event, requestBuffer, responseBuffer)
+
+	if ignore && err == nil {
+		return request.Span{}, true, true, nil
+	}
+
+	if err == nil {
+		return TCPToSunRPCToSpan(event, info), false, true, nil
+	}
+
+	return request.Span{}, true, true, fmt.Errorf("failed to handle SunRPC event: %w", err)
 }
 
 func handleError(span request.Span, err error, name string) (request.Span, bool, bool, error) {
@@ -249,7 +265,8 @@ func matchMemcachedNoreply(parseCtx *EBPFParseContext, event *TCPRequestInfo, re
 }
 
 // detectHeuristicProtocol runs heuristic-based protocol detection as a last resort:
-// Redis, Memcached, HTTP/2, NATS, AMQP, MQTT, and Kafka (for packets the kernel couldn't classify).
+// Redis, Memcached, HTTP/2, NATS, AMQP, MQTT, Kafka (for packets the kernel couldn't classify),
+// and SunRPC (fallback when the kernel missed the connection start).
 func detectHeuristicProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) {
 	if span, ignore, matched, err := matchRedis(parseCtx, event, requestBuffer, responseBuffer); matched {
 		return span, ignore, matched, err
@@ -280,6 +297,11 @@ func detectHeuristicProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, 
 
 	// Kafka can arrive here for packets the kernel couldn't classify (e.g. OBI attached mid-connection).
 	if span, ignore, matched, err := matchKafkaFallback(event, requestBuffer, responseBuffer, parseCtx.kafkaTopicUUIDToName); matched {
+		return span, ignore, matched, err
+	}
+
+	// SunRPC can arrive here when the kernel missed the connection start (e.g. OBI attached mid-connection).
+	if span, ignore, matched, err := matchSunRPC(parseCtx, event, requestBuffer, responseBuffer); matched {
 		return span, ignore, matched, err
 	}
 

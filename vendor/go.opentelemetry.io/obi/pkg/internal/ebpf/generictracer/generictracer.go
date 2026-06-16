@@ -23,9 +23,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/netns"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
@@ -370,8 +370,8 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			}},
 			"SSL_write_ex2": {{
 				Required: false,
-				Start:    p.bpfObjects.ObiUprobeSslWriteEx,
-				End:      p.bpfObjects.ObiUretprobeSslWriteEx,
+				Start:    p.bpfObjects.ObiUprobeSslWriteEx2,
+				End:      p.bpfObjects.ObiUretprobeSslWriteEx2,
 			}},
 			"SSL_write_ex": {{
 				Required: false,

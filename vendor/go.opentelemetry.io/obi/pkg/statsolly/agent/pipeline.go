@@ -70,11 +70,16 @@ func (s *Stats) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	swi.Add(decorate.Decorate(s.agentIP, statAttrs, cidrDecoratedStats, decoratedStats),
 		swarm.WithID("StatsDecorator"))
 
+	dynamicFilteredStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "dynamicFilteredStats")
+	swi.Add(filter.ByDynamicPID(s.ctxInfo.DynamicPIDSelector, s.ctxInfo.K8sInformer,
+		statAttrs, decoratedStats, dynamicFilteredStats),
+		swarm.WithID("DynamicPIDFilter"))
+
 	filteredStats := s.ctxInfo.OverrideStatsExportQueue
 	if filteredStats == nil {
 		filteredStats = msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "filteredStats")
 	}
-	swi.Add(filter.ByAttribute(s.cfg.Filters.Stats, nil, selectorCfg.ExtraGroupAttributesCfg, ebpf.StatStringGetters, decoratedStats, filteredStats),
+	swi.Add(filter.ByAttribute(s.cfg.Filters.Stats, nil, selectorCfg.ExtraGroupAttributesCfg, ebpf.StatStringGetters, dynamicFilteredStats, filteredStats),
 		swarm.WithID("AttributeFilter"))
 
 	// Terminal nodes export the stats record information out of the pipeline: OTEL, Prom and printer.

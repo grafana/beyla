@@ -16,9 +16,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/grafana/jvmtools/jvm"
-
 	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 )
 
 type JavaRoutes struct {

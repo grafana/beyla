@@ -10,12 +10,15 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/selection"
 )
 
+var _ selection.PIDSelector = (*DynamicPIDSelector)(nil)
+
 // DynamicPIDSelector holds the runtime set of target PIDs for OBI. It is preloaded from
-// config target_pids and updated at runtime via AddPIDs/RemovePIDs. Only the discover
-// matcher uses it for matching; the instrumenter (or appolly) holds a reference and
-// calls AddPIDs/RemovePIDs directly.
+// config target_pids and updated at runtime via AddPIDs/RemovePIDs. The discover matcher
+// uses it for matching; embedders hold a reference via ContextInfo.DynamicPIDSelector
+// and call AddPIDs/RemovePIDs on the concrete selector directly.
 //
 // Pending add/remove PIDs are accumulated in slices and drained by goroutines into
 // RemovedNotify() and AddedPIDsNotify(), so callers never block and nothing is dropped.

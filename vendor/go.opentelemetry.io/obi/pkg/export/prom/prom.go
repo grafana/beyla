@@ -33,6 +33,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
 
 // injectable function reference for testing
@@ -189,6 +190,7 @@ type metricsReporter struct {
 
 	input         <-chan []request.Span
 	processEvents <-chan exec.ProcessEvent
+	runtimeInput  <-chan []runtimemetrics.RuntimeMetricSnapshot
 
 	obiInfo                *Expirer[prometheus.Gauge]
 	httpDuration           *Expirer[prometheus.Histogram]
@@ -257,6 +259,8 @@ type metricsReporter struct {
 	genAIClientDuration *Expirer[prometheus.Histogram]
 	genAITokenUsage     *Expirer[prometheus.Histogram]
 
+	goRuntimeMetrics goRuntimeMetricsCollector
+
 	promConnect *connector.PrometheusManager
 
 	clock   *expire.CachedClock
@@ -286,12 +290,23 @@ func PrometheusEndpoint(
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetricCh *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !cfg.EndpointEnabled() || !jointMetricsConfig.Features.AppOrSpan() {
+		if !cfg.EndpointEnabled() || !jointMetricsConfig.Features.AnyAppO11yMetric() {
 			return swarm.EmptyRunFunc()
 		}
-		reporter, err := newReporter(ctx, ctxInfo, cfg, jointMetricsConfig, selectorCfg, unresolved, input, processEventCh)
+		reporter, err := newReporter(
+			ctx,
+			ctxInfo,
+			cfg,
+			jointMetricsConfig,
+			selectorCfg,
+			unresolved,
+			input,
+			processEventCh,
+			runtimeMetricCh,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
@@ -326,6 +341,7 @@ func newReporter(
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetricCh *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) (*metricsReporter, error) {
 	groups := ctxInfo.MetricAttributeGroups
 	groups.Add(attributes.GroupPrometheus)
@@ -358,11 +374,11 @@ func newReporter(
 
 	var attrGRPCDuration, attrGRPCClientDuration []attributes.Field[*request.Span, string]
 
-	if is.GRPCEnabled() {
-		attrGRPCDuration = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.RPCServerDuration))
-		attrGRPCClientDuration = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.RPCClientDuration))
+	if is.GRPCEnabled() || is.SunRPCEnabled() {
+		rpcServerAttrs := attrsProvider.For(attributes.RPCServerDuration)
+		rpcClientAttrs := attrsProvider.For(attributes.RPCClientDuration)
+		attrGRPCDuration = attributes.PrometheusGetters(attributeGetters, rpcServerAttrs)
+		attrGRPCClientDuration = attributes.PrometheusGetters(attributeGetters, rpcClientAttrs)
 	}
 
 	var attrDBClientDuration []attributes.Field[*request.Span, string]
@@ -440,9 +456,19 @@ func newReporter(
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
 	extraSpanMetadataLabels := parseExtraMetadata(cfg.ExtraSpanResourceLabels)
+	var inputCh <-chan []request.Span
+	if input != nil {
+		inputCh = input.Subscribe(msg.SubscriberName("prom.InputSpans"))
+	}
+	var runtimeInputCh <-chan []runtimemetrics.RuntimeMetricSnapshot
+	if runtimeMetricCh != nil {
+		runtimeInputCh = runtimeMetricCh.Subscribe(msg.SubscriberName("prom.RuntimeMetrics"))
+	}
+
 	mr := &metricsReporter{
-		input:                      input.Subscribe(msg.SubscriberName("prom.InputSpans")),
+		input:                      inputCh,
 		processEvents:              processEventCh.Subscribe(msg.SubscriberName("prom.ProcessEvents")),
+		runtimeInput:               runtimeInputCh,
 		serviceMap:                 map[svc.UID]svc.Attrs{},
 		pidsTracker:                otel.NewPidServiceTracker(),
 		ctxInfo:                    ctxInfo,
@@ -511,20 +537,20 @@ func newReporter(
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrHTTPClientDuration)).MetricVec, clock.Time, cfg.TTL)
 		}),
-		grpcDuration: optionalHistogramProvider(is.GRPCEnabled(), func() *Expirer[prometheus.Histogram] {
+		grpcDuration: optionalHistogramProvider(is.GRPCEnabled() || is.SunRPCEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.RPCServerDuration.Prom,
-				Help:                            "duration of RCP service calls from the server side, in seconds",
+				Help:                            "duration of RPC service calls from the server side, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     cfg.NativeHistogram.BucketFactor,
 				NativeHistogramMaxBucketNumber:  cfg.NativeHistogram.MaxBucketNumber,
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrGRPCDuration)).MetricVec, clock.Time, cfg.TTL)
 		}),
-		grpcClientDuration: optionalHistogramProvider(is.GRPCEnabled(), func() *Expirer[prometheus.Histogram] {
+		grpcClientDuration: optionalHistogramProvider(is.GRPCEnabled() || is.SunRPCEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.RPCClientDuration.Prom,
-				Help:                            "duration of GRPC service calls from the client side, in seconds",
+				Help:                            "duration of RPC service calls from the client side, in seconds",
 				Buckets:                         cfg.Buckets.DurationHistogram,
 				NativeHistogramBucketFactor:     cfg.NativeHistogram.BucketFactor,
 				NativeHistogramMaxBucketNumber:  cfg.NativeHistogram.MaxBucketNumber,
@@ -758,8 +784,14 @@ func newReporter(
 		}),
 	}
 
+	if jointMetricsConfig.Features.AppRuntime() {
+		mr.goRuntimeMetrics = newGoRuntimeMetricsCollector(
+			labelNamesTargetInfo(kubeEnabled, dockerEnabled, &ctxInfo.NodeMeta, extraMetadataLabels),
+		)
+	}
+
 	// testing aid
-	mr.deleteEventMetrics = mr.deleteTargetInfoMetrics
+	mr.deleteEventMetrics = mr.deleteMetricsForService
 	mr.createEventMetrics = mr.createTargetInfos
 
 	registeredMetrics := []prometheus.Collector{mr.targetInfo}
@@ -780,7 +812,7 @@ func newReporter(
 			)
 		}
 
-		if is.GRPCEnabled() {
+		if is.GRPCEnabled() || is.SunRPCEnabled() {
 			registeredMetrics = append(registeredMetrics,
 				mr.grpcClientDuration,
 				mr.grpcDuration,
@@ -839,6 +871,10 @@ func newReporter(
 
 	if jointMetricsConfig.Features.AppHost() {
 		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
+	}
+
+	if jointMetricsConfig.Features.AppRuntime() {
+		registeredMetrics = append(registeredMetrics, mr.goRuntimeMetrics.collectors()...)
 	}
 
 	if is.GPUEnabled() {
@@ -910,6 +946,9 @@ func (r *metricsReporter) reportMetrics(ctx context.Context) {
 
 func (r *metricsReporter) collectMetrics(ctx context.Context) {
 	go r.watchForProcessEvents(ctx)
+	if r.runtimeInput != nil {
+		go r.watchForRuntimeMetrics(ctx)
+	}
 	swarms.ForEachInput(ctx, r.input, nil, func(spans []request.Span) {
 		// clock needs to be updated to let the expirer
 		// remove the old metrics
@@ -1036,6 +1075,14 @@ func (r *metricsReporter) observe(span *request.Span) {
 		case request.EventTypeGRPCClient:
 			if r.is.GRPCEnabled() {
 				r.observeHistogram(r.grpcClientDuration.WithLabelValues(labelValues(span, r.attrGRPCClientDuration)...).Metric, duration, span)
+			}
+		case request.EventTypeSunRPCClient:
+			if r.is.SunRPCEnabled() {
+				r.observeHistogram(r.grpcClientDuration.WithLabelValues(labelValues(span, r.attrGRPCClientDuration)...).Metric, duration, span)
+			}
+		case request.EventTypeSunRPCServer:
+			if r.is.SunRPCEnabled() {
+				r.observeHistogram(r.grpcDuration.WithLabelValues(labelValues(span, r.attrGRPCDuration)...).Metric, duration, span)
 			}
 		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
 			if r.is.DBEnabled() {
@@ -1371,17 +1418,35 @@ func (r *metricsReporter) disassociatePIDFromService(pid app.PID) (bool, svc.UID
 }
 
 func (r *metricsReporter) createTargetInfos(service *svc.Attrs) {
+	if service == nil || !service.ExportModes.CanExportMetrics() {
+		return
+	}
+
 	r.createTargetInfo(service)
 	r.createTracesTargetInfo(service)
 }
 
 func (r *metricsReporter) deleteTargetInfoMetrics(service *svc.Attrs) {
+	if service == nil || !service.ExportModes.CanExportMetrics() {
+		return
+	}
+
 	r.deleteTargetInfoMetric(service)
 	r.deleteTracesTargetInfoMetric(service)
 }
 
+func (r *metricsReporter) deleteMetricsForService(service *svc.Attrs) {
+	r.deleteTargetInfoMetrics(service)
+	r.deleteRuntimeMetrics(service)
+}
+
 func (r *metricsReporter) deleteTargetInfos(uid svc.UID, service *svc.Attrs) {
-	r.deleteEventMetrics(r.origService(uid, service))
+	orig := r.origService(uid, service)
+	if orig == nil || !orig.ExportModes.CanExportMetrics() {
+		return
+	}
+
+	r.deleteEventMetrics(orig)
 }
 
 func (r *metricsReporter) handleProcessEvent(pe exec.ProcessEvent, log *slog.Logger) {

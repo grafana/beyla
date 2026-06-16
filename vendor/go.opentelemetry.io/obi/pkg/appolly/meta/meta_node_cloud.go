@@ -10,7 +10,7 @@ import (
 	"log/slog"
 
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )

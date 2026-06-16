@@ -5,12 +5,11 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strings"
-	"sync"
 
 	jsoniter "github.com/json-iterator/go"
 
@@ -20,27 +19,16 @@ import (
 var jsonBestEffort = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const (
-	// modelSearchWindow limits model-field regex to the start of the body so
-	// we don't match "model" keys inside user prompts or message content.
+	// modelSearchWindow limits extraction for top-level request model
+	// fields to the start of the request payload.
 	modelSearchWindow = 200
-	// responseHeaderSearchWindow limits regex extraction for top-level response
-	// fields (id, model, object) so we don't match nested values in payloads.
+	// responseHeaderSearchWindow limits extraction for top-level response
+	// fields (id, model, object) to the start of the response payload.
 	responseHeaderSearchWindow = 800
 )
 
-var jsonStringFieldRegexpCache sync.Map
-
-func jsonStringFieldRegexp(field string) *regexp.Regexp {
-	if cached, ok := jsonStringFieldRegexpCache.Load(field); ok {
-		return cached.(*regexp.Regexp)
-	}
-	re := regexp.MustCompile(`"` + field + `"\s*:\s*"([^"]+)"`)
-	actual, _ := jsonStringFieldRegexpCache.LoadOrStore(field, re)
-	return actual.(*regexp.Regexp)
-}
-
-// extractJSONStringField returns the string value for a top-level JSON field
-// using regex. window limits the search range; 0 searches the full body.
+// extractJSONStringField returns the string value for a top-level JSON field.
+// window limits the search range; 0 searches the full body.
 func extractJSONStringField(body []byte, field string, window int) string {
 	if len(body) == 0 {
 		return ""
@@ -49,18 +37,81 @@ func extractJSONStringField(body []byte, field string, window int) string {
 	if window > 0 && len(search) > window {
 		search = search[:window]
 	}
-	if matches := jsonStringFieldRegexp(field).FindSubmatch(search); len(matches) == 2 {
-		return strings.TrimSpace(string(matches[1]))
+
+	dec := json.NewDecoder(bytes.NewReader(search))
+	root, err := dec.Token()
+	if err != nil || root != json.Delim('{') {
+		return ""
 	}
+
+	for dec.More() {
+		keyToken, err := dec.Token()
+		if err != nil {
+			return ""
+		}
+		key, ok := keyToken.(string)
+		if !ok {
+			return ""
+		}
+
+		if key != field {
+			if err := skipJSONValue(dec); err != nil {
+				return ""
+			}
+			continue
+		}
+
+		value, err := dec.Token()
+		if err != nil {
+			return ""
+		}
+		if value, ok := value.(string); ok {
+			return strings.TrimSpace(value)
+		}
+		return ""
+	}
+
 	return ""
 }
 
-// extractModelField tries the early body window first, then the full captured
-// prefix. Used only when jsoniter could not reach model before truncation.
-func extractModelField(body []byte) string {
-	if model := extractJSONStringField(body, "model", modelSearchWindow); model != "" {
-		return model
+func skipJSONValue(dec *json.Decoder) error {
+	value, err := dec.Token()
+	if err != nil {
+		return err
 	}
+
+	delim, ok := value.(json.Delim)
+	if !ok {
+		return nil
+	}
+
+	switch delim {
+	case '{':
+		for dec.More() {
+			if _, err := dec.Token(); err != nil {
+				return err
+			}
+			if err := skipJSONValue(dec); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for dec.More() {
+			if err := skipJSONValue(dec); err != nil {
+				return err
+			}
+		}
+	default:
+		return nil
+	}
+
+	_, err = dec.Token()
+	return err
+}
+
+// extractModelField searches the top-level model field in the captured body.
+// Used only when jsoniter could not reach model before truncation.
+func extractModelField(body []byte) string {
 	return extractJSONStringField(body, "model", 0)
 }
 

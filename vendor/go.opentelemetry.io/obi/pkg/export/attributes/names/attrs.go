@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 )
@@ -27,7 +27,7 @@ func (an Name) Prom() string {
 	return strings.ReplaceAll(string(an), ".", "_")
 }
 
-// OpenTelemetry 1.38.0 semantic convention
+// OpenTelemetry 1.41.0 semantic convention
 const (
 	HTTPRequestMethod      = Name(semconv.HTTPRequestMethodKey)
 	HTTPResponseStatusCode = Name(semconv.HTTPResponseStatusCodeKey)
@@ -54,9 +54,7 @@ const (
 	DBSystemName           = Name(semconv.DBSystemNameKey)
 	ErrorType              = Name(semconv.ErrorTypeKey)
 	RPCMethod              = Name(semconv.RPCMethodKey)
-	RPCSystem              = Name(semconv.RPCSystemKey)
-	RPCService             = Name(semconv.RPCServiceKey)
-	RPCGRPCStatusCode      = Name(semconv.RPCGRPCStatusCodeKey)
+	RPCSystem              = Name(semconv.RPCSystemNameKey)
 	HTTPRoute              = Name(semconv.HTTPRouteKey)
 	MessagingOpName        = Name(semconv.MessagingOperationNameKey)
 	MessagingOpType        = Name(semconv.MessagingOperationTypeKey)
@@ -67,7 +65,6 @@ const (
 	GraphQLOperationName   = Name(semconv.GraphQLOperationNameKey)
 	GraphQLOperationType   = Name(semconv.GraphQLOperationTypeKey)
 	DNSAnswers             = Name(semconv.DNSAnswersKey)
-	ErrorMessage           = Name(semconv.ErrorMessageKey)
 	TelemetrySDKLanguage   = Name(semconv.TelemetrySDKLanguageKey)
 
 	K8sNamespaceName   = Name("k8s.namespace.name")
@@ -198,11 +195,10 @@ const (
 	ServiceName      = Name(semconv.ServiceNameKey)
 	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
 
-	// TODO: replace by semconv.ServicePeerNameKey and semconv.ServicePeerNamespaceKey
-	// when we update to OTEL semconv library 1.40 or with {server|client}.service.{name|namespace}
+	// TODO: replace with {server|client}.service.{name|namespace}
 	// if this is issue is approved https://github.com/open-telemetry/semantic-conventions/issues/3472
-	ServicePeerName      = Name("service.peer.name")
-	ServicePeerNamespace = Name("service.peer.namespace")
+	ServicePeerName      = Name(semconv.ServicePeerNameKey)
+	ServicePeerNamespace = Name(semconv.ServicePeerNamespaceKey)
 
 	HostID      = Name(semconv.HostIDKey)
 	HostImageID = Name(semconv.HostImageIDKey)
@@ -262,7 +258,17 @@ const (
 const (
 	JSONRPCProtocolVersion = Name("jsonrpc.protocol.version")
 	JSONRPCRequestID       = Name("jsonrpc.request.id")
-	RPCResponseStatusCode  = Name("rpc.response.status_code")
+	RPCResponseStatusCode  = Name(semconv.RPCResponseStatusCodeKey)
+)
+
+// ONC RPC (Sun RPC) span attributes — semconv v1.38.0+ (development stability).
+const (
+	OncRPCProgramName     = Name(semconv.OncRPCProgramNameKey)
+	OncRPCProcedureName   = Name(semconv.OncRPCProcedureNameKey)
+	OncRPCProcedureNumber = Name(semconv.OncRPCProcedureNumberKey)
+	OncRPCVersion         = Name(semconv.OncRPCVersionKey)
+	// Extension until semconv adds an official auth flavor attribute.
+	OncRPCAuthFlavor = Name("onc_rpc.auth.flavor")
 )
 
 // MCP (Model Context Protocol) attributes

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
@@ -176,6 +176,14 @@ func RPCMethod(val string) attribute.KeyValue {
 	return attribute.Key(attr.RPCMethod).String(val)
 }
 
+// S3RPCMethod returns the fully-qualified rpc.method value for AWS S3 operations.
+func S3RPCMethod(method string) string {
+	if method == "" {
+		return ""
+	}
+	return "S3/" + method
+}
+
 func AWSRequestID(val string) attribute.KeyValue {
 	return attribute.Key(attr.AWSRequestID).String(val)
 }
@@ -201,7 +209,7 @@ func CloudRegion(val string) attribute.KeyValue {
 }
 
 func PeerService(val string) attribute.KeyValue {
-	return semconv.PeerService(val)
+	return semconv.ServicePeerName(val)
 }
 
 func SpanHost(span *Span) string {
@@ -340,10 +348,6 @@ func Instance(val string) attribute.KeyValue {
 
 func DNSAnswers(val string) attribute.KeyValue {
 	return attribute.Key(attr.DNSAnswers).String(val)
-}
-
-func ErrorMessage(val string) attribute.KeyValue {
-	return attribute.Key(attr.ErrorMessage).String(val)
 }
 
 func DBResponseError(val string) attribute.KeyValue {

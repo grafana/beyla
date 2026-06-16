@@ -30,7 +30,6 @@ const (
 	StrContextPropagationDisabled = "disabled"
 	StrContextPropagationAll      = "all"
 	StrContextPropagationHeaders  = "headers"
-	StrContextPropagationHTTP     = "http"
 	StrContextPropagationTCP      = "tcp"
 )
 
@@ -229,7 +228,7 @@ func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		switch part {
-		case StrContextPropagationHeaders, StrContextPropagationHTTP:
+		case StrContextPropagationHeaders:
 			result |= ContextPropagationHeaders
 		case StrContextPropagationTCP:
 			result |= ContextPropagationTCP
@@ -268,9 +267,9 @@ func (m ContextPropagationMode) MarshalText() ([]byte, error) {
 }
 
 func (ContextPropagationMode) JSONSchema() *jsonschema.Schema {
-	options := []string{StrContextPropagationHeaders, StrContextPropagationHTTP, StrContextPropagationTCP}
+	options := []string{StrContextPropagationHeaders, StrContextPropagationTCP}
 	optionsStr := strings.Join(options, "|")
-	OptionsRegexp := fmt.Sprintf("^(%s)(,(%s))*$", optionsStr, optionsStr)
+	optionsRegexp := fmt.Sprintf("^(%s)(,(%s))*$", optionsStr, optionsStr)
 	return &jsonschema.Schema{
 		OneOf: []*jsonschema.Schema{
 			{
@@ -280,12 +279,18 @@ func (ContextPropagationMode) JSONSchema() *jsonschema.Schema {
 			},
 			{
 				Type:        "string",
-				Description: "List of propagation methods to enable (headers/http for HTTP headers, tcp for TCP options), separated by commas",
+				Description: "Comma-separated list of propagation methods (headers for HTTP headers, tcp for TCP options)",
 				Examples:    []any{"headers", "tcp", "headers,tcp"},
-				Pattern:     OptionsRegexp,
+				Pattern:     optionsRegexp,
+			},
+			{
+				Type:        "string",
+				Enum:        []any{"ip"},
+				Deprecated:  true,
+				Description: "IP options injection has been removed and has no effect",
 			},
 		},
 		Title:       "Context Propagation Mode",
-		Description: "Configures distributed context propagation. Can be 'all' to enable all methods, 'disabled'/'' to disable, or a list of specific methods: 'headers' (or 'http') for HTTP headers, 'tcp' for TCP options.",
+		Description: "Configures distributed context propagation. Can be 'all' to enable all methods, 'disabled'/'' to disable, or a comma-separated list of methods: 'headers' for HTTP headers, 'tcp' for TCP options (e.g. \"headers,tcp\").",
 	}
 }

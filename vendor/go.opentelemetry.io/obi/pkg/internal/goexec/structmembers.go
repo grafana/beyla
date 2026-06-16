@@ -107,6 +107,10 @@ const (
 	GoTracerDelegatePos
 	GoTracerAttributeOptOffset
 	GoErrorStringOffset
+	// go runtime channels
+	HchanDataqsizPos
+	HchanSendxPos
+	HchanRecvxPos
 	// go jsonrpc
 	GoJsonrpcRequestHeaderServiceMethodPos
 	// go mongodb
@@ -131,6 +135,11 @@ const (
 	// route harvesting offsets
 	MuxTemplatePos
 	GinFullpathPos
+	// Go runtime metrics
+	RuntimeMemstatsNumGCPos
+	RuntimeMemstatsNumForcedGCPos
+	RuntimeGCControllerMemoryLimitPos
+	RuntimeGCControllerGCPercentPos
 )
 
 //go:embed offsets.json
@@ -421,6 +430,14 @@ var structMembers = map[string]structInfo{
 			"delegate": GoTracerDelegatePos,
 		},
 	},
+	"runtime.hchan": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"dataqsiz": HchanDataqsizPos,
+			"sendx":    HchanSendxPos,
+			"recvx":    HchanRecvxPos,
+		},
+	},
 	"go.mongodb.org/mongo-driver/mongo.Collection": {
 		lib: "go.mongodb.org/mongo-driver",
 		fields: map[string]GoOffset{
@@ -499,6 +516,20 @@ var structMembers = map[string]structInfo{
 		lib: "github.com/gin-gonic/gin",
 		fields: map[string]GoOffset{
 			"fullPath": GinFullpathPos,
+		},
+	},
+	"runtime.mstats": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"numgc":       RuntimeMemstatsNumGCPos,
+			"numforcedgc": RuntimeMemstatsNumForcedGCPos,
+		},
+	},
+	"runtime.gcControllerState": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"memoryLimit": RuntimeGCControllerMemoryLimitPos,
+			"gcPercent":   RuntimeGCControllerGCPercentPos,
 		},
 	},
 }

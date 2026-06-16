@@ -29,6 +29,11 @@ var (
 		Prom:    "obi_network_flow_bytes_total",
 		OTEL:    "obi.network.flow.bytes",
 	}
+	NetworkFlowPackets = Name{
+		Section: "obi.network.flow.packets",
+		Prom:    "obi_network_flow_packets_total",
+		OTEL:    "obi.network.flow.packets",
+	}
 	NetworkInterZone = Name{
 		Section: "obi.network.inter.zone",
 		Prom:    "obi_network_inter_zone_bytes_total",
@@ -65,14 +70,14 @@ var (
 		OTEL:    "http.client.request.duration",
 	}
 	RPCServerDuration = Name{
-		Section: "rpc.server.duration",
-		Prom:    "rpc_server_duration_seconds",
-		OTEL:    "rpc.server.duration",
+		Section: "rpc.server.call.duration",
+		Prom:    "rpc_server_call_duration_seconds",
+		OTEL:    "rpc.server.call.duration",
 	}
 	RPCClientDuration = Name{
-		Section: "rpc.client.duration",
-		Prom:    "rpc_client_duration_seconds",
-		OTEL:    "rpc.client.duration",
+		Section: "rpc.client.call.duration",
+		Prom:    "rpc_client_call_duration_seconds",
+		OTEL:    "rpc.client.call.duration",
 	}
 	DBClientDuration = Name{
 		Section: "db.client.operation.duration",
@@ -138,6 +143,26 @@ var (
 		Section: "gen_ai.client.operation.duration",
 		Prom:    "gen_ai_client_operation_duration_seconds",
 		OTEL:    "gen_ai.client.operation.duration",
+	}
+	GoRuntimeMemoryLimit = Name{
+		Section: "go.memory.limit",
+		Prom:    "go_memory_limit_bytes",
+		OTEL:    "go.memory.limit",
+	}
+	GoRuntimeMemoryGCCycles = Name{
+		Section: "go.memory.gc.cycles",
+		Prom:    "go_memory_gc_cycles_total",
+		OTEL:    "go.memory.gc.cycles",
+	}
+	GoRuntimeProcessorLimit = Name{
+		Section: "go.processor.limit",
+		Prom:    "go_processor_limit",
+		OTEL:    "go.processor.limit",
+	}
+	GoRuntimeConfigGOGC = Name{
+		Section: "go.config.gogc",
+		Prom:    "go_config_gogc_percent",
+		OTEL:    "go.config.gogc",
 	}
 	StatTCPRtt = Name{
 		Section: "obi.stat.tcp.rtt",

@@ -386,7 +386,7 @@ func buildInlineTypeSchemas(rootType reflect.Type) map[string]func() *jsonschema
 
 	var walk func(t reflect.Type)
 	walk = func(t reflect.Type) {
-		for t.Kind() == reflect.Ptr {
+		for t.Kind() == reflect.Pointer {
 			t = t.Elem()
 		}
 
@@ -415,7 +415,7 @@ func buildInlineTypeSchemas(rootType reflect.Type) map[string]func() *jsonschema
 
 			if strings.Contains(yamlTag, "inline") {
 				fieldType := field.Type
-				for fieldType.Kind() == reflect.Ptr {
+				for fieldType.Kind() == reflect.Pointer {
 					fieldType = fieldType.Elem()
 				}
 

@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -291,98 +291,6 @@ func TestPodMutator_PreloadsSomethingElse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := mutator.PreloadsSomethingElse(tt.info)
 			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestPodMutator_AlreadyInstrumented(t *testing.T) {
-	cfg := &beyla.Config{Injector: beyla.SDKInject{ImageVersion: "v1.0.1"}}
-	currentVer := cfg.Injector.PackageVersion()
-	oldVer := (&beyla.SDKInject{ImageVersion: "v1.0.0"}).PackageVersion()
-
-	tests := []struct {
-		name     string
-		info     *ProcessInfo
-		expected bool
-	}{
-		{
-			name: "not instrumented - no labels or env",
-			info: &ProcessInfo{
-				podLabels: map[string]string{},
-				env:       map[string]string{},
-			},
-			expected: false,
-		},
-		{
-			name: "instrumented - matching label version",
-			info: &ProcessInfo{
-				podLabels: map[string]string{instrumentedLabel: currentVer},
-				env:       map[string]string{},
-			},
-			expected: true,
-		},
-		{
-			name: "not instrumented - different label version",
-			info: &ProcessInfo{
-				podLabels: map[string]string{instrumentedLabel: oldVer},
-				env:       map[string]string{},
-			},
-			expected: false,
-		},
-		{
-			name: "instrumented - matching env var version",
-			info: &ProcessInfo{
-				podLabels: map[string]string{},
-				env:       map[string]string{envVarSDKVersion: currentVer},
-			},
-			expected: true,
-		},
-		{
-			name: "not instrumented - different env var version",
-			info: &ProcessInfo{
-				podLabels: map[string]string{},
-				env:       map[string]string{envVarSDKVersion: oldVer},
-			},
-			expected: false,
-		},
-		{
-			name: "instrumented - label takes precedence",
-			info: &ProcessInfo{
-				podLabels: map[string]string{instrumentedLabel: currentVer},
-				env:       map[string]string{envVarSDKVersion: oldVer},
-			},
-			expected: true,
-		},
-		{
-			name: "not instrumented - empty label value",
-			info: &ProcessInfo{
-				podLabels: map[string]string{instrumentedLabel: ""},
-				env:       map[string]string{},
-			},
-			expected: false,
-		},
-		{
-			name: "not instrumented - empty env var value",
-			info: &ProcessInfo{
-				podLabels: map[string]string{},
-				env:       map[string]string{envVarSDKVersion: ""},
-			},
-			expected: false,
-		},
-		{
-			name: "not instrumented - nil maps",
-			info: &ProcessInfo{
-				podLabels: nil,
-				env:       nil,
-			},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mutator := &PodMutator{cfg: cfg}
-			assert.Equal(t, tt.expected, mutator.AlreadyInstrumented(tt.info))
 		})
 	}
 }
@@ -886,39 +794,6 @@ func TestOwnersFrom(t *testing.T) {
 	}
 }
 
-func TestPodMutator_BuildVolumeDefinition(t *testing.T) {
-	tests := []struct {
-		name     string
-		injector beyla.SDKInject
-		check    func(t *testing.T, vol corev1.Volume)
-	}{
-		{
-			name: "image volume when ImageVersion is set",
-			injector: beyla.SDKInject{
-				ImageVersion: "v1.0.0",
-			},
-			check: func(t *testing.T, vol corev1.Volume) {
-				assert.Equal(t, injectVolumeName, vol.Name)
-				assert.NotNil(t, vol.Image)
-				assert.Nil(t, vol.HostPath)
-				assert.Equal(t, "v1.0.0", vol.Image.Reference)
-				assert.Equal(t, corev1.PullIfNotPresent, vol.Image.PullPolicy)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pm := &PodMutator{
-				cfg:    &beyla.Config{Injector: tt.injector},
-				logger: slog.Default(),
-			}
-			vol := pm.buildVolumeDefinition()
-			tt.check(t, vol)
-		})
-	}
-}
-
 func TestProcessMetadata(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -1035,4 +910,55 @@ func TestProcessMetadata(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProtocolEndpoint(t *testing.T) {
+	type testCase struct {
+		name           string
+		cfg            beyla.Config
+		expectEndpoint string
+		expectProtocol string
+	}
+	// TODO: replace by new(false) after we upgrade to Go 1.26
+	falseVal := false
+	for _, tc := range []testCase{{
+		name:           "Override endpoint and proto",
+		cfg:            beyla.Config{Injector: beyla.SDKInject{Endpoint: "http://foo:4356", Protocol: "grpc"}},
+		expectEndpoint: "http://foo:4356",
+		expectProtocol: "grpc",
+	}, {
+		name:           "Default protocol",
+		cfg:            beyla.Config{Injector: beyla.SDKInject{Endpoint: "http://foo:4356"}},
+		expectEndpoint: "http://foo:4356",
+		expectProtocol: "http/protobuf",
+	}, {
+		name: "Defines both OTLP endpoints. Traces enabled",
+		cfg: beyla.Config{
+			Traces:      otelcfg.TracesConfig{Protocol: "http/json", TracesEndpoint: "http://traces:4356/v1/traces"},
+			OTELMetrics: otelcfg.MetricsConfig{MetricsEndpoint: "http://metrics:4356/v1/metrics"},
+		},
+		expectProtocol: "http/json",
+		expectEndpoint: "http://traces:4356",
+	}, {
+		name: "Defines both OTLP endpoints. Traces disabled",
+		cfg: beyla.Config{
+			Injector:    beyla.SDKInject{ExportedSignals: configmap.SDKExportedSignals{Traces: &falseVal}},
+			Traces:      otelcfg.TracesConfig{TracesEndpoint: "http://traces:4356/v1/traces"},
+			OTELMetrics: otelcfg.MetricsConfig{Protocol: "http/json", MetricsEndpoint: "http://metrics:4356/v1/metrics"},
+		},
+		expectProtocol: "http/json",
+		expectEndpoint: "http://metrics:4356",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			protocol, endpoint, err := protoEndpoint(&tc.cfg)
+			require.NoError(t, err)
+			assert.EqualValues(t, tc.expectProtocol, protocol)
+			assert.Equal(t, tc.expectEndpoint, endpoint)
+		})
+	}
+}
+
+func TestProtocolEndpoit_Error(t *testing.T) {
+	_, _, err := protoEndpoint(&beyla.Config{Prometheus: prom.PrometheusConfig{Port: 9090}})
+	assert.Error(t, err)
 }

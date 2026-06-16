@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -37,7 +38,6 @@ type Server struct {
 	initialState            map[string][]*ProcessInfo
 	initialStateMux         sync.Mutex
 	metrics                 *SDKInjectionMetrics
-	podStateCache           *PodStateCache
 	stateWriter             *StateConfigMapWriter
 	eligibleDeployments     *simplelru.LRU[string, *configmap.EligibleDeployment]
 	eligibleDeploymentsMux  sync.Mutex
@@ -68,17 +68,9 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	logger := slog.Default().With("component", "webhook-server")
 
 	var metrics *SDKInjectionMetrics
-	var podStateCache *PodStateCache
 	if ctxInfo.Prometheus != nil && cfg.InternalMetrics.Prometheus.Port != 0 {
 		metrics = NewSDKInjectionMetrics()
 		collectors := metrics.Collectors()
-		if ownNode := OwnNodeName(); ownNode == "" {
-			logger.Warn("state metrics unavailable: cannot determine node name (NODE_NAME unset and os.Hostname failed)")
-		} else {
-			podStateCache = NewPodStateCache(matcher, cfg, ownNode)
-			collectors = append(collectors, podStateCache)
-			logger.Info("registered beyla_injection_pods state metric collector")
-		}
 		ctxInfo.Prometheus.Register(cfg.InternalMetrics.Prometheus.Port, cfg.InternalMetrics.Prometheus.Path, collectors...)
 	}
 
@@ -87,7 +79,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		return nil, err
 	}
 
-	nodeName := OwnNodeName()
+	nodeName := ownNodeName()
 
 	initialCfg := buildInjectConfig(cfg, mutator.Endpoint(), mutator.Protocol())
 	stateHash := initialCfg.Hash()
@@ -117,7 +109,6 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		logger:                 logger,
 		ctxInfo:                ctxInfo,
 		metrics:                metrics,
-		podStateCache:          podStateCache,
 		stateWriter:            stateWriter,
 		eligibleDeployments:    eligible,
 		instrumentationManager: NewInstrumentationManager(cfg),
@@ -139,10 +130,6 @@ func (s *Server) Start(ctx context.Context) error {
 
 	if err := s.instrumentationManager.checkImageVolumeSupport(s.ctxInfo.K8sInformer); err != nil {
 		return err
-	}
-
-	if s.podStateCache != nil {
-		go s.subscribeStateCache(ctx)
 	}
 
 	if s.stateWriter != nil {
@@ -542,19 +529,15 @@ func (s *Server) handleExternalWebhookEvent(event *informer.Event) bool {
 	return false
 }
 
-// subscribeStateCache subscribes the pod state cache to the kube informer store.
-func (s *Server) subscribeStateCache(ctx context.Context) {
-	if !s.ctxInfo.K8sInformer.IsKubeEnabled() {
-		return
+// ownNodeName returns the name of the node this Beyla instance is running on.
+// It reads NODE_NAME (set via the downward API in the DaemonSet manifest) and
+// falls back to os.Hostname().
+func ownNodeName() string {
+	if name := os.Getenv("NODE_NAME"); name != "" {
+		return name
 	}
-	store, err := s.ctxInfo.K8sInformer.Get(ctx)
-	if err != nil {
-		s.logger.Error("state metrics unavailable: cannot subscribe to k8s informer", "error", err)
-		return
+	if h, err := os.Hostname(); err == nil {
+		return h
 	}
-	// Subscribe delivers all existing pods synchronously as CREATED events before
-	// returning. SYNC_FINISHED is not forwarded to late subscribers, so we mark
-	// the cache as ready immediately after Subscribe returns.
-	store.Subscribe(s.podStateCache)
-	s.podStateCache.markSynced()
+	return ""
 }

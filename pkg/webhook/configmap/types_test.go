@@ -93,3 +93,63 @@ func TestEnvVarsRoundTrip(t *testing.T) {
 	require.Len(t, got.Rules, 1)
 	assert.Equal(t, in.Rules[0].Config.Env, got.Rules[0].Config.Env)
 }
+
+func TestRuleConfigHash(t *testing.T) {
+	pastValues := map[uint64]struct{}{}
+	rc := RuleConfig{
+		Mode: ModeInstall,
+		Env:  EnvVars{{Name: "OTEL_LOGS_EXPORTER", Value: "none"}, {Name: "API_KEY", Value: "api-key"}},
+	}
+	testHashChanged := func(t *testing.T) {
+		h := rc.Hash()
+		assert.NotContains(t, pastValues, h)
+		pastValues[h] = struct{}{}
+	}
+
+	h := rc.Hash()
+	assert.NotZero(t, h)
+	pastValues[h] = struct{}{}
+	// multiple calls returns always the same value
+	assert.Equal(t, h, rc.Hash())
+	assert.Equal(t, h, rc.Hash())
+	assert.Equal(t, h, rc.Hash())
+
+	// Changing the order of the env vars does not affect the hash result
+	rc.Env = EnvVars{{Name: "API_KEY", Value: "api-key"}, {Name: "OTEL_LOGS_EXPORTER", Value: "none"}}
+	assert.Equal(t, h, rc.Hash())
+
+	// Changing the mode affects the hash result
+	rc.Mode = ModeSkip
+	testHashChanged(t)
+
+	// Adding an env var changes the hash result
+	rc.Env = append(rc.Env, corev1.EnvVar{Name: "OTEL_ENDPOINT", ValueFrom: &corev1.EnvVarSource{
+		FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "spec.nodeName"},
+	}})
+
+	testHashChanged(t)
+
+	// removing an env var changes the hash result
+	rc.Env = rc.Env[1:]
+	testHashChanged(t)
+
+	// Changing a variable name changes the hash result
+	rc.Env[0].Name = "OTEL_SAMPLER"
+	testHashChanged(t)
+
+	// Changing a variable value changes the hash result
+	rc.Env[0].Value = "always_on"
+	testHashChanged(t)
+
+	// Changing ValueFrom changes the hash result
+	rc.Env[1].ValueFrom = &corev1.EnvVarSource{
+		ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: "creds"},
+		},
+	}
+	testHashChanged(t)
+
+	// Ditto
+	rc.Env[1].ValueFrom = &corev1.EnvVarSource{}
+	testHashChanged(t)
+}

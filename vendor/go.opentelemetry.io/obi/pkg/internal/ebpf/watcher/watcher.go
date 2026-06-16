@@ -12,7 +12,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 

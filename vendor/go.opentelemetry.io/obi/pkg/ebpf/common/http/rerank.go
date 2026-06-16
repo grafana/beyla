@@ -61,21 +61,11 @@ func rerankProviderFromHost(req *http.Request) string {
 	return "unknown"
 }
 
-// extractModelFromPartialJSON attempts to extract the model field from
-// potentially truncated JSON using a simple regex.  This is a fallback
-// when standard json.Unmarshal fails due to eBPF buffer truncation.
-// Limits the search to the first modelSearchWindow bytes to avoid matching
-// "model" fields inside user-provided documents or query text.
+// extractModelFromPartialJSON attempts to extract the top-level model field
+// from potentially truncated JSON. This is a fallback when standard
+// json.Unmarshal fails due to eBPF buffer truncation.
 func extractModelFromPartialJSON(data []byte) string {
-	window := data
-	if len(window) > modelSearchWindow {
-		window = window[:modelSearchWindow]
-	}
-	m := modelFieldRegexp.FindSubmatch(window)
-	if m != nil {
-		return strings.TrimSpace(string(m[1]))
-	}
-	return ""
+	return extractJSONStringField(data, "model", modelSearchWindow)
 }
 
 // hasTopLevelRerankSignals uses a streaming JSON decoder to check for

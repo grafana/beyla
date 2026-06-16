@@ -19,12 +19,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/grafana/jvmtools/jvm"
-
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
@@ -425,7 +424,7 @@ func (i *JavaInjector) verifyJVMVersion(attacher *jvm.JAttacher, pid app.PID) (b
 		if strings.HasPrefix(line, "JDK ") {
 			// JDK 8 is special, failing to properly detect it can cause errors in applications if they are
 			// loaded more than once
-			return !strings.HasPrefix(line, "JDK 26"), strings.HasPrefix(line, "JDK 8")
+			return !strings.HasPrefix(line, "JDK 28"), strings.HasPrefix(line, "JDK 8")
 		}
 	}
 	if err := scanner.Err(); err != nil {

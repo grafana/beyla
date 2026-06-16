@@ -39,12 +39,16 @@ func (p NetPrometheusConfig) Enabled() bool {
 type netMetricsReporter struct {
 	cfg *PrometheusConfig
 
-	flowBytes *Expirer[prometheus.Counter]
+	flowBytes   *Expirer[prometheus.Counter]
+	flowPackets *Expirer[prometheus.Counter]
+
 	interZone *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
-	flowAttrs      []attributes.Field[*ebpf.Record, string]
+	flowAttrs        []attributes.Field[*ebpf.Record, string]
+	flowPacketsAttrs []attributes.Field[*ebpf.Record, string]
+
 	interZoneAttrs []attributes.Field[*ebpf.Record, string]
 
 	clock *expire.CachedClock
@@ -114,6 +118,19 @@ func newNetReporter(
 		register = append(register, mr.flowBytes)
 	}
 
+	if cfg.CommonCfg.Features.NetworkFlowPackets() {
+		log.Debug("registering network flow packets metric")
+		mr.flowPacketsAttrs = attributes.PrometheusGetters(
+			ebpf.RecordStringGetters(recordGettersConfig),
+			provider.For(attributes.NetworkFlowPackets))
+
+		mr.flowPackets = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.NetworkFlowPackets.Prom,
+			Help: "packets sent from a source network endpoint to a destination network endpoint",
+		}, labelNames(mr.flowPacketsAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		register = append(register, mr.flowPackets)
+	}
+
 	if cfg.CommonCfg.Features.NetworkInterZone() {
 		log.Debug("registering network inter-zone metric")
 		mr.interZoneAttrs = attributes.PrometheusGetters(
@@ -150,6 +167,7 @@ func (r *netMetricsReporter) collectMetrics(_ context.Context) {
 		for _, flow := range flows {
 			r.observeFlowBytes(flow)
 			r.observeInterZone(flow)
+			r.observeFlowPackets(flow)
 		}
 	}
 }
@@ -168,4 +186,12 @@ func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
 	}
 	r.interZone.WithLabelValues(labelValues(flow, r.interZoneAttrs)...).
 		Metric.Add(float64(flow.Metrics.Bytes))
+}
+
+func (r *netMetricsReporter) observeFlowPackets(flow *ebpf.Record) {
+	if r.flowPackets == nil {
+		return
+	}
+	r.flowPackets.WithLabelValues(labelValues(flow, r.flowPacketsAttrs)...).
+		Metric.Add(float64(flow.Metrics.Packets))
 }

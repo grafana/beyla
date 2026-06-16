@@ -12,13 +12,16 @@ import (
 	"time"
 	"unicode/utf8"
 
+	grpc_codes "google.golang.org/grpc/codes"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
@@ -56,6 +59,8 @@ const (
 	EventTypeNATSClient
 	EventTypeNATSServer
 	EventTypeAMQPClient
+	EventTypeSunRPCClient
+	EventTypeSunRPCServer
 )
 
 const (
@@ -146,6 +151,10 @@ func (t EventType) String() string {
 		return "NATSClient"
 	case EventTypeAMQPClient:
 		return "AMQPClient"
+	case EventTypeSunRPCClient:
+		return "SunRPCClient"
+	case EventTypeSunRPCServer:
+		return "SunRPCServer"
 	case EventTypeRedisServer:
 		return "RedisServer"
 	case EventTypeKafkaServer:
@@ -991,6 +1000,12 @@ type RetrievalUsage struct {
 	PromptTokens int `json:"prompt_tokens,omitempty"`
 }
 
+type SpanLink struct {
+	TraceID    trace.TraceID `json:"traceID"`
+	SpanID     trace.SpanID  `json:"spanID"`
+	TraceFlags uint8         `json:"traceFlags,string"`
+}
+
 // GetInputTokens returns the input token count, preferring prompt_tokens
 // and falling back to total_tokens. Returns zero when not reported.
 func (r *VendorRetrieval) GetInputTokens() int {
@@ -1027,6 +1042,7 @@ type Span struct {
 	SpanID            trace.SpanID   `json:"spanID"`
 	ParentSpanID      trace.SpanID   `json:"parentSpanID"`
 	TraceFlags        uint8          `json:"traceFlags,string"`
+	Links             []SpanLink     `json:"links,omitempty"`
 	Pid               PidInfo        `json:"-"`
 	PeerName          string         `json:"peerName"`
 	HostName          string         `json:"hostName"`
@@ -1214,6 +1230,22 @@ func spanAttributes(s *Span) SpanAttributes {
 			"clientId":   s.Statement,
 			"subject":    s.Path,
 		}
+	case EventTypeSunRPCServer, EventTypeSunRPCClient:
+		attrs := SpanAttributes{
+			"serverAddr":                  SpanHost(s),
+			"serverPort":                  strconv.Itoa(s.HostPort),
+			attr.OncRPCProgramName.Prom(): s.Path,
+			attr.OncRPCVersion.Prom():     strconv.Itoa(s.SubType),
+			attr.OncRPCAuthFlavor.Prom():  s.Statement,
+			"status":                      strconv.Itoa(s.Status),
+		}
+		if procRoute := s.SunRPCProcedureRouteForExport(); procRoute != "" {
+			attrs[attr.OncRPCProcedureNumber.Prom()] = procRoute
+		}
+		if procName := s.SunRPCProcedureNameForExport(); procName != "" {
+			attrs[attr.OncRPCProcedureName.Prom()] = procName
+		}
+		return attrs
 	case EventTypeGPUCudaKernelLaunch:
 		return SpanAttributes{
 			"gridSize":  strconv.FormatInt(s.ContentLength, 10),
@@ -1346,7 +1378,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
+	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient, EventTypeSunRPCClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
 		return true
 	}
 
@@ -1369,7 +1401,7 @@ func SpanStatusCode(span *Span) string {
 		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
-	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer:
+	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSunRPCClient, EventTypeSunRPCServer:
 		if span.Status != 0 {
 			return StatusCodeError
 		}
@@ -1412,20 +1444,45 @@ func SpanStatusMessage(span *Span) string {
 	switch span.Type {
 	case EventTypeManualSpan:
 		return span.Path
-	case EventTypeHTTPClient:
+	case EventTypeHTTPClient, EventTypeHTTP:
 		if span.SubType == HTTPSubtypeJSONRPC && span.JSONRPC != nil && span.JSONRPC.ErrorMessage != "" {
 			return span.JSONRPC.ErrorMessage
 		}
 		if span.SubType == HTTPSubtypeMCP && span.GenAI != nil && span.GenAI.MCP != nil && span.GenAI.MCP.ErrorMessage != "" {
 			return span.GenAI.MCP.ErrorMessage
 		}
-	case EventTypeHTTP:
-		if span.SubType == HTTPSubtypeJSONRPC && span.JSONRPC != nil && span.JSONRPC.ErrorMessage != "" {
-			return span.JSONRPC.ErrorMessage
+		if msg := genAIErrorMessage(span); msg != "" {
+			return msg
 		}
-		if span.SubType == HTTPSubtypeMCP && span.GenAI != nil && span.GenAI.MCP != nil && span.GenAI.MCP.ErrorMessage != "" {
-			return span.GenAI.MCP.ErrorMessage
+	case EventTypeDNS:
+		if span.Status != 0 {
+			return dnsparser.RCode(span.Status).String()
 		}
+	}
+	return ""
+}
+
+func genAIErrorMessage(span *Span) string {
+	if span.GenAI == nil {
+		return ""
+	}
+	if span.GenAI.OpenAI != nil && span.GenAI.OpenAI.Error.Message != "" {
+		return span.GenAI.OpenAI.Error.Message
+	}
+	if span.GenAI.Anthropic != nil && span.GenAI.Anthropic.Output.Error != nil && span.GenAI.Anthropic.Output.Error.Message != "" {
+		return span.GenAI.Anthropic.Output.Error.Message
+	}
+	if span.GenAI.Gemini != nil && span.GenAI.Gemini.Output.Error != nil && span.GenAI.Gemini.Output.Error.Message != "" {
+		return span.GenAI.Gemini.Output.Error.Message
+	}
+	if span.GenAI.Qwen != nil && span.GenAI.Qwen.Error.Message != "" {
+		return span.GenAI.Qwen.Error.Message
+	}
+	if span.GenAI.Bedrock != nil && span.GenAI.Bedrock.Output.ErrorMessage != "" {
+		return span.GenAI.Bedrock.Output.ErrorMessage
+	}
+	if span.GenAI.Rerank != nil && span.GenAI.Rerank.Output.Error != nil && span.GenAI.Rerank.Output.Error.Message != "" {
+		return span.GenAI.Rerank.Output.Error.Message
 	}
 	return ""
 }
@@ -1482,13 +1539,13 @@ func HTTPSpanStatusCode(span *Span) string {
 }
 
 var (
-	grpcStatusCodeOK               = int(semconv.RPCGRPCStatusCodeOk.Value.AsInt64())
-	grpcStatusCodeUnknown          = int(semconv.RPCGRPCStatusCodeUnknown.Value.AsInt64())
-	grpcStatusCodeDeadlineExceeded = int(semconv.RPCGRPCStatusCodeDeadlineExceeded.Value.AsInt64())
-	grpcStatusCodeUnimplemented    = int(semconv.RPCGRPCStatusCodeUnimplemented.Value.AsInt64())
-	grpcStatusCodeInternal         = int(semconv.RPCGRPCStatusCodeInternal.Value.AsInt64())
-	grpcStatusCodeUnavailable      = int(semconv.RPCGRPCStatusCodeUnavailable.Value.AsInt64())
-	grpcStatusCodeDataLoss         = int(semconv.RPCGRPCStatusCodeDataLoss.Value.AsInt64())
+	grpcStatusCodeOK               = int(grpc_codes.OK)
+	grpcStatusCodeUnknown          = int(grpc_codes.Unknown)
+	grpcStatusCodeDeadlineExceeded = int(grpc_codes.DeadlineExceeded)
+	grpcStatusCodeUnimplemented    = int(grpc_codes.Unimplemented)
+	grpcStatusCodeInternal         = int(grpc_codes.Internal)
+	grpcStatusCodeUnavailable      = int(grpc_codes.Unavailable)
+	grpcStatusCodeDataLoss         = int(grpc_codes.DataLoss)
 )
 
 // GrpcSpanStatusCode https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/rpc/#grpc-status
@@ -1528,9 +1585,9 @@ func (s *Span) ResponseBodyLength() int64 {
 // ServiceGraphKind returns the Kind string representation that is compliant with service graph metrics specification
 func (s *Span) ServiceGraphKind() string {
 	switch s.Type {
-	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeNATSServer, EventTypeRedisServer, EventTypeMemcachedServer, EventTypeSQLServer:
+	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeNATSServer, EventTypeSunRPCServer, EventTypeRedisServer, EventTypeMemcachedServer, EventTypeSQLServer:
 		return "SPAN_KIND_SERVER"
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
+	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeSunRPCClient:
 		return "SPAN_KIND_CLIENT"
 	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient:
 		switch s.Method {
@@ -1764,6 +1821,11 @@ func (s *Span) TraceName() string {
 			return s.Method
 		}
 		return s.Method + " " + s.Path
+	case EventTypeSunRPCClient, EventTypeSunRPCServer:
+		if s.Path == "" {
+			return "sunrpc/" + s.Method
+		}
+		return s.Path + "/" + s.Method
 	case EventTypeMongoClient:
 		if s.Path != "" && s.Method != "" {
 			// TODO for database operations like listCollections, we need to use s.DbNamespace instead of s.Path

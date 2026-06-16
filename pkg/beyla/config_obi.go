@@ -94,6 +94,11 @@ func OverrideOBIGlobalConfig() {
 		Prom:    "beyla_network_flow_bytes_total",
 		OTEL:    "beyla.network.flow.bytes",
 	}
+	attributes.NetworkFlowPackets = attributes.Name{
+		Section: "beyla.network.flow.packets",
+		Prom:    "beyla_network_flow_packets_total",
+		OTEL:    "beyla.network.flow.packets",
+	}
 	attributes.NetworkInterZone = attributes.Name{
 		Section: "beyla.network.inter.zone",
 		Prom:    "beyla_network_inter_zone_bytes_total",

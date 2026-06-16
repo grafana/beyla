@@ -5,6 +5,10 @@ inspired by Grafana Beyla (https://github.com/grafana/beyla).
 Copyright Grafana Labs.
 
 The Initial Developer of some parts of the product, which are copied from, derived from, or
+inspired by Grafana jvmtools (https://github.com/grafana/jvmtools).
+Copyright Grafana Labs.
+
+The Initial Developer of some parts of the product, which are copied from, derived from, or
 inspired by OpenTelemetry Go Automatic Instrumentation (https://github.com/open-telemetry/opentelemetry-go-instrumentation).
 Copyright The OpenTelemetry Authors.
 

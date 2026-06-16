@@ -20,13 +20,12 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	trace2 "go.opentelemetry.io/otel/trace"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
-	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -34,7 +33,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 )
 
-// Attribute keys not yet available in semconv v1.38.0.
+// Attribute keys not yet available in semconv v1.41.0.
 // Replace with semconv helpers when the package is updated.
 var (
 	genAIRequestStreamKey              = attribute.Key("gen_ai.request.stream")
@@ -199,6 +198,9 @@ func GenerateTracesWithAttributes(
 		if statusMessage != "" {
 			s.Status().SetMessage(statusMessage)
 		}
+		if !hasSubSpans {
+			appendSpanLinks(s, span.Links)
+		}
 		s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	}
 	return traces
@@ -233,6 +235,20 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 		spP.SetSpanID(pcommon.SpanID(idgen.RandomSpanID()))
 	}
 	spP.SetParentSpanID(parentSpanID)
+	appendSpanLinks(spP, span.Links)
+}
+
+func appendSpanLinks(dst ptrace.Span, links []request.SpanLink) {
+	for _, spanLink := range links {
+		if !spanLink.TraceID.IsValid() || !spanLink.SpanID.IsValid() {
+			continue
+		}
+
+		link := dst.Links().AppendEmpty()
+		link.SetTraceID(pcommon.TraceID(spanLink.TraceID))
+		link.SetSpanID(pcommon.SpanID(spanLink.SpanID))
+		link.SetFlags(uint32(spanLink.TraceFlags))
+	}
 }
 
 var emptyUID = svc.UID{}
@@ -312,6 +328,8 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.NATSEnabled()
 	case request.EventTypeAMQPClient:
 		return is.AMQPEnabled()
+	case request.EventTypeSunRPCClient, request.EventTypeSunRPCServer:
+		return is.SunRPCEnabled()
 	case request.EventTypeMongoClient:
 		return is.MongoEnabled()
 	case request.EventTypeManualSpan:
@@ -398,9 +416,6 @@ func mcpAttributes(span *request.Span) []attribute.KeyValue {
 	}
 	if mcp.ErrorCode != 0 {
 		attrs = append(attrs, attribute.String(string(attr.RPCResponseStatusCode), strconv.Itoa(mcp.ErrorCode)))
-		if mcp.ErrorMessage != "" {
-			attrs = append(attrs, semconv.ErrorMessage(mcp.ErrorMessage))
-		}
 	}
 	return attrs
 }
@@ -412,7 +427,7 @@ func jsonRPCAttributes(span *request.Span) []attribute.KeyValue {
 	}
 	rpc := span.JSONRPC
 	attrs := []attribute.KeyValue{
-		semconv.RPCSystemJSONRPC,
+		semconv.RPCSystemNameJSONRPC,
 		semconv.RPCMethod(rpc.Method),
 		attribute.String(string(attr.JSONRPCProtocolVersion), rpc.Version),
 	}
@@ -479,8 +494,8 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 	case request.EventTypeGRPC:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
-			semconv.RPCSystemGRPC,
-			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
+			semconv.RPCSystemNameGRPC,
+			semconv.RPCResponseStatusCode(request.GRPCStatusCodeString(span.Status)),
 			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
@@ -566,9 +581,8 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 
 		if span.SubType == request.HTTPSubtypeAWSS3 && span.AWS != nil {
 			s3 := span.AWS.S3
-			attrs = append(attrs, semconv.RPCService("S3"))
 			attrs = append(attrs, request.RPCSystem("aws-api"))
-			attrs = append(attrs, semconv.RPCMethod(s3.Method))
+			attrs = append(attrs, semconv.RPCMethod(request.S3RPCMethod(s3.Method)))
 			attrs = append(attrs, semconv.CloudRegion(s3.Meta.Region))
 			attrs = append(attrs, semconv.AWSRequestID(s3.Meta.RequestID))
 			attrs = append(attrs, request.AWSExtendedRequestID(s3.Meta.ExtendedRequestID))
@@ -680,7 +694,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 			if ai.Error.Type != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Error.Type))
-				attrs = append(attrs, semconv.ErrorMessage(ai.Error.Message))
 			}
 			if ai.OperationName == request.EmbeddingOperationName {
 				if ai.Request.Dimensions > 0 {
@@ -760,7 +773,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			// add error info
 			if ai.Output.Error != nil && ai.Output.Error.Type != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Type))
-				attrs = append(attrs, semconv.ErrorMessage(ai.Output.Error.Message))
 			}
 			attrs = append(attrs, genAIToolCallAttributes(ai.ToolCalls)...)
 		}
@@ -839,7 +851,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 			if ai.Output.Error != nil && ai.Output.Error.Status != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Status))
-				attrs = append(attrs, semconv.ErrorMessage(ai.Output.Error.Message))
 			}
 			attrs = append(attrs, genAIToolCallAttributes(ai.ToolCalls)...)
 		}
@@ -917,7 +928,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 			if ai.Error.Type != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Error.Type))
-				attrs = append(attrs, semconv.ErrorMessage(ai.Error.Message))
 			}
 			attrs = append(attrs, genAIToolCallAttributes(ai.ToolCalls)...)
 		}
@@ -974,7 +984,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 			if ai.Output.ErrorType != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.ErrorType))
-				attrs = append(attrs, semconv.ErrorMessage(ai.Output.ErrorMessage))
 			}
 		}
 
@@ -994,7 +1003,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			attrs = append(attrs, semconv.GenAIUsageInputTokens(ai.Output.GetTotalTokens()))
 			if ai.Output.Error != nil && ai.Output.Error.Type != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Type))
-				attrs = append(attrs, semconv.ErrorMessage(ai.Output.Error.Message))
 			}
 		}
 
@@ -1052,8 +1060,8 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 	case request.EventTypeGRPCClient:
 		attrs = []attribute.KeyValue{
 			semconv.RPCMethod(span.Path),
-			semconv.RPCSystemGRPC,
-			semconv.RPCGRPCStatusCodeKey.Int(span.Status),
+			semconv.RPCSystemNameGRPC,
+			semconv.RPCResponseStatusCode(request.GRPCStatusCodeString(span.Status)),
 			request.ServerAddr(request.HostAsServer(span)),
 			request.PeerService(request.PeerServiceFromSpan(span)),
 			request.ServerPort(span.HostPort),
@@ -1169,6 +1177,33 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		}
 
 		attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
+	case request.EventTypeSunRPCServer, request.EventTypeSunRPCClient:
+		// https://opentelemetry.io/docs/specs/semconv/registry/attributes/onc-rpc/
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.HostAsServer(span)),
+			request.ServerPort(span.HostPort),
+			request.RPCSystem("onc_rpc"),
+		}
+		if span.Path != "" {
+			attrs = append(attrs, semconv.OncRPCProgramName(span.Path))
+		}
+		if span.Route != "" {
+			if proc, err := strconv.Atoi(span.Route); err == nil {
+				attrs = append(attrs, semconv.OncRPCProcedureNumber(proc))
+			}
+		}
+		if procName := span.SunRPCProcedureNameForExport(); procName != "" {
+			attrs = append(attrs, semconv.OncRPCProcedureName(procName))
+		}
+		if span.SubType != 0 {
+			attrs = append(attrs, semconv.OncRPCVersion(span.SubType))
+		}
+		if span.Statement != "" {
+			attrs = append(attrs, attribute.String(string(attr.OncRPCAuthFlavor), span.Statement))
+		}
+		if span.Type == request.EventTypeSunRPCClient {
+			attrs = append(attrs, request.PeerService(request.PeerServiceFromSpan(span)))
+		}
 	case request.EventTypeMongoClient:
 		attrs = []attribute.KeyValue{
 			request.ServerAddr(request.HostAsServer(span)),
@@ -1257,9 +1292,6 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			attrs = append(attrs, semconv.DNSQuestionName(span.Path))
 		}
 
-		if span.Status != 0 {
-			attrs = append(attrs, request.ErrorMessage(dnsparser.RCode(span.Status).String()))
-		}
 	}
 
 	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
@@ -1271,9 +1303,9 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 
 func spanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer, request.EventTypeNATSServer, request.EventTypeMemcachedServer, request.EventTypeSQLServer:
+	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer, request.EventTypeMQTTServer, request.EventTypeNATSServer, request.EventTypeSunRPCServer, request.EventTypeMemcachedServer, request.EventTypeSQLServer:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeFailedConnect:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeSunRPCClient, request.EventTypeFailedConnect:
 		return trace2.SpanKindClient
 	case request.EventTypeKafkaClient, request.EventTypeMQTTClient, request.EventTypeNATSClient, request.EventTypeAMQPClient:
 		switch span.Method {

@@ -10,7 +10,7 @@ require (
 	github.com/caarlos0/env/v9 v9.0.0
 	github.com/goccy/go-json v0.10.6
 	github.com/google/uuid v1.6.0
-	github.com/grafana/pyroscope-go/godeltaprof v0.1.10
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.11
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/invopop/jsonschema v0.13.0
 	github.com/mariomac/guara v0.0.0-20250408105519-1e4dbdfb7136

@@ -68,25 +68,71 @@
   ],
   packageRules: [
     {
-      groupName: 'all patch and digest versions',
-      matchUpdateTypes: [
-        'patch',
-        'digest',
+      // Group updates by ecosystem (manager) rather than by update type, each
+      // on its own day. This isolates failures: a flaky Go/license build can no
+      // longer hold an unrelated GitHub Action digest bump hostage in a single
+      // shared "all patch and digest" PR.
+      description: 'Run `go mod tidy` on any Go module update',
+      matchManagers: [
+        'gomod',
       ],
-      schedule: [
-        'before 8am on Monday',
-      ],
-      matchPackageNames: [
-        '*',
+      postUpdateOptions: [
+        'gomodTidy',
       ],
     },
     {
+      description: 'Block the known-bad github.com/cilium/ebpf v0.21.0 update while allowing later releases through',
+      matchManagers: [
+        'gomod',
+      ],
+      matchPackageNames: [
+        'github.com/cilium/ebpf',
+      ],
+      allowedVersions: '!/^v?0\\.21\\.0$/',
+    },
+    {
+      groupName: 'Go',
+      matchManagers: [
+        'gomod',
+      ],
       matchUpdateTypes: [
+        'patch',
+        'digest',
         'minor',
         'major',
       ],
       schedule: [
         'before 8am on Monday',
+      ],
+    },
+    {
+      groupName: 'Docker',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchUpdateTypes: [
+        'patch',
+        'digest',
+        'minor',
+        'major',
+      ],
+      schedule: [
+        'before 8am on Tuesday',
+      ],
+    },
+    {
+      groupName: 'Github Actions',
+      matchManagers: [
+        'github-actions',
+      ],
+      matchUpdateTypes: [
+        'patch',
+        'digest',
+        'minor',
+        'major',
+      ],
+      schedule: [
+        'before 8am on Wednesday',
       ],
     },
     {

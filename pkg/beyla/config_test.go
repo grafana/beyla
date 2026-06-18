@@ -272,6 +272,7 @@ network:
 				instrumentations.InstrumentationMongo,
 				instrumentations.InstrumentationCouchbase,
 				instrumentations.InstrumentationMemcached,
+				instrumentations.InstrumentationSunRPC,
 				// no traces for DNS and GPU by default
 			},
 		},
@@ -382,8 +383,9 @@ network:
 					Metadata: map[string]*services.GlobAttr{"k8s_container_name": &servicesextra.K8sDefaultExcludeContainerNamesGlob},
 				},
 			},
-			DefaultOtlpGRPCPort:   4317,
-			RouteHarvesterTimeout: 10 * time.Second,
+			DefaultOtlpGRPCPort:     4317,
+			RouteHarvesterTimeout:   10 * time.Second,
+			DisabledRouteHarvesters: []services.RouteHarvesterLanguage{services.RouteHarvesterLanguageJava},
 			RouteHarvestConfig: servicesextra.RouteHarvestingConfig{
 				JavaHarvestDelay: 60 * time.Second,
 			},

@@ -1109,6 +1109,16 @@ func spanAttributes(s *Span) SpanAttributes {
 			attrs["graphqlOperationName"] = s.GraphQL.OperationName
 			attrs["graphqlOperationType"] = s.GraphQL.OperationType
 		}
+		if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
+			attrs["jsonrpcMethod"] = s.JSONRPC.Method
+			attrs["jsonrpcVersion"] = s.JSONRPC.Version
+			attrs["jsonrpcRequestId"] = s.JSONRPC.RequestID
+			attrs["jsonrpcErrorCode"] = strconv.Itoa(s.JSONRPC.ErrorCode)
+			if s.JSONRPC.ErrorMessage != "" {
+				attrs["jsonrpcErrorMessage"] = s.JSONRPC.ErrorMessage
+			}
+		}
+
 		addHeaderAttributes(attrs, s)
 		return attrs
 	case EventTypeHTTPClient:

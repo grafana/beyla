@@ -310,6 +310,7 @@ func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 				p.log.Error(err.Error())
 			}
 		}
+		delete(p.pids, pk)
 		return
 	}
 

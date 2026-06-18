@@ -130,7 +130,7 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 // the SendCtx operation would block for all the subscribers until all the internal channels
 // of the Queue room for a new message.
 func (q *Queue[T]) SendCtx(ctx context.Context, o T) {
-	q.chainedSend(ctx, o, []string{q.cfg.name})
+	q.chainedSend(ctx, o, node{name: q.cfg.name})
 }
 
 // Send is analogous to SendCtx(context.Background()).
@@ -139,13 +139,13 @@ func (q *Queue[T]) SendCtx(ctx context.Context, o T) {
 //
 // Deprecated: use SendCtx instead.
 func (q *Queue[T]) Send(o T) {
-	q.chainedSend(context.Background(), o, []string{q.cfg.name})
+	q.chainedSend(context.Background(), o, node{name: q.cfg.name})
 }
 
-func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
+func (q *Queue[T]) chainedSend(ctx context.Context, o T, source node) {
 	q.assertNotClosed()
 	if q.bypassTo != nil {
-		q.bypassTo.chainedSend(ctx, o, append(bypassPath, q.bypassTo.cfg.name))
+		q.bypassTo.chainedSend(ctx, o, node{name: q.bypassTo.cfg.name, source: &source})
 		return
 	}
 
@@ -178,6 +178,8 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 		case d.ch <- o:
 			// good!
 		case <-q.sendTimeout.C:
+			bypassPath := node{name: d.name, source: &source}
+
 			q.logger.Warn("an internal queue seems to be blocked. You might need to change "+
 				"some of the following configuration options: OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE, "+
 				"OTEL_EBPF_OTLP_TRACES_QUEUE_SIZE, OTEL_EBPF_CHANNEL_BUFFER_LEN, OTEL_EBPF_CHANNEL_SEND_TIMEOUT, "+
@@ -185,7 +187,7 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 				slog.Duration("timeout", q.cfg.sendTimeout),
 				slog.Int("queueLen", len(d.ch)),
 				slog.Int("queueCap", cap(d.ch)),
-				slog.String("sendPath", strings.Join(bypassPath, "->")),
+				slog.String("sendPath", bypassPath.String()),
 				slog.String("subscriber", d.name),
 			)
 			blocked = append(blocked, d)
@@ -213,8 +215,9 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 			case d.ch <- o:
 				// good!
 			case <-q.sendTimeout.C:
+				bypassPath := node{name: d.name, source: &source}
 				panic(fmt.Sprintf("sending through queue path %s. Subscriber channel %s is blocked",
-					strings.Join(bypassPath, "->"), d.name))
+					bypassPath.String(), d.name))
 			}
 		}
 	}
@@ -343,4 +346,29 @@ func (q *Queue[T]) assertNotClosed() {
 	if q.closed.Load() {
 		panic(q.cfg.name + ": queue is closed")
 	}
+}
+
+// node allows debugging the submission chain as a linked list that
+// is purely allocated in the function call stack
+type node struct {
+	name   string
+	source *node
+}
+
+func (n *node) String() string {
+	p := n
+	names := []string{p.name}
+	for p.source != nil {
+		p = p.source
+		names = append(names, p.name)
+	}
+	sb := strings.Builder{}
+	sb.WriteString(names[len(names)-1])
+	// reverse-iterate the names so we can go from in-memory "dst, ..., source" stack
+	// to print-format "source -> ... -> dst"
+	for i := len(names) - 2; i >= 0; i-- {
+		sb.WriteString("->")
+		sb.WriteString(names[i])
+	}
+	return sb.String()
 }

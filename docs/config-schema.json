@@ -105,6 +105,19 @@
       },
       "type": "object"
     },
+    "AvoidedServicesConfig": {
+      "properties": {
+        "disabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_INTERNAL_METRICS_AVOIDED_SERVICES_DISABLED"
+        },
+        "limit": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_INTERNAL_METRICS_AVOIDED_SERVICES_LIMIT"
+        }
+      },
+      "type": "object"
+    },
     "BedrockConfig": {
       "properties": {
         "enabled": {
@@ -1089,6 +1102,9 @@
     },
     "InternalMetricsConfig": {
       "properties": {
+        "avoided_services": {
+          "$ref": "#/$defs/AvoidedServicesConfig"
+        },
         "bpf_metric_scrape_interval": {
           "type": "string",
           "pattern": "^[0-9]+(ms|s|m)$",

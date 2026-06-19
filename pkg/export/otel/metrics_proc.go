@@ -14,7 +14,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
-	"go.opentelemetry.io/obi/pkg/export/expire"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
@@ -59,9 +58,8 @@ func pmlog() *slog.Logger {
 }
 
 type procMetricsExporter struct {
-	ctx   context.Context
-	cfg   *ProcMetricsConfig
-	clock *expire.CachedClock
+	ctx context.Context
+	cfg *ProcMetricsConfig
 
 	nodeMeta *meta.NodeMeta
 
@@ -155,7 +153,6 @@ func newProcMetricsExporter(
 		ctx:         ctx,
 		cfg:         cfg,
 		nodeMeta:    &ctxInfo.NodeMeta,
-		clock:       expire.NewCachedClock(timeNow),
 		attrCPUTime: attrCPUTime,
 		attrCPUUtil: attrCPUUtil,
 		attrMemory: attributes.OpenTelemetryGetters(process.OTELGetters,
@@ -327,7 +324,6 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 // Do reads all the process status data points and create the metrics accordingly
 func (me *procMetricsExporter) Do(_ context.Context) {
 	for i := range me.procStatusInput {
-		me.clock.Update()
 		for _, s := range i {
 			reporter, err := me.reporters.For(&s.ID)
 			if err != nil {

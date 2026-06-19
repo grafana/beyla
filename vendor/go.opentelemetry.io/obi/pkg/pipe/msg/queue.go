@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 )
 
 // if a Send operation takes more than this time, we panic informing about a deadlock
@@ -20,12 +22,20 @@ const defaultSendTimeout = time.Minute
 
 const unnamed = "(unnamed)"
 
+// bypassMu serializes all the routing changes (Bypass and Subscribe) across every
+// queue. These operations only happen while the pipeline is being wired up, so a
+// single global lock keeps the bookkeeping trivially correct without complicating
+// the Send hot path (which never acquires it).
+var bypassMu sync.Mutex
+
 type queueConfig struct {
 	channelBufferLen int
 	closingAttempts  int
 	name             string
 	sendTimeout      time.Duration
 	panicOnTimeout   bool
+	// maps any implementation of imetrics.Reporter's QueueBufferUtilization(subscriber string, ratio float64)
+	utilizationGauge func(string, float64)
 }
 
 var defaultQueueConfig = queueConfig{
@@ -34,6 +44,8 @@ var defaultQueueConfig = queueConfig{
 	name:             unnamed,
 	sendTimeout:      defaultSendTimeout,
 	panicOnTimeout:   false,
+	// default to noop
+	utilizationGauge: func(string, float64) {},
 }
 
 // QueueOpts allow configuring some operation of a queue
@@ -81,9 +93,37 @@ func ClosingAttempts(attempts int) QueueOpts {
 	}
 }
 
+func InternalMetrics(p imetrics.Reporter) QueueOpts {
+	return func(c *queueConfig) {
+		c.utilizationGauge = p.QueueBufferUtilization
+	}
+}
+
 type dst[T any] struct {
-	name string
-	ch   chan T
+	name  string
+	ch    chan T
+	gauge func(string, float64)
+}
+
+// sink holds the mutable, shared delivery state of a group of queues connected through Bypass.
+// When a Queue is bypassed to another Queue, the *sink reference is transferred to the destination.
+// So e.g. in a chain of a->b->c->d bypassing queues, invoking a.Send will directly deliver
+// the message to d's subscribers.
+type sink[T any] struct {
+	mt sync.Mutex
+	// cfg is the configuration of the queue that owns this sink (the final destination of the
+	// bypass group). It drives the channel buffer length and the send timeout behavior.
+	cfg *queueConfig
+	// dsts are the subscriber channels of all the queues in the group.
+	dsts []dst[T]
+	// members are all the queues currently routing into this sink. When two groups merge, the
+	// members of the source group are re-pointed here, so every queue always references the
+	// current destination sink directly.
+	members []*Queue[T]
+	closed  atomic.Bool
+
+	sendTimeout *time.Timer
+	logger      *slog.Logger
 }
 
 // Queue is a simple message queue that allows sending messages to multiple subscribers.
@@ -92,19 +132,21 @@ type dst[T any] struct {
 // If a message is sent to a queue that has no subscribers, it will not block the sender and the
 // message will be lost. This is by design, as the queue is meant to be used for fire-and-forget
 type Queue[T any] struct {
-	mt  sync.Mutex
 	cfg *queueConfig
 
-	dsts             []dst[T]
+	// sink points to the shared delivery state of this queue's bypass chain. It is never nil and,
+	// after one or more Bypass calls, points directly to the final destination of the chain.
+	sink *sink[T]
+
+	// routeNames is the sequence of queue names from this queue to its sink's destination,
+	// used only for building human-readable diagnostics about blocked send paths.
+	routeNames []string
+
+	// bypassed is set the first time Bypass is invoked on this queue, to enforce that a queue
+	// can only bypass to a single destination.
+	bypassed bool
+
 	remainingClosers int
-
-	// linked list of bypassing queues
-	// For simplicity, a Queue instance can only bypass to a single queue, despite multiple queues can bypass to it
-	bypassTo *Queue[T]
-	closed   atomic.Bool
-
-	sendTimeout *time.Timer
-	logger      *slog.Logger
 }
 
 // NewQueue creates a new Queue instance with the given options.
@@ -113,12 +155,23 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	return &Queue[T]{
-		cfg:              &cfg,
-		remainingClosers: cfg.closingAttempts,
-		sendTimeout:      time.NewTimer(cfg.sendTimeout),
-		logger:           slog.With("queueName", cfg.name),
+	// if channel capacity is set to zero, disable capacity ratio metrics to avoid divisions by zero
+	if cfg.channelBufferLen <= 0 {
+		cfg.utilizationGauge = func(string, float64) {}
 	}
+
+	q := &Queue[T]{
+		cfg:              &cfg,
+		routeNames:       []string{cfg.name},
+		remainingClosers: cfg.closingAttempts,
+	}
+	q.sink = &sink[T]{
+		cfg:         &cfg,
+		members:     []*Queue[T]{q},
+		sendTimeout: time.NewTimer(cfg.sendTimeout),
+		logger:      slog.With("queueName", cfg.name),
+	}
+	return q
 }
 
 // SendCtx sends a message to all subscribers of this queue, and interrupts the operation if the
@@ -130,7 +183,8 @@ func NewQueue[T any](opts ...QueueOpts) *Queue[T] {
 // the SendCtx operation would block for all the subscribers until all the internal channels
 // of the Queue room for a new message.
 func (q *Queue[T]) SendCtx(ctx context.Context, o T) {
-	q.chainedSend(ctx, o, []string{q.cfg.name})
+	q.assertNotClosed()
+	q.sink.send(ctx, o, q.routeNames)
 }
 
 // Send is analogous to SendCtx(context.Background()).
@@ -139,60 +193,59 @@ func (q *Queue[T]) SendCtx(ctx context.Context, o T) {
 //
 // Deprecated: use SendCtx instead.
 func (q *Queue[T]) Send(o T) {
-	q.chainedSend(context.Background(), o, []string{q.cfg.name})
+	q.assertNotClosed()
+	q.sink.send(context.Background(), o, q.routeNames)
 }
 
-func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
-	q.assertNotClosed()
-	if q.bypassTo != nil {
-		q.bypassTo.chainedSend(ctx, o, append(bypassPath, q.bypassTo.cfg.name))
-		return
-	}
-
-	// Subscribe appends to q.dsts under q.mt. Snapshot the subscriber list here so this Send
+// send delivers the message to all the subscribers of the sink. route is the path of queue names
+// that lead to this sink, used only to build diagnostics when a subscriber blocks.
+func (s *sink[T]) send(ctx context.Context, o T, route []string) {
+	// Subscribe appends to s.dsts under s.mt. Snapshot the subscriber list here so this Send
 	// iterates a stable copy: concurrent Subscribe is safe and we avoid racing on the slice
 	// header. Do not hold the mutex while writing to subscriber channels (Send can block).
-	q.mt.Lock()
-	if len(q.dsts) == 0 {
-		q.mt.Unlock()
+	s.mt.Lock()
+	if len(s.dsts) == 0 {
+		s.mt.Unlock()
 		// this can happen in dead paths (which are valid for disabled pipeline branches),
 		// exiting early to save timeout management
 		return
 	}
-	dsts := make([]dst[T], len(q.dsts))
-	copy(dsts, q.dsts)
-	q.mt.Unlock()
+	dsts := make([]dst[T], len(s.dsts))
+	copy(dsts, s.dsts)
+	s.mt.Unlock()
 
-	if q.cfg.panicOnTimeout {
+	if s.cfg.panicOnTimeout {
 		// instead of directly panicking in sendTimeout, we first warn at 90% sendTimeout,
 		// to get logged about other blocked senders before panicking
-		q.sendTimeout.Reset(9 * q.cfg.sendTimeout / 10)
+		s.sendTimeout.Reset(9 * s.cfg.sendTimeout / 10)
 	} else {
-		q.sendTimeout.Reset(q.cfg.sendTimeout)
+		s.sendTimeout.Reset(s.cfg.sendTimeout)
 	}
 	var blocked []dst[T]
 	for _, d := range dsts {
+		// report channel len/capacity ratio metrics
+		d.gauge(d.name, float64(len(d.ch)+1)/float64(cap(d.ch)))
 		select {
 		case <-ctx.Done():
 			return
 		case d.ch <- o:
 			// good!
-		case <-q.sendTimeout.C:
-			q.logger.Warn("an internal queue seems to be blocked. You might need to change "+
+		case <-s.sendTimeout.C:
+			s.logger.Warn("an internal queue seems to be blocked. You might need to change "+
 				"some of the following configuration options: OTEL_EBPF_OTLP_TRACES_BATCH_MAX_SIZE, "+
 				"OTEL_EBPF_OTLP_TRACES_QUEUE_SIZE, OTEL_EBPF_CHANNEL_BUFFER_LEN, OTEL_EBPF_CHANNEL_SEND_TIMEOUT, "+
 				"OTEL_EBPF_BPF_BATCH_LENGTH, OTEL_EBPF_BPF_BATCH_TIMEOUT",
-				slog.Duration("timeout", q.cfg.sendTimeout),
+				slog.Duration("timeout", s.cfg.sendTimeout),
 				slog.Int("queueLen", len(d.ch)),
 				slog.Int("queueCap", cap(d.ch)),
-				slog.String("sendPath", strings.Join(bypassPath, "->")),
+				slog.String("sendPath", sendPath(route, d.name)),
 				slog.String("subscriber", d.name),
 			)
 			blocked = append(blocked, d)
 		}
 	}
 
-	if !q.cfg.panicOnTimeout {
+	if !s.cfg.panicOnTimeout {
 		// if we don't configure the queue to panic on timeout, we wait
 		// for the messages to be delivered
 		for _, d := range blocked {
@@ -205,16 +258,16 @@ func (q *Queue[T]) chainedSend(ctx context.Context, o T, bypassPath []string) {
 		}
 	} else {
 		// if we confirm that the blocker candidates are actually blocked, we panic
-		q.sendTimeout.Reset(q.cfg.sendTimeout / 10)
+		s.sendTimeout.Reset(s.cfg.sendTimeout / 10)
 		for _, d := range blocked {
 			select {
 			case <-ctx.Done():
 				return
 			case d.ch <- o:
 				// good!
-			case <-q.sendTimeout.C:
+			case <-s.sendTimeout.C:
 				panic(fmt.Sprintf("sending through queue path %s. Subscriber channel %s is blocked",
-					strings.Join(bypassPath, "->"), d.name))
+					sendPath(route, d.name), d.name))
 			}
 		}
 	}
@@ -233,12 +286,6 @@ func SubscriberName(nodeName string) SubscribeOpt {
 	}
 }
 
-func withRawOpts(opts subscribeOpts) SubscribeOpt {
-	return func(o *subscribeOpts) {
-		*o = opts
-	}
-}
-
 // Subscribe to this queue. This will return a channel that will receive messages.
 // It's important to notice that, if Subscribe is invoked after Send, the sent message
 // will be lost.
@@ -248,62 +295,89 @@ func withRawOpts(opts subscribeOpts) SubscribeOpt {
 // not deliver to a subscriber that Subscribe'd immediately after the snapshot (that subscriber
 // misses that message).
 func (q *Queue[T]) Subscribe(options ...SubscribeOpt) <-chan T {
-	q.assertNotClosed()
-	q.mt.Lock()
-	defer q.mt.Unlock()
-
 	opts := subscribeOpts{subscriber: unnamed}
 	for _, opt := range options {
 		opt(&opts)
 	}
 
-	if q.bypassTo != nil {
-		return q.bypassTo.Subscribe(withRawOpts(opts))
-	}
+	// hold bypassMu so q.sink can't be re-pointed by a concurrent Bypass while we subscribe to it
+	bypassMu.Lock()
+	defer bypassMu.Unlock()
+	q.assertNotClosed()
 
-	ch := make(chan T, q.cfg.channelBufferLen)
-	q.dsts = append(q.dsts, dst[T]{ch: ch, name: opts.subscriber})
+	s := q.sink
+	// this mutex is also needed so we don't have race conditions in Send's copy(dsts, s.dsts)
+	s.mt.Lock()
+	defer s.mt.Unlock()
+	ch := make(chan T, s.cfg.channelBufferLen)
+	s.dsts = append(s.dsts, dst[T]{
+		ch:    ch,
+		name:  opts.subscriber,
+		gauge: s.cfg.utilizationGauge,
+	})
 	return ch
 }
 
 // Bypass allows this queue to bypass messages to another queue. This means that
 // messages sent to this queue will also be sent to the other queue.
+// A given queue can only Bypass once, but multiple queues can bypass to the same destination.
 // This operation does not control for graph cycles. It might result in an internal mutex deadlock.
 func (q *Queue[T]) Bypass(to *Queue[T]) {
-	q.assertNotClosed()
-	q.mt.Lock()
-	defer q.mt.Unlock()
 	if q == to {
 		panic(q.cfg.name + ": this queue can't bypass to itself")
 	}
-	q.assertNotBypassing()
 
-	q.bypassTo = to
-	// will copy all the subscribers of the queue to the last queue in the
-	// bypassing chain
-	last := to
-	last.mt.Lock()
-	for last.bypassTo != nil {
-		l := last
-		last = last.bypassTo
-		last.mt.Lock()
-		l.mt.Unlock()
+	bypassMu.Lock()
+	defer bypassMu.Unlock()
+	q.assertNotClosed()
+	if q.bypassed {
+		panic(fmt.Sprintf("queue %s is already bypassing data", q.cfg.name))
 	}
-	last.dsts = append(last.dsts, q.dsts...)
-	q.dsts = nil
-	q.sendTimeout = nil
-	last.mt.Unlock()
+	q.bypassed = true
+
+	srcSink := q.sink
+	dstSink := to.sink
+	if srcSink == dstSink {
+		// q and to already belong to the same bypass group: nothing to merge
+		return
+	}
+
+	srcSink.mt.Lock()
+	defer srcSink.mt.Unlock()
+	dstSink.mt.Lock()
+	defer dstSink.mt.Unlock()
+
+	// re-point every queue of the source group to the destination sink, so future Sends and
+	// Subscribes reach the destination directly, and extend their diagnostic route with to's route
+	for _, m := range srcSink.members {
+		m.sink = dstSink
+		m.routeNames = append(m.routeNames, to.routeNames...)
+	}
+
+	// move all the subscribers of the source group into the destination group
+	dstSink.dsts = append(dstSink.dsts, srcSink.dsts...)
+	srcSink.dsts = nil
+
+	dstSink.members = append(dstSink.members, srcSink.members...)
+	srcSink.members = nil
+
+	// the source sink is no longer a delivery point: stop its now-orphaned timer
+	if srcSink.sendTimeout != nil {
+		srcSink.sendTimeout.Stop()
+		srcSink.sendTimeout = nil
+	}
 }
 
-// Close all the subscribers of this queue. This will close all the channels
-// or will close the bypassed channel
+// Close all the subscribers of this queue. This will close all the channels of the queue's
+// bypass group.
 func (q *Queue[T]) Close() {
-	q.mt.Lock()
-	defer q.mt.Unlock()
-	if q.sendTimeout != nil {
-		q.sendTimeout.Stop()
-	}
-	q.close()
+	bypassMu.Lock()
+	s := q.sink
+	bypassMu.Unlock()
+
+	s.mt.Lock()
+	defer s.mt.Unlock()
+	s.close()
 }
 
 // MarkCloseable decreases the internal counter of submitters, and if it reaches 0,
@@ -311,36 +385,49 @@ func (q *Queue[T]) Close() {
 // This method is useful for multiple nodes sending messages to the same queue, and
 // willing to close it only when all
 func (q *Queue[T]) MarkCloseable() {
-	q.mt.Lock()
-	defer q.mt.Unlock()
+	bypassMu.Lock()
 	q.remainingClosers--
-	if q.remainingClosers <= 0 {
-		q.close()
-	}
-}
+	doClose := q.remainingClosers <= 0
+	s := q.sink
+	bypassMu.Unlock()
 
-func (q *Queue[T]) close() {
-	if q.closed.Swap(true) {
+	if !doClose {
 		return
 	}
-	if q.bypassTo != nil {
-		q.bypassTo.Close()
-	} else {
-		for _, d := range q.dsts {
-			close(d.ch)
-		}
-		q.dsts = nil
-	}
+	s.mt.Lock()
+	defer s.mt.Unlock()
+	s.close()
 }
 
-func (q *Queue[T]) assertNotBypassing() {
-	if q.bypassTo != nil {
-		panic(fmt.Sprintf("queue %s already bypassing data to queue %s", q.cfg.name, q.bypassTo.cfg.name))
+// close stops the send timer and closes all the subscriber channels of the sink.
+// It must be invoked while holding s.mt.
+func (s *sink[T]) close() {
+	if s.closed.Swap(true) {
+		return
 	}
+	if s.sendTimeout != nil {
+		s.sendTimeout.Stop()
+	}
+	for _, d := range s.dsts {
+		close(d.ch)
+	}
+	s.dsts = nil
 }
 
 func (q *Queue[T]) assertNotClosed() {
-	if q.closed.Load() {
+	if q.sink.closed.Load() {
 		panic(q.cfg.name + ": queue is closed")
 	}
+}
+
+// sendPath renders the diagnostic path of a message, from its origin queue to the blocked
+// subscriber, e.g. "src->middle->dst->subscriber".
+func sendPath(route []string, subscriber string) string {
+	sb := strings.Builder{}
+	for _, name := range route {
+		sb.WriteString(name)
+		sb.WriteString("->")
+	}
+	sb.WriteString(subscriber)
+	return sb.String()
 }

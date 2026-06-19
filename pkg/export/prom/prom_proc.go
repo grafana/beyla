@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
-	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -63,8 +62,6 @@ type procMetricsReporter struct {
 	cfg *prom.PrometheusConfig
 
 	promConnect *connector.PrometheusManager
-
-	clock *expire.CachedClock
 
 	// metrics
 	cpuTimeAttrs []attributes.Field[*process.Status, string]
@@ -122,43 +119,41 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 	attrMemory := attributes.PrometheusGetters(process.PromGetters, provider.For(extraattributes.ProcessMemoryUsage))
 	attrMemoryVirtual := attributes.PrometheusGetters(process.PromGetters, provider.For(extraattributes.ProcessMemoryVirtual))
 
-	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &procMetricsReporter{
 		cfg:          cfg.Metrics,
 		promConnect:  ctxInfo.Prometheus,
-		clock:        clock,
 		cpuTimeAttrs: cpuTimeGetters,
 		cpuTime: prom.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: extraattributes.ProcessCPUTime.Prom,
 			Help: "Total CPU seconds broken down by different states",
-		}, cpuTimeLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, cpuTimeLblNames).MetricVec, timeNow, cfg.Metrics.TTL),
 		cpuUtilizationAttrs: cpuUtilGetters,
 		cpuUtilization: prom.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: extraattributes.ProcessCPUUtilization.Prom,
 			Help: "Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process",
-		}, cpuUtilLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, cpuUtilLblNames).MetricVec, timeNow, cfg.Metrics.TTL),
 		memoryAttrs: attrMemory,
 		memory: prom.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: extraattributes.ProcessMemoryUsage.Prom,
 			Help: "The amount of physical memory in use",
-		}, labelNames[*process.Status](attrMemory)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, labelNames[*process.Status](attrMemory)).MetricVec, timeNow, cfg.Metrics.TTL),
 		memoryVirtualAttrs: attrMemoryVirtual,
 		memoryVirtual: prom.NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: extraattributes.ProcessMemoryVirtual.Prom,
 			Help: "The amount of committed virtual memory",
-		}, labelNames[*process.Status](attrMemoryVirtual)).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, labelNames[*process.Status](attrMemoryVirtual)).MetricVec, timeNow, cfg.Metrics.TTL),
 		diskAttrs: diskGetters,
 		disk: prom.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: extraattributes.ProcessDiskIO.Prom,
 			Help: "Disk bytes transferred",
-		}, diskLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, diskLblNames).MetricVec, timeNow, cfg.Metrics.TTL),
 		netAttrs: netGetters,
 		net: prom.NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: extraattributes.ProcessNetIO.Prom,
 			Help: "Network bytes transferred",
-		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		}, netLblNames).MetricVec, timeNow, cfg.Metrics.TTL),
 		procStatusInput: input.Subscribe(msg.SubscriberName("procStatusInput")),
 	}
 
@@ -207,9 +202,6 @@ func (r *procMetricsReporter) reportMetrics(ctx context.Context) {
 
 func (r *procMetricsReporter) collectMetrics(_ context.Context) {
 	for processes := range r.procStatusInput {
-		// clock needs to be updated to let the expirer
-		// remove the old metrics
-		r.clock.Update()
 		for _, proc := range processes {
 			r.observeMetric(proc)
 		}

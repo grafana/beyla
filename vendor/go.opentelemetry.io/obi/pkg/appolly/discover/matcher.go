@@ -81,6 +81,10 @@ type ProcessMatch struct {
 	Criteria            []services.Selector
 	LogEnricherCriteria []services.Selector
 	Process             *services.ProcessInfo
+	// DynamicSelectorPID is the runtime dynamic-selection owner PID. It is set by DynamicMatcher
+	// on direct matches and inherited unchanged by child processes matched via PPid. CriteriaMatcher
+	// leaves it zero so static discovery continues to use ProcPID downstream.
+	DynamicSelectorPID app.PID
 }
 
 func (pm ProcessMatch) LogEnricherEnabled() bool {

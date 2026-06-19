@@ -6,6 +6,7 @@
 package jvm // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -68,6 +69,14 @@ func (j *JAttacher) Cleanup() error {
 }
 
 func (j *JAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
+	return j.AttachContext(context.Background(), pid, argv, ignoreOnJ9)
+}
+
+func (j *JAttacher) AttachContext(ctx context.Context, pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	targetUID := j.myUID
 	targetGID := j.myGID
 	var nspid int
@@ -112,7 +121,7 @@ func (j *JAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadClos
 		// Deliberately no runtime.UnlockOSThread: this thread is tainted by the
 		// namespace switch and CLONE_FS unshare, so we let it die with the
 		// goroutine rather than return it to the pool.
-		reader, err := j.attachInNamespace(pid, nspid, targetUID, targetGID, argv, ignoreOnJ9)
+		reader, err := j.attachInNamespace(ctx, pid, nspid, targetUID, targetGID, argv, ignoreOnJ9)
 		resultCh <- attachResult{reader: reader, err: err}
 	}()
 
@@ -124,7 +133,7 @@ func (j *JAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadClos
 // handshake. It MUST be called from a goroutine pinned to a dedicated,
 // never-unlocked OS thread (see Attach), because it both joins the target's
 // mount namespace and unshares CLONE_FS on the calling thread.
-func (j *JAttacher) attachInNamespace(pid, nspid, targetUID, targetGID int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
+func (j *JAttacher) attachInNamespace(ctx context.Context, pid, nspid, targetUID, targetGID int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
 	// Container support: switch to the target namespaces.
 	// Network and IPC namespaces are essential for OpenJ9 connection.
 	if util.EnterNS(pid, "net") < 0 {
@@ -155,14 +164,21 @@ func (j *JAttacher) attachInNamespace(pid, nspid, targetUID, targetGID int, argv
 	// Make write() return EPIPE instead of abnormal process termination
 	signal.Ignore(syscall.SIGPIPE)
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	if isOpenJ9Process(tmpPath, attachPid) {
 		if ignoreOnJ9 {
 			return nil, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 		j9attacher := newJ9Attacher(j.logger)
 		j.j9attacher = j9attacher
 		return j.j9attacher.jattachOpenJ9(tmpPath, nspid, argv)
 	}
 
-	return jattachHotspot(pid, nspid, attachPid, argv, tmpPath, j.logger)
+	return jattachHotspot(ctx, pid, nspid, attachPid, argv, tmpPath, j.logger)
 }

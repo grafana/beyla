@@ -164,6 +164,11 @@ var (
 		Prom:    "go_config_gogc_percent",
 		OTEL:    "go.config.gogc",
 	}
+	Resource = Name{
+		Section: "resource",
+		Prom:    "resource",
+		OTEL:    "resource",
+	}
 	StatTCPRtt = Name{
 		Section: "obi.stat.tcp.rtt",
 		Prom:    "obi_stat_tcp_rtt_seconds",

@@ -12,7 +12,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
-	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
@@ -50,8 +49,6 @@ type netMetricsReporter struct {
 	flowPacketsAttrs []attributes.Field[*ebpf.Record, string]
 
 	interZoneAttrs []attributes.Field[*ebpf.Record, string]
-
-	clock *expire.CachedClock
 
 	input <-chan []*ebpf.Record
 }
@@ -92,13 +89,11 @@ func newNetReporter(
 		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
 	}
 
-	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &netMetricsReporter{
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
-		clock:       clock,
 	}
 	recordGettersConfig := ebpf.RecordGettersConfig{
 		PortGuessPolicy: cfg.GuessPorts,
@@ -114,7 +109,7 @@ func newNetReporter(
 		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.NetworkFlow.Prom,
 			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
-		}, labelNames(mr.flowAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.flowAttrs)).MetricVec, timeNow, cfg.Config.TTL)
 		register = append(register, mr.flowBytes)
 	}
 
@@ -127,7 +122,7 @@ func newNetReporter(
 		mr.flowPackets = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.NetworkFlowPackets.Prom,
 			Help: "packets sent from a source network endpoint to a destination network endpoint",
-		}, labelNames(mr.flowPacketsAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.flowPacketsAttrs)).MetricVec, timeNow, cfg.Config.TTL)
 		register = append(register, mr.flowPackets)
 	}
 
@@ -140,7 +135,7 @@ func newNetReporter(
 		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.NetworkInterZone.Prom,
 			Help: "bytes submitted between different cloud availability zones",
-		}, labelNames(mr.interZoneAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.interZoneAttrs)).MetricVec, timeNow, cfg.Config.TTL)
 		register = append(register, mr.interZone)
 	}
 
@@ -161,9 +156,6 @@ func (r *netMetricsReporter) reportMetrics(ctx context.Context) {
 
 func (r *netMetricsReporter) collectMetrics(_ context.Context) {
 	for flows := range r.input {
-		// clock needs to be updated to let the expirer
-		// remove the old metrics
-		r.clock.Update()
 		for _, flow := range flows {
 			r.observeFlowBytes(flow)
 			r.observeInterZone(flow)

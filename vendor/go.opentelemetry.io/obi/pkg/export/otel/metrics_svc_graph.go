@@ -54,6 +54,7 @@ type SvcGraphMetricsReporter struct {
 	pidTracker       PidServiceTracker
 	is               instrumentations.InstrumentationSelection
 	metricAttributes []attributes.Field[*request.Span, attribute.KeyValue]
+	selector         attributes.Selection
 
 	input         <-chan []request.Span
 	processEvents <-chan exec.ProcessEvent
@@ -80,6 +81,7 @@ func ReportSvcGraphMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
 	jointMetricsConfig *perapp.MetricsConfig,
+	selectorCfg *attributes.SelectorConfig,
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEvents *msg.Queue[exec.ProcessEvent],
@@ -94,6 +96,7 @@ func ReportSvcGraphMetrics(
 			ctx,
 			ctxInfo,
 			cfg,
+			selectorCfg,
 			unresolved,
 			input,
 			processEvents,
@@ -110,6 +113,7 @@ func newSvcGraphMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	selectorCfg *attributes.SelectorConfig,
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
@@ -126,6 +130,7 @@ func newSvcGraphMetricsReporter(
 		input:            input.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.input")),
 		processEvents:    processEventCh.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.processEvents")),
 		metricAttributes: serviceGraphGetters(unresolved, ctxInfo.K8sInformer.IsKubeEnabled()),
+		selector:         selectorCfg.SelectionCfg,
 		log:              log,
 	}
 
@@ -247,6 +252,7 @@ func (mr *SvcGraphMetricsReporter) newSvcGraphMetricsInstance(service *svc.Attrs
 	if service != nil {
 		log = log.With("service", service)
 		resourceAttributes = append(otelcfg.GetAppResourceAttrs(&mr.nodeMeta, service), otelcfg.ResourceAttrsFromEnv(service)...)
+		resourceAttributes = otelcfg.FilterResourceAttrs(resourceAttributes, mr.selector)
 	}
 	log.Debug("creating new Metrics reporter")
 	resources := resource.NewWithAttributes(semconv.SchemaURL, resourceAttributes...)
@@ -320,6 +326,7 @@ func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) 
 	}
 
 	filteredAttrs := otelcfg.GetFilteredAttributesByPrefix(baseAttrs, nil, extraAttrs, MetricTypes)
+	filteredAttrs = otelcfg.FilterResourceAttrs(filteredAttrs, mr.selector)
 	return attribute.NewSet(filteredAttrs...)
 }
 

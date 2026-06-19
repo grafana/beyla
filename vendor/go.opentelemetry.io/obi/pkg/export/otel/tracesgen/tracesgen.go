@@ -129,12 +129,40 @@ func GenerateTracesWithAttributes(
 	reporterName string,
 	extraResAttrs ...attribute.KeyValue,
 ) ptrace.Traces {
+	return generateTracesWithAttributes(cache, svc, envResourceAttrs, nodeMeta, spans, reporterName, nil, extraResAttrs...)
+}
+
+func GenerateTracesWithSelectedResourceAttributes(
+	cache *expirable2.LRU[svc.UID, []attribute.KeyValue],
+	svc *svc.Attrs,
+	envResourceAttrs []attribute.KeyValue,
+	nodeMeta *meta.NodeMeta,
+	spans []TraceSpanAndAttributes,
+	reporterName string,
+	attrSelector attributes.Selection,
+	extraResAttrs ...attribute.KeyValue,
+) ptrace.Traces {
+	return generateTracesWithAttributes(cache, svc, envResourceAttrs, nodeMeta, spans, reporterName, attrSelector, extraResAttrs...)
+}
+
+func generateTracesWithAttributes(
+	cache *expirable2.LRU[svc.UID, []attribute.KeyValue],
+	svc *svc.Attrs,
+	envResourceAttrs []attribute.KeyValue,
+	nodeMeta *meta.NodeMeta,
+	spans []TraceSpanAndAttributes,
+	reporterName string,
+	attrSelector attributes.Selection,
+	extraResAttrs ...attribute.KeyValue,
+) ptrace.Traces {
 	traces := ptrace.NewTraces()
 	rs := traces.ResourceSpans().AppendEmpty()
 	resourceAttrs := TraceAppResourceAttrs(cache, nodeMeta, svc)
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
+	resourceAttrs = otelcfg.FilterResourceAttrs(resourceAttrs, attrSelector)
 	resourceAttrsMap := AttrsToMap(resourceAttrs)
 	resourceAttrsMap.PutStr(string(semconv.OTelScopeNameKey), reporterName)
+	extraResAttrs = otelcfg.FilterResourceAttrs(extraResAttrs, attrSelector)
 	addAttrsToMap(extraResAttrs, resourceAttrsMap)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
 
@@ -387,7 +415,9 @@ func genAIToolCallAttributes(toolCalls []request.ToolCall) []attribute.KeyValue 
 }
 
 // mcpAttributes returns MCP span attributes following the OTEL MCP semantic conventions.
-func mcpAttributes(span *request.Span) []attribute.KeyValue {
+// Tool call arguments and results are gated behind optionalAttrs (GenAIInput/GenAIOutput)
+// because they may be large or contain sensitive data.
+func mcpAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	if span.SubType != request.HTTPSubtypeMCP || span.GenAI == nil || span.GenAI.MCP == nil {
 		return nil
 	}
@@ -398,6 +428,16 @@ func mcpAttributes(span *request.Span) []attribute.KeyValue {
 	}
 	if mcp.ToolName != "" {
 		attrs = append(attrs, attribute.String(string(attr.GenAIToolName), mcp.ToolName))
+	}
+	if mcp.ToolType != "" {
+		attrs = append(attrs, attribute.String(string(attr.GenAIToolType), mcp.ToolType))
+	}
+	// Gate potentially large/sensitive tool call data behind optionalAttrs
+	if _, ok := optionalAttrs[attr.GenAIInput]; ok && mcp.ToolCallArguments != "" {
+		attrs = append(attrs, attribute.String(string(attr.GenAIToolCallArguments), mcp.ToolCallArguments))
+	}
+	if _, ok := optionalAttrs[attr.GenAIOutput]; ok && mcp.ToolCallResult != "" {
+		attrs = append(attrs, attribute.String(string(attr.GenAIToolCallResult), mcp.ToolCallResult))
 	}
 	if mcp.ResourceURI != "" {
 		attrs = append(attrs, attribute.String(string(attr.MCPResourceURI), mcp.ResourceURI))
@@ -488,7 +528,7 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			attrs = append(attrs, semconv.GraphQLOperationName(span.GraphQL.OperationName))
 			attrs = append(attrs, request.GraphqlOperationType(span.GraphQL.OperationType))
 		}
-		attrs = append(attrs, mcpAttributes(span)...)
+		attrs = append(attrs, mcpAttributes(span, optionalAttrs)...)
 		attrs = append(attrs, jsonRPCAttributes(span)...)
 		attrs = append(attrs, httpEnrichmentAttributes(span)...)
 	case request.EventTypeGRPC:
@@ -696,8 +736,8 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Error.Type))
 			}
 			if ai.OperationName == request.EmbeddingOperationName {
-				if ai.Request.Dimensions > 0 {
-					attrs = append(attrs, semconv.GenAIEmbeddingsDimensionCount(ai.Request.Dimensions))
+				if dims := ai.GetEmbeddingDimensions(); dims > 0 {
+					attrs = append(attrs, semconv.GenAIEmbeddingsDimensionCount(dims))
 				}
 				if ai.Request.EncodingFormat != "" {
 					attrs = append(attrs, semconv.GenAIRequestEncodingFormats(ai.Request.EncodingFormat))
@@ -926,6 +966,14 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 					attrs = append(attrs, request.Metadata(string(ai.Metadata)))
 				}
 			}
+			if ai.OperationName == request.EmbeddingOperationName {
+				if dims := ai.GetEmbeddingDimensions(); dims > 0 {
+					attrs = append(attrs, semconv.GenAIEmbeddingsDimensionCount(dims))
+				}
+				if ai.Request.EncodingFormat != "" {
+					attrs = append(attrs, semconv.GenAIRequestEncodingFormats(ai.Request.EncodingFormat))
+				}
+			}
 			if ai.Error.Type != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Error.Type))
 			}
@@ -997,16 +1045,29 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			} else {
 				attrs = append(attrs, semconv.GenAIResponseModel(ai.Input.Model))
 			}
-			if ai.Output.ID != "" {
-				attrs = append(attrs, semconv.GenAIResponseID(ai.Output.ID))
+			if id := ai.Output.GetID(); id != "" {
+				attrs = append(attrs, semconv.GenAIResponseID(id))
 			}
 			attrs = append(attrs, semconv.GenAIUsageInputTokens(ai.Output.GetTotalTokens()))
+			if _, ok := optionalAttrs[attr.GenAIInput]; ok {
+				if input := ai.GetInput(); input != "" {
+					attrs = append(attrs, semconv.GenAIInputMessagesKey.String(input))
+				}
+			}
+			if _, ok := optionalAttrs[attr.GenAIOutput]; ok {
+				if output := ai.GetOutput(); output != "" {
+					attrs = append(attrs, semconv.GenAIOutputMessagesKey.String(output))
+				}
+			}
+			if ai.Input.GetTopN() > 0 {
+				attrs = append(attrs, attribute.Int("gen_ai.rerank.top_n", ai.Input.GetTopN()))
+			}
 			if ai.Output.Error != nil && ai.Output.Error.Type != "" {
 				attrs = append(attrs, semconv.ErrorTypeKey.String(ai.Output.Error.Type))
 			}
 		}
 
-		attrs = append(attrs, mcpAttributes(span)...)
+		attrs = append(attrs, mcpAttributes(span, optionalAttrs)...)
 
 		if span.SubType == request.HTTPSubtypeEmbedding && span.GenAI != nil && span.GenAI.Embedding != nil {
 			ai := span.GenAI.Embedding
@@ -1052,6 +1113,9 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 			if collection := ai.GetCollection(); collection != "" {
 				attrs = append(attrs, semconv.GenAIDataSourceID(collection))
+			}
+			if topK := ai.Input.GetTopK(); topK > 0 {
+				attrs = append(attrs, attribute.Int("gen_ai.retrieval.top_k", topK))
 			}
 		}
 

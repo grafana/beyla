@@ -15,7 +15,7 @@ import (
 
 type DynamicMatcher struct {
 	Log                *slog.Logger
-	DynamicPIDSelector services.Selector
+	DynamicPIDSelector *dynamicPIDSignalView
 	Input              <-chan []Event[ProcessAttrs]
 	Output             *msg.Queue[[]Event[ProcessMatch]]
 	ProcessHistory     map[app.PID]ProcessMatch
@@ -27,7 +27,7 @@ type DynamicMatcher struct {
 func dynamicMatcherProvider(
 	input *msg.Queue[[]Event[ProcessAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
-	dynamicPIDs *DynamicPIDSelector,
+	dynamicPIDs *dynamicPIDSignalView,
 ) swarm.InstanceFunc {
 	if dynamicPIDs == nil {
 		emptyFunc, _ := swarm.EmptyRunFunc()
@@ -36,7 +36,7 @@ func dynamicMatcherProvider(
 
 	dynamicMatcher := &DynamicMatcher{
 		Log:                slog.With("component", "discover.DynamicMatcher"),
-		DynamicPIDSelector: dynamicPIDs.AsSelector(),
+		DynamicPIDSelector: dynamicPIDs,
 		Input:              input.Subscribe(msg.SubscriberName("discover.DynamicMatcher")),
 		Output:             output,
 		ProcessHistory:     map[app.PID]ProcessMatch{},
@@ -130,20 +130,15 @@ func (m *DynamicMatcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], b
 
 func (m *DynamicMatcher) matchDynamicCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *ProcessMatch {
 	criteria := make([]services.Selector, 0, 1)
-	if pids, ok := m.DynamicPIDSelector.GetPIDs(); ok && len(pids) > 0 {
-		for _, p := range pids {
-			if p == proc.Pid {
-				criteria = append(criteria, m.DynamicPIDSelector)
-				break
-			}
-		}
+	if m.DynamicPIDSelector.IncludesPID(proc.Pid) {
+		criteria = append(criteria, m.DynamicPIDSelector.AsSelector())
 	}
 
 	if len(criteria) > 0 {
 		m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
 			obj.metadata, "podLabels", obj.podLabels, "criteria", criteria)
 
-		return &ProcessMatch{Criteria: criteria, Process: proc}
+		return &ProcessMatch{Criteria: criteria, Process: proc, DynamicSelectorPID: proc.Pid}
 	}
 
 	return nil

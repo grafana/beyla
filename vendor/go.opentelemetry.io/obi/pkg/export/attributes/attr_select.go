@@ -15,6 +15,7 @@ import (
 // Selection specifies which attributes are allowed for each signal.
 // The key is usually the metric name (either in Prometheus or OpenTelemetry format);
 // the key "traces" selects optional attributes for exported OTLP traces.
+// The key "resource" selects exported resource attributes.
 // The value is the enumeration of included/excluded attribute globs
 type Selection map[Section]InclusionLists
 

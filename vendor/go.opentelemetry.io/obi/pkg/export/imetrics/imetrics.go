@@ -54,6 +54,7 @@ const (
 // InternalMetricsConfig options for the different metrics exporters
 type InternalMetricsConfig struct {
 	Prometheus              PrometheusConfig        `yaml:"prometheus,omitempty"`
+	AvoidedServices         AvoidedServicesConfig   `yaml:"avoided_services,omitempty"`
 	Exporter                InternalMetricsExporter `yaml:"exporter,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_EXPORTER" validate:"omitempty,oneof=disabled prometheus otel"`
 	BpfMetricScrapeInterval time.Duration           `yaml:"bpf_metric_scrape_interval" env:"OTEL_EBPF_BPF_METRIC_SCRAPE_INTERVAL" validate:"omitempty,gt=0"`
 }
@@ -99,6 +100,9 @@ type Reporter interface {
 	// BPFPacketStats sets the counters of how many packets have been internally accounted vs how many packets
 	// have been ignored due to internal BPF map collisions
 	BPFPacketStats(count, ignored uint64)
+	// QueueBufferUtilization shows the ratio [0-1] between the unread messages of an internal Go channel
+	// and its total capacity
+	QueueBufferUtilization(subscriber string, ratio float64)
 }
 
 func IsBuiltinNoopReporter(reporter Reporter) bool {
@@ -135,3 +139,4 @@ func (n NoopReporter) BpfMapMaxEntries(_, _, _ string, _ int)            {}
 func (n NoopReporter) BpfInternalMetricsScrapeInterval() time.Duration   { return 0 }
 func (n NoopReporter) InformerLag(_ float64)                             {}
 func (n NoopReporter) BPFPacketStats(_, _ uint64)                        {}
+func (n NoopReporter) QueueBufferUtilization(_ string, _ float64)        {}

@@ -35,6 +35,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
+	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -270,6 +271,9 @@ var DefaultConfig = Config{
 	TracePrinter: debug.TracePrinterDisabled,
 	InternalMetrics: imetrics.InternalMetricsConfig{
 		Exporter: imetrics.InternalMetricsExporterDisabled,
+		AvoidedServices: imetrics.AvoidedServicesConfig{
+			Limit: avoidedsvc.DefaultLimit,
+		},
 		Prometheus: imetrics.PrometheusConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
@@ -319,12 +323,11 @@ var DefaultConfig = Config{
 				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
 			},
 		},
-		MinProcessAge:           5 * time.Second,
-		DefaultOtlpGRPCPort:     4317,
-		RouteHarvesterTimeout:   10 * time.Second,
-		DisabledRouteHarvesters: []services.RouteHarvesterLanguage{services.RouteHarvesterLanguageJava},
+		MinProcessAge:         5 * time.Second,
+		DefaultOtlpGRPCPort:   4317,
+		RouteHarvesterTimeout: 10 * time.Second,
 		RouteHarvestConfig: services.RouteHarvestingConfig{
-			JavaHarvestDelay: 60 * time.Second,
+			JavaHarvestDelay: 5 * time.Second,
 		},
 		ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
 	},

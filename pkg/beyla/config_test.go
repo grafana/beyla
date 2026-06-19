@@ -305,6 +305,9 @@ network:
 		},
 		InternalMetrics: imetrics.InternalMetricsConfig{
 			Exporter: imetrics.InternalMetricsExporterDisabled,
+			AvoidedServices: imetrics.AvoidedServicesConfig{
+				Limit: 2000, // avoidedsvc.DefaultLimit (OBI internal pkg, not importable)
+			},
 			Prometheus: imetrics.PrometheusConfig{
 				Port: 3210,
 				Path: "/internal/metrics",
@@ -383,11 +386,10 @@ network:
 					Metadata: map[string]*services.GlobAttr{"k8s_container_name": &servicesextra.K8sDefaultExcludeContainerNamesGlob},
 				},
 			},
-			DefaultOtlpGRPCPort:     4317,
-			RouteHarvesterTimeout:   10 * time.Second,
-			DisabledRouteHarvesters: []services.RouteHarvesterLanguage{services.RouteHarvesterLanguageJava},
+			DefaultOtlpGRPCPort:   4317,
+			RouteHarvesterTimeout: 10 * time.Second,
 			RouteHarvestConfig: servicesextra.RouteHarvestingConfig{
-				JavaHarvestDelay: 60 * time.Second,
+				JavaHarvestDelay: 5 * time.Second,
 			},
 			ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
 		},

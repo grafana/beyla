@@ -58,6 +58,8 @@ type Tracer struct {
 	supportsBPFLoop         bool
 	runtimeMetricTargetKeys map[runtimeMetricTargetKey]BpfPidInfo
 	runtimeMetrics          *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
+	goChannelOffsetsByIno   map[uint64]bool
+	currentBinaryIno        uint64
 }
 
 func New(
@@ -86,6 +88,7 @@ func New(
 		supportsBPFLoop:         ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
 		runtimeMetricTargetKeys: map[runtimeMetricTargetKey]BpfPidInfo{},
 		runtimeMetrics:          runtimeMetrics,
+		goChannelOffsetsByIno:   map[uint64]bool{},
 	}
 }
 
@@ -203,6 +206,8 @@ func (p *Tracer) SetupTailCalls() {
 }
 
 func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
+	p.recordGoChannelOffsetAvailability(fileInfo, offsets)
+
 	offTable := BpfOffTableT{}
 	// Set the field offsets and the logLevel for the Go BPF program in a map
 	for _, field := range []goexec.GoOffset{
@@ -344,6 +349,26 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 	}
 }
 
+func (p *Tracer) recordGoChannelOffsetAvailability(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
+	if p == nil || fileInfo == nil {
+		return
+	}
+
+	if p.goChannelOffsetsByIno == nil {
+		p.goChannelOffsetsByIno = map[uint64]bool{}
+	}
+
+	ino := fileInfo.Ino()
+	hasOffsets := offsets.HasGoChannelOffsets()
+	p.goChannelOffsetsByIno[ino] = hasOffsets
+	p.currentBinaryIno = ino
+
+	if !hasOffsets && p.log != nil {
+		p.log.Debug("skipping Go channel link probes for binary with missing runtime.hchan offsets",
+			"pid", fileInfo.Pid(), "ino", ino, "cmd", fileInfo.CmdExePath())
+	}
+}
+
 // registerRuntimeMetricTarget writes per-process Go runtime global addresses
 // into BPF. Offsets stay inode-scoped in go_offsets_map, but these addresses
 // are process-scoped for PIE/ASLR and must follow the PID allow lifecycle.
@@ -421,7 +446,17 @@ func runtimeMetricPIDInfo(pid app.PID, ns uint32) (BpfPidInfo, error) {
 	return pidInfo, nil
 }
 
-func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
+func (p *Tracer) ProcessBinary(fileInfo *exec.FileInfo) {
+	if p == nil {
+		return
+	}
+	if fileInfo == nil {
+		p.currentBinaryIno = 0
+		return
+	}
+
+	p.currentBinaryIno = fileInfo.Ino()
+}
 
 func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
@@ -773,6 +808,21 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 	}
 
+	if p.goChannelLinkProbesEnabled() {
+		m["runtime.chansend1"] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeRuntimeChansend1,
+			End:   p.bpfObjects.ObiUprobeRuntimeChansend1Return,
+		}}
+		m["runtime.chanrecv1"] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeRuntimeChanrecv1,
+			End:   p.bpfObjects.ObiUprobeRuntimeChanrecv1Return,
+		}}
+		m["runtime.chanrecv2"] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeRuntimeChanrecv2,
+			End:   p.bpfObjects.ObiUprobeRuntimeChanrecv2Return,
+		}}
+	}
+
 	// HTTP Header extraction
 	// with bpf_loop we scan the buffer with a single uprobe - this is less overhead
 	// otherwise we have a probe per header net/textproto.(*Reader).readContinuedLineSlice
@@ -830,6 +880,14 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	}
 
 	return m
+}
+
+func (p *Tracer) goChannelLinkProbesEnabled() bool {
+	if p == nil || p.currentBinaryIno == 0 {
+		return false
+	}
+
+	return p.goChannelOffsetsByIno[p.currentBinaryIno]
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {

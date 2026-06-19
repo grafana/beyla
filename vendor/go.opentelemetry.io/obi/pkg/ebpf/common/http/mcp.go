@@ -49,7 +49,8 @@ const mcpSessionHeader = "Mcp-Session-Id"
 // Param structures for extracting method-specific fields.
 
 type mcpToolCallParams struct {
-	Name string `json:"name"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
 type mcpResourceParams struct {
@@ -66,6 +67,10 @@ type mcpInitializeParams struct {
 
 type mcpInitializeResult struct {
 	ProtocolVersion string `json:"protocolVersion"`
+}
+
+type mcpToolCallResult struct {
+	Content json.RawMessage `json:"content,omitempty"`
 }
 
 // MCPSpanFromParsed detects MCP signals in a pre-parsed JSON-RPC request and
@@ -169,6 +174,10 @@ func parseMCPParams(rpcReq jsonRPCRequest, result *request.MCPCall) {
 		var p mcpToolCallParams
 		if json.Unmarshal(rpcReq.Params, &p) == nil {
 			result.ToolName = p.Name
+			result.ToolType = "function"
+			if len(p.Arguments) > 0 {
+				result.ToolCallArguments = string(p.Arguments)
+			}
 		}
 	case "resources/read", "resources/subscribe", "resources/unsubscribe":
 		var p mcpResourceParams
@@ -227,6 +236,13 @@ func applyMCPResponse(resp jsonRPCResponse, result *request.MCPCall) {
 		var initResult mcpInitializeResult
 		if json.Unmarshal(resp.Result, &initResult) == nil && initResult.ProtocolVersion != "" {
 			result.ProtocolVer = initResult.ProtocolVersion
+		}
+	}
+
+	if result.Method == "tools/call" && len(resp.Result) > 0 {
+		var toolResult mcpToolCallResult
+		if json.Unmarshal(resp.Result, &toolResult) == nil && len(toolResult.Content) > 0 {
+			result.ToolCallResult = string(toolResult.Content)
 		}
 	}
 }

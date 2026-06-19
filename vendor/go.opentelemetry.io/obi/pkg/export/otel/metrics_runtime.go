@@ -38,6 +38,7 @@ type RuntimeMetricsReporter struct {
 	reporters otelcfg.ReporterPool[*svc.Attrs, *RuntimeMetrics]
 	input     <-chan []runtimemetrics.RuntimeMetricSnapshot
 	log       *slog.Logger
+	selector  attributes.Selection
 }
 
 type RuntimeMetrics struct {
@@ -64,6 +65,7 @@ func ReportRuntimeMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
 	jointMetricsConfig *perapp.MetricsConfig,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
@@ -72,7 +74,7 @@ func ReportRuntimeMetrics(
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		reporter, err := newRuntimeMetricsReporter(ctx, ctxInfo, cfg, input)
+		reporter, err := newRuntimeMetricsReporter(ctx, ctxInfo, cfg, selectorCfg, input)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL runtime metrics reporter: %w", err)
 		}
@@ -85,6 +87,7 @@ func newRuntimeMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
+	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) (*RuntimeMetricsReporter, error) {
 	log := rmlog()
@@ -101,6 +104,7 @@ func newRuntimeMetricsReporter(
 		exporter: instrumentMetricsExporter(ctxInfo.Metrics, exporter),
 		input:    input.Subscribe(msg.SubscriberName("otel.RuntimeMetricsReporter")),
 		log:      log,
+		selector: selectorCfg.SelectionCfg,
 	}
 
 	reporter.reporters, err = otelcfg.NewReporterPool[*svc.Attrs, *RuntimeMetrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
@@ -127,6 +131,7 @@ func (r *RuntimeMetricsReporter) newMetricsInstance(service *svc.Attrs) RuntimeM
 	if service != nil {
 		log = log.With("service", service)
 		resourceAttributes = append(otelcfg.GetAppResourceAttrs(&r.nodeMeta, service), otelcfg.ResourceAttrsFromEnv(service)...)
+		resourceAttributes = otelcfg.FilterResourceAttrs(resourceAttributes, r.selector)
 	}
 	log.Debug("creating new runtime metrics reporter")
 

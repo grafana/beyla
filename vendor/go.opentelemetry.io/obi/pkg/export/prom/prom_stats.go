@@ -12,7 +12,6 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
-	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -48,8 +47,6 @@ type statMetricsReporter struct {
 	tcpFailedConnectionsAttrs []attributes.Field[*ebpf.Stat, string]
 	tcpRetransmitsAttrs       []attributes.Field[*ebpf.Stat, string]
 	tcpIoAttrs                []attributes.Field[*ebpf.Stat, string]
-
-	clock *expire.CachedClock
 
 	input <-chan []*ebpf.Stat
 }
@@ -90,13 +87,11 @@ func newStatsReporter(
 		return nil, fmt.Errorf("stats Prometheus exporter attributes enable: %w", err)
 	}
 
-	clock := expire.NewCachedClock(timeNow)
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	mr := &statMetricsReporter{
 		cfg:         cfg.Config,
 		promConnect: ctxInfo.Prometheus,
-		clock:       clock,
 	}
 
 	var register []prometheus.Collector
@@ -115,7 +110,7 @@ func newStatsReporter(
 			NativeHistogramBucketFactor:     cfg.Config.NativeHistogram.BucketFactor,
 			NativeHistogramMaxBucketNumber:  cfg.Config.NativeHistogram.MaxBucketNumber,
 			NativeHistogramMinResetDuration: cfg.Config.NativeHistogram.MinResetDuration,
-		}, labelNames(mr.tcpRttAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.tcpRttAttrs)).MetricVec, timeNow, cfg.Config.TTL)
 		register = append(register, mr.tcpRtt)
 	}
 
@@ -129,7 +124,7 @@ func newStatsReporter(
 		mr.tcpRetransmits = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.StatTCPRetransmits.Prom,
 			Help: "counts the TCP retransmits between 2 endpoints",
-		}, labelNames(mr.tcpRetransmitsAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.tcpRetransmitsAttrs)).MetricVec, timeNow, cfg.Config.TTL)
 
 		register = append(register, mr.tcpRetransmits)
 	}
@@ -144,7 +139,7 @@ func newStatsReporter(
 		mr.tcpIo = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.StatTCPIo.Prom,
 			Help: "count bytes transferred at the socket layer",
-		}, labelNames(mr.tcpIoAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.tcpIoAttrs)).MetricVec, timeNow, cfg.Config.TTL)
 
 		register = append(register, mr.tcpIo)
 	}
@@ -159,7 +154,7 @@ func newStatsReporter(
 		mr.tcpFailedConnections = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.StatTCPFailedConnections.Prom,
 			Help: "counts the TCP failed connections between 2 endpoints",
-		}, labelNames(mr.tcpFailedConnectionsAttrs)).MetricVec, clock.Time, cfg.Config.TTL)
+		}, labelNames(mr.tcpFailedConnectionsAttrs)).MetricVec, timeNow, cfg.Config.TTL)
 
 		register = append(register, mr.tcpFailedConnections)
 	}
@@ -181,9 +176,6 @@ func (r *statMetricsReporter) reportMetrics(ctx context.Context) {
 
 func (r *statMetricsReporter) collectMetrics(_ context.Context) {
 	for stats := range r.input {
-		// clock needs to be updated to let the expirer
-		// remove the old metrics
-		r.clock.Update()
 		for _, stat := range stats {
 			r.observeTCPRtt(stat)
 			r.observeTCPFailedConnections(stat)

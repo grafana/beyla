@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
@@ -89,7 +88,6 @@ type statMetricsExporter struct {
 	tcpFailedConnections *Expirer[*ebpf.Stat, metric2.Int64Counter, int64]
 	tcpRetransmits       *Expirer[*ebpf.Stat, metric2.Int64Counter, int64]
 	tcpIo                *Expirer[*ebpf.Stat, metric2.Int64Counter, int64]
-	clock                *expire.CachedClock
 	expireTTL            time.Duration
 	in                   <-chan []*ebpf.Stat
 }
@@ -138,12 +136,9 @@ func newStatMetricsExporter(
 		return nil, fmt.Errorf("stats OTEL exporter attributes enable: %w", err)
 	}
 
-	clock := expire.NewCachedClock(timeNow)
-
 	ebpfEvents := provider.Meter(statScopeName)
 
 	nme := &statMetricsExporter{
-		clock:     clock,
 		expireTTL: cfg.Metrics.TTL,
 	}
 
@@ -164,7 +159,7 @@ func newStatMetricsExporter(
 			ebpf.StatGetters,
 			attrProv.For(attributes.StatTCPRtt))
 
-		nme.tcpRtt = NewExpirer[*ebpf.Stat, metric2.Float64Histogram, float64](ctx, tcpRtt, attrs, clock.Time, cfg.Metrics.TTL)
+		nme.tcpRtt = NewExpirer[*ebpf.Stat, metric2.Float64Histogram, float64](ctx, tcpRtt, attrs, timeNow, cfg.Metrics.TTL)
 	}
 
 	if cfg.CommonCfg.Features.StatsTCPRetransmits() {
@@ -180,7 +175,7 @@ func newStatMetricsExporter(
 			ebpf.StatGetters,
 			attrProv.For(attributes.StatTCPRetransmits))
 
-		nme.tcpRetransmits = NewExpirer[*ebpf.Stat, metric2.Int64Counter, int64](ctx, tcpRetransmits, attrs, clock.Time, cfg.Metrics.TTL)
+		nme.tcpRetransmits = NewExpirer[*ebpf.Stat, metric2.Int64Counter, int64](ctx, tcpRetransmits, attrs, timeNow, cfg.Metrics.TTL)
 	}
 
 	if cfg.CommonCfg.Features.StatsTCPIo() {
@@ -196,7 +191,7 @@ func newStatMetricsExporter(
 			ebpf.StatGetters,
 			attrProv.For(attributes.StatTCPIo))
 
-		nme.tcpIo = NewExpirer[*ebpf.Stat, metric2.Int64Counter, int64](ctx, tcpIo, attrs, clock.Time, cfg.Metrics.TTL)
+		nme.tcpIo = NewExpirer[*ebpf.Stat, metric2.Int64Counter, int64](ctx, tcpIo, attrs, timeNow, cfg.Metrics.TTL)
 	}
 
 	if cfg.CommonCfg.Features.StatsTCPFailedConnections() {
@@ -212,7 +207,7 @@ func newStatMetricsExporter(
 			ebpf.StatGetters,
 			attrProv.For(attributes.StatTCPFailedConnections))
 
-		nme.tcpFailedConnections = NewExpirer[*ebpf.Stat, metric2.Int64Counter, int64](ctx, tcpFailedConnections, attrs, clock.Time, cfg.Metrics.TTL)
+		nme.tcpFailedConnections = NewExpirer[*ebpf.Stat, metric2.Int64Counter, int64](ctx, tcpFailedConnections, attrs, timeNow, cfg.Metrics.TTL)
 	}
 
 	nme.in = input.Subscribe(msg.SubscriberName("otel.StatMetricsExporter"))
@@ -221,7 +216,6 @@ func newStatMetricsExporter(
 
 func (me *statMetricsExporter) Do(ctx context.Context) {
 	for i := range me.in {
-		me.clock.Update()
 		for _, v := range i {
 			if me.tcpRtt != nil && v.TCPRtt != nil {
 				tcpRtt, attrs := me.tcpRtt.ForRecord(v)

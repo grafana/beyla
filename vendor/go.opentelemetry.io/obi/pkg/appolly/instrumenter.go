@@ -190,6 +190,7 @@ func setupMetricsSubPipeline(
 			ctxInfo,
 			&config.OTELMetrics,
 			jointMetricsConfig,
+			selectorCfg,
 			unresolvedCfg,
 			spanNameAggregatedMetrics,
 			processEventsCh,
@@ -214,6 +215,7 @@ func setupMetricsSubPipeline(
 			ctxInfo,
 			&config.OTELMetrics,
 			jointMetricsConfig,
+			selectorCfg,
 			runtimeMetrics,
 		), swarm.WithID("OTELRuntimeMetricsExport"))
 	}

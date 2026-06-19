@@ -137,9 +137,15 @@ func (rbf *ringBufForwarder[T]) sharedReadAndForward(ctx context.Context, closer
 		rbf.logger.Error("creating ring buffer reader. Exiting", "error", err)
 		return
 	}
-	// If the underlying context is closed, it closes the objects we have allocated for this bpf program
-	go rbf.bgListenSharedContextCancelation(ctx, closers, eventsReader)
+	// If the underlying context is closed, it closes the objects we have allocated for this bpf program.
+	// We wait for the closer goroutine to finish before returning so that callers (e.g. Instrumenter.stop)
+	// do not signal completion while eBPF resources are still being torn down.
+	var closerDone sync.WaitGroup
+	closerDone.Go(func() {
+		rbf.bgListenSharedContextCancelation(ctx, closers, eventsReader)
+	})
 	rbf.readAndForwardInner(ctx, eventsReader, out)
+	closerDone.Wait()
 }
 
 func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, out *msg.Queue[[]T]) {
@@ -396,8 +402,12 @@ func (rbf *ringBufForwarder[T]) bgListenContextCancelation(ctx context.Context, 
 func (rbf *ringBufForwarder[T]) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer, eventsReader ringBufReader) {
 	<-ctx.Done()
 	rbf.logger.Debug("context is cancelled. Closing eBPF resources", "len", len(closers))
-	// Often there are hundreds of closers, and don't have time to sequentially close within the
-	// shutdown grace period. Closing them in parallel
+	// Close the events reader before the eBPF objects so the readerLoop unblocks
+	// immediately via ErrClosed, rather than waiting for potentially hundreds of
+	// eBPF closers to finish. This trades a small window of data loss (events
+	// already in the ring buffer but not yet consumed) for a prompt shutdown.
+	rbf.logger.Debug("closing events reader")
+	_ = eventsReader.Close()
 	wg := sync.WaitGroup{}
 	wg.Add(len(closers))
 	for i := range closers {
@@ -408,9 +418,6 @@ func (rbf *ringBufForwarder[T]) bgListenSharedContextCancelation(ctx context.Con
 		}()
 	}
 	wg.Wait()
-	rbf.logger.Debug("closing events reader")
-	_ = eventsReader.Close()
-
 	rbf.logger.Debug("the eBPF resources are closed")
 }
 

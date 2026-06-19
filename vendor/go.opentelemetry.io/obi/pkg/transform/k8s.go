@@ -37,8 +37,9 @@ func klog() *slog.Logger {
 type KubernetesDecorator struct {
 	Enable kubeflags.EnableFlag `yaml:"enable" env:"OTEL_EBPF_KUBE_METADATA_ENABLE" validate:"oneof=true false autodetect"`
 
-	// ClusterName overrides cluster name. If empty, the NetO11y module will try to retrieve
-	// it from the Cloud Provider Metadata (EC2, GCP and Azure), and leave it empty if it fails to.
+	// ClusterName overrides cluster name. If empty, OBI will try to retrieve it from node labels,
+	// the OpenShift Infrastructure CR, or cloud provider metadata (EC2, GCP, Azure),
+	// and leave it empty if all fail.
 	ClusterName string `yaml:"cluster_name" env:"OTEL_EBPF_KUBE_CLUSTER_NAME"`
 
 	// KubeconfigPath specifies the path to the kubeconfig file. If unset, it will look in the usual location.

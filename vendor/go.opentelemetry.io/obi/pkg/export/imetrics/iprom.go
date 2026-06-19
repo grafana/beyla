@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
+	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
 )
 
 // pipelineBufferLengths buckets for histogram metrics about the number of traces submitted from one stage to another
@@ -37,6 +38,7 @@ type PrometheusReporter struct {
 	instrumentedProcesses            *prometheus.GaugeVec
 	instrumentationErrors            *prometheus.CounterVec
 	avoidedServices                  *prometheus.GaugeVec
+	avoidedServicesLimiter           *avoidedsvc.Limiter
 	buildInfo                        prometheus.Gauge
 	bpfProbeExecutions               *prometheus.CounterVec
 	bpfProbeLatencySum               *prometheus.CounterVec
@@ -50,6 +52,8 @@ type PrometheusReporter struct {
 	totalIgnoredPackets   uint64
 	bpfPacketCount        prometheus.Counter
 	bpfIgnoredPacketCount prometheus.Counter
+
+	queueCapacityRatio *prometheus.GaugeVec
 }
 
 func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
@@ -91,10 +95,6 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			Name: attr.VendorPrefix + "_instrumentation_errors_total",
 			Help: "Total number of instrumentation errors by process name and error type",
 		}, []string{"process_name", "error_type"}),
-		avoidedServices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attr.VendorPrefix + "_avoided_services",
-			Help: "Services avoided due to existing OpenTelemetry instrumentation",
-		}, []string{"service_name", "service_namespace", "service_instance_id", "telemetry_type"}),
 		buildInfo: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + "_internal_build_info",
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -141,6 +141,22 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			Name: attr.VendorPrefix + "_bpf_network_packets_total",
 			Help: "How many network packets have been internally accounted",
 		}),
+		queueCapacityRatio: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attr.VendorPrefix + "_queue_capacity_ratio",
+			Help: "Ratio [0-1] between the unread messages of an internal Go channel and its total capacity",
+		}, []string{"subscriber"}),
+	}
+	if !cfg.AvoidedServices.Disabled {
+		pr.avoidedServicesLimiter = avoidedsvc.NewLimiter(cfg.AvoidedServices.Limit)
+		pr.avoidedServices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: attr.VendorPrefix + "_avoided_services",
+			Help: "Services avoided due to existing OpenTelemetry instrumentation",
+		}, []string{
+			"service_name",
+			"service_namespace",
+			"telemetry_type",
+			avoidedsvc.PrometheusOverflowLabel,
+		})
 	}
 	metrics := []prometheus.Collector{
 		pr.tracerFlushes,
@@ -151,7 +167,6 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		pr.prometheusRequests,
 		pr.instrumentedProcesses,
 		pr.instrumentationErrors,
-		pr.avoidedServices,
 		pr.buildInfo,
 		pr.bpfProbeExecutions,
 		pr.bpfProbeLatencySum,
@@ -160,6 +175,10 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		pr.informerLag,
 		pr.bpfPacketCount,
 		pr.bpfIgnoredPacketCount,
+		pr.queueCapacityRatio,
+	}
+	if pr.avoidedServices != nil {
+		metrics = append(metrics, pr.avoidedServices)
 	}
 	if registry != nil {
 		registry.MustRegister(metrics...)
@@ -214,7 +233,12 @@ func (p *PrometheusReporter) InstrumentationError(processName string, errorType 
 }
 
 func (p *PrometheusReporter) recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, telemetryType string) {
-	p.avoidedServices.WithLabelValues(serviceName, serviceNamespace, serviceInstanceID, telemetryType).Set(1)
+	if p.avoidedServices == nil {
+		return
+	}
+
+	labels := p.avoidedServicesLimiter.Labels(serviceName, serviceNamespace, serviceInstanceID, telemetryType)
+	p.avoidedServices.WithLabelValues(labels.PrometheusValues()...).Set(1)
 }
 
 func (p *PrometheusReporter) AvoidInstrumentationMetrics(serviceName, serviceNamespace, serviceInstanceID string) {
@@ -250,4 +274,8 @@ func (p *PrometheusReporter) BPFPacketStats(count, ignored uint64) {
 	p.bpfPacketCount.Add(float64(count - p.totalPackets))
 	p.bpfIgnoredPacketCount.Add(float64(ignored - p.totalIgnoredPackets))
 	p.totalPackets, p.totalIgnoredPackets = count, ignored
+}
+
+func (p *PrometheusReporter) QueueBufferUtilization(subscriber string, ratio float64) {
+	p.queueCapacityRatio.WithLabelValues(subscriber).Set(ratio)
 }

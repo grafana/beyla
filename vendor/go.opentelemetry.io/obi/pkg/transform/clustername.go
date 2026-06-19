@@ -10,11 +10,15 @@ package transform // import "go.opentelemetry.io/obi/pkg/transform"
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"k8s.io/client-go/rest"
 
 	"go.opentelemetry.io/contrib/detectors/aws/eks"
 
@@ -23,8 +27,9 @@ import (
 )
 
 const (
-	gcpMetadataURL   = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name"
-	azureMetadataURL = "http://169.254.169.254/metadata/instance/compute/resourceGroupName?api-version=2017-08-01&format=text"
+	gcpMetadataURL     = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name"
+	azureMetadataURL   = "http://169.254.169.254/metadata/instance/compute/resourceGroupName?api-version=2017-08-01&format=text"
+	openshiftInfraPath = "/apis/config.openshift.io/v1/infrastructures/cluster"
 )
 
 var (
@@ -36,18 +41,23 @@ var metadataClient = http.Client{Timeout: time.Second}
 
 type clusterNameFetcher func(context.Context) (string, error)
 
-// fetchClusterName tries to automatically guess the cluster name from three major
-// cloud providers: EC2, GCP, Azure.
+// fetchClusterName tries to automatically guess the cluster name from
+// node labels, cloud providers (EC2, GCP, Azure), or OpenShift.
 // TODO: consider other providers (Alibaba, Oracle, etc...)
 func fetchClusterName(ctx context.Context, k8sInformer *kube.MetadataProvider) string {
 	log := klog().With("func", "fetchClusterName")
-	clusterNameFetchers := map[string]clusterNameFetcher{
-		"Label": nodeLabelsClusterNameFetcher(k8sInformer),
-		"EC2":   eksClusterNameFetcher,
-		"GCP":   gcpClusterNameFetcher,
-		"Azure": azureClusterNameFetcher,
+	clusterNameFetchers := []struct {
+		provider string
+		fetch    clusterNameFetcher
+	}{
+		{"Label", nodeLabelsClusterNameFetcher(k8sInformer)},
+		{"OpenShift", openshiftClusterNameFetcher(k8sInformer)},
+		{"EC2", eksClusterNameFetcher},
+		{"GCP", gcpClusterNameFetcher},
+		{"Azure", azureClusterNameFetcher},
 	}
-	for provider, fetch := range clusterNameFetchers {
+	for _, f := range clusterNameFetchers {
+		provider, fetch := f.provider, f.fetch
 		log := log.With("provider", provider)
 		log.Debug("trying to retrieve cluster name")
 		if name, err := fetch(ctx); err != nil {
@@ -116,6 +126,54 @@ func eksClusterNameFetcher(ctx context.Context) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("did not find any cluster attribute in %+v", resource.Attributes())
+}
+
+type openshiftInfrastructureResponse struct {
+	Status struct {
+		InfrastructureName string `json:"infrastructureName"`
+	} `json:"status"`
+}
+
+func openshiftClusterNameFetcher(k8sInformer *kube.MetadataProvider) clusterNameFetcher {
+	return func(ctx context.Context) (string, error) {
+		cfg, err := k8sInformer.RestConfig()
+		if err != nil {
+			return "", fmt.Errorf("loading kube config: %w", err)
+		}
+
+		transport, err := rest.TransportFor(cfg)
+		if err != nil {
+			return "", fmt.Errorf("creating transport: %w", err)
+		}
+
+		client := &http.Client{Timeout: time.Second, Transport: transport}
+		endpoint := strings.TrimRight(cfg.Host, "/") + openshiftInfraPath
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return "", fmt.Errorf("creating request: %w", err)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("requesting OpenShift infrastructure CR: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("OpenShift API returned %s", resp.Status)
+		}
+
+		var infra openshiftInfrastructureResponse
+		if err := json.NewDecoder(resp.Body).Decode(&infra); err != nil {
+			return "", fmt.Errorf("decoding infrastructure response: %w", err)
+		}
+
+		if infra.Status.InfrastructureName == "" {
+			return "", errors.New("OpenShift Infrastructure CR has empty infrastructureName")
+		}
+
+		return infra.Status.InfrastructureName, nil
+	}
 }
 
 func nodeLabelsClusterNameFetcher(k8sInformer *kube.MetadataProvider) func(ctx context.Context) (string, error) {

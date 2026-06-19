@@ -6,6 +6,7 @@
 package jvm // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -33,9 +34,7 @@ func getFileOwner(path string) int {
 	return int(stat.Uid)
 }
 
-// Force remote JVM to start Attach listener.
-// HotSpot will start Attach listener in response to SIGQUIT if it sees .attach_pid file
-func startAttachMechanism(pid, nspid, attachPid int, tmpPath string) bool {
+func createAttachFile(attachPid, nspid int, tmpPath string) (string, error) {
 	path := fmt.Sprintf("/proc/%d/cwd/.attach_pid%d", attachPid, nspid)
 	fd, err := os.Create(path)
 	if err == nil {
@@ -46,40 +45,68 @@ func startAttachMechanism(pid, nspid, attachPid int, tmpPath string) bool {
 		path = fmt.Sprintf("%s/.attach_pid%d", tmpPath, nspid)
 		fd, err = os.Create(path)
 		if err != nil {
-			return false
+			return "", err
 		}
 		if err := fd.Close(); err != nil {
 			_ = os.Remove(path)
-			return false
+			return "", err
 		}
 	}
 
+	return path, nil
+}
+
+func sleepContext(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// Force remote JVM to start Attach listener.
+// HotSpot will start Attach listener in response to SIGQUIT if it sees .attach_pid file
+func startAttachMechanism(ctx context.Context, pid, nspid, attachPid int, tmpPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	path, err := createAttachFile(attachPid, nspid, tmpPath)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(path)
+
 	if err := syscall.Kill(pid, syscall.SIGQUIT); err != nil {
-		_ = os.Remove(path)
-		return false
+		return err
 	}
 
 	ts := 20 * time.Millisecond
 	for i := 0; i < 300; i++ {
-		time.Sleep(ts)
+		if err := sleepContext(ctx, ts); err != nil {
+			return err
+		}
 		if checkSocket(nspid, tmpPath) {
-			_ = os.Remove(path)
-			return true
+			return nil
 		}
 		ts += 20 * time.Millisecond
 	}
 
-	_ = os.Remove(path)
-	return false
+	return errors.New("could not start the attach mechanism")
 }
 
 // Connect to UNIX domain socket created by JVM for Dynamic Attach
-func connectSocket(pid int, tmpPath string) (net.Conn, error) {
-	return net.Dial("unix", fmt.Sprintf("%s/.java_pid%d", tmpPath, pid))
+func connectSocket(ctx context.Context, pid int, tmpPath string) (net.Conn, error) {
+	var dialer net.Dialer
+	return dialer.DialContext(ctx, "unix", fmt.Sprintf("%s/.java_pid%d", tmpPath, pid))
 }
 
 // Send command with arguments to socket
-func writeHotspotCommand(conn net.Conn, args []string) error {
+func writeHotspotCommand(ctx context.Context, conn net.Conn, args []string) error {
 	request := make([]byte, 0)
 
 	request = append(request, byte('1'))
@@ -92,23 +119,36 @@ func writeHotspotCommand(conn net.Conn, args []string) error {
 		request = append(request, byte(0))
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	stop := context.AfterFunc(ctx, func() {
+		_ = conn.Close()
+	})
 	_, err := conn.Write(request)
+	stop()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
 	return err
 }
 
-func jattachHotspot(pid, nspid, attachPid int, args []string, tmpPath string, logger *slog.Logger) (io.ReadCloser, error) {
-	if !checkSocket(nspid, tmpPath) && !startAttachMechanism(pid, nspid, attachPid, tmpPath) {
-		return nil, errors.New("could not start the attach mechanism")
+func jattachHotspot(ctx context.Context, pid, nspid, attachPid int, args []string, tmpPath string, logger *slog.Logger) (io.ReadCloser, error) {
+	if !checkSocket(nspid, tmpPath) {
+		if err := startAttachMechanism(ctx, pid, nspid, attachPid, tmpPath); err != nil {
+			return nil, err
+		}
 	}
 
-	conn, err := connectSocket(nspid, tmpPath)
+	conn, err := connectSocket(ctx, nspid, tmpPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to JVM socket: %w", err)
 	}
 
 	logger.Debug("connected to the JVM")
 
-	if err := writeHotspotCommand(conn, args); err != nil {
+	if err := writeHotspotCommand(ctx, conn, args); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("error writing to the JVM socket: %w", err)
 	}

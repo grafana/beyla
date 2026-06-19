@@ -109,6 +109,11 @@ type Attrs struct {
 	// UserPID and HostPID fields of the request.PidInfo struct.
 	ProcPID app.PID
 
+	// DynamicSelectorPID is the PID whose dynamic signal selection controls this process.
+	// It usually matches ProcPID, but children discovered through a selected parent can inherit
+	// the parent's runtime signal selection.
+	DynamicSelectorPID app.PID
+
 	// HostName running the process. It will default to the OBI host and will be overridden
 	// by other metadata if available (e.g., Pod Name, Node Name, etc...)
 	HostName string

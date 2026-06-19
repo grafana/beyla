@@ -106,9 +106,11 @@ func (rm *PartialRouteMatcher) findPartialRecursive(tokens []string, node *node,
 		return rm.findPartialRecursive(tokens, child, consumed+1)
 	}
 
-	// Try wildcard match
-	if node.Wildcard != nil {
-		return rm.findPartialRecursive(tokens, node.Wildcard, consumed+1)
+	// Try pattern match in definition order; the first matching pattern wins
+	for _, w := range node.Patterns {
+		if w.matches(currentToken) {
+			return rm.findPartialRecursive(tokens, w.node, consumed+1)
+		}
 	}
 
 	// No match found

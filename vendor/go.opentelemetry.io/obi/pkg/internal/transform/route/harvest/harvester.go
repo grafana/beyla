@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -29,7 +28,7 @@ type RouteHarvester struct {
 	mux      *sync.Mutex
 
 	// testing related
-	javaExtractRoutes func(pid app.PID) (*RouteHarvesterResult, error)
+	javaExtractRoutes func(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
 	nodeExtractRoutes func(pid app.PID) (*RouteHarvesterResult, error)
 }
 
@@ -97,14 +96,6 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 
 	resultChan := make(chan result, 1)
 
-	// We need to fix this in the downstream library and then we can remove this code
-	if fileInfo.SDKLanguage() == svc.InstrumentableJava {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		h.java.Attacher.Init()
-		defer h.java.Attacher.Cleanup()
-	}
-
 	// Run the harvesting in a goroutine
 	go func() {
 		defer func() {
@@ -117,7 +108,7 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 		switch fileInfo.SDKLanguage() {
 		case svc.InstrumentableJava:
 			if _, ok := h.disabled[svc.InstrumentableJava]; !ok {
-				r, err := h.javaExtractRoutes(fileInfo.Pid())
+				r, err := h.javaExtractRoutes(fileInfo)
 				if err != nil {
 					resultChan <- result{err: err}
 					return

@@ -395,6 +395,22 @@ func (ai *VendorOpenAI) GetOutput() string {
 	return normalizeOpenAIOutput(ai)
 }
 
+func (ai *VendorOpenAI) GetEmbeddingDimensions() int {
+	if ai.Request.Dimensions > 0 {
+		return ai.Request.Dimensions
+	}
+	if len(ai.Data) == 0 {
+		return 0
+	}
+	var data []struct {
+		Embedding []json.Number `json:"embedding"`
+	}
+	if err := json.Unmarshal(ai.Data, &data); err != nil || len(data) == 0 {
+		return 0
+	}
+	return len(data[0].Embedding)
+}
+
 type OpenAIInput struct {
 	Input           string          `json:"input"`
 	Prompt          string          `json:"prompt"`
@@ -729,15 +745,18 @@ func (b *VendorBedrock) GetStopReason() string {
 
 // MCPCall holds parsed data from a Model Context Protocol request/response.
 type MCPCall struct {
-	Method       string `json:"method"`
-	ToolName     string `json:"toolName,omitempty"`
-	ResourceURI  string `json:"resourceUri,omitempty"`
-	PromptName   string `json:"promptName,omitempty"`
-	SessionID    string `json:"sessionId,omitempty"`
-	ProtocolVer  string `json:"protocolVer,omitempty"`
-	RequestID    string `json:"requestId,omitempty"`
-	ErrorCode    int    `json:"errorCode,omitempty"`
-	ErrorMessage string `json:"errorMessage,omitempty"`
+	Method            string `json:"method"`
+	ToolName          string `json:"toolName,omitempty"`
+	ToolType          string `json:"toolType,omitempty"`
+	ToolCallArguments string `json:"toolCallArguments,omitempty"`
+	ToolCallResult    string `json:"toolCallResult,omitempty"`
+	ResourceURI       string `json:"resourceUri,omitempty"`
+	PromptName        string `json:"promptName,omitempty"`
+	SessionID         string `json:"sessionId,omitempty"`
+	ProtocolVer       string `json:"protocolVer,omitempty"`
+	RequestID         string `json:"requestId,omitempty"`
+	ErrorCode         int    `json:"errorCode,omitempty"`
+	ErrorMessage      string `json:"errorMessage,omitempty"`
 }
 
 // OperationName returns the GenAI operation name for the MCP method.
@@ -873,6 +892,44 @@ type RerankRequest struct {
 	Query     string          `json:"query"`
 	TopN      int             `json:"top_n"`
 	Documents json.RawMessage `json:"documents"`
+	// Some providers nest query/documents under "input" and top_n under "parameters".
+	NestedInput *struct {
+		Query     string          `json:"query"`
+		Documents json.RawMessage `json:"documents"`
+	} `json:"input,omitempty"`
+	NestedParams *struct {
+		TopN int `json:"top_n"`
+	} `json:"parameters,omitempty"`
+}
+
+func (r *RerankRequest) GetQuery() string {
+	if r.Query != "" {
+		return r.Query
+	}
+	if r.NestedInput != nil {
+		return r.NestedInput.Query
+	}
+	return ""
+}
+
+func (r *RerankRequest) GetDocuments() json.RawMessage {
+	if len(r.Documents) > 0 {
+		return r.Documents
+	}
+	if r.NestedInput != nil {
+		return r.NestedInput.Documents
+	}
+	return nil
+}
+
+func (r *RerankRequest) GetTopN() int {
+	if r.TopN > 0 {
+		return r.TopN
+	}
+	if r.NestedParams != nil && r.NestedParams.TopN > 0 {
+		return r.NestedParams.TopN
+	}
+	return 0
 }
 
 type RerankResponse struct {
@@ -882,6 +939,28 @@ type RerankResponse struct {
 	Usage   RerankUsage     `json:"usage"`
 	Meta    *RerankMeta     `json:"meta,omitempty"`
 	Error   *RerankError    `json:"error,omitempty"`
+	// Some providers nest results under "output".
+	NestedOutput *struct {
+		Results json.RawMessage `json:"results"`
+	} `json:"output,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+}
+
+func (r *RerankResponse) GetResults() json.RawMessage {
+	if len(r.Results) > 0 {
+		return r.Results
+	}
+	if r.NestedOutput != nil {
+		return r.NestedOutput.Results
+	}
+	return nil
+}
+
+func (r *RerankResponse) GetID() string {
+	if r.ID != "" {
+		return r.ID
+	}
+	return r.RequestID
 }
 
 // RerankMeta represents Cohere-style metadata in the rerank response.
@@ -931,6 +1010,36 @@ func (r *RerankResponse) GetTotalTokens() int {
 type RerankError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+// GetInput returns a JSON representation of the rerank input (query + documents).
+func (v *VendorRerank) GetInput() string {
+	query := v.Input.GetQuery()
+	docs := v.Input.GetDocuments()
+	if query == "" && len(docs) == 0 {
+		return ""
+	}
+	obj := struct {
+		Query     string          `json:"query,omitempty"`
+		Documents json.RawMessage `json:"documents,omitempty"`
+	}{
+		Query:     query,
+		Documents: docs,
+	}
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// GetOutput returns a JSON representation of the rerank output (results).
+func (v *VendorRerank) GetOutput() string {
+	results := v.Output.GetResults()
+	if len(results) == 0 {
+		return ""
+	}
+	return string(results)
 }
 
 // Vector retrieval provider types (Pinecone, Qdrant, Milvus, Chroma, Weaviate, etc.)
@@ -983,6 +1092,22 @@ type RetrievalRequest struct {
 	CollectionName  string `json:"collectionName,omitempty"`
 	CollectionSnake string `json:"collection_name,omitempty"`
 	Namespace       string `json:"namespace,omitempty"`
+	// TopK / limit for similarity search results.
+	// Pinecone/Qdrant use "topK"/"top_k", Milvus/Chroma use "limit".
+	TopK      int `json:"topK,omitempty"`
+	TopKSnake int `json:"top_k,omitempty"`
+	Limit     int `json:"limit,omitempty"`
+}
+
+// GetTopK returns the top-k value from whichever field was populated.
+func (r *RetrievalRequest) GetTopK() int {
+	if r.TopK > 0 {
+		return r.TopK
+	}
+	if r.TopKSnake > 0 {
+		return r.TopKSnake
+	}
+	return r.Limit
 }
 
 // RetrievalResponse captures the common fields from vector search response
@@ -1109,6 +1234,16 @@ func spanAttributes(s *Span) SpanAttributes {
 			attrs["graphqlOperationName"] = s.GraphQL.OperationName
 			attrs["graphqlOperationType"] = s.GraphQL.OperationType
 		}
+		if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
+			attrs["jsonrpcMethod"] = s.JSONRPC.Method
+			attrs["jsonrpcVersion"] = s.JSONRPC.Version
+			attrs["jsonrpcRequestId"] = s.JSONRPC.RequestID
+			attrs["jsonrpcErrorCode"] = strconv.Itoa(s.JSONRPC.ErrorCode)
+			if s.JSONRPC.ErrorMessage != "" {
+				attrs["jsonrpcErrorMessage"] = s.JSONRPC.ErrorMessage
+			}
+		}
+
 		addHeaderAttributes(attrs, s)
 		return attrs
 	case EventTypeHTTPClient:

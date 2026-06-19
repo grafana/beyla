@@ -107,6 +107,10 @@ func (mp *MetadataProvider) ForceDisable() {
 	mp.cfg.Enable = kubeflags.EnabledFalse
 }
 
+func (mp *MetadataProvider) RestConfig() (*rest.Config, error) {
+	return loadKubeConfig(mp.cfg.KubeConfigPath)
+}
+
 func (mp *MetadataProvider) KubeClient() (kubernetes.Interface, error) {
 	restCfg, err := loadKubeConfig(mp.cfg.KubeConfigPath)
 	if err != nil {

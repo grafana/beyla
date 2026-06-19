@@ -18,9 +18,6 @@ import (
 const (
 	maxPendingSpanLinks = 1024
 	pendingSpanLinksTTL = 5 * time.Minute
-
-	// TODO(#2283): Honor OTEL_SPAN_LINK_COUNT_LIMIT when constructing parser state.
-	maxSpanLinks = sdktrace.DefaultLinkCountLimit
 )
 
 type spanLinkKey struct {
@@ -30,16 +27,18 @@ type spanLinkKey struct {
 
 type pendingSpanLinks struct {
 	// Links are keyed by the receiver span that should receive them when it is parsed.
-	cache *expirable.LRU[spanLinkKey, []request.SpanLink]
+	cache          *expirable.LRU[spanLinkKey, []request.SpanLink]
+	linkCountLimit int
 }
 
 func newPendingSpanLinks() *pendingSpanLinks {
-	return newPendingSpanLinksWith(maxPendingSpanLinks, pendingSpanLinksTTL)
+	return newPendingSpanLinksWith(maxPendingSpanLinks, pendingSpanLinksTTL, sdktrace.NewSpanLimits().LinkCountLimit)
 }
 
-func newPendingSpanLinksWith(size int, ttl time.Duration) *pendingSpanLinks {
+func newPendingSpanLinksWith(size int, ttl time.Duration, linkCountLimit int) *pendingSpanLinks {
 	return &pendingSpanLinks{
-		cache: expirable.NewLRU[spanLinkKey, []request.SpanLink](size, nil, ttl),
+		cache:          expirable.NewLRU[spanLinkKey, []request.SpanLink](size, nil, ttl),
+		linkCountLimit: linkCountLimit,
 	}
 }
 
@@ -119,7 +118,7 @@ func (p *pendingSpanLinks) recordLink(key spanLinkKey, link request.SpanLink) {
 		}
 	}
 
-	if len(links) >= maxSpanLinks {
+	if spanLinkCountLimitReached(len(links), p.linkCountLimit) {
 		return
 	}
 
@@ -143,7 +142,7 @@ func (p *pendingSpanLinks) consume(span *request.Span) {
 	}
 
 	for _, link := range links {
-		if len(span.Links) >= maxSpanLinks {
+		if spanLinkCountLimitReached(len(span.Links), p.linkCountLimit) {
 			break
 		}
 
@@ -161,4 +160,8 @@ func (p *pendingSpanLinks) consume(span *request.Span) {
 	}
 
 	p.cache.Remove(key)
+}
+
+func spanLinkCountLimitReached(count int, limit int) bool {
+	return limit >= 0 && count >= limit
 }

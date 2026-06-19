@@ -144,6 +144,7 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 			Namespace: namespace,
 		},
 		ProcPID:            processMatch.Process.Pid,
+		DynamicSelectorPID: processMatch.DynamicSelectorPID,
 		ExportModes:        exportModes,
 		Sampler:            samplerFromConfig(samplerConfig),
 		PathTrie:           clusterurl.NewPathTrie(routesCfg.MaxPathSegmentCardinality, wildcard),

@@ -802,7 +802,7 @@ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 # go.opentelemetry.io/obi v0.9.0 => ./.obi-src
-## explicit; go 1.25.10
+## explicit; go 1.25.11
 go.opentelemetry.io/obi/pkg/appolly
 go.opentelemetry.io/obi/pkg/appolly/app
 go.opentelemetry.io/obi/pkg/appolly/app/request
@@ -845,6 +845,7 @@ go.opentelemetry.io/obi/pkg/export/otel/tracesgen
 go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
 go.opentelemetry.io/obi/pkg/health
+go.opentelemetry.io/obi/pkg/internal/avoidedsvc
 go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience
@@ -900,6 +901,7 @@ go.opentelemetry.io/obi/pkg/internal/traces/hostname
 go.opentelemetry.io/obi/pkg/internal/transform/route
 go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest
+go.opentelemetry.io/obi/pkg/internal/transform/route/harvest/java
 go.opentelemetry.io/obi/pkg/kube
 go.opentelemetry.io/obi/pkg/kube/kubecache
 go.opentelemetry.io/obi/pkg/kube/kubecache/informer
@@ -1103,10 +1105,10 @@ golang.org/x/text/unicode/norm
 # golang.org/x/time v0.15.0
 ## explicit; go 1.25.0
 golang.org/x/time/rate
-# google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9
+# google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa
 ## explicit; go 1.25.0
 google.golang.org/genproto/googleapis/api/httpbody
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
 ## explicit; go 1.25.0
 google.golang.org/genproto/googleapis/rpc/errdetails
 google.golang.org/genproto/googleapis/rpc/status

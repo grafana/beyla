@@ -21,6 +21,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/export"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/selection"
 )
 
 func statAttrs(s *ebpf.Stat) *pipe.CommonAttrs { return &s.CommonAttrs }
@@ -71,7 +72,11 @@ func (s *Stats) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		swarm.WithID("StatsDecorator"))
 
 	dynamicFilteredStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "dynamicFilteredStats")
-	swi.Add(filter.ByDynamicPID(s.ctxInfo.DynamicPIDSelector, s.ctxInfo.K8sInformer,
+	var dynamicSelector selection.PIDSelector
+	if s.ctxInfo.DynamicPIDSelector != nil {
+		dynamicSelector = s.ctxInfo.DynamicPIDSelector.StatsMetrics()
+	}
+	swi.Add(filter.ByDynamicPID(dynamicSelector, s.ctxInfo.K8sInformer,
 		statAttrs, decoratedStats, dynamicFilteredStats),
 		swarm.WithID("DynamicPIDFilter"))
 

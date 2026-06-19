@@ -4,22 +4,15 @@
 //go:build !linux
 
 package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
-import "go.opentelemetry.io/obi/pkg/appolly/app"
 
-type (
-	JavaRoutes   struct{ Attacher JavaAttacher }
-	JavaAttacher interface {
-		Init()
-		Cleanup()
-	}
-)
+import "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+
+type JavaRoutes struct{}
 
 func NewJavaRoutesHarvester() *JavaRoutes {
-	return &JavaRoutes{Attacher: fakeAttacher{}}
+	return &JavaRoutes{}
 }
-func (h *JavaRoutes) ExtractRoutes(_ app.PID) (*RouteHarvesterResult, error) { return nil, nil }
 
-type fakeAttacher struct{}
-
-func (f fakeAttacher) Init()    {}
-func (f fakeAttacher) Cleanup() {}
+func (h *JavaRoutes) ExtractRoutes(_ *exec.FileInfo) (*RouteHarvesterResult, error) {
+	return nil, nil
+}

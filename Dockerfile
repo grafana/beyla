@@ -83,8 +83,7 @@ ENV BPF2GO=/go/bin/bpf2go
 
 # Build
 RUN if [ -z "${DEV_OBI}" ]; then \
-    export PATH="/usr/lib/llvm20/bin:$PATH" && \
-    make generate && \
+    /generate.sh && \
     make copy-obi-vendor \
     ; fi
 

@@ -9,7 +9,7 @@
     "author": "Grafana Labs",
     "license": "APL",
     "dependencies": {
-        "express": "^4.18.2",
+        "express": "^5.0.0",
         "start": "^5.1.0"
     }
 }

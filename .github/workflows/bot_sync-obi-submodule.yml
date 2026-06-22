@@ -36,13 +36,6 @@ jobs:
         run: |
           echo "sha=$(git -C .obi-src rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Commit submodule update
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .obi-src
-          git diff --staged --quiet || git commit -m "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
-
       - name: Set up Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
@@ -67,6 +60,7 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.get-github-app-token.outputs.token }}
+          sign-commits: true
           commit-message: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
           title: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
           body: |

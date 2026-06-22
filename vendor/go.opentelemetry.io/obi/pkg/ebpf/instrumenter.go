@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -37,10 +38,56 @@ func ilog() *slog.Logger {
 	return slog.With("component", "ebpf.Instrumenter")
 }
 
+var findNamespacedPids = procs.FindNamespacedPids
+
 func closeAll(closers []io.Closer) {
 	for i := range closers {
 		closers[i].Close()
 	}
+}
+
+type usdtIPMapDeleter interface {
+	Delete(key any) error
+}
+
+type usdtIPMapCleanup struct {
+	ipMap usdtIPMapDeleter
+	keys  []obiUSDTIPKey
+}
+
+func (c usdtIPMapCleanup) Close() error {
+	if c.ipMap == nil {
+		return nil
+	}
+
+	var cleanupErr error
+	for _, key := range c.keys {
+		if err := c.ipMap.Delete(key); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+			cleanupErr = errors.Join(cleanupErr, err)
+		}
+	}
+
+	return cleanupErr
+}
+
+type usdtLinkCloser struct {
+	link    io.Closer
+	cleanup usdtIPMapCleanup
+	once    sync.Once
+	err     error
+}
+
+func (c *usdtLinkCloser) Close() error {
+	c.once.Do(func() {
+		var closeErr error
+		if c.link != nil {
+			closeErr = c.link.Close()
+		}
+
+		c.err = errors.Join(closeErr, c.cleanup.Close())
+	})
+
+	return c.err
 }
 
 func (i *instrumenter) goprobes(p Tracer) error {
@@ -68,6 +115,15 @@ func (i *instrumenter) instrumentProbes(exe *link.Executable, probes map[string]
 	for symbolName, probeArray := range probes {
 		for _, probe := range probeArray {
 			log.Debug("going to instrument function", "function", symbolName, "programs", probe)
+
+			if probe.Skip {
+				if probe.Required {
+					closeAll(closers)
+					return nil, fmt.Errorf("required symbol %q was not resolved", symbolName)
+				}
+				log.Debug("skipping unresolved optional uprobe", "function", symbolName)
+				continue
+			}
 
 			cls, err := i.uprobe(exe, probe)
 
@@ -164,31 +220,13 @@ func (i *instrumenter) uprobeModules(p Tracer, pid app.PID, maps []*procfs.ProcM
 
 		lib = baseLib
 		log.Debug("finding library", "lib", lib)
-		libMap := procs.LibPath(lib, maps)
-		instrPath := exePath
-
-		instrumentedIno := exeIno
-
-		if libMap != nil {
-			log.Debug("instrumenting library", "lib", lib, "path", libMap.Pathname)
-			// we do this to make sure instrumenting something like libssl.so works with Docker
-			libInstrPath := fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr)
-
-			info, err := os.Stat(libInstrPath)
-			if err == nil {
-				stat, ok := info.Sys().(*syscall.Stat_t)
-				if ok {
-					// We've already attached probes to this shared library for this executable
-					// override the instrumented path to be the shared library
-					instrPath = libInstrPath
-					instrumentedIno = stat.Ino
-					log.Debug("found inode number, recording this instrumentation if successful", "lib", lib, "path", libMap.Pathname, "ino", stat.Ino)
-				}
-			}
+		instrPath, instrumentedIno, mappedPath, found := resolveInstrPath(pid, lib, maps, exePath, exeIno)
+		if found && mappedPath != "" {
+			log.Debug("instrumenting library", "lib", lib, "path", mappedPath, "ino", instrumentedIno)
 		}
 
 		// We didn't find this library in the shared libraries, look up for the symbols in the executable directly
-		if instrumentedIno == exeIno { // default executable instrumented path
+		if !found {
 			// E.g. NodeJS uses OpenSSL but they ship it as statically linked in the node binary
 			log.Debug(lib+" not linked, attempting to instrument executable", "path", instrPath)
 		}
@@ -303,6 +341,39 @@ func resolveExePath(pid app.PID) (string, uint64, error) {
 	return exePath, stat.Ino, nil
 }
 
+func resolveInstrPath(
+	pid app.PID,
+	lib string,
+	maps []*procfs.ProcMap,
+	exePath string,
+	exeIno uint64,
+) (string, uint64, string, bool) {
+	if lib == "" {
+		return exePath, exeIno, "", true
+	}
+
+	libMap := procs.LibPath(lib, maps)
+	if libMap == nil {
+		return exePath, exeIno, "", false
+	}
+
+	mappedPath := libMap.Pathname
+	libInstrPath := fmt.Sprintf("/proc/%d/map_files/%x-%x", pid, libMap.StartAddr, libMap.EndAddr)
+	if info, err := os.Stat(libInstrPath); err == nil {
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			return libInstrPath, stat.Ino, mappedPath, true
+		}
+	}
+
+	if info, err := os.Stat(mappedPath); err == nil {
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			return mappedPath, stat.Ino, mappedPath, true
+		}
+	}
+
+	return mappedPath, exeIno, mappedPath, true
+}
+
 func (i *instrumenter) uprobes(pid app.PID, p Tracer) error {
 	maps, err := processMaps(pid)
 	if err != nil {
@@ -365,6 +436,184 @@ func (i *instrumenter) uprobes(pid app.PID, p Tracer) error {
 	}
 
 	return nil
+}
+
+func (i *instrumenter) usdtProbes(pid app.PID, ns uint32, p Tracer) error {
+	probesByLib := p.USDTProbes()
+	if len(probesByLib) == 0 {
+		return nil
+	}
+
+	maps, err := processMaps(pid)
+	if err != nil {
+		return err
+	}
+	if len(maps) == 0 {
+		ilog().Debug("didn't find any process maps, not instrumenting USDT probes", "pid", pid)
+		return nil
+	}
+
+	exePath, _, err := resolveExePath(pid)
+	if err != nil {
+		return err
+	}
+
+	var usdtClosers []io.Closer
+	for lib, probes := range probesByLib {
+		baseLib, selected, err := matchVersionedUprobeLibrary(lib, maps)
+		if err != nil {
+			ilog().Warn("invalid version annotation for USDT library", "lib", lib, "error", err)
+			continue
+		}
+		if !selected {
+			ilog().Debug("skipping version-mismatched USDT library", "lib", lib)
+			continue
+		}
+
+		instrPath, _, mappedPath, found := resolveInstrPath(pid, baseLib, maps, exePath, 0)
+		if !found {
+			ilog().Debug("skipping USDT library not found in process maps", "pid", pid, "lib", baseLib)
+			continue
+		}
+
+		exe, err := link.OpenExecutable(instrPath)
+		if err != nil {
+			ilog().Debug("can't open executable for USDT instrumentation", "pid", pid, "path", instrPath, "error", err)
+			continue
+		}
+
+		elfFile, err := elf.Open(instrPath)
+		if err != nil {
+			ilog().Debug("can't open ELF for USDT inspection", "pid", pid, "path", instrPath, "error", err)
+			continue
+		}
+
+		for _, probe := range probes {
+			closers, err := i.instrumentUSDTProbe(exe, elfFile, pid, ns, maps, mappedPath, probe)
+			if err != nil {
+				if probe.Required {
+					elfFile.Close()
+					closeAll(usdtClosers)
+					return err
+				}
+				ilog().Debug("error instrumenting optional USDT probe",
+					"pid", pid,
+					"lib", baseLib,
+					"provider", probe.Provider,
+					"name", probe.Name,
+					"error", err,
+				)
+				continue
+			}
+			usdtClosers = append(usdtClosers, closers...)
+		}
+
+		elfFile.Close()
+	}
+
+	p.AddCloser(usdtClosers...)
+	return nil
+}
+
+func (i *instrumenter) instrumentUSDTProbe(
+	exe *link.Executable,
+	elfFile *elf.File,
+	pid app.PID,
+	ns uint32,
+	maps []*procfs.ProcMap,
+	mappedPath string,
+	probe *ebpfcommon.USDTProbeDesc,
+) ([]io.Closer, error) {
+	if probe.Program == nil || probe.SpecsMap == nil || probe.IPMap == nil || probe.SpecManager == nil {
+		return nil, errors.New("USDT probe is missing program, maps, or spec manager")
+	}
+
+	targets, err := collectUSDTTargets(elfFile, pid, maps, mappedPath, probe.Provider, probe.Name)
+	if err != nil {
+		return nil, err
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("USDT probe %s:%s not found", probe.Provider, probe.Name)
+	}
+
+	closers := make([]io.Closer, 0, len(targets))
+	for _, target := range targets {
+		specID, err := probe.SpecManager.ID(target.SpecKey, obiUSDTMaxSpecCnt)
+		if err != nil {
+			closeAll(closers)
+			return nil, err
+		}
+		// USDT specs and manager IDs are append-only; link closers only delete IP map entries.
+		if err := probe.SpecsMap.Put(specID, target.Spec); err != nil {
+			closeAll(closers)
+			return nil, fmt.Errorf("updating USDT spec map: %w", err)
+		}
+		ipMapPIDs := usdtIPMapPIDs(pid)
+		insertedIPKeys := make([]obiUSDTIPKey, 0, len(ipMapPIDs))
+		for _, mapPID := range ipMapPIDs {
+			ipKey := obiUSDTIPKey{
+				PID:       uint32(mapPID),
+				Namespace: ns,
+				IP:        target.AbsIP,
+			}
+			if err := probe.IPMap.Put(ipKey, specID); err != nil {
+				_ = (usdtIPMapCleanup{ipMap: probe.IPMap, keys: insertedIPKeys}).Close()
+				closeAll(closers)
+				return nil, fmt.Errorf("updating USDT IP map: %w", err)
+			}
+			insertedIPKeys = append(insertedIPKeys, ipKey)
+		}
+		ipMapCleanup := usdtIPMapCleanup{ipMap: probe.IPMap, keys: insertedIPKeys}
+
+		ilog().Debug("instrumenting USDT probe",
+			"pid", pid,
+			"namespace", ns,
+			"ip_map_pids", ipMapPIDs,
+			"provider", probe.Provider,
+			"name", probe.Name,
+			"spec_id", specID,
+			"rel_ip", fmt.Sprintf("%#x", target.RelIP),
+			"abs_ip", fmt.Sprintf("%#x", target.AbsIP),
+			"sema_off", fmt.Sprintf("%#x", target.SemaOff),
+		)
+
+		up, err := exe.Uprobe("", probe.Program, &link.UprobeOptions{
+			Address:      target.RelIP,
+			PID:          int(pid),
+			RefCtrOffset: target.SemaOff,
+		})
+		if err != nil {
+			_ = ipMapCleanup.Close()
+			closeAll(closers)
+			return nil, fmt.Errorf("attaching USDT probe %s:%s at %#x: %w", probe.Provider, probe.Name, target.RelIP, err)
+		}
+		closers = append(closers, &usdtLinkCloser{link: up, cleanup: ipMapCleanup})
+	}
+
+	return closers, nil
+}
+
+func usdtIPMapPIDs(pid app.PID) []app.PID {
+	pids := []app.PID{pid}
+	seen := map[app.PID]struct{}{
+		pid: {},
+	}
+
+	namespacedPIDs, err := findNamespacedPids(pid)
+	if err != nil {
+		ilog().Debug("can't read namespaced PIDs for USDT IP map", "pid", pid, "error", err)
+		return pids
+	}
+
+	for _, nsPID := range namespacedPIDs {
+		if _, ok := seen[nsPID]; ok {
+			continue
+		}
+		seen[nsPID] = struct{}{}
+		pids = append(pids, nsPID)
+	}
+
+	return pids
 }
 
 func (i *instrumenter) uprobe(exe *link.Executable, probe *ebpfcommon.ProbeDesc) ([]io.Closer, error) {
@@ -633,11 +882,16 @@ func getCgroupPath() (string, error) {
 	return cgroupPath, err
 }
 
-func symbolNames(m map[string][]*ebpfcommon.ProbeDesc) []string {
+func symbolNames(m map[string][]*ebpfcommon.ProbeDesc, matcher ebpfcommon.SymbolMatcher) []string {
 	keys := make([]string, 0, len(m))
 
-	for name := range m {
-		keys = append(keys, name)
+	for name, probes := range m {
+		for _, probe := range probes {
+			if probe.SymbolMatcher == matcher {
+				keys = append(keys, name)
+				break
+			}
+		}
 	}
 
 	return keys
@@ -657,36 +911,95 @@ func gatherOffsets(instrPath string, probes map[string][]*ebpfcommon.ProbeDesc, 
 func gatherOffsetsImpl(elfFile *elf.File, probes map[string][]*ebpfcommon.ProbeDesc,
 	instrPath string, log *slog.Logger,
 ) error {
-	syms, err := procs.FindExeSymbols(elfFile, symbolNames(probes))
+	exactSyms, substringSyms, err := procs.FindExeSymbolsByNameAndSubstring(
+		elfFile,
+		symbolNames(probes, ebpfcommon.SymbolMatcherExact),
+		symbolNames(probes, ebpfcommon.SymbolMatcherContains),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to lookup symbols for %s: %w", instrPath, err)
 	}
 
 	for symbolName, probeArray := range probes {
 		for _, probe := range probeArray {
+			syms := exactSyms
+			if probe.SymbolMatcher == ebpfcommon.SymbolMatcherContains {
+				syms = substringSyms
+			}
+
 			sym, ok := syms[symbolName]
 
 			if !ok {
+				probe.Skip = true
+				if probe.Required {
+					return fmt.Errorf("required symbol %s not found in %s", symbolName, instrPath)
+				}
+				log.Debug("skipping unresolved optional uprobe", "symbol", symbolName, "path", instrPath)
 				continue
 			}
 
+			probe.Skip = false
+			probe.StartOffset = sym.Off
 			progData := readSymbolData(&sym)
 
 			if progData == nil {
-				return fmt.Errorf("error reading symbol data for %s (%s)", symbolName, instrPath)
-			}
-
-			returns, err := goexec.FindReturnOffsets(sym.Off, progData)
-			if err != nil {
-				log.Debug("Error finding return offsets", "symbol", sym)
+				if err := handleSymbolDataReadFailure(probe, symbolName, instrPath, log); err != nil {
+					return err
+				}
 				continue
 			}
 
-			probe.StartOffset = sym.Off
-			probe.ReturnOffsets = returns
+			returns, err := goexec.FindReturnOffsets(sym.Off, progData)
+			applyResolvedSymbolOffsets(probe, sym, returns, err, symbolName, instrPath, log)
+			log.Debug("resolved uprobe symbol",
+				"requested_symbol", symbolName,
+				"matched_symbol", sym.Name,
+				"path", instrPath,
+				"offset", sym.Off,
+				"offset_hex", fmt.Sprintf("0x%x", sym.Off),
+				"size", sym.Len,
+			)
 		}
 	}
 
+	return nil
+}
+
+func applyResolvedSymbolOffsets(
+	probe *ebpfcommon.ProbeDesc,
+	sym procs.Sym,
+	returnOffsets []uint64,
+	returnErr error,
+	symbolName string,
+	instrPath string,
+	log *slog.Logger,
+) {
+	probe.StartOffset = sym.Off
+	if returnErr != nil {
+		log.Debug("error finding return offsets", "symbol", symbolName, "path", instrPath, "matched_symbol", sym.Name, "error", returnErr)
+		return
+	}
+	probe.ReturnOffsets = returnOffsets
+}
+
+func handleSymbolDataReadFailure(
+	probe *ebpfcommon.ProbeDesc,
+	symbolName string,
+	instrPath string,
+	log *slog.Logger,
+) error {
+	log.Debug("error reading symbol data", "symbol", symbolName, "path", instrPath)
+	if probe.End == nil {
+		return nil
+	}
+
+	probe.ReturnOffsets = nil
+	if probe.Required {
+		return fmt.Errorf("required symbol %s needs return offsets but symbol data could not be read from %s", symbolName, instrPath)
+	}
+
+	probe.Skip = true
+	log.Debug("skipping optional uprobe because return offsets need symbol data", "symbol", symbolName, "path", instrPath)
 	return nil
 }
 

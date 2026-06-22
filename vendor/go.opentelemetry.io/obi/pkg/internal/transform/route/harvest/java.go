@@ -6,6 +6,7 @@
 package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -23,8 +24,8 @@ func NewJavaRoutesHarvester() *JavaRoutes {
 	}
 }
 
-func (h *JavaRoutes) ExtractRoutes(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error) {
-	routes, err := javaharvest.ExtractRoutes(fileInfo)
+func (h *JavaRoutes) ExtractRoutes(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error) {
+	routes, err := javaharvest.ExtractRoutes(ctx, fileInfo)
 	if err != nil {
 		return nil, fmt.Errorf("extracting Java routes from class files: %w", err)
 	}

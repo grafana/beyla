@@ -115,13 +115,16 @@ func newGraphBuilder(
 	if exportableSpans == nil {
 		exportableSpans = msg2.QueueFromConfig[[]request.Span](config, "exportableSpans")
 	}
+	attrFilteredSpans := msg2.QueueFromConfig[[]request.Span](config, "attrFilteredSpans")
 	swi.Add(filter.ByAttribute(config.Filters.Application,
 		nil,
 		selectorCfg.ExtraGroupAttributesCfg,
 		spanPtrPromGetters(config),
 		nameResolverToAttrFilter,
-		exportableSpans),
+		attrFilteredSpans),
 		swarm.WithID("AttributesFilter"))
+	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicPIDSelector, attrFilteredSpans, exportableSpans),
+		swarm.WithID("DynamicSignalSpanGate"))
 
 	swi.Add(otel.TracesReceiver(
 		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,
@@ -130,7 +133,7 @@ func newGraphBuilder(
 		swarm.WithID("PrinterNode"))
 
 	// some nodes (ipNodesFilter, span name limiter...) are only passed to the metrics export nodes.
-	// Nodes directly handling raw traces will still get the unfiltered exportableSpans queue.
+	// The exportableSpans queue already carries any dynamic per-signal trace/metrics gating.
 	// If no metrics exporter is configured, we will not start the metrics subpipeline to save resources.
 	jointMetricsConfig := JoinMetricsConfig(config)
 	exportingMetrics := jointMetricsConfig.Features.AnyAppO11yMetric() &&
@@ -159,6 +162,10 @@ func setupMetricsSubPipeline(
 	jointMetricsConfig *perapp.MetricsConfig,
 	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) {
+	metricsProcessEvents := msg2.QueueFromConfig[exec.ProcessEvent](config, "metricsProcessEvents")
+	swi.Add(DynamicSignalProcessEventGate(ctxInfo.DynamicPIDSelector, processEventsCh, metricsProcessEvents),
+		swarm.WithID("DynamicSignalProcessEventGate"))
+
 	unresolvedCfg := request.UnresolvedNames{
 		Generic:  config.Attributes.RenameUnresolvedHosts,
 		Outgoing: config.Attributes.RenameUnresolvedHostsOutgoing,
@@ -183,7 +190,7 @@ func setupMetricsSubPipeline(
 			selectorCfg,
 			unresolvedCfg,
 			spanNameAggregatedMetrics,
-			processEventsCh,
+			metricsProcessEvents,
 		), swarm.WithID("OTELMetricsExport"))
 
 		swi.Add(otel.ReportSvcGraphMetrics(
@@ -193,11 +200,15 @@ func setupMetricsSubPipeline(
 			selectorCfg,
 			unresolvedCfg,
 			spanNameAggregatedMetrics,
-			processEventsCh,
+			metricsProcessEvents,
 		), swarm.WithID("OTELSvcGraphMetricsExport"))
 	}
 
-	if jointMetricsConfig.Features.AppOrSpan() || jointMetricsConfig.Features.ServiceGraph() || jointMetricsConfig.Features.AppRuntime() {
+	runtimeMetricsEnabled := runtimemetrics.EnabledFeatures(jointMetricsConfig.Features)
+
+	if jointMetricsConfig.Features.AppOrSpan() ||
+		jointMetricsConfig.Features.ServiceGraph() ||
+		runtimeMetricsEnabled.Any() {
 		swi.Add(prom.PrometheusEndpoint(
 			ctxInfo,
 			&config.Prometheus,
@@ -205,12 +216,12 @@ func setupMetricsSubPipeline(
 			selectorCfg,
 			unresolvedCfg,
 			spanNameAggregatedMetrics,
-			processEventsCh,
+			metricsProcessEvents,
 			runtimeMetrics,
 		), swarm.WithID("PrometheusEndpoint"))
 	}
 
-	if jointMetricsConfig.Features.AppRuntime() {
+	if runtimeMetricsEnabled.Any() {
 		swi.Add(otel.ReportRuntimeMetrics(
 			ctxInfo,
 			&config.OTELMetrics,

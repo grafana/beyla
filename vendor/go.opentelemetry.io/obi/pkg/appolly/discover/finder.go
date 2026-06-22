@@ -201,9 +201,8 @@ func newGoTracersGroup(
 	pidFilter ebpfcommon.ServiceFilter,
 	cfg *obi.Config,
 	metrics imetrics.Reporter,
-	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) []ebpf.Tracer {
-	return []ebpf.Tracer{gotracer.New(pidFilter, cfg, metrics, runtimeMetrics)}
+	return []ebpf.Tracer{gotracer.New(pidFilter, cfg, metrics)}
 }
 
 func newGenericTracersGroup(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) []ebpf.Tracer {

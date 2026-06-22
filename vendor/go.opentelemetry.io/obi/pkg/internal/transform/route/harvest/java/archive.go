@@ -5,6 +5,7 @@ package java // import "go.opentelemetry.io/obi/pkg/internal/transform/route/har
 
 import (
 	"archive/zip"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -12,8 +13,11 @@ import (
 	"strings"
 )
 
-func (e *Extractor) scanDir(root string) {
+func (e *Extractor) scanDir(ctx context.Context, root string) error {
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			e.log.Debug("error walking Java classpath directory", "path", path, "error", err)
 			return nil
@@ -25,49 +29,70 @@ func (e *Extractor) scanDir(root string) {
 			return filepath.SkipAll
 		}
 		if strings.EqualFold(filepath.Ext(path), ".class") {
-			e.scanClassFile(path)
+			if err := e.scanClassFile(ctx, path); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
 	if err != nil && !errors.Is(err, filepath.SkipAll) {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
 		e.log.Debug("error scanning Java classpath directory", "path", root, "error", err)
 	}
+	return nil
 }
 
-func (e *Extractor) scanClassFile(path string) {
+func (e *Extractor) scanClassFile(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		e.log.Debug("error stating Java class file", "path", path, "error", err)
-		return
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if info.Size() > MaxJavaClassScanBytes {
 		e.log.Info("java class file scan limit reached", "path", path, "size", info.Size(), "limit", MaxJavaClassScanBytes)
-		return
+		return nil
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		e.log.Debug("error reading Java class file", "path", path, "error", err)
-		return
+		return nil
 	}
-	e.scanClassBytes(path, data)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return e.scanClassBytes(ctx, path, data)
 }
 
-func (e *Extractor) scanArchive(path string) {
+func (e *Extractor) scanArchive(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		e.log.Debug("error stating Java archive", "path", path, "error", err)
-		return
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if info.Size() > MaxJavaArchiveScanBytes {
 		e.log.Info("java archive scan limit reached", "path", path, "size", info.Size(), "limit", MaxJavaArchiveScanBytes)
-		return
+		return nil
 	}
 
 	reader, err := zip.OpenReader(path)
 	if err != nil {
 		e.log.Debug("error opening Java archive", "path", path, "error", err)
-		return
+		return nil
 	}
 	defer func() {
 		if err := reader.Close(); err != nil {
@@ -76,8 +101,11 @@ func (e *Extractor) scanArchive(path string) {
 	}()
 
 	for _, file := range reader.File {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if e.classLimitReached() || e.routeLimitReached() {
-			return
+			return nil
 		}
 		if !scanArchiveClassEntry(file.Name) {
 			continue
@@ -86,8 +114,11 @@ func (e *Extractor) scanArchive(path string) {
 			e.log.Info("java class file scan limit reached", "path", file.Name, "size", file.UncompressedSize64, "limit", MaxJavaClassScanBytes)
 			continue
 		}
-		e.scanZipClass(path, file)
+		if err := e.scanZipClass(ctx, path, file); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func scanArchiveClassEntry(name string) bool {
@@ -104,11 +135,14 @@ func scanArchiveClassEntry(name string) bool {
 	return true
 }
 
-func (e *Extractor) scanZipClass(archivePath string, file *zip.File) {
+func (e *Extractor) scanZipClass(ctx context.Context, archivePath string, file *zip.File) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	reader, err := file.Open()
 	if err != nil {
 		e.log.Debug("error opening Java class entry", "archive", archivePath, "path", file.Name, "error", err)
-		return
+		return nil
 	}
 	defer func() {
 		if err := reader.Close(); err != nil {
@@ -119,22 +153,32 @@ func (e *Extractor) scanZipClass(archivePath string, file *zip.File) {
 	data, err := io.ReadAll(io.LimitReader(reader, MaxJavaClassScanBytes+1))
 	if err != nil {
 		e.log.Debug("error reading Java class entry", "archive", archivePath, "path", file.Name, "error", err)
-		return
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if int64(len(data)) > MaxJavaClassScanBytes {
 		e.log.Info("java class file scan limit reached", "path", file.Name, "size", len(data), "limit", MaxJavaClassScanBytes)
-		return
+		return nil
 	}
-	e.scanClassBytes(archivePath+":"+file.Name, data)
+	return e.scanClassBytes(ctx, archivePath+":"+file.Name, data)
 }
 
-func (e *Extractor) scanClassBytes(name string, data []byte) {
+func (e *Extractor) scanClassBytes(ctx context.Context, name string, data []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	e.classesScanned++
 
 	class, err := parseClassFile(data)
 	if err != nil {
 		e.log.Debug("error parsing Java class file", "path", name, "error", err)
-		return
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	e.addRoutes(routesFromClass(class))
+	return nil
 }

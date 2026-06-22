@@ -186,6 +186,8 @@ type Config struct {
 
 	HealthCheck obi.HealthCheckConfig `yaml:"health_check"`
 
+	JVMRuntimeMetrics obi.JVMRuntimeMetricsConfig `yaml:"jvm_runtime_metrics"`
+
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
 }

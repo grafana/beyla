@@ -431,6 +431,11 @@ adjust_docker_compose_paths() {
         # (testoutput paths are unchanged — depth matches upstream)
         sed_i -e 's|\.\./\.\./\.\./internal/|../../../.obi-src/internal/|g' "$file"
 
+        # The jvm-runtime-events-live compose file bind-mounts the OBI repo root
+        # at /src so `go test ./pkg/internal/ebpf/generictracer` (which only exists
+        # in OBI) can compile inside the container.
+        sed_i -e 's|- \.\./\.\./\.\.:/src|- ../../../.obi-src:/src|g' "$file"
+
         # Redirect bare ./components/ and components/ paths to .obi-src.
         # These reference standalone app dirs that aren't copied to the
         # generated output (they're built via Docker from the OBI source).

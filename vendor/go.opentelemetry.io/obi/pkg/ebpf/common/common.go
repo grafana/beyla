@@ -100,6 +100,13 @@ var IntegrityModeOverride = false
 
 type TracerCapability uint64
 
+type SymbolMatcher uint8
+
+const (
+	SymbolMatcherExact SymbolMatcher = iota
+	SymbolMatcherContains
+)
+
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
 type ProbeDesc struct {
@@ -120,6 +127,50 @@ type ProbeDesc struct {
 
 	// Optional list of the offsets of every RET instruction in the symbol
 	ReturnOffsets []uint64
+
+	// SymbolMatcher controls how the map key for this probe is matched against
+	// executable symbols. The zero value preserves exact symbol matching.
+	SymbolMatcher SymbolMatcher
+
+	// Skip is set when an optional uprobe symbol was not resolved.
+	Skip bool
+}
+
+type USDTSpecManager struct {
+	mu    sync.Mutex
+	next  uint32
+	specs map[string]uint32
+}
+
+func (m *USDTSpecManager) ID(specKey string, maxSpecs uint32) (uint32, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.specs == nil {
+		m.specs = map[string]uint32{}
+	}
+	if id, ok := m.specs[specKey]; ok {
+		return id, nil
+	}
+	if m.next >= maxSpecs {
+		return 0, fmt.Errorf("too many USDT argument specs: max %d", maxSpecs)
+	}
+
+	id := m.next
+	m.next++
+	m.specs[specKey] = id
+	return id, nil
+}
+
+type USDTProbeDesc struct {
+	Required bool
+	Provider string
+	Name     string
+	Program  *ebpf.Program
+
+	SpecsMap    *ebpf.Map
+	IPMap       *ebpf.Map
+	SpecManager *USDTSpecManager
 }
 
 type Filter struct {
@@ -219,6 +270,7 @@ type sharedForwarder interface {
 type EBPFEventContext struct {
 	CommonPIDsFilter ServiceFilter
 	SharedRingBuffer sharedForwarder
+	RuntimeMetrics   RuntimeMetricSender
 	EBPFMaps         map[string]*ebpf.Map
 	RingBufLock      sync.Mutex
 	MapsLock         sync.Mutex

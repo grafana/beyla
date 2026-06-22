@@ -92,10 +92,15 @@ type tracerInstance struct {
 	done     atomic.Bool
 }
 
-func (pt *ProcessTracer) Run(ctx context.Context, ebpfEventContext *common.EBPFEventContext, out *msg.Queue[[]request.Span]) {
+func (pt *ProcessTracer) Run(
+	ctx context.Context,
+	ebpfEventContext *common.EBPFEventContext,
+	out *msg.Queue[[]request.Span],
+) {
 	pt.log = ptlog().With("type", pt.Type)
 
 	pt.log.Debug("starting process tracer")
+
 	// Searches for traceable functions
 	trcrs := pt.Programs
 	wg := sync.WaitGroup{}
@@ -315,6 +320,10 @@ func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
 				printVerifierErrorInfo(err)
 				return err
 			}
+			if err := i.usdtProbes(ie.FileInfo.Pid(), ie.FileInfo.Ns(), p); err != nil {
+				printVerifierErrorInfo(err)
+				return err
+			}
 		}
 	} else {
 		pt.log.Warn("Attempted to update non-existent tracer", "path", ie.FileInfo.CmdExePath(), "pid", ie.FileInfo.Pid())
@@ -343,6 +352,11 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 
 		// Uprobes to be used for native module instrumentation points
 		if err := i.uprobes(ie.FileInfo.Pid(), p); err != nil {
+			printVerifierErrorInfo(err)
+			return err
+		}
+
+		if err := i.usdtProbes(ie.FileInfo.Pid(), ie.FileInfo.Ns(), p); err != nil {
 			printVerifierErrorInfo(err)
 			return err
 		}

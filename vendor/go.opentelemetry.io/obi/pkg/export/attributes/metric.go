@@ -164,6 +164,31 @@ var (
 		Prom:    "go_config_gogc_percent",
 		OTEL:    "go.config.gogc",
 	}
+	JVMMemoryUsed = Name{
+		Section: "jvm.memory.used",
+		Prom:    "jvm_memory_used_bytes",
+		OTEL:    "jvm.memory.used",
+	}
+	JVMMemoryCommitted = Name{
+		Section: "jvm.memory.committed",
+		Prom:    "jvm_memory_committed_bytes",
+		OTEL:    "jvm.memory.committed",
+	}
+	JVMMemoryLimit = Name{
+		Section: "jvm.memory.limit",
+		Prom:    "jvm_memory_limit_bytes",
+		OTEL:    "jvm.memory.limit",
+	}
+	JVMMemoryUsedAfterLastGC = Name{
+		Section: "jvm.memory.used_after_last_gc",
+		Prom:    "jvm_memory_used_after_last_gc_bytes",
+		OTEL:    "jvm.memory.used_after_last_gc",
+	}
+	ObiJVMHeapUsed = Name{
+		Section: "obi.jvm.heap.used",
+		Prom:    "obi_jvm_heap_used_bytes",
+		OTEL:    "obi.jvm.heap.used",
+	}
 	Resource = Name{
 		Section: "resource",
 		Prom:    "resource",

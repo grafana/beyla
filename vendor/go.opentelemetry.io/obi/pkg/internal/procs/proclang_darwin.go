@@ -17,3 +17,11 @@ func FindProcLanguage(_ app.PID) svc.InstrumentableType {
 func FindExeSymbols(_ *elf.File, _ []string, _ ...elf.SymType) (map[string]Sym, error) {
 	return nil, nil
 }
+
+func FindExeSymbolsBySubstring(_ *elf.File, _ []string, _ ...elf.SymType) (map[string]Sym, error) {
+	return nil, nil
+}
+
+func FindExeSymbolsByNameAndSubstring(_ *elf.File, _, _ []string, _ ...elf.SymType) (map[string]Sym, map[string]Sym, error) {
+	return nil, nil, nil
+}

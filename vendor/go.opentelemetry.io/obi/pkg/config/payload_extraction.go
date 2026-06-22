@@ -205,7 +205,7 @@ type HTTPParsingPolicy struct {
 	// DefaultAction specifies what to do when no rule matches, per type.
 	DefaultAction HTTPParsingDefaultAction `yaml:"default_action"`
 	// ObfuscationString is the replacement string used when a rule's action is "obfuscate"
-	ObfuscationString string `yaml:"obfuscation_string" env:"OTEL_EBPF_HTTP_ENRICHMENT_OBFUSCATION_STRING"`
+	DefaultObfuscationString string `yaml:"obfuscation_string" env:"OTEL_EBPF_HTTP_ENRICHMENT_OBFUSCATION_STRING"`
 }
 
 // HTTPParsingDefaultAction specifies the default action per rule type.
@@ -224,6 +224,8 @@ type HTTPParsingRule struct {
 	Scope HTTPParsingScope `yaml:"scope" validate:"required"`
 	// Match defines the matching criteria for this rule
 	Match HTTPParsingMatch `yaml:"match"`
+	// ObfuscationString is the replacement string used when a rule's action is "obfuscate"
+	ObfuscationString *string `yaml:"obfuscation_string"`
 }
 
 // HTTPParsingRuleType specifies the target of a parsing rule.

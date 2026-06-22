@@ -4,22 +4,23 @@
 package runtimemetrics // import "go.opentelemetry.io/obi/pkg/runtimemetrics"
 
 import (
+	"context"
 	"errors"
 	"math"
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
+	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-const EventTypeGoRuntimeMetric = 17
+const EventTypeGoRuntimeMetric = ebpfcommon.EventTypeGoRuntimeMetric
 
 func IsGoRuntimeMetricRecord(record *ringbuf.Record) bool {
-	return record != nil &&
-		len(record.RawSample) > 0 &&
-		record.RawSample[0] == EventTypeGoRuntimeMetric
+	return ebpfcommon.IsGoRuntimeMetricRecord(record)
 }
 
 type RuntimeMetricSnapshot struct {
@@ -27,10 +28,60 @@ type RuntimeMetricSnapshot struct {
 	PID     app.PID
 	Time    time.Time
 
+	Go  *GoRuntimeMetricSnapshot
+	JVM *JVMRuntimeMetricSnapshot
+}
+
+type GoRuntimeMetricSnapshot struct {
 	MemoryLimit    *int64
 	GCCycles       *uint64
 	ProcessorLimit *int64
 	GOGC           *int64
+}
+
+type JVMRuntimeMetricSnapshot struct {
+	Kind       jvmruntime.JVMRuntimeMetricKind
+	PoolName   string
+	MemoryType jvmruntime.JVMMemoryType
+	GCPhase    jvmruntime.JVMGCPhase
+	ValueBytes uint64
+}
+
+type QueueSender struct {
+	queue *msg.Queue[[]RuntimeMetricSnapshot]
+}
+
+func NewQueueSender(queue *msg.Queue[[]RuntimeMetricSnapshot]) *QueueSender {
+	return &QueueSender{queue: queue}
+}
+
+func (s *QueueSender) SendGoRuntimeMetricRecord(
+	ctx context.Context,
+	record *ringbuf.Record,
+	filter ebpfcommon.ServiceFilter,
+) error {
+	if s == nil || s.queue == nil {
+		return nil
+	}
+
+	snapshot, ignore, err := SnapshotFromRingbuf(record, filter)
+	if err != nil || ignore {
+		return err
+	}
+	s.queue.SendCtx(ctx, []RuntimeMetricSnapshot{snapshot})
+	return nil
+}
+
+func (s *QueueSender) SendJVMRuntimeMetrics(ctx context.Context, events []jvmruntime.JVMRuntimeEvent) {
+	if s == nil || s.queue == nil || len(events) == 0 {
+		return
+	}
+
+	snapshots := make([]RuntimeMetricSnapshot, 0, len(events))
+	for i := range events {
+		snapshots = append(snapshots, SnapshotFromJVMRuntimeEvent(events[i]))
+	}
+	s.queue.SendCtx(ctx, snapshots)
 }
 
 type goRuntimeMetricRawKey struct {
@@ -124,12 +175,29 @@ func convertGoRuntimeMetricSnapshot(
 	}
 
 	return RuntimeMetricSnapshot{
-		Service:        service,
-		PID:            pid,
-		Time:           time.Now(),
-		MemoryLimit:    limit,
-		GCCycles:       totalPtr,
-		ProcessorLimit: processorLimit,
-		GOGC:           gogc,
+		Service: service,
+		PID:     pid,
+		Time:    time.Now(),
+		Go: &GoRuntimeMetricSnapshot{
+			MemoryLimit:    limit,
+			GCCycles:       totalPtr,
+			ProcessorLimit: processorLimit,
+			GOGC:           gogc,
+		},
+	}
+}
+
+func SnapshotFromJVMRuntimeEvent(event jvmruntime.JVMRuntimeEvent) RuntimeMetricSnapshot {
+	return RuntimeMetricSnapshot{
+		Service: event.Service,
+		PID:     event.PID,
+		Time:    event.Time,
+		JVM: &JVMRuntimeMetricSnapshot{
+			Kind:       event.Kind,
+			PoolName:   event.PoolName,
+			MemoryType: event.MemoryType,
+			GCPhase:    event.GCPhase,
+			ValueBytes: event.ValueBytes,
+		},
 	}
 }

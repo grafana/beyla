@@ -37,7 +37,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
-	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
@@ -57,7 +56,6 @@ type Tracer struct {
 	disabledRouteHarvesting bool
 	supportsBPFLoop         bool
 	runtimeMetricTargetKeys map[runtimeMetricTargetKey]BpfPidInfo
-	runtimeMetrics          *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
 	goChannelOffsetsByIno   map[uint64]bool
 	currentBinaryIno        uint64
 }
@@ -66,7 +64,6 @@ func New(
 	pidFilter ebpfcommon.ServiceFilter,
 	cfg *obi.Config,
 	metrics imetrics.Reporter,
-	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) *Tracer {
 	log := slog.With("component", "go.Tracer")
 
@@ -87,7 +84,6 @@ func New(
 		disabledRouteHarvesting: disabledRouteHarvesting,
 		supportsBPFLoop:         ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
 		runtimeMetricTargetKeys: map[runtimeMetricTargetKey]BpfPidInfo{},
-		runtimeMetrics:          runtimeMetrics,
 		goChannelOffsetsByIno:   map[uint64]bool{},
 	}
 }
@@ -898,6 +894,10 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 	return nil
 }
 
+func (p *Tracer) USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc {
+	return nil
+}
+
 func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
@@ -931,7 +931,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 		p.cfg,
 		p.bpfObjects.Events,
 		func(record *ringbuf.Record) (request.Span, bool, error) {
-			if handled, err := p.handleRuntimeMetricRecord(ctx, record); handled {
+			if handled, err := ebpfcommon.HandleRuntimeMetricsRecord(ctx, ebpfEventContext, record, p.pidsFilter, p.log); handled {
 				return request.Span{}, true, err
 			}
 			s, ignore, err := ebpfcommon.ReadBPFTraceAsSpan(parseContext, p.cfg, record, p.pidsFilter)
@@ -944,18 +944,6 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 		slog.With("component", "ringbuf.Tracer"),
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
-}
-
-func (p *Tracer) handleRuntimeMetricRecord(ctx context.Context, record *ringbuf.Record) (bool, error) {
-	if !runtimemetrics.IsGoRuntimeMetricRecord(record) {
-		return false, nil
-	}
-
-	snapshot, ignore, err := runtimemetrics.SnapshotFromRingbuf(record, p.pidsFilter)
-	if !ignore && err == nil && p.runtimeMetrics != nil {
-		p.runtimeMetrics.SendCtx(ctx, []runtimemetrics.RuntimeMetricSnapshot{snapshot})
-	}
-	return true, err
 }
 
 func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext) {}

@@ -260,6 +260,25 @@ func getDefinitions(
 		extraGroupAttributes[GroupApp],
 	)
 
+	jvmMemoryAttributes := NewAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&appAttributes},
+		map[attr.Name]Default{
+			attr.JVMMemoryType:     true,
+			attr.JVMMemoryPoolName: true,
+		},
+		nil,
+	)
+
+	jvmHeapAttributes := NewAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&appAttributes},
+		map[attr.Name]Default{
+			attr.JVMGCPhase: true,
+		},
+		nil,
+	)
+
 	httpRoutes := NewAttrReportGroup(
 		!groups.Has(GroupHTTPRoutes),
 		nil,
@@ -464,6 +483,26 @@ func getDefinitions(
 				attr.ServerPort:         true,
 				attr.ServerAddr:         true,
 			},
+		},
+		JVMMemoryUsed.Section: {
+			SubGroups:  []*AttrReportGroup{&jvmMemoryAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		JVMMemoryCommitted.Section: {
+			SubGroups:  []*AttrReportGroup{&jvmMemoryAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		JVMMemoryLimit.Section: {
+			SubGroups:  []*AttrReportGroup{&jvmMemoryAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		JVMMemoryUsedAfterLastGC.Section: {
+			SubGroups:  []*AttrReportGroup{&jvmMemoryAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		ObiJVMHeapUsed.Section: {
+			SubGroups:  []*AttrReportGroup{&jvmHeapAttributes},
+			Attributes: map[attr.Name]Default{},
 		},
 		StatTCPRtt.Section: {
 			SubGroups: []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},

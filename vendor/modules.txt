@@ -806,6 +806,7 @@ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
 go.opentelemetry.io/obi/pkg/appolly
 go.opentelemetry.io/obi/pkg/appolly/app
 go.opentelemetry.io/obi/pkg/appolly/app/request
+go.opentelemetry.io/obi/pkg/appolly/app/runtime
 go.opentelemetry.io/obi/pkg/appolly/app/svc
 go.opentelemetry.io/obi/pkg/appolly/discover
 go.opentelemetry.io/obi/pkg/appolly/discover/exec

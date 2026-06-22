@@ -338,6 +338,9 @@ var DefaultConfig = Config{
 		Enabled: true,
 		Timeout: 10 * time.Second,
 	},
+	JVMRuntimeMetrics: JVMRuntimeMetricsConfig{
+		SamplingInterval: time.Second,
+	},
 	HealthCheck: HealthCheckConfig{
 		Port: 0,
 	},
@@ -430,6 +433,8 @@ type Config struct {
 
 	NodeJS NodeJSConfig `yaml:"nodejs"`
 	Java   JavaConfig   `yaml:"javaagent"`
+
+	JVMRuntimeMetrics JVMRuntimeMetricsConfig `yaml:"jvm_runtime_metrics"`
 
 	HealthCheck HealthCheckConfig `yaml:"health_check"`
 }
@@ -628,6 +633,11 @@ type JavaConfig struct {
 	Timeout              time.Duration `yaml:"attach_timeout" env:"OTEL_EBPF_JAVAAGENT_ATTACH_TIMEOUT" validate:"gte=0"`
 }
 
+type JVMRuntimeMetricsConfig struct {
+	Enabled          bool          `yaml:"enabled" env:"OBI_JVM_RUNTIME_METRICS_ENABLED"`
+	SamplingInterval time.Duration `yaml:"sampling_interval" env:"OBI_JVM_RUNTIME_METRICS_SAMPLING_INTERVAL"`
+}
+
 type ConfigError string
 
 func (e ConfigError) Error() string {
@@ -651,6 +661,10 @@ func (c *Config) Validate() error {
 
 	if err := validate.Struct(c); err != nil {
 		return ConfigError(err.Error())
+	}
+
+	if c.JVMRuntimeMetrics.Enabled && c.JVMRuntimeMetrics.SamplingInterval <= 0 {
+		return ConfigError("jvm_runtime_metrics.sampling_interval must be greater than 0 when jvm_runtime_metrics.enabled is true")
 	}
 
 	if err := c.Discovery.Validate(); err != nil {

@@ -325,8 +325,15 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.DBCollectionName:
 		getter = func(s *Span) attribute.KeyValue {
-			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
-				return DBCollectionName(s.Elasticsearch.DBCollectionName)
+			switch s.Type {
+			case EventTypeHTTPClient:
+				if s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
+					return DBCollectionName(s.Elasticsearch.DBCollectionName)
+				} else if s.SubType == HTTPSubtypeSQLPP {
+					return DBCollectionName(s.Route)
+				}
+			case EventTypeSQLClient, EventTypeSQLServer:
+				return DBCollectionName(s.Path)
 			}
 			return DBCollectionName("")
 		}

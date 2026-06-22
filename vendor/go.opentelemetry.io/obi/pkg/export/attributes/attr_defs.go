@@ -389,10 +389,11 @@ func getDefinitions(
 		DBClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{
-				attr.ServerAddr:   true,
-				attr.DBOperation:  true,
-				attr.DBSystemName: true,
-				attr.ErrorType:    true,
+				attr.ServerAddr:       true,
+				attr.DBOperation:      true,
+				attr.DBSystemName:     true,
+				attr.ErrorType:        true,
+				attr.DBCollectionName: true,
 			},
 		},
 		MessagingPublishDuration.Section: {

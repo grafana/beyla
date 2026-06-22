@@ -395,6 +395,9 @@ network:
 		},
 		NodeJS: obi.NodeJSConfig{Enabled: true},
 		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
+		JVMRuntimeMetrics: obi.JVMRuntimeMetricsConfig{
+			SamplingInterval: time.Second,
+		},
 		Injector: SDKInject{
 			EnabledSDKs: []servicesextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},

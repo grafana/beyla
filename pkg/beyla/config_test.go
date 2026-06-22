@@ -193,7 +193,7 @@ network:
 								Headers: obiconfig.HTTPParsingActionExclude,
 								Body:    obiconfig.HTTPParsingActionExclude,
 							},
-							ObfuscationString: "***",
+							DefaultObfuscationString: "***",
 						},
 						Rules: []obiconfig.HTTPParsingRule{},
 					},
@@ -393,8 +393,9 @@ network:
 			},
 			ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
 		},
-		NodeJS: obi.NodeJSConfig{Enabled: true},
-		Java:   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
+		NodeJS:            obi.NodeJSConfig{Enabled: true},
+		Java:              obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
+		JVMRuntimeMetrics: obi.JVMRuntimeMetricsConfig{SamplingInterval: time.Second},
 		Injector: SDKInject{
 			EnabledSDKs: []servicesextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},

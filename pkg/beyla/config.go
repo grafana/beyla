@@ -177,6 +177,8 @@ type Config struct {
 
 	Java obi.JavaConfig `yaml:"javaagent"`
 
+	JVMRuntimeMetrics obi.JVMRuntimeMetricsConfig `yaml:"jvm_runtime_metrics"`
+
 	// Topology enables extra topology-related features, such as inter-cluster connection spans.
 	Topology spanscfg.Topology `yaml:"topology"`
 

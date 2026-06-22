@@ -30,6 +30,7 @@ jobs:
       - name: Update submodule
         run: |
           git submodule update --checkout --remote .obi-src
+          git add .obi-src
 
       - name: Get OBI short SHA
         id: obi-sha

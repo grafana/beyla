@@ -430,6 +430,9 @@ adjust_docker_compose_paths() {
         # Volume mounts: internal/ paths → .obi-src
         # (testoutput paths are unchanged — depth matches upstream)
         sed_i -e 's|\.\./\.\./\.\./internal/|../../../.obi-src/internal/|g' "$file"
+        # Volume mount that exposes the OBI repo root inside the container
+        # (used by tests that `go test ./pkg/...` against OBI source).
+        sed_i -e 's|\.\./\.\./\.\.:/src|../../../.obi-src:/src|g' "$file"
 
         # Redirect bare ./components/ and components/ paths to .obi-src.
         # These reference standalone app dirs that aren't copied to the

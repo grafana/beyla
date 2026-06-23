@@ -206,6 +206,14 @@ func setupMetricsSubPipeline(
 
 	runtimeMetricsEnabled := runtimemetrics.EnabledFeatures(jointMetricsConfig.Features)
 
+	runtimeMetricsInput := runtimeMetrics
+	if runtimeMetrics != nil {
+		gatedRuntimeMetrics := msg2.QueueFromConfig[[]runtimemetrics.RuntimeMetricSnapshot](config, "gatedRuntimeMetrics")
+		swi.Add(DynamicSignalRuntimeMetricsGate(ctxInfo.DynamicPIDSelector, runtimeMetrics, gatedRuntimeMetrics),
+			swarm.WithID("DynamicSignalRuntimeMetricsGate"))
+		runtimeMetricsInput = gatedRuntimeMetrics
+	}
+
 	if jointMetricsConfig.Features.AppOrSpan() ||
 		jointMetricsConfig.Features.ServiceGraph() ||
 		runtimeMetricsEnabled.Any() {
@@ -217,7 +225,7 @@ func setupMetricsSubPipeline(
 			unresolvedCfg,
 			spanNameAggregatedMetrics,
 			metricsProcessEvents,
-			runtimeMetrics,
+			runtimeMetricsInput,
 		), swarm.WithID("PrometheusEndpoint"))
 	}
 
@@ -227,7 +235,7 @@ func setupMetricsSubPipeline(
 			&config.OTELMetrics,
 			jointMetricsConfig,
 			selectorCfg,
-			runtimeMetrics,
+			runtimeMetricsInput,
 		), swarm.WithID("OTELRuntimeMetricsExport"))
 	}
 }

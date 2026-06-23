@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 	"go.opentelemetry.io/obi/pkg/selection"
 )
 
@@ -28,6 +29,13 @@ func processEventSignalPID(file *exec.FileInfo) app.PID {
 		return snap.DynamicSelectorPID
 	}
 	return file.Pid()
+}
+
+func runtimeMetricSignalPID(snapshot runtimemetrics.RuntimeMetricSnapshot) app.PID {
+	if snapshot.Service.DynamicSelectorPID != 0 {
+		return snapshot.Service.DynamicSelectorPID
+	}
+	return snapshot.PID
 }
 
 // DynamicSignalSpanGate marks spans as traces/metrics-ignored according to the runtime signal views.
@@ -58,6 +66,44 @@ func DynamicSignalSpanGate(
 			})
 		}, nil
 	}
+}
+
+// DynamicSignalRuntimeMetricsGate forwards runtime metric snapshots only for PIDs selected
+// for app metrics.
+func DynamicSignalRuntimeMetricsGate(
+	selector selection.MultiSignalPIDSelector,
+	input, output *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
+		if selector == nil {
+			return swarm.Bypass(input, output)
+		}
+		in := input.Subscribe(msg.SubscriberName("appolly.DynamicSignalRuntimeMetricsGate"))
+		metricsSelector := selector.AppMetrics()
+		return func(ctx context.Context) {
+			defer output.Close()
+			swarms.ForEachInput(ctx, in, nil, func(snapshots []runtimemetrics.RuntimeMetricSnapshot) {
+				out := filterRuntimeMetricSnapshots(snapshots, metricsSelector)
+				if len(out) > 0 {
+					output.SendCtx(ctx, out)
+				}
+			})
+		}, nil
+	}
+}
+
+func filterRuntimeMetricSnapshots(
+	snapshots []runtimemetrics.RuntimeMetricSnapshot,
+	selector selection.PIDSelector,
+) []runtimemetrics.RuntimeMetricSnapshot {
+	writeIdx := 0
+	for readIdx := range snapshots {
+		if selector.IncludesPID(runtimeMetricSignalPID(snapshots[readIdx])) {
+			snapshots[writeIdx] = snapshots[readIdx]
+			writeIdx++
+		}
+	}
+	return snapshots[:writeIdx]
 }
 
 type dynamicSignalProcessEventGate struct {

@@ -36,6 +36,7 @@ WORKSPACE=""
 WORKSPACE_AUTO_CREATED=false
 BEYLA_DIR=""
 OBI_DIR=""
+OBI_RELEASE_REMOTE_SHA=""
 
 DATE_BIN=""
 
@@ -133,6 +134,98 @@ run_write_git_remote_cmd() {
     fi
 
     run_git_remote_cmd "$@"
+}
+
+# The org enforces a required-signatures ruleset on all branches, so plain
+# `git push` of locally-created commits is rejected. Commits created via the
+# GitHub API with the app token are signed by GitHub, so the release commits are
+# recreated through the API and the branch ref is moved to the signed tip.
+
+upload_blob() {
+    local repo_slug="$1" repo_dir="$2" blob_sha="$3"
+    local content
+    content=$(git -C "$repo_dir" cat-file blob "$blob_sha" | base64 | tr -d '\n')
+    jq -nc --arg c "$content" '{content:$c, encoding:"base64"}' \
+        | gh api "repos/${repo_slug}/git/blobs" --input - --jq '.sha'
+}
+
+build_tree_entries() {
+    local repo_slug="$1" repo_dir="$2" sha="$3"
+    {
+        while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+            local srcmode dstmode _srcsha dstsha status
+            read -r srcmode dstmode _srcsha dstsha status <<< "${meta#:}"
+            if [[ "$status" == "D" ]]; then
+                if [[ "$srcmode" == "160000" ]]; then
+                    jq -nc --arg p "$path" '{path:$p, mode:"160000", type:"commit", sha:null}'
+                else
+                    jq -nc --arg p "$path" --arg m "$srcmode" '{path:$p, mode:$m, type:"blob", sha:null}'
+                fi
+            elif [[ "$dstmode" == "160000" ]]; then
+                jq -nc --arg p "$path" --arg s "$dstsha" '{path:$p, mode:"160000", type:"commit", sha:$s}'
+            else
+                local blob_sha
+                blob_sha=$(upload_blob "$repo_slug" "$repo_dir" "$dstsha")
+                jq -nc --arg p "$path" --arg m "$dstmode" --arg s "$blob_sha" '{path:$p, mode:$m, type:"blob", sha:$s}'
+            fi
+        done < <(git -C "$repo_dir" diff-tree --no-commit-id -r --no-renames -z "$sha")
+    } | jq -sc .
+}
+
+create_remote_signed_commit() {
+    local repo_slug="$1" repo_dir="$2" local_sha="$3" parent_remote_sha="$4"
+
+    local parent_tree
+    parent_tree=$(gh api "repos/${repo_slug}/git/commits/${parent_remote_sha}" --jq '.tree.sha')
+
+    local entries
+    entries=$(build_tree_entries "$repo_slug" "$repo_dir" "$local_sha")
+
+    local new_tree
+    new_tree=$(jq -nc --arg base "$parent_tree" --argjson entries "$entries" \
+        '{base_tree:$base, tree:$entries}' \
+        | gh api "repos/${repo_slug}/git/trees" --input - --jq '.sha')
+
+    local message
+    message=$(git -C "$repo_dir" log -1 --format=%B "$local_sha")
+
+    jq -nc --arg m "$message" --arg t "$new_tree" --arg p "$parent_remote_sha" \
+        '{message:$m, tree:$t, parents:[$p]}' \
+        | gh api "repos/${repo_slug}/git/commits" --input - --jq '.sha'
+}
+
+create_or_update_remote_ref() {
+    local repo_slug="$1" branch="$2" sha="$3"
+    if gh api "repos/${repo_slug}/git/ref/heads/${branch}" >/dev/null 2>&1; then
+        log_info "Updating refs/heads/${branch} -> ${sha:0:12}"
+        jq -nc --arg s "$sha" '{sha:$s, force:true}' \
+            | gh api -X PATCH "repos/${repo_slug}/git/refs/heads/${branch}" --input - >/dev/null
+    else
+        log_info "Creating refs/heads/${branch} -> ${sha:0:12}"
+        jq -nc --arg r "refs/heads/${branch}" --arg s "$sha" '{ref:$r, sha:$s}' \
+            | gh api "repos/${repo_slug}/git/refs" --input - >/dev/null
+    fi
+}
+
+push_signed_branch() {
+    local repo_dir="$1" repo_slug="$2" branch="$3" base_sha="$4"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[dry-run] would recreate $(git -C "$repo_dir" rev-list --count "${base_sha}..HEAD") commit(s) as signed commits on ${repo_slug}:${branch}"
+        git -C "$repo_dir" rev-parse HEAD
+        return 0
+    fi
+
+    local parent_remote="$base_sha"
+    local commit
+    while IFS= read -r commit; do
+        [[ -n "$commit" ]] || continue
+        log_info "Signing ${commit:0:12} onto ${repo_slug}:${branch} (parent ${parent_remote:0:12})"
+        parent_remote=$(create_remote_signed_commit "$repo_slug" "$repo_dir" "$commit" "$parent_remote")
+    done < <(git -C "$repo_dir" rev-list --reverse "${base_sha}..HEAD")
+
+    create_or_update_remote_ref "$repo_slug" "$branch" "$parent_remote"
+    echo "$parent_remote"
 }
 
 require_cmd() {
@@ -548,6 +641,9 @@ prepare_obi_branch() {
         run_cmd git -C "$OBI_DIR" checkout -B "$release_branch"
     fi
 
+    local base_sha
+    base_sha=$(git -C "$OBI_DIR" rev-parse HEAD)
+
     uncomment_bpfel_in_gitignore "$OBI_DIR"
 
     run_write_cmd make -C "$OBI_DIR" docker-generate
@@ -560,7 +656,7 @@ prepare_obi_branch() {
         log_info "No OBI artifact changes to commit."
     fi
 
-    run_write_git_remote_cmd -C "$OBI_DIR" push -u origin "$release_branch"
+    OBI_RELEASE_REMOTE_SHA=$(push_signed_branch "$OBI_DIR" "$OBI_REPO" "$release_branch" "$base_sha")
 }
 
 prepare_beyla_branch() {
@@ -569,6 +665,9 @@ prepare_beyla_branch() {
     local obi_sha="$3"
 
     checkout_or_create_release_branch "$BEYLA_DIR" "$BEYLA_MAIN_BRANCH" "$release_branch"
+
+    local base_sha
+    base_sha=$(git -C "$BEYLA_DIR" rev-parse HEAD)
 
     run_cmd git -C "$BEYLA_DIR" submodule sync --recursive
     run_cmd git -C "$BEYLA_DIR" submodule update --init --recursive
@@ -595,7 +694,9 @@ prepare_beyla_branch() {
         log_info "No Beyla release artifact changes to commit."
     fi
 
-    run_write_git_remote_cmd -C "$BEYLA_DIR" push -u origin "$release_branch"
+    local beyla_remote_sha
+    beyla_remote_sha=$(push_signed_branch "$BEYLA_DIR" "$BEYLA_REPO" "$release_branch" "$base_sha")
+    log_info "Beyla release branch tip SHA: ${beyla_remote_sha}"
 }
 
 ensure_release_branch_exists() {
@@ -724,8 +825,7 @@ prepare_command() {
     fi
 
     prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha" "$obi_is_patch"
-    local obi_release_sha
-    obi_release_sha="$(git -C "$OBI_DIR" rev-parse HEAD)"
+    local obi_release_sha="$OBI_RELEASE_REMOTE_SHA"
     log_info "OBI release branch tip SHA: ${obi_release_sha}"
     prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch" "$obi_release_sha"
 

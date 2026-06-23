@@ -141,57 +141,65 @@ run_write_git_remote_cmd() {
 # GitHub API with the app token are signed by GitHub, so the release commits are
 # recreated through the API and the branch ref is moved to the signed tip.
 
+is_sha40() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+
+# Content is piped on stdin (not passed as an argument) because base64-encoded
+# release artifacts routinely exceed the OS per-argument size limit.
 upload_blob() {
     local repo_slug="$1" repo_dir="$2" blob_sha="$3"
-    local content
-    content=$(git -C "$repo_dir" cat-file blob "$blob_sha" | base64 | tr -d '\n')
-    jq -nc --arg c "$content" '{content:$c, encoding:"base64"}' \
-        | gh api "repos/${repo_slug}/git/blobs" --input - --jq '.sha'
-}
-
-build_tree_entries() {
-    local repo_slug="$1" repo_dir="$2" sha="$3"
-    {
-        while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
-            local srcmode dstmode _srcsha dstsha status
-            read -r srcmode dstmode _srcsha dstsha status <<< "${meta#:}"
-            if [[ "$status" == "D" ]]; then
-                if [[ "$srcmode" == "160000" ]]; then
-                    jq -nc --arg p "$path" '{path:$p, mode:"160000", type:"commit", sha:null}'
-                else
-                    jq -nc --arg p "$path" --arg m "$srcmode" '{path:$p, mode:$m, type:"blob", sha:null}'
-                fi
-            elif [[ "$dstmode" == "160000" ]]; then
-                jq -nc --arg p "$path" --arg s "$dstsha" '{path:$p, mode:"160000", type:"commit", sha:$s}'
-            else
-                local blob_sha
-                blob_sha=$(upload_blob "$repo_slug" "$repo_dir" "$dstsha")
-                jq -nc --arg p "$path" --arg m "$dstmode" --arg s "$blob_sha" '{path:$p, mode:$m, type:"blob", sha:$s}'
-            fi
-        done < <(git -C "$repo_dir" diff-tree --no-commit-id -r --no-renames -z "$sha")
-    } | jq -sc .
+    local sha
+    sha=$(git -C "$repo_dir" cat-file blob "$blob_sha" | base64 | tr -d '\n' \
+        | jq -Rsc '{content:., encoding:"base64"}' \
+        | gh api "repos/${repo_slug}/git/blobs" --input - --jq '.sha') \
+        || die "Failed to upload blob ${blob_sha} to ${repo_slug}"
+    is_sha40 "$sha" || die "Unexpected blob sha from ${repo_slug}: ${sha}"
+    printf '%s' "$sha"
 }
 
 create_remote_signed_commit() {
     local repo_slug="$1" repo_dir="$2" local_sha="$3" parent_remote_sha="$4"
 
     local parent_tree
-    parent_tree=$(gh api "repos/${repo_slug}/git/commits/${parent_remote_sha}" --jq '.tree.sha')
+    parent_tree=$(gh api "repos/${repo_slug}/git/commits/${parent_remote_sha}" --jq '.tree.sha') \
+        || die "Failed to read tree of ${parent_remote_sha} in ${repo_slug}"
 
-    local entries
-    entries=$(build_tree_entries "$repo_slug" "$repo_dir" "$local_sha")
+    local entries_file
+    entries_file=$(mktemp)
+    local meta path srcmode dstmode _srcsha dstsha status blob_sha
+    while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+        read -r srcmode dstmode _srcsha dstsha status <<< "${meta#:}"
+        if [[ "$status" == "D" ]]; then
+            if [[ "$srcmode" == "160000" ]]; then
+                jq -nc --arg p "$path" '{path:$p, mode:"160000", type:"commit", sha:null}'
+            else
+                jq -nc --arg p "$path" --arg m "$srcmode" '{path:$p, mode:$m, type:"blob", sha:null}'
+            fi
+        elif [[ "$dstmode" == "160000" ]]; then
+            jq -nc --arg p "$path" --arg s "$dstsha" '{path:$p, mode:"160000", type:"commit", sha:$s}'
+        else
+            blob_sha=$(upload_blob "$repo_slug" "$repo_dir" "$dstsha")
+            jq -nc --arg p "$path" --arg m "$dstmode" --arg s "$blob_sha" '{path:$p, mode:$m, type:"blob", sha:$s}'
+        fi
+    done < <(git -C "$repo_dir" diff-tree --no-commit-id -r --no-renames -z "$local_sha") >> "$entries_file"
 
     local new_tree
-    new_tree=$(jq -nc --arg base "$parent_tree" --argjson entries "$entries" \
-        '{base_tree:$base, tree:$entries}' \
-        | gh api "repos/${repo_slug}/git/trees" --input - --jq '.sha')
+    new_tree=$(jq -sc --arg base "$parent_tree" '{base_tree:$base, tree:.}' "$entries_file" \
+        | gh api "repos/${repo_slug}/git/trees" --input - --jq '.sha') \
+        || die "Failed to create tree in ${repo_slug}"
+    rm -f "$entries_file"
+    is_sha40 "$new_tree" || die "Unexpected tree sha from ${repo_slug}: ${new_tree}"
 
     local message
     message=$(git -C "$repo_dir" log -1 --format=%B "$local_sha")
 
-    jq -nc --arg m "$message" --arg t "$new_tree" --arg p "$parent_remote_sha" \
+    local new_commit
+    new_commit=$(jq -nc --arg m "$message" --arg t "$new_tree" --arg p "$parent_remote_sha" \
         '{message:$m, tree:$t, parents:[$p]}' \
-        | gh api "repos/${repo_slug}/git/commits" --input - --jq '.sha'
+        | gh api "repos/${repo_slug}/git/commits" --input - --jq '.sha') \
+        || die "Failed to create commit in ${repo_slug}"
+    is_sha40 "$new_commit" || die "Unexpected commit sha from ${repo_slug}: ${new_commit}"
+
+    printf '%s' "$new_commit"
 }
 
 create_or_update_remote_ref() {
@@ -221,9 +229,11 @@ push_signed_branch() {
     while IFS= read -r commit; do
         [[ -n "$commit" ]] || continue
         log_info "Signing ${commit:0:12} onto ${repo_slug}:${branch} (parent ${parent_remote:0:12})"
-        parent_remote=$(create_remote_signed_commit "$repo_slug" "$repo_dir" "$commit" "$parent_remote")
+        parent_remote=$(create_remote_signed_commit "$repo_slug" "$repo_dir" "$commit" "$parent_remote") \
+            || die "Failed to create signed commit for ${commit} on ${repo_slug}:${branch}"
     done < <(git -C "$repo_dir" rev-list --reverse "${base_sha}..HEAD")
 
+    is_sha40 "$parent_remote" || die "Refusing to move ${repo_slug}:${branch}: invalid signed tip '${parent_remote}'"
     create_or_update_remote_ref "$repo_slug" "$branch" "$parent_remote"
     echo "$parent_remote"
 }

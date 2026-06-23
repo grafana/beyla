@@ -1,0 +1,52 @@
+diff --git a/pkg/ebpf/common/http_transform.go b/pkg/ebpf/common/http_transform.go
+index 0d1ab2a9..943799b9 100644
+--- a/pkg/ebpf/common/http_transform.go
++++ b/pkg/ebpf/common/http_transform.go
+@@ -7,6 +7,7 @@ import (
+ 	"bufio"
+ 	"bytes"
+ 	"errors"
++	"fmt"
+ 	"io"
+ 	"log/slog"
+ 	"net"
+@@ -136,6 +137,13 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
+ 		Statement: scheme + request.SchemeHostSeparator + headerHost,
+ 	}
+ 
++	slog.With("component", "obi.tphdr").Info("[TPHDR] generic-tracer http span",
++		"type", event.Type, "method", req.Method, "path", removeQuery(req.URL.String()),
++		"ebpf_parentid", fmt.Sprintf("%x", event.Tp.ParentId),
++		"ebpf_has_parent", event.Tp.ParentId != [8]uint8{},
++		"req_traceparent_hdr", req.Header.Get("Traceparent"),
++		"num_headers", len(req.Header))
++
+ 	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
+ 		span, ok := ebpfhttp.AWSS3Span(&httpSpan, req, resp)
+ 		if ok {
+diff --git a/pkg/ebpf/common/spanner.go b/pkg/ebpf/common/spanner.go
+index 227840ac..557853a1 100644
+--- a/pkg/ebpf/common/spanner.go
++++ b/pkg/ebpf/common/spanner.go
+@@ -4,6 +4,7 @@
+ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
+ 
+ import (
++	"fmt"
+ 	"log/slog"
+ 	"strings"
+ 	"unsafe"
+@@ -55,6 +56,13 @@ func HTTPRequestTraceToSpan(trace *HTTPRequestTrace) request.Span {
+ 		schemeHost = strings.Join([]string{scheme, origHost}, request.SchemeHostSeparator)
+ 	}
+ 
++	hasParent := trace.Tp.ParentId != [8]uint8{}
++	slog.With("component", "obi.tphdr").Info("[TPHDR] go-tracer http span",
++		"type", trace.Type, "method", method, "path", path,
++		"traceid", fmt.Sprintf("%x", trace.Tp.TraceId),
++		"parentid", fmt.Sprintf("%x", trace.Tp.ParentId),
++		"has_parent", hasParent, "flags", trace.Tp.Flags)
++
+ 	return request.Span{
+ 		Type:           request.EventType(trace.Type),
+ 		Method:         method,

@@ -5,20 +5,16 @@ package rdns // import "go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
-
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/pipe"
-	"go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp"
-	"go.opentelemetry.io/obi/pkg/internal/rdns/store"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/transform"
 )
 
 const (
@@ -65,11 +61,11 @@ func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs,
 			return swarm.Bypass(input, output)
 		}
 
-		if err := checkEBPFReverseDNS(ctx, cfg, ebpfCfg); err != nil {
-			return nil, err
-		}
+		// if err := checkEBPFReverseDNS(ctx, cfg, ebpfCfg); err != nil {
+		// 	return nil, err
+		// }
 		// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
-		cache := expirable.NewLRU[pipe.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
+		//cache := expirable.NewLRU[pipe.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
 
 		log := rdlog()
 		in := input.Subscribe(msg.SubscriberName("rdns.ReverseDNS"))
@@ -80,10 +76,12 @@ func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs,
 				for _, item := range items {
 					a := attrs(item)
 					if a.SrcName == "" {
-						a.SrcName = optGetName(log, cache, a.SrcAddr)
+						//a.SrcName = optGetName(log, cache, a.SrcAddr)
+						a.SrcName = resolveWithAppO11y(a.SrcAddr)
 					}
 					if a.DstName == "" {
-						a.DstName = optGetName(log, cache, a.DstAddr)
+						//a.DstName = optGetName(log, cache, a.DstAddr)
+						a.DstName = resolveWithAppO11y(a.DstAddr)
 					}
 				}
 				output.Send(items)
@@ -92,34 +90,42 @@ func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs,
 	}
 }
 
-// changes reverse DNS method according to the provided configuration
-func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS, ebpfCfg *config.EBPFTracer) error {
-	if cfg.Type == ReverseDNSEBPF {
-		// overriding netLookupAddr by an eBPF-based alternative
-		dnsCache, err := store.NewInMemory(cfg.CacheLen)
-		if err != nil {
-			return fmt.Errorf("initializing eBPF-based reverse DNS cache: %w", err)
-		}
-		if err := xdp.StartDNSPacketInspector(ctx, dnsCache, ebpfCfg); err != nil {
-			return fmt.Errorf("starting eBPF-based reverse DNS: %w", err)
-		}
-		netLookupAddr = dnsCache.GetHostnames
+func resolveWithAppO11y(addr pipe.IPAddr) string {
+	if transform.Resolver != nil {
+		ipStr := addr.IP().String()
+		return transform.Resolver.ResolveRDNS(ipStr)
 	}
-	return nil
-}
-
-func optGetName(log *slog.Logger, cache *expirable.LRU[pipe.IPAddr, string], ip pipe.IPAddr) string {
-	if host, ok := cache.Get(ip); ok {
-		return host
-	}
-	ipStr := ip.IP().String()
-	if names, err := netLookupAddr(ipStr); err == nil && len(names) > 0 {
-		cache.Add(ip, names[0])
-		return names[0]
-	} else if err != nil {
-		log.Debug("error trying to lookup by IP address", "ip", ipStr, "error", err)
-	}
-	// return empty string. In a later pipeline stage it will be decorated with
-	// the actual IP
 	return ""
 }
+
+// // changes reverse DNS method according to the provided configuration
+// func checkEBPFReverseDNS(ctx context.Context, cfg *ReverseDNS, ebpfCfg *config.EBPFTracer) error {
+// 	if cfg.Type == ReverseDNSEBPF {
+// 		// overriding netLookupAddr by an eBPF-based alternative
+// 		dnsCache, err := store.NewInMemory(cfg.CacheLen)
+// 		if err != nil {
+// 			return fmt.Errorf("initializing eBPF-based reverse DNS cache: %w", err)
+// 		}
+// 		if err := xdp.StartDNSPacketInspector(ctx, dnsCache, ebpfCfg); err != nil {
+// 			return fmt.Errorf("starting eBPF-based reverse DNS: %w", err)
+// 		}
+// 		netLookupAddr = dnsCache.GetHostnames
+// 	}
+// 	return nil
+// }
+
+// func optGetName(log *slog.Logger, cache *expirable.LRU[pipe.IPAddr, string], ip pipe.IPAddr) string {
+// 	if host, ok := cache.Get(ip); ok {
+// 		return host
+// 	}
+// 	ipStr := ip.IP().String()
+// 	if names, err := netLookupAddr(ipStr); err == nil && len(names) > 0 {
+// 		cache.Add(ip, names[0])
+// 		return names[0]
+// 	} else if err != nil {
+// 		log.Debug("error trying to lookup by IP address", "ip", ipStr, "error", err)
+// 	}
+// 	// return empty string. In a later pipeline stage it will be decorated with
+// 	// the actual IP
+// 	return ""
+// }

@@ -57,6 +57,8 @@ func resolverSources(src []Source) maps.Bits {
 	}))
 }
 
+var Resolver *NameResolver
+
 type NameResolverConfig struct {
 	// Sources specifies the backends used for name resolving. Accepted values: dns, k8s, rdns
 	Sources []Source `yaml:"sources" env:"OTEL_EBPF_NAME_RESOLVER_SOURCES" envSeparator:"," envDefault:"k8s"`
@@ -122,6 +124,8 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 		sources:  sources,
 		logger:   logger,
 	}
+
+	Resolver = &nr
 
 	in := input.Subscribe(msg.SubscriberName("transform.NameResolver"))
 	return func(ctx context.Context) {
@@ -281,7 +285,7 @@ func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, s
 	}
 
 	if nr.sources.Has(ResolverRDNS) && nr.dnsCache != nil {
-		n := nr.resolveRDNS(ip)
+		n := nr.ResolveRDNS(ip)
 		n = nr.cleanName(svc, ip, n)
 		return n, svc.UID.Namespace, ""
 	}
@@ -336,7 +340,7 @@ func (nr *NameResolver) handleRDNS(span *request.Span) {
 	}
 }
 
-func (nr *NameResolver) resolveRDNS(ip string) string {
+func (nr *NameResolver) ResolveRDNS(ip string) string {
 	names, err := nr.dnsCache.GetHostnames(ip)
 
 	nr.logger.Debug("reverse DNS lookup", "ip", ip, "names", names)

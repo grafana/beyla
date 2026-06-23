@@ -888,7 +888,6 @@ go.opentelemetry.io/obi/pkg/internal/pipe/geoip
 go.opentelemetry.io/obi/pkg/internal/pipe/rdns
 go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s
 go.opentelemetry.io/obi/pkg/internal/procs
-go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
 go.opentelemetry.io/obi/pkg/internal/shardedqueue
 go.opentelemetry.io/obi/pkg/internal/split

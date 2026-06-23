@@ -93,7 +93,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
         package-operator.json package.extra.json > package.json
 
 # Build the Node.js artifacts
-FROM node:20@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5 AS build-nodejs-sdk
+FROM node:24@sha256:032e78d7e54e352129831743737e3a83171d9cc5b5896f411649c597ce0b11ea AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY --from=prepare-nodejs-deps /build/package.json .

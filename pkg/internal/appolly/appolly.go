@@ -110,8 +110,9 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 
 func newRuntimeMetricsQueue(config *obi.Config) *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot] {
 	jointMetricsConfig := obiAppolly.JoinMetricsConfig(config)
+	runtimeMetricsEnabled := runtimemetrics.EnabledFeatures(jointMetricsConfig.Features)
 
-	if !jointMetricsConfig.Features.AppRuntime() ||
+	if !runtimeMetricsEnabled.Any() ||
 		!jointMetricsConfig.Features.AnyAppO11yMetric() ||
 		(!config.OTELMetrics.EndpointEnabled() && !config.Prometheus.EndpointEnabled()) {
 		return nil

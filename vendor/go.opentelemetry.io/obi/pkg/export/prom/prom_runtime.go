@@ -60,11 +60,24 @@ func (c *goRuntimeMetricsCollector) collectors() []prometheus.Collector {
 }
 
 func (r *metricsReporter) collectRuntimeMetrics(snapshots []runtimemetrics.RuntimeMetricSnapshot) {
+	enabled := r.runtimeMetricsEnabled()
 	for _, snapshot := range snapshots {
-		if snapshot.Service.SDKLanguage != svc.InstrumentableGolang {
+		if !enabled.ShouldReport(snapshot) {
 			continue
 		}
-		r.collectGoRuntimeMetrics(snapshot)
+		if snapshot.Go != nil {
+			r.collectGoRuntimeMetrics(snapshot)
+		}
+		if snapshot.JVM != nil {
+			r.collectJVMRuntimeMetrics(snapshot)
+		}
+	}
+}
+
+func (r *metricsReporter) runtimeMetricsEnabled() runtimemetrics.Enabled {
+	return runtimemetrics.Enabled{
+		Go:  r.goRuntimeMetrics.memoryLimit != nil,
+		JVM: r.jvmRuntimeMetrics.memoryUsed != nil,
 	}
 }
 
@@ -74,28 +87,28 @@ func (r *metricsReporter) watchForRuntimeMetrics(ctx context.Context) {
 }
 
 func (r *metricsReporter) collectGoRuntimeMetrics(snapshot runtimemetrics.RuntimeMetricSnapshot) {
-	if r.goRuntimeMetrics.memoryLimit == nil {
+	if r.goRuntimeMetrics.memoryLimit == nil || snapshot.Go == nil {
 		return
 	}
 
 	labels := r.labelValuesTargetInfo(&snapshot.Service)
-	if snapshot.MemoryLimit != nil {
-		r.goRuntimeMetrics.memoryLimit.WithLabelValues(labels...).Set(float64(*snapshot.MemoryLimit))
+	if snapshot.Go.MemoryLimit != nil {
+		r.goRuntimeMetrics.memoryLimit.WithLabelValues(labels...).Set(float64(*snapshot.Go.MemoryLimit))
 	} else {
 		r.goRuntimeMetrics.memoryLimit.DeleteLabelValues(labels...)
 	}
-	if snapshot.GCCycles != nil {
-		r.goRuntimeMetrics.addGCCycles(labels, *snapshot.GCCycles)
+	if snapshot.Go.GCCycles != nil {
+		r.goRuntimeMetrics.addGCCycles(labels, *snapshot.Go.GCCycles)
 	} else {
 		r.goRuntimeMetrics.deleteGCCycles(labels)
 	}
-	if snapshot.ProcessorLimit != nil {
-		r.goRuntimeMetrics.processorLimit.WithLabelValues(labels...).Set(float64(*snapshot.ProcessorLimit))
+	if snapshot.Go.ProcessorLimit != nil {
+		r.goRuntimeMetrics.processorLimit.WithLabelValues(labels...).Set(float64(*snapshot.Go.ProcessorLimit))
 	} else {
 		r.goRuntimeMetrics.processorLimit.DeleteLabelValues(labels...)
 	}
-	if snapshot.GOGC != nil {
-		r.goRuntimeMetrics.configGOGC.WithLabelValues(labels...).Set(float64(*snapshot.GOGC))
+	if snapshot.Go.GOGC != nil {
+		r.goRuntimeMetrics.configGOGC.WithLabelValues(labels...).Set(float64(*snapshot.Go.GOGC))
 	} else {
 		r.goRuntimeMetrics.configGOGC.DeleteLabelValues(labels...)
 	}

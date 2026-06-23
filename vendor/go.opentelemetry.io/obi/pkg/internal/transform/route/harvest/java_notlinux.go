@@ -5,7 +5,11 @@
 
 package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 
-import "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+import (
+	"context"
+
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+)
 
 type JavaRoutes struct{}
 
@@ -13,6 +17,6 @@ func NewJavaRoutesHarvester() *JavaRoutes {
 	return &JavaRoutes{}
 }
 
-func (h *JavaRoutes) ExtractRoutes(_ *exec.FileInfo) (*RouteHarvesterResult, error) {
+func (h *JavaRoutes) ExtractRoutes(_ context.Context, _ *exec.FileInfo) (*RouteHarvesterResult, error) {
 	return nil, nil
 }

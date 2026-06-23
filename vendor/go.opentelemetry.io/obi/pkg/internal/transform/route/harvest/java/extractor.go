@@ -5,6 +5,7 @@
 package java // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest/java"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -31,8 +32,8 @@ type Extractor struct {
 	routeLimitLogged bool
 }
 
-func ExtractRoutes(fileInfo *exec.FileInfo) ([]string, error) {
-	return NewExtractor().ExtractRoutes(fileInfo)
+func ExtractRoutes(ctx context.Context, fileInfo *exec.FileInfo) ([]string, error) {
+	return NewExtractor().ExtractRoutes(ctx, fileInfo)
 }
 
 func NewExtractor() *Extractor {
@@ -42,7 +43,10 @@ func NewExtractor() *Extractor {
 	}
 }
 
-func (e *Extractor) ExtractRoutes(fileInfo *exec.FileInfo) ([]string, error) {
+func (e *Extractor) ExtractRoutes(ctx context.Context, fileInfo *exec.FileInfo) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if fileInfo == nil {
 		return nil, errors.New("java route harvesting requires process file info")
 	}
@@ -56,14 +60,21 @@ func (e *Extractor) ExtractRoutes(fileInfo *exec.FileInfo) ([]string, error) {
 	}
 
 	for _, root := range roots {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if e.routeLimitReached() || e.classLimitReached() {
 			break
 		}
 		if root.dir {
-			e.scanDir(root.path)
+			if err := e.scanDir(ctx, root.path); err != nil {
+				return nil, err
+			}
 			continue
 		}
-		e.scanArchive(root.path)
+		if err := e.scanArchive(ctx, root.path); err != nil {
+			return nil, err
+		}
 	}
 
 	return sortRoutes(mapKeys(e.routes)), nil

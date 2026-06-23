@@ -235,7 +235,8 @@ type metricsReporter struct {
 	genAIClientDuration *Expirer[prometheus.Histogram]
 	genAITokenUsage     *Expirer[prometheus.Histogram]
 
-	goRuntimeMetrics goRuntimeMetricsCollector
+	goRuntimeMetrics  goRuntimeMetricsCollector
+	jvmRuntimeMetrics jvmRuntimeMetricsCollector
 
 	promConnect *connector.PrometheusManager
 
@@ -434,6 +435,7 @@ func newReporter(
 	if input != nil {
 		inputCh = input.Subscribe(msg.SubscriberName("prom.InputSpans"))
 	}
+	runtimeMetricsEnabled := runtimemetrics.EnabledFeatures(jointMetricsConfig.Features)
 	var runtimeInputCh <-chan []runtimemetrics.RuntimeMetricSnapshot
 	if runtimeMetricCh != nil {
 		runtimeInputCh = runtimeMetricCh.Subscribe(msg.SubscriberName("prom.RuntimeMetrics"))
@@ -758,10 +760,13 @@ func newReporter(
 		}),
 	}
 
-	if jointMetricsConfig.Features.AppRuntime() {
+	if runtimeMetricsEnabled.Go {
 		mr.goRuntimeMetrics = newGoRuntimeMetricsCollector(
 			labelNamesTargetInfo(kubeEnabled, dockerEnabled, &ctxInfo.NodeMeta, extraMetadataLabels, selectorCfg.SelectionCfg),
 		)
+	}
+	if runtimeMetricsEnabled.JVM {
+		mr.jvmRuntimeMetrics = newJVMRuntimeMetricsCollector(cfg)
 	}
 
 	// testing aid
@@ -847,8 +852,11 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
 	}
 
-	if jointMetricsConfig.Features.AppRuntime() {
+	if runtimeMetricsEnabled.Go {
 		registeredMetrics = append(registeredMetrics, mr.goRuntimeMetrics.collectors()...)
+	}
+	if runtimeMetricsEnabled.JVM {
+		registeredMetrics = append(registeredMetrics, mr.jvmRuntimeMetrics.collectors()...)
 	}
 
 	if is.GPUEnabled() {

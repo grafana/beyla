@@ -85,6 +85,8 @@ type Tracer interface {
 	// the entry to be selected only when the library's version satisfies the constraint.
 	// See matchVersionedUprobeLibrary for how selection is performed.
 	UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc
+	// USDTProbes returns a map with the module name mapping to USDT probes.
+	USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc
 	// SocketFilters  returns a list of programs that need to be loaded as a
 	// generic eBPF socket filter
 	SocketFilters() []*ebpf.Program

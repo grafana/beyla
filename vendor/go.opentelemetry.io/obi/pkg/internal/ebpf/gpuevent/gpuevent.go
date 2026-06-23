@@ -150,6 +150,10 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 	}
 }
 
+func (p *Tracer) USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc {
+	return nil
+}
+
 func (p *Tracer) SetupTailCalls() {}
 
 func (p *Tracer) SocketFilters() []*ebpf.Program { return nil }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/internal/pipe"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -65,7 +66,7 @@ func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs,
 		// 	return nil, err
 		// }
 		// TODO: replace by a cache with fuzzy expiration time to avoid cache stampede
-		//cache := expirable.NewLRU[pipe.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
+		cache := expirable.NewLRU[pipe.IPAddr, string](cfg.CacheLen, nil, cfg.CacheTTL)
 
 		log := rdlog()
 		in := input.Subscribe(msg.SubscriberName("rdns.ReverseDNS"))
@@ -76,12 +77,16 @@ func ReverseDNSProvider[T any](cfg *ReverseDNS, attrs func(T) *pipe.CommonAttrs,
 				for _, item := range items {
 					a := attrs(item)
 					if a.SrcName == "" {
-						//a.SrcName = optGetName(log, cache, a.SrcAddr)
 						a.SrcName = resolveWithAppO11y(a.SrcAddr)
+						if a.SrcName == "" {
+							a.SrcName = optGetName(log, cache, a.SrcAddr)
+						}
 					}
 					if a.DstName == "" {
-						//a.DstName = optGetName(log, cache, a.DstAddr)
 						a.DstName = resolveWithAppO11y(a.DstAddr)
+						if a.DstName == "" {
+							a.DstName = optGetName(log, cache, a.DstAddr)
+						}
 					}
 				}
 				output.Send(items)
@@ -114,18 +119,18 @@ func resolveWithAppO11y(addr pipe.IPAddr) string {
 // 	return nil
 // }
 
-// func optGetName(log *slog.Logger, cache *expirable.LRU[pipe.IPAddr, string], ip pipe.IPAddr) string {
-// 	if host, ok := cache.Get(ip); ok {
-// 		return host
-// 	}
-// 	ipStr := ip.IP().String()
-// 	if names, err := netLookupAddr(ipStr); err == nil && len(names) > 0 {
-// 		cache.Add(ip, names[0])
-// 		return names[0]
-// 	} else if err != nil {
-// 		log.Debug("error trying to lookup by IP address", "ip", ipStr, "error", err)
-// 	}
-// 	// return empty string. In a later pipeline stage it will be decorated with
-// 	// the actual IP
-// 	return ""
-// }
+func optGetName(log *slog.Logger, cache *expirable.LRU[pipe.IPAddr, string], ip pipe.IPAddr) string {
+	if host, ok := cache.Get(ip); ok {
+		return host
+	}
+	ipStr := ip.IP().String()
+	if names, err := netLookupAddr(ipStr); err == nil && len(names) > 0 {
+		cache.Add(ip, names[0])
+		return names[0]
+	} else if err != nil {
+		log.Debug("error trying to lookup by IP address", "ip", ipStr, "error", err)
+	}
+	// return empty string. In a later pipeline stage it will be decorated with
+	// the actual IP
+	return ""
+}

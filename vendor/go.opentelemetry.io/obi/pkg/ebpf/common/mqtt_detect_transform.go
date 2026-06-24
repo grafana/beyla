@@ -100,12 +100,19 @@ func ProcessMQTTEvent(pkt []byte) (*MQTTInfo, bool, error) {
 			continue
 		}
 		if !ignore {
+			if !isValidMQTTPacket(info) {
+				return nil, true, errNoSpanWorthyMQTTPackets
+			}
 			return info, false, nil
 		}
 		offset += packet.Length()
 	}
 
 	return nil, true, errNoSpanWorthyMQTTPackets
+}
+
+func isValidMQTTPacket(info *MQTTInfo) bool {
+	return info.ClientID != "" || info.Topic != ""
 }
 
 // processMQTTPacket processes a single MQTT packet based on its type.

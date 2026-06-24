@@ -1,3 +1,5 @@
 owner: grafana
 git-repo: helm-charts
 skip-existing: true
+release-name-template: "{{ .Name }}-{{ .Version }}"
+sign: true

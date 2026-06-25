@@ -718,13 +718,23 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 			expected bool
 		}{
 			{
-				name:     "incompatible when JAVA_TOOL_OPTIONS sets -javaagent",
+				name:     "compatible when JAVA_TOOL_OPTIONS sets -javaagent to non-otel jar",
 				envStrs:  []string{"JAVA_TOOL_OPTIONS=    -javaagent:/opt/agent.jar"},
+				expected: false,
+			},
+			{
+				name:     "compatible when OPENJ9_JAVA_OPTIONS sets -javaagent to non-otel jar",
+				envStrs:  []string{"OPENJ9_JAVA_OPTIONS=-Xmx1g -javaagent:/opt/agent.jar"},
+				expected: false,
+			},
+			{
+				name:     "incompatible when JAVA_TOOL_OPTIONS sets -javaagent to otel upstream jar",
+				envStrs:  []string{"JAVA_TOOL_OPTIONS=    -javaagent:/opt/opentelemetry-javaagent.jar"},
 				expected: true,
 			},
 			{
-				name:     "incompatible when OPENJ9_JAVA_OPTIONS sets -javaagent",
-				envStrs:  []string{"OPENJ9_JAVA_OPTIONS=-Xmx1g -javaagent:/opt/agent.jar"},
+				name:     "incompatible when OPENJ9_JAVA_OPTIONS sets -javaagent to grafana otel jar",
+				envStrs:  []string{"OPENJ9_JAVA_OPTIONS=-Xmx1g -javaagent:/opt/grafana-opentelemetry-java.jar"},
 				expected: true,
 			},
 			{

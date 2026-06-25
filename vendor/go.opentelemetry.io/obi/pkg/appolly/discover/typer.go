@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -19,6 +20,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -101,6 +103,7 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	var samplerConfig *services.SamplerConfig
 	var routesConfig *services.CustomRoutesConfig
 	svcFeatures := t.cfg.Metrics.Features
+	var metadata map[attr.Name]string
 
 	for _, s := range processMatch.Criteria {
 		if n := s.GetName(); n != "" {
@@ -109,6 +112,13 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 
 		if n := s.GetNamespace(); n != "" {
 			namespace = n
+		}
+
+		if m := ResourceAttributesFromSelector(s); len(m) > 0 {
+			if metadata == nil {
+				metadata = make(map[attr.Name]string, len(m))
+			}
+			maps.Copy(metadata, m)
 		}
 
 		if m := s.GetExportModes(); m != services.ExportModeUnset {
@@ -143,6 +153,7 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 			Name:      name,
 			Namespace: namespace,
 		},
+		Metadata:           metadata,
 		ProcPID:            processMatch.Process.Pid,
 		DynamicSelectorPID: processMatch.DynamicSelectorPID,
 		ExportModes:        exportModes,

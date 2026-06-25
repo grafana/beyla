@@ -172,20 +172,11 @@ func (e *EBPFTracer) CudaInstrumentationEnabled() bool {
 	return false
 }
 
-// MaxCapturedPayloadBytes is the maximum number of bytes that can be captured
-// per protocol request direction via large buffer events.
-//
-// It must stay aligned with the k_large_buf_max_*_captured_bytes constants in
-// bpf/common/large_buffers.h and with the validate tags in EBPFBufferSizes.
-const MaxCapturedPayloadBytes = 1 << 16
-
 // Per-protocol maximum bytes to capture per request per direction, sent to userspace via large buffer events.
-// Values must stay aligned with MaxCapturedPayloadBytes and the
-// k_large_buf_max_*_captured_bytes constants in bpf/common/large_buffers.h.
 //
 // Default: 0 (disabled).
 type EBPFBufferSizes struct {
-	HTTP     uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP" validate:"lte=65536"`
+	HTTP     uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP" validate:"lte=262144"`
 	MySQL    uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL" validate:"lte=65536"`
 	Kafka    uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=65536"`
 	Postgres uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=65536"`

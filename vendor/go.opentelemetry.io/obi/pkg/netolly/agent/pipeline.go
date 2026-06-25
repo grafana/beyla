@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/pipe/decorate"
 	"go.opentelemetry.io/obi/pkg/internal/pipe/geoip"
 	"go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/dynamicpid"
 	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s"
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -114,8 +115,12 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	if f.ctxInfo.DynamicPIDSelector != nil {
 		dynamicSelector = f.ctxInfo.DynamicPIDSelector.NetworkMetrics()
 	}
+	dynamicDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dynamicDecoratedFlows")
+	swi.Add(dynamicpid.MetadataDecoratorProvider(f.ctxInfo.DynamicPIDSelector, dynamicSelector,
+		f.ctxInfo.K8sInformer, recordAttrs, decoratedFlows, dynamicDecoratedFlows),
+		swarm.WithID("DynamicPIDMetadataDecorator"))
 	swi.Add(filter.ByDynamicPID(dynamicSelector, f.ctxInfo.K8sInformer,
-		recordAttrs, decoratedFlows, dynamicFilteredFlows),
+		recordAttrs, dynamicDecoratedFlows, dynamicFilteredFlows),
 		swarm.WithID("DynamicPIDFilter"))
 
 	filteredFlows := f.ctxInfo.OverrideNetExportQueue

@@ -18,6 +18,23 @@ import (
 
 var jsonBestEffort = jsoniter.ConfigCompatibleWithStandardLibrary
 
+// looksLikeJSON returns true if the data starts with '{' or '[' after
+// stripping leading ASCII whitespace. This avoids misclassifying plain
+// JSON responses (which may have leading newlines/spaces) as SSE streams.
+func looksLikeJSON(data []byte) bool {
+	for _, b := range data {
+		switch b {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '{', '[':
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 const (
 	// modelSearchWindow limits extraction for top-level request model
 	// fields to the start of the request payload.
@@ -218,7 +235,40 @@ func parseOpenAIInput(body []byte) request.OpenAIInput {
 	if parsed.Model == "" {
 		parsed.Model = extractModelField(body)
 	}
+	if len(parsed.Messages) == 0 && len(body) > 0 {
+		parsed.Messages = extractJSONRawField(body, "messages")
+	}
 	return parsed
+}
+
+// extractJSONRawField returns the raw value of a top-level field. It works on
+// truncated JSON as long as the target field's value is complete in body.
+// Returns nil if the body isn't a JSON object, the field is absent, or its
+// value is cut off.
+func extractJSONRawField(body []byte, field string) json.RawMessage {
+	dec := json.NewDecoder(bytes.NewReader(body))
+
+	// Consume the opening '{'.
+	if t, err := dec.Token(); err != nil {
+		return nil
+	} else if d, ok := t.(json.Delim); !ok || d != '{' {
+		return nil
+	}
+
+	for dec.More() {
+		keyTok, err := dec.Token() // object key
+		if err != nil {
+			return nil
+		}
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil { // exactly one value
+			return nil
+		}
+		if key, _ := keyTok.(string); key == field {
+			return raw
+		}
+	}
+	return nil
 }
 
 func parseVendorOpenAI(body []byte) request.VendorOpenAI {

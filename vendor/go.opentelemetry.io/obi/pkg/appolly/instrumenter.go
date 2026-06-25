@@ -68,6 +68,7 @@ func newGraphBuilder(
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
+		SensitiveQueryParamsCfg: config.Attributes.SensitiveQueryParams,
 	}
 
 	// Second, we register instancers for each pipe node, as well as communication queues between them

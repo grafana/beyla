@@ -22,7 +22,6 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	v2 "github.com/containers/common/pkg/cgroupv2"
 	"github.com/hashicorp/go-version"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
@@ -726,22 +725,9 @@ func (i *instrumenter) sockmsgs(p Tracer) error {
 
 func (i *instrumenter) sockops(p Tracer) error {
 	for _, sockops := range p.SockOps() {
-		cgroupPath, err := getCgroupPath()
-		if err != nil {
-			if i.metrics != nil {
-				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorCgroupNotFound)
-			}
-			slog.Warn("could not get cgroup path (missing cgroup v2?), using best-effort TC tracking", "error", err)
-			return nil
-		}
+		slog.Info("Attaching sock ops")
 
-		slog.Info("Attaching sock ops", "path", cgroupPath)
-
-		sockops.SockopsCgroup, err = link.AttachCgroup(link.CgroupOptions{
-			Path:    cgroupPath,
-			Attach:  sockops.AttachAs,
-			Program: sockops.Program,
-		})
+		l, err := AttachCgroupSockOps(sockops.Program, sockops.AttachAs)
 		if err != nil {
 			if i.metrics != nil {
 				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingCgroup)
@@ -750,6 +736,7 @@ func (i *instrumenter) sockops(p Tracer) error {
 			return nil
 		}
 
+		sockops.SockopsCgroup = l
 		p.AddCloser(&sockops)
 	}
 
@@ -865,21 +852,6 @@ func htons(a uint16) uint16 {
 
 func processMaps(pid app.PID) ([]*procfs.ProcMap, error) {
 	return procs.FindLibMaps(pid)
-}
-
-func getCgroupPath() (string, error) {
-	cgroupPath := "/sys/fs/cgroup"
-
-	enabled, err := v2.Enabled()
-	if !enabled {
-		if _, pathErr := os.Stat(filepath.Join(cgroupPath, "unified")); pathErr == nil {
-			slog.Debug("discovered hybrid cgroup hierarchy, will attempt to attach sockops")
-			return filepath.Join(cgroupPath, "unified"), nil
-		}
-		return "", errors.New("failed to find unified cgroup hierarchy: sockops cannot be used with cgroups v1")
-	}
-
-	return cgroupPath, err
 }
 
 func symbolNames(m map[string][]*ebpfcommon.ProbeDesc, matcher ebpfcommon.SymbolMatcher) []string {

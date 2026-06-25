@@ -34,6 +34,7 @@ func (o *Offsets) HasGoChannelOffsets() bool {
 	}
 
 	for _, field := range []GoOffset{
+		HchanQcountPos,
 		HchanDataqsizPos,
 		HchanSendxPos,
 		HchanRecvxPos,

@@ -81,10 +81,54 @@ func parseExtraAttrGroup(group string) (AttrGroups, error) {
 	}
 }
 
+// DefaultSensitiveQueryParams is the built-in list of query-parameter keys whose values
+// are redacted by default. Users can extend or narrow it via SensitiveQueryParamsConfig.
+var DefaultSensitiveQueryParams = []string{
+	// OTel semconv-recommended — https://opentelemetry.io/docs/specs/semconv/http/http-spans/
+	"X-Amz-Signature", "X-Amz-Credential", "X-Amz-Security-Token",
+	"X-Goog-Signature", "sig",
+	// Common sensitive parameters
+	"token", "access_token", "refresh_token", "id_token", "jwt",
+	"session", "sid", "signature",
+	"api_key", "apikey", "client_secret", "secret",
+	"password", "pass", "pwd",
+	"reset_token", "invite_token", "verify_token",
+	"otp", "totp", "mfa_code", "verification_code",
+	"SAMLResponse", "assertion",
+	"card", "cc", "pan", "cvv",
+	"ssn", "tax_id",
+}
+
+// SensitiveQueryParamsConfig controls which query-parameter keys are redacted.
+// The effective list is DefaultSensitiveQueryParams + Add - Remove.
+// When both Add and Remove are empty, DefaultSensitiveQueryParams is used unchanged.
+type SensitiveQueryParamsConfig struct {
+	Add    []string `yaml:"add" env:"OTEL_EBPF_SENSITIVE_QUERY_PARAMS_ADD" envSeparator:","`
+	Remove []string `yaml:"remove" env:"OTEL_EBPF_SENSITIVE_QUERY_PARAMS_REMOVE" envSeparator:","`
+}
+
+func (c SensitiveQueryParamsConfig) Effective() []string {
+	if len(c.Add) == 0 && len(c.Remove) == 0 {
+		return DefaultSensitiveQueryParams
+	}
+	removeSet := make(map[string]struct{}, len(c.Remove))
+	for _, k := range c.Remove {
+		removeSet[k] = struct{}{}
+	}
+	result := make([]string, 0, len(DefaultSensitiveQueryParams)+len(c.Add))
+	for _, k := range DefaultSensitiveQueryParams {
+		if _, skip := removeSet[k]; !skip {
+			result = append(result, k)
+		}
+	}
+	return append(result, c.Add...)
+}
+
 // SelectorConfig defines settings for filtering attributes and adding additional attributes
 type SelectorConfig struct {
 	SelectionCfg            Selection
 	ExtraGroupAttributesCfg map[string][]attr.Name
+	SensitiveQueryParamsCfg SensitiveQueryParamsConfig
 }
 
 // AttrSelector returns, for each metric, the attributes that have to be reported

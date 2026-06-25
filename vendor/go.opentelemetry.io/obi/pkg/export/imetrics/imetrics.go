@@ -42,7 +42,6 @@ const (
 	InstrumentationErrorNoInstrumentableFunctionsFound = "no_instrumentable_functions_found"
 	InstrumentationErrorAttachingSockFilter            = "attaching_sock_filter"
 	InstrumentationErrorAttachingSockMsg               = "attaching_sock_msg"
-	InstrumentationErrorCgroupNotFound                 = "cgroup_not_found"
 	InstrumentationErrorAttachingCgroup                = "attaching_cgroup"
 	InstrumentationErrorAttachingKprobe                = "attaching_kprobe"
 	InstrumentationErrorAttachingUprobe                = "attaching_uprobe"

@@ -236,18 +236,6 @@ jobs:
             --latest
           echo "GitHub release ${VERSION_TAG} updated to stable/latest"
 
-      - name: Trigger documentation publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION_TAG: ${{ needs.validate.outputs.version_tag }}
-        run: |
-          set -euo pipefail
-          echo "Triggering documentation publish for ${VERSION_TAG}"
-          gh workflow run publish-technical-documentation-release.yml \
-            --repo "${{ github.repository }}" \
-            --ref "${VERSION_TAG}"
-          echo "Documentation workflow triggered"
-
       - name: Print summary
         env:
           VERSION_TAG: ${{ needs.validate.outputs.version_tag }}
@@ -264,9 +252,6 @@ jobs:
             echo ""
             echo "### GitHub Release"
             echo "- [${VERSION_TAG}](https://github.com/${{ github.repository }}/releases/tag/${VERSION_TAG}) marked as stable/latest"
-            echo ""
-            echo "### Documentation"
-            echo "- Technical documentation publish workflow triggered for \`${VERSION_TAG}\`"
             echo ""
             echo "### Automated Follow-up"
             echo "- [x] Helm chart bump workflow triggered (check the workflow run for status)"

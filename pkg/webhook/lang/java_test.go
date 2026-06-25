@@ -25,12 +25,18 @@ func TestFindJavaAgent(t *testing.T) {
 			want:    &JavaAgent{Source: "cmdline", Arg: "-javaagent:/otel/opentelemetry-javaagent.jar"},
 		},
 		{
+			name:    "grafana agent on cmdline",
+			cmdline: []string{"java", "-javaagent:/otel/grafana-opentelemetry-java.jar", "-jar", "app.jar"},
+			env:     nil,
+			want:    &JavaAgent{Source: "cmdline", Arg: "-javaagent:/otel/grafana-opentelemetry-java.jar"},
+		},
+		{
 			name:    "agent in java tool options",
 			cmdline: []string{"java", "-jar", "app.jar"},
 			env: map[string]string{
-				"JAVA_TOOL_OPTIONS": "-Xmx512m -javaagent:/env-agent.jar -Dfoo=bar",
+				"JAVA_TOOL_OPTIONS": "-Xmx512m -javaagent:/env/opentelemetry-javaagent.jar -Dfoo=bar",
 			},
-			want: &JavaAgent{Source: "JAVA_TOOL_OPTIONS", Arg: "-javaagent:/env-agent.jar"},
+			want: &JavaAgent{Source: "JAVA_TOOL_OPTIONS", Arg: "-javaagent:/env/opentelemetry-javaagent.jar"},
 		},
 		{
 			name:    "agent in quoted java tool options",
@@ -44,25 +50,37 @@ func TestFindJavaAgent(t *testing.T) {
 			name:    "env vars checked in declared order",
 			cmdline: []string{"java", "-jar", "app.jar"},
 			env: map[string]string{
-				"_JAVA_OPTIONS":     "-javaagent:/second.jar",
-				"JAVA_TOOL_OPTIONS": "-javaagent:/first.jar",
+				"_JAVA_OPTIONS":     "-javaagent:/second/opentelemetry-javaagent.jar",
+				"JAVA_TOOL_OPTIONS": "-javaagent:/first/opentelemetry-javaagent.jar",
 			},
-			want: &JavaAgent{Source: "JAVA_TOOL_OPTIONS", Arg: "-javaagent:/first.jar"},
+			want: &JavaAgent{Source: "JAVA_TOOL_OPTIONS", Arg: "-javaagent:/first/opentelemetry-javaagent.jar"},
 		},
 		{
 			name:    "empty option env is ignored",
 			cmdline: []string{"java", "-jar", "app.jar"},
 			env: map[string]string{
 				"JAVA_TOOL_OPTIONS": "",
-				"_JAVA_OPTIONS":     "-javaagent:/fallback.jar",
+				"_JAVA_OPTIONS":     "-javaagent:/fallback/opentelemetry-javaagent.jar",
 			},
-			want: &JavaAgent{Source: "_JAVA_OPTIONS", Arg: "-javaagent:/fallback.jar"},
+			want: &JavaAgent{Source: "_JAVA_OPTIONS", Arg: "-javaagent:/fallback/opentelemetry-javaagent.jar"},
 		},
 		{
 			name:    "javaagent without colon is ignored",
 			cmdline: []string{"java", "-javaagent", "/agent.jar", "-jar", "app.jar"},
 			env:     nil,
 			want:    nil,
+		},
+		{
+			name:    "non otel agent is ignored",
+			cmdline: []string{"java", "-javaagent:/otel/pyroscope.jar", "-jar", "app.jar"},
+			env:     nil,
+			want:    nil,
+		},
+		{
+			name:    "only otel agent selected among multiple agents",
+			cmdline: []string{"java", "-javaagent:/otel/profiling.jar", "-javaagent:/otel/security.jar", "-javaagent:/otel/opentelemetry-java.jar", "-jar", "app.jar"},
+			env:     nil,
+			want:    &JavaAgent{Source: "cmdline", Arg: "-javaagent:/otel/opentelemetry-java.jar"},
 		},
 	}
 

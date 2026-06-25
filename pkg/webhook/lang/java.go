@@ -21,9 +21,13 @@ var JavaOptionsEnvVars = []string{
 }
 
 const javaAgentPrefix = "-javaagent:"
+const otelJava = "opentelemetry-java"
 
 // FindJavaAgent scans process cmdline arguments and environment for a
-// -javaagent: directive. cmdline is the process argv (e.g. the result of
+// -javaagent: directive of the OpenTelemetry Java agent.
+// We use contains of "opentelemetry-java" to support both Grafana's and
+// OTel upstream agent naming.
+// cmdline is the process argv (e.g. the result of
 // splitting /proc/<pid>/cmdline on NUL). env is the process environment as
 // a name->value map. cmdline takes precedence over env vars; env vars are
 // checked in the order of JavaOptionsEnvVars. Returns nil if none found.
@@ -45,7 +49,7 @@ func FindJavaAgent(cmdline []string, env map[string]string) *JavaAgent {
 
 func findJavaAgentArg(args []string) string {
 	for _, a := range args {
-		if strings.HasPrefix(a, javaAgentPrefix) {
+		if strings.HasPrefix(a, javaAgentPrefix) && strings.Contains(a, otelJava) && strings.HasSuffix(a, ".jar") {
 			return a
 		}
 	}

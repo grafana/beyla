@@ -87,6 +87,9 @@ func TestLinuxHarvester_Harvest(t *testing.T) {
 	assert.NotZero(t, status.MemoryRSSBytes)
 	assert.NotZero(t, status.ID.ParentProcessID)
 	assert.NotZero(t, status.ThreadCount)
+	require.NotEmpty(t, status.ID.StartTime, "process creation time must be derived from /proc")
+	_, err = time.Parse(time.RFC3339Nano, status.ID.StartTime)
+	assert.NoError(t, err, "StartTime must parse as RFC 3339")
 }
 
 func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {

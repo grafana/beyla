@@ -124,6 +124,7 @@ func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) e
 	status.ID.CommandLine = process.commandLine
 	status.ID.ExecPath = process.execPath
 	status.ID.ExecName = process.execName
+	status.ID.StartTime = process.creationTime
 
 	status.ID.ProcessID = process.Pid()
 

@@ -225,6 +225,12 @@ func getFilteredProcessResourceAttrs(nodeMeta *meta.NodeMeta, procID *process.ID
 		extranames.ProcExecName.OTEL().String(procID.ExecName),
 		extranames.ProcExecPath.OTEL().String(procID.ExecPath),
 	}
+	// process.creation.time is required by the OTel semconv `process` entity
+	// (enforced by weaver ≥ v0.24.1). The semconv import pinned in this file
+	// predates the constant, so emit it via a raw attribute key.
+	if procID.StartTime != "" {
+		procAttrs = append(procAttrs, attribute.String("process.creation.time", procID.StartTime))
+	}
 	return otelcfg.GetFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }
 

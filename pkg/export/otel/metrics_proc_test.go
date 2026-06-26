@@ -154,6 +154,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		ExecName:        "test-process",
 		ExecPath:        "/bin/test-process",
 		User:            "testuser",
+		StartTime:       "2025-01-02T03:04:05Z",
 		Service:         service,
 		UID:             service.UID,
 	}
@@ -192,6 +193,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 	assert.Equal(t, "12345", attrMap["process.pid"])
 	assert.Equal(t, "test-process", attrMap["process.command"])
 	assert.Equal(t, "testuser", attrMap["process.owner"])
+	assert.Equal(t, "2025-01-02T03:04:05Z", attrMap["process.creation.time"])
 
 	_, hasCommandArgs := attrMap["process.command_args"]
 	assert.False(t, hasCommandArgs, "process.command_args should be filtered out")
@@ -228,6 +230,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		"process.exec_name",
 		"process.exec_path",
 		"process.owner",
+		"process.creation.time",
 	}
 
 	for _, attrName := range processAttrs {

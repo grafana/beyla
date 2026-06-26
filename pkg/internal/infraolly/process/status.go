@@ -36,6 +36,10 @@ type ID struct {
 	CommandLine     string
 	ExecName        string
 	ExecPath        string
+	// StartTime is the process creation time formatted as RFC 3339, matching
+	// the OTel semconv `process.creation.time` resource attribute. Static for
+	// the lifetime of the process.
+	StartTime string
 }
 
 func (i *ID) GetUID() svc.UID {

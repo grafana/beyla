@@ -57,13 +57,16 @@ func packetTypeToMethod(packetType mqttparser.PacketType) string {
 // should be ignored for span creation (e.g., control packets like CONNECT).
 func ProcessPossibleMQTTEvent(event *TCPRequestInfo, pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer) (*MQTTInfo, bool, error) {
 	pktView := pkt.UnsafeView()
-	rpktView := rpkt.UnsafeView()
 
 	m, ignore, err := ProcessMQTTEvent(pktView)
 	if err != nil {
+		if rpkt == nil {
+			return m, ignore, err
+		}
+
 		// If we are getting the information in the response buffer, the event
 		// must be reversed and that's how we captured it.
-		m, ignore, err = ProcessMQTTEvent(rpktView)
+		m, ignore, err = ProcessMQTTEvent(rpkt.UnsafeView())
 		if err == nil && !ignore {
 			reverseTCPEvent(event)
 		}

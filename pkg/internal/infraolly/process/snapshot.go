@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -75,6 +76,9 @@ type linuxProcess struct {
 	commandLine        string
 	execPath           string
 	execName           string
+	// creationTime is the process start time in RFC 3339 format, derived once
+	// from /proc/<pid>/stat's starttime field and the boot epoch from /proc/stat.
+	creationTime string
 }
 
 // needed to calculate RSS.
@@ -90,6 +94,60 @@ var (
 	errMalformedGetentEntry  = errors.New("malformed getent entry")
 	errInvalidUidsForProcess = errors.New("invalid uids for process")
 )
+
+// bootTimeCache caches the parsed boot epoch (seconds since Unix epoch) per
+// procFSRoot so tests that swap in fake /proc trees stay isolated. A value of
+// zero means the parse failed and should not be used.
+var (
+	bootTimeMu    sync.Mutex
+	bootTimeCache = map[string]int64{}
+)
+
+// bootTimeUnix returns the system boot time (seconds since the Unix epoch),
+// parsed lazily from `<procFSRoot>/stat`'s `btime` line and cached per root.
+// Returns 0 if the value cannot be read or parsed.
+func bootTimeUnix(procFSRoot string) int64 {
+	bootTimeMu.Lock()
+	defer bootTimeMu.Unlock()
+	if v, ok := bootTimeCache[procFSRoot]; ok {
+		return v
+	}
+	v := readBootTime(procFSRoot)
+	bootTimeCache[procFSRoot] = v
+	return v
+}
+
+func readBootTime(procFSRoot string) int64 {
+	content, err := os.ReadFile(path.Join(procFSRoot, "stat"))
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		if !strings.HasPrefix(line, "btime ") {
+			continue
+		}
+		v, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(line, "btime ")), 10, 64)
+		if err != nil {
+			return 0
+		}
+		return v
+	}
+	return 0
+}
+
+// processCreationTime returns the absolute creation time of a process as an
+// RFC 3339 string, derived from its starttime ticks and the system boot epoch.
+// Returns "" if either input is unavailable.
+func processCreationTime(procFSRoot string, startTimeTicks uint64) string {
+	if startTimeTicks == 0 {
+		return ""
+	}
+	bootTime := bootTimeUnix(procFSRoot)
+	if bootTime == 0 {
+		return ""
+	}
+	return time.Unix(bootTime+int64(startTimeTicks)/clocksPerSec, 0).UTC().Format(time.RFC3339Nano)
+}
 
 func init() {
 	pageSize = int64(os.Getpagesize())
@@ -136,6 +194,7 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid app.PID, p
 			measureTime:         measureTime,
 			previousMeasureTime: measureTime,
 			procFSRoot:          procFSRoot,
+			creationTime:        processCreationTime(procFSRoot, currentStats.startTimeTicks),
 		}, nil
 	}
 
@@ -242,6 +301,10 @@ type procStats struct {
 	vmRSS      int64
 	vmSize     int64
 	cpu        CPUInfo
+	// startTimeTicks is the process start time in clock ticks since system boot
+	// (proc(5) field 22). Combine with the boot epoch from /proc/stat's `btime`
+	// line to derive the absolute process creation time.
+	startTimeTicks uint64
 }
 
 // /proc/<pid>/stat standard field indices according to: http://man7.org/linux/man-pages/man5/proc.5.html
@@ -254,6 +317,7 @@ const (
 	statCUtime     = 13
 	statCStime     = 14
 	statNumThreads = 17
+	statStartTime  = 19
 	statVsize      = 20
 	statRss        = 21
 )
@@ -271,6 +335,8 @@ func readProcStat(procFSRoot string, pid app.PID) (procStats, error) {
 }
 
 // parseProcStat is used to parse the content of the /proc/<pid>/stat file.
+//
+//nolint:cyclop
 func parseProcStat(content string) (procStats, error) {
 	stats := procStats{}
 
@@ -345,6 +411,13 @@ func parseProcStat(content string) (procStats, error) {
 		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 	stats.vmRSS *= pageSize
+
+	if len(fields) > statStartTime {
+		stats.startTimeTicks, err = strconv.ParseUint(fields[statStartTime], 10, 64)
+		if err != nil {
+			return stats, errors.Wrapf(err, "for stats: %s", content)
+		}
+	}
 
 	return stats, nil
 }

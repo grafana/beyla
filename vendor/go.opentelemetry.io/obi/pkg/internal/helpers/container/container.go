@@ -6,6 +6,7 @@ package container // import "go.opentelemetry.io/obi/pkg/internal/helpers/contai
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -20,6 +21,9 @@ var (
 	procRoot        = "/proc/"
 	namespaceFinder = procs.FindNamespace
 )
+
+// ErrContainerNotFound is returned when a process has no supported container cgroup entry.
+var ErrContainerNotFound = errors.New("container not found")
 
 // Info that we need to keep from a container: its ContainerID in Kubernetes and
 // the PIDNamespace of its processes.
@@ -69,7 +73,7 @@ func InfoForPID(pid app.PID) (Info, error) {
 			return Info{PIDNamespace: ns, ContainerID: cgroupID}, nil
 		}
 	}
-	return Info{}, fmt.Errorf("%s: couldn't find any docker entry for process with PID %d", cgroupFile, pid)
+	return Info{}, ErrContainerNotFound
 }
 
 // look for a cgroup ID on all the possible formats

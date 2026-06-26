@@ -1586,38 +1586,10 @@ func SpanStatusMessage(span *Span) string {
 		if span.SubType == HTTPSubtypeMCP && span.GenAI != nil && span.GenAI.MCP != nil && span.GenAI.MCP.ErrorMessage != "" {
 			return span.GenAI.MCP.ErrorMessage
 		}
-		if msg := genAIErrorMessage(span); msg != "" {
-			return msg
-		}
 	case EventTypeDNS:
 		if span.Status != 0 {
 			return dnsparser.RCode(span.Status).String()
 		}
-	}
-	return ""
-}
-
-func genAIErrorMessage(span *Span) string {
-	if span.GenAI == nil {
-		return ""
-	}
-	if span.GenAI.OpenAI != nil && span.GenAI.OpenAI.Error.Message != "" {
-		return span.GenAI.OpenAI.Error.Message
-	}
-	if span.GenAI.Anthropic != nil && span.GenAI.Anthropic.Output.Error != nil && span.GenAI.Anthropic.Output.Error.Message != "" {
-		return span.GenAI.Anthropic.Output.Error.Message
-	}
-	if span.GenAI.Gemini != nil && span.GenAI.Gemini.Output.Error != nil && span.GenAI.Gemini.Output.Error.Message != "" {
-		return span.GenAI.Gemini.Output.Error.Message
-	}
-	if span.GenAI.Qwen != nil && span.GenAI.Qwen.Error.Message != "" {
-		return span.GenAI.Qwen.Error.Message
-	}
-	if span.GenAI.Bedrock != nil && span.GenAI.Bedrock.Output.ErrorMessage != "" {
-		return span.GenAI.Bedrock.Output.ErrorMessage
-	}
-	if span.GenAI.Rerank != nil && span.GenAI.Rerank.Output.Error != nil && span.GenAI.Rerank.Output.Error.Message != "" {
-		return span.GenAI.Rerank.Output.Error.Message
 	}
 	return ""
 }

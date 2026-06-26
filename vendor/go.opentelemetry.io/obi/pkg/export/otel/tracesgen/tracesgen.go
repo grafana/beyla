@@ -73,9 +73,10 @@ func UserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Na
 	return traceAttrs, err
 }
 
-// GroupSpans must remain public for collectors embedding OBI
-func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection) map[svc.UID][]TraceSpanAndAttributes {
+// GroupSpans must remain public for collectors embedding OBI.
+func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection, redactKeys ...string) map[svc.UID][]TraceSpanAndAttributes {
 	spanGroups := map[svc.UID][]TraceSpanAndAttributes{}
+	redactSet := buildRedactSet(redactKeys)
 
 	for i := range spans {
 		span := &spans[i]
@@ -86,7 +87,7 @@ func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.N
 			continue
 		}
 
-		finalAttrs := TraceAttributesSelector(span, traceAttrs)
+		finalAttrs := traceAttributesSelectorInternal(span, traceAttrs, redactSet)
 
 		spanSampler := func() trace.Sampler {
 			if span.Service.Sampler != nil {
@@ -499,7 +500,7 @@ func httpEnrichmentAttributes(span *request.Span) []attribute.KeyValue {
 }
 
 //nolint:cyclop
-func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
+func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.Name]struct{}, redactSet map[string]struct{}) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -507,12 +508,14 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		attrs = []attribute.KeyValue{
 			request.HTTPRequestMethod(span.Method),
 			request.HTTPResponseStatusCode(span.Status),
-			request.HTTPUrlPath(span.Path),
 			request.ClientAddr(request.PeerAsClient(span)),
 			request.ServerAddr(request.SpanHost(span)),
 			request.ServerPort(span.HostPort),
 			request.HTTPRequestBodySize(int(span.RequestBodyLength())),
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
+		}
+		if span.Path != "" {
+			attrs = append(attrs, request.HTTPUrlPath(span.Path))
 		}
 		scheme := request.HTTPScheme(span)
 		if scheme != "" {
@@ -527,6 +530,13 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			}
 			attrs = append(attrs, semconv.GraphQLOperationName(span.GraphQL.OperationName))
 			attrs = append(attrs, request.GraphqlOperationType(span.GraphQL.OperationType))
+		}
+		if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok {
+			if idx := strings.IndexByte(span.FullPath, '?'); idx >= 0 {
+				if qs := scrubQuery(span.FullPath[idx+1:], redactSet); qs != "" {
+					attrs = append(attrs, request.HTTPUrlQuery(qs))
+				}
+			}
 		}
 		attrs = append(attrs, mcpAttributes(span, optionalAttrs)...)
 		attrs = append(attrs, jsonRPCAttributes(span)...)
@@ -577,12 +587,14 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 		if span.FullPath != "" {
 			urlPath = span.FullPath
 		}
-		// Strip query parameters from url.full by default to avoid leaking
-		// sensitive data (tokens, PII). Include them only when explicitly opted in.
-		var queryString string
-		if idx := strings.IndexByte(urlPath, '?'); idx > 0 {
-			queryString = urlPath[idx+1:]
-			if _, ok := optionalAttrs[attr.HTTPUrlQuery]; !ok {
+		// Scrub sensitive query parameters from url.full. The scrubbed query is always
+		// included in url.full when present; the selector only gates the separate url.query attribute.
+		var scrubbedQS string
+		if idx := strings.IndexByte(urlPath, '?'); idx >= 0 {
+			if qs := scrubQuery(urlPath[idx+1:], redactSet); qs != "" {
+				urlPath = urlPath[:idx+1] + qs
+				scrubbedQS = qs
+			} else {
 				urlPath = urlPath[:idx]
 			}
 		}
@@ -603,8 +615,10 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
 		}
 
-		if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok && queryString != "" {
-			attrs = append(attrs, request.HTTPUrlQuery(queryString))
+		if scrubbedQS != "" {
+			if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok {
+				attrs = append(attrs, request.HTTPUrlQuery(scrubbedQS))
+			}
 		}
 
 		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
@@ -1363,6 +1377,11 @@ func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]str
 	}
 
 	return attrs
+}
+
+// TraceAttributesSelector returns the []attribute.KeyValue for a single span.
+func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]struct{}, redactKeys ...string) []attribute.KeyValue {
+	return traceAttributesSelectorInternal(span, optionalAttrs, buildRedactSet(redactKeys))
 }
 
 func spanKind(span *request.Span) trace2.SpanKind {

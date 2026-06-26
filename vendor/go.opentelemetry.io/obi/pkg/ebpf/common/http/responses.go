@@ -16,14 +16,15 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
-
-	"go.opentelemetry.io/obi/pkg/config"
 )
 
 // Keep the decompressed response cap aligned with the maximum captured payload size
 // so body enrichment cannot expand a compressed payload beyond the configured
 // userspace budget.
-const maxDecompressedResponseBodyBytes = config.MaxCapturedPayloadBytes
+const (
+	maxCapturedPayloadBytes          = 1 << 18
+	maxDecompressedResponseBodyBytes = maxCapturedPayloadBytes
+)
 
 var errResponseBodyTooLarge = fmt.Errorf(
 	"response body exceeds decompression limit of %d bytes",

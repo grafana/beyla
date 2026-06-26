@@ -77,7 +77,7 @@ func (d *DynamicAppIPs) refreshAll() {
 
 func (d *DynamicAppIPs) addBatch(pids []app.PID) {
 	for _, pid := range pids {
-		ips := d.resolveIPs(pid)
+		ips := ResolveContainerIPs(d.store, pid)
 		if len(ips) == 0 {
 			selLog().Debug("no IPs resolved for dynamically selected PID", "pid", pid)
 			continue
@@ -123,17 +123,18 @@ func (d *DynamicAppIPs) decrementIPsLocked(ips []string) {
 	}
 }
 
-func (d *DynamicAppIPs) resolveIPs(pid app.PID) []string {
-	if d.store == nil {
+// ResolveContainerIPs returns pod IPs for a PID when a Kubernetes store is available.
+func ResolveContainerIPs(store *kube.Store, pid app.PID) []string {
+	if store == nil {
 		return nil
 	}
-	d.store.AddProcess(pid)
+	store.AddProcess(pid)
 	info, err := container.InfoForPID(pid)
 	if err != nil {
 		selLog().Debug("can't read container info for PID", "pid", pid, "error", err)
 		return nil
 	}
-	meta, _ := d.store.PodContainerByPIDNs(info.PIDNamespace, pid)
+	meta, _ := store.PodContainerByPIDNs(info.PIDNamespace, pid)
 	if meta == nil {
 		return nil
 	}

@@ -23,7 +23,7 @@ import (
 
 func removeQuery(url string) string {
 	idx := strings.IndexByte(url, '?')
-	if idx > 0 {
+	if idx >= 0 {
 		return url[:idx]
 	}
 	return url
@@ -366,7 +366,7 @@ func recoverJSONBodyFromBuffer(buf *largebuf.LargeBuffer) []byte {
 	// Scan forward from header end to find a JSON object or array.
 	for i := bodyStart; i < len(raw); i++ {
 		if raw[i] == '{' || raw[i] == '[' {
-			return raw[i:]
+			return append([]byte(nil), raw[i:]...)
 		}
 	}
 	return nil
@@ -384,9 +384,89 @@ func httpSafeParseResponse(responseBuffer *largebuf.LargeBuffer, req *http.Reque
 		responseBuffer.AppendChunk([]byte("\r\n\r\n"))
 		r.Reset()
 		rd.Reset(&r)
-		return http.ReadResponse(rd, req)
+		resp, err = http.ReadResponse(rd, req)
 	}
-	return resp, err
+	if err != nil {
+		return resp, err
+	}
+
+	if isChunkedResponse(resp) {
+		raw := responseBuffer.UnsafeView()
+		if bodyStart := findBodyStart(raw); bodyStart >= 0 {
+			decoded := dechunkBody(raw[bodyStart:])
+			resp.Body = io.NopCloser(bytes.NewReader(decoded))
+			resp.TransferEncoding = nil
+			resp.ContentLength = int64(len(decoded))
+			resp.Header.Del("Transfer-Encoding")
+		}
+	}
+
+	return resp, nil
+}
+
+func isChunkedResponse(resp *http.Response) bool {
+	for _, te := range resp.TransferEncoding {
+		if strings.EqualFold(te, "chunked") {
+			return true
+		}
+	}
+	return false
+}
+
+func findBodyStart(raw []byte) int {
+	idx := bytes.Index(raw, []byte("\r\n\r\n"))
+	if idx < 0 {
+		return -1
+	}
+	return idx + 4
+}
+
+// dechunkBody decodes HTTP chunked transfer encoding from raw bytes,
+// tolerating truncation at any point. Returns all successfully decoded
+// chunk payloads concatenated.
+func dechunkBody(data []byte) []byte {
+	var result []byte
+	pos := 0
+	for pos < len(data) {
+		// Find the end of the chunk-size line.
+		lineEnd := bytes.Index(data[pos:], []byte("\r\n"))
+		if lineEnd < 0 {
+			break
+		}
+		sizeLine := string(data[pos : pos+lineEnd])
+
+		// Strip chunk extensions (e.g. ";ext=val").
+		if semi := strings.IndexByte(sizeLine, ';'); semi >= 0 {
+			sizeLine = sizeLine[:semi]
+		}
+		sizeLine = strings.TrimSpace(sizeLine)
+		if sizeLine == "" {
+			break
+		}
+
+		chunkSize, err := strconv.ParseInt(sizeLine, 16, 64)
+		if err != nil || chunkSize < 0 {
+			break
+		}
+		if chunkSize == 0 {
+			break
+		}
+
+		chunkStart := pos + lineEnd + 2 // skip past \r\n
+		chunkEnd := chunkStart + int(chunkSize)
+
+		if chunkEnd > len(data) {
+			// Truncated chunk: take whatever is available.
+			result = append(result, data[chunkStart:]...)
+			break
+		}
+
+		result = append(result, data[chunkStart:chunkEnd]...)
+
+		// Skip past chunk data + trailing \r\n.
+		pos = chunkEnd + 2
+	}
+	return result
 }
 
 func httpRequestToSpan(event *BPFHTTPInfo, requestBuffer *largebuf.LargeBuffer) request.Span {

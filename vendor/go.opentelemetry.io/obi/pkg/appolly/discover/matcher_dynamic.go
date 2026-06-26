@@ -129,19 +129,23 @@ func (m *DynamicMatcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], b
 }
 
 func (m *DynamicMatcher) matchDynamicCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *ProcessMatch {
-	criteria := make([]services.Selector, 0, 1)
-	if m.DynamicPIDSelector.IncludesPID(proc.Pid) {
-		criteria = append(criteria, m.DynamicPIDSelector.AsSelector())
+	if !m.DynamicPIDSelector.IncludesPID(proc.Pid) {
+		return nil
 	}
 
-	if len(criteria) > 0 {
-		m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
-			obj.metadata, "podLabels", obj.podLabels, "criteria", criteria)
-
-		return &ProcessMatch{Criteria: criteria, Process: proc, DynamicSelectorPID: proc.Pid}
+	selector := m.DynamicPIDSelector.SelectorForPID(proc.Pid)
+	if selector == nil {
+		return nil
 	}
 
-	return nil
+	m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
+		obj.metadata, "podLabels", obj.podLabels, "criteria", []services.Selector{selector})
+
+	return &ProcessMatch{
+		Criteria:           []services.Selector{selector},
+		Process:            proc,
+		DynamicSelectorPID: proc.Pid,
+	}
 }
 
 func (m *DynamicMatcher) filterDeleted(obj ProcessAttrs) (Event[ProcessMatch], bool) {

@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/pipe/decorate"
 	"go.opentelemetry.io/obi/pkg/internal/pipe/geoip"
 	"go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/dynamicpid"
 	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/export"
@@ -76,8 +77,12 @@ func (s *Stats) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	if s.ctxInfo.DynamicPIDSelector != nil {
 		dynamicSelector = s.ctxInfo.DynamicPIDSelector.StatsMetrics()
 	}
+	dynamicDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "dynamicDecoratedStats")
+	swi.Add(dynamicpid.MetadataDecoratorProvider(s.ctxInfo.DynamicPIDSelector, dynamicSelector,
+		s.ctxInfo.K8sInformer, statAttrs, decoratedStats, dynamicDecoratedStats),
+		swarm.WithID("DynamicPIDMetadataDecorator"))
 	swi.Add(filter.ByDynamicPID(dynamicSelector, s.ctxInfo.K8sInformer,
-		statAttrs, decoratedStats, dynamicFilteredStats),
+		statAttrs, dynamicDecoratedStats, dynamicFilteredStats),
 		swarm.WithID("DynamicPIDFilter"))
 
 	filteredStats := s.ctxInfo.OverrideStatsExportQueue

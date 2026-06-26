@@ -5,7 +5,6 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -22,7 +21,10 @@ func isQwen(respHeader http.Header) bool {
 }
 
 func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
-	if !isQwen(resp.Header) {
+	headerDetected := isQwen(resp.Header)
+
+	// Fast exit: not detected by headers and URL doesn't match
+	if !headerDetected && !isQwenCompatibleURL(req) {
 		return *baseSpan, false
 	}
 
@@ -31,17 +33,24 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 		return *baseSpan, false
 	}
 
+	// If not detected by headers, verify model name starts with "qwen"
+	if !headerDetected {
+		model := extractModelField(reqB)
+		if !strings.HasPrefix(strings.ToLower(model), "qwen") {
+			return *baseSpan, false
+		}
+	}
+
 	respB, ok := readHTTPResponseBody("QwenSpan", resp, baseSpan)
 	if !ok {
 		return *baseSpan, false
 	}
 
-	slog.Debug("Qwen", "request", string(reqB), "response", string(respB))
-
 	parsedRequest := parseOpenAIInput(reqB)
-	parsedResponse := parseVendorOpenAI(respB)
+	parsedResponse, toolCalls := parseOpenAICompatibleResponse(respB)
 
-	if parsedResponse.ID == "" {
+	// Qwen-specific: try to extract request_id from response body
+	if parsedResponse.ID == "" && looksLikeJSON(respB) {
 		var responseID struct {
 			RequestID string `json:"request_id"`
 		}
@@ -50,8 +59,8 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 		}
 	}
 
+	// Fallback: try to get request ID from response headers
 	if parsedResponse.ID == "" {
-		// Fall back to response headers when body capture is partial/truncated.
 		for _, headerName := range []string{"X-DashScope-Request-Id", "X-Request-Id"} {
 			if headerValue := strings.TrimSpace(resp.Header.Get(headerName)); headerValue != "" {
 				parsedResponse.ID = headerValue
@@ -69,14 +78,43 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 	}
 
 	parsedResponse.Request = parsedRequest
-	parsedResponse.ToolCalls = extractToolCalls(parsedResponse.Choices)
+	parsedResponse.ToolCalls = toolCalls
 
 	baseSpan.SubType = request.HTTPSubtypeQwen
 	baseSpan.GenAI = &request.GenAI{
-		Qwen: &parsedResponse,
+		Qwen: parsedResponse,
 	}
 
 	return *baseSpan, true
+}
+
+// isQwenCompatibleURL checks if the request targets a Qwen/DashScope
+// endpoint that serves Qwen models.
+func isQwenCompatibleURL(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	if !isQwenHost(req) {
+		return false
+	}
+	path := requestPath(req)
+	return strings.Contains(path, "/chat/completions") ||
+		strings.Contains(path, "/completions") ||
+		strings.Contains(path, "/embeddings") ||
+		strings.Contains(path, "/generation")
+}
+
+func isQwenHost(req *http.Request) bool {
+	var host string
+	if req.URL != nil {
+		host = req.URL.Host
+	}
+	if host == "" {
+		host = req.Host
+	}
+	host = strings.ToLower(host)
+	return strings.Contains(host, "dashscope.aliyuncs.com") ||
+		strings.Contains(host, "dashscope.aliyun.com")
 }
 
 func extractQwenOperation(req *http.Request) string {

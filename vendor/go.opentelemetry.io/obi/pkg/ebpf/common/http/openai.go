@@ -4,6 +4,7 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
+	"bytes"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -50,6 +51,18 @@ func extractToolCalls(choices json.RawMessage) []request.ToolCall {
 	return result
 }
 
+// parseOpenAICompatibleResponse parses an OpenAI-compatible response body,
+// handling both JSON and SSE streaming formats. It returns the parsed response
+// and any tool calls extracted from the response.
+func parseOpenAICompatibleResponse(respB []byte) (*request.VendorOpenAI, []request.ToolCall) {
+	if looksLikeJSON(respB) {
+		resp := parseVendorOpenAI(respB)
+		return &resp, extractToolCalls(resp.Choices)
+	}
+	reader := bytes.NewReader(respB)
+	return parseOpenAIStream(reader)
+}
+
 func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
 	// Check any of the well known response headers that OpenAI would use
 	isOpenAI := false
@@ -77,7 +90,7 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	slog.Debug("OpenAI", "request", string(reqB), "response", string(respB))
 
 	parsedRequest := parseOpenAIInput(reqB)
-	parsedResponse := parseVendorOpenAI(respB)
+	parsedResponse, toolCalls := parseOpenAICompatibleResponse(respB)
 
 	if parsedResponse.ResponseModel == "" {
 		parsedResponse.ResponseModel = parsedRequest.Model
@@ -87,7 +100,7 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	}
 
 	parsedResponse.Request = parsedRequest
-	parsedResponse.ToolCalls = extractToolCalls(parsedResponse.Choices)
+	parsedResponse.ToolCalls = toolCalls
 
 	// Override operation name and derive API type from URL path.
 	if req.URL != nil {
@@ -106,7 +119,7 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 
 	baseSpan.SubType = request.HTTPSubtypeOpenAI
 	baseSpan.GenAI = &request.GenAI{
-		OpenAI: &parsedResponse,
+		OpenAI: parsedResponse,
 	}
 
 	return *baseSpan, true

@@ -5,11 +5,14 @@ package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"iter"
+	"maps"
 	"slices"
 	"sync"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/selection"
 )
@@ -27,6 +30,19 @@ const (
 	appSignalMask dynamicPIDSignal = signalTraces | signalAppMetrics
 	allSignalMask dynamicPIDSignal = appSignalMask | signalNetworkMetrics | signalStatsMetrics
 )
+
+// TODO: support per-signal attribute overrides; attributes are currently shared across all signals.
+
+type dynamicPIDAttributes struct {
+	serviceName        string
+	serviceNamespace   string
+	resourceAttributes map[string]string
+}
+
+type dynamicPIDRecord struct {
+	signals dynamicPIDSignal
+	attrs   dynamicPIDAttributes
+}
 
 type dynamicPIDNotifier struct {
 	addedCh   chan []app.PID
@@ -106,7 +122,11 @@ type dynamicPIDSignalView struct {
 }
 
 func (v *dynamicPIDSignalView) AddPIDs(pids ...uint32) {
-	v.parent.addSignals(v.mask, pids...)
+	v.parent.addSignals(v.mask, nil, pids...)
+}
+
+func (v *dynamicPIDSignalView) AddPID(pid uint32, opts selection.DynamicPIDOptions) {
+	v.parent.addSignals(v.mask, &opts, pid)
 }
 
 func (v *dynamicPIDSignalView) RemovePIDs(pids ...uint32) {
@@ -129,16 +149,30 @@ func (v *dynamicPIDSignalView) RemovedNotify() <-chan []app.PID {
 	return v.notifier.removedCh
 }
 
+// SelectorForPID returns a services.Selector for pid when it is in this view, carrying the
+// PID's shared service name and resource attributes.
+func (v *dynamicPIDSignalView) SelectorForPID(pid app.PID) services.Selector {
+	if !v.IncludesPID(pid) {
+		return nil
+	}
+	return v.parent.selectorForPID(pid)
+}
+
 // AsSelector returns a services.Selector that matches when the process PID is in this dynamic view.
 func (v *dynamicPIDSignalView) AsSelector() services.Selector {
-	return &dynamicPIDCriteriaAdapter{selector: v}
+	return &dynamicPIDCriteriaAdapter{view: v}
 }
 
 // DynamicPIDSelector holds one runtime selector object with per-signal PID views. The root Add/Remove
 // methods preserve legacy behavior by applying to all supported signals.
 type DynamicPIDSelector struct {
 	mu    sync.RWMutex
-	byPID map[app.PID]dynamicPIDSignal
+	byPID map[app.PID]dynamicPIDRecord
+
+	fileInfoMu        sync.RWMutex
+	fileInfoByPID     map[app.PID]*exec.FileInfo
+	onFileInfoUpdated func(*exec.FileInfo)
+	attrsUpdatedCh    chan app.PID
 
 	rootView           dynamicPIDSignalView
 	tracesView         dynamicPIDSignalView
@@ -161,7 +195,9 @@ func newDynamicPIDSignalView(parent *DynamicPIDSelector, mask dynamicPIDSignal) 
 // NewDynamicPIDSelector creates a new selector whose root Add/Remove methods apply to all signals.
 func NewDynamicPIDSelector() *DynamicPIDSelector {
 	d := &DynamicPIDSelector{
-		byPID: map[app.PID]dynamicPIDSignal{},
+		byPID:          map[app.PID]dynamicPIDRecord{},
+		fileInfoByPID:  map[app.PID]*exec.FileInfo{},
+		attrsUpdatedCh: make(chan app.PID, 64),
 	}
 	d.rootView = newDynamicPIDSignalView(d, allSignalMask)
 	d.tracesView = newDynamicPIDSignalView(d, signalTraces)
@@ -170,6 +206,51 @@ func NewDynamicPIDSelector() *DynamicPIDSelector {
 	d.statsMetricsView = newDynamicPIDSignalView(d, signalStatsMetrics)
 	d.appSignalsView = newDynamicPIDSignalView(d, appSignalMask)
 	return d
+}
+
+// SetOnFileInfoUpdated registers a hook invoked after SetPID updates a live FileInfo. OBI uses this
+// to re-send process events so metrics exporters refresh target_info and related series.
+func (d *DynamicPIDSelector) SetOnFileInfoUpdated(fn func(*exec.FileInfo)) {
+	d.fileInfoMu.Lock()
+	d.onFileInfoUpdated = fn
+	d.fileInfoMu.Unlock()
+}
+
+// AttrsUpdatedNotify reports PIDs whose shared attributes changed.
+func (d *DynamicPIDSelector) AttrsUpdatedNotify() <-chan app.PID {
+	return d.attrsUpdatedCh
+}
+
+func (d *DynamicPIDSelector) notifyAttrsUpdated(pid app.PID) {
+	select {
+	case d.attrsUpdatedCh <- pid:
+	default:
+	}
+}
+
+// RegisterFileInfo records the live FileInfo for a dynamically selected PID after instrumentation.
+func (d *DynamicPIDSelector) RegisterFileInfo(pid app.PID, fi *exec.FileInfo) {
+	if fi == nil {
+		return
+	}
+	d.fileInfoMu.Lock()
+	d.fileInfoByPID[pid] = fi
+	if owner := fi.ServiceAttrs().DynamicSelectorPID; owner != 0 && owner != pid {
+		d.fileInfoByPID[owner] = fi
+	}
+	d.fileInfoMu.Unlock()
+}
+
+// UnregisterFileInfo drops FileInfo references for pid and its dynamic selector owner PID.
+func (d *DynamicPIDSelector) UnregisterFileInfo(pid app.PID, fi *exec.FileInfo) {
+	d.fileInfoMu.Lock()
+	delete(d.fileInfoByPID, pid)
+	if fi != nil {
+		if owner := fi.ServiceAttrs().DynamicSelectorPID; owner != 0 {
+			delete(d.fileInfoByPID, owner)
+		}
+	}
+	d.fileInfoMu.Unlock()
 }
 
 func (d *DynamicPIDSelector) views() []*dynamicPIDSignalView {
@@ -183,21 +264,34 @@ func (d *DynamicPIDSelector) views() []*dynamicPIDSignalView {
 	}
 }
 
-func (d *DynamicPIDSelector) addSignals(mask dynamicPIDSignal, pids ...uint32) {
+func (d *DynamicPIDSelector) addSignals(mask dynamicPIDSignal, opts *selection.DynamicPIDOptions, pids ...uint32) {
 	if len(pids) == 0 {
 		return
 	}
 	addedByView := map[*dynamicPIDSignalView][]app.PID{}
+	var attrsUpdated []app.PID
 
 	d.mu.Lock()
 	for _, rawPID := range pids {
 		pid := app.PID(rawPID)
-		oldMask := d.byPID[pid]
+		rec := d.byPID[pid]
+		oldMask := rec.signals
+
+		if opts != nil {
+			rec.attrs = attrsFromOptions(*opts)
+		}
+
 		newMask := oldMask | mask
 		if newMask == oldMask {
+			if opts != nil {
+				d.byPID[pid] = rec
+				attrsUpdated = append(attrsUpdated, pid)
+			}
 			continue
 		}
-		d.byPID[pid] = newMask
+		rec.signals = newMask
+		d.byPID[pid] = rec
+
 		for _, view := range d.views() {
 			if !view.contains(oldMask) && view.contains(newMask) {
 				addedByView[view] = append(addedByView[view], pid)
@@ -208,6 +302,9 @@ func (d *DynamicPIDSelector) addSignals(mask dynamicPIDSignal, pids ...uint32) {
 
 	for view, batch := range addedByView {
 		view.notifier.notifyAdded(batch)
+	}
+	for _, pid := range attrsUpdated {
+		d.notifyAttrsUpdated(pid)
 	}
 }
 
@@ -220,10 +317,11 @@ func (d *DynamicPIDSelector) removeSignals(mask dynamicPIDSignal, pids ...uint32
 	d.mu.Lock()
 	for _, rawPID := range pids {
 		pid := app.PID(rawPID)
-		oldMask, ok := d.byPID[pid]
+		rec, ok := d.byPID[pid]
 		if !ok {
 			continue
 		}
+		oldMask := rec.signals
 		newMask := oldMask &^ mask
 		if newMask == oldMask {
 			continue
@@ -231,7 +329,8 @@ func (d *DynamicPIDSelector) removeSignals(mask dynamicPIDSignal, pids ...uint32
 		if newMask == 0 {
 			delete(d.byPID, pid)
 		} else {
-			d.byPID[pid] = newMask
+			rec.signals = newMask
+			d.byPID[pid] = rec
 		}
 		for _, view := range d.views() {
 			if view.contains(oldMask) && !view.contains(newMask) {
@@ -253,8 +352,8 @@ func (d *DynamicPIDSelector) getPIDs(mask dynamicPIDSignal) ([]app.PID, bool) {
 		return nil, false
 	}
 	out := make([]app.PID, 0, len(d.byPID))
-	for pid, signals := range d.byPID {
-		if signals&mask != 0 {
+	for pid, rec := range d.byPID {
+		if rec.signals&mask != 0 {
 			out = append(out, pid)
 		}
 	}
@@ -268,11 +367,98 @@ func (d *DynamicPIDSelector) getPIDs(mask dynamicPIDSignal) ([]app.PID, bool) {
 func (d *DynamicPIDSelector) includesPID(mask dynamicPIDSignal, pid app.PID) bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return d.byPID[pid]&mask != 0
+	return d.byPID[pid].signals&mask != 0
+}
+
+func (d *DynamicPIDSelector) selectorForPID(pid app.PID) services.Selector {
+	d.mu.RLock()
+	rec, ok := d.byPID[pid]
+	d.mu.RUnlock()
+	if !ok {
+		return nil
+	}
+	return newDynamicPIDCriteriaAdapter(pid, rec.attrs)
+}
+
+// GetPID returns the shared attributes for a tracked PID.
+func (d *DynamicPIDSelector) GetPID(pid uint32) (selection.DynamicPIDEntry, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	rec, ok := d.byPID[app.PID(pid)]
+	if !ok {
+		return selection.DynamicPIDEntry{}, false
+	}
+	return entryFromRecord(app.PID(pid), rec.attrs), true
+}
+
+// SetPID updates shared attributes for a PID that is already tracked by the selector and, when
+// the process is instrumented, applies them to its live FileInfo.
+func (d *DynamicPIDSelector) SetPID(entry selection.DynamicPIDEntry) bool {
+	attrs := attrsFromEntry(entry)
+
+	d.mu.Lock()
+	rec, ok := d.byPID[entry.PID]
+	if !ok {
+		d.mu.Unlock()
+		return false
+	}
+	d.byPID[entry.PID] = dynamicPIDRecord{
+		signals: rec.signals,
+		attrs:   attrs,
+	}
+	d.mu.Unlock()
+
+	d.applyAttrsToInstrumented(entry.PID, attrs)
+	d.notifyAttrsUpdated(entry.PID)
+	return true
+}
+
+func (d *DynamicPIDSelector) applyAttrsToInstrumented(pid app.PID, attrs dynamicPIDAttributes) {
+	d.fileInfoMu.RLock()
+	fi := d.fileInfoByPID[pid]
+	cb := d.onFileInfoUpdated
+	d.fileInfoMu.RUnlock()
+	if fi == nil {
+		return
+	}
+	updated := false
+	if attrs.serviceName != "" || attrs.serviceNamespace != "" {
+		uid := fi.ServiceAttrs().UID
+		if attrs.serviceName != "" {
+			uid.Name = attrs.serviceName
+		}
+		if attrs.serviceNamespace != "" {
+			uid.Namespace = attrs.serviceNamespace
+		}
+		fi.SetUID(uid)
+		updated = true
+	}
+	if len(attrs.resourceAttributes) > 0 {
+		snap := fi.ServiceAttrs()
+		metadata := snap.Metadata
+		if metadata == nil {
+			metadata = map[attr.Name]string{}
+		} else {
+			metadata = maps.Clone(metadata)
+		}
+		for k, v := range attrs.resourceAttributes {
+			metadata[attr.Name(k)] = v
+		}
+		fi.SetMetadata(metadata)
+		updated = true
+	}
+	if updated && cb != nil {
+		cb(fi)
+	}
 }
 
 func (v *dynamicPIDSignalView) contains(mask dynamicPIDSignal) bool {
 	return mask&v.mask != 0
+}
+
+// AddPID adds a PID to all supported signals with optional shared attributes.
+func (d *DynamicPIDSelector) AddPID(pid uint32, opts selection.DynamicPIDOptions) {
+	d.rootView.AddPID(pid, opts)
 }
 
 // AddPIDs adds PIDs to all supported signals (legacy root behavior).
@@ -334,20 +520,47 @@ func (d *DynamicPIDSelector) AsSelector() services.Selector {
 	return d.rootView.AsSelector()
 }
 
-// dynamicPIDCriteriaAdapter implements services.Selector by delegating only GetPIDs to a runtime PID selector.
-type dynamicPIDCriteriaAdapter struct {
-	selector selection.PIDSelector
+// ResourceAttributesFromSelector returns resource attributes configured on a dynamic PID
+// selector criteria, or nil when the selector is not from DynamicPIDSelector.
+func ResourceAttributesFromSelector(selector services.Selector) map[attr.Name]string {
+	adapter, ok := selector.(*dynamicPIDCriteriaAdapter)
+	if !ok || len(adapter.attrs.resourceAttributes) == 0 {
+		return nil
+	}
+	out := make(map[attr.Name]string, len(adapter.attrs.resourceAttributes))
+	for k, v := range adapter.attrs.resourceAttributes {
+		out[attr.Name(k)] = v
+	}
+	return out
 }
 
-func (a *dynamicPIDCriteriaAdapter) GetName() string                       { return "" }
-func (a *dynamicPIDCriteriaAdapter) GetNamespace() string                  { return "" }
-func (a *dynamicPIDCriteriaAdapter) GetPath() services.StringMatcher       { return &emptyMatcher{} }
+// dynamicPIDCriteriaAdapter implements services.Selector for a dynamically selected PID.
+type dynamicPIDCriteriaAdapter struct {
+	pid   app.PID
+	attrs dynamicPIDAttributes
+	view  *dynamicPIDSignalView
+}
+
+func newDynamicPIDCriteriaAdapter(pid app.PID, attrs dynamicPIDAttributes) *dynamicPIDCriteriaAdapter {
+	return &dynamicPIDCriteriaAdapter{pid: pid, attrs: cloneAttrs(attrs)}
+}
+
+func (a *dynamicPIDCriteriaAdapter) GetName() string      { return a.attrs.serviceName }
+func (a *dynamicPIDCriteriaAdapter) GetNamespace() string { return a.attrs.serviceNamespace }
+func (a *dynamicPIDCriteriaAdapter) GetPath() services.StringMatcher {
+	return &emptyMatcher{}
+}
 func (a *dynamicPIDCriteriaAdapter) GetPathRegexp() services.StringMatcher { return &emptyMatcher{} }
 func (a *dynamicPIDCriteriaAdapter) GetOpenPorts() *services.IntEnum       { return &services.IntEnum{} }
 func (a *dynamicPIDCriteriaAdapter) GetLanguages() services.StringMatcher  { return &emptyMatcher{} }
-func (a *dynamicPIDCriteriaAdapter) GetPIDs() ([]app.PID, bool)            { return a.selector.GetPIDs() }
-func (a *dynamicPIDCriteriaAdapter) GetCmdArgs() services.StringMatcher    { return &emptyMatcher{} }
-func (a *dynamicPIDCriteriaAdapter) IsContainersOnly() bool                { return false }
+func (a *dynamicPIDCriteriaAdapter) GetPIDs() ([]app.PID, bool) {
+	if a.view != nil {
+		return a.view.GetPIDs()
+	}
+	return []app.PID{a.pid}, true
+}
+func (a *dynamicPIDCriteriaAdapter) GetCmdArgs() services.StringMatcher { return &emptyMatcher{} }
+func (a *dynamicPIDCriteriaAdapter) IsContainersOnly() bool             { return false }
 func (a *dynamicPIDCriteriaAdapter) RangeMetadata() iter.Seq2[string, services.StringMatcher] {
 	return emptyMetadataSeq2
 }
@@ -364,8 +577,11 @@ func (a *dynamicPIDCriteriaAdapter) GetExportModes() services.ExportModes {
 	return services.ExportModeUnset
 }
 
-func (a *dynamicPIDCriteriaAdapter) GetSamplerConfig() *services.SamplerConfig     { return nil }
-func (a *dynamicPIDCriteriaAdapter) GetRoutesConfig() *services.CustomRoutesConfig { return nil }
+func (a *dynamicPIDCriteriaAdapter) GetSamplerConfig() *services.SamplerConfig { return nil }
+func (a *dynamicPIDCriteriaAdapter) GetRoutesConfig() *services.CustomRoutesConfig {
+	return nil
+}
+
 func (a *dynamicPIDCriteriaAdapter) MetricsConfig() perapp.SvcMetricsConfig {
 	return perapp.SvcMetricsConfig{}
 }
@@ -376,3 +592,36 @@ func (emptyMatcher) IsSet() bool               { return false }
 func (emptyMatcher) MatchString(_ string) bool { return false }
 
 func emptyMetadataSeq2(_ func(string, services.StringMatcher) bool) {}
+
+func attrsFromOptions(opts selection.DynamicPIDOptions) dynamicPIDAttributes {
+	return dynamicPIDAttributes{
+		serviceName:        opts.ServiceName,
+		serviceNamespace:   opts.ServiceNamespace,
+		resourceAttributes: maps.Clone(opts.ResourceAttributes),
+	}
+}
+
+func attrsFromEntry(entry selection.DynamicPIDEntry) dynamicPIDAttributes {
+	return dynamicPIDAttributes{
+		serviceName:        entry.ServiceName,
+		serviceNamespace:   entry.ServiceNamespace,
+		resourceAttributes: maps.Clone(entry.ResourceAttributes),
+	}
+}
+
+func entryFromRecord(pid app.PID, attrs dynamicPIDAttributes) selection.DynamicPIDEntry {
+	return selection.DynamicPIDEntry{
+		PID:                pid,
+		ServiceName:        attrs.serviceName,
+		ServiceNamespace:   attrs.serviceNamespace,
+		ResourceAttributes: maps.Clone(attrs.resourceAttributes),
+	}
+}
+
+func cloneAttrs(attrs dynamicPIDAttributes) dynamicPIDAttributes {
+	return dynamicPIDAttributes{
+		serviceName:        attrs.serviceName,
+		serviceNamespace:   attrs.serviceNamespace,
+		resourceAttributes: maps.Clone(attrs.resourceAttributes),
+	}
+}

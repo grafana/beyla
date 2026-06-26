@@ -108,6 +108,7 @@ const (
 	GoTracerAttributeOptOffset
 	GoErrorStringOffset
 	// go runtime channels
+	HchanQcountPos
 	HchanDataqsizPos
 	HchanSendxPos
 	HchanRecvxPos
@@ -433,6 +434,7 @@ var structMembers = map[string]structInfo{
 	"runtime.hchan": {
 		lib: "go",
 		fields: map[string]GoOffset{
+			"qcount":   HchanQcountPos,
 			"dataqsiz": HchanDataqsizPos,
 			"sendx":    HchanSendxPos,
 			"recvx":    HchanRecvxPos,

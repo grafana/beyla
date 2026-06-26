@@ -615,6 +615,9 @@ type Attributes struct {
 	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.
 	// If the value <= 0, it is disabled.
 	MetricSpanNameAggregationLimit int `yaml:"metric_span_names_limit" env:"OTEL_EBPF_METRIC_SPAN_NAMES_LIMIT"`
+
+	// SensitiveQueryParams controls which query-parameter keys are redacted in url.full and url.query.
+	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
 }
 
 type HostIDConfig struct {

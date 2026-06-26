@@ -20,6 +20,7 @@ type PIDSelector interface {
 type MutablePIDSelector interface {
 	PIDSelector
 	AddPIDs(...uint32)
+	AddPID(pid uint32, opts DynamicPIDOptions)
 	RemovePIDs(...uint32)
 }
 
@@ -31,4 +32,8 @@ type MultiSignalPIDSelector interface {
 	AppMetrics() MutablePIDSelector
 	NetworkMetrics() MutablePIDSelector
 	StatsMetrics() MutablePIDSelector
+	GetPID(pid uint32) (DynamicPIDEntry, bool)
+	SetPID(entry DynamicPIDEntry) bool
+	// AttrsUpdatedNotify reports PIDs whose shared attributes changed via SetPID or AddPID with options.
+	AttrsUpdatedNotify() <-chan app.PID
 }

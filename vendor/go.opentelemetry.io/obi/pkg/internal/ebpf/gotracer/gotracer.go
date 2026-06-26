@@ -46,6 +46,15 @@ type runtimeMetricTargetKey struct {
 	ns  uint32
 }
 
+const missingGoOffset = ^uint64(0)
+
+var goChannelOffsetFields = [...]goexec.GoOffset{
+	goexec.HchanQcountPos,
+	goexec.HchanDataqsizPos,
+	goexec.HchanSendxPos,
+	goexec.HchanRecvxPos,
+}
+
 type Tracer struct {
 	log                     *slog.Logger
 	pidsFilter              ebpfcommon.ServiceFilter
@@ -193,6 +202,8 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,                 // 10
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
+		// Large buffer multi-batch emission
+		p.bpfObjects.ObiLargeBufEmitContinue, // 13  k_tail_large_buf_emit_continue
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
@@ -205,6 +216,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 	p.recordGoChannelOffsetAvailability(fileInfo, offsets)
 
 	offTable := BpfOffTableT{}
+	initMissingGoChannelOffsets(&offTable)
 	// Set the field offsets and the logLevel for the Go BPF program in a map
 	for _, field := range []goexec.GoOffset{
 		goexec.ConnFdPos,
@@ -279,6 +291,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		// go manual spans
 		goexec.GoTracerDelegatePos,
 		// go runtime channels
+		goexec.HchanQcountPos,
 		goexec.HchanDataqsizPos,
 		goexec.HchanSendxPos,
 		goexec.HchanRecvxPos,
@@ -342,6 +355,16 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 
 	if err := p.bpfObjects.GoOffsetsMap.Put(fileInfo.Ino(), offTable); err != nil {
 		p.log.Error("error setting offset in map for", "pid", fileInfo.Pid(), "ino", fileInfo.Ino())
+	}
+}
+
+func initMissingGoChannelOffsets(offTable *BpfOffTableT) {
+	if offTable == nil {
+		return
+	}
+
+	for _, field := range goChannelOffsetFields {
+		offTable.Table[field] = missingGoOffset
 	}
 }
 

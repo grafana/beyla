@@ -403,10 +403,12 @@ func getDefinitions(
 		},
 		Traces.Section: {
 			Attributes: map[attr.Name]Default{
-				attr.DNSQuestionName:   true,
-				attr.DBQueryText:       false,
-				attr.GraphQLDocument:   false,
-				attr.HTTPUrlQuery:      false,
+				attr.DNSQuestionName: true,
+				attr.DBQueryText:     false,
+				attr.GraphQLDocument: false,
+				// url.query is Conditionally Required by OTel semconv (emitted when a query string is present).
+				// You can opt out via attributes.select.traces.exclude: [url.query].
+				attr.HTTPUrlQuery:      true,
 				attr.GenAIInput:        false,
 				attr.GenAIOutput:       false,
 				attr.GenAIInstructions: false,

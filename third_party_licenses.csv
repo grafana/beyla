@@ -9,8 +9,8 @@ github.com/aws/aws-sdk-go-v2/credentials,https://github.com/grafana/beyla/blob/H
 github.com/aws/aws-sdk-go-v2/feature/ec2/imds,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/feature/ec2/imds/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/internal/configsources,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/configsources/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/endpoints/v2/LICENSE.txt,Apache-2.0
-github.com/aws/aws-sdk-go-v2/internal/ini,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/ini/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/internal/sync/singleflight,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/sync/singleflight/LICENSE,BSD-3-Clause
+github.com/aws/aws-sdk-go-v2/internal/v4a,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/v4a/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/internal/presigned-url/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/signin,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/signin/LICENSE.txt,Apache-2.0

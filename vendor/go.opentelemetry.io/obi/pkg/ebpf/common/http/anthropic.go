@@ -99,7 +99,7 @@ func AnthropicSpan(baseSpan *request.Span, req *http.Request, resp *http.Respons
 
 	var parsedResponse request.AnthropicResponse
 	var toolCalls []request.ToolCall
-	if len(respB) > 0 && respB[0] == '{' {
+	if looksLikeJSON(respB) {
 		parsedResponse = parseAnthropicResponse(respB)
 		toolCalls = extractAnthropicToolCalls(parsedResponse.Content)
 	} else {

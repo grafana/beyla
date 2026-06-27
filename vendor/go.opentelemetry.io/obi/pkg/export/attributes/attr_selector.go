@@ -86,6 +86,7 @@ func parseExtraAttrGroup(group string) (AttrGroups, error) {
 var DefaultSensitiveQueryParams = []string{
 	// OTel semconv-recommended — https://opentelemetry.io/docs/specs/semconv/http/http-spans/
 	"X-Amz-Signature", "X-Amz-Credential", "X-Amz-Security-Token",
+	"AWSAccessKeyId", "Signature", "SecurityToken",
 	"X-Goog-Signature", "sig",
 	// Common sensitive parameters
 	"token", "access_token", "refresh_token", "id_token", "jwt",

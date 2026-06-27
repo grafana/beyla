@@ -48,9 +48,12 @@ func (e *Extractor) scanClassFile(ctx context.Context, path string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		e.log.Debug("error stating Java class file", "path", path, "error", err)
+		return nil
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
 		return nil
 	}
 	if err := ctx.Err(); err != nil {

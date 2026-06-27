@@ -510,6 +510,7 @@ func (i *instrumenter) usdtProbes(pid app.PID, ns uint32, p Tracer) error {
 		elfFile.Close()
 	}
 
+	i.closables = append(i.closables, usdtClosers...)
 	p.AddCloser(usdtClosers...)
 	return nil
 }

@@ -1,7 +1,7 @@
 // Package jsonschema uses reflection to generate JSON Schemas from Go types [1].
 //
 // If json tags are present on struct fields, they will be used to infer
-// property names and if a property is required (omitempty is present).
+// property names and if a property is required (omitempty or omitzero is present).
 //
 // [1] http://json-schema.org/latest/json-schema-validation.html
 package jsonschema
@@ -103,7 +103,7 @@ type Reflector struct {
 
 	// RequiredFromJSONSchemaTags will cause the Reflector to generate a schema
 	// that requires any key tagged with `jsonschema:required`, overriding the
-	// default of requiring any key *not* tagged with `json:,omitempty`.
+	// default of requiring any key *not* tagged with `json:,omitempty` or `json:,omitzero`.
 	RequiredFromJSONSchemaTags bool
 
 	// Do not reference definitions. This will remove the top-level $defs map and
@@ -188,8 +188,12 @@ func (r *Reflector) ReflectFromType(t reflect.Type) *Schema {
 	s.Definitions = definitions
 	bs := r.reflectTypeToSchemaWithID(definitions, t)
 	if r.ExpandedStruct {
-		*s = *definitions[name]
-		delete(definitions, name)
+		if def := definitions[name]; def != nil {
+			*s = *def
+			delete(definitions, name)
+		} else {
+			*s = *bs
+		}
 	} else {
 		*s = *bs
 	}
@@ -611,6 +615,18 @@ func (t *Schema) structKeywordsFromTags(f reflect.StructField, parent *Schema, p
 	tags := splitOnUnescapedCommas(f.Tag.Get("jsonschema"))
 	tags = t.genericKeywords(tags, parent, propertyName)
 
+	// The encoding/json ",string" option causes integer, float and boolean
+	// fields to be encoded as JSON strings. Override the reflected type
+	// accordingly before running type-specific keyword parsing so the
+	// generated schema matches the on-the-wire representation.
+	jsonTags := strings.Split(f.Tag.Get("json"), ",")
+	switch t.Type {
+	case "integer", "number", "boolean":
+		if jsonTagHasOption(jsonTags, "string") {
+			t.Type = "string"
+		}
+	}
+
 	switch t.Type {
 	case "string":
 		t.stringKeywords(tags)
@@ -623,7 +639,7 @@ func (t *Schema) structKeywordsFromTags(f reflect.StructField, parent *Schema, p
 	case "boolean":
 		t.booleanKeywords(tags)
 	}
-	extras := strings.Split(f.Tag.Get("jsonschema_extras"), ",")
+	extras := splitOnUnescapedCommas(f.Tag.Get("jsonschema_extras"))
 	t.extraKeywords(extras)
 }
 
@@ -742,9 +758,10 @@ func (t *Schema) booleanKeywords(tags []string) {
 		}
 		name, val := nameValue[0], nameValue[1]
 		if name == "default" {
-			if val == "true" {
+			switch val {
+			case "true":
 				t.Default = true
-			} else if val == "false" {
+			case "false":
 				t.Default = false
 			}
 		}
@@ -913,11 +930,12 @@ func (t *Schema) setExtra(key, val string) {
 			t.Extras[key], _ = strconv.Atoi(val)
 		default:
 			var x any
-			if val == "true" {
+			switch val {
+			case "true":
 				x = true
-			} else if val == "false" {
+			case "false":
 				x = false
-			} else {
+			default:
 				x = val
 			}
 			t.Extras[key] = x
@@ -931,7 +949,7 @@ func requiredFromJSONTags(tags []string, val *bool) {
 	}
 
 	for _, tag := range tags[1:] {
-		if tag == "omitempty" {
+		if tag == "omitempty" || tag == "omitzero" {
 			*val = false
 			return
 		}
@@ -973,6 +991,18 @@ func ignoredByJSONSchemaTags(tags []string) bool {
 func inlinedByJSONTags(tags []string) bool {
 	for _, tag := range tags[1:] {
 		if tag == "inline" {
+			return true
+		}
+	}
+	return false
+}
+
+// jsonTagHasOption reports whether the parsed json struct tag contains the
+// given option. The first element of tags is assumed to be the field name, as
+// produced by strings.Split on a raw json tag value, and is skipped.
+func jsonTagHasOption(tags []string, option string) bool {
+	for _, tag := range tags[1:] {
+		if tag == option {
 			return true
 		}
 	}

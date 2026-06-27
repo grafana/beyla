@@ -106,7 +106,9 @@ func find(path []string, pathNode *node) string {
 	// so more specific patterns (e.g. "@:username") must be declared before a catch-all
 	for _, w := range pathNode.Patterns {
 		if w.matches(path[0]) {
-			return find(path[1:], w.node)
+			if fullRoute := find(path[1:], w.node); fullRoute != "" {
+				return fullRoute
+			}
 		}
 	}
 	if pathNode.AnyPath != nil {

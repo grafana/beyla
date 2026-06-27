@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
@@ -318,11 +319,20 @@ func (t *typer) loadAllGoFunctionNames() {
 	t.allGoFunctions = nil
 	for _, p := range newGoTracersGroup(nil, t.cfg, t.metrics) {
 		for symbolName := range p.GoProbes() {
-			// avoid duplicating function names
-			if _, ok := uniqueFunctions[symbolName]; !ok {
-				uniqueFunctions[symbolName] = struct{}{}
-				t.allGoFunctions = append(t.allGoFunctions, symbolName)
-			}
+			t.addGoFunctionName(uniqueFunctions, symbolName)
 		}
 	}
+
+	for _, symbolName := range gotracer.GoChannelLinkProbeSymbols() {
+		t.addGoFunctionName(uniqueFunctions, symbolName)
+	}
+}
+
+func (t *typer) addGoFunctionName(uniqueFunctions map[string]struct{}, symbolName string) {
+	if _, ok := uniqueFunctions[symbolName]; ok {
+		return
+	}
+
+	uniqueFunctions[symbolName] = struct{}{}
+	t.allGoFunctions = append(t.allGoFunctions, symbolName)
 }

@@ -5,6 +5,7 @@ package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -177,6 +178,9 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo ProcessAttrs) (ProcessAttrs
 	if err != nil {
 		// it is expected for any process not running inside a container
 		wk.log.Debug("can't get container info for PID", "pid", procInfo.pid, "error", err)
+		if errors.Is(err, container.ErrContainerNotFound) {
+			return procInfo, true
+		}
 		return ProcessAttrs{}, false
 	}
 

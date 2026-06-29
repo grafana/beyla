@@ -481,6 +481,17 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
+var goChannelLinkProbeSymbols = []string{
+	"runtime.chansend1",
+	"runtime.chanrecv1",
+	"runtime.chanrecv2",
+}
+
+// GoChannelLinkProbeSymbols returns the Go runtime symbols used to correlate direct channel handoffs.
+func GoChannelLinkProbeSymbols() []string {
+	return append([]string(nil), goChannelLinkProbeSymbols...)
+}
+
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	m := map[string][]*ebpfcommon.ProbeDesc{
 		// Go runtime
@@ -828,15 +839,15 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	}
 
 	if p.goChannelLinkProbesEnabled() {
-		m["runtime.chansend1"] = []*ebpfcommon.ProbeDesc{{
+		m[goChannelLinkProbeSymbols[0]] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeRuntimeChansend1,
 			End:   p.bpfObjects.ObiUprobeRuntimeChansend1Return,
 		}}
-		m["runtime.chanrecv1"] = []*ebpfcommon.ProbeDesc{{
+		m[goChannelLinkProbeSymbols[1]] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeRuntimeChanrecv1,
 			End:   p.bpfObjects.ObiUprobeRuntimeChanrecv1Return,
 		}}
-		m["runtime.chanrecv2"] = []*ebpfcommon.ProbeDesc{{
+		m[goChannelLinkProbeSymbols[2]] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeRuntimeChanrecv2,
 			End:   p.bpfObjects.ObiUprobeRuntimeChanrecv2Return,
 		}}

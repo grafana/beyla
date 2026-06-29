@@ -154,6 +154,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		ExecName:        "test-process",
 		ExecPath:        "/bin/test-process",
 		User:            "testuser",
+		CreationTime:    "2023-11-21T09:25:34.853Z",
 		Service:         service,
 		UID:             service.UID,
 	}
@@ -228,6 +229,7 @@ func TestGetFilteredProcessResourceAttrs(t *testing.T) {
 		"process.exec_name",
 		"process.exec_path",
 		"process.owner",
+		"process.creation.time",
 	}
 
 	for _, attrName := range processAttrs {

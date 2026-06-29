@@ -125,6 +125,11 @@ func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) e
 	status.ID.ExecPath = process.execPath
 	status.ID.ExecName = process.execName
 
+	if err := process.fetchCreationTime(); err != nil {
+		ps.log.Debug("can't get creation time for process", "pid", process.Pid(), "error", err)
+	}
+	status.ID.CreationTime = process.creationTime
+
 	status.ID.ProcessID = process.Pid()
 
 	var err error

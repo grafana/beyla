@@ -198,7 +198,10 @@ func resolveProcessPath(root, cwd, path string) (string, bool) {
 		return "", false
 	}
 
-	if isProcRoot(root) {
+	if procRootPath(root) {
+		if pathHasSymlink(root, containerPath) {
+			return "", false
+		}
 		if _, err := os.Stat(hostPath); err != nil {
 			return "", false
 		}
@@ -218,6 +221,28 @@ func resolveProcessPath(root, cwd, path string) (string, bool) {
 	}
 
 	return hostEval, true
+}
+
+var procRootPath = isProcRoot
+
+func pathHasSymlink(root, containerPath string) bool {
+	parts := strings.Split(strings.TrimPrefix(containerPath, string(filepath.Separator)), string(filepath.Separator))
+	path := root
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+
+		path = filepath.Join(path, part)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return false
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func isProcRoot(root string) bool {

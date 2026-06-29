@@ -68,13 +68,15 @@ type linuxProcess struct {
 	procFSRoot string
 
 	// data that will be reused between harvests of the same process.
-	pid                app.PID
-	user               string
-	commandInfoFetched bool
-	commandArgs        []string
-	commandLine        string
-	execPath           string
-	execName           string
+	pid                 app.PID
+	user                string
+	commandInfoFetched  bool
+	commandArgs         []string
+	commandLine         string
+	execPath            string
+	execName            string
+	creationTimeFetched bool
+	creationTime        string
 }
 
 // needed to calculate RSS.
@@ -414,6 +416,23 @@ func (pw *linuxProcess) fetchCommandInfo() {
 		pw.commandArgs = append(pw.commandArgs, arg)
 	}
 	pw.commandLine = fullCommandLine.String()
+}
+
+// fetchCreationTime caches the process creation time as an RFC3339Nano UTC string,
+// matching the format example given by OTel semconv for process.creation.time
+// (e.g. "2023-11-21T09:25:34.853Z").
+func (pw *linuxProcess) fetchCreationTime() error {
+	if pw.creationTimeFetched {
+		return nil
+	}
+	pw.creationTimeFetched = true
+
+	ms, err := pw.process.CreateTime()
+	if err != nil {
+		return err
+	}
+	pw.creationTime = time.UnixMilli(ms).UTC().Format(time.RFC3339Nano)
+	return nil
 }
 
 // getNextArg consumes the next found argument from a /proc/*/cmdline string

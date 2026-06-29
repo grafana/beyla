@@ -224,6 +224,7 @@ func getFilteredProcessResourceAttrs(nodeMeta *meta.NodeMeta, procID *process.ID
 		extranames.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
 		extranames.ProcExecName.OTEL().String(procID.ExecName),
 		extranames.ProcExecPath.OTEL().String(procID.ExecPath),
+		extranames.ProcCreationTime.OTEL().String(procID.CreationTime),
 	}
 	return otelcfg.GetFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }

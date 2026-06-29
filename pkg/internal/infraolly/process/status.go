@@ -36,6 +36,7 @@ type ID struct {
 	CommandLine     string
 	ExecName        string
 	ExecPath        string
+	CreationTime    string
 }
 
 func (i *ID) GetUID() svc.UID {

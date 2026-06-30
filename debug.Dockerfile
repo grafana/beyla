@@ -1,4 +1,4 @@
-FROM golang:1.26.3-alpine@sha256:91eda9776261207ea25fd06b5b7fed8d397dd2c0a283e77f2ab6e91bfa71079d as builder
+FROM golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 as builder
 
 ARG TARGETARCH
 
@@ -27,7 +27,7 @@ RUN go install github.com/go-delve/delve/cmd/dlv@latest
 # Prior to using this debug.Dockerfile, you should manually run `make generate copy-obi-vendor`
 RUN make debug
 
-FROM alpine:latest@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
+FROM alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 WORKDIR /
 

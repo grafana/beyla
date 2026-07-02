@@ -28,6 +28,20 @@
     },
     {
       customType: 'regex',
+      description: 'Track grafana/helm-charts update-helm-repo reusable workflow (referenced by bare commit SHA on main, which the standard github-actions manager cannot track)',
+      managerFilePatterns: [
+        '/^\\.github/workflows/helm-release\\.yml$/',
+      ],
+      matchStrings: [
+        'update-helm-repo\\.yaml@(?<currentDigest>[a-f0-9]{40})',
+      ],
+      depNameTemplate: 'grafana/helm-charts',
+      packageNameTemplate: 'https://github.com/grafana/helm-charts',
+      datasourceTemplate: 'git-refs',
+      currentValueTemplate: 'main',
+    },
+    {
+      customType: 'regex',
       description: 'Update opentelemetry-injector version',
       datasourceTemplate: 'github-releases',
       depNameTemplate: 'open-telemetry/opentelemetry-injector',
@@ -130,6 +144,19 @@
         'digest',
         'minor',
         'major',
+      ],
+      schedule: [
+        'before 8am on Wednesday',
+      ],
+    },
+    {
+      description: 'Group the helm-charts reusable workflow bump with the other GitHub Actions updates',
+      groupName: 'Github Actions',
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchFileNames: [
+        '.github/workflows/helm-release.yml',
       ],
       schedule: [
         'before 8am on Wednesday',

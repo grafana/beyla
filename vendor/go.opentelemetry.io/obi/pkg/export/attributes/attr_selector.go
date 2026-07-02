@@ -139,6 +139,13 @@ type AttrSelector struct {
 	selector   Selection
 }
 
+// exactIncludeOnlyAttrs contains optional attributes that must be selected by
+// exact name. Wildcard includes such as gen_ai.* do not select these attributes.
+var exactIncludeOnlyAttrs = map[attr.Name]struct{}{
+	attr.GenAIToolCallArguments: {},
+	attr.GenAIToolCallResult:    {},
+}
+
 // NewAttrSelector returns an AttrSelector instance based on the user-provided attributes Selection
 // and the auto-detected attribute AttrGroups.
 // NewAttrSelector assumes that the passed SelectorConfig is already normalized (has already invoked
@@ -187,9 +194,9 @@ func (p *AttrSelector) For(metricName Name) []attr.Name {
 	matchingAttrs := map[attr.Name]struct{}{}
 	for i, il := range allInclusionLists {
 		p.addIncludedAttributes(matchingAttrs, attributeNames, il)
-		// if the "include" lists are empty in the first iteration, we use the default attributes
+		// if the "include" list is empty in the first iteration, we use the default attributes
 		// as included
-		if i == 0 && len(matchingAttrs) == 0 {
+		if i == 0 && len(il.Include) == 0 {
 			matchingAttrs = attributeNames.Default()
 		}
 		// now remove any attribute specified in the "exclude" lists
@@ -211,10 +218,22 @@ func (p *AttrSelector) addIncludedAttributes(
 ) {
 	allAttributes := attributeNames.All()
 	for attrName := range allAttributes {
+		if requiresExactInclude(attrName) {
+			if inclusionLists.includesExact(attrName) {
+				matchingAttrs[attrName] = struct{}{}
+			}
+			continue
+		}
+
 		if inclusionLists.includes(attrName) {
 			matchingAttrs[attrName] = struct{}{}
 		}
 	}
+}
+
+func requiresExactInclude(name attr.Name) bool {
+	_, ok := exactIncludeOnlyAttrs[name]
+	return ok
 }
 
 func (p *AttrSelector) rmExcludedAttributes(matchingAttrs map[attr.Name]struct{}, inclusionLists InclusionLists) {

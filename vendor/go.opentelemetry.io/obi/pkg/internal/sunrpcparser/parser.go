@@ -38,8 +38,9 @@ const (
 	rmLastFrag = 0x80000000
 	rmFragLen  = 0x7fffffff
 
-	maxRecordSize   = 1 << 20
-	maxMessagesRead = 32
+	maxRecordSize      = 1 << 20
+	maxRecordFragments = 64
+	maxMessagesRead    = 32
 )
 
 var (
@@ -164,6 +165,14 @@ func readRecord(r *largebuf.LargeBufferReader) ([]byte, error) {
 
 		last := hdr&rmLastFrag != 0
 		length := int(hdr & rmFragLen)
+		// Keep this guard scoped to parser work: reject records that require
+		// too many fragment headers, but do not reject zero-length non-final
+		// fragments because RFC 5531 record marking permits them. Payload size
+		// limits stay separate below so allocation bounds and iteration bounds
+		// are enforced by the checks that match each concern.
+		if len(parts) >= maxRecordFragments {
+			return nil, ErrNotSunRPC
+		}
 		if length < 0 || length > maxRecordSize || total+length > maxRecordSize {
 			return nil, ErrNotSunRPC
 		}

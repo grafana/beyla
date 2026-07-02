@@ -54,47 +54,6 @@ func (hs *handles) Close() error {
 	return errors.Join(errs...)
 }
 
-// splitSymbols splits insns into subsections delimited by Symbol Instructions.
-// insns cannot be empty and must start with a Symbol Instruction.
-//
-// The resulting map is indexed by Symbol name.
-func splitSymbols(insns asm.Instructions) (map[string]asm.Instructions, error) {
-	if len(insns) == 0 {
-		return nil, errors.New("insns is empty")
-	}
-
-	currentSym := insns[0].Symbol()
-	if currentSym == "" {
-		return nil, errors.New("insns must start with a Symbol")
-	}
-
-	start := 0
-	progs := make(map[string]asm.Instructions)
-	for i, ins := range insns[1:] {
-		i := i + 1
-
-		sym := ins.Symbol()
-		if sym == "" {
-			continue
-		}
-
-		// New symbol, flush the old one out.
-		progs[currentSym] = slices.Clone(insns[start:i])
-
-		if progs[sym] != nil {
-			return nil, fmt.Errorf("insns contains duplicate Symbol %s", sym)
-		}
-		currentSym = sym
-		start = i
-	}
-
-	if tail := insns[start:]; len(tail) > 0 {
-		progs[currentSym] = slices.Clone(tail)
-	}
-
-	return progs, nil
-}
-
 // The linker is responsible for resolving bpf-to-bpf calls between programs
 // within an ELF. Each BPF program must be a self-contained binary blob,
 // so when an instruction in one ELF program section wants to jump to
@@ -346,7 +305,8 @@ fixups:
 			return nil, fmt.Errorf("kfuncMetaKey doesn't contain kfuncMeta")
 		}
 
-		// findTargetInKernel returns btf.ErrNotFound if the input btf.Spec is nil.
+		// findTargetInKernel returns [btf.ErrNotFound] if the target can't be found
+		// or if BTF is not enabled.
 		target := btf.Type((*btf.Func)(nil))
 		spec, module, err := findTargetInKernel(kfm.Func.Name, &target, cache)
 		if errors.Is(err, btf.ErrNotFound) {

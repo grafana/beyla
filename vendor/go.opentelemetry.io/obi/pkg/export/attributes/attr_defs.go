@@ -408,13 +408,15 @@ func getDefinitions(
 				attr.GraphQLDocument: false,
 				// url.query is Conditionally Required by OTel semconv (emitted when a query string is present).
 				// You can opt out via attributes.select.traces.exclude: [url.query].
-				attr.HTTPUrlQuery:      true,
-				attr.GenAIInput:        false,
-				attr.GenAIOutput:       false,
-				attr.GenAIInstructions: false,
-				attr.GenAIMetadata:     false,
-				attr.GenAITools:        false,
-				attr.DBResponseError:   false,
+				attr.HTTPUrlQuery:           true,
+				attr.GenAIInput:             false,
+				attr.GenAIOutput:            false,
+				attr.GenAIInstructions:      false,
+				attr.GenAIMetadata:          false,
+				attr.GenAITools:             false,
+				attr.GenAIToolCallArguments: false,
+				attr.GenAIToolCallResult:    false,
+				attr.DBResponseError:        false,
 			},
 		},
 		GPUCudaKernelLaunchCalls.Section: {

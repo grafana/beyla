@@ -16,27 +16,28 @@ import (
 type flowIPDecoration struct {
 	serviceName      string
 	serviceNamespace string
-	resourceAttrs    map[attr.Name]string
 }
 
-// DynamicFlowAttrs maps dynamically selected application IPs to service identity and resource
-// attributes for NetO11y and StatsO11y decoration.
+// DynamicFlowAttrs maps dynamically selected application IPs to service identity for NetO11y
+// and StatsO11y decoration.
 type DynamicFlowAttrs struct {
 	multiSel  MultiSignalPIDSelector
 	signalSel PIDSelector
 	store     *kube.Store
 
-	mu      sync.RWMutex
-	ipDecor map[string]flowIPDecoration
+	mu             sync.RWMutex
+	ipDecor        map[string]flowIPDecoration
+	registeredPIDs map[app.PID]struct{}
 }
 
 // NewDynamicFlowAttrs creates a tracker for the given signal view and optional Kubernetes store.
 func NewDynamicFlowAttrs(multiSel MultiSignalPIDSelector, signalSel PIDSelector, store *kube.Store) *DynamicFlowAttrs {
 	return &DynamicFlowAttrs{
-		multiSel:  multiSel,
-		signalSel: signalSel,
-		store:     store,
-		ipDecor:   map[string]flowIPDecoration{},
+		multiSel:       multiSel,
+		signalSel:      signalSel,
+		store:          store,
+		ipDecor:        map[string]flowIPDecoration{},
+		registeredPIDs: map[app.PID]struct{}{},
 	}
 }
 
@@ -47,8 +48,8 @@ func (d *DynamicFlowAttrs) Run(ctx context.Context) {
 	}
 	d.rebuild()
 
-	go d.loop(ctx, d.signalSel.AddedPIDsNotify(), d.rebuild)
-	go d.loop(ctx, d.signalSel.RemovedNotify(), d.rebuild)
+	go d.loop(ctx, AddedPIDsNotifyContext(ctx, d.signalSel), d.rebuild)
+	go d.loop(ctx, RemovedNotifyContext(ctx, d.signalSel), d.rebuild)
 	go d.loopAttrs(ctx)
 }
 
@@ -83,31 +84,40 @@ func (d *DynamicFlowAttrs) loopAttrs(ctx context.Context) {
 
 func (d *DynamicFlowAttrs) rebuild() {
 	pids, ok := d.signalSel.GetPIDs()
-	if !ok {
-		d.mu.Lock()
-		d.ipDecor = map[string]flowIPDecoration{}
-		d.mu.Unlock()
-		return
-	}
 
 	next := map[string]flowIPDecoration{}
-	for _, pid := range pids {
-		entry, ok := d.multiSel.GetPID(uint32(pid))
-		if !ok {
-			continue
-		}
-		dec := decorationFromEntry(entry)
-		if dec.isEmpty() {
-			continue
-		}
-		for _, ip := range ResolveContainerIPs(d.store, pid) {
-			next[ip] = dec
+	storeRegisteredPIDs := map[app.PID]struct{}{}
+	if ok && d.store != nil {
+		for _, pid := range pids {
+			entry, found := d.multiSel.GetPID(uint32(pid))
+			if !found {
+				continue
+			}
+			dec := decorationFromEntry(entry)
+			if dec.isEmpty() {
+				continue
+			}
+			for _, ip := range ResolveContainerIPs(d.store, pid) {
+				next[ip] = dec
+			}
+			storeRegisteredPIDs[pid] = struct{}{}
 		}
 	}
 
 	d.mu.Lock()
+	defer d.mu.Unlock()
+	for pid := range d.registeredPIDs {
+		if _, still := storeRegisteredPIDs[pid]; !still {
+			if d.store != nil {
+				d.store.DeleteProcess(pid)
+			}
+			delete(d.registeredPIDs, pid)
+		}
+	}
+	for pid := range storeRegisteredPIDs {
+		d.registeredPIDs[pid] = struct{}{}
+	}
 	d.ipDecor = next
-	d.mu.Unlock()
 }
 
 func (d *DynamicFlowAttrs) Apply(a *pipe.CommonAttrs) {
@@ -133,21 +143,14 @@ func (d *DynamicFlowAttrs) Apply(a *pipe.CommonAttrs) {
 }
 
 func decorationFromEntry(entry DynamicPIDEntry) flowIPDecoration {
-	dec := flowIPDecoration{
+	return flowIPDecoration{
 		serviceName:      entry.ServiceName,
 		serviceNamespace: entry.ServiceNamespace,
 	}
-	if len(entry.ResourceAttributes) > 0 {
-		dec.resourceAttrs = make(map[attr.Name]string, len(entry.ResourceAttributes))
-		for k, v := range entry.ResourceAttributes {
-			dec.resourceAttrs[attr.Name(k)] = v
-		}
-	}
-	return dec
 }
 
 func (d flowIPDecoration) isEmpty() bool {
-	return d.serviceName == "" && d.serviceNamespace == "" && len(d.resourceAttrs) == 0
+	return d.serviceName == "" && d.serviceNamespace == ""
 }
 
 func applyFlowDecoration(dec flowIPDecoration, a *pipe.CommonAttrs, src bool) {
@@ -158,15 +161,12 @@ func applyFlowDecoration(dec flowIPDecoration, a *pipe.CommonAttrs, src bool) {
 		if dec.serviceNamespace != "" {
 			a.Metadata[attr.ServiceNamespace] = dec.serviceNamespace
 		}
-	} else {
-		if dec.serviceName != "" {
-			a.Metadata[attr.ServicePeerName] = dec.serviceName
-		}
-		if dec.serviceNamespace != "" {
-			a.Metadata[attr.ServicePeerNamespace] = dec.serviceNamespace
-		}
+		return
 	}
-	for k, v := range dec.resourceAttrs {
-		a.Metadata[k] = v
+	if dec.serviceName != "" {
+		a.Metadata[attr.ServicePeerName] = dec.serviceName
+	}
+	if dec.serviceNamespace != "" {
+		a.Metadata[attr.ServicePeerNamespace] = dec.serviceNamespace
 	}
 }

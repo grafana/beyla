@@ -40,7 +40,6 @@ func dynamicMatcherProvider(
 		Input:              input.Subscribe(msg.SubscriberName("discover.DynamicMatcher")),
 		Output:             output,
 		ProcessHistory:     map[app.PID]ProcessMatch{},
-		RemovedPIDsNotify:  dynamicPIDs.RemovedNotify(),
 	}
 	return swarm.DirectInstance(dynamicMatcher.Run)
 }
@@ -48,6 +47,11 @@ func dynamicMatcherProvider(
 func (m *DynamicMatcher) Run(ctx context.Context) {
 	defer m.Output.Close()
 	m.Log.Debug("starting dynamic matcher node")
+
+	removedPIDsNotify := m.RemovedPIDsNotify
+	if removedPIDsNotify == nil && m.DynamicPIDSelector != nil {
+		removedPIDsNotify = m.DynamicPIDSelector.RemovedNotifyContext(ctx)
+	}
 
 	for {
 		select {
@@ -65,7 +69,10 @@ func (m *DynamicMatcher) Run(ctx context.Context) {
 			if len(o) > 0 {
 				m.Output.SendCtx(ctx, o)
 			}
-		case removedPIDs := <-m.RemovedPIDsNotify:
+		case removedPIDs, ok := <-removedPIDsNotify:
+			if !ok {
+				return
+			}
 			o := m.syntheticDeletesForRemovedPIDs(removedPIDs)
 			if len(o) > 0 {
 				m.Log.Debug("synthetic deletes for removed PIDs", "len", len(o))

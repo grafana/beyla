@@ -416,7 +416,7 @@ func genAIToolCallAttributes(toolCalls []request.ToolCall) []attribute.KeyValue 
 }
 
 // mcpAttributes returns MCP span attributes following the OTEL MCP semantic conventions.
-// Tool call arguments and results are gated behind optionalAttrs (GenAIInput/GenAIOutput)
+// Tool call arguments and results are gated behind their own optionalAttrs
 // because they may be large or contain sensitive data.
 func mcpAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	if span.SubType != request.HTTPSubtypeMCP || span.GenAI == nil || span.GenAI.MCP == nil {
@@ -433,11 +433,10 @@ func mcpAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []a
 	if mcp.ToolType != "" {
 		attrs = append(attrs, attribute.String(string(attr.GenAIToolType), mcp.ToolType))
 	}
-	// Gate potentially large/sensitive tool call data behind optionalAttrs
-	if _, ok := optionalAttrs[attr.GenAIInput]; ok && mcp.ToolCallArguments != "" {
+	if _, ok := optionalAttrs[attr.GenAIToolCallArguments]; ok && mcp.ToolCallArguments != "" {
 		attrs = append(attrs, attribute.String(string(attr.GenAIToolCallArguments), mcp.ToolCallArguments))
 	}
-	if _, ok := optionalAttrs[attr.GenAIOutput]; ok && mcp.ToolCallResult != "" {
+	if _, ok := optionalAttrs[attr.GenAIToolCallResult]; ok && mcp.ToolCallResult != "" {
 		attrs = append(attrs, attribute.String(string(attr.GenAIToolCallResult), mcp.ToolCallResult))
 	}
 	if mcp.ResourceURI != "" {

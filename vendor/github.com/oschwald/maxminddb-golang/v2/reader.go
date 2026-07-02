@@ -100,12 +100,13 @@
 //
 // # Thread Safety
 //
-// All Reader methods are thread-safe. The Reader can be safely shared across
-// multiple goroutines.
+// Reader lookup, decode, and iteration methods are safe to call concurrently.
+// Close must not be called concurrently with other Reader or Result methods.
 package maxminddb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -132,8 +133,8 @@ type mmapCleanup struct {
 // Reader holds the data corresponding to the MaxMind DB file. Its only public
 // field is Metadata, which contains the metadata from the MaxMind DB file.
 //
-// All of the methods on Reader are thread-safe. The struct may be safely
-// shared across goroutines.
+// Reader lookup, decode, and iteration methods are safe to call concurrently.
+// Close must not be called concurrently with other Reader or Result methods.
 type Reader struct {
 	hasMappedFile     *atomic.Bool
 	decoder           decoder.ReflectionDecoder
@@ -310,9 +311,9 @@ func (r *Reader) Close() error {
 // OpenBytes takes a byte slice corresponding to a MaxMind DB file and any
 // options. It returns a Reader structure or an error.
 func OpenBytes(buffer []byte, options ...ReaderOption) (*Reader, error) {
-	opts := &readerOptions{}
+	var opts readerOptions
 	for _, option := range options {
-		option(opts)
+		option(&opts)
 	}
 
 	metadataStart := bytes.LastIndex(buffer, metadataStartMarker)
@@ -350,9 +351,8 @@ func OpenBytes(buffer []byte, options ...ReaderOption) (*Reader, error) {
 	if dataSectionStart > dataSectionEnd {
 		return nil, mmdberrors.NewInvalidDatabaseError("the MaxMind DB contains invalid metadata")
 	}
-	d := decoder.New(
-		buffer[searchTreeSize+dataSectionSeparatorSize : metadataStart-len(metadataStartMarker)],
-	)
+	dataSection := buffer[dataSectionStart:dataSectionEnd]
+	d := decoder.New(dataSection)
 
 	reader := &Reader{
 		buffer:          buffer,
@@ -423,16 +423,9 @@ func (r *Reader) setIPv4Start() error {
 		return nil
 	}
 
-	nodeCount := r.Metadata.NodeCount
-
-	node := uint(0)
-	i := 0
-	for ; i < 96 && node < nodeCount; i++ {
-		var err error
-		node, err = readNodeBySize(r.buffer, node*r.nodeOffsetMult, 0, r.Metadata.RecordSize)
-		if err != nil {
-			return err
-		}
+	node, i, err := r.traverseTree(zeroIP, 0, 96)
+	if err != nil {
+		return err
 	}
 	r.ipv4Start = node
 	r.ipv4StartBitDepth = i
@@ -460,65 +453,15 @@ func (r *Reader) lookupPointer(ip netip.Addr) (uint, int, error) {
 	}
 
 	nodeCount := r.Metadata.NodeCount
+	if node > nodeCount {
+		return node, prefixLength, nil
+	}
 	if node == nodeCount {
 		// Record is empty
 		return 0, prefixLength, nil
-	} else if node > nodeCount {
-		return node, prefixLength, nil
 	}
 
 	return 0, prefixLength, mmdberrors.NewInvalidDatabaseError("invalid node in search tree")
-}
-
-// readNodeBySize reads a node value from the buffer based on record size and bit.
-func readNodeBySize(buffer []byte, offset, bit, recordSize uint) (uint, error) {
-	bufferLen := uint(len(buffer))
-	switch recordSize {
-	case 24:
-		offset += bit * 3
-		if !hasBufferRange(bufferLen, offset, 3) {
-			return 0, mmdberrors.NewInvalidDatabaseError(
-				"bounds check failed: insufficient buffer for 24-bit node read",
-			)
-		}
-		return (uint(buffer[offset]) << 16) |
-			(uint(buffer[offset+1]) << 8) |
-			uint(buffer[offset+2]), nil
-	case 28:
-		if bit == 0 {
-			if !hasBufferRange(bufferLen, offset, 4) {
-				return 0, mmdberrors.NewInvalidDatabaseError(
-					"bounds check failed: insufficient buffer for 28-bit node read",
-				)
-			}
-			return ((uint(buffer[offset+3]) & 0xF0) << 20) |
-				(uint(buffer[offset]) << 16) |
-				(uint(buffer[offset+1]) << 8) |
-				uint(buffer[offset+2]), nil
-		}
-		if !hasBufferRange(bufferLen, offset, 7) {
-			return 0, mmdberrors.NewInvalidDatabaseError(
-				"bounds check failed: insufficient buffer for 28-bit node read",
-			)
-		}
-		return ((uint(buffer[offset+3]) & 0x0F) << 24) |
-			(uint(buffer[offset+4]) << 16) |
-			(uint(buffer[offset+5]) << 8) |
-			uint(buffer[offset+6]), nil
-	case 32:
-		offset += bit * 4
-		if !hasBufferRange(bufferLen, offset, 4) {
-			return 0, mmdberrors.NewInvalidDatabaseError(
-				"bounds check failed: insufficient buffer for 32-bit node read",
-			)
-		}
-		return (uint(buffer[offset]) << 24) |
-			(uint(buffer[offset+1]) << 16) |
-			(uint(buffer[offset+2]) << 8) |
-			uint(buffer[offset+3]), nil
-	default:
-		return 0, mmdberrors.NewInvalidDatabaseError("unsupported record size")
-	}
 }
 
 // readNodePairBySize reads both left (bit=0) and right (bit=1) child pointers
@@ -599,107 +542,241 @@ func (r *Reader) traverseTree(ip netip.Addr, node uint, stopBit int) (uint, int,
 }
 
 func (r *Reader) traverseTree24(ip netip.Addr, node uint, stopBit int) (uint, int, error) {
+	// Verify upfront that the buffer covers every possible record offset, so
+	// the inner loops can omit per-iteration hasBufferRange calls and rely on
+	// Go's implicit slice bounds checks (which can't be hit because of this
+	// guard). OpenBytes/Open already enforces this condition, so the check is
+	// only reachable when a Reader is constructed directly (e.g. by tests);
+	// do not remove it as "redundant" — it is the precondition that makes the
+	// inner loops safe.
+	if uint(len(r.buffer)) < r.Metadata.NodeCount*6 {
+		return 0, 0, mmdberrors.NewInvalidDatabaseError("bounds check failed during tree traversal")
+	}
 	i := 0
 	if ip.Is4() {
 		i = r.ipv4StartBitDepth
 		node = r.ipv4Start
+
+		if stopBit <= i {
+			return node, i, nil
+		}
+
+		nodeCount := r.Metadata.NodeCount
+		buffer := r.buffer
+		ip4 := ip.As4()
+		ipBits := binary.BigEndian.Uint32(ip4[:])
+		remainingBits := min(stopBit-i, 32)
+
+		j := 0
+		for ; j < remainingBits && node < nodeCount; j++ {
+			baseOffset := node * 6
+			bit := uint((ipBits >> 31) & 1)
+			ipBits <<= 1
+			offset := baseOffset + bit*3
+
+			node = (uint(buffer[offset]) << 16) |
+				(uint(buffer[offset+1]) << 8) |
+				uint(buffer[offset+2])
+		}
+
+		return node, i + j, nil
 	}
 	nodeCount := r.Metadata.NodeCount
 	buffer := r.buffer
-	bufferLen := uint(len(buffer))
 	ip16 := ip.As16()
 
-	for ; i < stopBit && node < nodeCount; i++ {
-		byteIdx := i >> 3
-		bitPos := 7 - (i & 7)
-		bit := (uint(ip16[byteIdx]) >> bitPos) & 1
+	for i < stopBit && node < nodeCount {
+		// Extract bits in 32-bit chunks to reduce shift/mask operations in the
+		// inner loop.
+		chunk := i >> 5
+		ipBits := binary.BigEndian.Uint32(ip16[chunk*4:])
 
-		baseOffset := node * 6
-		offset := baseOffset + bit*3
+		offsetInChunk := i & 31
+		ipBits <<= offsetInChunk
 
-		if !hasBufferRange(bufferLen, offset, 3) {
-			return 0, 0, mmdberrors.NewInvalidDatabaseError(
-				"bounds check failed during tree traversal",
-			)
+		bitsToProcess := min(32-offsetInChunk, stopBit-i)
+		for j := 0; j < bitsToProcess && node < nodeCount; j++ {
+			bit := uint((ipBits >> 31) & 1)
+			ipBits <<= 1
+
+			baseOffset := node * 6
+			offset := baseOffset + bit*3
+
+			node = (uint(buffer[offset]) << 16) |
+				(uint(buffer[offset+1]) << 8) |
+				uint(buffer[offset+2])
+			i++
 		}
-
-		node = (uint(buffer[offset]) << 16) |
-			(uint(buffer[offset+1]) << 8) |
-			uint(buffer[offset+2])
 	}
 
 	return node, i, nil
 }
 
 func (r *Reader) traverseTree28(ip netip.Addr, node uint, stopBit int) (uint, int, error) {
+	// Verify upfront that the buffer covers every possible record offset, so
+	// the inner loops can omit per-iteration hasBufferRange calls and rely on
+	// Go's implicit slice bounds checks (which can't be hit because of this
+	// guard). OpenBytes/Open already enforces this condition, so the check is
+	// only reachable when a Reader is constructed directly (e.g. by tests);
+	// do not remove it as "redundant" — it is the precondition that makes the
+	// inner loops safe.
+	if uint(len(r.buffer)) < r.Metadata.NodeCount*7 {
+		return 0, 0, mmdberrors.NewInvalidDatabaseError("bounds check failed during tree traversal")
+	}
 	i := 0
 	if ip.Is4() {
+		// Fast path: skip the IPv6 prefix bits by jumping directly to the
+		// IPv4 subtree root. The 32 IPv4 bits are packed into a uint32
+		// (ipBits) so we can extract each next bit with a single shift,
+		// avoiding the byteIdx/bitPos arithmetic the generic IPv6 path
+		// needs.
 		i = r.ipv4StartBitDepth
 		node = r.ipv4Start
+
+		if stopBit <= i {
+			return node, i, nil
+		}
+
+		nodeCount := r.Metadata.NodeCount
+		buffer := r.buffer
+		ip4 := ip.As4()
+		ipBits := binary.BigEndian.Uint32(ip4[:])
+		// stopBit comes from the shared traverseTree signature (max 128),
+		// but ipBits only holds 32 bits, so clamp before iterating.
+		remainingBits := min(stopBit-i, 32)
+
+		j := 0
+		for ; j < remainingBits && node < nodeCount; j++ {
+			// 28-bit record layout: each pair of records occupies 7 bytes.
+			// bit=0 reads buffer[base..base+3] high-nibble half; bit=1 reads
+			// buffer[base+4..base+6] low-nibble half. A single 7-byte range
+			// check covers both halves and is strictly stronger than the
+			// IPv6 path's two separate (base, 4) and (offset, 3) checks.
+			baseOffset := node * 7
+			bit := uint((ipBits >> 31) & 1)
+			ipBits <<= 1
+			offset := baseOffset + bit*4
+
+			// shift = 20 (bit=0) or 24 (bit=1): position the shared nibble's
+			// high or low 4 bits into the top of the assembled 28-bit node.
+			sharedByte := uint(buffer[baseOffset+3])
+			mask := uint(0xF0 >> (bit * 4))
+			shift := 20 + bit*4
+			nibble := ((sharedByte & mask) << shift)
+
+			node = nibble |
+				(uint(buffer[offset]) << 16) |
+				(uint(buffer[offset+1]) << 8) |
+				uint(buffer[offset+2])
+		}
+
+		return node, i + j, nil
 	}
 	nodeCount := r.Metadata.NodeCount
 	buffer := r.buffer
-	bufferLen := uint(len(buffer))
 	ip16 := ip.As16()
 
-	for ; i < stopBit && node < nodeCount; i++ {
-		byteIdx := i >> 3
-		bitPos := 7 - (i & 7)
-		bit := (uint(ip16[byteIdx]) >> bitPos) & 1
+	for i < stopBit && node < nodeCount {
+		// Extract bits in 32-bit chunks to reduce shift/mask operations in the
+		// inner loop.
+		chunk := i >> 5
+		ipBits := binary.BigEndian.Uint32(ip16[chunk*4:])
 
-		baseOffset := node * 7
-		offset := baseOffset + bit*4
+		offsetInChunk := i & 31
+		ipBits <<= offsetInChunk
 
-		if !hasBufferRange(bufferLen, baseOffset, 4) ||
-			!hasBufferRange(bufferLen, offset, 3) {
-			return 0, 0, mmdberrors.NewInvalidDatabaseError(
-				"bounds check failed during tree traversal",
-			)
+		bitsToProcess := min(32-offsetInChunk, stopBit-i)
+		for j := 0; j < bitsToProcess && node < nodeCount; j++ {
+			bit := uint((ipBits >> 31) & 1)
+			ipBits <<= 1
+
+			baseOffset := node * 7
+			offset := baseOffset + bit*4
+
+			sharedByte := uint(buffer[baseOffset+3])
+			mask := uint(0xF0 >> (bit * 4))
+			shift := 20 + bit*4
+			nibble := ((sharedByte & mask) << shift)
+
+			node = nibble |
+				(uint(buffer[offset]) << 16) |
+				(uint(buffer[offset+1]) << 8) |
+				uint(buffer[offset+2])
+			i++
 		}
-
-		sharedByte := uint(buffer[baseOffset+3])
-		mask := uint(0xF0 >> (bit * 4))
-		shift := 20 + bit*4
-		nibble := ((sharedByte & mask) << shift)
-
-		node = nibble |
-			(uint(buffer[offset]) << 16) |
-			(uint(buffer[offset+1]) << 8) |
-			uint(buffer[offset+2])
 	}
 
 	return node, i, nil
 }
 
 func (r *Reader) traverseTree32(ip netip.Addr, node uint, stopBit int) (uint, int, error) {
+	// Verify upfront that the buffer covers every possible record offset, so
+	// the inner loops can omit per-iteration hasBufferRange calls and rely on
+	// Go's implicit slice bounds checks (which can't be hit because of this
+	// guard). OpenBytes/Open already enforces this condition, so the check is
+	// only reachable when a Reader is constructed directly (e.g. by tests);
+	// do not remove it as "redundant" — it is the precondition that makes the
+	// inner loops safe.
+	if uint(len(r.buffer)) < r.Metadata.NodeCount*8 {
+		return 0, 0, mmdberrors.NewInvalidDatabaseError("bounds check failed during tree traversal")
+	}
 	i := 0
 	if ip.Is4() {
 		i = r.ipv4StartBitDepth
 		node = r.ipv4Start
+
+		if stopBit <= i {
+			return node, i, nil
+		}
+
+		nodeCount := r.Metadata.NodeCount
+		buffer := r.buffer
+		ip4 := ip.As4()
+		ipBits := binary.BigEndian.Uint32(ip4[:])
+		remainingBits := min(stopBit-i, 32)
+
+		j := 0
+		for ; j < remainingBits && node < nodeCount; j++ {
+			baseOffset := node * 8
+			bit := uint((ipBits >> 31) & 1)
+			ipBits <<= 1
+			offset := baseOffset + bit*4
+
+			node = (uint(buffer[offset]) << 24) |
+				(uint(buffer[offset+1]) << 16) |
+				(uint(buffer[offset+2]) << 8) |
+				uint(buffer[offset+3])
+		}
+
+		return node, i + j, nil
 	}
 	nodeCount := r.Metadata.NodeCount
 	buffer := r.buffer
-	bufferLen := uint(len(buffer))
 	ip16 := ip.As16()
 
-	for ; i < stopBit && node < nodeCount; i++ {
-		byteIdx := i >> 3
-		bitPos := 7 - (i & 7)
-		bit := (uint(ip16[byteIdx]) >> bitPos) & 1
+	for i < stopBit && node < nodeCount {
+		// Extract bits in 32-bit chunks to reduce shift/mask operations in the
+		// inner loop.
+		chunk := i >> 5
+		ipBits := binary.BigEndian.Uint32(ip16[chunk*4:])
 
-		baseOffset := node * 8
-		offset := baseOffset + bit*4
+		offsetInChunk := i & 31
+		ipBits <<= offsetInChunk
 
-		if !hasBufferRange(bufferLen, offset, 4) {
-			return 0, 0, mmdberrors.NewInvalidDatabaseError(
-				"bounds check failed during tree traversal",
-			)
+		bitsToProcess := min(32-offsetInChunk, stopBit-i)
+		for j := 0; j < bitsToProcess && node < nodeCount; j++ {
+			bit := uint((ipBits >> 31) & 1)
+			ipBits <<= 1
+
+			baseOffset := node * 8
+			offset := baseOffset + bit*4
+
+			node = (uint(buffer[offset]) << 24) |
+				(uint(buffer[offset+1]) << 16) |
+				(uint(buffer[offset+2]) << 8) |
+				uint(buffer[offset+3])
+			i++
 		}
-
-		node = (uint(buffer[offset]) << 24) |
-			(uint(buffer[offset+1]) << 16) |
-			(uint(buffer[offset+2]) << 8) |
-			uint(buffer[offset+3])
 	}
 
 	return node, i, nil
@@ -716,10 +793,9 @@ func (r *Reader) resolveDataPointer(pointer uint) (uintptr, error) {
 		return 0, mmdberrors.NewInvalidDatabaseError("the MaxMind DB file's search tree is corrupt")
 	}
 
-	resolved := uintptr(pointer - minPointer)
-	if resolved < uintptr(r.dataSectionSize) {
-		return resolved, nil
+	resolved := pointer - minPointer
+	if resolved >= r.dataSectionSize {
+		return 0, mmdberrors.NewInvalidDatabaseError("the MaxMind DB file's search tree is corrupt")
 	}
-
-	return 0, mmdberrors.NewInvalidDatabaseError("the MaxMind DB file's search tree is corrupt")
+	return uintptr(resolved), nil
 }

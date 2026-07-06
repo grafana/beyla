@@ -45,6 +45,17 @@ type HTTPConfig struct {
 	Enrichment EnrichmentConfig `yaml:"enrichment"`
 }
 
+// NumericRange defines numeric comparison criteria for a rule match condition.
+// All fields are optional; only the provided fields are evaluated.
+type NumericRange struct {
+	GreaterThan   *int `yaml:"greater_than"`
+	GreaterEquals *int `yaml:"greater_equals"`
+	Equals        *int `yaml:"equals"`
+	NotEquals     *int `yaml:"not_equals"`
+	LessEquals    *int `yaml:"less_equals"`
+	LessThan      *int `yaml:"less_than"`
+}
+
 type GraphQLConfig struct {
 	// Enable GraphQL payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_GRAPHQL_ENABLED" validate:"boolean"`
@@ -174,6 +185,20 @@ func (c EnrichmentConfig) Validate() error {
 	return nil
 }
 
+func validateStatusCodeRange(i int, match HTTPParsingMatch) error {
+	if sc := match.ResponseStatusCode; sc != nil {
+		if sc.GreaterEquals != nil && sc.LessEquals != nil && *sc.GreaterEquals > *sc.LessEquals {
+			return fmt.Errorf("rule %d: response_status_code greater_equals (%d) must not exceed less_equals (%d)",
+				i, *sc.GreaterEquals, *sc.LessEquals)
+		}
+		if sc.GreaterThan != nil && sc.LessThan != nil && *sc.GreaterThan >= *sc.LessThan {
+			return fmt.Errorf("rule %d: response_status_code greater_than (%d) must be less than less_than (%d)",
+				i, *sc.GreaterThan, *sc.LessThan)
+		}
+	}
+	return nil
+}
+
 func validateHeaderRule(i int, rule HTTPParsingRule) error {
 	if len(rule.Match.ObfuscationJSONPaths) > 0 {
 		return fmt.Errorf("rule %d: header rules cannot use obfuscation_json_paths", i)
@@ -181,7 +206,7 @@ func validateHeaderRule(i int, rule HTTPParsingRule) error {
 	if len(rule.Match.Patterns) == 0 {
 		return fmt.Errorf("rule %d: header rules require at least one pattern", i)
 	}
-	return nil
+	return validateStatusCodeRange(i, rule.Match)
 }
 
 func validateBodyRule(i int, rule HTTPParsingRule) error {
@@ -197,7 +222,7 @@ func validateBodyRule(i int, rule HTTPParsingRule) error {
 	if rule.Action != HTTPParsingActionObfuscate && len(rule.Match.ObfuscationJSONPaths) > 0 {
 		return fmt.Errorf("rule %d: obfuscation_json_paths can only be used with action \"obfuscate\"", i)
 	}
-	return nil
+	return validateStatusCodeRange(i, rule.Match)
 }
 
 // HTTPParsingPolicy defines the default action for http enrichment rules.
@@ -325,17 +350,21 @@ type HTTPParsingMatch struct {
 	URLPathPatterns []services.GlobAttr `yaml:"url_path_patterns"`
 	// Methods is a list of HTTP methods this rule applies to (shared). Empty means all methods.
 	Methods []HTTPMethod `yaml:"methods"`
+	// ResponseStatusCode filters this rule to only apply when the response status code matches the given range.
+	// If unset, the rule applies regardless of status code.
+	ResponseStatusCode *NumericRange `yaml:"response_status_code"`
 }
 
 // UnmarshalYAML deserializes the match config and compiles glob patterns
 // and JSONPath expressions from their raw string values.
 func (m *HTTPParsingMatch) UnmarshalYAML(value *yaml.Node) error {
 	var raw struct {
-		Patterns             []string     `yaml:"patterns"`
-		CaseSensitive        bool         `yaml:"case_sensitive"`
-		ObfuscationJSONPaths []string     `yaml:"obfuscation_json_paths"`
-		URLPathPatterns      []string     `yaml:"url_path_patterns"`
-		Methods              []HTTPMethod `yaml:"methods"`
+		Patterns             []string      `yaml:"patterns"`
+		CaseSensitive        bool          `yaml:"case_sensitive"`
+		ObfuscationJSONPaths []string      `yaml:"obfuscation_json_paths"`
+		URLPathPatterns      []string      `yaml:"url_path_patterns"`
+		Methods              []HTTPMethod  `yaml:"methods"`
+		ResponseStatusCode   *NumericRange `yaml:"response_status_code"`
 	}
 	if err := value.Decode(&raw); err != nil {
 		return err
@@ -343,6 +372,7 @@ func (m *HTTPParsingMatch) UnmarshalYAML(value *yaml.Node) error {
 
 	m.CaseSensitive = raw.CaseSensitive
 	m.Methods = raw.Methods
+	m.ResponseStatusCode = raw.ResponseStatusCode
 
 	// Compile header name patterns
 	m.Patterns = make([]services.GlobAttr, 0, len(raw.Patterns))

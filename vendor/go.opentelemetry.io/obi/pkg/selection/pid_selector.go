@@ -4,6 +4,8 @@
 package selection // import "go.opentelemetry.io/obi/pkg/selection"
 
 import (
+	"context"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 )
 
@@ -14,6 +16,31 @@ type PIDSelector interface {
 	IncludesPID(app.PID) bool
 	AddedPIDsNotify() <-chan []app.PID
 	RemovedNotify() <-chan []app.PID
+}
+
+// PIDSelectorContextNotifier is implemented by selectors that can bind notification channel
+// lifetime to a context.
+type PIDSelectorContextNotifier interface {
+	AddedPIDsNotifyContext(context.Context) <-chan []app.PID
+	RemovedNotifyContext(context.Context) <-chan []app.PID
+}
+
+// AddedPIDsNotifyContext returns add notifications, using a context-bound subscription when
+// the selector supports it.
+func AddedPIDsNotifyContext(ctx context.Context, selector PIDSelector) <-chan []app.PID {
+	if notifier, ok := selector.(PIDSelectorContextNotifier); ok {
+		return notifier.AddedPIDsNotifyContext(ctx)
+	}
+	return selector.AddedPIDsNotify()
+}
+
+// RemovedNotifyContext returns remove notifications, using a context-bound subscription when
+// the selector supports it.
+func RemovedNotifyContext(ctx context.Context, selector PIDSelector) <-chan []app.PID {
+	if notifier, ok := selector.(PIDSelectorContextNotifier); ok {
+		return notifier.RemovedNotifyContext(ctx)
+	}
+	return selector.RemovedNotify()
 }
 
 // MutablePIDSelector allows callers to add or remove runtime PIDs for a given signal view.

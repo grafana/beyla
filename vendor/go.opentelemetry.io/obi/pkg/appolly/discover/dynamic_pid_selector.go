@@ -4,6 +4,7 @@
 package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
+	"context"
 	"iter"
 	"maps"
 	"slices"
@@ -29,6 +30,9 @@ const (
 const (
 	appSignalMask dynamicPIDSignal = signalTraces | signalAppMetrics
 	allSignalMask dynamicPIDSignal = appSignalMask | signalNetworkMetrics | signalStatsMetrics
+
+	dynamicPIDNotifyBufferSize = 64
+	dynamicPIDNotifyPendingMax = dynamicPIDNotifyBufferSize
 )
 
 // TODO: support per-signal attribute overrides; attributes are currently shared across all signals.
@@ -45,8 +49,8 @@ type dynamicPIDRecord struct {
 }
 
 type dynamicPIDNotifier struct {
-	addedCh   chan []app.PID
-	removedCh chan []app.PID
+	addedSubscribers   []*dynamicPIDSubscriber
+	removedSubscribers []*dynamicPIDSubscriber
 
 	addedPending []app.PID
 	addedMu      sync.Mutex
@@ -57,11 +61,93 @@ type dynamicPIDNotifier struct {
 	removedCond    *sync.Cond
 }
 
-func newDynamicPIDNotifier() *dynamicPIDNotifier {
-	n := &dynamicPIDNotifier{
-		addedCh:   make(chan []app.PID, 1),
-		removedCh: make(chan []app.PID, 1),
+type dynamicPIDSubscriber struct {
+	ctx        context.Context
+	ch         chan []app.PID
+	wake       chan struct{}
+	done       chan struct{}
+	maxPending int
+	mu         sync.Mutex
+	pending    []app.PID
+}
+
+func newDynamicPIDSubscriber(ctx context.Context, maxPending int) *dynamicPIDSubscriber {
+	if ctx == nil {
+		ctx = context.Background()
 	}
+	s := &dynamicPIDSubscriber{
+		ctx:        ctx,
+		ch:         make(chan []app.PID, dynamicPIDNotifyBufferSize),
+		wake:       make(chan struct{}, 1),
+		done:       make(chan struct{}),
+		maxPending: maxPending,
+	}
+	go s.run()
+	return s
+}
+
+func (s *dynamicPIDSubscriber) notify(batch []app.PID) {
+	select {
+	case <-s.ctx.Done():
+		return
+	default:
+	}
+
+	// Queue on the subscriber so a full subscriber channel cannot block notifier fan-out.
+	s.mu.Lock()
+	for _, pid := range batch {
+		if s.maxPending > 0 && len(s.pending) == s.maxPending {
+			break
+		}
+		s.pending = append(s.pending, pid)
+	}
+	s.mu.Unlock()
+
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (s *dynamicPIDSubscriber) run() {
+	defer close(s.done)
+	defer close(s.ch)
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-s.wake:
+			for {
+				batch := s.takePending()
+				if len(batch) == 0 {
+					break
+				}
+				select {
+				case s.ch <- batch:
+				case <-s.ctx.Done():
+					return
+				}
+			}
+		}
+	}
+}
+
+func (s *dynamicPIDSubscriber) takePending() []app.PID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.pending) == 0 {
+		return nil
+	}
+
+	// Send a stable batch while later notify calls append to a fresh pending queue.
+	batch := slices.Clone(s.pending)
+	s.pending = nil
+	return batch
+}
+
+func newDynamicPIDNotifier() *dynamicPIDNotifier {
+	n := &dynamicPIDNotifier{}
 	n.addedCond = sync.NewCond(&n.addedMu)
 	n.removedCond = sync.NewCond(&n.removedMu)
 	go n.drainAdded()
@@ -92,27 +178,97 @@ func (n *dynamicPIDNotifier) notifyRemoved(pids []app.PID) {
 func (n *dynamicPIDNotifier) drainAdded() {
 	for {
 		n.addedMu.Lock()
-		for len(n.addedPending) == 0 {
+		for len(n.addedPending) == 0 || len(n.addedSubscribers) == 0 {
 			n.addedCond.Wait()
 		}
 		batch := append([]app.PID(nil), n.addedPending...)
 		n.addedPending = n.addedPending[:0]
+		subscribers := slices.Clone(n.addedSubscribers)
 		n.addedMu.Unlock()
-		n.addedCh <- batch
+
+		for _, subscriber := range subscribers {
+			subscriber.notify(batch)
+		}
 	}
 }
 
 func (n *dynamicPIDNotifier) drainRemoved() {
 	for {
 		n.removedMu.Lock()
-		for len(n.removedPending) == 0 {
+		for len(n.removedPending) == 0 || len(n.removedSubscribers) == 0 {
 			n.removedCond.Wait()
 		}
 		batch := append([]app.PID(nil), n.removedPending...)
 		n.removedPending = n.removedPending[:0]
+		subscribers := slices.Clone(n.removedSubscribers)
 		n.removedMu.Unlock()
-		n.removedCh <- batch
+
+		for _, subscriber := range subscribers {
+			subscriber.notify(batch)
+		}
 	}
+}
+
+func (n *dynamicPIDNotifier) removeAddedSubscriber(subscriber *dynamicPIDSubscriber) {
+	n.addedMu.Lock()
+	n.addedSubscribers = slices.DeleteFunc(n.addedSubscribers, func(ch *dynamicPIDSubscriber) bool {
+		return ch == subscriber
+	})
+	n.addedMu.Unlock()
+}
+
+func (n *dynamicPIDNotifier) removeRemovedSubscriber(subscriber *dynamicPIDSubscriber) {
+	n.removedMu.Lock()
+	n.removedSubscribers = slices.DeleteFunc(n.removedSubscribers, func(ch *dynamicPIDSubscriber) bool {
+		return ch == subscriber
+	})
+	n.removedMu.Unlock()
+}
+
+func (n *dynamicPIDNotifier) addedNotify() <-chan []app.PID {
+	subscriber := newDynamicPIDSubscriber(context.Background(), dynamicPIDNotifyPendingMax)
+	n.addedMu.Lock()
+	n.addedSubscribers = append(n.addedSubscribers, subscriber)
+	n.addedCond.Signal()
+	n.addedMu.Unlock()
+	return subscriber.ch
+}
+
+func (n *dynamicPIDNotifier) addedNotifyContext(ctx context.Context) <-chan []app.PID {
+	subscriber := newDynamicPIDSubscriber(ctx, 0)
+	n.addedMu.Lock()
+	n.addedSubscribers = append(n.addedSubscribers, subscriber)
+	n.addedCond.Signal()
+	n.addedMu.Unlock()
+
+	go func() {
+		<-subscriber.done
+		n.removeAddedSubscriber(subscriber)
+	}()
+	return subscriber.ch
+}
+
+func (n *dynamicPIDNotifier) removedNotify() <-chan []app.PID {
+	subscriber := newDynamicPIDSubscriber(context.Background(), dynamicPIDNotifyPendingMax)
+	n.removedMu.Lock()
+	n.removedSubscribers = append(n.removedSubscribers, subscriber)
+	n.removedCond.Signal()
+	n.removedMu.Unlock()
+	return subscriber.ch
+}
+
+func (n *dynamicPIDNotifier) removedNotifyContext(ctx context.Context) <-chan []app.PID {
+	subscriber := newDynamicPIDSubscriber(ctx, 0)
+	n.removedMu.Lock()
+	n.removedSubscribers = append(n.removedSubscribers, subscriber)
+	n.removedCond.Signal()
+	n.removedMu.Unlock()
+
+	go func() {
+		<-subscriber.done
+		n.removeRemovedSubscriber(subscriber)
+	}()
+	return subscriber.ch
 }
 
 type dynamicPIDSignalView struct {
@@ -142,11 +298,19 @@ func (v *dynamicPIDSignalView) IncludesPID(pid app.PID) bool {
 }
 
 func (v *dynamicPIDSignalView) AddedPIDsNotify() <-chan []app.PID {
-	return v.notifier.addedCh
+	return v.notifier.addedNotify()
+}
+
+func (v *dynamicPIDSignalView) AddedPIDsNotifyContext(ctx context.Context) <-chan []app.PID {
+	return v.notifier.addedNotifyContext(ctx)
 }
 
 func (v *dynamicPIDSignalView) RemovedNotify() <-chan []app.PID {
-	return v.notifier.removedCh
+	return v.notifier.removedNotify()
+}
+
+func (v *dynamicPIDSignalView) RemovedNotifyContext(ctx context.Context) <-chan []app.PID {
+	return v.notifier.removedNotifyContext(ctx)
 }
 
 // SelectorForPID returns a services.Selector for pid when it is in this view, carrying the
@@ -486,9 +650,17 @@ func (d *DynamicPIDSelector) AddedPIDsNotify() <-chan []app.PID {
 	return d.rootView.AddedPIDsNotify()
 }
 
+func (d *DynamicPIDSelector) AddedPIDsNotifyContext(ctx context.Context) <-chan []app.PID {
+	return d.rootView.AddedPIDsNotifyContext(ctx)
+}
+
 // RemovedNotify returns the channel on which PIDs are sent when they leave the root view.
 func (d *DynamicPIDSelector) RemovedNotify() <-chan []app.PID {
 	return d.rootView.RemovedNotify()
+}
+
+func (d *DynamicPIDSelector) RemovedNotifyContext(ctx context.Context) <-chan []app.PID {
+	return d.rootView.RemovedNotifyContext(ctx)
 }
 
 // Traces returns the mutable selector view for trace signals.

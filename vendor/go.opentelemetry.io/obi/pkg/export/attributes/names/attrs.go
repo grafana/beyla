@@ -67,19 +67,19 @@ const (
 	DNSAnswers             = Name(semconv.DNSAnswersKey)
 	TelemetrySDKLanguage   = Name(semconv.TelemetrySDKLanguageKey)
 
-	K8sNamespaceName   = Name("k8s.namespace.name")
-	K8sPodName         = Name("k8s.pod.name")
-	K8sContainerName   = Name("k8s.container.name")
-	K8sDeploymentName  = Name("k8s.deployment.name")
-	K8sReplicaSetName  = Name("k8s.replicaset.name")
-	K8sJobName         = Name("k8s.job.name")
-	K8sCronJobName     = Name("k8s.cronjob.name")
-	K8sDaemonSetName   = Name("k8s.daemonset.name")
-	K8sStatefulSetName = Name("k8s.statefulset.name")
+	K8sNamespaceName   = Name(semconv.K8SNamespaceNameKey)
+	K8sPodName         = Name(semconv.K8SPodNameKey)
+	K8sContainerName   = Name(semconv.K8SContainerNameKey)
+	K8sDeploymentName  = Name(semconv.K8SDeploymentNameKey)
+	K8sReplicaSetName  = Name(semconv.K8SReplicaSetNameKey)
+	K8sJobName         = Name(semconv.K8SJobNameKey)
+	K8sCronJobName     = Name(semconv.K8SCronJobNameKey)
+	K8sDaemonSetName   = Name(semconv.K8SDaemonSetNameKey)
+	K8sStatefulSetName = Name(semconv.K8SStatefulSetNameKey)
 	K8sOwnerName       = Name("k8s.owner.name")
-	K8sNodeName        = Name("k8s.node.name")
-	K8sPodUID          = Name("k8s.pod.uid")
-	K8sPodStartTime    = Name("k8s.pod.start_time")
+	K8sNodeName        = Name(semconv.K8SNodeNameKey)
+	K8sPodUID          = Name(semconv.K8SPodUIDKey)
+	K8sPodStartTime    = Name(semconv.K8SPodStartTimeKey)
 	K8sKind            = Name("k8s.kind")
 	K8SClientNamespace = Name("client_k8s_namespace_name")
 	K8SServerNamespace = Name("server_k8s_namespace_name")
@@ -136,8 +136,8 @@ var OBIIP = Name("obi.ip")
 
 const (
 	Transport       = Name("transport")
-	NetworkType     = Name("network.type")
-	NetworkProtocol = Name("network.protocol.name")
+	NetworkType     = Name(semconv.NetworkTypeKey)
+	NetworkProtocol = Name(semconv.NetworkProtocolNameKey)
 	SrcAddress      = Name("src.address")
 	DstAddress      = Name("dst.address")
 	SrcPort         = Name("src.port")
@@ -150,7 +150,7 @@ const (
 	SrcZone         = Name("src.zone")
 	DstZone         = Name("dst.zone")
 
-	ClientPort = Name("client.port")
+	ClientPort = Name(semconv.ClientPortKey)
 
 	// Direction values: request or response
 	Direction = Name("direction")
@@ -161,7 +161,7 @@ const (
 	K8sSrcNamespace = Name("k8s.src.namespace")
 	K8sDstOwnerName = Name("k8s.dst.owner.name")
 	K8sDstNamespace = Name("k8s.dst.namespace")
-	K8sClusterName  = Name("k8s.cluster.name")
+	K8sClusterName  = Name(semconv.K8SClusterNameKey)
 	K8sSrcName      = Name("k8s.src.name")
 	K8sSrcType      = Name("k8s.src.type")
 	K8sSrcOwnerType = Name("k8s.src.owner.type")
@@ -241,17 +241,18 @@ const (
 	CloudRegion = Name(semconv.CloudRegionKey)
 
 	// GenAI
+	// NOTE: semconv v1.42.0 drops gen_ai.* (moved to a separate repo with no Go bindings yet); revisit these on the next semconv bump.
 	GenAIInput             = Name(semconv.GenAIInputMessagesKey)
 	GenAIInstructions      = Name(semconv.GenAISystemInstructionsKey)
 	GenAIOutput            = Name(semconv.GenAIOutputMessagesKey)
 	GenAIMetadata          = Name("gen_ai.metadata")
 	GenAITools             = Name(semconv.GenAIToolDefinitionsKey)
-	GenAIToolName          = Name("gen_ai.tool.name")
-	GenAIToolType          = Name("gen_ai.tool.type")
-	GenAIToolCallID        = Name("gen_ai.tool.call.id")
-	GenAIToolCallArguments = Name("gen_ai.tool.call.arguments")
-	GenAIToolCallResult    = Name("gen_ai.tool.call.result")
-	GenAIPromptName        = Name("gen_ai.prompt.name")
+	GenAIToolName          = Name(semconv.GenAIToolNameKey)
+	GenAIToolType          = Name(semconv.GenAIToolTypeKey)
+	GenAIToolCallID        = Name(semconv.GenAIToolCallIDKey)
+	GenAIToolCallArguments = Name(semconv.GenAIToolCallArgumentsKey)
+	GenAIToolCallResult    = Name(semconv.GenAIToolCallResultKey)
+	GenAIPromptName        = Name(semconv.GenAIPromptNameKey)
 )
 
 // OBI specific GPU events
@@ -262,8 +263,8 @@ const (
 
 // JSON-RPC attributes (current semconv, replacing deprecated rpc.jsonrpc.* attributes)
 const (
-	JSONRPCProtocolVersion = Name("jsonrpc.protocol.version")
-	JSONRPCRequestID       = Name("jsonrpc.request.id")
+	JSONRPCProtocolVersion = Name(semconv.JSONRPCProtocolVersionKey)
+	JSONRPCRequestID       = Name(semconv.JSONRPCRequestIDKey)
 	RPCResponseStatusCode  = Name(semconv.RPCResponseStatusCodeKey)
 )
 
@@ -278,11 +279,12 @@ const (
 )
 
 // MCP (Model Context Protocol) attributes
+// NOTE: semconv v1.42.0 drops mcp.* too, same caveat as the GenAI block above.
 const (
-	MCPMethodName      = Name("mcp.method.name")
-	MCPSessionID       = Name("mcp.session.id")
-	MCPProtocolVersion = Name("mcp.protocol.version")
-	MCPResourceURI     = Name("mcp.resource.uri")
+	MCPMethodName      = Name(semconv.McpMethodNameKey)
+	MCPSessionID       = Name(semconv.McpSessionIDKey)
+	MCPProtocolVersion = Name(semconv.McpProtocolVersionKey)
+	MCPResourceURI     = Name(semconv.McpResourceURIKey)
 )
 
 // DNS events
@@ -310,5 +312,5 @@ const (
 const (
 	TCPFailedConnectionReason = Name("reason")
 	NetworkTCPHandshakeRole   = Name("network.tcp.handshake.role")
-	NetworkIoDirection        = Name("network.io.direction")
+	NetworkIoDirection        = Name(semconv.NetworkIODirectionKey)
 )

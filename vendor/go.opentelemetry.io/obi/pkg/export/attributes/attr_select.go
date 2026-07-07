@@ -44,6 +44,15 @@ func (i *InclusionLists) includes(name attr.Name) bool {
 	return false
 }
 
+func (i *InclusionLists) includesExact(name attr.Name) bool {
+	for _, incl := range i.Include {
+		if asProm(incl) == name.Prom() {
+			return true
+		}
+	}
+	return false
+}
+
 func (i *InclusionLists) excludes(name attr.Name) bool {
 	for _, excl := range i.Exclude {
 		// to ignore user-input format (dots or underscores) we transform the patterns

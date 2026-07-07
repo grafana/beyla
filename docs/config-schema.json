@@ -959,6 +959,9 @@
           },
           "type": "array"
         },
+        "response_status_code": {
+          "$ref": "#/$defs/NumericRange"
+        },
         "url_path_patterns": {
           "items": {
             "$ref": "#/$defs/GlobAttr"
@@ -1713,6 +1716,29 @@
         "enabled": {
           "type": "boolean",
           "x-env-var": "OTEL_EBPF_NODEJS_ENABLED"
+        }
+      },
+      "type": "object"
+    },
+    "NumericRange": {
+      "properties": {
+        "equals": {
+          "type": "integer"
+        },
+        "greater_equals": {
+          "type": "integer"
+        },
+        "greater_than": {
+          "type": "integer"
+        },
+        "less_equals": {
+          "type": "integer"
+        },
+        "less_than": {
+          "type": "integer"
+        },
+        "not_equals": {
+          "type": "integer"
         }
       },
       "type": "object"

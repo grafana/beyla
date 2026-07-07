@@ -98,7 +98,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 
 	var addedPIDsCh <-chan []app.PID
 	if appDynamicSelector != nil {
-		addedPIDsCh = appDynamicSelector.AddedPIDsNotify()
+		addedPIDsCh = appDynamicSelector.AddedPIDsNotifyContext(ctx)
 	}
 	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, addedPIDsCh)),
 		swarm.WithID("ProcessWatcher"))

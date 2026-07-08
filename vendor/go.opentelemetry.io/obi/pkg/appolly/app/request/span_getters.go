@@ -194,6 +194,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return semconv.DBSystemNameMongoDB
 			case EventTypeCouchbaseClient:
 				return semconv.DBSystemNameCouchbase
+			case EventTypeAerospikeClient:
+				return DBSystemName("aerospike")
 			case EventTypeHTTPClient:
 				if span.SubType == HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
 					return DBSystemName(span.Elasticsearch.DBSystemName)
@@ -327,6 +329,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
 				return DBCollectionName(s.Elasticsearch.DBCollectionName)
+			}
+			if s.Type == EventTypeAerospikeClient {
+				return DBCollectionName(s.Path)
 			}
 			return DBCollectionName("")
 		}

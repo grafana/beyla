@@ -9,6 +9,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync"
 
 	"github.com/cilium/ebpf"
 
@@ -23,14 +24,19 @@ import (
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfIter ../../../../bpf/tpinjector/sock_iter.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfFionreadFixup ../../../../bpf/tpinjector/fionread_fixup.c -- -I../../../../bpf -I../../../../bpf
 
 type Tracer struct {
-	cfg            *obi.Config
-	bpfObjects     BpfObjects
-	bpfIterObjects BpfIterObjects
-	closers        []io.Closer
-	log            *slog.Logger
-	iters          []*ebpfcommon.Iter
+	cfg                     *obi.Config
+	bpfObjects              BpfObjects
+	bpfIterObjects          BpfIterObjects
+	bpfFionreadFixupObjects BpfFionreadFixupObjects
+	closers                 []io.Closer
+	log                     *slog.Logger
+	iters                   []*ebpfcommon.Iter
+	fionreadOnce            sync.Once
+	fionreadBroken          bool
+	fionreadFixupEnabled    bool
 }
 
 func New(cfg *obi.Config) *Tracer {
@@ -73,6 +79,25 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 			Objects:   &p.bpfIterObjects,
 			Constants: p.iterConstants(),
 		})
+	}
+
+	// kernel lockdown rejects bpf_probe_write_user at load time
+	if p.kernelBreaksFIONREAD() {
+		fixupSpec, err := loadableFIONREADFixup()
+		if err != nil {
+			p.log.Error("kernel misreports FIONREAD for sockets in a sockhash and the BPF "+
+				"compensation cannot be loaded (kernel lockdown?); applications sizing reads "+
+				"via FIONREAD (nginx, Java, .NET) may stall or truncate transfers; "+
+				"set context_propagation: disabled (OTEL_EBPF_BPF_CONTEXT_PROPAGATION=disabled) "+
+				"to avoid impact", "error", err)
+		} else {
+			bundles = append(bundles, &ebpfcommon.SpecBundle{
+				Spec:      fixupSpec,
+				Objects:   &p.bpfFionreadFixupObjects,
+				Constants: map[string]any{"g_bpf_debug": p.cfg.EBPF.BpfDebug},
+			})
+			p.fionreadFixupEnabled = true
+		}
 	}
 
 	return bundles, nil
@@ -124,8 +149,16 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
+// Tracepoints returns the FIONREAD fixup probes; not Required so a failed
+// attach cannot drop the tracer
 func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
-	return nil
+	if !p.fionreadFixupEnabled {
+		return nil
+	}
+	return map[string]ebpfcommon.ProbeDesc{
+		"syscalls/sys_enter_ioctl": {Start: p.bpfFionreadFixupObjects.ObiFionreadFixupEnter},
+		"syscalls/sys_exit_ioctl":  {Start: p.bpfFionreadFixupObjects.ObiFionreadFixupExit},
+	}
 }
 
 func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
@@ -196,6 +229,10 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("tpinjector started")
 
+	if p.fionreadFixupEnabled {
+		p.verifyFIONREADFix()
+	}
+
 	for _, it := range p.Iters() {
 		if err := it.Run(p.log); err != nil {
 			p.log.Error("error running iterator", "error", err)
@@ -206,6 +243,7 @@ func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg
 
 	p.bpfObjects.Close()
 	p.bpfIterObjects.Close()
+	p.bpfFionreadFixupObjects.Close()
 
 	p.log.Debug("tpinjector terminated")
 }

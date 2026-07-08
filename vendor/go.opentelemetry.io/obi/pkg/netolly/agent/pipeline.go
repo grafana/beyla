@@ -51,8 +51,10 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	}
 
 	swi := &swarm.Instancer{}
-	// Start nodes: those generating flow records (reading them from eBPF)
-	ebpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "ebpfFlows")
+	// Start nodes: those generating flow records (reading them from eBPF).
+	// ebpfFlows has two senders (MapTracer and RingBufTracer), so it must only be
+	// closed after both of them have marked it closeable, hence ClosingAttempts(2).
+	ebpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "ebpfFlows", msg.ClosingAttempts(2))
 	swi.Add(swarm.DirectInstance(newMapTracer(f, ebpfFlows)), swarm.WithID("MapTracer"))
 	swi.Add(swarm.DirectInstance(newRingBufTracer(f, ebpfFlows)), swarm.WithID("RingBufTracer"))
 

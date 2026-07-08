@@ -87,7 +87,7 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc 
 				rtlog.Debug("exiting trace loop due to context cancellation")
 				return
 			default:
-				if err := m.listenAndForwardRingBuffer(debugging, out); err != nil {
+				if err := m.listenAndForwardRingBuffer(ctx, debugging, out); err != nil {
 					if errors.Is(err, ringbuf.ErrClosed) {
 						rtlog.Debug("Received signal, exiting..")
 						return
@@ -100,7 +100,7 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc 
 	}
 }
 
-func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh *msg.Queue[[]*ebpf.Record]) error {
+func (m *RingBufTracer) listenAndForwardRingBuffer(ctx context.Context, debugging bool, forwardCh *msg.Queue[[]*ebpf.Record]) error {
 	event, err := m.ringBuffer.ReadRingBuf()
 	if err != nil {
 		return fmt.Errorf("reading from ring buffer: %w", err)
@@ -120,7 +120,7 @@ func (m *RingBufTracer) listenAndForwardRingBuffer(debugging bool, forwardCh *ms
 		m.mapFlusher.Flush()
 	}
 
-	forwardCh.Send([]*ebpf.Record{ebpf.NewRecord(readFlow.Id, readFlow.Metrics)})
+	forwardCh.SendCtx(ctx, []*ebpf.Record{ebpf.NewRecord(readFlow.Id, readFlow.Metrics)})
 
 	return nil
 }

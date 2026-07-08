@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"io"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -33,10 +32,7 @@ const (
 	fcgiFrameTypeParams   = 4
 )
 
-var (
-	errFastCGIPayloadTooShort  = errors.New("payload too short")
-	errFastCGIHeaderReadFailed = errors.New("failed to read FastCGI header")
-)
+var errFastCGIPayloadTooShort = errors.New("payload too short")
 
 // fastCGIHeader represents the structure of a FastCGI header
 type fastCGIHeader struct {
@@ -48,39 +44,16 @@ type fastCGIHeader struct {
 	Reserved      uint8  // Reserved (always 0)
 }
 
-// ReadFastCGIHeader reads a FastCGI header from an input stream
-func readFastCGIHeader(b []byte) (*fastCGIHeader, error) {
-	reader := bytes.NewReader(b)
-	// FastCGI header is always 8 bytes
-	headerBytes := make([]byte, fastCGIRequestHeaderLen)
-	if _, err := io.ReadFull(reader, headerBytes); err != nil {
-		return nil, errFastCGIHeaderReadFailed
+// readFastCGIHeader parses a FastCGI record header from the first 8 bytes of b.
+func readFastCGIHeader(b []byte) *fastCGIHeader {
+	return &fastCGIHeader{
+		Version:       b[0],
+		Type:          b[1],
+		RequestID:     binary.BigEndian.Uint16(b[2:4]),
+		ContentLength: binary.BigEndian.Uint16(b[4:6]),
+		PaddingLength: b[6],
+		Reserved:      b[7],
 	}
-
-	// Parse the header
-	header := &fastCGIHeader{}
-	buffer := bytes.NewReader(headerBytes)
-
-	if err := binary.Read(buffer, binary.BigEndian, &header.Version); err != nil {
-		return nil, errFastCGIHeaderReadFailed
-	}
-	if err := binary.Read(buffer, binary.BigEndian, &header.Type); err != nil {
-		return nil, errFastCGIHeaderReadFailed
-	}
-	if err := binary.Read(buffer, binary.BigEndian, &header.RequestID); err != nil {
-		return nil, errFastCGIHeaderReadFailed
-	}
-	if err := binary.Read(buffer, binary.BigEndian, &header.ContentLength); err != nil {
-		return nil, errFastCGIHeaderReadFailed
-	}
-	if err := binary.Read(buffer, binary.BigEndian, &header.PaddingLength); err != nil {
-		return nil, errFastCGIHeaderReadFailed
-	}
-	if err := binary.Read(buffer, binary.BigEndian, &header.Reserved); err != nil {
-		return nil, errFastCGIHeaderReadFailed
-	}
-
-	return header, nil
 }
 
 func parseCGITable(b []byte) map[string]string {
@@ -95,11 +68,6 @@ func parseCGITable(b []byte) map[string]string {
 
 		keyLen := int(b[0])
 		valLen := int(b[1])
-
-		if keyLen < 0 || valLen < 0 {
-			break
-		}
-
 		b = b[2:]
 
 		if keyLen > 0 && len(b) >= keyLen {
@@ -153,10 +121,7 @@ func parseHeader(b *largebuf.LargeBuffer) ([]byte, error) {
 		if err != nil {
 			return nil, errFastCGIPayloadTooShort
 		}
-		hdr, err := readFastCGIHeader(hdrBytes)
-		if err != nil {
-			return nil, errFastCGIPayloadTooShort
-		}
+		hdr := readFastCGIHeader(hdrBytes)
 
 		if hdr.Type == fcgiFrameTypeParams {
 			if r.Remaining() == 0 {

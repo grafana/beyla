@@ -17,7 +17,7 @@ github.com/Microsoft/go-winio/internal/fs
 github.com/Microsoft/go-winio/internal/socket
 github.com/Microsoft/go-winio/internal/stringbuffer
 github.com/Microsoft/go-winio/pkg/guid
-# github.com/andybalholm/brotli v1.2.1
+# github.com/andybalholm/brotli v1.2.2
 ## explicit; go 1.22
 github.com/andybalholm/brotli
 github.com/andybalholm/brotli/flate
@@ -152,17 +152,19 @@ github.com/cenkalti/backoff/v5
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/cilium/ebpf v0.20.0
-## explicit; go 1.24.0
+# github.com/cilium/ebpf v0.22.0
+## explicit; go 1.25.0
 github.com/cilium/ebpf
 github.com/cilium/ebpf/asm
 github.com/cilium/ebpf/btf
+github.com/cilium/ebpf/features
 github.com/cilium/ebpf/internal
 github.com/cilium/ebpf/internal/efw
 github.com/cilium/ebpf/internal/epoll
 github.com/cilium/ebpf/internal/kallsyms
 github.com/cilium/ebpf/internal/kconfig
 github.com/cilium/ebpf/internal/linux
+github.com/cilium/ebpf/internal/mountinfo
 github.com/cilium/ebpf/internal/platform
 github.com/cilium/ebpf/internal/sys
 github.com/cilium/ebpf/internal/sysenc
@@ -475,7 +477,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/ohler55/ojg v1.28.1
+# github.com/ohler55/ojg v1.28.2
 ## explicit; go 1.18
 github.com/ohler55/ojg
 github.com/ohler55/ojg/alt
@@ -550,7 +552,7 @@ github.com/shirou/gopsutil/v3/internal/common
 github.com/shirou/gopsutil/v3/mem
 github.com/shirou/gopsutil/v3/net
 github.com/shirou/gopsutil/v3/process
-# github.com/shirou/gopsutil/v4 v4.26.5
+# github.com/shirou/gopsutil/v4 v4.26.6
 ## explicit; go 1.24.0
 github.com/shirou/gopsutil/v4/common
 github.com/shirou/gopsutil/v4/cpu
@@ -575,7 +577,7 @@ github.com/tklauser/go-sysconf
 # github.com/tklauser/numcpus v0.11.0
 ## explicit; go 1.24.0
 github.com/tklauser/numcpus
-# github.com/vektah/gqlparser/v2 v2.5.35
+# github.com/vektah/gqlparser/v2 v2.5.36
 ## explicit; go 1.22
 github.com/vektah/gqlparser/v2/ast
 github.com/vektah/gqlparser/v2/gqlerror
@@ -945,6 +947,7 @@ go.opentelemetry.io/otel/semconv/v1.19.0
 go.opentelemetry.io/otel/semconv/v1.25.0
 go.opentelemetry.io/otel/semconv/v1.37.0
 go.opentelemetry.io/otel/semconv/v1.37.0/rpcconv
+go.opentelemetry.io/otel/semconv/v1.38.0
 go.opentelemetry.io/otel/semconv/v1.40.0
 go.opentelemetry.io/otel/semconv/v1.40.0/httpconv
 go.opentelemetry.io/otel/semconv/v1.40.0/rpcconv

@@ -11,9 +11,10 @@ import (
 	"sync"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 )
 
-// This file contains convenience functions around the cilum/ebpf
+// This file contains convenience functions around the cilium/ebpf
 // CollectionSpec.Variables API.
 // This wrapper has been deprecated in the main cilium/ebpf codebase.
 
@@ -79,7 +80,8 @@ func ResolveMaps(spec *ebpf.CollectionSpec, sharedMaps map[string]*ebpf.Map, mu 
 // - constants: optional map of BPF constants to rewrite (may be nil)
 // - sharedMaps: map store for PinInternal maps, shared across specs within the same agent
 // - pinPath: bpffs pin path for PinByName maps (empty string to skip)
-func LoadSpec(spec *ebpf.CollectionSpec, objects any, constants map[string]any, sharedMaps map[string]*ebpf.Map, mu *sync.Mutex, pinPath string) error {
+// - cache: optional kernel BTF cache shared across loads (may be nil)
+func LoadSpec(spec *ebpf.CollectionSpec, objects any, constants map[string]any, sharedMaps map[string]*ebpf.Map, mu *sync.Mutex, pinPath string, cache *btf.Cache) error {
 	if constants != nil {
 		if err := RewriteConstants(spec, constants); err != nil {
 			return fmt.Errorf("rewriting BPF constants: %w", err)
@@ -93,6 +95,7 @@ func LoadSpec(spec *ebpf.CollectionSpec, objects any, constants map[string]any, 
 
 	collOpts.Programs = ebpf.ProgramOptions{LogSizeStart: 640 * 1024}
 	collOpts.Maps = ebpf.MapOptions{PinPath: pinPath}
+	collOpts.Cache = cache
 
 	if err := spec.LoadAndAssign(objects, collOpts); err != nil {
 		return fmt.Errorf("loading and assigning BPF objects: %w", err)

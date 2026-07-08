@@ -234,20 +234,18 @@ func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 
 		strtab := ctx.Sections[sec.Link]
 
-		if strtab == nil || int(strtab.Offset) >= len(ctx.Data) {
+		strs, ok := ctx.SectionData(strtab)
+		if !ok {
 			continue
 		}
 
-		strs := ctx.Data[strtab.Offset:]
-
-		if sec.Entsize == 0 {
+		symOffset, symEntrySize, symCount, ok := ctx.SymbolTableBounds(sec)
+		if !ok {
 			continue
 		}
-
-		symCount := int(sec.Size / sec.Entsize)
 
 		for i := range symCount {
-			sym := fastelf.ReadStruct[fastelf.Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
+			sym := fastelf.ReadStruct[fastelf.Elf64_Sym](ctx.Data, symOffset+i*symEntrySize)
 
 			if sym == nil ||
 				fastelf.SymType(sym.Info) != fastelf.STT_FUNC ||

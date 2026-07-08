@@ -136,6 +136,10 @@ func DBOperationName(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBOperation).String(val)
 }
 
+func DBOperationBatchSize(val int) attribute.KeyValue {
+	return attribute.Key(attr.DBOperationBatchSize).Int(val)
+}
+
 func DBSystemName(val string) attribute.KeyValue {
 	return attribute.Key(attr.DBSystemName).String(val)
 }

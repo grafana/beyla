@@ -30,7 +30,7 @@ jobs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
       kernels: ${{ steps.build-kernel-matrix.outputs.kernels }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
           submodules: true
@@ -108,7 +108,7 @@ jobs:
           docker builder prune -af || true
           df -h
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
           submodules: true
@@ -118,13 +118,13 @@ jobs:
         uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
       - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: "go.mod"
           cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
 
       - name: Go build cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
         with:
           path: ~/.cache/go-build
           key: go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
@@ -146,7 +146,7 @@ jobs:
 
       - name: Cache Docker images
         id: docker-images-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 # zizmor: ignore[cache-poisoning] keyed on hash of compose+Dockerfile inputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] keyed on hash of compose+Dockerfile inputs
         with:
           path: compiled-tests/docker-images.tar
           key: vm-docker-images-${{ hashFiles('internal/testgenerated/integration/docker-compose-multiexec*.yml', 'internal/testgenerated/integration/**/Dockerfile*', 'internal/test/beyla_extensions/**/Dockerfile*') }}
@@ -201,7 +201,7 @@ jobs:
 
       - name: Cache rootfs.qcow2
         id: rootfs-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 # zizmor: ignore[cache-poisoning] keyed on hash of VM Dockerfile
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] keyed on hash of VM Dockerfile
         with:
           path: compiled-tests/rootfs.qcow2
           key: vm-rootfs-${{ hashFiles('internal/testgenerated/vm/Dockerfile') }}
@@ -219,7 +219,7 @@ jobs:
           tar cf compiled-tests/testgenerated.tar internal/testgenerated schemas
 
       - name: Upload prep artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vm-prep-${{ github.run_id }}
           path: compiled-tests
@@ -263,13 +263,13 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           df -h
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
           submodules: true
 
       - name: Download prep artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: vm-prep-${{ github.run_id }}
           path: compiled-tests
@@ -289,7 +289,7 @@ jobs:
           mv compiled-tests/rootfs.qcow2 ./rootfs.qcow2
 
       - name: Cache LVH kernel artifacts
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 # zizmor: ignore[cache-poisoning] keyed on pinned LVH tag from kernels.yaml
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] keyed on pinned LVH tag from kernels.yaml
         with:
           path: |
             .obi-src/internal/test/vm/lvh/out/vmlinuz-${{ matrix.kernel.id }}-amd64
@@ -351,14 +351,14 @@ jobs:
             CODECOV_TOKEN=codecov:token
 
       - name: Report coverage
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./testoutput/itest-covdata.txt
           flags: integration-test-vm-${{ matrix.kernel.id }}
           name: vm-integration-test-coverage-${{ matrix.kernel.id }}-${{ matrix.test.id }}-${{ github.run_number }}
 
       - name: Upload integration test logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: vm-integration-test-logs-${{ matrix.kernel.id }}-${{ matrix.test.id }}-${{ github.run_number }}

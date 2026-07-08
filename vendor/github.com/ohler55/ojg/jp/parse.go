@@ -16,7 +16,7 @@ const (
 	//   0123456789abcdef0123456789abcdef
 	tokenMap = "" +
 		"................................" + // 0x00
-		"...o.o..........oooooooooooo...o" + // 0x20
+		"...o.o..........oooooooooo.o...o" + // 0x20
 		".oooooooooooooooooooooooooo...oo" + // 0x40
 		".oooooooooooooooooooooooooooooo." + // 0x60
 		"oooooooooooooooooooooooooooooooo" + // 0x80
@@ -72,7 +72,7 @@ func Parse(buf []byte) (x Expr, err error) {
 
 // MustParse parses a []byte into an Expr and panics on error.
 func MustParse(buf []byte) (x Expr) {
-	p := &parser{buf: buf}
+	p := parser{buf: buf}
 	x = p.readExpr()
 	if p.pos < len(buf) {
 		p.raise("parse error")
@@ -81,7 +81,7 @@ func MustParse(buf []byte) (x Expr) {
 }
 
 func (p *parser) readExpr() (x Expr) {
-	x = Expr{}
+	x = make(Expr, 0, 4)
 	var f Frag
 	first := true
 	lastDescent := false
@@ -141,7 +141,7 @@ func (p *parser) afterDot() Frag {
 	if len(p.buf) <= p.pos {
 		p.raise("not terminated")
 	}
-	var token []byte
+	start := p.pos
 	b := p.buf[p.pos]
 	p.pos++
 	switch b {
@@ -153,35 +153,26 @@ func (p *parser) afterDot() Frag {
 		if tokenMap[b] == '.' {
 			p.raise("an expression fragment can not start with a '%c'", b)
 		}
-		token = append(token, b)
 	}
 	for p.pos < len(p.buf) {
-		b := p.buf[p.pos]
-		p.pos++
-		if tokenMap[b] == '.' {
-			p.pos--
+		if tokenMap[p.buf[p.pos]] == '.' {
 			break
 		}
-		token = append(token, b)
+		p.pos++
 	}
-	return Child(token)
+	return Child(p.buf[start:p.pos])
 }
 
 func (p *parser) afterDotDot() Frag {
-	var token []byte
-	b := p.buf[p.pos]
+	start := p.pos
 	p.pos++
-	token = append(token, b)
 	for p.pos < len(p.buf) {
-		b := p.buf[p.pos]
-		p.pos++
-		if tokenMap[b] == '.' {
-			p.pos--
+		if tokenMap[p.buf[p.pos]] == '.' {
 			break
 		}
-		token = append(token, b)
+		p.pos++
 	}
-	return Child(token)
+	return Child(p.buf[start:p.pos])
 }
 
 func (p *parser) afterBracket() Frag {

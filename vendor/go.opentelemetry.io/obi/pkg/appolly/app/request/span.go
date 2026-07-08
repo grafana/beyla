@@ -61,6 +61,7 @@ const (
 	EventTypeAMQPClient
 	EventTypeSunRPCClient
 	EventTypeSunRPCServer
+	EventTypeAerospikeClient
 )
 
 const (
@@ -185,6 +186,8 @@ func (t EventType) String() string {
 		return "MemcachedClient"
 	case EventTypeMemcachedServer:
 		return "MemcachedServer"
+	case EventTypeAerospikeClient:
+		return "AerospikeClient"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -1159,6 +1162,7 @@ type Span struct {
 	Status            int            `json:"-"`
 	ResponseLength    int64          `json:"-"`
 	ContentLength     int64          `json:"-"`
+	DBBatchSize       int            `json:"-"`
 	RequestStart      int64          `json:"-"`
 	Start             int64          `json:"-"`
 	End               int64          `json:"-"`
@@ -1402,6 +1406,21 @@ func spanAttributes(s *Span) SpanAttributes {
 			"operation":  s.Method,
 			"table":      s.Path,
 		}
+	case EventTypeAerospikeClient:
+		attrs := SpanAttributes{
+			"serverAddr":      SpanHost(s),
+			"serverPort":      strconv.Itoa(s.HostPort),
+			"dbOperationName": s.Method,
+			"dbNamespace":     s.DBNamespace,
+		}
+		if s.Path != "" {
+			attrs["dbCollectionName"] = s.Path
+		}
+		if s.DBError.ErrorCode != "" {
+			attrs["errorType"] = s.DBError.ErrorCode
+			attrs["errorDescription"] = s.DBError.Description
+		}
+		return attrs
 	}
 
 	return SpanAttributes{}
@@ -1513,7 +1532,7 @@ func (s *Span) IsValid() bool {
 
 func (s *Span) IsClientSpan() bool {
 	switch s.Type {
-	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient, EventTypeSunRPCClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient:
+	case EventTypeGRPCClient, EventTypeDNS, EventTypeHTTPClient, EventTypeRedisClient, EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient, EventTypeSunRPCClient, EventTypeSQLClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeAerospikeClient:
 		return true
 	}
 
@@ -1536,7 +1555,7 @@ func SpanStatusCode(span *Span) string {
 		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
-	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSunRPCClient, EventTypeSunRPCServer:
+	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSunRPCClient, EventTypeSunRPCServer, EventTypeAerospikeClient:
 		if span.Status != 0 {
 			return StatusCodeError
 		}
@@ -1564,7 +1583,7 @@ func SpanDBStatusMessage(span *Span, dbError string) string {
 
 func (s *Span) IsDBSpan() bool {
 	switch s.Type {
-	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSQLClient, EventTypeSQLServer:
+	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSQLClient, EventTypeSQLServer, EventTypeAerospikeClient:
 		return true
 	case EventTypeHTTPClient:
 		if s.SubType == HTTPSubtypeSQLPP {
@@ -1963,6 +1982,23 @@ func (s *Span) TraceName() string {
 		}
 		if s.Path != "" {
 			return s.Method + " " + s.Path
+		}
+		return s.Method
+	case EventTypeAerospikeClient:
+		if s.Method == "" {
+			return "AEROSPIKE"
+		}
+		// {operation} {namespace}.{set}, dropping any missing component.
+		target := s.DBNamespace
+		if s.Path != "" {
+			if target != "" {
+				target += "." + s.Path
+			} else {
+				target = s.Path
+			}
+		}
+		if target != "" {
+			return s.Method + " " + target
 		}
 		return s.Method
 	}

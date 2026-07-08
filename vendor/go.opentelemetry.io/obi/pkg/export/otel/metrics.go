@@ -967,7 +967,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
 				httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
 			}
-		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
+		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeMemcachedServer, request.EventTypeAerospikeClient:
 			if mr.is.DBEnabled() {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))

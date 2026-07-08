@@ -320,6 +320,53 @@ func NewElfContextFromData(data []byte) (*ElfContext, error) {
 	return &ctx, nil
 }
 
+func uint64Offset(data []byte, offset uint64) (int, bool) {
+	if offset > uint64(len(data)) || offset > math.MaxInt {
+		return 0, false
+	}
+
+	return int(offset), true
+}
+
+// SectionData returns a section's contents when its declared range fits in data.
+func (ctx *ElfContext) SectionData(sec *Elf64_Shdr) ([]byte, bool) {
+	if sec == nil {
+		return nil, false
+	}
+
+	offset, ok := uint64Offset(ctx.Data, sec.Offset)
+	if !ok || sec.Size > uint64(len(ctx.Data)-offset) {
+		return nil, false
+	}
+
+	size := int(sec.Size)
+
+	return ctx.Data[offset : offset+size], true
+}
+
+// SymbolTableBounds returns a symbol table range that is safe to iterate.
+func (ctx *ElfContext) SymbolTableBounds(sec *Elf64_Shdr) (offset, entrySize, entryCount int, ok bool) {
+	if sec == nil {
+		return 0, 0, 0, false
+	}
+
+	offset, ok = uint64Offset(ctx.Data, sec.Offset)
+	if !ok {
+		return 0, 0, 0, false
+	}
+
+	symbolSize := uint64(unsafe.Sizeof(Elf64_Sym{}))
+	if sec.Entsize < symbolSize || sec.Entsize > math.MaxInt {
+		return 0, 0, 0, false
+	}
+
+	if sec.Size > uint64(len(ctx.Data)-offset) {
+		return 0, 0, 0, false
+	}
+
+	return offset, int(sec.Entsize), int(sec.Size / sec.Entsize), true
+}
+
 func (ctx *ElfContext) Close() error {
 	if ctx.file != nil {
 		defer ctx.file.Close()
@@ -354,20 +401,18 @@ func (ctx *ElfContext) HasSymbol(symbol string) bool {
 			continue
 		}
 
-		if int(strtab.Offset) >= len(ctx.Data) {
+		strs, ok := ctx.SectionData(strtab)
+		if !ok {
 			continue
 		}
 
-		strs := ctx.Data[strtab.Offset:]
-
-		if sec.Entsize == 0 {
+		symOffset, symEntrySize, symCount, ok := ctx.SymbolTableBounds(sec)
+		if !ok {
 			continue
 		}
-
-		symCount := int(sec.Size / sec.Entsize)
 
 		for i := range symCount {
-			sym := ReadStruct[Elf64_Sym](ctx.Data, int(sec.Offset)+i*int(sec.Entsize))
+			sym := ReadStruct[Elf64_Sym](ctx.Data, symOffset+i*symEntrySize)
 
 			if sym == nil || SymType(sym.Info) != STT_FUNC || sym.Size == 0 || sym.Value == 0 {
 				continue
@@ -405,11 +450,12 @@ func (ctx *ElfContext) shstrtabData() []byte {
 
 	shstrtab := ctx.Sections[ctx.Hdr.Shstrndx]
 
-	if shstrtab == nil || int(shstrtab.Offset) >= len(ctx.Data) {
+	data, ok := ctx.SectionData(shstrtab)
+	if !ok {
 		return nil
 	}
 
-	return ctx.Data[shstrtab.Offset:]
+	return data
 }
 
 func (ctx *ElfContext) section(sectionName string) *Elf64_Shdr {

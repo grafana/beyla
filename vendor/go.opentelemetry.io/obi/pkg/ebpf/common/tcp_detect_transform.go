@@ -305,6 +305,39 @@ func detectHeuristicProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, 
 		return span, ignore, matched, err
 	}
 
+	if span, ignore, matched, err := matchAerospike(event, requestBuffer, responseBuffer); matched {
+		return span, ignore, matched, err
+	}
+
+	return request.Span{}, false, false, nil
+}
+
+// matchAerospike detects the Aerospike native client protocol (proto v2) from the
+// captured request/response buffers and builds a client span. Only type-3 AS_MSG
+// data requests produce a span; info/auth/compressed frames are left for the
+// generic ignore path. Correlation is the generic per-connection direction flip.
+func matchAerospike(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
+	// Aerospike instrumentation is client-side only. When OBI also instruments the
+	// Aerospike server process it sees the same exchange from the server side; skip
+	// it so a single operation isn't reported twice (once per peer).
+	if event.IsServer {
+		return request.Span{}, false, false, nil
+	}
+
+	// parseAerospikeRequest validates the proto/as_msg header itself and returns
+	// nil for non-Aerospike or response frames, so it doubles as the detector.
+	if info := parseAerospikeRequest(requestBuffer); info != nil {
+		status, dbError := aerospikeStatus(responseBuffer)
+		return TCPToAerospikeToSpan(event, info, status, dbError), false, true, nil
+	}
+
+	// We may have caught the connection mid-flight with the buffers reversed.
+	if info := parseAerospikeRequest(responseBuffer); info != nil {
+		reverseTCPEvent(event)
+		status, dbError := aerospikeStatus(requestBuffer)
+		return TCPToAerospikeToSpan(event, info, status, dbError), false, true, nil
+	}
+
 	return request.Span{}, false, false, nil
 }
 

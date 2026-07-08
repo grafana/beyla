@@ -55,13 +55,6 @@ type Link interface {
 	isLink()
 }
 
-// NewLinkFromFD creates a link from a raw fd.
-//
-// Deprecated: use [NewFromFD] instead.
-func NewLinkFromFD(fd int) (Link, error) {
-	return NewFromFD(fd)
-}
-
 // NewFromFD creates a link from a raw fd.
 //
 // You should not use fd after calling this function.
@@ -121,7 +114,7 @@ type Info struct {
 	Type    Type
 	ID      ID
 	Program ebpf.ProgramID
-	extra   interface{}
+	extra   any
 }
 
 // RawLink is the low-level API to bpf_link.

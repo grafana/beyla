@@ -749,10 +749,14 @@ func (i *instrumenter) tracepoints(p KprobesTracer) error {
 		slog.Debug("going to add syscall", "function", sfunc, "probes", sprobes)
 
 		if err := i.tracepoint(sfunc, sprobes); err != nil {
-			if i.metrics != nil {
-				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorInvalidTracepoint)
+			if sprobes.Required {
+				if i.metrics != nil {
+					i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorInvalidTracepoint)
+				}
+				return fmt.Errorf("instrumenting function %q: %w", sfunc, err)
 			}
-			return fmt.Errorf("instrumenting function %q: %w", sfunc, err)
+
+			slog.Debug("error instrumenting tracepoint", "function", sfunc, "error", err)
 		}
 		p.AddCloser(i.closables...)
 	}

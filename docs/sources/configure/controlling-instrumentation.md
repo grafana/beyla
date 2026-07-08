@@ -120,7 +120,7 @@ List of supported AWS services protocol detectors:
 
 ### HTTP header extraction
 
-Beyla can extract selected HTTP request and response headers and add them as span attributes. To enable this feature, configure HTTP payload enrichment, select the header attributes for export, and set an HTTP buffer size large enough to capture the headers you want to inspect. Header extraction is disabled by default to avoid leaking sensitive data and increasing trace cardinality.
+Beyla can extract selected HTTP request and response headers and add them as span attributes, and can obfuscate selected header values before export. To enable this feature, configure HTTP payload enrichment, select the header attributes for export, and set an HTTP buffer size large enough to capture the headers you want to inspect. Header extraction is disabled by default to avoid leaking sensitive data and increasing trace cardinality.
 
 Extracted request headers are exported as `http.request.header.<header_name>` span attributes. Extracted response headers are exported as `http.response.header.<header_name>` span attributes. Header names are converted to lowercase in the exported attribute name, and header values are exported as string arrays. This configuration adds attributes to traces; it does not add HTTP headers as Beyla RED metric labels.
 
@@ -141,7 +141,7 @@ ebpf:
 | `policy.obfuscation_string`<p>`BEYLA_HTTP_ENRICHMENT_OBFUSCATION_STRING`</p>                           | Replacement string used when a rule action is `obfuscate`.                                    | string  | `***`   |
 | `rules`                                                                                                 | Ordered list of include, exclude, and obfuscate rules.                                        | list    | empty   |
 
-For example, this configuration extracts `X-Tenant-ID`, `X-Forwarded-Host`, and response rate-limit headers, and obfuscates request `Authorization` values:
+For example, this configuration extracts `X-Tenant-ID`, `X-Forwarded-Host`, and response rate-limit headers, and shows how to obfuscate request `Authorization` values before export:
 
 ```yaml
 attributes:

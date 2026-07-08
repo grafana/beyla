@@ -1444,6 +1444,7 @@
             "type": "string",
             "enum": [
               "*",
+              "aerospike",
               "amqp",
               "couchbase",
               "dns",
@@ -1800,6 +1801,7 @@
             "type": "string",
             "enum": [
               "*",
+              "aerospike",
               "amqp",
               "couchbase",
               "dns",
@@ -2410,6 +2412,7 @@
             "type": "string",
             "enum": [
               "*",
+              "aerospike",
               "amqp",
               "couchbase",
               "dns",

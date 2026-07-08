@@ -120,7 +120,7 @@ List of supported AWS services protocol detectors:
 
 ### HTTP header extraction
 
-Beyla can extract selected HTTP request and response headers and add them as span attributes. To enable this feature, configure HTTP payload enrichment, enable request header tracking, select the header attributes for export, and set an HTTP buffer size large enough to capture the headers you want to inspect. Header extraction is disabled by default to avoid leaking sensitive data and increasing trace cardinality.
+Beyla can extract selected HTTP request and response headers and add them as span attributes. To enable this feature, configure HTTP payload enrichment, select the header attributes for export, and set an HTTP buffer size large enough to capture the headers you want to inspect. Header extraction is disabled by default to avoid leaking sensitive data and increasing trace cardinality.
 
 Extracted request headers are exported as `http.request.header.<header_name>` span attributes. Extracted response headers are exported as `http.response.header.<header_name>` span attributes. Header names are converted to lowercase in the exported attribute name, and header values are exported as string arrays. This configuration adds attributes to traces; it does not add HTTP headers as Beyla RED metric labels.
 
@@ -152,7 +152,6 @@ attributes:
         - "http.response.header.*"
 
 ebpf:
-  track_request_headers: true
   buffer_sizes:
     http: 8192
   payload_extraction:
@@ -185,7 +184,7 @@ ebpf:
 
 With this configuration, Beyla can add attributes such as `http.request.header.x-tenant-id`, `http.request.header.x-forwarded-host`, and `http.response.header.x-ratelimit-remaining` to spans.
 
-For Go applications, HTTP header enrichment may require the generic HTTP tracer path. Setting `discovery.skip_go_specific_tracers: true` or `BEYLA_SKIP_GO_SPECIFIC_TRACERS=true` forces that path, but disables Go-specific tracers and can affect tracing accuracy or context propagation. Evaluate this trade-off before enabling it in production.
+HTTP header enrichment is currently not available for Go applications.
 
 Header rules use the following fields:
 

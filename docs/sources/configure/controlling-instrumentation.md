@@ -118,9 +118,90 @@ List of supported AWS services protocol detectors:
 | S3                | CreateBucket, DeleteBucket, PutObject, DeleteObject, ListBuckets, ListObjects, GetObject |
 | SQS               | All                                                                                      |
 
+### HTTP header extraction
+
+Beyla can extract selected HTTP request and response headers and add them as span attributes, and can obfuscate selected header values before export. To enable this feature, configure HTTP payload enrichment, select the header attributes for export, and set an HTTP buffer size large enough to capture the headers you want to inspect. Header extraction is disabled by default to avoid leaking sensitive data and increasing trace cardinality.
+
+Extracted request headers are exported as `http.request.header.<header_name>` span attributes. Extracted response headers are exported as `http.response.header.<header_name>` span attributes. Header names are converted to lowercase in the exported attribute name, and header values are exported as string arrays. This configuration adds attributes to traces; it does not add HTTP headers as Beyla RED metric labels.
+
+YAML section:
+
+```yaml
+ebpf:
+  payload_extraction:
+    http:
+      enrichment:
+```
+
+| YAML option<p>Environment variable</p>                                                                  | Description                                                                                   | Type    | Default |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------- | ------- |
+| `enabled`<p>`BEYLA_HTTP_ENRICHMENT_ENABLED`</p>                                                        | Enable HTTP header and body enrichment.                                                       | boolean | false   |
+| `policy.default_action.headers`                                                                         | Default action for HTTP headers that do not match a rule. Accepted values: `exclude`, `include`, `obfuscate`. | string  | exclude |
+| `policy.default_action.body`                                                                            | Default action for HTTP body content that does not match a rule. Accepted values: `exclude`, `include`, `obfuscate`. | string  | exclude |
+| `policy.obfuscation_string`<p>`BEYLA_HTTP_ENRICHMENT_OBFUSCATION_STRING`</p>                           | Replacement string used when a rule action is `obfuscate`.                                    | string  | `***`   |
+| `rules`                                                                                                 | Ordered list of include, exclude, and obfuscate rules.                                        | list    | empty   |
+
+For example, this configuration extracts `X-Tenant-ID`, `X-Forwarded-Host`, and response rate-limit headers, and shows how to obfuscate request `Authorization` values before export:
+
+```yaml
+attributes:
+  select:
+    traces:
+      include:
+        - "http.request.header.*"
+        - "http.response.header.*"
+
+ebpf:
+  buffer_sizes:
+    http: 8192
+  payload_extraction:
+    http:
+      enrichment:
+        enabled: true
+        policy:
+          default_action:
+            headers: exclude
+            body: exclude
+          obfuscation_string: "***"
+        rules:
+          - action: obfuscate
+            type: headers
+            scope: request
+            match:
+              patterns:
+                - "Authorization"
+              case_sensitive: false
+          - action: include
+            type: headers
+            scope: all
+            match:
+              patterns:
+                - "X-Tenant-ID"
+                - "X-Forwarded-Host"
+                - "X-RateLimit-*"
+              case_sensitive: false
+```
+
+With this configuration, Beyla can add attributes such as `http.request.header.x-tenant-id`, `http.request.header.x-forwarded-host`, and `http.response.header.x-ratelimit-remaining` to spans.
+
+HTTP header enrichment is currently not available for Go applications.
+
+Header rules use the following fields:
+
+- `action`: `include`, `exclude`, or `obfuscate`.
+- `type`: Set to `headers` for header extraction rules.
+- `scope`: `request`, `response`, or `all`.
+- `match.patterns`: Header name glob patterns.
+- `match.case_sensitive`: Whether the header name match is case-sensitive.
+- `match.url_path_patterns`: Optional URL path glob patterns for limiting where the rule applies.
+- `match.methods`: Optional list of HTTP methods for limiting where the rule applies.
+- `match.response_status_code`: Optional response status code range for limiting where the rule applies.
+
+Header rules are evaluated in order, and the first matching header rule wins. Put specific obfuscation or exclusion rules before broader include rules. Avoid setting `policy.default_action.headers: include` unless you have reviewed the data, because it can expose credentials, cookies, or user-identifying values and can add high-cardinality span attributes.
+
 ## Configure data processing buffer sizes
 
-To minimize the performance impact of eBPF data collection, Beyla uses limited payload buffer size capture for various protocols, which gives us the best quality to performance ratio. However, for certain kinds of protocols, especially for some that are mentioned in [Payload extraction](#payload-extraction), it might be beneficial to use larger buffer sizes. The following section describes the configuration options for controlling the auxiliary buffers captured for higher quality trace generation.
+To minimize the performance impact of eBPF data collection, Beyla uses limited payload buffer size capture for various protocols, which gives us the best quality to performance ratio. However, for certain kinds of protocols, especially for some that are mentioned in [Payload extraction](#payload-extraction), it might be beneficial to use larger buffer sizes. HTTP header extraction also requires an HTTP buffer size large enough to include the headers in the captured request or response. The following section describes the configuration options for controlling the auxiliary buffers captured for higher quality trace generation.
 
 YAML section:
 

@@ -33,8 +33,6 @@ func TestSigilSpans(t *testing.T) {
 }
 
 func testSigilTraces(t *testing.T) {
-	ti.DoHTTPGet(t, "http://localhost:8080/chat", 200)
-
 	var trace jaeger.Trace
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		ti.DoHTTPGet(t, "http://localhost:8080/chat", 200)

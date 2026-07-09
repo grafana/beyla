@@ -2629,6 +2629,10 @@
       ],
       "x-env-var": "BEYLA_SHUTDOWN_TIMEOUT"
     },
+    "sigil_export": {
+      "$ref": "#/$defs/TracesConfig",
+      "description": "We use a custom env prefix to ensure the OTLP_EXPORTER environment variables don't override our Sigil export URL"
+    },
     "stats": {
       "$ref": "#/$defs/StatsConfig",
       "description": "Stats configuration for Stats Observability feature"

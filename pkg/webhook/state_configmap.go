@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -49,11 +48,11 @@ var saNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 type StateConfigMapWriter struct {
 	logger     *slog.Logger
 	kubeClient kubernetes.Interface
-	ownMeta    OwnMeta
+	ownPod     *corev1.Pod
 	owner      *metav1.OwnerReference
 }
 
-func NewStateConfigMapWriter(ctxInfo *global.ContextInfo, ownMeta OwnMeta) (*StateConfigMapWriter, error) {
+func NewStateConfigMapWriter(ctxInfo *global.ContextInfo, ownPod *corev1.Pod) (*StateConfigMapWriter, error) {
 	logger := slog.Default().With("component", "webhook.StateConfigMapWriter")
 	kubeClient, err := ctxInfo.K8sInformer.KubeClient()
 	if err != nil {
@@ -63,42 +62,12 @@ func NewStateConfigMapWriter(ctxInfo *global.ContextInfo, ownMeta OwnMeta) (*Sta
 	return &StateConfigMapWriter{
 		logger:     logger,
 		kubeClient: kubeClient,
-		ownMeta:    ownMeta,
+		ownPod:     ownPod,
 	}, nil
 }
 
 func (w *StateConfigMapWriter) Init(ctx context.Context) error {
-	// The kubelet publishes status.containerStatuses[].containerID (the field
-	// findOwnPod matches on) asynchronously, just after starting the container.
-	// Beyla is that container's entrypoint, so on a cold/slow node it routinely
-	// reaches this code before the status is populated and the lookup misses.
-	// Poll until it converges rather than failing the whole process on first try.
-	var owner *metav1.OwnerReference
-	var findErr error
-	pollErr := wait.PollUntilContextTimeout(ctx, ownPodLookupPollInterval, ownPodLookupTimeout, true,
-		func(ctx context.Context) (bool, error) {
-			o, err := w.findDaemonSetOwner(ctx)
-			if err != nil {
-				findErr = err
-				w.logger.Debug("own pod not visible yet (kubelet may not have published the container status); retrying",
-					"error", err)
-				return false, nil
-			}
-			owner = o
-			return true, nil
-		})
-	if pollErr != nil {
-		if findErr != nil {
-			return fmt.Errorf("error finding daemonset (gave up after %s): %w", ownPodLookupTimeout, findErr)
-		}
-		return fmt.Errorf("error finding daemonset: %w", pollErr)
-	}
-	if owner == nil {
-		return fmt.Errorf("no DaemonSet owner found for own pod in namespace %s on node %s", w.ownMeta.Namespace, w.ownMeta.NodeName)
-	}
-
-	w.owner = owner
-
+	w.owner = w.findDaemonSetOwner()
 	return nil
 }
 
@@ -119,22 +88,22 @@ func (w *StateConfigMapWriter) Write(
 		return fmt.Errorf("marshal eligible deployments: %w", err)
 	}
 
-	name := stateConfigMapName(w.owner.Name, w.ownMeta.NodeName)
+	name := stateConfigMapName(w.owner.Name, w.ownPod.Spec.NodeName)
 
 	desired := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
-			Namespace:       w.ownMeta.Namespace,
+			Namespace:       w.ownPod.Namespace,
 			OwnerReferences: []metav1.OwnerReference{*w.owner},
 			Labels: map[string]string{
 				"app.kubernetes.io/managed-by": "beyla",
 				"app.kubernetes.io/component":  "injector-state",
-				configmap.SelectorAnnotation:   sanitizeDNS1123(w.ownMeta.NodeName),
+				configmap.SelectorAnnotation:   sanitizeDNS1123(w.ownPod.Spec.NodeName),
 			},
 			// Annotation (presence-only) is what the external injection
 			// controller watches; without it the controller ignores the CM.
 			Annotations: map[string]string{
-				configmap.SelectorAnnotation: w.ownMeta.NodeName,
+				configmap.SelectorAnnotation: w.ownPod.Spec.NodeName,
 			},
 		},
 		Data: map[string]string{
@@ -143,39 +112,35 @@ func (w *StateConfigMapWriter) Write(
 		},
 	}
 
-	cms := w.kubeClient.CoreV1().ConfigMaps(w.ownMeta.Namespace)
+	cms := w.kubeClient.CoreV1().ConfigMaps(w.ownPod.Namespace)
 	existing, err := cms.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("get ConfigMap %s/%s: %w", w.ownMeta.Namespace, name, err)
+			return fmt.Errorf("get ConfigMap %s/%s: %w", w.ownPod.Namespace, name, err)
 		}
 		if _, err := cms.Create(ctx, desired, metav1.CreateOptions{}); err != nil {
-			return fmt.Errorf("create ConfigMap %s/%s: %w", w.ownMeta.Namespace, name, err)
+			return fmt.Errorf("create ConfigMap %s/%s: %w", w.ownPod.Namespace, name, err)
 		}
 		w.logger.Debug("created injector state ConfigMap",
-			"name", name, "namespace", w.ownMeta.Namespace, "eligible", len(eligible))
+			"name", name, "namespace", w.ownPod.Namespace, "eligible", len(eligible))
 		return nil
 	}
 
 	desired.ResourceVersion = existing.ResourceVersion
 	if _, err := cms.Update(ctx, desired, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update ConfigMap %s/%s: %w", w.ownMeta.Namespace, name, err)
+		return fmt.Errorf("update ConfigMap %s/%s: %w", w.ownPod.Namespace, name, err)
 	}
 	w.logger.Debug("updated injector state ConfigMap",
-		"name", name, "namespace", w.ownMeta.Namespace, "eligible", len(eligible))
+		"name", name, "namespace", w.ownPod.Namespace, "eligible", len(eligible))
 	return nil
 }
 
 // findDaemonSetOwner fetches this pod and returns an OwnerReference pointing at
 // the parent DaemonSet, or nil if the pod has no DaemonSet owner.
-func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.OwnerReference, error) {
-	pod, err := w.findOwnPod(ctx)
-	if err != nil {
-		return nil, err
-	}
-	w.logger.Debug("finding own pod", "pod", pod)
-	for i := range pod.OwnerReferences {
-		ref := &pod.OwnerReferences[i]
+func (w *StateConfigMapWriter) findDaemonSetOwner() *metav1.OwnerReference {
+	w.logger.Debug("finding owners of own pod", "pod", w.ownPod.Name)
+	for i := range w.ownPod.OwnerReferences {
+		ref := &w.ownPod.OwnerReferences[i]
 		if ref.Kind != daemonSetOwnerKind {
 			continue
 		}
@@ -189,9 +154,9 @@ func (w *StateConfigMapWriter) findDaemonSetOwner(ctx context.Context) (*metav1.
 			UID:                ref.UID,
 			Controller:         &controller,
 			BlockOwnerDeletion: &blockOwnerDeletion,
-		}, nil
+		}
 	}
-	return nil, nil
+	return nil
 }
 
 // buildInjectConfig constructs an InjectConfig from the Beyla injector configuration.

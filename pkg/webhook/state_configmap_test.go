@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"context"
 	"errors"
 	"log/slog"
 	"os"
@@ -12,13 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
-	clienttesting "k8s.io/client-go/testing"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 
@@ -290,98 +285,12 @@ func makePod(name, namespace, nodeName, containerID string, owners []metav1.Owne
 	}
 }
 
-func newTestWriter(client *fake.Clientset, namespace, nodeName, containerID string) *StateConfigMapWriter {
+func newTestWriter(client *fake.Clientset, pod *corev1.Pod) *StateConfigMapWriter {
 	return &StateConfigMapWriter{
-		logger:       slog.Default(),
-		kubeClient:   client,
-		nodeName:     nodeName,
-		ownContainer: containerID,
-		ownNamespace: namespace,
+		logger:     slog.Default(),
+		kubeClient: client,
+		ownPod:     pod,
 	}
-}
-
-func TestFindOwnPod(t *testing.T) {
-	const (
-		ns          = "beyla-system"
-		node        = "node-1"
-		containerID = "abc123def456"
-	)
-
-	t.Run("returns the pod whose container id matches", func(t *testing.T) {
-		ourPod := makePod("beyla-xyz", ns, node, containerID, nil)
-		other := makePod("other", ns, node, "ffffeeeeddddcccc", nil)
-		client := fake.NewSimpleClientset(ourPod, other)
-		w := newTestWriter(client, ns, node, containerID)
-
-		got, err := w.findOwnPod(context.Background())
-		require.NoError(t, err)
-		assert.Equal(t, "beyla-xyz", got.Name)
-	})
-
-	t.Run("only considers pods on the configured node (field selector applied)", func(t *testing.T) {
-		// fake clientset doesn't natively honor field selectors - install a
-		// reactor that filters by spec.nodeName like the real apiserver does.
-		ourPod := makePod("beyla-on-our-node", ns, node, containerID, nil)
-		offNode := makePod("beyla-on-other-node", ns, "other-node", containerID, nil)
-		client := fake.NewSimpleClientset(ourPod, offNode)
-		installNodeNameFieldSelectorReactor(client)
-
-		w := newTestWriter(client, ns, node, containerID)
-
-		got, err := w.findOwnPod(context.Background())
-		require.NoError(t, err)
-		assert.Equal(t, "beyla-on-our-node", got.Name)
-	})
-
-	t.Run("errors when no pod matches the container id", func(t *testing.T) {
-		other := makePod("not-us", ns, node, "ffffeeeeddddcccc", nil)
-		client := fake.NewSimpleClientset(other)
-		w := newTestWriter(client, ns, node, containerID)
-
-		_, err := w.findOwnPod(context.Background())
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "own pod not found")
-	})
-
-	t.Run("errors when no pods exist in the namespace", func(t *testing.T) {
-		client := fake.NewSimpleClientset()
-		w := newTestWriter(client, ns, node, containerID)
-
-		_, err := w.findOwnPod(context.Background())
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "own pod not found")
-	})
-
-	t.Run("propagates list errors", func(t *testing.T) {
-		client := fake.NewSimpleClientset()
-		client.PrependReactor("list", "pods", func(_ clienttesting.Action) (bool, runtime.Object, error) {
-			return true, nil, apierrors.NewServiceUnavailable("apiserver down")
-		})
-		w := newTestWriter(client, ns, node, containerID)
-
-		_, err := w.findOwnPod(context.Background())
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "list pods")
-		assert.Contains(t, err.Error(), "apiserver down")
-	})
-
-	t.Run("matches when status container id has a runtime scheme prefix", func(t *testing.T) {
-		ourPod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "beyla", Namespace: ns},
-			Spec:       corev1.PodSpec{NodeName: node},
-			Status: corev1.PodStatus{
-				ContainerStatuses: []corev1.ContainerStatus{
-					{Name: "main", ContainerID: "cri-o://" + containerID},
-				},
-			},
-		}
-		client := fake.NewSimpleClientset(ourPod)
-		w := newTestWriter(client, ns, node, containerID) // own id has no scheme
-
-		got, err := w.findOwnPod(context.Background())
-		require.NoError(t, err)
-		assert.Equal(t, "beyla", got.Name)
-	})
 }
 
 func TestFindDaemonSetOwner(t *testing.T) {
@@ -407,10 +316,9 @@ func TestFindDaemonSetOwner(t *testing.T) {
 	t.Run("returns owner ref for a daemonset-owned pod", func(t *testing.T) {
 		pod := makePod("beyla-xyz", ns, node, containerID, []metav1.OwnerReference{dsOwnerRef})
 		client := fake.NewSimpleClientset(pod)
-		w := newTestWriter(client, ns, node, containerID)
+		w := newTestWriter(client, pod)
 
-		owner, err := w.findDaemonSetOwner(context.Background())
-		require.NoError(t, err)
+		owner := w.findDaemonSetOwner()
 		require.NotNil(t, owner)
 		assert.Equal(t, "apps/v1", owner.APIVersion)
 		assert.Equal(t, "DaemonSet", owner.Kind)
@@ -425,20 +333,18 @@ func TestFindDaemonSetOwner(t *testing.T) {
 	t.Run("nil owner when pod has no daemonset owner", func(t *testing.T) {
 		pod := makePod("beyla-xyz", ns, node, containerID, []metav1.OwnerReference{rsOwnerRef})
 		client := fake.NewSimpleClientset(pod)
-		w := newTestWriter(client, ns, node, containerID)
+		w := newTestWriter(client, pod)
 
-		owner, err := w.findDaemonSetOwner(context.Background())
-		require.NoError(t, err)
+		owner := w.findDaemonSetOwner()
 		assert.Nil(t, owner)
 	})
 
 	t.Run("nil owner when pod has no owner references at all", func(t *testing.T) {
 		pod := makePod("beyla-xyz", ns, node, containerID, nil)
 		client := fake.NewSimpleClientset(pod)
-		w := newTestWriter(client, ns, node, containerID)
+		w := newTestWriter(client, pod)
 
-		owner, err := w.findDaemonSetOwner(context.Background())
-		require.NoError(t, err)
+		owner := w.findDaemonSetOwner()
 		assert.Nil(t, owner)
 	})
 
@@ -446,67 +352,12 @@ func TestFindDaemonSetOwner(t *testing.T) {
 		pod := makePod("beyla-xyz", ns, node, containerID,
 			[]metav1.OwnerReference{rsOwnerRef, dsOwnerRef})
 		client := fake.NewSimpleClientset(pod)
-		w := newTestWriter(client, ns, node, containerID)
+		w := newTestWriter(client, pod)
 
-		owner, err := w.findDaemonSetOwner(context.Background())
-		require.NoError(t, err)
+		owner := w.findDaemonSetOwner()
 		require.NotNil(t, owner)
 		assert.Equal(t, "DaemonSet", owner.Kind)
 		assert.Equal(t, "beyla", owner.Name)
-	})
-
-	t.Run("propagates pod lookup error", func(t *testing.T) {
-		client := fake.NewSimpleClientset()
-		w := newTestWriter(client, ns, node, containerID)
-
-		_, err := w.findDaemonSetOwner(context.Background())
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "own pod not found")
-	})
-}
-
-// installNodeNameFieldSelectorReactor makes the fake clientset honor a
-// `spec.nodeName=<name>` field selector on `list pods`, which it does not do
-// out of the box. Without this, every list returns every pod regardless of the
-// FieldSelector option, hiding the production code's filtering from the test.
-func installNodeNameFieldSelectorReactor(client *fake.Clientset) {
-	client.PrependReactor("list", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
-		listAction, ok := action.(clienttesting.ListAction)
-		if !ok {
-			return false, nil, nil
-		}
-		fs := listAction.GetListRestrictions().Fields
-		if fs == nil || fs.Empty() {
-			return false, nil, nil
-		}
-		nodeName, ok := fs.RequiresExactMatch("spec.nodeName")
-		if !ok {
-			return false, nil, nil
-		}
-
-		// Pull the underlying tracker through a non-reactor path by reading all
-		// pods and filtering. The fake clientset stores objects in a tracker we
-		// can access via the typed list call (re-entry is safe because we only
-		// match the original action via field selector).
-		all, err := client.Tracker().List(
-			schema.GroupVersionResource{Version: "v1", Resource: "pods"},
-			schema.GroupVersionKind{Version: "v1", Kind: "Pod"},
-			listAction.GetNamespace(),
-		)
-		if err != nil {
-			return true, nil, err
-		}
-		list, ok := all.(*corev1.PodList)
-		if !ok {
-			return true, nil, errors.New("unexpected list type from tracker")
-		}
-		filtered := &corev1.PodList{ListMeta: list.ListMeta}
-		for i := range list.Items {
-			if list.Items[i].Spec.NodeName == nodeName {
-				filtered.Items = append(filtered.Items, list.Items[i])
-			}
-		}
-		return true, filtered, nil
 	})
 }
 

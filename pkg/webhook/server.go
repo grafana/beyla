@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +14,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
@@ -62,7 +63,12 @@ const (
 )
 
 // NewServer creates a new webhook server
-func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
+func NewServer(ctx context.Context, cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) {
+	ownPod, err := loadOwnPod(ctx, ctxInfo)
+	if err != nil {
+		return nil, fmt.Errorf("starting webhook server, could not get own Pod: %w", err)
+	}
+
 	matcher := NewPodMatcher(cfg)
 
 	logger := slog.Default().With("component", "webhook-server")
@@ -79,14 +85,12 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		return nil, err
 	}
 
-	nodeName := ownNodeName()
-
 	initialCfg := buildInjectConfig(cfg, mutator.Endpoint(), mutator.Protocol())
 	stateHash := initialCfg.Hash()
 
 	logger.Info("SDK injection config established", "hash", stateHash)
 
-	stateWriter, err := NewStateConfigMapWriter(ctxInfo, nodeName)
+	stateWriter, err := NewStateConfigMapWriter(ctxInfo, ownPod)
 	if err != nil {
 		return nil, fmt.Errorf("error creating configmap state writer: %w", err)
 	}
@@ -112,7 +116,7 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 		stateWriter:            stateWriter,
 		eligibleDeployments:    eligible,
 		instrumentationManager: NewInstrumentationManager(cfg),
-		nodeName:               nodeName,
+		nodeName:               ownPod.Spec.NodeName,
 		uuid:                   uuid.NewString(),
 		stateHash:              stateHash,
 	}
@@ -122,6 +126,32 @@ func NewServer(cfg *beyla.Config, ctxInfo *global.ContextInfo) (*Server, error) 
 	s.initialPodScan.Store(true)
 
 	return s, nil
+}
+
+func loadOwnPod(ctx context.Context, ctxInfo *global.ContextInfo) (*corev1.Pod, error) {
+	// The kubelet publishes status.containerStatuses[].containerID (the field
+	// findOwnPod matches on) asynchronously, just after starting the container.
+	// Beyla is that container's entrypoint, so on a cold/slow node it routinely
+	// reaches this code before the status is populated and the lookup misses.
+	// Poll until it converges rather than failing the whole process on first try.
+	var ownPod *corev1.Pod
+	var findErr error
+	if err := wait.PollUntilContextTimeout(ctx, ownPodLookupPollInterval, ownPodLookupTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			ownPod, findErr = OwnPod(ctx, ctxInfo)
+			if findErr != nil {
+				slog.Debug("own pod not visible yet (kubelet may not have published the container status); retrying",
+					"component", "webhook-server", "error", findErr)
+				return false, nil
+			}
+			return true, nil
+		}); err != nil {
+		if findErr != nil {
+			return nil, fmt.Errorf("error finding daemonset (gave up after %s): %w", ownPodLookupTimeout, findErr)
+		}
+		return nil, fmt.Errorf("error finding daemonset: %w", err)
+	}
+	return ownPod, nil
 }
 
 // Start starts the webhook coordinator
@@ -527,17 +557,4 @@ func (s *Server) handleExternalWebhookEvent(event *informer.Event) bool {
 	}
 
 	return false
-}
-
-// ownNodeName returns the name of the node this Beyla instance is running on.
-// It reads NODE_NAME (set via the downward API in the DaemonSet manifest) and
-// falls back to os.Hostname().
-func ownNodeName() string {
-	if name := os.Getenv("NODE_NAME"); name != "" {
-		return name
-	}
-	if h, err := os.Hostname(); err == nil {
-		return h
-	}
-	return ""
 }

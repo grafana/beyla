@@ -12,9 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ti "go.opentelemetry.io/obi/pkg/test/integration"
+
 	"github.com/grafana/beyla/v3/internal/test/tools/docker"
 	"github.com/grafana/beyla/v3/internal/test/tools/jaeger"
-	ti "go.opentelemetry.io/obi/pkg/test/integration"
 )
 
 const jaegerQueryURL = "http://localhost:16686/api/traces"

@@ -57,7 +57,8 @@ type Process struct {
 func (tq *TracesQuery) FindBySpan(tags ...Tag) []Trace {
 	var matches []Trace
 	for _, trace := range tq.Data {
-		for _, span := range trace.Spans {
+		for i := range trace.Spans {
+			span := &trace.Spans[i]
 			diff := span.Diff(tags...)
 			if len(diff) == 0 {
 				matches = append(matches, trace)
@@ -70,11 +71,12 @@ func (tq *TracesQuery) FindBySpan(tags ...Tag) []Trace {
 
 func (t *Trace) FindByOperationName(operationName string, spanType string) []Span {
 	var matches []Span
-	for _, s := range t.Spans {
+	for i := range t.Spans {
+		s := &t.Spans[i]
 		if s.OperationName == operationName {
 			tag, _ := FindIn(s.Tags, "span.kind")
 			if spanType == "" || spanType == tag.Value {
-				matches = append(matches, s)
+				matches = append(matches, *s)
 			}
 		}
 	}
@@ -83,11 +85,12 @@ func (t *Trace) FindByOperationName(operationName string, spanType string) []Spa
 
 func (t *Trace) FindByOperationNameAndService(operationName, service string) []Span {
 	var matches []Span
-	for _, s := range t.Spans {
+	for i := range t.Spans {
+		s := &t.Spans[i]
 		if s.OperationName == operationName {
 			if p, ok := t.Processes[s.ProcessID]; ok {
 				if p.ServiceName == service {
-					matches = append(matches, s)
+					matches = append(matches, *s)
 				}
 			}
 		}
@@ -99,7 +102,8 @@ func (t *Trace) FindByOperationNameServiceAndKind(operationName, service, kind s
 	candidates := t.FindByOperationNameAndService(operationName, service)
 
 	var matches []Span
-	for _, s := range candidates {
+	for i := range candidates {
+		s := candidates[i]
 		if tag, ok := FindIn(s.Tags, "span.kind"); ok && tag.Value == kind {
 			matches = append(matches, s)
 		}
@@ -117,7 +121,8 @@ func (t *Trace) ParentOf(s *Span) (Span, bool) {
 	if parentID == "" {
 		return Span{}, false
 	}
-	for _, sp := range t.Spans {
+	for i := range t.Spans {
+		sp := t.Spans[i]
 		if sp.SpanID == parentID {
 			return sp, true
 		}
@@ -127,7 +132,8 @@ func (t *Trace) ParentOf(s *Span) (Span, bool) {
 
 func (t *Trace) ChildrenOf(parentID string) []Span {
 	var matches []Span
-	for _, sp := range t.Spans {
+	for i := range t.Spans {
+		sp := t.Spans[i]
 		for _, ref := range sp.References {
 			if ref.RefType == "CHILD_OF" && ref.SpanID == parentID {
 				matches = append(matches, sp)

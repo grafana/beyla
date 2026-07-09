@@ -24,6 +24,7 @@ func FromOBI(c *obi.Config) *Config {
 		// to avoid that convert panics,
 		".obi":              cfgutil.SkipConversion,
 		".TracesReceiver":   cfgutil.SkipConversion,
+		".SigilExport":      cfgutil.SkipConversion,
 		".Processes":        cfgutil.SkipConversion,
 		".Grafana":          cfgutil.SkipConversion,
 		".Topology":         cfgutil.SkipConversion,

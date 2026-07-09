@@ -101,9 +101,12 @@ type Config struct {
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
 	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
-	Metrics      perapp.MetricsConfig          `yaml:"metrics"`
-	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
-	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+	// We use a custom env prefix to ensure the OTLP_EXPORTER environment variables don't
+	// override our Sigil export URL
+	SigilExport  otelcfg.TracesConfig  `yaml:"sigil_export" envPrefix:"BEYLA_SIGIL_"`
+	Metrics      perapp.MetricsConfig  `yaml:"metrics"`
+	Prometheus   prom.PrometheusConfig `yaml:"prometheus_export"`
+	TracePrinter debug.TracePrinter    `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	//
@@ -507,6 +510,9 @@ func normalizeConfig(c *Config) {
 
 	c.OTELMetrics.ExtraSpanResourceLabels = appendDefaultResourceLabels(c.OTELMetrics.ExtraSpanResourceLabels)
 	c.Prometheus.ExtraSpanResourceLabels = appendDefaultResourceLabels(c.Prometheus.ExtraSpanResourceLabels)
+
+	// GenAI APIs are HTTP at the moment, so we only enable HTTP instrumentation for Sigil
+	c.SigilExport.Instrumentations = []instrumentations.Instrumentation{instrumentations.InstrumentationHTTP}
 }
 
 func appendDefaultResourceLabels(dst []string) []string {

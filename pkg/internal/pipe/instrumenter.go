@@ -59,6 +59,8 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 
 	clusterConnectorsSubpipeline(swi, ctxInfo, config)
 
+	sigilExportSubpipeline(swi, ctxInfo, config, selectorCfg)
+
 	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
 
 	return swi.Instance(ctx)
@@ -106,4 +108,23 @@ func clusterConnectorsSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextI
 		&config.Traces,
 		unresolvedNames(config),
 		externalTraces))
+}
+
+func sigilExportSubpipeline(swi *swarm.Instancer, ctxInfo *global.ContextInfo, config *beyla.Config, selectorCfg *attributes.SelectorConfig) {
+	if !config.SigilExport.Enabled() {
+		return
+	}
+
+	ilog().Info("Starting Sigil trace exporter")
+
+	genAITraces := msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "sigilExportTraces")
+	swi.Add(traces.SelectGenAI(
+		ctxInfo.OverrideAppExportQueue,
+		genAITraces,
+	))
+
+	swi.Add(otel.SigilExport(ctxInfo,
+		&config.SigilExport,
+		selectorCfg,
+		genAITraces))
 }

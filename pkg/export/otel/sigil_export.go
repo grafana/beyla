@@ -87,7 +87,17 @@ func (se *sigilExport) provideLoop(ctx context.Context) {
 }
 
 func (se *sigilExport) processSpans(ctx context.Context, exp exporter.Traces, sampler sdktrace.Sampler, spans []request.Span) {
-	spanGroups := tracesgen.GroupSpans(ctx, spans, se.traceAttrs, sampler, se.is)
+	genAISpans := make([]request.Span, 0, len(spans))
+
+	// filter out all spans that are not GenAI
+	for i := range spans {
+		span := &spans[i]
+		if span.IsHTTPSpan() && request.IsGenAISubtype(span.SubType) {
+			genAISpans = append(genAISpans, spans[i])
+		}
+	}
+
+	spanGroups := tracesgen.GroupSpans(ctx, genAISpans, se.traceAttrs, sampler, se.is)
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) == 0 {
 			continue
@@ -108,11 +118,11 @@ func (se *sigilExport) processSpans(ctx context.Context, exp exporter.Traces, sa
 }
 
 func stampSigilRequiredAttributes(traces ptrace.Traces) {
-	rss := traces.ResourceSpans()
-	for i := 0; i < rss.Len(); i++ {
-		sss := rss.At(i).ScopeSpans()
-		for j := 0; j < sss.Len(); j++ {
-			spans := sss.At(j).Spans()
+	rs := traces.ResourceSpans()
+	for i := 0; i < rs.Len(); i++ {
+		scs := rs.At(i).ScopeSpans()
+		for j := 0; j < scs.Len(); j++ {
+			spans := scs.At(j).Spans()
 			for k := 0; k < spans.Len(); k++ {
 				attrs := spans.At(k).Attributes()
 				attrs.PutStr(sigilGenerationIDKey, "gen_"+uuid.New().String())

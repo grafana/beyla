@@ -86,17 +86,7 @@ func (se *sigilExport) provideLoop(ctx context.Context) {
 	})
 }
 
-func (se *sigilExport) processSpans(ctx context.Context, exp exporter.Traces, sampler sdktrace.Sampler, spans []request.Span) {
-	genAISpans := make([]request.Span, 0, len(spans))
-
-	// filter out all spans that are not GenAI
-	for i := range spans {
-		span := &spans[i]
-		if span.IsHTTPSpan() && request.IsGenAISubtype(span.SubType) {
-			genAISpans = append(genAISpans, spans[i])
-		}
-	}
-
+func (se *sigilExport) processSpans(ctx context.Context, exp exporter.Traces, sampler sdktrace.Sampler, genAISpans []request.Span) {
 	spanGroups := tracesgen.GroupSpans(ctx, genAISpans, se.traceAttrs, sampler, se.is)
 	for _, spanGroup := range spanGroups {
 		if len(spanGroup) == 0 {

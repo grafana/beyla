@@ -27,6 +27,7 @@ func filterGenAI(spans []request.Span) []request.Span {
 	var genAI []request.Span
 	for i := range spans {
 		if spans[i].Service.ExportModes.CanExportTraces() &&
+			spans[i].IsHTTPSpan() &&
 			request.IsGenAISubtype(spans[i].SubType) {
 			genAI = append(genAI, spans[i])
 		}

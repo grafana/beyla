@@ -35,7 +35,7 @@ func TestSigilSpans(t *testing.T) {
 func testSigilTraces(t *testing.T) {
 	var trace jaeger.Trace
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
-		ti.DoHTTPGet(t, "http://localhost:8080/chat", 200)
+		ti.DoHTTPGet(ct, "http://localhost:8080/chat", 200)
 		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=chat%20%gpt-4o-mini")
 		require.NoError(ct, err)
 		if resp == nil {

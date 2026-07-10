@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -24,6 +23,7 @@ import (
 	"github.com/grafana/beyla/v3/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v3/pkg/internal/testutil"
 )
 
 const timeout = 3 * time.Second
@@ -33,8 +33,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	timeNow = now.Now
 
 	ctx := t.Context()
-	openPort, err := test.FreeTCPPort()
-	require.NoError(t, err)
+	openPort := testutil.FreeTCPPort(t)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
 	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics do not consider the cpu_mode
@@ -82,7 +81,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	})
 
 	// THEN the metrics are exported adding system/user/wait times into a single datapoint
-	test.Eventually(t, timeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		exported := getMetrics(t, promURL)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo"} 6`)
 		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo"} 60`)
@@ -92,7 +91,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 		assert.Contains(t, exported, `process_disk_io_bytes_total{process_command="bar"} 975`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{process_command="foo"} 46`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{process_command="bar"} 4`)
-	})
+	}, timeout, time.Millisecond)
 
 	// AND WHEN new metrics are received
 	procsInput.Send([]*process.Status{
@@ -105,7 +104,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 	})
 
 	// THEN the counter is updated by adding values and the gauges change their values
-	test.Eventually(t, timeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		exported := getMetrics(t, promURL)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{process_command="foo"} 7`)
 		assert.Contains(t, exported, `process_cpu_time_seconds_total{process_command="foo"} 66`)
@@ -115,7 +114,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 		assert.Contains(t, exported, `process_disk_io_bytes_total{process_command="bar"} 975`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{process_command="foo"} 50`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{process_command="bar"} 4`)
-	})
+	}, timeout, time.Millisecond)
 }
 
 func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
@@ -123,8 +122,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	timeNow = now.Now
 
 	ctx := t.Context()
-	openPort, err := test.FreeTCPPort()
-	require.NoError(t, err)
+	openPort := testutil.FreeTCPPort(t)
 	promURL := fmt.Sprintf("http://127.0.0.1:%d/metrics", openPort)
 
 	// GIVEN a Prometheus Metrics Exporter whose process CPU metrics consider the cpu_mode
@@ -166,7 +164,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	})
 
 	// THEN the metrics are exported aggregated by system/user/wait times
-	test.Eventually(t, timeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		exported := getMetrics(t, promURL)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="user",process_command="foo"} 1`)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="system",process_command="foo"} 2`)
@@ -178,7 +176,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 		assert.Contains(t, exported, `process_disk_io_bytes_total{disk_io_direction="write",process_command="foo"} 456`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="transmit",process_command="foo"} 3`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="receive",process_command="foo"} 1`)
-	})
+	}, timeout, time.Millisecond)
 
 	// AND WHEN new metrics are received
 	procsInput.Send([]*process.Status{
@@ -191,7 +189,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 	})
 
 	// THEN the counter is updated by adding values and the gauges change their values
-	test.Eventually(t, timeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		exported := getMetrics(t, promURL)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="user",process_command="foo"} 2`)
 		assert.Contains(t, exported, `process_cpu_utilization_ratio{cpu_mode="system",process_command="foo"} 1`)
@@ -203,7 +201,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 		assert.Contains(t, exported, `process_disk_io_bytes_total{disk_io_direction="write",process_command="foo"} 458`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="transmit",process_command="foo"} 33`)
 		assert.Contains(t, exported, `process_network_io_bytes_total{network_io_direction="receive",process_command="foo"} 11`)
-	})
+	}, timeout, time.Millisecond)
 }
 
 type syncedClock struct {

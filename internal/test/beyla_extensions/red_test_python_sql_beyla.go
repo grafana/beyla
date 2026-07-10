@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,7 +34,7 @@ func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string
 	pq := promtest.Client{HostPort: prometheusHostPort}
 	var results []promtest.Result
 	var err error
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		var err error
 		results, err = pq.Query(`db_client_operation_duration_seconds_count{` +
 			`db_operation_name="SELECT",` +
@@ -44,7 +43,7 @@ func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string
 		enoughPromResults(t, results)
 		val := totalPromCount(t, results)
 		assert.LessOrEqual(t, 3, val)
-	})
+	}, testTimeout, time.Millisecond)
 
 	// Ensure we don't see any http requests
 	results, err = pq.Query(`http_server_request_duration_seconds_count{}`)
@@ -52,7 +51,7 @@ func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string
 	require.Equal(t, len(results), 0)
 
 	// Look for a trace with SELECT accounting.contacts
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&operation=SELECT%20accounting.contacts")
 		require.NoError(t, err)
 		if resp == nil {
@@ -63,7 +62,7 @@ func testREDMetricsForPythonSQLLibrary(t *testing.T, url, comm, namespace string
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&tq))
 		traces := tq.FindBySpan(jaeger.Tag{Key: "db.operation.name", Type: "string", Value: "SELECT"})
 		assert.LessOrEqual(t, 1, len(traces))
-	}, test.Interval(100*time.Millisecond))
+	}, testTimeout, 100*time.Millisecond)
 
 	// Ensure we don't find any HTTP traces, since we filter them out
 	resp, err := http.Get(jaegerQueryURL + "?service=" + comm + "&operation=GET%20%2Fquery")

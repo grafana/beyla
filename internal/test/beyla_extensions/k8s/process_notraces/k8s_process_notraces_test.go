@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
@@ -75,11 +75,11 @@ func waitForSomeMetrics() features.Feature {
 		Assess("smoke test", func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 			pq := promtest.Client{HostPort: prometheusHostPort}
 			// timeout needs to be high, as the K8s cluster needs to be spinned up at this right moment
-			test.Eventually(t, 5*time.Minute, func(t require.TestingT) {
+			require.EventuallyWithT(t, func(t *assert.CollectT) {
 				results, err := pq.Query("process_cpu_time_seconds_total")
 				require.NoError(t, err)
 				require.NotEmpty(t, results)
-			})
+			}, 5*time.Minute, time.Second)
 			return ctx
 		}).Feature()
 }

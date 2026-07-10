@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -61,32 +61,32 @@ func TestWebhookMetrics(t *testing.T) {
 	t.Run("matched_pod_emits_success", func(t *testing.T) {
 		sendAdmissionReview(t, makeAdmissionReview("test-ns", "my-app", nil, nil))
 
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		require.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`beyla_sdk_injection_requests_total{outcome="success"}`)
 			require.NoError(t, err)
 			require.NotEmpty(t, results)
-		})
+		}, testTimeout, 100*time.Millisecond)
 	})
 
 	t.Run("unmatched_namespace_emits_no_matching_selector", func(t *testing.T) {
 		sendAdmissionReview(t, makeAdmissionReview("other-ns", "my-app", nil, nil))
 
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		require.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`beyla_sdk_injection_requests_total{outcome="no_matching_selector"}`)
 			require.NoError(t, err)
 			require.NotEmpty(t, results)
-		})
+		}, testTimeout, 100*time.Millisecond)
 	})
 
 	t.Run("already_instrumented_pod_emits_already_instrumented", func(t *testing.T) {
 		labels := map[string]string{"com.grafana.beyla/instrumented": "v0.1.0"}
 		sendAdmissionReview(t, makeAdmissionReview("test-ns", "instrumented-app", labels, nil))
 
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		require.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`beyla_sdk_injection_requests_total{outcome="already_instrumented"}`)
 			require.NoError(t, err)
 			require.NotEmpty(t, results)
-		})
+		}, testTimeout, 100*time.Millisecond)
 	})
 }
 
@@ -133,12 +133,12 @@ func generateTestCerts(dir string) error {
 // waitForWebhookReady polls the webhook health endpoint until it responds.
 func waitForWebhookReady(t *testing.T) {
 	t.Helper()
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		resp, err := insecureClient.Get(webhookHealthURL)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
-	})
+	}, testTimeout, 100*time.Millisecond)
 }
 
 // makeAdmissionReview builds a minimal AdmissionReview for a pod in the given namespace.

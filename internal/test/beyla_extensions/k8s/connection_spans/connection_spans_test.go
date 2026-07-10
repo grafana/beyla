@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -89,10 +88,10 @@ func featureConnectionSpans() features.Feature {
 		Assess("it doesn't have connection spans for internal traffic",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				// first, make sure that we have traces for the pinger pod
-				test.Eventually(t, testTimeout, func(t require.TestingT) {
+				assert.EventuallyWithT(t, func(t *assert.CollectT) {
 					tq := getTraces(t, "?service=testserver")
 					assert.NotEmpty(t, tq.Data)
-				}, test.Interval(200*time.Millisecond))
+				}, testTimeout, 200*time.Millisecond)
 				// BUT we don't have any connection spans
 				tq := getTraces(t, "?service=testserver&tags="+
 					// matching also client.address to ignore the first unresolved pings, before the
@@ -110,12 +109,12 @@ func featureConnectionSpans() features.Feature {
 				require.Equal(t, http.StatusOK, resp.StatusCode)
 
 				// check that now we get the connection spans
-				test.Eventually(t, testTimeout, func(t require.TestingT) {
+				assert.EventuallyWithT(t, func(t *assert.CollectT) {
 					tq := getTraces(t, "?service=testserver&operation="+
 						url.QueryEscape("GET /testing-external-traces")+"&tags="+
 						url.QueryEscape(`{"beyla.topology":"external"}`))
 					require.Len(t, tq.Data, 1)
-				})
+				}, testTimeout, time.Millisecond)
 
 				return ctx
 			},

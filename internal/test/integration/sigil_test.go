@@ -36,7 +36,9 @@ func testSigilTraces(t *testing.T) {
 	var trace jaeger.Trace
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		ti.DoHTTPGet(ct, "http://localhost:8080/chat", 200)
-		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=chat%20%gpt-4o-mini")
+
+		// ensure we can find the GenAI span
+		resp, err := http.Get(jaegerQueryURL + "?service=testserver&operation=chat%20gpt-4o-mini")
 		require.NoError(ct, err)
 		if resp == nil {
 			return
@@ -61,5 +63,15 @@ func testSigilTraces(t *testing.T) {
 
 		require.Truef(ct, ok, "gen_ai.conversation.id not found in tags: %v", span.Tags)
 		assert.NotEmpty(ct, conversationId.Value)
+
+		// ensure we didn't send any other spans to the Sigil endpoint
+		resp, err = http.Get(jaegerQueryURL + "?service=testserver&operation=GET%20%2Fchat")
+		require.NoError(ct, err)
+		if resp == nil {
+			return
+		}
+		require.Equal(ct, http.StatusOK, resp.StatusCode)
+		require.NoError(ct, json.NewDecoder(resp.Body).Decode(&tq))
+		require.Len(ct, tq.Data, 0)
 	}, testTimeout, 1*time.Second)
 }

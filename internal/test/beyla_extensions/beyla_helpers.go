@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
@@ -43,12 +43,12 @@ func waitForSQLTestComponents(t *testing.T, url, subpath string) {
 func testPrometheusBeylaBuildInfo(t *testing.T) {
 	pq := promtest.Client{HostPort: prometheusHostPort}
 	var results []promtest.Result
-	test.Eventually(t, testTimeout, func(t require.TestingT) {
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		var err error
 		results, err = pq.Query(`beyla_build_info{target_lang="go"}`)
 		require.NoError(t, err)
 		require.NotEmpty(t, results)
-	})
+	}, testTimeout, time.Millisecond)
 }
 
 // testPrometheusNoBeylaEvents checks that Beyla self-instrumentation is disabled

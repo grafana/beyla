@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -96,7 +95,7 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 		_ = cmd.Process.Kill()
 	}()
 
-	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
+	require.EventuallyWithT(t, 5*time.Second, func(t *assert.CollectT) {
 		// Given a process harvester configured to showw the full command line
 		cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
 		h := newHarvester(&CollectConfig{}, cache)

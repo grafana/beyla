@@ -11,7 +11,6 @@ import (
 	"time"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer"
@@ -300,9 +299,9 @@ func TestConnectTraces(t *testing.T) {
 		PeerName: "3.3.2.6",
 	}})
 
-	test.Eventually(t, 5*time.Second, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		require.NotEmpty(t, mts.getConsumedTraces())
-	})
+	}, 5*time.Second, time.Millisecond)
 	grouped := mts.getConsumedTraces()
 	require.Len(t, grouped, 1)
 

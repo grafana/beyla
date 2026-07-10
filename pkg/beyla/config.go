@@ -101,9 +101,9 @@ type Config struct {
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
 	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
 	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
-	// We use a custom env prefix to ensure the OTLP_EXPORTER environment variables don't
-	// override our Sigil export URL
-	SigilExport  otelcfg.TracesConfig  `yaml:"sigil_export" envPrefix:"BEYLA_SIGIL_"`
+	// Same as the otel_traces_export option, except all environment variables
+	// are prefixed with BEYLA_GRAFANA_AI_
+	SigilExport  otelcfg.TracesConfig  `yaml:"sigil_export" envPrefix:"BEYLA_GRAFANA_AI_"`
 	Metrics      perapp.MetricsConfig  `yaml:"metrics"`
 	Prometheus   prom.PrometheusConfig `yaml:"prometheus_export"`
 	TracePrinter debug.TracePrinter    `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`

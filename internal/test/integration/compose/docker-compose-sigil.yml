@@ -48,7 +48,7 @@ services:
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_OPEN_PORT: 8080
-      BEYLA_SIGIL_OTEL_EXPORTER_OTLP_ENDPOINT: "http://otelcol:4318"
+      BEYLA_GRAFANA_AI_OTEL_EXPORTER_OTLP_ENDPOINT: "http://otelcol:4318"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

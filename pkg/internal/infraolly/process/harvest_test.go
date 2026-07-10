@@ -95,7 +95,7 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 		_ = cmd.Process.Kill()
 	}()
 
-	require.EventuallyWithT(t, 5*time.Second, func(t *assert.CollectT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Given a process harvester configured to showw the full command line
 		cache, _ := simplelru.NewLRU[app.PID, *linuxProcess](math.MaxInt, nil)
 		h := newHarvester(&CollectConfig{}, cache)
@@ -112,7 +112,7 @@ func TestLinuxHarvester_Harvest_FullCommandLine(t *testing.T) {
 		assert.Equal(t, "/bin/sleep 1m", status.ID.CommandLine)
 		assert.Equal(t, "sleep", status.ID.Command)
 		assert.Equal(t, []string{"1m"}, status.ID.CommandArgs)
-	})
+	}, 5*time.Second, time.Millisecond)
 }
 
 func TestLinuxHarvester_Do_InvalidateCache_DifferentCmd(t *testing.T) {

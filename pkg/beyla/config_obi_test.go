@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -112,8 +111,8 @@ grafana:
 	}})
 
 	// THEN it sends the traces to the provided endpoint, with the Grafana Cloud authentication headers
-	test.Eventually(t, 3*time.Second, func(t require.TestingT) {
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 		assert.Equal(t, "Basic MTIzNDU6YWZmYWZhZmFhZmtk", *authHeader.Load())
-	})
+	}, 3*time.Second, time.Millisecond)
 }

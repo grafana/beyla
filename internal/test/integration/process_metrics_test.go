@@ -6,8 +6,8 @@ import (
 	"path"
 	"strconv"
 	"testing"
+	"time"
 
-	"github.com/mariomac/guara/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -65,21 +65,21 @@ func testProcesses(extraQuery string, attribMatcher map[string]string) func(t *t
 		utilizationLen := 0
 		// cpu load is so low in integration tests that we don't check if the
 		// value is > 0
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`process_cpu_utilization_ratio` + extraQuery)
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
 			utilizationLen = len(results)
-		})
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		}, testTimeout, time.Millisecond)
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`process_cpu_time_seconds_total` + extraQuery)
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
 			assert.Len(t, results, utilizationLen)
-		})
+		}, testTimeout, time.Millisecond)
 		// checking that the memory is present and has a reasonable values
 		memory := map[string]int{}
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`process_memory_usage_bytes` + extraQuery)
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
@@ -91,9 +91,9 @@ func testProcesses(extraQuery string, attribMatcher map[string]string) func(t *t
 				require.Greater(t, physicalMem, 1_000_000)
 				memory[instanceID(result)] = physicalMem
 			}
-		})
+		}, testTimeout, time.Millisecond)
 		// checking that virtual memory has larger value than physical memory
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`process_memory_virtual_bytes` + extraQuery)
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
@@ -105,17 +105,17 @@ func testProcesses(extraQuery string, attribMatcher map[string]string) func(t *t
 					instanceID(result))
 				require.Greater(t, virtualMem, physicalMem)
 			}
-		})
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		}, testTimeout, time.Millisecond)
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`process_disk_io_bytes_total` + extraQuery)
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
-		})
-		test.Eventually(t, testTimeout, func(t require.TestingT) {
+		}, testTimeout, time.Millisecond)
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			results, err := pq.Query(`process_network_io_bytes_total` + extraQuery)
 			require.NoError(t, err)
 			matchAttributes(t, results, attribMatcher)
-		})
+		}, testTimeout, time.Millisecond)
 	}
 }
 

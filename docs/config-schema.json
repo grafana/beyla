@@ -2631,7 +2631,7 @@
     },
     "sigil_export": {
       "$ref": "#/$defs/TracesConfig",
-      "description": "We use a custom env prefix to ensure the OTLP_EXPORTER environment variables don't override our Sigil export URL"
+      "description": "Same as the otel_traces_export option, except all environment variables are prefixed with BEYLA_GRAFANA_AI_"
     },
     "stats": {
       "$ref": "#/$defs/StatsConfig",

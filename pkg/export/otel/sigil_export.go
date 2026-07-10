@@ -99,6 +99,9 @@ func (se *sigilExport) processSpans(ctx context.Context, exp exporter.Traces, sa
 		envResourceAttrs := otelcfg.ResourceAttrsFromEnv(&sample.Span.Service)
 		traces := tracesgen.GenerateTracesWithAttributes(
 			se.attributeCache, &sample.Span.Service, envResourceAttrs, se.nodeMeta, spanGroup, ReporterName)
+		// we must stamp the attributes for the conversation.id after we've generated the spans from OBI.
+		// OBI has logic that sometimes it sets the conversation.id if it's available, in that case we want to
+		// keep that id, otherwise we set the conversation.id to match the response.id.
 		stampSigilRequiredAttributes(traces)
 		se.log.Debug("exporting sigil traces", "count", traces.SpanCount())
 		if err := exp.ConsumeTraces(ctx, traces); err != nil {

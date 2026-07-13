@@ -126,6 +126,8 @@ spec:
           {{- if .Values.contextPropagation.enabled }}
             - mountPath: /sys/fs/cgroup
               name: cgroup
+            - mountPath: /sys/kernel/tracing
+              name: tracefs
           {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -158,6 +160,9 @@ spec:
         - name: cgroup
           hostPath:
             path: /sys/fs/cgroup
+        - name: tracefs
+          hostPath:
+            path: /sys/kernel/tracing
       {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

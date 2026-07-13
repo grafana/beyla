@@ -270,6 +270,7 @@ apply_go_import_path_transforms() {
         -e 's|^//go:build ignore$|//go:build integration|' \
         -e "s|${OBI_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/testgenerated/integration|g" \
         -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/testgenerated/tools|g" \
+        -e "s|${OBI_MODULE}/internal/test/weavercheck|${BEYLA_MODULE}/internal/testgenerated/weavercheck|g" \
         -e "s|${BEYLA_MODULE}/internal/test/integration|${BEYLA_MODULE}/internal/testgenerated/integration|g" \
         -e "s|${BEYLA_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/testgenerated/tools|g" \
         -e "s|// import \"${OBI_MODULE}/internal/test/integration[^\"]*\"||g" \
@@ -340,6 +341,32 @@ copy_test_tools() {
         find "internal/testgenerated/tools" -name "*.go" -type f | while read -r file; do
             sed_i -e "s|${OBI_MODULE}/internal/test/tools|${BEYLA_MODULE}/internal/testgenerated/tools|g" "$file"
         done
+    fi
+}
+
+copy_weavercheck() {
+    # The new OBI revision extracted the transport-agnostic weaver live-check
+    # parsing/validation into go.opentelemetry.io/obi/internal/test/weavercheck,
+    # imported by both the integration suite (weaver.go) and the OATS harness.
+    # OBI keeps it in its ROOT module so both consumers can import it. Mirror
+    # that: copy it into a package of the MAIN Beyla module so the generated
+    # integration package and the separate OATS harness module can both import
+    # it via the Beyla path.
+    local src=".obi-src/internal/test/weavercheck"
+    local dest="internal/testgenerated/weavercheck"
+    if [[ -d "$src" ]]; then
+        echo "  Copying weavercheck package..."
+        rm -rf "$dest"
+        mkdir -p "$dest"
+        # Copy only the source (not weavercheck_test.go — avoid adding an
+        # untagged standalone unit test to the Beyla module).
+        cp "$src/weavercheck.go" "$dest/"
+        # Strip the canonical-import-path comment so the package can be
+        # imported via the Beyla path. Do NOT add a //go:build integration tag:
+        # the OATS harness is built by Ginkgo without that tag and must still
+        # see the package (matches OBI, where the file has no build tag).
+        sed_i -e "s|// import \"${OBI_MODULE}/internal/test/weavercheck\"||g" \
+            "$dest/weavercheck.go"
     fi
 }
 
@@ -620,6 +647,30 @@ rewrite_oats_go_mod() {
         # directives) to the Beyla module path. Use ${BEYLA_MODULE} (with /v3) to match
         # the Go import transforms applied to .go files by transform_oats_go_files().
         sed_i -e "s|${OBI_MODULE}/internal/test/oats|${BEYLA_MODULE}/internal/testgenerated/oats|g" "$modfile"
+
+        # The upstream OATS modules require the OBI ROOT module (added for the
+        # weavercheck package) via a local replace to the repo root. In Beyla
+        # the repo root IS the Beyla module, so repoint both the require and the
+        # replace at ${BEYLA_MODULE}. After the oats-path rewrite above, the only
+        # remaining go.opentelemetry.io/obi tokens are this root require and
+        # replace (the go.opentelemetry.io/{otel,collector,proto,auto} deps and
+        # the prose comment mentioning the OBI module are untouched).
+        # "../../../.." from internal/testgenerated/oats/{harness,http,…} is the
+        # Beyla repo root, whose module path is ${BEYLA_MODULE}, so the replace
+        # now matches and provides …/internal/testgenerated/weavercheck.
+        # The require version must carry the module's major-version suffix
+        # (Go rejects "v0.0.0" for a /v3 module path), so bump v0.0.0 → v3.0.0;
+        # the local replace makes the exact version immaterial at build time.
+        sed_i \
+            -e "s|${OBI_MODULE} v0.0.0|${BEYLA_MODULE} v3.0.0|g" \
+            -e "s|replace ${OBI_MODULE} =>|replace ${BEYLA_MODULE} =>|g" \
+            "$modfile"
+
+        # Keep the compiled Ginkgo version in lockstep with the CLI installed
+        # from internal/tools/go.mod (v2.30.0). The upstream OATS modules pin
+        # v2.28.1, which triggers a "Ginkgo detected a version mismatch"
+        # failure against the newer CLI. Update this if that pin changes.
+        sed_i -e "s|github.com/onsi/ginkgo/v2 v2.28.1|github.com/onsi/ginkgo/v2 v2.30.0|g" "$modfile"
     done
 }
 
@@ -636,6 +687,21 @@ apply_oats_behavioral_transforms() {
     local jobs="$1"
     echo "  Applying OBI → Beyla behavioral transforms to OATs..."
     find "$OATS_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
+}
+
+tidy_oats_go_mods() {
+    # The rewrites above introduce a new require (the Beyla root module, for
+    # weavercheck) and bump the Ginkgo pin, so each OATS module's go.sum is now
+    # stale ("go: updates to go.mod needed; to update it: go mod tidy"). Tidy
+    # every generated OATS module. This needs module-cache/network access,
+    # consistent with the vendor-obi-tests / copy-obi-vendor make targets that
+    # already run go get / go mod tidy / go mod vendor.
+    echo "  Tidying generated OATs modules..."
+    # Tidy the shared harness first (group modules replace it via ../harness).
+    for modfile in "$OATS_DEST/harness/go.mod" $(find "$OATS_DEST" -name go.mod -type f ! -path "*/harness/go.mod"); do
+        [[ -f "$modfile" ]] || continue
+        ( cd "$(dirname "$modfile")" && go mod tidy )
+    done
 }
 
 # =============================================================================
@@ -709,6 +775,7 @@ generate() {
     copy_beyla_manifests
     copy_discovered_go_subpackages
     copy_test_tools
+    copy_weavercheck
     copy_beyla_extensions
     transform_go_imports_and_paths "$jobs"
     apply_component_consolidation
@@ -730,6 +797,7 @@ generate() {
     rewrite_oats_go_mod
     transform_oats_go_files "$jobs"
     apply_oats_behavioral_transforms "$jobs"
+    tidy_oats_go_mods
 
     # -----------------------------------------------------------------
     # VM test infrastructure

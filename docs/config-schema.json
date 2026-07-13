@@ -2629,6 +2629,10 @@
       ],
       "x-env-var": "BEYLA_SHUTDOWN_TIMEOUT"
     },
+    "sigil_export": {
+      "$ref": "#/$defs/TracesConfig",
+      "description": "Same as the otel_traces_export option, except all environment variables are prefixed with BEYLA_GRAFANA_AI_"
+    },
     "stats": {
       "$ref": "#/$defs/StatsConfig",
       "description": "Stats configuration for Stats Observability feature"

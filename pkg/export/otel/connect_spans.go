@@ -7,24 +7,11 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configgrpc"
-	"go.opentelemetry.io/collector/config/confighttp"
-	"go.opentelemetry.io/collector/config/configopaque"
-	"go.opentelemetry.io/collector/config/configoptional"
-	"go.opentelemetry.io/collector/config/configretry"
-	"go.opentelemetry.io/collector/config/configtls"
-	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
-	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.opentelemetry.io/collector/exporter/otlpexporter"
-	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
-	"go.opentelemetry.io/otel/trace/noop"
-	"go.uber.org/zap"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
@@ -135,7 +122,7 @@ func (emptyHost) GetExtensions() map[component.ID]component.Component {
 }
 
 func (tr *connectionSpansExport) provideLoop(ctx context.Context) {
-	exp, err := tr.getTracesExporter(ctx)
+	exp, err := createTracesExporter(ctx, tr.cfg, tr.log)
 	if err != nil {
 		tr.log.Error("error creating traces exporter", "error", err)
 		return
@@ -155,153 +142,6 @@ func (tr *connectionSpansExport) provideLoop(ctx context.Context) {
 	swarms.ForEachInput(ctx, tr.input, tr.log.Debug, func(spans []request.Span) {
 		tr.processSpans(ctx, exp, spans)
 	})
-}
-
-//nolint:cyclop
-func (tr *connectionSpansExport) getTracesExporter(ctx context.Context) (exporter.Traces, error) {
-	switch proto := tr.cfg.GetProtocol(); proto {
-	case otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
-		tr.log.Debug("instantiating HTTP TracesReporter", "protocol", proto)
-		var err error
-
-		opts, err := otelcfg.HTTPTracesEndpointOptions(tr.cfg)
-		if err != nil {
-			tr.log.Error("can't get HTTP traces endpoint options", "error", err)
-			return nil, err
-		}
-		factory := otlphttpexporter.NewFactory()
-		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
-		config.QueueConfig = getQueueConfig(tr.cfg)
-		config.RetryConfig = getRetrySettings(tr.cfg)
-		config.ClientConfig = confighttp.ClientConfig{
-			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
-			TLS: configtls.ClientConfig{
-				Insecure:           opts.Insecure,
-				InsecureSkipVerify: tr.cfg.InsecureSkipVerify,
-			},
-			Headers: convertHeaders(opts.Headers),
-		}
-		tr.log.Debug("getTracesExporter: confighttp.ClientConfig created", "endpoint", config.ClientConfig.Endpoint)
-		set := getTraceSettings(factory.Type())
-		exp, err := factory.CreateTraces(ctx, set, config)
-		if err != nil {
-			tr.log.Error("can't create OTLP HTTP traces exporter", "error", err)
-			return nil, err
-		}
-		// TODO: remove this once the batcher helper is added to otlphttpexporter
-		return exporterhelper.NewTraces(ctx, set, tr.cfg,
-			exp.ConsumeTraces,
-			exporterhelper.WithStart(exp.Start),
-			exporterhelper.WithShutdown(exp.Shutdown),
-			exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
-			exporterhelper.WithQueue(config.QueueConfig),
-			exporterhelper.WithRetry(config.RetryConfig))
-	case otelcfg.ProtocolGRPC:
-		tr.log.Debug("instantiating GRPC TracesReporter", "protocol", proto)
-		var err error
-		opts, err := otelcfg.GRPCTracesEndpointOptions(tr.cfg)
-		if err != nil {
-			tr.log.Error("can't get GRPC traces endpoint options", "error", err)
-			return nil, err
-		}
-		endpoint, _, err := otelcfg.ParseTracesEndpoint(tr.cfg)
-		if err != nil {
-			tr.log.Error("can't parse GRPC traces endpoint", "error", err)
-			return nil, err
-		}
-		factory := otlpexporter.NewFactory()
-		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
-		config.QueueConfig = getQueueConfig(tr.cfg)
-		config.RetryConfig = getRetrySettings(tr.cfg)
-		config.ClientConfig = configgrpc.ClientConfig{
-			Endpoint: endpoint.String(),
-			TLS: configtls.ClientConfig{
-				Insecure:           opts.Insecure,
-				InsecureSkipVerify: tr.cfg.InsecureSkipVerify,
-			},
-			Headers: convertHeaders(opts.Headers),
-		}
-		set := getTraceSettings(factory.Type())
-		exp, err := factory.CreateTraces(ctx, set, config)
-		if err != nil {
-			return nil, err
-		}
-		return exp, nil
-	default:
-		tr.log.Error(fmt.Sprintf("invalid protocol value: %q. Accepted values are: %s, %s, %s",
-			proto, otelcfg.ProtocolGRPC, otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf))
-		return nil, fmt.Errorf("invalid protocol value: %q", proto)
-	}
-}
-
-func getQueueConfig(cfg *otelcfg.TracesConfig) configoptional.Optional[exporterhelper.QueueBatchConfig] {
-	// enable batching only if the queue config is enabled
-	if cfg.BatchMaxSize <= 0 && cfg.BatchTimeout <= 0 && cfg.QueueSize <= 0 {
-		return configoptional.None[exporterhelper.QueueBatchConfig]()
-	}
-
-	queueConfig := exporterhelper.NewDefaultQueueConfig()
-	queueConfig.Sizer = exporterhelper.RequestSizerTypeItems
-	// Avoid continuously seeing "sending queue is full" errors in the standard output
-	queueConfig.BlockOnOverflow = true
-	if cfg.QueueSize > 0 {
-		queueConfig.QueueSize = int64(cfg.QueueSize)
-	}
-	batchCfg := exporterhelper.BatchConfig{
-		Sizer: queueConfig.Sizer,
-	}
-	batchSet := false
-	if cfg.BatchMaxSize > 0 {
-		batchSet = true
-		batchCfg.MaxSize = int64(cfg.BatchMaxSize)
-	}
-	if cfg.BatchTimeout > 0 {
-		batchSet = true
-		batchCfg.FlushTimeout = cfg.BatchTimeout
-		batchCfg.MinSize = int64(cfg.BatchMaxSize)
-	}
-	if batchSet {
-		queueConfig.Batch = configoptional.Some(batchCfg)
-	}
-	return configoptional.Some(queueConfig)
-}
-
-func getTraceSettings(dataTypeMetrics component.Type) exporter.Settings {
-	traceProvider := noop.NewTracerProvider()
-	meterProvider := metric.NewMeterProvider()
-	telemetrySettings := component.TelemetrySettings{
-		Logger:         zap.NewNop(),
-		MeterProvider:  meterProvider,
-		TracerProvider: traceProvider,
-		Resource:       pcommon.NewResource(),
-	}
-
-	return exporter.Settings{
-		ID:                component.NewIDWithName(dataTypeMetrics, "beyla"),
-		TelemetrySettings: telemetrySettings,
-	}
-}
-
-func getRetrySettings(cfg *otelcfg.TracesConfig) configretry.BackOffConfig {
-	backOffCfg := configretry.NewDefaultBackOffConfig()
-	if cfg.BackOffInitialInterval > 0 {
-		backOffCfg.InitialInterval = cfg.BackOffInitialInterval
-	}
-	if cfg.BackOffMaxInterval > 0 {
-		backOffCfg.MaxInterval = cfg.BackOffMaxInterval
-	}
-	if cfg.BackOffMaxElapsedTime > 0 {
-		backOffCfg.MaxElapsedTime = cfg.BackOffMaxElapsedTime
-	}
-	return backOffCfg
-}
-
-func convertHeaders(headers map[string]string) configopaque.MapList {
-	opaqueHeaders := make(configopaque.MapList, 0, len(headers))
-	for key, value := range headers {
-		opaqueHeaders = append(opaqueHeaders, configopaque.Pair{Name: key, Value: configopaque.String(value)})
-	}
-	return opaqueHeaders
 }
 
 func GroupConnectionSpans(

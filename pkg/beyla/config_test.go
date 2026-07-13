@@ -405,6 +405,9 @@ network:
 				{InstrumentableType: svc.InstrumentablePython},
 			},
 		},
+		SigilExport: otelcfg.TracesConfig{
+			Instrumentations: []instrumentations.Instrumentation{instrumentations.InstrumentationHTTP},
+		},
 	}, cfg)
 }
 

@@ -65,6 +65,8 @@ The recommended way to deploy Beyla on Kubernetes with distributed tracing suppo
 The following `Kubernetes` configuration must be used:
 - Beyla must be deployed as a `DaemonSet` with host network access (`hostNetwork: true`).
 - The `/sys/fs/cgroup` path from the host must be volume mounted as local `/sys/fs/cgroup` path.
+- The `/sys/kernel/tracing` path from the host must be volume mounted as local `/sys/kernel/tracing` path, because of the
+  mitigation code added to handle the [FIONREAD kernel bug](https://lore.kernel.org/bpf/CAOvpEWN6xgFx4GWFnnWLGCB+_1auDcAZPYPSv1PDu3UfXkcriw@mail.gmail.com/t/#r36b3618483204331fed2978fbaa67be0cb6ad975).
 - The `CAP_NET_ADMIN` capability must be granted to the Beyla container.
 
 The following YAML snippet shows an example Beyla deployment configuration:
@@ -105,6 +107,8 @@ The following YAML snippet shows an example Beyla deployment configuration:
         volumeMounts:
           - name: cgroup
             mountPath: /sys/fs/cgroup # <-- Important. Allows Beyla to monitor all newly sockets to track outgoing requests.
+          - name: tracefs # <-- Important. Allows Beyla to mitigate the FIONREAD kernel bug for the broken kernel versions.
+            mountPath: /sys/kernel/tracing  
           - mountPath: /config
             name: beyla-config
       tolerations:
@@ -119,6 +123,9 @@ The following YAML snippet shows an example Beyla deployment configuration:
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup
+      - name: tracefs
+        hostPath:
+          path: /sys/kernel/tracing
 ```
 
 If `/sys/fs/cgroup` is not mounted as a local volume path for the Beyla `DaemonSet` some requests may not
@@ -155,6 +162,7 @@ services:
     volumes:
       - /sys/kernel/security:/sys/kernel/security
       - /sys/fs/cgroup:/sys/fs/cgroup
+      - /sys/kernel/tracing:/sys/kernel/tracing
 ```
 
 If the `/sys/kernel/security/` volume is not mounted, Beyla assumes that the Linux Kernel is not running in integrity mode.

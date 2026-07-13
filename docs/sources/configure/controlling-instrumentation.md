@@ -49,6 +49,8 @@ To use this option in containerized environments (Kubernetes and Docker), you mu
 
 - Deploy Beyla as a `DaemonSet` with host network access `hostNetwork: true`
 - Volume mount the `/sys/fs/cgroup` path from the host as local `/sys/fs/cgroup` path
+- The `/sys/kernel/tracing` path from the host must be volume mounted as local `/sys/kernel/tracing` path, because of the
+  mitigation code added to handle the [FIONREAD kernel bug](https://lore.kernel.org/bpf/CAOvpEWN6xgFx4GWFnnWLGCB+_1auDcAZPYPSv1PDu3UfXkcriw@mail.gmail.com/t/#r36b3618483204331fed2978fbaa67be0cb6ad975).
 - Grant the `CAP_NET_ADMIN` capability to the Beyla container
 
 gRPC and HTTP2 are not supported.

@@ -68,9 +68,8 @@ type HostInstance struct {
 }
 
 func NewHostInstance(cfg *config.InstanceIDConfig) HostInstance {
-	// TODO: periodically update in case the current OBI instance is created from a VM snapshot running as a different hostname
-	resolver := hostname.CreateResolver(cfg.OverrideHostname, "", cfg.HostnameDNSResolution)
-	fullHostName, _, err := resolver.Query()
+	resolver := hostname.CreateResolver(cfg.OverrideHostname, cfg.HostnameDNSResolution)
+	fullHostName, err := resolver.Query()
 	log := rlog().With("function", "instance_ID_hostNamePIDDecorator")
 	if err != nil {
 		log.Warn("can't read hostname. Leaving empty. Consider overriding"+

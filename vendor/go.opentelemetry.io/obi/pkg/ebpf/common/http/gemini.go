@@ -4,6 +4,7 @@
 package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 
 import (
+	"bytes"
 	"encoding/json"
 	"log/slog"
 	"net"
@@ -128,14 +129,25 @@ func GeminiSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	}
 
 	var parsedResponse request.GeminiResponse
-	if !unmarshalJSON(respB, &parsedResponse) {
-		slog.Debug("failed to parse Gemini response, continuing with partial fields")
+	var toolCalls []request.ToolCall
+
+	if looksLikeJSON(respB) {
+		if !unmarshalJSON(respB, &parsedResponse) {
+			slog.Debug("failed to parse Gemini response, continuing with partial fields")
+		}
+		toolCalls = extractGeminiFunctionCalls(&parsedResponse)
+	} else {
+		reader := bytes.NewReader(respB)
+		streamResp, streamTools := parseGeminiStream(reader)
+		if streamResp != nil {
+			parsedResponse = *streamResp
+		}
+		toolCalls = streamTools
 	}
 
 	model := extractGeminiModel(req)
 	operation := extractGeminiOperation(req)
 	isStream := isGeminiStream(req)
-	toolCalls := extractGeminiFunctionCalls(&parsedResponse)
 
 	baseSpan.SubType = request.HTTPSubtypeGemini
 	baseSpan.GenAI = &request.GenAI{

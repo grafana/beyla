@@ -207,7 +207,13 @@ func (p *Tracer) Iters() []*ebpfcommon.Iter {
 		return p.iters
 	}
 
-	p.iters = []*ebpfcommon.Iter{{Program: p.bpfIterObjects.ObiSkIterTcp}}
+	// The ordering matters, we don't want to add passive listeners to
+	// the map, so we first find the listening ports and then we discard
+	// the established with those listening ports.
+	p.iters = []*ebpfcommon.Iter{
+		{Program: p.bpfIterObjects.ObiSkIterTcpListen},
+		{Program: p.bpfIterObjects.ObiSkIterTcp},
+	}
 
 	return p.iters
 }

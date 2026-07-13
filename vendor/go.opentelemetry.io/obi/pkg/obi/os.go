@@ -188,6 +188,7 @@ func checkCapabilitiesForSetOptions(config *Config, caps *helpers.OSCapabilities
 		switch config.NetworkFlows.Source {
 		case EbpfSourceSock:
 			testAndSet(caps, capError, unix.CAP_NET_RAW)
+			testAndSet(caps, capError, unix.CAP_PERFMON)
 		case EbpfSourceTC:
 			testAndSet(caps, capError, unix.CAP_PERFMON)
 			testAndSet(caps, capError, unix.CAP_NET_ADMIN)

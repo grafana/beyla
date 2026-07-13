@@ -218,7 +218,7 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 
 	if err != nil && (strings.Contains(err.Error(), "unknown func bpf_probe_write_user") ||
 		strings.Contains(err.Error(), "cannot use helper bpf_probe_write_user")) {
-		plog.Warn("Failed to enable Go write memory distributed tracing context-propagation" +
+		plog.Warn("Failed to enable Go write memory distributed tracing context-propagation " +
 			"and/or log enricher on a Linux Kernel without write memory support. " +
 			"To avoid seeing this message, please ensure you have correctly mounted /sys/kernel/security " +
 			"and ensure OBI has the SYS_ADMIN linux capability. " +

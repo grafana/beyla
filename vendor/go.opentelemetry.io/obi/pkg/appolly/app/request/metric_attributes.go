@@ -4,6 +4,7 @@
 package request // import "go.opentelemetry.io/obi/pkg/appolly/app/request"
 
 import (
+	"strconv"
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -121,7 +122,7 @@ func DBResponseStatusCode(val string) attribute.KeyValue {
 }
 
 func MessagingPartition(val int) attribute.KeyValue {
-	return attribute.Key(attr.MessagingPartition).Int(val)
+	return attribute.Key(attr.MessagingPartition).String(strconv.Itoa(val))
 }
 
 func MessagingKafkaOffset(val int64) attribute.KeyValue {

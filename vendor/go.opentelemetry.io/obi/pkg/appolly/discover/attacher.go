@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/cilium/ebpf/link"
@@ -246,6 +247,8 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		return false
 	}
 
+	ta.dropUnloadedTracers(tracer.Programs)
+
 	ie.Tracer = tracer
 
 	if err := tracer.NewExecutable(exe, ie); err != nil {
@@ -275,12 +278,23 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 	return true
 }
 
+// dropUnloadedTracers keeps only the common tracers that survived ProcessTracer.Init in
+// loadedPrograms, so PID notifications never reach a tracer without loaded BPF objects
+func (ta *traceAttacher) dropUnloadedTracers(loadedPrograms []ebpf.Tracer) {
+	if ta.commonTracersLoaded {
+		return
+	}
+	ta.commonTracers = slices.DeleteFunc(ta.commonTracers, func(ct ebpf.Tracer) bool {
+		return !slices.Contains(loadedPrograms, ct)
+	})
+	ta.commonTracersLoaded = true
+}
+
 func (ta *traceAttacher) withCommonTracersGroup(tracers []ebpf.Tracer) []ebpf.Tracer {
 	if ta.commonTracersLoaded {
 		return tracers
 	}
 
-	ta.commonTracersLoaded = true
 	ta.commonTracers = newCommonTracersGroup(ta.Cfg, ta.Metrics, ta.EbpfEventContext.CommonPIDsFilter)
 
 	return append(tracers, ta.commonTracers...)

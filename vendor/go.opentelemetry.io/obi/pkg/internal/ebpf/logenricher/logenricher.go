@@ -248,6 +248,9 @@ func applyTraceContext(m map[string]any, traceID, spanID string, includeSpan boo
 
 func (p *Tracer) addPID(key uint64) error {
 	p.log.Debug("adding pid", "pid", uint32(key), "ns", key>>32)
+	if p.bpfObjects.LogEnricherPids == nil {
+		return fmt.Errorf("BPF objects not loaded, cannot add pid %d (ns=%d)", uint32(key), key>>32)
+	}
 	if err := p.bpfObjects.LogEnricherPids.Put(key, uint8(1)); err != nil {
 		return fmt.Errorf("error adding pid %d (ns=%d) to bpf map: %w", uint32(key), key>>32, err)
 	}
@@ -256,6 +259,9 @@ func (p *Tracer) addPID(key uint64) error {
 
 func (p *Tracer) removePID(key uint64) error {
 	p.log.Debug("removing pid", "pid", uint32(key), "ns", key>>32)
+	if p.bpfObjects.LogEnricherPids == nil {
+		return fmt.Errorf("BPF objects not loaded, cannot remove pid %d (ns=%d)", uint32(key), key>>32)
+	}
 	if err := p.bpfObjects.LogEnricherPids.Delete(key); err != nil {
 		if errors.Is(err, ebpf.ErrKeyNotExist) {
 			return nil

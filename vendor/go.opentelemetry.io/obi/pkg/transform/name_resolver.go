@@ -281,9 +281,9 @@ func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, s
 	}
 
 	if nr.sources.Has(ResolverRDNS) && nr.dnsCache != nil {
-		n := nr.resolveRDNS(ip)
-		n = nr.cleanName(svc, ip, n)
-		return n, svc.UID.Namespace, ""
+		if n := nr.resolveRDNS(ip); n != "" {
+			return nr.cleanName(svc, ip, n), svc.UID.Namespace, ""
+		}
 	}
 
 	if nr.sources.Has(ResolverDNS) {

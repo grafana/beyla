@@ -18,7 +18,7 @@ services:
 
   # Beyla for NGINX
   nginxbeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -48,7 +48,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   gobeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -78,7 +78,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   javabeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -108,7 +108,7 @@ services:
 
   # Beyla for Rust Actix
   rustbeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security

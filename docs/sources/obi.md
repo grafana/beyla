@@ -76,10 +76,7 @@ This section lists some features that are provided by Beyla but not by OBI:
 
 * Process metrics
 * Survey mode
-* K8s OTEL SDK auto-injection
 * Integration inside Grafana Alloy
-  * Fleet Management
-  * Instrumentation Hub
 
 The following subsections provide upstream-only alternatives for these features.
 
@@ -118,18 +115,20 @@ At the moment, there is no direct replacement for Beyla's survey mode in OBI, bu
 an ongoing initiative to port [Beyla's survey mode to OBI](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/2285).
 We will update this document as the survey mode porting progresses.
 
-### K8s OTEL auto-injection
-
-TODO: Point to the OpenTelemetry operator and SDK injector projects. Explain
-the limitations (for example, you need to be explicit in which services
-are instrumented by OBI and which services are instrumented by the Operator)
-
 ### Integration with Alloy or Collector
 
-- Can't run embedded in the same executable (WIP: https://github.com/open-telemetry/opentelemetry-collector/issues/15430)
-- How to integrate with a collector/alloy
-- No integration with Instrumentation Hub by now
-- No integration with Fleet management by now
+While Beyla can run as a standalone process, it can also run as an embedded component inside
+[Grafana Alloy](https://grafana.com/docs/alloy/latest/reference/components/beyla/),
+an OpenTelemetry collector from Grafana. When it runs as an Alloy component, it can make
+use of some exclusive features, such as the integration with
+[Fleet Management](https://grafana.com/docs/grafana-cloud/send-data/fleet-management/),
+which allows you to remotely manage multiple telemetry collector deployments at scale.
+
+To achieve similar functionality with OBI, you need to follow these steps:
+1. [Build a custom Collector with OBI as a receiver](https://opentelemetry.io/docs/zero-code/obi/configure/collector-receiver/).
+2. Make sure the resulting collector integrates [OpAMP](https://opentelemetry.io/docs/collector/management/),
+and check the [Get started with Fleet Management and OpenTelemetry Collector](https://grafana.com/docs/grafana-cloud/send-data/fleet-management/get-started/opentelemetry-collector/)
+documentation for integration instructions.
 
 ## Using OBI with asserts
 ## Using OBI with App O11y

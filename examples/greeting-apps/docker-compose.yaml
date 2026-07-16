@@ -166,6 +166,7 @@ services:
       - -server.grpc-listen-port=9096
     volumes:
       - ./configs/:/etc/mimir
+      - ./system/mimir-rules:/tmp/mimir/rules
     ports:
       - "9009:9009"
       - "9096:9096"

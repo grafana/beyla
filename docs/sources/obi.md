@@ -81,15 +81,42 @@ This section lists some features that are provided by Beyla but not by OBI:
   * Fleet Management
   * Instrumentation Hub
 
-The following subsections provide some 
+The following subsections provide upstream-only alternatives for these features.
 
 ### Process metrics
 
-TODO: explain how to setup Host Metrics Receiver
+Beyla provides the following metrics, which follow the
+[OpenTelemetry semantic conventions for OS process metrics](https://opentelemetry.io/docs/specs/semconv/system/process-metrics/):
+```
+process.cpu.time
+process.cpu.utilization
+process.memory.usage
+process.memory.virtual
+process.disk.io
+process.network.io
+```
+
+If you are using OBI but still require the above metrics, you need to install an instance
+of the OpenTelemetry Collector on each node and configure the
+[Host Metrics Receiver](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/hostmetricsreceiver/README.md)
+to report process metrics.
+
+Unlike the Collector's Host Metrics Receiver, which sends metrics from all the processes in the system
+by default, Beyla only sends process metrics belonging to the services and applications that are instrumented.
+If you want to restrict the process metrics to only the processes reporting application-level metrics,
+you should manually [configure the OpenTelemetry Collector to filter out processes](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor)
+that do not match the [OBI Service Discovery configuration](https://opentelemetry.io/docs/zero-code/obi/configure/service-discovery/).
 
 ### Survey mode
 
-There is no direct replacement. TODO: link to service discovery documentation.
+Beyla has a special [survey mode](./configure/service-discovery.md#survey-mode) that is
+aimed exclusively at discovering which of your currently uninstrumented services can be instrumented by Beyla.
+It enables faster auto-configuration of your services within
+[Grafana Cloud's Instrumentation Hub](https://grafana.com/docs/grafana-cloud/get-started/inst-hub-setup/).
+
+At the moment, there is no direct replacement for Beyla's survey mode in OBI, but there is
+an ongoing initiative to port [Beyla's survey mode to OBI](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/2285).
+We will update this document as the survey mode porting progresses.
 
 ### K8s OTEL auto-injection
 

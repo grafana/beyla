@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   nginx:
-    image: nginx:latest@sha256:ec4ed8b5299e5e90694af7750eb6dffd2627317d30544d056b0371f8082f7bce
+    image: nginx:latest@sha256:5a88c9c45479443d7be2eadc894b4ed0a9801bae03d97a5760ae13b5c2005942
     container_name: demo-nginx
     ports:
       - 3333:3330

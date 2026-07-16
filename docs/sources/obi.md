@@ -40,17 +40,39 @@ both are 100% open source, vendor-neutral solutions based on open standards and
 specifications, Beyla provides some extra features that smooth the adoption
 of eBPF-based auto-instrumentation within the Grafana ecosystem.
 
+Also, the stable release cycles of the two projects are different. In this case, and unlike
+other open source projects, the Beyla release cycle is faster than OBI's, so
+some features might be available in Beyla before they are in OBI.
+
+For metrics and attributes that don't follow an OpenTelemetry semantic convention
+because none exists yet, Beyla prefixes the names with `beyla_` while
+OBI prefixes them with `obi_`. For example, the network-level flow bytes metric is reported as
+`beyla_network_flow_bytes_total` in Beyla and `obi_network_flow_bytes_total` in OBI.
+
 ### Configuration
 
-(TODO: develop)
+Both Beyla and OBI follow the same YAML configuration schema, so any configuration example
+you might find in this documentation is generally compatible with OBI, with the exception
+of the Beyla features that are missing in OBI, which are listed in the following section.
 
-* Same YAML structure
-* Same environment variables, but different prefix `OTEL_EBPF_*` instead of `BEYLA_`.
-  * Anyway, Beyla still supports `OTEL_EBPF_*` prefix (but not the reverse).
+As an alternative to the Beyla documentation, the OpenTelemetry site already documents
+[how to configure OBI from a YAML configuration file](https://opentelemetry.io/docs/zero-code/obi/configure/).
 
-### Beyla features that are missing in OBI
+A notable difference concerns configuring OBI with environment variables. OBI prefixes
+its configuration environment variables with `OTEL_EBPF_*` while Beyla prefixes them with `BEYLA_*`
+(Beyla also accepts the `OTEL_EBPF_*` prefix). The rest of the environment variable names
+remain the same in both cases.
 
-(TODO: develop)
+For example, to set the logging verbosity level, OBI accepts the `OTEL_EBPF_LOG_LEVEL` environment
+variable, and Beyla accepts both `BEYLA_LOG_LEVEL` and `OTEL_EBPF_LOG_LEVEL`.
+
+The [OpenTelemetry common environment variables](https://opentelemetry.io/docs/languages/sdk-configuration/otlp-exporter/)
+(for example `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_PROTOCOL`) remain supported
+by both OBI and Beyla in the same way.
+
+## Beyla features that are missing in OBI
+
+This section lists some features that are provided by Beyla but not by OBI:
 
 * Process metrics
 * Survey mode
@@ -59,26 +81,31 @@ of eBPF-based auto-instrumentation within the Grafana ecosystem.
   * Fleet Management
   * Instrumentation Hub
 
-## Process metrics
+The following subsections provide some 
+
+### Process metrics
 
 TODO: explain how to setup Host Metrics Receiver
 
-## Survey mode
+### Survey mode
 
 There is no direct replacement. TODO: link to service discovery documentation.
 
-## K8s OTEL auto-injection
+### K8s OTEL auto-injection
 
 TODO: Point to the OpenTelemetry operator and SDK injector projects. Explain
 the limitations (for example, you need to be explicit in which services
 are instrumented by OBI and which services are instrumented by the Operator)
 
-## Integration with Alloy or Collector
+### Integration with Alloy or Collector
 
 - Can't run embedded in the same executable (WIP: https://github.com/open-telemetry/opentelemetry-collector/issues/15430)
 - How to integrate with a collector/alloy
 - No integration with Instrumentation Hub by now
 - No integration with Fleet management by now
+
+## Using OBI with asserts
+## Using OBI with App O11y
 
 
 

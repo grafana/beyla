@@ -141,6 +141,9 @@ you need to manually configure your instrumentation pipeline:
 - Make sure OBI is exporting traces to your OpenTelemetry Collector (and your OpenTelemetry
   collector is forwarding them to Grafana Cloud)
 - In the OpenTelemetry collector:
+  - Decorate each span with an attribute named `sigil.generation.id`, and a value
+    prefixed by `gen_` followed by a random UUID.
+    For example: `gen_01234567-90ab-cdef-0123-456789abcdef`
   - Make sure each span contains the `gen_ai.conversation.id` attribute. If it
     does not exist, use a transform pipeline step to populate `gen_ai.conversation.id`
     with the value of the `gen_ai.response.id` attribute.

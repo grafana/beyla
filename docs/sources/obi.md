@@ -132,6 +132,23 @@ To achieve similar functionality with OBI, you need to follow these steps:
 and check the [Get started with Fleet Management and OpenTelemetry Collector](https://grafana.com/docs/grafana-cloud/send-data/fleet-management/get-started/opentelemetry-collector/)
 documentation for integration instructions.
 
+### Grafana AI Observability support
+
+OBI can generate spans and traces from your Generative AI clients. However,
+to make them fully compatible with [Grafana AI](https://grafana.com/docs/grafana-cloud/monitor-applications/ai-observability/),
+you need to manually configure your instrumentation pipeline:
+
+- Make sure OBI is exporting traces to your OpenTelemetry Collector (and your OpenTelemetry
+  collector is forwarding them to Grafana Cloud)
+- In the OpenTelemetry collector:
+  - Make sure each span contains the `gen_ai.conversation.id` attribute. If it
+    does not exist, use a transform pipeline step to populate `gen_ai.conversation.id`
+    with the value of the `gen_ai.response.id` attribute.
+  - (Optional) To reduce costs, filter out any span that doesn't belong to a
+    Generative AI workload, if you aren't interested in it. For example, you can
+    remove any span that doesn't contain one of the `gen_ai.*` attributes if you
+    aren't interested in other types of workloads.
+
 ## Using OBI with asserts
 ## Using OBI with App O11y
 

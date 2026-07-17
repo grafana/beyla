@@ -17,8 +17,8 @@ Grafana Beyla is the distribution of the
 [OpenTelemetry eBPF Instrumentation](https://opentelemetry.io/docs/zero-code/obi/)
 (a.k.a. OBI) software that is currently supported by Grafana.
 
-The Grafana Beyla code was donated in 2025 to the OpenTelemetry project as
-OBI, which is now maintained by a consortium of contributors
+The Grafana Beyla code was [donated in 2025 to the OpenTelemetry project](https://grafana.com/blog/opentelemetry-ebpf-instrumentation-beyla-donation/)
+as OBI, which is now maintained by a consortium of contributors
 that includes (but is not limited to) Grafana.
 
 This document is aimed at helping users who want to use the upstream OBI distribution
@@ -26,7 +26,7 @@ instead of Grafana Beyla. OBI works out of the box with the Grafana OTLP
 endpoint (or any intermediate OpenTelemetry/Prometheus collector), but there are
 some Beyla features that are not available in OBI. They are not indispensable
 for the correct functioning of OBI within the Grafana ecosystem, but users
-might want open source alternatives for some of them.
+might require other OpenTelemetry projects to provide such features.
 
 ## Differences between OBI and Grafana
 
@@ -41,8 +41,8 @@ specifications, Beyla provides some extra features that smooth the adoption
 of eBPF-based auto-instrumentation within the Grafana ecosystem.
 
 Also, the stable release cycles of the two projects are different. In this case, and unlike
-other open source projects, the Beyla release cycle is faster than OBI's, so
-some features might be available in Beyla before they are in OBI.
+other open source projects, the Beyla release cycle is usually faster than OBI's, so
+some features might be available in Beyla before they are in an official OBI release.
 
 For metrics and attributes that don't follow an OpenTelemetry semantic convention
 because none exists yet, Beyla prefixes the names with `beyla_` while
@@ -77,6 +77,8 @@ This section lists some features that are provided by Beyla but not by OBI:
 * Process metrics
 * Survey mode
 * Integration inside Grafana Alloy
+* Grafana AI Observability support
+* Connecting spans for Tempo service graph metrics (which we also need to document)
 
 The following subsections provide upstream-only alternatives for these features.
 

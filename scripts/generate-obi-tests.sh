@@ -99,7 +99,6 @@ BEHAVIORAL_TRANSFORMS=(
     'obi\.version|beyla.version'
     'obi\.revision|beyla.revision'
     'obi\.stat\.tcp\.|beyla.stat.tcp.'
-    'obi\.jvm\.|beyla.jvm.'
 
     # --- Telemetry SDK/scope identity ---
     'Value: "go\.opentelemetry\.io/obi"|Value: "github.com/grafana/beyla"'

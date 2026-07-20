@@ -125,9 +125,4 @@ func OverrideOBIGlobalConfig() {
 		Prom:    "beyla_stat_tcp_io_bytes_total",
 		OTEL:    "beyla.stat.tcp.io",
 	}
-	attributes.ObiJVMHeapUsed = attributes.Name{
-		Section: "beyla.jvm.heap.used",
-		Prom:    "beyla_jvm_heap_used_bytes",
-		OTEL:    "beyla.jvm.heap.used",
-	}
 }

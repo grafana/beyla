@@ -14,6 +14,13 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 )
 
+// genericRerankProvider is the declared gen_ai.provider.name fallback used
+// for genuine rerank requests whose vendor could not be identified by
+// hostname. It mirrors RetrievalSpan's genericRetrievalProvider so that
+// gen_ai.provider.name stays a valid semconv enum member (weaver live-check
+// rejects the internal "unknown" sentinel).
+const genericRerankProvider = "generic"
+
 // rerankProviders maps hostname suffixes to GenAI provider names.
 // Provider names are aligned with existing canonical names used elsewhere
 // in the codebase (e.g. embedding uses "voyage" for Voyage AI).
@@ -163,7 +170,12 @@ func RerankSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	}
 
 	// At this point, we've confirmed this is a genuine rerank request.
-	// Continue with full parsing even if provider is "unknown" (as long as model exists).
+	// Emit the declared "generic" provider rather than the internal
+	// "unknown" sentinel so gen_ai.provider.name remains a valid enum
+	// member (mirrors RetrievalSpan).
+	if provider == "unknown" {
+		provider = genericRerankProvider
+	}
 
 	// Response body parsing is best-effort: truncated responses may fail
 	// to parse but should not prevent provider detection.

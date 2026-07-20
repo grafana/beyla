@@ -102,7 +102,11 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	parsedResponse.Request = parsedRequest
 	parsedResponse.ToolCalls = toolCalls
 
-	// Override operation name and derive API type from URL path.
+	// Override operation name and derive API type from URL path. The path is
+	// authoritative even when the response carries no `object` field (error
+	// responses don't): the operation name feeds required metric attributes
+	// (gen_ai.client.operation.duration / token.usage), so failed calls must
+	// carry it too.
 	if req.URL != nil {
 		path := strings.TrimSuffix(req.URL.Path, "/")
 		switch path {
@@ -113,7 +117,10 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 			parsedResponse.OperationName = request.EmbeddingOperationName
 			parsedResponse.APIType = "embeddings"
 		case "/v1/responses":
+			parsedResponse.OperationName = request.ResponseOperationName
 			parsedResponse.APIType = "responses"
+		case "/v1/conversations":
+			parsedResponse.OperationName = request.ConversationOperationName
 		}
 	}
 

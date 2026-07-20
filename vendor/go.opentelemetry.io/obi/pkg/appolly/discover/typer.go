@@ -326,6 +326,9 @@ func (t *typer) loadAllGoFunctionNames() {
 	for _, symbolName := range gotracer.GoChannelLinkProbeSymbols() {
 		t.addGoFunctionName(uniqueFunctions, symbolName)
 	}
+	for _, symbolName := range gotracer.GoRuntimeMetricProbeSymbols() {
+		t.addGoFunctionName(uniqueFunctions, symbolName)
+	}
 }
 
 func (t *typer) addGoFunctionName(uniqueFunctions map[string]struct{}, symbolName string) {

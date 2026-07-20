@@ -156,7 +156,7 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	if len(outputSpans) != len(inputSpans) {
 		pf.log.Debug("filtered spans from processes that did not match discovery",
 			"function", "PIDsFilter.Filter", "inLen", len(inputSpans), "outLen", len(outputSpans),
-			"pids", pf.current, "spans", inputSpans,
+			"pids", pf.current,
 		)
 	}
 	return outputSpans

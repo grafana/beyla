@@ -314,14 +314,18 @@ func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext, cfg *obi.Co
 
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
 	if i, ok := pt.Instrumentables[ie.FileInfo.Ino()]; ok {
+		maps, err := processMaps(ie.FileInfo.Pid())
+		if err != nil {
+			return err
+		}
 		for _, p := range pt.Programs {
 			p.ProcessBinary(ie.FileInfo)
 			// Uprobes to be used for native module instrumentation points
-			if err := i.uprobes(ie.FileInfo.Pid(), p); err != nil {
+			if err := i.uprobes(ie.FileInfo.Pid(), p, maps); err != nil {
 				printVerifierErrorInfo(err)
 				return err
 			}
-			if err := i.usdtProbes(ie.FileInfo.Pid(), ie.FileInfo.Ns(), p); err != nil {
+			if err := i.usdtProbes(ie.FileInfo.Pid(), ie.FileInfo.Ns(), p, maps); err != nil {
 				printVerifierErrorInfo(err)
 				return err
 			}
@@ -342,6 +346,11 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 		processName: ie.FileInfo.ExecutableName(),
 	}
 
+	maps, err := processMaps(ie.FileInfo.Pid())
+	if err != nil {
+		return err
+	}
+
 	for _, p := range pt.Programs {
 		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
 
@@ -352,12 +361,12 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 		}
 
 		// Uprobes to be used for native module instrumentation points
-		if err := i.uprobes(ie.FileInfo.Pid(), p); err != nil {
+		if err := i.uprobes(ie.FileInfo.Pid(), p, maps); err != nil {
 			printVerifierErrorInfo(err)
 			return err
 		}
 
-		if err := i.usdtProbes(ie.FileInfo.Pid(), ie.FileInfo.Ns(), p); err != nil {
+		if err := i.usdtProbes(ie.FileInfo.Pid(), ie.FileInfo.Ns(), p, maps); err != nil {
 			printVerifierErrorInfo(err)
 			return err
 		}

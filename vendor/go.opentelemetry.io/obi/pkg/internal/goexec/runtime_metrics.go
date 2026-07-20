@@ -14,10 +14,17 @@ import (
 )
 
 type RuntimeMetricSymbols struct {
-	MemstatsAddr     uint64
-	GCControllerAddr uint64
-	GOMAXPROCSAddr   uint64
+	MemstatsAddr         uint64
+	GCControllerAddr     uint64
+	GOMAXPROCSAddr       uint64
+	WorkAddr             uint64
+	SizeClassToSizesAddr uint64
 }
+
+const (
+	runtimeMetricSizeClassToSizesSymbol         = "runtime.class_to_size"
+	runtimeMetricInternalSizeClassToSizesSymbol = "internal/runtime/gc.SizeClassToSize"
+)
 
 // ResolveRuntimeMetricSymbols resolves Go runtime global variables to absolute
 // process addresses. Userspace provides only this metadata; BPF still reads the
@@ -40,12 +47,16 @@ func resolveRuntimeMetricSymbols(f *elf.File, loadBias uint64) (RuntimeMetricSym
 		memstatsSymbol     = "runtime.memstats"
 		gcControllerSymbol = "runtime.gcController"
 		gomaxprocsSymbol   = "runtime.gomaxprocs"
+		workSymbol         = "runtime.work"
 	)
 
 	symbols, err := procs.FindExeSymbols(f, []string{
 		memstatsSymbol,
 		gcControllerSymbol,
 		gomaxprocsSymbol,
+		workSymbol,
+		runtimeMetricSizeClassToSizesSymbol,
+		runtimeMetricInternalSizeClassToSizesSymbol,
 	}, elf.STT_OBJECT)
 	if err != nil {
 		return RuntimeMetricSymbols{}, err
@@ -65,8 +76,22 @@ func resolveRuntimeMetricSymbols(f *elf.File, loadBias uint64) (RuntimeMetricSym
 	}
 
 	return RuntimeMetricSymbols{
-		MemstatsAddr:     loadBias + memstats.Off,
-		GCControllerAddr: loadBias + gcController.Off,
-		GOMAXPROCSAddr:   loadBias + gomaxprocs.Off,
+		MemstatsAddr:         loadBias + memstats.Off,
+		GCControllerAddr:     loadBias + gcController.Off,
+		GOMAXPROCSAddr:       loadBias + gomaxprocs.Off,
+		WorkAddr:             runtimeMetricSymbolAddr(symbols, workSymbol, loadBias),
+		SizeClassToSizesAddr: runtimeMetricSymbolAddr(symbols, runtimeMetricSizeClassToSizesSymbol, loadBias),
 	}, nil
+}
+
+func runtimeMetricSymbolAddr(symbols map[string]procs.Sym, name string, loadBias uint64) uint64 {
+	if sym, ok := symbols[name]; ok {
+		return loadBias + sym.Off
+	}
+	if name == runtimeMetricSizeClassToSizesSymbol {
+		if sym, ok := symbols[runtimeMetricInternalSizeClassToSizesSymbol]; ok {
+			return loadBias + sym.Off
+		}
+	}
+	return 0
 }

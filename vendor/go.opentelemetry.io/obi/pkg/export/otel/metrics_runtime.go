@@ -53,15 +53,23 @@ type RuntimeMetrics struct {
 }
 
 type goRuntimeMetrics struct {
-	memoryLimit    instrument.Int64UpDownCounter
-	memoryGCCycles instrument.Int64Counter
-	processorLimit instrument.Int64UpDownCounter
-	configGOGC     instrument.Int64UpDownCounter
+	memoryLimit       instrument.Int64UpDownCounter
+	memoryGCCycles    instrument.Int64Counter
+	memoryUsed        instrument.Int64UpDownCounter
+	memoryAllocated   instrument.Int64Counter
+	memoryAllocations instrument.Int64Counter
+	cpuTime           instrument.Float64Counter
+	processorLimit    instrument.Int64UpDownCounter
+	configGOGC        instrument.Int64UpDownCounter
 
-	memoryLimitValue    *int64
-	memoryGCCyclesValue *uint64
-	processorLimitValue *int64
-	configGOGCValue     *int64
+	memoryLimitValue       *int64
+	memoryGCCyclesValue    *uint64
+	memoryUsedValues       map[string]int64
+	memoryAllocatedValue   *uint64
+	memoryAllocationsValue *uint64
+	cpuTimeValues          map[string]int64
+	processorLimitValue    *int64
+	configGOGCValue        *int64
 }
 
 func ReportRuntimeMetrics(
@@ -172,15 +180,14 @@ func setupRuntimeMeters(
 	ttl time.Duration,
 	enabled runtimemetrics.Enabled,
 ) error {
-	if enabled.Go {
-		if err := setupGoRuntimeMeters(&metrics.goMetrics, meter); err != nil {
-			return err
-		}
+	if !enabled.Runtime {
+		return nil
 	}
-	if enabled.JVM {
-		if err := setupJVMRuntimeMeters(metrics.ctx, &metrics.jvmMetrics, meter, ttl); err != nil {
-			return err
-		}
+	if err := setupGoRuntimeMeters(&metrics.goMetrics, meter); err != nil {
+		return err
+	}
+	if err := setupJVMRuntimeMeters(metrics.ctx, &metrics.jvmMetrics, meter, ttl); err != nil {
+		return err
 	}
 	return nil
 }
@@ -194,6 +201,22 @@ func setupGoRuntimeMeters(metrics *goRuntimeMetrics, meter instrument.Meter) err
 	metrics.memoryGCCycles, err = meter.Int64Counter(attributes.GoRuntimeMemoryGCCycles.OTEL, instrument.WithUnit("{gc_cycle}"))
 	if err != nil {
 		return fmt.Errorf("creating go memory gc cycles: %w", err)
+	}
+	metrics.memoryUsed, err = meter.Int64UpDownCounter(attributes.GoRuntimeMemoryUsed.OTEL, instrument.WithUnit("By"))
+	if err != nil {
+		return fmt.Errorf("creating go memory used: %w", err)
+	}
+	metrics.memoryAllocated, err = meter.Int64Counter(attributes.GoRuntimeMemoryAllocated.OTEL, instrument.WithUnit("By"))
+	if err != nil {
+		return fmt.Errorf("creating go memory allocated: %w", err)
+	}
+	metrics.memoryAllocations, err = meter.Int64Counter(attributes.GoRuntimeMemoryAllocations.OTEL, instrument.WithUnit("{allocation}"))
+	if err != nil {
+		return fmt.Errorf("creating go memory allocations: %w", err)
+	}
+	metrics.cpuTime, err = meter.Float64Counter(attributes.GoRuntimeCPUTime.OTEL, instrument.WithUnit("s"))
+	if err != nil {
+		return fmt.Errorf("creating go cpu time: %w", err)
 	}
 	metrics.processorLimit, err = meter.Int64UpDownCounter(attributes.GoRuntimeProcessorLimit.OTEL, instrument.WithUnit("{thread}"))
 	if err != nil {
@@ -255,7 +278,7 @@ func recordRuntimeMetrics(ctx context.Context, metrics *RuntimeMetrics, snapshot
 		recordGoRuntimeMetrics(ctx, &metrics.goMetrics, snapshot)
 	}
 	if snapshot.JVM != nil {
-		if !snapshot.Service.ExportModes.CanExportMetrics() || !snapshot.Service.Features.AppJVM() {
+		if !snapshot.Service.ExportModes.CanExportMetrics() || !snapshot.Service.Features.AppRuntime() {
 			return
 		}
 		metrics.jvmMetrics.record(snapshot)
@@ -269,6 +292,25 @@ func recordGoRuntimeMetrics(ctx context.Context, metrics *goRuntimeMetrics, snap
 
 	recordCurrentRuntimeMetric(ctx, metrics.memoryLimit, &metrics.memoryLimitValue, snapshot.Go.MemoryLimit)
 	recordRuntimeCounter(ctx, metrics.memoryGCCycles, &metrics.memoryGCCyclesValue, snapshot.Go.GCCycles)
+	recordCurrentRuntimeMetricWithAttributes(
+		ctx,
+		metrics.memoryUsed,
+		&metrics.memoryUsedValues,
+		"stack",
+		snapshot.Go.MemoryUsedStack,
+		semconv.GoMemoryTypeStack,
+	)
+	recordCurrentRuntimeMetricWithAttributes(
+		ctx,
+		metrics.memoryUsed,
+		&metrics.memoryUsedValues,
+		"other",
+		snapshot.Go.MemoryUsedOther,
+		semconv.GoMemoryTypeOther,
+	)
+	recordRuntimeCounter(ctx, metrics.memoryAllocated, &metrics.memoryAllocatedValue, snapshot.Go.MemoryAllocated)
+	recordRuntimeCounter(ctx, metrics.memoryAllocations, &metrics.memoryAllocationsValue, snapshot.Go.MemoryAllocations)
+	recordGoRuntimeCPUTime(ctx, metrics, snapshot.Go.CPUTime)
 	recordCurrentRuntimeMetric(ctx, metrics.processorLimit, &metrics.processorLimitValue, snapshot.Go.ProcessorLimit)
 	recordCurrentRuntimeMetric(ctx, metrics.configGOGC, &metrics.configGOGCValue, snapshot.Go.GOGC)
 }
@@ -317,6 +359,100 @@ func recordRuntimeCounter(
 	}
 	value := *current
 	*previous = &value
+}
+
+func recordCurrentRuntimeMetricWithAttributes(
+	ctx context.Context,
+	metric instrument.Int64UpDownCounter,
+	previous *map[string]int64,
+	key string,
+	current *int64,
+	attrs ...attribute.KeyValue,
+) {
+	if *previous == nil {
+		*previous = map[string]int64{}
+	}
+	options := []instrument.AddOption{instrument.WithAttributes(attrs...)}
+	removeOptions := []instrument.RemoveOption{instrument.WithAttributes(attrs...)}
+
+	prev, ok := (*previous)[key]
+	if current == nil {
+		if ok {
+			metric.Add(ctx, -prev, options...)
+			delete(*previous, key)
+		}
+		metric.Remove(ctx, removeOptions...)
+		return
+	}
+
+	if !ok {
+		metric.Add(ctx, *current, options...)
+	} else if delta := *current - prev; delta != 0 {
+		metric.Add(ctx, delta, options...)
+	}
+	(*previous)[key] = *current
+}
+
+func recordGoRuntimeCPUTime(
+	ctx context.Context,
+	metrics *goRuntimeMetrics,
+	cpu *runtimemetrics.GoRuntimeCPUTimeSnapshot,
+) {
+	for _, value := range runtimemetrics.GoRuntimeCPUTimeValues(cpu) {
+		key := value.State
+		attrs := []attribute.KeyValue{semconv.GoCPUStateKey.String(value.State)}
+		if value.DetailedState != "" {
+			key = value.DetailedState
+			attrs = append(attrs, semconv.GoCPUDetailedState(value.DetailedState))
+		}
+
+		if cpu == nil {
+			removeFloatRuntimeCounterWithAttributes(ctx, metrics.cpuTime, &metrics.cpuTimeValues,
+				key, attrs...)
+			continue
+		}
+
+		recordFloatRuntimeCounterWithAttributes(ctx, metrics.cpuTime, &metrics.cpuTimeValues,
+			key, value.Nanoseconds, attrs...)
+	}
+}
+
+func recordFloatRuntimeCounterWithAttributes(
+	ctx context.Context,
+	metric instrument.Float64Counter,
+	previous *map[string]int64,
+	key string,
+	current int64,
+	attrs ...attribute.KeyValue,
+) {
+	if *previous == nil {
+		*previous = map[string]int64{}
+	}
+	options := []instrument.AddOption{instrument.WithAttributes(attrs...)}
+	removeOptions := []instrument.RemoveOption{instrument.WithAttributes(attrs...)}
+
+	prev, ok := (*previous)[key]
+	if !ok || current < prev {
+		currentSeconds := float64(current) / float64(time.Second)
+		metric.Remove(ctx, removeOptions...)
+		metric.Add(ctx, currentSeconds, options...)
+	} else if delta := current - prev; delta > 0 {
+		metric.Add(ctx, float64(delta)/float64(time.Second), options...)
+	}
+	(*previous)[key] = current
+}
+
+func removeFloatRuntimeCounterWithAttributes(
+	ctx context.Context,
+	metric instrument.Float64Counter,
+	previous *map[string]int64,
+	key string,
+	attrs ...attribute.KeyValue,
+) {
+	if *previous != nil {
+		delete(*previous, key)
+	}
+	metric.Remove(ctx, instrument.WithAttributes(attrs...))
 }
 
 func (r *RuntimeMetricsReporter) close() {

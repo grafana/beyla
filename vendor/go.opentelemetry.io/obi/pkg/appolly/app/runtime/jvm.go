@@ -24,7 +24,6 @@ const (
 	JVMMetricMemoryCommitted       JVMRuntimeMetricKind = "jvm.memory.committed"
 	JVMMetricMemoryLimit           JVMRuntimeMetricKind = "jvm.memory.limit"
 	JVMMetricMemoryUsedAfterLastGC JVMRuntimeMetricKind = "jvm.memory.used_after_last_gc"
-	JVMMetricObiHeapUsed           JVMRuntimeMetricKind = "obi.jvm.heap.used"
 )
 
 type JVMMemoryType string
@@ -106,27 +105,6 @@ func ParseJVMMemoryPoolEvent(
 		events = append(events, withJVMMetric(base, JVMMetricMemoryUsedAfterLastGC, used))
 	}
 	return events, nil
-}
-
-func ParseJVMGCHeapSummaryEvent(
-	timestamp uint64,
-	nsPID uint32,
-	pidNamespaceID uint32,
-	gcWhenType RawJVMGCWhenType,
-	used uint64,
-) (JVMRuntimeEvent, error) {
-	phase, err := parseRawJVMGCPhase(gcWhenType)
-	if err != nil {
-		return JVMRuntimeEvent{}, err
-	}
-	return JVMRuntimeEvent{
-		PID:            app.PID(nsPID),
-		PIDNamespaceID: pidNamespaceID,
-		Time:           jvmKernelTime(timestamp),
-		Kind:           JVMMetricObiHeapUsed,
-		GCPhase:        phase,
-		ValueBytes:     used,
-	}, nil
 }
 
 func jvmKernelTime(ktime uint64) time.Time {

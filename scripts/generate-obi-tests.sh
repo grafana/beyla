@@ -762,6 +762,108 @@ apply_schema_transforms() {
         | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
 }
 
+# ---- Schema injections: registry override groups not (yet) in OBI ------------
+# copy_schemas re-derives schemas/obi/ verbatim from .obi-src on every run
+# (rm -rf + cp), so any hand-edit under schemas/ is wiped. Overrides that OBI
+# has not yet declared upstream are re-created here, after apply_schema_transforms,
+# so they survive regeneration. This is the schema-level equivalent of the
+# CODE_INJECTIONS block above: a documented bridge until the declaration lands
+# in OBI's own schemas/obi/groups/ and flows back in via a submodule bump.
+apply_schema_injections() {
+    echo "  Applying schema injections..."
+
+    # cpu.mode=wait (process.cpu.time / process.cpu.utilization).
+    #
+    # The upstream OTel process-metrics semconv
+    # (.deps/upstream-*/model/process/metrics.yaml) states that
+    # `cpu.mode` for process.cpu.time/utilization SHOULD use `user`, `system`,
+    # `wait`. OBI's refactored process-CPU reader emits `cpu.mode=wait`
+    # accordingly. But the SHARED cpu.mode enum
+    # (.deps/upstream-*/model/cpu/registry.yaml) only lists
+    # user/system/nice/idle/iowait/interrupt/steal/kernel — no `wait` — so
+    # weaver live-check flags `wait` as an undefined_enum_variant and the
+    # weaver-validated suites fail (integration TestSuite_PythonAsyncUvloop_*).
+    #
+    # This is a legitimate closed-enum extension, not a bug value, so declare it
+    # rather than suppress it (per schemas/obi/README.md "Closed enum, extended").
+    # Override group id is x.obi.cpu so it sorts last and wins weaver's
+    # last-id-wins resolution; it carries the FULL upstream member list plus
+    # `wait`. Re-sync the upstream members from
+    # .deps/upstream-<version>/model/cpu/registry.yaml when bumping semconv.
+    #
+    # DURABLE FIX: declare this group in OBI's own schemas/obi/groups/ (and
+    # allowlist the expected DuplicateAttributeId in OBI's
+    # scripts/lint-schema-filter.jq); then drop this injection after the bump.
+    cat > "$SCHEMAS_DEST/obi/groups/x_obi_cpu.yaml" <<'EOF'
+groups:
+  # Overrides `cpu.mode`: extends the shared upstream enum with `wait`, the
+  # value OBI emits for process.cpu.time / process.cpu.utilization. The
+  # upstream process-metrics semconv sanctions `wait` for these metrics, but
+  # the shared cpu.mode registry enum has no member for it, so it must be
+  # declared here or weaver flags it as undefined_enum_variant.
+  # Emitters: process-CPU reader (process.cpu.time, process.cpu.utilization).
+  #
+  # See ../README.md for the override mechanics (x.obi.* group id, full
+  # upstream member list, lint allowlist). Members mirror
+  # .deps/upstream-*/model/cpu/registry.yaml verbatim, plus `wait`.
+  #
+  # NOTE: injected by scripts/generate-obi-tests.sh (apply_schema_injections);
+  # a bridge until OBI declares cpu.mode=wait upstream.
+  - id: x.obi.cpu
+    type: attribute_group
+    display_name: OBI CPU Attribute Overrides
+    brief: >
+      OBI override of `cpu.mode` extending the shared upstream enum with `wait`,
+      emitted for process.cpu.time / process.cpu.utilization.
+    attributes:
+      - id: cpu.mode
+        brief: "The mode of the CPU"
+        type:
+          members:
+            - id: user
+              value: 'user'
+              brief: User
+              stability: development
+            - id: system
+              value: 'system'
+              brief: System
+              stability: development
+            - id: nice
+              value: 'nice'
+              brief: Nice
+              stability: development
+            - id: idle
+              value: 'idle'
+              brief: Idle
+              stability: development
+            - id: iowait
+              value: 'iowait'
+              brief: IO Wait
+              stability: development
+            - id: interrupt
+              value: 'interrupt'
+              brief: Interrupt
+              stability: development
+            - id: steal
+              value: 'steal'
+              brief: Steal
+              stability: development
+            - id: kernel
+              value: 'kernel'
+              brief: Kernel
+              stability: development
+            # --- OBI extension (not in upstream semconv v1.41 cpu registry) ---
+            # Sanctioned by upstream process metrics semconv for
+            # process.cpu.time / process.cpu.utilization.
+            - id: wait
+              value: 'wait'
+              brief: Wait
+              stability: development
+        stability: development
+        examples: [ "user", "system" ]
+EOF
+}
+
 generate() {
     echo "Generating OBI tests from $OBI_SRC..."
     local jobs
@@ -809,6 +911,7 @@ generate() {
     fetch_upstream_semconv   # ← populate .deps/ before copying
     copy_schemas
     apply_schema_transforms "$jobs"
+    apply_schema_injections
 
     echo ""
     echo "Generated integration tests at $OBI_DEST"

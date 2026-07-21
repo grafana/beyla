@@ -23,6 +23,5 @@ type MetricsConfig struct {
 type SvcMetricsConfig struct {
 	// Features specifies which metric features to export. Accepted values: application, network,
 	// application_span, application_service_graph, ...
-	// envDefault is provided to avoid breaking changes
 	Features export.Features `yaml:"features"`
 }

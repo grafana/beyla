@@ -154,6 +154,26 @@ var (
 		Prom:    "go_memory_gc_cycles_total",
 		OTEL:    "go.memory.gc.cycles",
 	}
+	GoRuntimeMemoryUsed = Name{
+		Section: "go.memory.used",
+		Prom:    "go_memory_used_bytes",
+		OTEL:    "go.memory.used",
+	}
+	GoRuntimeMemoryAllocated = Name{
+		Section: "go.memory.allocated",
+		Prom:    "go_memory_allocated_bytes_total",
+		OTEL:    "go.memory.allocated",
+	}
+	GoRuntimeMemoryAllocations = Name{
+		Section: "go.memory.allocations",
+		Prom:    "go_memory_allocations_total",
+		OTEL:    "go.memory.allocations",
+	}
+	GoRuntimeCPUTime = Name{
+		Section: "go.cpu.time",
+		Prom:    "go_cpu_time_seconds_total",
+		OTEL:    "go.cpu.time",
+	}
 	GoRuntimeProcessorLimit = Name{
 		Section: "go.processor.limit",
 		Prom:    "go_processor_limit",
@@ -183,11 +203,6 @@ var (
 		Section: "jvm.memory.used_after_last_gc",
 		Prom:    "jvm_memory_used_after_last_gc_bytes",
 		OTEL:    "jvm.memory.used_after_last_gc",
-	}
-	ObiJVMHeapUsed = Name{
-		Section: "obi.jvm.heap.used",
-		Prom:    "obi_jvm_heap_used_bytes",
-		OTEL:    "obi.jvm.heap.used",
 	}
 	Resource = Name{
 		Section: "resource",

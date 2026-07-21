@@ -22,6 +22,7 @@ func ddlog() *slog.Logger {
 type dockerAPIClient interface {
 	IsEnabled(context.Context) bool
 	ContainerInfo(context.Context, app.PID) (docker.ContainerMeta, bool)
+	InvalidatePID(app.PID)
 }
 
 func DockerDiscoveryDecoratorProvider(
@@ -69,6 +70,7 @@ func (dd *dockerDecorator) decorate(ctx context.Context) {
 				}
 			case EventDeleted:
 				delete(dd.containerByPID, ev.Obj.pid)
+				dd.docker.InvalidatePID(ev.Obj.pid)
 			}
 		}
 		dd.out.SendCtx(ctx, instrumentables)

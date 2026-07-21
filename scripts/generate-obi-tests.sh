@@ -511,6 +511,37 @@ ensure_multiexec_local_image_reuse() {
     done
 }
 
+stamp_obi_revision_into_multiexec_compose() {
+    # Cache-busting stamp for the VM integration "docker-images" cache.
+    #
+    # workflow_integration_tests_vm.yml keys the pre-built docker-images.tar on
+    # the hash of the multiexec compose files plus the referenced Dockerfiles.
+    # The hatest-obi (Beyla) image those compose files build is compiled from
+    # the vendored OBI, but OBI is vendored via a local `replace => ./.obi-src`:
+    # an OBI submodule bump changes neither go.mod/go.sum (the require is a
+    # static placeholder and OBI is absent from go.sum) nor any Dockerfile or
+    # compose file. Without a signal here the cache key is byte-identical across
+    # an OBI bump, so the run restores a stale hatest-obi image built from the
+    # previous OBI — e.g. emitting underscore target_info/traces_target_info
+    # while the regenerated weaver registry declares dot-notation target.info /
+    # traces.target.info, which weaver's OTLP live-check then rejects.
+    #
+    # Stamping the resolved OBI revision into the (cache-keyed) multiexec compose
+    # files makes the cache key change whenever OBI changes, forcing hatest-obi
+    # to be rebuilt from the current vendor. The stamp is a YAML comment, so it
+    # is inert to docker compose. Run this after all compose transforms so it is
+    # not clobbered.
+    local obi_rev
+    obi_rev="$(git -C .obi-src rev-parse HEAD 2>/dev/null \
+        || git rev-parse HEAD:.obi-src 2>/dev/null \
+        || echo unknown)"
+    echo "  Stamping OBI revision ($obi_rev) into multiexec compose files..."
+    for file in "$OBI_DEST/docker-compose-multiexec.yml" "$OBI_DEST/docker-compose-multiexec-host.yml"; do
+        [[ -f "$file" ]] || continue
+        printf '# obi-revision: %s\n' "$obi_rev" >> "$file"
+    done
+}
+
 split_docker_build_contexts() {
     # Split docker.Build: OBI components (testserver, pythontestserver, etc.) need
     # .obi-src as build context; Beyla needs repo root. Tests with both get two Build calls.
@@ -885,6 +916,7 @@ generate() {
     split_docker_build_contexts
     apply_behavioral_transforms "$jobs"
     restore_weaver_registry_mount_paths   # ← restore /obi-registry after BEHAVIORAL_TRANSFORMS
+    stamp_obi_revision_into_multiexec_compose   # ← after all compose transforms, so the stamp survives
     ensure_daemonset_process_metrics_enabled
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports

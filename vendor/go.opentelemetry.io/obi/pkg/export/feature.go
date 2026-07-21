@@ -36,7 +36,6 @@ const (
 	FeatureGraph
 	FeatureApplicationHost
 	FeatureApplicationRuntime
-	FeatureApplicationJVM
 	FeatureEBPF
 	FeatureAll = Features(^uint(0)) // all bits to 1
 )
@@ -65,16 +64,21 @@ var FeatureMapper = map[string]Features{
 	"application_service_graph":    FeatureGraph,
 	"application_host":             FeatureApplicationHost,
 	"application_runtime":          FeatureApplicationRuntime,
-	"application_jvm":              FeatureApplicationJVM,
-	"ebpf":                         FeatureEBPF,
-	"all":                          FeatureAll,
-	"*":                            FeatureAll,
+	// Deprecated alias kept for v0.10 config compatibility.
+	"application_jvm": FeatureApplicationRuntime,
+	"ebpf":            FeatureEBPF,
+	"all":             FeatureAll,
+	"*":               FeatureAll,
 }
 
 func (Features) JSONSchema() *jsonschema.Schema {
 	features := make([]any, 0, len(FeatureMapper))
 
 	for k := range FeatureMapper {
+		// Keep application_jvm accepted for v0.10 config compatibility, but do not advertise it in generated docs.
+		if k == "application_jvm" {
+			continue
+		}
 		features = append(features, k)
 	}
 	return &jsonschema.Schema{
@@ -146,7 +150,7 @@ func (f Features) Empty() bool {
 }
 
 func (f Features) AnyAppO11yMetric() bool {
-	return f.any(AppO11yFeatures | FeatureApplicationRuntime | FeatureApplicationJVM)
+	return f.any(AppO11yFeatures | FeatureApplicationRuntime)
 }
 
 func (f Features) SpanMetrics() bool {
@@ -166,7 +170,6 @@ func (f Features) AppOrSpan() bool {
 		FeatureSpanSizes |
 		FeatureApplicationHost |
 		FeatureApplicationRuntime |
-		FeatureApplicationJVM |
 		FeatureSpanLegacy |
 		FeatureSpanOTel)
 }
@@ -185,10 +188,6 @@ func (f Features) AppHost() bool {
 
 func (f Features) AppRuntime() bool {
 	return f.any(FeatureApplicationRuntime)
-}
-
-func (f Features) AppJVM() bool {
-	return f.any(FeatureApplicationJVM)
 }
 
 func (f Features) AppRED() bool {

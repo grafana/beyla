@@ -37,11 +37,58 @@ var tokenIsDBOperation = map[int]bool{
 	sqlparser.REPLACE:  true,
 }
 
-//nolint:cyclop
+// SQLTargetCollection reduces the tables referenced by a statement to the
+// semconv db.collection.name: multi-collection SELECTs carry no collection,
+// while writes always target the first table (INSERT INTO t1 SELECT FROM t2)
+// Rule [3] from the db metrics says don't put the collection name if there is more
+// than one table mentioned in the SQL statement.
+// https://opentelemetry.io/docs/specs/semconv/db/database-metrics/#metric-dbclientoperationduration
+func SQLTargetCollection(op string, tables []string) string {
+	if len(tables) == 0 || (op == "SELECT" && len(tables) > 1) {
+		return ""
+	}
+	return tables[0]
+}
+
 func SQLParseOperationAndTable(query string) (string, string) {
+	op, tables := SQLParseOperationAndTables(query)
+	return op, SQLTargetCollection(op, tables)
+}
+
+const maxQuerySummaryLen = 255
+
+// SQLQuerySummary builds the semconv db.query.summary: the operation followed
+// by its space-separated targets, truncated at a target boundary; empty when
+// there are no targets so span naming can fall back to {op} {namespace}
+func SQLQuerySummary(op string, tables []string) string {
+	if op == "" || len(tables) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString(op)
+	appended := false
+	for _, t := range tables {
+		if sb.Len()+1+len(t) > maxQuerySummaryLen {
+			break
+		}
+		sb.WriteByte(' ')
+		sb.WriteString(t)
+		appended = true
+	}
+	if !appended {
+		return ""
+	}
+	return sb.String()
+}
+
+// SQLParseOperationAndTables returns the operation and the distinct table
+// names referenced by the statement, in order of appearance
+//
+//nolint:cyclop
+func SQLParseOperationAndTables(query string) (string, []string) {
 	var operation string
 	var lastType int
-	tables := []string{}
+	var tables []string
 
 	tokens := sqlparser.NewTokenizer(strings.NewReader(query))
 	addedTable := false
@@ -61,7 +108,8 @@ func SQLParseOperationAndTable(query string) (string, string) {
 
 		if tokenType == 46 && addedTable { // a dot
 			tokenType, data = tokens.Scan()
-			if tokenType == sqlparser.ID {
+			// quoted identifiers ("Users") tokenize as STRING under the MySQL dialect
+			if tokenType == sqlparser.ID || tokenType == sqlparser.STRING {
 				tables[len(tables)-1] = tables[len(tables)-1] + "." + string(data)
 				continue
 			}
@@ -86,11 +134,20 @@ func SQLParseOperationAndTable(query string) (string, string) {
 		}
 	}
 
-	if len(tables) > 1 && operation != "SELECT" {
-		tables = tables[:1]
+	if len(tables) > 1 {
+		seen := make(map[string]struct{}, len(tables))
+		distinct := tables[:0]
+		for _, t := range tables {
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			distinct = append(distinct, t)
+		}
+		tables = distinct
 	}
 
-	return operation, strings.Join(tables, ",")
+	return operation, tables
 }
 
 func SQLParseError(kind request.SQLKind, buf []uint8) *request.SQLError {

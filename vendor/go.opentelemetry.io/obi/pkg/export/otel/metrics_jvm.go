@@ -25,7 +25,6 @@ type jvmRuntimeMetrics struct {
 	memoryCommitted       *jvmCurrentUpDownCounter
 	memoryLimit           *jvmCurrentUpDownCounter
 	memoryUsedAfterLastGC *jvmCurrentUpDownCounter
-	obiJVMHeapUsed        *Expirer[runtimemetrics.RuntimeMetricSnapshot, instrument.Int64Gauge, int64]
 }
 
 type jvmCurrentUpDownCounter struct {
@@ -48,7 +47,6 @@ type jvmCurrentUpDownCounterEntry struct {
 
 func setupJVMRuntimeMeters(ctx context.Context, m *jvmRuntimeMetrics, meter instrument.Meter, ttl time.Duration) error {
 	memoryAttrs := jvmMemoryOTELAttributes()
-	heapAttrs := jvmHeapOTELAttributes()
 	var err error
 
 	m.ctx = ctx
@@ -76,12 +74,6 @@ func setupJVMRuntimeMeters(ctx context.Context, m *jvmRuntimeMetrics, meter inst
 	}
 	m.memoryUsedAfterLastGC = newJVMCurrentUpDownCounter(ctx, memoryUsedAfterLastGC, memoryAttrs, timeNow, ttl)
 
-	heapUsed, err := meter.Int64Gauge(attributes.ObiJVMHeapUsed.OTEL, instrument.WithUnit("By"))
-	if err != nil {
-		return fmt.Errorf("creating OBI JVM heap used gauge: %w", err)
-	}
-	m.obiJVMHeapUsed = NewExpirer[runtimemetrics.RuntimeMetricSnapshot, instrument.Int64Gauge, int64](ctx, heapUsed, heapAttrs, timeNow, ttl)
-
 	return nil
 }
 
@@ -90,7 +82,6 @@ func (m *jvmRuntimeMetrics) record(snapshot runtimemetrics.RuntimeMetricSnapshot
 		return
 	}
 
-	ctx := m.ctx
 	value := int64(snapshot.JVM.ValueBytes)
 	switch snapshot.JVM.Kind {
 	case jvmruntime.JVMMetricMemoryUsed:
@@ -101,9 +92,6 @@ func (m *jvmRuntimeMetrics) record(snapshot runtimemetrics.RuntimeMetricSnapshot
 		m.memoryLimit.Record(snapshot, value)
 	case jvmruntime.JVMMetricMemoryUsedAfterLastGC:
 		m.memoryUsedAfterLastGC.Record(snapshot, value)
-	case jvmruntime.JVMMetricObiHeapUsed:
-		gauge, attrs := m.obiJVMHeapUsed.ForRecord(snapshot)
-		gauge.Record(ctx, value, instrument.WithAttributeSet(attrs))
 	}
 }
 
@@ -182,17 +170,6 @@ func jvmMemoryOTELAttributes() []attributes.Field[runtimemetrics.RuntimeMetricSn
 			ExposedName: string(attr.JVMMemoryPoolName.OTEL()),
 			Get: func(snapshot runtimemetrics.RuntimeMetricSnapshot) attribute.KeyValue {
 				return attr.JVMMemoryPoolName.OTEL().String(snapshot.JVM.PoolName)
-			},
-		},
-	}
-}
-
-func jvmHeapOTELAttributes() []attributes.Field[runtimemetrics.RuntimeMetricSnapshot, attribute.KeyValue] {
-	return []attributes.Field[runtimemetrics.RuntimeMetricSnapshot, attribute.KeyValue]{
-		{
-			ExposedName: string(attr.JVMGCPhase.OTEL()),
-			Get: func(snapshot runtimemetrics.RuntimeMetricSnapshot) attribute.KeyValue {
-				return attr.JVMGCPhase.OTEL().String(string(snapshot.JVM.GCPhase))
 			},
 		},
 	}

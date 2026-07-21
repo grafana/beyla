@@ -83,8 +83,9 @@ func mysqlPreparedStatements(b []byte) (string, string, string) {
 
 func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, error) {
 	var (
-		op, table, stmt string
-		span            request.Span
+		op, stmt string
+		tables   []string
+		span     request.Span
 	)
 
 	if requestBuffer.Len() < sqlprune.MySQLHdrSize+1 {
@@ -141,18 +142,18 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 			slog.Debug("MySQL EXECUTE command with unknown statement ID", "stmtID", stmtID)
 			return span, errFallback
 		}
-		op, table = sqlprune.SQLParseOperationAndTable(stmt)
+		op, tables = sqlprune.SQLParseOperationAndTables(stmt)
 	case "QUERY":
-		op, table, stmt = detectSQL(reqRaw[sqlprune.MySQLHdrSize+1:])
+		op, tables, stmt = detectSQL(reqRaw[sqlprune.MySQLHdrSize+1:])
 	default:
 		slog.Debug("MySQL command ID unhandled", "commandID", reqRaw[sqlprune.MySQLHdrSize])
 		return span, errFallback
 	}
 
-	if !validSQL(op, table, request.DBMySQL) {
+	if !validSQL(op, len(tables) > 0, request.DBMySQL) {
 		slog.Debug("MySQL operation and/or table are invalid", "stmt", stmt)
 		return span, errFallback
 	}
 
-	return TCPToSQLToSpan(event, op, table, stmt, request.DBMySQL, sqlCommand, sqlError), nil
+	return TCPToSQLToSpan(event, op, tables, stmt, request.DBMySQL, sqlCommand, sqlError), nil
 }

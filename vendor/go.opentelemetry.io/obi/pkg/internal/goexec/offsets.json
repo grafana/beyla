@@ -1306,6 +1306,118 @@
         ]
       }
     },
+    "runtime.consistentHeapStats": {
+      "stats": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      }
+    },
+    "runtime.cpuStats": {
+      "GCAssistTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "GCDedicatedTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "GCIdleTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "GCPauseTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "IdleTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "ScavengeAssistTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "ScavengeBgTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "UserTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.23.0"
+          }
+        ]
+      }
+    },
     "runtime.gcControllerState": {
       "gcPercent": {
         "versions": {
@@ -1390,6 +1502,96 @@
         ]
       }
     },
+    "runtime.heapStatsDelta": {
+      "committed": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "inStacks": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "largeAlloc": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 48,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "largeAllocCount": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 56,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "smallAllocCount": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 64,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "smallFreeCount": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 632,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 624,
+            "since": "1.25.0"
+          }
+        ]
+      }
+    },
     "runtime.moduledata": {
       "etext": {
         "versions": {
@@ -1465,22 +1667,78 @@
       }
     },
     "runtime.mstats": {
-      "numforcedgc": {
+      "buckhash_sys": {
         "versions": {
-          "oldest": "1.17.0",
-          "newest": "1.26.4"
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
         },
         "offsets": [
           {
-            "offset": 4284,
-            "since": "1.17.0"
+            "offset": 3568,
+            "since": "1.23.0"
           },
           {
-            "offset": 7708,
-            "since": "1.19.0"
+            "offset": 3544,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "gcMiscSys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 3576,
+            "since": "1.23.0"
           },
           {
-            "offset": 7684,
+            "offset": 3552,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "heapStats": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "mcache_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 3560,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3536,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "mspan_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 3552,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3528,
             "since": "1.25.0"
           }
         ]
@@ -1502,6 +1760,64 @@
           {
             "offset": 7680,
             "since": "1.25.0"
+          }
+        ]
+      },
+      "other_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 3584,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3560,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "stacks_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 3544,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3520,
+            "since": "1.25.0"
+          }
+        ]
+      }
+    },
+    "runtime.workType": {
+      "cpuStats": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 472,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 504,
+            "since": "1.23.4"
+          },
+          {
+            "offset": 592,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 728,
+            "since": "1.26.0"
           }
         ]
       }

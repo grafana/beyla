@@ -303,6 +303,9 @@ func loadModuledataOffsets(elfF *elf.File) (moduledataOffsets, error) {
 	if err != nil {
 		return moduledataOffsets{}, fmt.Errorf("getting Go version: %w", err)
 	}
+	if !supportedGoVersion(goVersion) {
+		return moduledataOffsets{}, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
+	}
 
 	goVersion = strings.ReplaceAll(goVersion, "go", "")
 

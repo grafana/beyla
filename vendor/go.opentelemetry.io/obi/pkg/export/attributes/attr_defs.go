@@ -270,15 +270,6 @@ func getDefinitions(
 		nil,
 	)
 
-	jvmHeapAttributes := NewAttrReportGroup(
-		false,
-		[]*AttrReportGroup{&appAttributes},
-		map[attr.Name]Default{
-			attr.JVMGCPhase: true,
-		},
-		nil,
-	)
-
 	httpRoutes := NewAttrReportGroup(
 		!groups.Has(GroupHTTPRoutes),
 		nil,
@@ -389,10 +380,11 @@ func getDefinitions(
 		DBClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{
-				attr.ServerAddr:   true,
-				attr.DBOperation:  true,
-				attr.DBSystemName: true,
-				attr.ErrorType:    true,
+				attr.ServerAddr:       true,
+				attr.DBOperation:      true,
+				attr.DBSystemName:     true,
+				attr.ErrorType:        true,
+				attr.DBCollectionName: false,
 			},
 		},
 		MessagingPublishDuration.Section: {
@@ -502,10 +494,6 @@ func getDefinitions(
 		},
 		JVMMemoryUsedAfterLastGC.Section: {
 			SubGroups:  []*AttrReportGroup{&jvmMemoryAttributes},
-			Attributes: map[attr.Name]Default{},
-		},
-		ObiJVMHeapUsed.Section: {
-			SubGroups:  []*AttrReportGroup{&jvmHeapAttributes},
 			Attributes: map[attr.Name]Default{},
 		},
 		StatTCPRtt.Section: {

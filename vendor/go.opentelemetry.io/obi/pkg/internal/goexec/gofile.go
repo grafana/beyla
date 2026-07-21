@@ -16,21 +16,44 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// minGoVersion defines the minimum instrumentable Go version. If the target binary was
-// compiled using an older Go version, it will be treated as a non-Go program.
-const minGoVersion = "1.17"
+const (
+	// minGoVersion defines the minimum instrumentable Go version. If the target binary was
+	// compiled using an older Go version, it will be treated as a non-Go program.
+	minGoVersion                    = "1.17"
+	minGoRuntimeMemoryMetricVersion = "1.23"
+)
+
+var goVersionPattern = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?`)
 
 // supportedGoVersion checks if the given Go version string is equal or greater than the
 // minimum supported version.
 func supportedGoVersion(version string) bool {
-	re := regexp.MustCompile(`\d+\.\d+(?:\.\d+)?`)
-	match := re.FindStringSubmatch(version)
-	if match == nil {
+	return goVersionAtLeast(version, minGoVersion)
+}
+
+// SupportsGoRuntimeMemoryMetrics reports whether the target Go version is in
+// OBI's supported range for collecting stable heap snapshots.
+func SupportsGoRuntimeMemoryMetrics(elfFile *elf.File) (bool, error) {
+	if elfFile == nil {
+		return false, errors.New("missing ELF file")
+	}
+
+	goVersion, _, err := getGoDetails(elfFile)
+	if err != nil {
+		return false, fmt.Errorf("getting Go version: %w", err)
+	}
+
+	return goVersionAtLeast(goVersion, minGoRuntimeMemoryMetricVersion), nil
+}
+
+func goVersionAtLeast(version, minimum string) bool {
+	match := goVersionPattern.FindString(version)
+	if match == "" {
 		return false
 	}
-	version = match[0]
+
 	// 'semver' package requires version strings to begin with a leading "v".
-	return semver.Compare("v"+version, "v"+minGoVersion) >= 0
+	return semver.Compare("v"+match, "v"+minimum) >= 0
 }
 
 // findLibraryVersions looks for all the libraries and versions inside the elf file.

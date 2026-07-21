@@ -140,7 +140,7 @@ func resourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.KeyV
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(service.UID.Name),
 		// SpanMetrics requires an extra attribute besides service name
-		// to generate the traces_target_info metric,
+		// to generate the traces.target.info / traces_target_info metric,
 		// so the service is visible in the ServicesList
 		// This attribute also allows that App O11y plugin shows this app as a Go application.
 		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),

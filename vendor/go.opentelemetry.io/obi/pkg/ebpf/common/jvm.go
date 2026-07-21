@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	EventTypeGoRuntimeMetric  = 17 // EVENT_GO_RUNTIME_METRIC
-	EventTypeJVMGCHeapSummary = 19 // EVENT_JVM_GC_HEAP_SUMMARY
-	EventTypeJVMMemoryPoolGC  = 20 // EVENT_JVM_MEM_POOL_GC
+	EventTypeGoRuntimeMetric = 17 // EVENT_GO_RUNTIME_METRIC
+	EventTypeJVMMemoryPoolGC = 19 // EVENT_JVM_MEM_POOL_GC
 )
 
 type RuntimeMetricSender interface {
@@ -51,7 +50,7 @@ func HandleRuntimeMetricsRecord(
 			return true, nil
 		}
 		return true, eventContext.RuntimeMetrics.SendGoRuntimeMetricRecord(ctx, record, filter)
-	case EventTypeJVMGCHeapSummary, EventTypeJVMMemoryPoolGC:
+	case EventTypeJVMMemoryPoolGC:
 		for _, handler := range handlers {
 			if handler == nil {
 				continue

@@ -127,11 +127,21 @@ func (p *Tracer) rebuildValidPids() {
 func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	p.pidsFilter.AllowPID(pid, ns, fi, ebpfcommon.PIDTypeKProbes)
 	p.rebuildValidPids()
+	// Override potential negative cache entry for this PID
+	if p.bpfObjects.PidCache != nil {
+		pidU32 := uint32(pid)
+		_ = p.bpfObjects.PidCache.Put(pidU32, pidU32)
+	}
 }
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.pidsFilter.BlockPID(pid, ns)
 	p.rebuildValidPids()
+	// Remove from cache so next access re-evaluates
+	if p.bpfObjects.PidCache != nil {
+		pidU32 := uint32(pid)
+		_ = p.bpfObjects.PidCache.Delete(pidU32)
+	}
 }
 
 func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
@@ -229,7 +239,7 @@ func (p *Tracer) constants() map[string]any {
 	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
 	m["g_bpf_traceparent_enabled"] = p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.ContextPropagation.IsEnabled()
 	m["jvm_sampling_interval_ns"] = uint64(0)
-	if p.cfg.JVMRuntimeMetrics.Enabled {
+	if p.jvmRuntimeMetricsEnabled() {
 		m["jvm_sampling_interval_ns"] = uint64(p.cfg.JVMRuntimeMetrics.SamplingInterval.Nanoseconds())
 	}
 
@@ -482,20 +492,11 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			}},
 		},
 	}
-	if p.cfg.JVMRuntimeMetrics.Enabled {
-		m["libjvm.so"] = map[string][]*ebpfcommon.ProbeDesc{
-			"report_gc_heap_summary": {{
-				Required:      false,
-				Start:         p.bpfObjects.ObiUprobeReportGcHeapSummary,
-				SymbolMatcher: ebpfcommon.SymbolMatcherContains,
-			}},
-		}
-	}
 	return m
 }
 
 func (p *Tracer) USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc {
-	if p.cfg == nil || !p.cfg.JVMRuntimeMetrics.Enabled {
+	if !p.jvmRuntimeMetricsEnabled() {
 		return nil
 	}
 	return map[string][]*ebpfcommon.USDTProbeDesc{
@@ -642,7 +643,7 @@ func (p *Tracer) Run(
 	p.log.Info("Launching p.Tracer")
 
 	cfg := &p.cfg.EBPF
-	if p.cfg.JVMRuntimeMetrics.Enabled {
+	if p.jvmRuntimeMetricsEnabled() {
 		if p.runtimeMetricsSender() == nil {
 			p.log.Warn("JVM runtime metrics enabled without runtime metrics queue")
 		} else {
@@ -661,6 +662,10 @@ func (p *Tracer) Run(
 		p.log,
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
+}
+
+func (p *Tracer) jvmRuntimeMetricsEnabled() bool {
+	return p.cfg != nil && p.cfg.JoinMetricsConfig().Features.AppRuntime()
 }
 
 func (p *Tracer) processSharedRingbufRecord(
@@ -697,16 +702,6 @@ func (p *Tracer) handleJVMRuntimeMetricsRecord(
 
 	eventType := record.RawSample[0]
 	switch eventType {
-	case ebpfcommon.EventTypeJVMGCHeapSummary:
-		if p.eventCtx == nil || p.eventCtx.RuntimeMetrics == nil {
-			return true, nil
-		}
-		event, ignore, err := p.parseJVMGCHeapSummaryRecord(record)
-		if err != nil || ignore {
-			return true, err
-		}
-		p.eventCtx.RuntimeMetrics.SendJVMRuntimeMetrics(ctx, []jvmruntime.JVMRuntimeEvent{event})
-		return true, nil
 	case ebpfcommon.EventTypeJVMMemoryPoolGC:
 		if p.eventCtx == nil || p.eventCtx.RuntimeMetrics == nil {
 			return true, nil
@@ -727,37 +722,6 @@ func (p *Tracer) runtimeMetricsSender() ebpfcommon.RuntimeMetricSender {
 		return nil
 	}
 	return p.eventCtx.RuntimeMetrics
-}
-
-func (p *Tracer) parseJVMGCHeapSummaryRecord(record *ringbuf.Record) (jvmruntime.JVMRuntimeEvent, bool, error) {
-	raw, err := ebpfcommon.ReinterpretCast[BpfJvmGcHeapSummaryEvent](record.RawSample)
-	if err != nil {
-		return jvmruntime.JVMRuntimeEvent{}, false, err
-	}
-
-	event, err := jvmruntime.ParseJVMGCHeapSummaryEvent(
-		raw.Timestamp,
-		raw.NsPid,
-		raw.PidNsId,
-		jvmruntime.RawJVMGCWhenType(raw.GcWhenType),
-		raw.Used,
-	)
-	if err != nil {
-		return jvmruntime.JVMRuntimeEvent{}, false, err
-	}
-	if !ebpfcommon.DecorateJVMRuntimeEvent(p.pidsFilter, &event) {
-		return jvmruntime.JVMRuntimeEvent{}, true, nil
-	}
-	if p.log != nil {
-		p.log.Debug("received JVM GC heap summary event",
-			"pid", event.PID,
-			"service", event.Service.UID.Name,
-			"namespace", event.Service.UID.Namespace,
-			"phase", event.GCPhase,
-			"value_bytes", event.ValueBytes,
-		)
-	}
-	return event, false, nil
 }
 
 func (p *Tracer) parseJVMMemoryPoolRecord(record *ringbuf.Record) ([]jvmruntime.JVMRuntimeEvent, bool, error) {

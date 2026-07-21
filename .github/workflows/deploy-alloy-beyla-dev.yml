@@ -54,8 +54,9 @@ jobs:
           fi
           SHORT_SHA="$(git rev-parse --short HEAD)"
           echo "image_tag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
-          echo "alloy-beyla dev image tag: ${IMAGE_TAG}, beyla short SHA: ${SHORT_SHA}"
+          echo "alloy-beyla dev image tag: ${IMAGE_TAG}, beyla image tag: ${VERSION}, beyla short SHA: ${SHORT_SHA}"
 
       - name: Log in to Google Artifact Registry
         uses: grafana/shared-workflows/actions/login-to-gar@00646b30431b955ec3c00982b23b1eeb7b66445b # v1.0.0
@@ -70,6 +71,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
           SHORT_SHA: ${{ steps.tag.outputs.short_sha }}
         # zizmor: ignore[template-injection] CONFIG_JSON is locally generated and passed as plain string
         run: |
@@ -92,7 +94,7 @@ jobs:
               {
                 "file_path": "ksonnet/environments/beyla/versions.libsonnet",
                 "jsonnet_key_path": "dev.container_image_tag",
-                "jsonnet_value": "${IMAGE_TAG}"
+                "jsonnet_value": "${VERSION}"
               },
               {
                 "file_path": "ksonnet/environments/beyla/versions.libsonnet",

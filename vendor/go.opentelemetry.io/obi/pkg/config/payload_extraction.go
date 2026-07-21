@@ -98,13 +98,16 @@ type GenAIConfig struct {
 	Rerank RerankConfig `yaml:"rerank"`
 	// Vector retrieval payload extraction and parsing (Pinecone, Qdrant, Milvus, Chroma, Weaviate, etc.)
 	Retrieval RetrievalConfig `yaml:"retrieval"`
+	// OpenAI-compatible gateway payload extraction and parsing
+	OpenAICompatible OpenAICompatibleConfig `yaml:"openai_compatible"`
 }
 
 func (g *GenAIConfig) Enabled() bool {
 	return g.Anthropic.Enabled || g.OpenAI.Enabled ||
 		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled ||
 		g.MCP.Enabled ||
-		g.Embedding.Enabled || g.Rerank.Enabled || g.Retrieval.Enabled
+		g.Embedding.Enabled || g.Rerank.Enabled || g.Retrieval.Enabled ||
+		g.OpenAICompatible.Enabled
 }
 
 type OpenAIConfig struct {
@@ -152,6 +155,22 @@ type RetrievalConfig struct {
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_RETRIEVAL_ENABLED" validate:"boolean"`
 }
 
+type OpenAICompatibleConfig struct {
+	// Enable OpenAI-compatible gateway payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_OPENAI_COMPATIBLE_ENABLED" validate:"boolean"`
+	// Opt-in allowlist of gateway destinations to match by host (case-insensitive) with optional port and provider name
+	Gateways []OpenAICompatibleGateway `yaml:"gateways" validate:"dive"`
+}
+
+type OpenAICompatibleGateway struct {
+	// Gateway hostname to match (case-insensitive)
+	Host string `yaml:"host" validate:"required"`
+	// Destination port; when 0 or omitted, matches any port
+	Port int `yaml:"port" validate:"gte=0,lte=65535"`
+	// Provider name reported in the gen_ai.system span attribute
+	Provider string `yaml:"provider"`
+}
+
 type JSONRPCConfig struct {
 	// Enable JSON-RPC payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_JSONRPC_ENABLED" validate:"boolean"`
@@ -171,6 +190,10 @@ type EnrichmentConfig struct {
 // Required fields (action, type, scope) are enforced by validate:"required" tags.
 func (c EnrichmentConfig) Validate() error {
 	for i, rule := range c.Rules {
+		if rule.ObfuscationString != nil && rule.Action != HTTPParsingActionObfuscate {
+			return fmt.Errorf("rule %d: obfuscation_string can only be used with action \"obfuscate\"", i)
+		}
+
 		switch rule.Type {
 		case HTTPParsingRuleTypeHeaders:
 			if err := validateHeaderRule(i, rule); err != nil {
@@ -229,8 +252,9 @@ func validateBodyRule(i int, rule HTTPParsingRule) error {
 type HTTPParsingPolicy struct {
 	// DefaultAction specifies what to do when no rule matches, per type.
 	DefaultAction HTTPParsingDefaultAction `yaml:"default_action"`
-	// ObfuscationString is the replacement string used when a rule's action is "obfuscate"
-	ObfuscationString string `yaml:"obfuscation_string" env:"OTEL_EBPF_HTTP_ENRICHMENT_OBFUSCATION_STRING"`
+	// DefaultObfuscationString is the replacement string used when a rule's action is "obfuscate" and
+	// the rule doesn't define it's own obfuscation_string.
+	DefaultObfuscationString string `yaml:"obfuscation_string" env:"OTEL_EBPF_HTTP_ENRICHMENT_OBFUSCATION_STRING"`
 }
 
 // HTTPParsingDefaultAction specifies the default action per rule type.
@@ -249,6 +273,8 @@ type HTTPParsingRule struct {
 	Scope HTTPParsingScope `yaml:"scope" validate:"required"`
 	// Match defines the matching criteria for this rule
 	Match HTTPParsingMatch `yaml:"match"`
+	// ObfuscationString is the replacement string used when a rule's action is "obfuscate"
+	ObfuscationString *string `yaml:"obfuscation_string"`
 }
 
 // HTTPParsingRuleType specifies the target of a parsing rule.

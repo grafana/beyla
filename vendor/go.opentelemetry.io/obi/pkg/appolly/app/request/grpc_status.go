@@ -4,12 +4,14 @@
 package request // import "go.opentelemetry.io/obi/pkg/appolly/app/request"
 
 import (
-	"strconv"
-
 	grpc_codes "google.golang.org/grpc/codes"
 )
 
 // GRPCStatusCodeString returns the canonical gRPC status code string per semconv.
+// It returns "" when status is not a valid gRPC code (0-16) — e.g. an HTTP
+// status that leaked through protocol detection, or a failed eBPF status read.
+// Callers must then omit the attribute instead of emitting a made-up value
+// that would violate the semconv gRPC status enum.
 func GRPCStatusCodeString(status int) string {
 	switch grpc_codes.Code(status) {
 	case grpc_codes.OK:
@@ -47,6 +49,6 @@ func GRPCStatusCodeString(status int) string {
 	case grpc_codes.Unauthenticated:
 		return "UNAUTHENTICATED"
 	default:
-		return "CODE(" + strconv.FormatInt(int64(status), 10) + ")"
+		return ""
 	}
 }

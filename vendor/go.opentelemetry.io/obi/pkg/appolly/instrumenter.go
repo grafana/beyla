@@ -292,12 +292,5 @@ func spanPtrPromGetters(cfg *obi.Config) attributes.NamedGetters[request.Span, s
 // for any of the possible service matches.
 // Then they would be used or not for each service, based on the per-service features-.
 func JoinMetricsConfig(cfg *obi.Config) *perapp.MetricsConfig {
-	mc := cfg.Metrics
-	for _, d := range cfg.Discovery.Instrument {
-		mc.Features |= d.Metrics.Features
-	}
-	for _, d := range cfg.Discovery.Services {
-		mc.Features |= d.Metrics.Features
-	}
-	return &mc
+	return cfg.JoinMetricsConfig()
 }

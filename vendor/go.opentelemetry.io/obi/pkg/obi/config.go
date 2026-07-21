@@ -194,7 +194,7 @@ var DefaultConfig = Config{
 							Headers: config.HTTPParsingActionExclude,
 							Body:    config.HTTPParsingActionExclude,
 						},
-						ObfuscationString: "***",
+						DefaultObfuscationString: "***",
 					},
 					Rules: []config.HTTPParsingRule{},
 				},
@@ -440,6 +440,25 @@ type Config struct {
 	HealthCheck HealthCheckConfig `yaml:"health_check"`
 }
 
+// JoinMetricsConfig returns a combination of the base and per-application metrics config.
+// It is used to initialize resources that should be available if they are enabled
+// for any possible service match. Per-service features still decide whether each
+// service emits the corresponding metrics.
+func (c *Config) JoinMetricsConfig() *perapp.MetricsConfig {
+	if c == nil {
+		return &perapp.MetricsConfig{}
+	}
+
+	mc := c.Metrics
+	for _, d := range c.Discovery.Instrument {
+		mc.Features |= d.Metrics.Features
+	}
+	for _, d := range c.Discovery.Services {
+		mc.Features |= d.Metrics.Features
+	}
+	return &mc
+}
+
 type HealthCheckConfig struct {
 	// 0 (default) means disabled
 	Port int `yaml:"port" env:"OTEL_EBPF_HEALTH_CHECK_PORT" validate:"gte=0,lte=65535"`
@@ -638,7 +657,6 @@ type JavaConfig struct {
 }
 
 type JVMRuntimeMetricsConfig struct {
-	Enabled          bool          `yaml:"enabled" env:"OBI_JVM_RUNTIME_METRICS_ENABLED"`
 	SamplingInterval time.Duration `yaml:"sampling_interval" env:"OBI_JVM_RUNTIME_METRICS_SAMPLING_INTERVAL"`
 }
 
@@ -667,8 +685,8 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if c.JVMRuntimeMetrics.Enabled && c.JVMRuntimeMetrics.SamplingInterval <= 0 {
-		return ConfigError("jvm_runtime_metrics.sampling_interval must be greater than 0 when jvm_runtime_metrics.enabled is true")
+	if c.JVMRuntimeMetrics.SamplingInterval <= 0 {
+		return ConfigError("jvm_runtime_metrics.sampling_interval must be greater than 0")
 	}
 
 	if err := c.Discovery.Validate(); err != nil {

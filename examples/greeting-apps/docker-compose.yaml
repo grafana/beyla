@@ -18,7 +18,7 @@ services:
 
   # Beyla for NGINX
   nginxbeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -48,7 +48,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   gobeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -78,7 +78,7 @@ services:
 
   # Beyla for Java Spring Boot 3.0 GraalVM Native Image
   javabeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -108,7 +108,7 @@ services:
 
   # Beyla for Rust Actix
   rustbeyla:
-    image: grafana/beyla:latest@sha256:3b010f4f8515b50bf1be7b8aa963fe31e1bd53c309c886c07b828ca7c605433c
+    image: grafana/beyla:latest@sha256:133b8d66190f21e20365d9972e1621513ea5e44518fb71e1c3e0180c64815566
     volumes:
       - ./configs/:/configs
       - ./system/sys/kernel/security:/sys/kernel/security
@@ -159,7 +159,7 @@ services:
 
   # Mimir -config.file=config-mimir.yaml -server.grpc-listen-port=9096
   mimir:
-    image: grafana/mimir@sha256:39cc23910bbaa60d0280fd162265a22c39120ff61b02bc993f3fd3701fb8606d
+    image: grafana/mimir@sha256:c906a6fc334ba401b901230b34f660cb1bb1818ef1b169d90e7e4033b97c4f59
     container_name: demo-mimir
     command:
       - -config.file=/etc/mimir/mimir-config.yaml

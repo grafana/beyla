@@ -88,29 +88,32 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: grafana/alloy
-          ref: beyla_hackathon
+          ref: beyla_hackathon_simple
           persist-credentials: "false"
 
       # The git commit is required: Alloy's tools/image-tag appends "+dirty"
       # to the embedded VERSION when the worktree has uncommitted changes,
       # and GIT_REVISION would otherwise report the upstream commit's SHA.
       # The commit is local to this runner and never pushed.
-      - name: Pin BEYLA_VERSION in Alloy Makefile
+      - name: Pin Beyla version in Alloy
         env:
           BEYLA_VERSION: ${{ inputs.beyla_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [[ ! "${BEYLA_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
             echo "::error::Invalid beyla_version: ${BEYLA_VERSION}. Expected vX.Y.Z or vX.Y.Z-suffix."
             exit 1
           fi
-          sed -i -E "s|^(BEYLA_VERSION[[:space:]]+\?=).*$|\1 ${BEYLA_VERSION}|" Makefile
-          grep '^BEYLA_VERSION' Makefile
-          if ! git diff --quiet Makefile; then
+          VERSION_FILE=internal/component/beyla/ebpf/internal/config/gen/beyla/beyla_version.yaml
+          env -u GOOS -u GOARCH -u GOARM go run ./internal/component/beyla/ebpf/internal/config/gen/download.go \
+            --update-checksums "${BEYLA_VERSION}" "${VERSION_FILE}"
+          cat "${VERSION_FILE}"
+          if ! git diff --quiet "${VERSION_FILE}"; then
             git config user.email "grafana-beyla-bot[bot]@users.noreply.github.com"
             git config user.name "grafana-beyla-bot[bot]"
-            git add Makefile
-            git commit -m "Pin BEYLA_VERSION to ${BEYLA_VERSION} (ephemeral)"
+            git add "${VERSION_FILE}"
+            git commit -m "Pin Beyla ${BEYLA_VERSION} (ephemeral)"
           fi
 
       - name: Login to GHCR

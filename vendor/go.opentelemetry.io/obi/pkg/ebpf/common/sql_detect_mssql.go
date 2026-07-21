@@ -155,9 +155,9 @@ func extractTDSPayloads(b *largebuf.LargeBuffer) []byte {
 	return payload
 }
 
-func mssqlExtractBatchSQL(b *largebuf.LargeBuffer) (string, string, string) {
+func mssqlExtractBatchSQL(b *largebuf.LargeBuffer) (string, []string, string) {
 	if b.Len() <= kMSSQLHeaderLen {
-		return "", "", ""
+		return "", nil, ""
 	}
 
 	pktType, _ := b.U8At(0)
@@ -166,13 +166,14 @@ func mssqlExtractBatchSQL(b *largebuf.LargeBuffer) (string, string, string) {
 		return detectSQL(stmt)
 	}
 
-	return "", "", ""
+	return "", nil, ""
 }
 
 func handleMSSQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, error) {
 	var (
-		op, table, stmt string
-		span            request.Span
+		op, stmt string
+		tables   []string
+		span     request.Span
 	)
 
 	if requestBuffer.Len() < kMSSQLHeaderLen {
@@ -188,7 +189,7 @@ func handleMSSQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 
 	switch sqlCommand {
 	case "SQL_BATCH":
-		op, table, stmt = mssqlExtractBatchSQL(requestBuffer)
+		op, tables, stmt = mssqlExtractBatchSQL(requestBuffer)
 	case "RPC":
 		procID, r, err := parseMSSQLRPC(requestBuffer)
 		if err == nil {
@@ -196,7 +197,7 @@ func handleMSSQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 			switch procID {
 			case kMSSQLProcIDPrepExec:
 				text := ucs2ToUTF8(payload)
-				op, table, stmt = detectSQL(text)
+				op, tables, stmt = detectSQL(text)
 			case kMSSQLProcIDPrepare:
 				text := ucs2ToUTF8(payload)
 				_, _, stmt = detectSQL(text)
@@ -217,19 +218,19 @@ func handleMSSQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 						stmtID:   handle,
 					})
 					if found {
-						op, table = sqlprune.SQLParseOperationAndTable(stmt)
+						op, tables = sqlprune.SQLParseOperationAndTables(stmt)
 					}
 				}
 			}
 		}
 	}
 
-	if !validSQL(op, table, request.DBMSSQL) {
+	if !validSQL(op, len(tables) > 0, request.DBMSSQL) {
 		slog.Debug("MSSQL operation and/or table are invalid", "stmt", stmt)
 		return span, errFallback
 	}
 
-	return TCPToSQLToSpan(event, op, table, stmt, request.DBMSSQL, sqlCommand, sqlError), nil
+	return TCPToSQLToSpan(event, op, tables, stmt, request.DBMSSQL, sqlCommand, sqlError), nil
 }
 
 func parseMSSQLRPC(b *largebuf.LargeBuffer) (uint16, largebuf.LargeBufferReader, error) {

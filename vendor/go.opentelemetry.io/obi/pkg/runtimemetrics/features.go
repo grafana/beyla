@@ -7,33 +7,30 @@ import "go.opentelemetry.io/obi/pkg/appolly/app/svc"
 
 type FeatureSet interface {
 	AppRuntime() bool
-	AppJVM() bool
 }
 
 type Enabled struct {
-	Go  bool
-	JVM bool
+	Runtime bool
 }
 
 func EnabledFeatures(features FeatureSet) Enabled {
 	return Enabled{
-		Go:  features.AppRuntime(),
-		JVM: features.AppJVM(),
+		Runtime: features.AppRuntime(),
 	}
 }
 
 func (e Enabled) Any() bool {
-	return e.Go || e.JVM
+	return e.Runtime
 }
 
 func (e Enabled) ShouldReport(snapshot RuntimeMetricSnapshot) bool {
 	if snapshot.Go != nil {
-		return e.Go && snapshot.Service.SDKLanguage == svc.InstrumentableGolang
+		return e.Runtime && snapshot.Service.SDKLanguage == svc.InstrumentableGolang
 	}
 	if snapshot.JVM != nil {
-		return e.JVM &&
+		return e.Runtime &&
 			snapshot.Service.ExportModes.CanExportMetrics() &&
-			snapshot.Service.Features.AppJVM()
+			snapshot.Service.Features.AppRuntime()
 	}
 	return false
 }

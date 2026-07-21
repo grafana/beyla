@@ -193,7 +193,7 @@ network:
 								Headers: obiconfig.HTTPParsingActionExclude,
 								Body:    obiconfig.HTTPParsingActionExclude,
 							},
-							ObfuscationString: "***",
+							DefaultObfuscationString: "***",
 						},
 						Rules: []obiconfig.HTTPParsingRule{},
 					},

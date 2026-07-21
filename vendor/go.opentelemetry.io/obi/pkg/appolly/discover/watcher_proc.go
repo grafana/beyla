@@ -170,7 +170,7 @@ func (pa *pollAccounter) run(ctx context.Context) {
 			log.Warn("can't get system processes", "error", err)
 		} else {
 			if events := pa.snapshot(procs); len(events) > 0 {
-				log.Debug("new process watching events", "events", events)
+				log.Debug("new process watching events", "len", len(events))
 				pa.output.Send(events)
 			}
 		}

@@ -34,22 +34,20 @@ func DockerDecoratorProvider(
 		}
 
 		dd := dockerEnricher{
-			in:             input.Subscribe(msg.SubscriberName("DockerEnricher")),
-			out:            output,
-			containerByPID: map[app.PID]docker.ContainerMeta{},
-			log:            delog(),
-			docker:         ctxInfo.DockerMetadata,
+			in:     input.Subscribe(msg.SubscriberName("DockerEnricher")),
+			out:    output,
+			log:    delog(),
+			docker: ctxInfo.DockerMetadata,
 		}
 		return dd.decorate, nil
 	}
 }
 
 type dockerEnricher struct {
-	in             <-chan []request.Span
-	out            *msg.Queue[[]request.Span]
-	containerByPID map[app.PID]docker.ContainerMeta
-	log            *slog.Logger
-	docker         *docker.ContainerStore
+	in     <-chan []request.Span
+	out    *msg.Queue[[]request.Span]
+	log    *slog.Logger
+	docker *docker.ContainerStore
 }
 
 func (dd *dockerEnricher) decorate(ctx context.Context) {
@@ -66,13 +64,8 @@ func (dd *dockerEnricher) decorate(ctx context.Context) {
 }
 
 func (dd *dockerEnricher) containerInfo(ctx context.Context, pid app.PID) (docker.ContainerMeta, bool) {
-	if ci, ok := dd.containerByPID[pid]; ok {
-		return ci, true
-	}
 	ci, ok := dd.docker.ContainerInfo(ctx, pid)
-	if ok {
-		dd.containerByPID[pid] = ci
-	} else {
+	if !ok {
 		dd.log.Debug("can't find container metadata", "pid", pid)
 	}
 	return ci, ok
@@ -121,6 +114,7 @@ func DockerProcessEventDecoratorProvider(
 					}
 				case exec.ProcessEventTerminated:
 					delete(containerByPID, ev.File.Pid())
+					containers.InvalidatePID(ev.File.Pid())
 				}
 				output.SendCtx(ctx, ev)
 			})

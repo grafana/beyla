@@ -209,7 +209,6 @@ const (
 	SkipSpanMetrics   = Name("span.metrics.skip")
 	JVMMemoryType     = Name("jvm.memory.type")
 	JVMMemoryPoolName = Name("jvm.memory.pool.name")
-	JVMGCPhase        = Name("jvm.gc.phase")
 
 	VendorVersionSuffix  = Name(".version")
 	VendorRevisionSuffix = Name(".revision")

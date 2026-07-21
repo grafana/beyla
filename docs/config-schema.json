@@ -638,7 +638,6 @@
           "all",
           "application",
           "application_host",
-          "application_jvm",
           "application_process",
           "application_runtime",
           "application_service_graph",
@@ -687,6 +686,9 @@
         },
         "openai": {
           "$ref": "#/$defs/OpenAIConfig"
+        },
+        "openai_compatible": {
+          "$ref": "#/$defs/OpenAICompatibleConfig"
         },
         "qwen": {
           "$ref": "#/$defs/QwenConfig"
@@ -991,6 +993,9 @@
         "match": {
           "$ref": "#/$defs/HTTPParsingMatch"
         },
+        "obfuscation_string": {
+          "type": "string"
+        },
         "scope": {
           "$ref": "#/$defs/HTTPParsingScope"
         },
@@ -1158,10 +1163,6 @@
     },
     "JVMRuntimeMetricsConfig": {
       "properties": {
-        "enabled": {
-          "type": "boolean",
-          "x-env-var": "OBI_JVM_RUNTIME_METRICS_ENABLED"
-        },
         "sampling_interval": {
           "type": "string",
           "pattern": "^[0-9]+(ms|s|m)$",
@@ -1740,6 +1741,35 @@
         },
         "not_equals": {
           "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "OpenAICompatibleConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_HTTP_OPENAI_COMPATIBLE_ENABLED"
+        },
+        "gateways": {
+          "items": {
+            "$ref": "#/$defs/OpenAICompatibleGateway"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "OpenAICompatibleGateway": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
         }
       },
       "type": "object"

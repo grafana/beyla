@@ -373,11 +373,7 @@ func resolveInstrPath(
 	return mappedPath, exeIno, mappedPath, true
 }
 
-func (i *instrumenter) uprobes(pid app.PID, p Tracer) error {
-	maps, err := processMaps(pid)
-	if err != nil {
-		return err
-	}
+func (i *instrumenter) uprobes(pid app.PID, p Tracer, maps []*procfs.ProcMap) error {
 	log := ilog().With("probes", "uprobes")
 	if len(maps) == 0 {
 		log.Info("didn't find any process maps, not instrumenting shared libraries", "pid", pid)
@@ -437,16 +433,12 @@ func (i *instrumenter) uprobes(pid app.PID, p Tracer) error {
 	return nil
 }
 
-func (i *instrumenter) usdtProbes(pid app.PID, ns uint32, p Tracer) error {
+func (i *instrumenter) usdtProbes(pid app.PID, ns uint32, p Tracer, maps []*procfs.ProcMap) error {
 	probesByLib := p.USDTProbes()
 	if len(probesByLib) == 0 {
 		return nil
 	}
 
-	maps, err := processMaps(pid)
-	if err != nil {
-		return err
-	}
 	if len(maps) == 0 {
 		ilog().Debug("didn't find any process maps, not instrumenting USDT probes", "pid", pid)
 		return nil
@@ -987,12 +979,26 @@ func (i *instrumenter) gatherGoOffsets(goProbes map[string][]*ebpfcommon.ProbeDe
 		offs, ok := i.offsets.Funcs[symbolName]
 
 		if !ok {
-			// the program function is not in the detected offsets. Ignoring
+			// The program function is not in the detected offsets. Mark the
+			// probes as Skip so instrumentProbes does not attempt to attach
+			// them with Address=0, which would force cilium/ebpf to parse the
+			// full ELF symbol table via lazyLoadSymbols and retain it on
+			// Executable.cachedSymbols for the tracer's lifetime. Emit an
+			// InstrumentationError with a symbol_not_found label to preserve
+			// observability of missing symbols where they might've been
+			// expected.
 			log.Debug("ignoring function", "function", symbolName)
+			for _, probe := range descs {
+				probe.Skip = true
+			}
+			if i.metrics != nil {
+				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorSymbolNotFound)
+			}
 			continue
 		}
 
 		for _, probe := range descs {
+			probe.Skip = false
 			probe.StartOffset = offs.Start
 			probe.ReturnOffsets = offs.Returns
 		}

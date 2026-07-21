@@ -4,6 +4,8 @@
 package svc // import "go.opentelemetry.io/obi/pkg/appolly/app/svc"
 
 import (
+	"log/slog"
+
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
@@ -142,8 +144,15 @@ func (i *Attrs) GetUID() UID {
 	return i.UID
 }
 
-func (i *Attrs) String() string {
+// String uses a value receiver so nested Attrs values (e.g. Span.Service) never reflection-dump EnvVars
+func (i Attrs) String() string {
 	return i.Job()
+}
+
+// LogValue implements slog.LogValuer: JSON handlers marshal exported fields
+// instead of calling String, so without it they would emit EnvVars
+func (i Attrs) LogValue() slog.Value {
+	return slog.StringValue(i.Job())
 }
 
 func (i *Attrs) Job() string {

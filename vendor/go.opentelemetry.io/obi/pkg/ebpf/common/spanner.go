@@ -109,7 +109,8 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 	// From C, assuming 0-ended strings
 	sql := cstr(trace.Sql[:])
 
-	method, path := sqlprune.SQLParseOperationAndTable(sql)
+	method, tables := sqlprune.SQLParseOperationAndTables(sql)
+	path := sqlprune.SQLTargetCollection(method, tables)
 
 	peer := ""
 	peerPort := 0
@@ -127,8 +128,23 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 		hostname = hostname[:idx]
 	}
 
+	subType := trace.SubType
+
+	// if we didn't detect the type in Go, try heuristic detect
+	if subType == uint8(request.DBGeneric) {
+		switch hostPort {
+		case 5432:
+			subType = uint8(request.DBPostgres)
+		case 3306:
+			subType = uint8(request.DBMySQL)
+		case 1434:
+			subType = uint8(request.DBMSSQL)
+		}
+	}
+
 	return request.Span{
 		Type:          request.EventType(trace.Type),
+		SubType:       int(subType),
 		Method:        method,
 		Path:          path,
 		Peer:          peer,
@@ -150,6 +166,7 @@ func SQLRequestTraceToSpan(trace *SQLRequestTrace) request.Span {
 			UserPID:   app.PID(trace.Pid.UserPid),
 			Namespace: trace.Pid.Ns,
 		},
-		Statement: sql,
+		Statement:      sql,
+		DBQuerySummary: sqlprune.SQLQuerySummary(method, tables),
 	}
 }

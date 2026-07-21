@@ -48,9 +48,12 @@ const (
 	SpanMetricsCallsOTel     = "traces_span_metrics_calls_total"
 	SpanMetricsRequestSizes  = "traces_spanmetrics_size_total"
 	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
-	TracesTargetInfo         = "traces_target_info"
-	TargetInfo               = "target_info"
-	TracesHostInfo           = "traces_host_info"
+	// TracesTargetInfo, TargetInfo and TracesHostInfo use OTel dot notation.
+	// The Prometheus exporter keeps the underscore variants of these names
+	// (see pkg/export/prom), following the OpenMetrics convention.
+	TracesTargetInfo = "traces.target.info"
+	TargetInfo       = "target.info"
+	TracesHostInfo   = "traces.host.info"
 )
 
 // CloudHostIDKey is the host ID attribute for cloud provider integrations,
@@ -1078,7 +1081,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 }
 
 func (mr *MetricsReporter) createTargetInfo(attrs *attribute.Set) {
-	mlog().Debug("Creating target_info")
+	mlog().Debug("Creating target.info")
 
 	attrOpt := instrument.WithAttributeSet(*attrs)
 
@@ -1090,7 +1093,7 @@ func (mr *MetricsReporter) deleteTargetInfo(attrs *attribute.Set) {
 		return
 	}
 
-	mlog().Debug("Deleting target_info for", "attrs", attrs)
+	mlog().Debug("Deleting target.info for", "attrs", attrs)
 	attrOpt := instrument.WithAttributeSet(*attrs)
 	mr.targetInfo.Remove(mr.ctx, attrOpt)
 }
@@ -1100,7 +1103,7 @@ func (mr *MetricsReporter) createTracesTargetInfo(svc *svc.Attrs, attrs *attribu
 		return
 	}
 
-	mlog().Debug("Creating traces_target_info")
+	mlog().Debug("Creating traces.target.info")
 
 	attrOpt := instrument.WithAttributeSet(*attrs)
 
@@ -1112,7 +1115,7 @@ func (mr *MetricsReporter) deleteTracesTargetInfo(attrs *attribute.Set) {
 		return
 	}
 
-	mlog().Debug("Deleting traces_target_info for", "attrs", attrs)
+	mlog().Debug("Deleting traces.target.info for", "attrs", attrs)
 
 	attrOpt := instrument.WithAttributeSet(*attrs)
 	mr.tracesTargetInfo.Remove(mr.ctx, attrOpt)
@@ -1289,7 +1292,7 @@ func (mr *MetricsReporter) onSpan(spans []request.Span) {
 		reporter, err := mr.reporters.For(&s.Service)
 		if err != nil {
 			mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
-				"error", err, "service", s.Service)
+				"error", err, "service", s.Service.UID)
 			continue
 		}
 		reporter.record(s, mr)

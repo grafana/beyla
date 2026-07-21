@@ -318,11 +318,11 @@ mainLoop:
 		case podEvent := <-md.podsInfoCh:
 			switch podEvent.Type {
 			case EventCreated:
-				md.log.Debug("created pod event", "event", podEvent.Obj)
+				md.log.Debug("created pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
 				md.handlePodUpdateEvent(podEvent.Obj)
 			case EventDeleted:
 				md.cleanupPodData(podEvent.Obj)
-				md.log.Debug("deleted pod event", "event", podEvent.Obj)
+				md.log.Debug("deleted pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
 			}
 		}
 	}
@@ -339,7 +339,7 @@ func (md *procEventMetadataDecorator) getContainerInfo(pid app.PID) (container.I
 }
 
 func (md *procEventMetadataDecorator) handlePodUpdateEvent(pod *informer.ObjectMeta) {
-	md.log.Debug("pod update event", "pod", pod)
+	md.log.Debug("pod update event", "pod", pod.Name, "namespace", pod.Namespace)
 	for _, cnt := range pod.Pod.Containers {
 		md.log.Debug("looking up running process for pod container", "container", cnt.Id)
 		if peMap, ok := md.tracker.info(cnt.Id); ok {

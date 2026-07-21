@@ -40,6 +40,50 @@ var redisErrors = [...]struct {
 	{[]byte("READONLY "), "READONLY"},
 }
 
+// core command words per https://github.com/redis/redis/tree/unstable/src/commands;
+// only a tie-break for reversal detection, so completeness is not required
+var redisKnownOps = func() map[string]struct{} {
+	ops := map[string]struct{}{}
+	for _, op := range []string{
+		"ACL", "APPEND", "AUTH", "BGREWRITEAOF", "BGSAVE", "BITCOUNT", "BITFIELD", "BITOP", "BITPOS",
+		"BLMOVE", "BLMPOP", "BLPOP", "BRPOP", "BRPOPLPUSH", "BZMPOP", "BZPOPMAX", "BZPOPMIN",
+		"CLIENT", "CLUSTER", "COMMAND", "CONFIG", "COPY", "DBSIZE", "DEBUG", "DECR", "DECRBY",
+		"DEL", "DISCARD", "DUMP", "ECHO", "EVAL", "EVALSHA", "EVALSHA_RO", "EVAL_RO", "EXEC",
+		"EXISTS", "EXPIRE", "EXPIREAT", "EXPIRETIME", "FAILOVER", "FCALL", "FCALL_RO", "FLUSHALL",
+		"FLUSHDB", "FUNCTION", "GEOADD", "GEODIST", "GEOHASH", "GEOPOS", "GEOSEARCH",
+		"GEOSEARCHSTORE", "GET", "GETDEL", "GETEX", "GETRANGE", "GETSET", "HDEL", "HELLO",
+		"HEXISTS", "HEXPIRE", "HGET", "HGETALL", "HGETDEL", "HGETEX", "HINCRBY", "HINCRBYFLOAT",
+		"HKEYS", "HLEN", "HMGET", "HMSET", "HPERSIST", "HRANDFIELD", "HSCAN", "HSET", "HSETNX",
+		"HSTRLEN", "HTTL", "HVALS", "INCR", "INCRBY", "INCRBYFLOAT", "INFO", "KEYS", "LASTSAVE",
+		"LATENCY", "LCS", "LINDEX", "LINSERT", "LLEN", "LMOVE", "LMPOP", "LOLWUT", "LPOP", "LPOS",
+		"LPUSH", "LPUSHX", "LRANGE", "LREM", "LSET", "LTRIM", "MEMORY", "MGET", "MIGRATE",
+		"MONITOR", "MOVE", "MSET", "MSETNX", "MULTI", "OBJECT", "PERSIST", "PEXPIRE", "PEXPIREAT",
+		"PEXPIRETIME", "PFADD", "PFCOUNT", "PFMERGE", "PING", "PSETEX", "PSUBSCRIBE", "PSYNC",
+		"PTTL", "PUBLISH", "PUBSUB", "PUNSUBSCRIBE", "QUIT", "RANDOMKEY", "RENAME", "RENAMENX",
+		"REPLICAOF", "RESET", "RESTORE", "ROLE", "RPOP", "RPOPLPUSH", "RPUSH", "RPUSHX", "SADD",
+		"SAVE", "SCAN", "SCARD", "SCRIPT", "SDIFF", "SDIFFSTORE", "SELECT", "SET", "SETEX",
+		"SETNX", "SETRANGE", "SHUTDOWN", "SINTER", "SINTERCARD", "SINTERSTORE", "SISMEMBER",
+		"SLAVEOF", "SLOWLOG", "SMEMBERS", "SMISMEMBER", "SMOVE", "SORT", "SORT_RO", "SPOP",
+		"SRANDMEMBER", "SREM", "SSCAN", "STRLEN", "SUBSCRIBE", "SUNION", "SUNIONSTORE", "SWAPDB",
+		"SYNC", "TIME", "TOUCH", "TTL", "TYPE", "UNLINK", "UNSUBSCRIBE", "UNWATCH", "WAIT",
+		"WAITAOF", "WATCH", "XACK", "XADD", "XAUTOCLAIM", "XCLAIM", "XDEL", "XGROUP", "XINFO",
+		"XLEN", "XPENDING", "XRANGE", "XREAD", "XREADGROUP", "XREVRANGE", "XSETID", "XTRIM",
+		"ZADD", "ZCARD", "ZCOUNT", "ZDIFF", "ZDIFFSTORE", "ZINCRBY", "ZINTER", "ZINTERCARD",
+		"ZINTERSTORE", "ZLEXCOUNT", "ZMPOP", "ZMSCORE", "ZPOPMAX", "ZPOPMIN", "ZRANDMEMBER",
+		"ZRANGE", "ZRANGEBYLEX", "ZRANGEBYSCORE", "ZRANGESTORE", "ZRANK", "ZREM",
+		"ZREMRANGEBYLEX", "ZREMRANGEBYRANK", "ZREMRANGEBYSCORE", "ZREVRANGE", "ZREVRANGEBYLEX",
+		"ZREVRANGEBYSCORE", "ZREVRANK", "ZSCAN", "ZSCORE", "ZUNION", "ZUNIONSTORE",
+	} {
+		ops[op] = struct{}{}
+	}
+	return ops
+}()
+
+func isKnownRedisOp(op string) bool {
+	_, ok := redisKnownOps[strings.ToUpper(op)]
+	return ok
+}
+
 func isRedis(buf *largebuf.LargeBuffer) bool {
 	if buf.Len() < minRedisFrameLen {
 		return false
@@ -62,9 +106,19 @@ func isRedisOp(buf []uint8) bool {
 	case '-':
 		_, isError := getRedisError(buf[1:])
 		return isError
-	case ':', '$', '*':
+	case ':', '$', '*', '(', '!', '=', '%', '~', '>', '|':
 		return crlfTerminatedMatch(buf[1:], func(c uint8) bool {
 			return (c >= '0' && c <= '9') || c == '-'
+		})
+	case '#':
+		return len(buf) >= 4 && (buf[1] == 't' || buf[1] == 'f') && buf[2] == '\r' && buf[3] == '\n'
+	case '_':
+		return len(buf) >= 3 && buf[1] == '\r' && buf[2] == '\n'
+	case ',':
+		// RESP3 double: numbers plus inf/nan and exponent notation
+		return crlfTerminatedMatch(buf[1:], func(c uint8) bool {
+			return (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' ||
+				c == 'e' || c == 'E' || c == 'i' || c == 'n' || c == 'f' || c == 'a'
 		})
 	}
 
@@ -111,96 +165,248 @@ func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
 	return buf[i+1] == '\n'
 }
 
-func isValidRedisChar(c byte) bool {
-	return (c >= 'a' && c <= 'z') ||
-		(c >= 'A' && c <= 'Z') ||
-		(c >= '0' && c <= '9') ||
-		c == '.' || c == ' ' || c == '-' || c == '_'
+type redisCommand struct {
+	op   string
+	text string
 }
 
-func parseRedisRequest(buf []byte) (string, string, bool) {
-	// We need at least two CRLF-delimited lines: a first delimiter must exist with
-	// content following it. Walking the buffer directly with bytes.Index avoids the
-	// generic split.Iterator's per-call indirect dispatch and the double scan its
-	// peek-then-Reset pattern required.
-	firstDelim := bytes.Index(buf, redisDelimBytes)
-	if firstDelim < 0 || firstDelim+len(redisDelimBytes) >= len(buf) {
-		return "", "", false
-	}
+type redisReply struct {
+	status  int
+	dbError request.DBError
+}
 
-	// It's not a command, something else?
-	if buf[0] != '*' {
-		return "", "", true
+// readRESPLine returns the bytes before the next CRLF and the offset just past it
+func readRESPLine(buf []byte, pos int) ([]byte, int, bool) {
+	rel := bytes.Index(buf[pos:], redisDelimBytes)
+	if rel < 0 {
+		return nil, 0, false
+	}
+	return buf[pos : pos+rel], pos + rel + len(redisDelimBytes), true
+}
+
+func parseRESPInt(line []byte) (int, bool) {
+	if len(line) == 0 {
+		return 0, false
+	}
+	i := 0
+	neg := false
+	if line[0] == '-' {
+		neg = true
+		i = 1
+	}
+	if i >= len(line) {
+		return 0, false
+	}
+	n := 0
+	for ; i < len(line); i++ {
+		c := line[i]
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		n = n*10 + int(c-'0')
+		if n > 1<<30 {
+			return 0, false
+		}
+	}
+	if neg {
+		n = -n
+	}
+	return n, true
+}
+
+// letters plus '.', '_', '-' (JSON.SET, EVALSHA_RO, RESTORE-ASKING); reply payload tokens rarely fit
+func isRedisCommandToken(tok []byte) bool {
+	if len(tok) == 0 {
+		return false
+	}
+	for _, c := range tok {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '.' && c != '_' && c != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func isPrintableToken(tok []byte) bool {
+	for _, c := range tok {
+		if c < 0x20 || c > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func salvageRedisCommand(op string, text *strings.Builder) *redisCommand {
+	if op == "" {
+		return nil
+	}
+	return &redisCommand{op: op, text: text.String()}
+}
+
+// parseRedisCommand reads one RESP array at pos, honoring bulk lengths so binary
+// values can't derail the scan; on truncation it salvages the complete tokens and returns ok=false
+//
+//nolint:cyclop
+func parseRedisCommand(buf []byte, pos int) (*redisCommand, int, bool) {
+	header, next, ok := readRESPLine(buf, pos)
+	if !ok || len(header) < 2 || header[0] != '*' {
+		return nil, 0, false
+	}
+	n, ok := parseRESPInt(header[1:])
+	if !ok || n <= 0 {
+		// *-1 and *0 are reply shapes, not commands
+		return nil, 0, false
 	}
 
 	op := ""
-
+	textDone := false
 	var text strings.Builder
-	// The assembled text is always shorter than the raw frame (it drops the RESP
-	// length markers and CRLFs), so a single Grow sizes the builder once and avoids
-	// the geometric re-allocations Write would otherwise trigger as tokens accumulate.
-	text.Grow(len(buf))
+	pos = next
 
-	read := false
-
-	// Resume past the array-header line; subsequent lines alternate length markers
-	// and data tokens.
-	for pos := firstDelim + len(redisDelimBytes); pos < len(buf); {
-		line := buf[pos:]
-		if rel := bytes.Index(line, redisDelimBytes); rel >= 0 {
-			end := rel + len(redisDelimBytes)
-			line, pos = line[:end], pos+end
-		} else {
-			pos = len(buf)
+	for i := 0; i < n; i++ {
+		lenLine, tokStart, ok := readRESPLine(buf, pos)
+		if !ok || len(lenLine) < 2 || lenLine[0] != '$' {
+			return salvageRedisCommand(op, &text), 0, false
 		}
-
-		if bytes.Equal(line, redisDelimBytes) {
-			continue
+		l, ok := parseRESPInt(lenLine[1:])
+		if !ok || l < 0 {
+			return salvageRedisCommand(op, &text), 0, false
 		}
-
-		if !read {
-			if isRedisOp(line) {
-				read = true
+		tokEnd := tokStart + l
+		if tokEnd+len(redisDelimBytes) > len(buf) ||
+			!bytes.Equal(buf[tokEnd:tokEnd+len(redisDelimBytes)], redisDelimBytes) {
+			return salvageRedisCommand(op, &text), 0, false
+		}
+		tok := buf[tokStart:tokEnd]
+		if i == 0 {
+			if !isRedisCommandToken(tok) {
+				return nil, 0, false
+			}
+			op = string(tok)
+			text.Write(tok)
+		} else if !textDone {
+			if isPrintableToken(tok) {
+				text.WriteByte(' ')
+				text.Write(tok)
 			} else {
-				break
+				textDone = true
 			}
-		} else {
-			if isRedisOp(line) {
-				text.WriteString("; ")
-				continue
-			}
-			if !isValidRedisChar(line[0]) {
-				break
-			}
-
-			trimmed := bytes.TrimSuffix(line, redisDelimBytes)
-
-			if op == "" {
-				op = string(trimmed)
-			}
-			text.Write(trimmed)
-			text.WriteString(" ")
-			read = false
 		}
+		pos = tokEnd + len(redisDelimBytes)
 	}
 
-	return op, strings.TrimSpace(text.String()), true
+	return &redisCommand{op: op, text: text.String()}, pos, true
 }
 
-func redisStatus(buf *largebuf.LargeBuffer) (request.DBError, int) {
-	if buf.Len() == 0 {
-		return request.DBError{}, 0
+// parseRedisCommands splits a buffer into its pipelined commands; nil means
+// the buffer isn't a command stream (how replies are told apart from commands)
+func parseRedisCommands(buf []byte) []redisCommand {
+	var cmds []redisCommand
+	pos := 0
+	for pos < len(buf) && buf[pos] == '*' {
+		cmd, next, ok := parseRedisCommand(buf, pos)
+		if cmd != nil {
+			cmds = append(cmds, *cmd)
+		}
+		if !ok {
+			break
+		}
+		pos = next
 	}
-	data := buf.UnsafeView()
-	if data[0] != '-' {
-		return request.DBError{}, 0
+	return cmds
+}
+
+const maxRESPDepth = 8
+
+// skipRESPValue advances past one RESP value of any type, including RESP3 frames
+//
+//nolint:cyclop
+func skipRESPValue(buf []byte, pos, depth int) (int, bool) {
+	if depth > maxRESPDepth || pos >= len(buf) {
+		return 0, false
 	}
-	dbError, isError := getRedisError(data[1:])
-	status := 0
-	if isError {
-		status = 1
+	t := buf[pos]
+	line, next, ok := readRESPLine(buf, pos)
+	if !ok {
+		return 0, false
 	}
-	return dbError, status
+	switch t {
+	case '+', '-', ':', ',', '(', '#', '_':
+		return next, true
+	case '$', '=', '!':
+		l, ok := parseRESPInt(line[1:])
+		if !ok {
+			return 0, false
+		}
+		if l < 0 {
+			return next, true
+		}
+		end := next + l + len(redisDelimBytes)
+		if end > len(buf) {
+			return 0, false
+		}
+		return end, true
+	case '*', '~', '>', '%', '|':
+		n, ok := parseRESPInt(line[1:])
+		if !ok {
+			return 0, false
+		}
+		if n < 0 {
+			return next, true
+		}
+		if t == '%' || t == '|' {
+			n *= 2
+		}
+		for i := 0; i < n; i++ {
+			next, ok = skipRESPValue(buf, next, depth+1)
+			if !ok {
+				return 0, false
+			}
+		}
+		return next, true
+	}
+	return 0, false
+}
+
+// parseRedisReplies splits the response stream into per-command results; RESP3
+// push frames aren't positional replies and attributes decorate the next value,
+// so both are skipped
+func parseRedisReplies(buf []byte, maxReplies int) []redisReply {
+	replies := make([]redisReply, 0, min(maxReplies, 8))
+	pos := 0
+	for pos < len(buf) && len(replies) < maxReplies {
+		t := buf[pos]
+		next, ok := skipRESPValue(buf, pos, 0)
+		if !ok {
+			break
+		}
+		if t != '>' && t != '|' {
+			r := redisReply{}
+			switch t {
+			case '-':
+				line, _, _ := readRESPLine(buf, pos)
+				dbError, known := getRedisError(line[1:])
+				r.dbError = dbError
+				if known {
+					r.status = 1
+				}
+			case '!':
+				// RESP3 bulk error: text is on the line after the length header
+				if _, tstart, ok := readRESPLine(buf, pos); ok {
+					if line, _, ok := readRESPLine(buf, tstart); ok {
+						dbError, known := getRedisError(line)
+						r.dbError = dbError
+						if known {
+							r.status = 1
+						}
+					}
+				}
+			}
+			replies = append(replies, r)
+		}
+		pos = next
+	}
+	return replies
 }
 
 func getRedisDB(connInfo BpfConnectionInfoT, op, text string, dbCache *simplelru.LRU[BpfConnectionInfoT, int]) (int, bool) {
@@ -272,12 +478,34 @@ func TCPToRedisToSpan(trace *TCPRequestInfo, op, text string, status, db int, db
 	}
 }
 
-func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+func ReadGoRedisRequestIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record) (request.Span, bool, error) {
 	event, err := ReinterpretCast[GoRedisClientInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}
 
+	cmds := parseRedisCommands(event.Buf[:min(int(event.BufLen), len(event.Buf))])
+	if len(cmds) == 0 {
+		// We know it's redis request here, it just didn't complete correctly
+		event.Err = 1
+		return goRedisSpan(event, "", ""), false, nil
+	}
+
+	spans := make([]request.Span, 0, len(cmds))
+	for i := range cmds {
+		spans = append(spans, goRedisSpan(event, cmds[i].op, cmds[i].text))
+	}
+	if len(spans) > 1 {
+		// clear SpanID on extras so tracesgen assigns fresh IDs
+		for i := 1; i < len(spans); i++ {
+			spans[i].SpanID = trace2.SpanID{}
+		}
+		parseCtx.emitExtraSpans(spans[1:]...)
+	}
+	return spans[0], false, nil
+}
+
+func goRedisSpan(event *GoRedisClientInfo, op, text string) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
@@ -285,13 +513,6 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 	if event.Conn.S_port != 0 || event.Conn.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&event.Conn)).reqHostInfo()
 		hostPort = int(event.Conn.D_port)
-	}
-
-	op, text, ok := parseRedisRequest(event.Buf[:])
-
-	if !ok {
-		// We know it's redis request here, it just didn't complete correctly
-		event.Err = 1
 	}
 
 	return request.Span{
@@ -315,5 +536,5 @@ func ReadGoRedisRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, err
 			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
-	}, false, nil
+	}
 }

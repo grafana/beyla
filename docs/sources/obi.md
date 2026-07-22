@@ -13,6 +13,20 @@ keywords:
 
 # Using OpenTelemetry eBPF Instrumentation instead of Beyla
 
+Table of contents:
+
+<!-- TOC -->
+* [Differences between OBI and Grafana](#differences-between-obi-and-grafana)
+  * [Configuration](#configuration)
+* [Beyla features that are missing in OBI](#beyla-features-that-are-missing-in-obi)
+  * [Process metrics](#process-metrics)
+  * [Survey mode](#survey-mode)
+  * [Integration with Alloy or Collector](#integration-with-alloy-or-collector)
+  * [Grafana AI Observability support](#grafana-ai-observability-support)
+  * [Using OBI with Grafana Cloud Application Observability and Knowledge Graph](#using-obi-with-grafana-cloud-application-observability-and-knowledge-graph)
+<!-- TOC -->
+
+
 Grafana Beyla is the distribution of the
 [OpenTelemetry eBPF Instrumentation](https://opentelemetry.io/docs/zero-code/obi/)
 (a.k.a. OBI) software that is currently supported by Grafana.
@@ -157,7 +171,7 @@ you need to manually configure your instrumentation pipeline:
 With a base OBI installation, you can get basic functionality in Grafana Cloud
 [Application Observability](https://grafana.com/products/cloud/application-observability/)
 and [Knowledge Graph](https://grafana.com/docs/grafana-cloud/knowledge-graph/).
-To get most of the capabilities of Application Observability, you need to make
+To get the most out of Application Observability, you need to make
 sure that OBI is configured to export the following families of metrics
 in the [features](https://opentelemetry.io/docs/zero-code/obi/configure/export-data/#metrics-export-features)
 section:
@@ -170,26 +184,6 @@ section:
 - `application_runtime`
 
 For a full experience, you also need to enable traces with
-[full context propagation](https://opentelemetry.io/docs/zero-code/obi/distributed-traces/).
-
-There is also a kind of signal that is not provided by OBI by default but can be
-derived from it: Connection Spans. Connection spans are simple Tempo spans that
-provide the minimum information required by Tempo to visualize inter-cluster connections.
-
-If you want to see inter-cluster connections in your Service Maps, you should enable
-an intermediate OTEL collector that receives the Traces from OBI and forwards them
-at the same time it enables an alternate pipeline that creates simple spans
-with the following attributes, directly copied from the original span:
-- `name`
-- `context > trace_id`
-- `context > span_id`
-- `parent_span` (if exists)
-- 
-- Rest of attributes?
-
-
-
-Connect spans
-Process metrics
-
+[full context propagation](https://opentelemetry.io/docs/zero-code/obi/distributed-traces/),
+as well as provide a source for [process metrics](#process-metrics).
 

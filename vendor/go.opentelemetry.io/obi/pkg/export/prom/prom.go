@@ -760,12 +760,10 @@ func newReporter(
 		}),
 	}
 
-	if runtimeMetricsEnabled.Go {
+	if runtimeMetricsEnabled.Runtime {
 		mr.goRuntimeMetrics = newGoRuntimeMetricsCollector(
 			labelNamesTargetInfo(kubeEnabled, dockerEnabled, &ctxInfo.NodeMeta, extraMetadataLabels, selectorCfg.SelectionCfg),
 		)
-	}
-	if runtimeMetricsEnabled.JVM {
 		mr.jvmRuntimeMetrics = newJVMRuntimeMetricsCollector(cfg)
 	}
 
@@ -852,10 +850,8 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
 	}
 
-	if runtimeMetricsEnabled.Go {
+	if runtimeMetricsEnabled.Runtime {
 		registeredMetrics = append(registeredMetrics, mr.goRuntimeMetrics.collectors()...)
-	}
-	if runtimeMetricsEnabled.JVM {
 		registeredMetrics = append(registeredMetrics, mr.jvmRuntimeMetrics.collectors()...)
 	}
 

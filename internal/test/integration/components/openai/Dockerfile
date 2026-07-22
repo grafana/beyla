@@ -1,4 +1,4 @@
-FROM python:3.14@sha256:61346539f7b26521a230e72c11da5ebd872924745074b19736e7d65ba748c366
+FROM python:3.14@sha256:5f1cdbcab9a50594a79502dd73e885456d2a2fc31f1a1fa18484815b37ee9152
 EXPOSE 8080
 COPY requirements.txt /requirements.txt
 RUN pip install --require-hashes -r /requirements.txt

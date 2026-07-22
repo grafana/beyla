@@ -356,26 +356,32 @@ func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter
 	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.TraceFlags)))
 
 	if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
-		connType := request.ConnectionTypeMetric(ConnectionTypeForSpan(span, &mr.pidTracker))
+		// connection_type is an enumerated attribute: omit it for direct
+		// HTTP/gRPC requests (empty value) instead of emitting an empty
+		// string, which is not a valid enum member.
+		var connType []attribute.KeyValue
+		if ct := ConnectionTypeForSpan(span, &mr.pidTracker); ct != "" {
+			connType = append(connType, request.ConnectionTypeMetric(ct))
+		}
 
 		if span.IsClientSpan() {
-			sgc, attrs := r.serviceGraphClient.ForRecord(span, connType)
+			sgc, attrs := r.serviceGraphClient.ForRecord(span, connType...)
 			sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			// If we managed to resolve the remote name only, we check to see
 			// we are not instrumenting the server service, then and only then,
 			// we generate client span count for service graph total
 			if ClientSpanToUninstrumentedService(&mr.pidTracker, span) {
-				sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType)
+				sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType...)
 				sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 			}
 		} else {
-			sgs, attrs := r.serviceGraphServer.ForRecord(span, connType)
+			sgs, attrs := r.serviceGraphServer.ForRecord(span, connType...)
 			sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType)
+			sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType...)
 			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 		}
 		if request.SpanStatusCode(span) == request.StatusCodeError {
-			sgf, attrs := r.serviceGraphFailed.ForRecord(span, connType)
+			sgf, attrs := r.serviceGraphFailed.ForRecord(span, connType...)
 			sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 		}
 	}
@@ -468,7 +474,7 @@ func (mr *SvcGraphMetricsReporter) onSpan(spans []request.Span) {
 		reporter, err := mr.reporters.For(&s.Service)
 		if err != nil {
 			mr.log.Error("unexpected error creating OTEL resource. Ignoring metric",
-				"error", err, "service", s.Service)
+				"error", err, "service", s.Service.UID)
 			continue
 		}
 		reporter.record(s, mr)

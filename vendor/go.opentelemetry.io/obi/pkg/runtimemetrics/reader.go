@@ -33,10 +33,54 @@ type RuntimeMetricSnapshot struct {
 }
 
 type GoRuntimeMetricSnapshot struct {
-	MemoryLimit    *int64
-	GCCycles       *uint64
-	ProcessorLimit *int64
-	GOGC           *int64
+	MemoryLimit       *int64
+	GCCycles          *uint64
+	ProcessorLimit    *int64
+	GOGC              *int64
+	CPUTime           *GoRuntimeCPUTimeSnapshot
+	MemoryUsedStack   *int64
+	MemoryUsedOther   *int64
+	MemoryAllocated   *uint64
+	MemoryAllocations *uint64
+}
+
+type GoRuntimeCPUTimeSnapshot struct {
+	GCAssistTime       int64
+	GCDedicatedTime    int64
+	GCIdleTime         int64
+	GCPauseTime        int64
+	ScavengeAssistTime int64
+	ScavengeBgTime     int64
+	IdleTime           int64
+	UserTime           int64
+}
+
+const goRuntimeCPUTimeValueCount = 8
+
+type GoRuntimeCPUTimeValue struct {
+	State         string
+	DetailedState string
+	Nanoseconds   int64
+}
+
+// GoRuntimeCPUTimeValues returns every CPU time series. A nil snapshot returns
+// the same series with zero values so exporters can remove them consistently.
+func GoRuntimeCPUTimeValues(cpu *GoRuntimeCPUTimeSnapshot) [goRuntimeCPUTimeValueCount]GoRuntimeCPUTimeValue {
+	var snapshot GoRuntimeCPUTimeSnapshot
+	if cpu != nil {
+		snapshot = *cpu
+	}
+
+	return [...]GoRuntimeCPUTimeValue{
+		{State: "user", Nanoseconds: snapshot.UserTime},
+		{State: "gc", DetailedState: "gc/mark/assist", Nanoseconds: snapshot.GCAssistTime},
+		{State: "gc", DetailedState: "gc/mark/dedicated", Nanoseconds: snapshot.GCDedicatedTime},
+		{State: "gc", DetailedState: "gc/mark/idle", Nanoseconds: snapshot.GCIdleTime},
+		{State: "gc", DetailedState: "gc/pause", Nanoseconds: snapshot.GCPauseTime},
+		{State: "scavenge", DetailedState: "scavenge/assist", Nanoseconds: snapshot.ScavengeAssistTime},
+		{State: "scavenge", DetailedState: "scavenge/background", Nanoseconds: snapshot.ScavengeBgTime},
+		{State: "idle", Nanoseconds: snapshot.IdleTime},
+	}
 }
 
 type JVMRuntimeMetricSnapshot struct {
@@ -98,12 +142,37 @@ type goRuntimeMetricRawEvent struct {
 }
 
 type goRuntimeMetricRawSnapshot struct {
-	NumGC       uint32
-	NumForcedGC uint32
-	GOMAXPROCS  int32
-	GCPercent   int32
-	MemoryLimit int64
+	ValidMask             uint64
+	NumGC                 uint32
+	Pad                   uint32
+	GOMAXPROCS            int32
+	GCPercent             int32
+	MemoryLimit           int64
+	CPUGCAssistTime       int64
+	CPUGCDedicatedTime    int64
+	CPUGCIdleTime         int64
+	CPUGCPauseTime        int64
+	CPUScavengeAssistTime int64
+	CPUScavengeBgTime     int64
+	CPUIdleTime           int64
+	CPUUserTime           int64
+	MemoryUsedStack       int64
+	MemoryUsedOther       int64
+	MemoryAllocated       uint64
+	MemoryAllocations     uint64
 }
+
+// Mirrors go_runtime_metric_valid_t in bpf/gotracer/maps/runtime.h.
+// Check these bits before using raw values; zero can be a valid value.
+const (
+	goRuntimeMetricValidGCCycles       uint64 = 1 << 0
+	goRuntimeMetricValidMemoryLimit    uint64 = 1 << 1
+	goRuntimeMetricValidProcessorLimit uint64 = 1 << 2
+	goRuntimeMetricValidGOGC           uint64 = 1 << 3
+	goRuntimeMetricValidCPUTime        uint64 = 1 << 4
+	goRuntimeMetricValidMemoryUsed     uint64 = 1 << 5
+	goRuntimeMetricValidMemoryAllocs   uint64 = 1 << 6
+)
 
 func SnapshotFromRingbuf(
 	record *ringbuf.Record,
@@ -154,24 +223,59 @@ func convertGoRuntimeMetricSnapshot(
 ) RuntimeMetricSnapshot {
 	total := uint64(raw.NumGC)
 	var totalPtr *uint64
-	if total > 0 {
+	if raw.ValidMask&goRuntimeMetricValidGCCycles != 0 {
 		totalPtr = &total
 	}
 
 	var limit *int64
-	if raw.MemoryLimit > 0 && raw.MemoryLimit < math.MaxInt64 {
+	if raw.ValidMask&goRuntimeMetricValidMemoryLimit != 0 && raw.MemoryLimit > 0 && raw.MemoryLimit < math.MaxInt64 {
 		limit = &raw.MemoryLimit
 	}
 
 	var processorLimit *int64
-	if raw.GOMAXPROCS > 0 {
+	if raw.ValidMask&goRuntimeMetricValidProcessorLimit != 0 && raw.GOMAXPROCS > 0 {
 		v := int64(raw.GOMAXPROCS)
 		processorLimit = &v
 	}
 	var gogc *int64
-	if raw.GCPercent >= 0 {
+	if raw.ValidMask&goRuntimeMetricValidGOGC != 0 && raw.GCPercent >= 0 {
 		v := int64(raw.GCPercent)
 		gogc = &v
+	}
+	var cpuTime *GoRuntimeCPUTimeSnapshot
+	if raw.ValidMask&goRuntimeMetricValidCPUTime != 0 &&
+		raw.CPUGCAssistTime >= 0 &&
+		raw.CPUGCDedicatedTime >= 0 &&
+		raw.CPUGCIdleTime >= 0 &&
+		raw.CPUGCPauseTime >= 0 &&
+		raw.CPUScavengeAssistTime >= 0 &&
+		raw.CPUScavengeBgTime >= 0 &&
+		raw.CPUIdleTime >= 0 &&
+		raw.CPUUserTime >= 0 {
+		cpuTime = &GoRuntimeCPUTimeSnapshot{
+			GCAssistTime:       raw.CPUGCAssistTime,
+			GCDedicatedTime:    raw.CPUGCDedicatedTime,
+			GCIdleTime:         raw.CPUGCIdleTime,
+			GCPauseTime:        raw.CPUGCPauseTime,
+			ScavengeAssistTime: raw.CPUScavengeAssistTime,
+			ScavengeBgTime:     raw.CPUScavengeBgTime,
+			IdleTime:           raw.CPUIdleTime,
+			UserTime:           raw.CPUUserTime,
+		}
+	}
+	var memoryUsedStack *int64
+	var memoryUsedOther *int64
+	if raw.ValidMask&goRuntimeMetricValidMemoryUsed != 0 &&
+		raw.MemoryUsedStack >= 0 &&
+		raw.MemoryUsedOther >= 0 {
+		memoryUsedStack = &raw.MemoryUsedStack
+		memoryUsedOther = &raw.MemoryUsedOther
+	}
+	var memoryAllocated *uint64
+	var memoryAllocations *uint64
+	if raw.ValidMask&goRuntimeMetricValidMemoryAllocs != 0 {
+		memoryAllocated = &raw.MemoryAllocated
+		memoryAllocations = &raw.MemoryAllocations
 	}
 
 	return RuntimeMetricSnapshot{
@@ -179,10 +283,15 @@ func convertGoRuntimeMetricSnapshot(
 		PID:     pid,
 		Time:    time.Now(),
 		Go: &GoRuntimeMetricSnapshot{
-			MemoryLimit:    limit,
-			GCCycles:       totalPtr,
-			ProcessorLimit: processorLimit,
-			GOGC:           gogc,
+			MemoryLimit:       limit,
+			GCCycles:          totalPtr,
+			ProcessorLimit:    processorLimit,
+			GOGC:              gogc,
+			CPUTime:           cpuTime,
+			MemoryUsedStack:   memoryUsedStack,
+			MemoryUsedOther:   memoryUsedOther,
+			MemoryAllocated:   memoryAllocated,
+			MemoryAllocations: memoryAllocations,
 		},
 	}
 }

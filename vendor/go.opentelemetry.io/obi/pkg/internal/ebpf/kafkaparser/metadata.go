@@ -9,15 +9,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
-const partitionLen = // 26
-Int16Len +           // error_code
-	Int32Len + // partition_index
-	Int32Len + // leader_id
-	Int32Len + // leader_epoch
-	Int32Len + // replica_nodes
-	Int32Len + // isr_nodes
-	Int32Len // offline_replicas
-
 type MetadataTopic struct {
 	Name string
 	UUID UUID
@@ -111,6 +102,30 @@ func parseMetadataTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeade
 	return topics, nil
 }
 
+// skipMetadataPartition advances the reader past one partition entry of a
+// Metadata Response topic (v10-13):
+// partitions => { error_code partition_index leader_id leader_epoch (replica_nodes) (isr_nodes) (offline_replicas) }
+// https://kafka.apache.org/43/design/protocol/
+// replica/isr/offline are compact arrays of INT32 node ids, so the entry is
+// variable-length and must be walked field by field.
+func skipMetadataPartition(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	// error_code + partition_index + leader_id + leader_epoch
+	if err := r.Skip(Int16Len + Int32Len*3); err != nil {
+		return err
+	}
+	// replica_nodes, isr_nodes, offline_replicas
+	for range 3 {
+		n, err := readArrayLength(r, header)
+		if err != nil {
+			return err
+		}
+		if err = r.Skip(n * Int32Len); err != nil {
+			return err
+		}
+	}
+	return skipTaggedFields(r, header)
+}
+
 func parseMetadataTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader, isLast bool) (*MetadataTopic, error) {
 	var topic MetadataTopic
 	/*
@@ -148,14 +163,27 @@ func parseMetadataTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader
 	if isLast {
 		return &topic, nil
 	}
+	// is_internal (BOOLEAN) precedes the partitions array in the wire format.
+	// It must be skipped to stay aligned for the next topic; otherwise every
+	// topic after the first is mis-parsed (its name/UUID are read from the
+	// middle of this topic's partition data).
+	if err = r.Skip(Int8Len); err != nil { // is_internal
+		return &topic, nil
+	}
 	partitionsCount, err := readArrayLength(r, header)
 	if err != nil {
-		return nil, err
+		return &topic, nil
 	}
-	skipBytes := partitionsCount*partitionLen + // partitions
-		Int32Len // topic_authorized_operations
-	if err = r.Skip(skipBytes); err != nil {
-		// if we can't read partitions, we can still return the topic
+	// Each partition is variable-length in the flexible (compact) encoding
+	// (replica_nodes/isr_nodes/offline_replicas are compact arrays, plus a
+	// per-partition tagged-fields section), so it cannot be skipped with a
+	// fixed size.
+	for range partitionsCount {
+		if err = skipMetadataPartition(r, header); err != nil {
+			return &topic, nil
+		}
+	}
+	if err = r.Skip(Int32Len); err != nil { // topic_authorized_operations
 		return &topic, nil
 	}
 	if err = skipTaggedFields(r, header); err != nil {

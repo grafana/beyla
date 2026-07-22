@@ -51,8 +51,9 @@ func (k Operation) String() string {
 }
 
 // ProcessPossibleKafkaEvent processes a TCP packet and returns error if the packet is not a valid Kafka request.
-// Otherwise, return kafka.Info with the processed data.
-func ProcessPossibleKafkaEvent(event *TCPRequestInfo, pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
+// Otherwise, it returns one KafkaInfo per topic in the request (a single Produce/Fetch request can
+// reference multiple topics).
+func ProcessPossibleKafkaEvent(event *TCPRequestInfo, pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) ([]*KafkaInfo, bool, error) {
 	k, ok, err := ProcessKafkaEvent(pkt, rpkt, kafkaTopicUUIDToName)
 	if err != nil {
 		// If we are getting the information in the response buffer, the event
@@ -65,7 +66,7 @@ func ProcessPossibleKafkaEvent(event *TCPRequestInfo, pkt *largebuf.LargeBuffer,
 	return k, ok, err
 }
 
-func ProcessKafkaEvent(pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
+func ProcessKafkaEvent(pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) ([]*KafkaInfo, bool, error) {
 	hdr, err := kafkaparser.NewKafkaRequestHeader(pkt)
 	if err != nil {
 		return nil, true, err
@@ -82,7 +83,7 @@ func ProcessKafkaEvent(pkt *largebuf.LargeBuffer, rpkt *largebuf.LargeBuffer, ka
 	}
 }
 
-func processProduceRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
+func processProduceRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) ([]*KafkaInfo, bool, error) {
 	r, err := hdr.NewBodyReader()
 	if err != nil {
 		return nil, true, err
@@ -92,35 +93,35 @@ func processProduceRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToN
 	if err != nil {
 		return nil, true, err
 	}
-	firstTopic := produceReq.Topics[0]
-	topicName := firstTopic.Name
-	if firstTopic.UUID != nil {
-		if kafkaTopicUUIDToName != nil {
-			var found bool
-			topicName, found = kafkaTopicUUIDToName.Get(*firstTopic.UUID)
-			if !found {
-				topicName = "*"
-			}
-		} else {
+	clientID := hdr.ClientID()
+	infos := make([]*KafkaInfo, 0, len(produceReq.Topics))
+	for _, topic := range produceReq.Topics {
+		topicName := topic.Name
+		if topic.UUID != nil {
 			topicName = "*"
+			if kafkaTopicUUIDToName != nil {
+				if name, found := kafkaTopicUUIDToName.Get(*topic.UUID); found {
+					topicName = name
+				}
+			}
 		}
-	}
-	var partitionInfo *PartitionInfo
-	if firstTopic.Partition != nil {
-		partitionInfo = &PartitionInfo{
-			Partition: *firstTopic.Partition,
+		var partitionInfo *PartitionInfo
+		if topic.Partition != nil {
+			partitionInfo = &PartitionInfo{
+				Partition: *topic.Partition,
+			}
 		}
+		infos = append(infos, &KafkaInfo{
+			ClientID:      clientID,
+			Operation:     Produce,
+			Topic:         topicName,
+			PartitionInfo: partitionInfo,
+		})
 	}
-	return &KafkaInfo{
-		ClientID:  hdr.ClientID(),
-		Operation: Produce,
-		// TODO: handle multiple topics
-		Topic:         topicName,
-		PartitionInfo: partitionInfo,
-	}, false, nil
+	return infos, false, nil
 }
 
-func processFetchRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
+func processFetchRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) ([]*KafkaInfo, bool, error) {
 	r, err := hdr.NewBodyReader()
 	if err != nil {
 		return nil, true, err
@@ -130,33 +131,38 @@ func processFetchRequest(hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToNam
 	if err != nil {
 		return nil, true, err
 	}
-	firstTopic := fetchReq.Topics[0]
-	topicName := firstTopic.Name
-	// get topic name from UUID if available
-	if firstTopic.UUID != nil {
-		var found bool
-		topicName, found = kafkaTopicUUIDToName.Get(*firstTopic.UUID)
-		if !found {
+	clientID := hdr.ClientID()
+	infos := make([]*KafkaInfo, 0, len(fetchReq.Topics))
+	for _, topic := range fetchReq.Topics {
+		topicName := topic.Name
+		// Fetch v13+ identifies topics by UUID; resolve it via the cache filled
+		// from Metadata responses.
+		if topic.UUID != nil {
 			topicName = "*"
+			if kafkaTopicUUIDToName != nil {
+				if name, found := kafkaTopicUUIDToName.Get(*topic.UUID); found {
+					topicName = name
+				}
+			}
 		}
-	}
-	var partitionInfo *PartitionInfo
-	if firstTopic.Partition != nil {
-		partitionInfo = &PartitionInfo{
-			Partition: firstTopic.Partition.Partition,
-			Offset:    firstTopic.Partition.FetchOffset,
+		var partitionInfo *PartitionInfo
+		if topic.Partition != nil {
+			partitionInfo = &PartitionInfo{
+				Partition: topic.Partition.Partition,
+				Offset:    topic.Partition.FetchOffset,
+			}
 		}
+		infos = append(infos, &KafkaInfo{
+			ClientID:      clientID,
+			Operation:     Fetch,
+			Topic:         topicName,
+			PartitionInfo: partitionInfo,
+		})
 	}
-	return &KafkaInfo{
-		ClientID:  hdr.ClientID(),
-		Operation: Fetch,
-		// TODO: handle multiple topics
-		Topic:         topicName,
-		PartitionInfo: partitionInfo,
-	}, false, nil
+	return infos, false, nil
 }
 
-func processMetadataResponse(rpkt *largebuf.LargeBuffer, hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
+func processMetadataResponse(rpkt *largebuf.LargeBuffer, hdr kafkaparser.KafkaRequestHeader, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) ([]*KafkaInfo, bool, error) {
 	if rpkt == nil {
 		return nil, true, errKafkaNoResponseBufferForMetadata
 	}
@@ -176,7 +182,7 @@ func processMetadataResponse(rpkt *largebuf.LargeBuffer, hdr kafkaparser.KafkaRe
 	return nil, true, nil
 }
 
-func ProcessKafkaRequest(pkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (*KafkaInfo, bool, error) {
+func ProcessKafkaRequest(pkt *largebuf.LargeBuffer, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) ([]*KafkaInfo, bool, error) {
 	hdr, err := kafkaparser.NewKafkaRequestHeader(pkt)
 	if err != nil {
 		return nil, true, err

@@ -378,6 +378,9 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcClientStreamStream,
 		// go manual spans
 		goexec.GoTracerDelegatePos,
+		goexec.SpanContextTraceIDPos,
+		goexec.SpanContextSpanIDPos,
+		goexec.SpanContextTraceFlagsPos,
 		// go runtime channels
 		goexec.HchanQcountPos,
 		goexec.HchanDataqsizPos,

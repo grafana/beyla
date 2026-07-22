@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: grafana/alloy
-          ref: beyla_hackathon_simple
+          ref: main
           persist-credentials: "false"
 
       # The git commit is required: Alloy's tools/image-tag appends "+dirty"

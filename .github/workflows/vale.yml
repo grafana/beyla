@@ -12,9 +12,9 @@ jobs:
   vale:
     runs-on: ubuntu-latest
     container:
-      image: grafana/vale@sha256:40540e4f3ba199a430528c9e5b87ecc7e8f388fc8d873290df72003837c028a5
+      image: grafana/vale@sha256:eb78672ef59d80bd7d6c7f9a9377cfaf1b6de47c4082adbe9b1f7204b983198f
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: grafana/writers-toolkit/vale-action@67d43d461804a3413c2e11fd7899ff01e05b2563 # vale-action/v2

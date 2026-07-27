@@ -473,6 +473,16 @@
           ],
           "x-env-var": "OTEL_EBPF_FORCE_BPF_MAP_READER"
         },
+        "go_http_client_buffer_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OTEL_EBPF_BPF_GO_HTTP_CLIENT_BUFFER_TIMEOUT"
+        },
         "heuristic_sql_detect": {
           "type": "boolean",
           "x-env-var": "OTEL_EBPF_HEURISTIC_SQL_DETECT"
@@ -683,6 +693,9 @@
         },
         "mcp": {
           "$ref": "#/$defs/MCPConfig"
+        },
+        "ollama": {
+          "$ref": "#/$defs/OllamaConfig"
         },
         "openai": {
           "$ref": "#/$defs/OpenAIConfig"
@@ -1308,11 +1321,55 @@
           ],
           "x-env-var": "OTEL_EBPF_BPF_LOG_ENRICHER_CACHE_TTL"
         },
+        "field_names": {
+          "$ref": "#/$defs/LogEnricherFieldNames"
+        },
+        "plain_text": {
+          "$ref": "#/$defs/LogEnricherPlainTextConfig"
+        },
         "services": {
           "items": {
             "$ref": "#/$defs/LogEnricherServiceConfig"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "LogEnricherFieldNames": {
+      "properties": {
+        "span_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^=\\u0000-\\u0020\\u007F-\\u00A0\\u1680\\u2000-\\u200A\\u2028-\\u2029\\u202F\\u205F\\u3000]+$"
+        },
+        "trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^=\\u0000-\\u0020\\u007F-\\u00A0\\u1680\\u2000-\\u200A\\u2028-\\u2029\\u202F\\u205F\\u3000]+$"
+        }
+      },
+      "type": "object"
+    },
+    "LogEnricherPlainTextConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "multiline": {
+          "type": "string",
+          "enum": [
+            "each_line",
+            "first_line",
+            "last_line"
+          ]
+        },
+        "placement": {
+          "type": "string",
+          "enum": [
+            "prefix",
+            "suffix"
+          ]
         }
       },
       "type": "object"
@@ -1741,6 +1798,15 @@
         },
         "not_equals": {
           "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "OllamaConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_HTTP_OLLAMA_ENABLED"
         }
       },
       "type": "object"

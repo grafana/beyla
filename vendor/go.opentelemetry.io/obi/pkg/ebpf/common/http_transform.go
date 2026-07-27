@@ -21,6 +21,28 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 )
 
+const ephemeralPortMin = 32768
+
+func likelyEphemeralPort(port uint16) bool {
+	return port >= ephemeralPortMin
+}
+
+func swapConnectionInfoOrder(info *BpfConnectionInfoT) {
+	info.S_port, info.D_port = info.D_port, info.S_port
+	info.S_addr, info.D_addr = info.D_addr, info.S_addr
+}
+
+func sortConnectionInfo(info *BpfConnectionInfoT) {
+	if likelyEphemeralPort(info.S_port) && !likelyEphemeralPort(info.D_port) {
+		return
+	}
+
+	if (likelyEphemeralPort(info.D_port) && !likelyEphemeralPort(info.S_port)) ||
+		info.D_port > info.S_port {
+		swapConnectionInfoOrder(info)
+	}
+}
+
 func removeQuery(url string) string {
 	idx := strings.IndexByte(url, '?')
 	if idx >= 0 {
@@ -136,34 +158,38 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 		Statement: scheme + request.SchemeHostSeparator + headerHost,
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
-		span, ok := ebpfhttp.AWSS3Span(&httpSpan, req, resp)
+	return postProcessHTTPSpan(parseCtx, &httpSpan, req, resp)
+}
+
+func postProcessHTTPSpan(parseCtx *EBPFParseContext, httpSpan *request.Span, req *http.Request, resp *http.Response) request.Span {
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
+		span, ok := ebpfhttp.AWSS3Span(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 
-		span, ok = ebpfhttp.AWSSQSSpan(&httpSpan, req, resp)
-		if ok {
-			return span
-		}
-	}
-
-	if !isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GraphQL.Enabled {
-		span, ok := ebpfhttp.GraphQLSpan(&httpSpan, req, resp)
-		if ok {
-			return span
-		}
-	}
-
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.Elasticsearch.Enabled {
-		span, ok := ebpfhttp.ElasticsearchSpan(&httpSpan, req, resp)
+		span, ok = ebpfhttp.AWSSQSSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.SQLPP.Enabled {
-		span, ok := ebpfhttp.SQLPPSpan(&httpSpan, req, resp, parseCtx.payloadExtraction.HTTP.SQLPP.EndpointPatterns)
+	if !httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GraphQL.Enabled {
+		span, ok := ebpfhttp.GraphQLSpan(httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.Elasticsearch.Enabled {
+		span, ok := ebpfhttp.ElasticsearchSpan(httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.SQLPP.Enabled {
+		span, ok := ebpfhttp.SQLPPSpan(httpSpan, req, resp, parseCtx.payloadExtraction.HTTP.SQLPP.EndpointPatterns)
 		if ok {
 			return span
 		}
@@ -173,8 +199,8 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 	// header-based detectors (OpenAI, Anthropic, etc.) so that known
 	// embedding-only providers are not misclassified when they return
 	// OpenAI-compatible response headers.
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Embedding.Enabled {
-		span, ok := ebpfhttp.EmbeddingSpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Embedding.Enabled {
+		span, ok := ebpfhttp.EmbeddingSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
@@ -183,57 +209,64 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 	// Retrieval detection runs alongside embedding: both are host-anchored
 	// and target dedicated vector database endpoints that do not overlap
 	// with LLM providers, so ordering between them does not matter.
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Retrieval.Enabled {
-		span, ok := ebpfhttp.RetrievalSpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Retrieval.Enabled {
+		span, ok := ebpfhttp.RetrievalSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAI.Enabled {
-		span, ok := ebpfhttp.OpenAISpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Ollama.Enabled {
+		span, ok := ebpfhttp.OllamaSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Anthropic.Enabled {
-		span, ok := ebpfhttp.AnthropicSpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAI.Enabled {
+		span, ok := ebpfhttp.OpenAISpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Gemini.Enabled {
-		span, ok := ebpfhttp.GeminiSpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Anthropic.Enabled {
+		span, ok := ebpfhttp.AnthropicSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Rerank.Enabled {
-		span, ok := ebpfhttp.RerankSpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Gemini.Enabled {
+		span, ok := ebpfhttp.GeminiSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Qwen.Enabled {
-		span, ok := ebpfhttp.QwenSpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Rerank.Enabled {
+		span, ok := ebpfhttp.RerankSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Bedrock.Enabled {
-		span, ok := ebpfhttp.BedrockSpan(&httpSpan, req, resp)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Qwen.Enabled {
+		span, ok := ebpfhttp.QwenSpan(httpSpan, req, resp)
 		if ok {
 			return span
 		}
 	}
 
-	if isClientEvent(event.Type) && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAICompatible.Enabled {
-		span, ok := ebpfhttp.OpenAICompatibleSpan(&httpSpan, req, resp, parseCtx.payloadExtraction.HTTP.GenAI.OpenAICompatible.Gateways)
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Bedrock.Enabled {
+		span, ok := ebpfhttp.BedrockSpan(httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAICompatible.Enabled {
+		span, ok := ebpfhttp.OpenAICompatibleSpan(httpSpan, req, resp, parseCtx.payloadExtraction.HTTP.GenAI.OpenAICompatible.Gateways)
 		if ok {
 			return span
 		}
@@ -244,22 +277,22 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 	if parseCtx != nil && (parseCtx.payloadExtraction.HTTP.GenAI.MCP.Enabled || parseCtx.payloadExtraction.HTTP.JSONRPC.Enabled) {
 		if parsed := ebpfhttp.TryParseJSONRPC(req); parsed != nil {
 			if parseCtx.payloadExtraction.HTTP.GenAI.MCP.Enabled {
-				span, ok := ebpfhttp.MCPSpanFromParsed(&httpSpan, req, resp, parsed)
+				span, ok := ebpfhttp.MCPSpanFromParsed(httpSpan, req, resp, parsed)
 				if ok {
 					return span
 				}
 			}
 			if parseCtx.payloadExtraction.HTTP.JSONRPC.Enabled {
-				return ebpfhttp.JSONRPCSpanFromParsed(&httpSpan, resp, parsed)
+				return ebpfhttp.JSONRPCSpanFromParsed(httpSpan, resp, parsed)
 			}
 		}
 	}
 
 	if parseCtx != nil && parseCtx.httpEnricher != nil {
-		parseCtx.httpEnricher.Enrich(&httpSpan, req, resp)
+		parseCtx.httpEnricher.Enrich(httpSpan, req, resp)
 	}
 
-	return httpSpan
+	return *httpSpan
 }
 
 func ReadHTTPInfoIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {

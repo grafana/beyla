@@ -24,10 +24,9 @@ const maxGeminiStreamCandidates = 256
 const maxPartialArgArrayIndex = 1024
 
 type geminiStreamChunk struct {
-	Candidates    []geminiStreamCandidate `json:"candidates"`
-	UsageMetadata *request.GeminiUsage    `json:"usageMetadata"`
-	ModelVersion  string                  `json:"modelVersion"`
-	ResponseID    string                  `json:"responseId"`
+	Candidates   []geminiStreamCandidate `json:"candidates"`
+	ModelVersion string                  `json:"modelVersion"`
+	ResponseID   string                  `json:"responseId"`
 }
 
 type geminiStreamCandidate struct {
@@ -337,7 +336,7 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 	var toolCalls []request.ToolCall
 	var modelVersion string
 	var responseID string
-	var usage *request.GeminiUsage
+	var usage request.GeminiUsage
 	var streamError *request.GeminiError
 
 	for scanner.Scan() {
@@ -353,13 +352,12 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 		}
 
 		var chunk geminiStreamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			slog.Debug("parseGeminiStream: failed to parse chunk", "error", err)
-			continue
-		}
+		unmarshalJSONBestEffort([]byte(data), &chunk)
+		var chunkUsage request.GeminiUsage
+		hasUsage := unmarshalJSONContainerBestEffort([]byte(data), &chunkUsage, "usageMetadata")
 
 		// Check if this data line is itself an error envelope.
-		if chunk.Candidates == nil && chunk.UsageMetadata == nil {
+		if chunk.Candidates == nil && !hasUsage {
 			if err := tryParseErrorLine(data); err != nil {
 				streamError = err
 				continue
@@ -372,8 +370,8 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 		if chunk.ResponseID != "" {
 			responseID = chunk.ResponseID
 		}
-		if chunk.UsageMetadata != nil && geminiUsageHasTokens(chunk.UsageMetadata) {
-			usage = chunk.UsageMetadata
+		if hasUsage {
+			usage.Merge(chunkUsage)
 		}
 
 		for i := range chunk.Candidates {
@@ -438,9 +436,7 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 		ResponseID:   responseID,
 	}
 
-	if usage != nil {
-		resp.UsageMetadata = *usage
-	}
+	resp.UsageMetadata = usage
 	if streamError != nil {
 		resp.Error = streamError
 	}
@@ -560,12 +556,6 @@ func extractSSEData(line string) (string, bool) {
 		return line[5:], true
 	}
 	return "", false
-}
-
-// geminiUsageHasTokens returns true when any of the exported token
-// fields are populated, not just totalTokenCount.
-func geminiUsageHasTokens(u *request.GeminiUsage) bool {
-	return u.PromptTokenCount > 0 || u.CandidatesTokenCount > 0 || u.TotalTokenCount > 0
 }
 
 // buildGeminiCandidates constructs the final candidate list from the

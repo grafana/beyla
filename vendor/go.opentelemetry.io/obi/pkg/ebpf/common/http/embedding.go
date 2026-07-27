@@ -69,6 +69,21 @@ func EmbeddingSpan(baseSpan *request.Span, req *http.Request, resp *http.Respons
 	if len(respB) > 0 && !unmarshalJSON(respB, &parsedResponse) {
 		slog.Debug("failed to parse embedding response", "provider", provider)
 	}
+	var usage request.EmbeddingUsage
+	if unmarshalJSONContainerBestEffort(respB, &usage, "usage") {
+		parsedResponse.Usage.PromptTokens.Merge(usage.PromptTokens)
+		parsedResponse.Usage.TotalTokens.Merge(usage.TotalTokens)
+	}
+	var billedUnits request.CohereBilledUnits
+	if unmarshalJSONContainerBestEffort(respB, &billedUnits, "meta", "billed_units") {
+		if parsedResponse.Meta == nil {
+			parsedResponse.Meta = &request.CohereResponseMeta{}
+		}
+		if parsedResponse.Meta.BilledUnits == nil {
+			parsedResponse.Meta.BilledUnits = &request.CohereBilledUnits{}
+		}
+		parsedResponse.Meta.BilledUnits.InputTokens.Merge(billedUnits.InputTokens)
+	}
 
 	baseSpan.SubType = request.HTTPSubtypeEmbedding
 	baseSpan.GenAI = &request.GenAI{

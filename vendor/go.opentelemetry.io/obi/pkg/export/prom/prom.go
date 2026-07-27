@@ -1034,8 +1034,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.observeHistogram(r.grpcClientDuration.WithLabelValues(labelValues(span, r.attrGRPCClientDuration)...).Metric, duration, span)
 			case r.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType):
 				r.observeHistogram(r.genAIClientDuration.WithLabelValues(labelValues(span, r.attrGenAIClientDuration)...).Metric, duration, span)
-				r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIInputTokenUsage)...).Metric, float64(span.GenAIInputTokens()), span)
-				r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIOutputTokenUsage)...).Metric, float64(span.GenAIOutputTokens()), span)
+				if tokens, reported := span.GenAIInputTokenCount(); reported {
+					r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIInputTokenUsage)...).Metric, float64(tokens), span)
+				}
+				if tokens, reported := span.GenAIOutputTokenCount(); reported {
+					r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIOutputTokenUsage)...).Metric, float64(tokens), span)
+				}
 			default:
 				if r.is.HTTPEnabled() {
 					r.observeHistogram(r.httpClientDuration.WithLabelValues(labelValues(span, r.attrHTTPClientDuration)...).Metric, duration, span)

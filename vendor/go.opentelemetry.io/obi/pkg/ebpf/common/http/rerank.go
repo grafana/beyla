@@ -199,8 +199,21 @@ func RerankSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 
 	var parsedResponse request.RerankResponse
 	if len(respB) > 0 {
-		if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-			slog.Debug("failed to parse rerank response", "provider", provider, "error", err)
+		unmarshalJSONBestEffort(respB, &parsedResponse)
+		var usage request.RerankUsage
+		if unmarshalJSONContainerBestEffort(respB, &usage, "usage") {
+			parsedResponse.Usage.TotalTokens.Merge(usage.TotalTokens)
+			parsedResponse.Usage.PromptTokens.Merge(usage.PromptTokens)
+		}
+		var tokens request.RerankMetaTokens
+		if unmarshalJSONContainerBestEffort(respB, &tokens, "meta", "tokens") {
+			if parsedResponse.Meta == nil {
+				parsedResponse.Meta = &request.RerankMeta{}
+			}
+			if parsedResponse.Meta.Tokens == nil {
+				parsedResponse.Meta.Tokens = &request.RerankMetaTokens{}
+			}
+			parsedResponse.Meta.Tokens.InputTokens.Merge(tokens.InputTokens)
 		}
 	}
 

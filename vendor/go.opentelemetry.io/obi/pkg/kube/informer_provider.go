@@ -74,6 +74,10 @@ func NewMetadataProvider(config MetadataConfig, internalMetrics imetrics.Reporte
 	return &MetadataProvider{cfg: &config, internalMetrics: internalMetrics}
 }
 
+func (mp *MetadataProvider) SetInternalMetrics(internalMetrics imetrics.Reporter) {
+	mp.internalMetrics = internalMetrics
+}
+
 func (mp *MetadataProvider) IsKubeEnabled() bool {
 	if mp == nil || mp.cfg == nil {
 		return false

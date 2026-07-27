@@ -6,9 +6,7 @@
 package logenricher // import "go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -52,6 +50,7 @@ type Tracer struct {
 	log         *slog.Logger
 	fdCache     *expirable.LRU[string, *os.File]
 	asyncWriter *shardedqueue.ShardedQueue[LogEvent]
+	formatter   logFormatter
 	pids        map[uint64][]uint64       // pid:[]nsPids
 	pidServices map[uint32]*exec.FileInfo // host pid -> file info, for run-time OTel-export check in handle()
 	pidsMU      sync.Mutex
@@ -71,6 +70,7 @@ func New(cfg *obi.Config) *Tracer {
 		fdCache: expirable.NewLRU[string, *os.File](cfg.EBPF.LogEnricher.CacheSize, func(_ string, f *os.File) {
 			f.Close()
 		}, cfg.EBPF.LogEnricher.CacheTTL),
+		formatter:   newLogFormatter(cfg.EBPF.LogEnricher),
 		pids:        make(map[uint64][]uint64),
 		pidServices: make(map[uint32]*exec.FileInfo),
 	}
@@ -230,20 +230,6 @@ func (p *Tracer) shouldOmitSpanID(hostPID uint32) bool {
 	p.pidsMU.Unlock()
 
 	return s != nil && s.ExportsOTelTraces()
-}
-
-func applyTraceContext(m map[string]any, traceID, spanID string, includeSpan bool) {
-	if _, present := m["trace_id"]; !present {
-		m["trace_id"] = traceID
-	}
-
-	if !includeSpan {
-		return
-	}
-
-	if _, present := m["span_id"]; !present {
-		m["span_id"] = spanID
-	}
 }
 
 func (p *Tracer) addPID(key uint64) error {
@@ -418,32 +404,17 @@ func (p *Tracer) handle(e LogEvent) {
 		return
 	}
 
-	var (
-		b           bytes.Buffer
-		spanID      = trace.SpanID(e.orig.Ctx.SpanId)
-		traceID     = trace.TraceID(e.orig.Ctx.TraceId)
-		includeSpan = !p.shouldOmitSpanID(e.orig.Tgid)
-	)
+	spanID := trace.SpanID(e.orig.Ctx.SpanId)
+	traceID := trace.TraceID(e.orig.Ctx.TraceId)
+	includeSpan := !p.shouldOmitSpanID(e.orig.Tgid)
 
-	var m map[string]any
-	if err := json.Unmarshal([]byte(e.logLine), &m); err == nil {
-		applyTraceContext(m, traceID.String(), spanID.String(), includeSpan)
-
-		out, err2 := json.Marshal(m)
-		if err2 != nil {
-			p.log.Warn("failed to marshal enriched log line, writing original", "error", err2)
-			b.Write([]byte(e.logLine))
-			return
-		}
-
-		b.Write(out)
-		b.WriteByte('\n')
-	} else {
-		// Not JSON -> preserve the original logline
-		b.Write([]byte(e.logLine))
+	out, err := p.formatter.format([]byte(e.logLine), traceID.String(), spanID.String(), includeSpan)
+	if err != nil {
+		p.log.Warn("failed to format enriched log line, writing original", "error", err)
+		out = []byte(e.logLine)
 	}
 
-	_, err := f.Write(b.Bytes())
+	_, err = f.Write(out)
 	if err != nil {
 		p.log.Error("failed to write enriched log line", "error", err)
 	}

@@ -958,10 +958,14 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			} else if mr.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType) {
 				genAIClientDuration, attrs := r.genAIClientDuration.ForRecord(span)
 				genAIClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-				genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)
-				genAIInputTokenUsage.Record(ctx, float64(span.GenAIInputTokens()), instrument.WithAttributeSet(attrs))
-				genAIOutputTokenUsage, attrs := r.genAIOutputTokenUsage.ForRecord(span)
-				genAIOutputTokenUsage.Record(ctx, float64(span.GenAIOutputTokens()), instrument.WithAttributeSet(attrs))
+				if tokens, reported := span.GenAIInputTokenCount(); reported {
+					genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)
+					genAIInputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+				}
+				if tokens, reported := span.GenAIOutputTokenCount(); reported {
+					genAIOutputTokenUsage, attrs := r.genAIOutputTokenUsage.ForRecord(span)
+					genAIOutputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+				}
 			} else if mr.is.HTTPEnabled() {
 				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
 				httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))

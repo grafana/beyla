@@ -141,6 +141,25 @@ func unmarshalJSONBestEffort(body []byte, v any) {
 	_ = jsonBestEffort.Unmarshal(body, v)
 }
 
+func unmarshalJSONContainerBestEffort(body []byte, v any, path ...any) bool {
+	field := jsonBestEffort.Get(body, path...)
+	if field.ValueType() != jsoniter.ObjectValue {
+		return false
+	}
+	unmarshalJSONBestEffort([]byte(field.ToString()), v)
+	return true
+}
+
+func tokenCountJSONField(body []byte, path ...any) request.TokenCount {
+	field := jsonBestEffort.Get(body, path...)
+	if field.ValueType() != jsoniter.NumberValue {
+		return request.TokenCount{}
+	}
+	var count request.TokenCount
+	_ = jsonBestEffort.Unmarshal([]byte(field.ToString()), &count)
+	return count
+}
+
 func readHTTPRequestBody(component string, req *http.Request, baseSpan *request.Span, emptyLogAttrs ...any) ([]byte, bool) {
 	if req == nil || req.Body == nil {
 		return nil, true
@@ -274,6 +293,10 @@ func extractJSONRawField(body []byte, field string) json.RawMessage {
 func parseVendorOpenAI(body []byte) request.VendorOpenAI {
 	var parsed request.VendorOpenAI
 	unmarshalJSONBestEffort(body, &parsed)
+	var usage request.OpenAIUsage
+	if unmarshalJSONContainerBestEffort(body, &usage, "usage") {
+		parsed.Usage.Merge(usage)
+	}
 	if parsed.ID == "" {
 		parsed.ID = extractJSONStringField(body, "id", responseHeaderSearchWindow)
 	}
@@ -298,6 +321,10 @@ func parseAnthropicRequest(body []byte) request.AnthropicRequest {
 func parseAnthropicResponse(body []byte) request.AnthropicResponse {
 	var parsed request.AnthropicResponse
 	unmarshalJSONBestEffort(body, &parsed)
+	var usage request.AnthropicUsage
+	if unmarshalJSONContainerBestEffort(body, &usage, "usage") {
+		parsed.Usage.Merge(usage)
+	}
 	if parsed.ID == "" {
 		parsed.ID = extractJSONStringField(body, "id", responseHeaderSearchWindow)
 	}
@@ -325,4 +352,22 @@ func unmarshalJSON(body []byte, v any) bool {
 		return false
 	}
 	return jsonBestEffort.Unmarshal(body, v) == nil
+}
+
+func isHTTP2Request(req *http.Request) bool {
+	return req != nil && req.ProtoMajor == 2
+}
+
+func genaiModel(reqB, respB []byte) string {
+	if m := extractModelField(reqB); m != "" {
+		return m
+	}
+	return extractJSONStringField(respB, "model", responseHeaderSearchWindow)
+}
+
+func genaiModelVersion(reqB, respB []byte) string {
+	if m := extractJSONStringField(reqB, "modelVersion", 0); m != "" {
+		return m
+	}
+	return extractJSONStringField(respB, "modelVersion", responseHeaderSearchWindow)
 }

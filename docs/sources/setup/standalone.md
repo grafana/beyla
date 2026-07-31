@@ -21,12 +21,6 @@ Beyla can run as a standalone Linux OS process with elevated privileges that can
 
 You can download the Beyla executable from the [Beyla releases page](https://github.com/grafana/beyla/releases).
 
-Alternatively, download the Beyla executable with the `go install` command:
-
-```sh
-go install github.com/grafana/beyla/cmd/beyla@latest
-```
-
 ## Installing as a service
 
 After you have Beyla installed on your system, you can use the

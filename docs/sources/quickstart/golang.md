@@ -26,13 +26,6 @@ go run quickstart.go
 Download the latest Beyla executable from the [Beyla releases page](https://github.com/grafana/beyla/releases).
 Uncompress and copy the Beyla executable to any location in your `$PATH`.
 
-As an alternative (if your host has the Go toolset installed), you can directly download the
-Beyla executable with the `go install` command:
-
-```sh
-go install github.com/grafana/beyla/cmd/beyla@latest
-```
-
 ## 3. (Optional) get Grafana Cloud credentials
 
 Beyla can export metrics and traces to any OpenTelemetry endpoint, as well as exposing metrics as a Prometheus endpoint. However, we recommend using the OpenTelemetry endpoint in Grafana Cloud. You can get a [Free Grafana Cloud Account at Grafana's website](/pricing/).

@@ -282,7 +282,7 @@ urllib3==2.7.0 \
     --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
     --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
     # via requests
-uvicorn==0.41.0 \
-    --hash=sha256:09d11cf7008da33113824ee5a1c6422d89fbc2ff476540d69a34c87fab8b571a \
-    --hash=sha256:29e35b1d2c36a04b9e180d4007ede3bcb32a85fbdfd6c6aeb3f26839de088187
+uvicorn==0.52.0 \
+    --hash=sha256:3d887809810b89ed33501bcf0a9aba469b06ecd608158efce04bd6b48d8c9b08 \
+    --hash=sha256:ca8876ad6c1983f394157c168b39d52f6dd56dabf5602fa0982751cffc2293ae
     # via -r requirements.in

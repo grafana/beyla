@@ -510,6 +510,44 @@
         ]
       }
     },
+    "go.opentelemetry.io/otel/trace.SpanContext": {
+      "spanID": {
+        "versions": {
+          "oldest": "1.0.0",
+          "newest": "1.44.0"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.0.0"
+          }
+        ]
+      },
+      "traceFlags": {
+        "versions": {
+          "oldest": "1.0.0",
+          "newest": "1.44.0"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.0.0"
+          }
+        ]
+      },
+      "traceID": {
+        "versions": {
+          "oldest": "1.0.0",
+          "newest": "1.44.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.0.0"
+          }
+        ]
+      }
+    },
     "golang.org/x/net/http2.ClientConn": {
       "fr": {
         "versions": {

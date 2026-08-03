@@ -159,7 +159,7 @@ services:
 
   # Mimir -config.file=config-mimir.yaml -server.grpc-listen-port=9096
   mimir:
-    image: grafana/mimir@sha256:c906a6fc334ba401b901230b34f660cb1bb1818ef1b169d90e7e4033b97c4f59
+    image: grafana/mimir@sha256:ea395743a08cc1f41ede12a7264613cb32f0268bbda6277f12a5929b71625a41
     container_name: demo-mimir
     command:
       - -config.file=/etc/mimir/mimir-config.yaml

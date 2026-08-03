@@ -10,6 +10,8 @@ import (
 	"log/slog"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -51,6 +53,11 @@ const (
 
 const wildCard = "/**"
 
+type DirectionalRoutePolicyPresence struct {
+	Incoming bool
+	Outgoing bool
+}
+
 // RoutesConfig allows grouping URLs sharing a given pattern.
 type RoutesConfig struct {
 	// Unmatch specifies what to do when a route pattern is not matched.
@@ -67,6 +74,64 @@ type RoutesConfig struct {
 	// Max allowed path segment cardinality (per service) for the heuristic matcher
 	// 0 = disabled
 	MaxPathSegmentCardinality int `yaml:"max_path_segment_cardinality" validate:"gte=0"`
+
+	// Directional is populated only by config v2 conversion. The fields above
+	// remain the complete v1 YAML surface.
+	Directional *services.DirectionalRoutePolicies `yaml:"-" json:"-"`
+	// DirectionalPolicyPresence preserves which global directions were present
+	// in a complete v2 config. Nil means both directions are configured.
+	DirectionalPolicyPresence *DirectionalRoutePolicyPresence `yaml:"-" json:"-"`
+	// DirectionalRuleOnly indicates that Directional provides an inheritance
+	// baseline for per-service rules but does not apply globally.
+	DirectionalRuleOnly bool `yaml:"-" json:"-"`
+}
+
+func (rc *RoutesConfig) Clone() *RoutesConfig {
+	if rc == nil {
+		return nil
+	}
+	cloned := *rc
+	cloned.Patterns = append([]string(nil), rc.Patterns...)
+	cloned.IgnorePatterns = append([]string(nil), rc.IgnorePatterns...)
+	if rc.Directional != nil {
+		policies := rc.Directional.Clone()
+		cloned.Directional = &policies
+	}
+	if rc.DirectionalPolicyPresence != nil {
+		presence := *rc.DirectionalPolicyPresence
+		cloned.DirectionalPolicyPresence = &presence
+	}
+	return &cloned
+}
+
+func (rc *RoutesConfig) HasIncomingPolicy() bool {
+	return rc != nil && (rc.DirectionalPolicyPresence == nil || rc.DirectionalPolicyPresence.Incoming)
+}
+
+func (rc *RoutesConfig) HasOutgoingPolicy() bool {
+	return rc != nil && (rc.DirectionalPolicyPresence == nil || rc.DirectionalPolicyPresence.Outgoing)
+}
+
+func (rc *RoutesConfig) DirectionalPolicies() services.DirectionalRoutePolicies {
+	if rc == nil {
+		return services.DirectionalRoutePolicies{}
+	}
+	if rc.Directional != nil {
+		return rc.Directional.Clone()
+	}
+
+	policy := services.RoutePolicy{
+		Unmatch:                   services.RouteUnmatch(rc.Unmatch),
+		Patterns:                  rc.Patterns,
+		IgnorePatterns:            rc.IgnorePatterns,
+		IgnoredEvents:             services.RouteIgnoreMode(rc.IgnoredEvents),
+		WildcardChar:              rc.WildcardChar,
+		MaxPathSegmentCardinality: rc.MaxPathSegmentCardinality,
+	}
+	return services.DirectionalRoutePolicies{
+		Incoming: policy.Clone(),
+		Outgoing: policy.Clone(),
+	}
 }
 
 func RoutesProvider(rc *RoutesConfig, input, output *msg.Queue[[]request.Span]) swarm.InstanceFunc {
@@ -78,16 +143,22 @@ func RoutesProvider(rc *RoutesConfig, input, output *msg.Queue[[]request.Span]) 
 }
 
 type routerNode struct {
-	config     *RoutesConfig
-	classifier *clusterurl.ClusterURLClassifier
-	input      *msg.Queue[[]request.Span]
-	output     *msg.Queue[[]request.Span]
+	config              *RoutesConfig
+	classifier          *clusterurl.ClusterURLClassifier
+	classifiers         map[byte]*clusterurl.ClusterURLClassifier
+	incomingRoutePolicy *svc.RoutePolicy
+	outgoingRoutePolicy *svc.RoutePolicy
+	input               *msg.Queue[[]request.Span]
+	output              *msg.Queue[[]request.Span]
 }
 
 func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 	rc := rn.config
 	if rc == nil {
 		return swarm.Bypass(rn.input, rn.output)
+	}
+	if rc.Directional != nil {
+		return rn.provideDirectionalRoutes()
 	}
 
 	// set default value for Unmatch action
@@ -148,6 +219,176 @@ func (rn *routerNode) provideRoutes(_ context.Context) (swarm.RunFunc, error) {
 			out.SendCtx(ctx, spans)
 		})
 	}, nil
+}
+
+func (rn *routerNode) provideDirectionalRoutes() (swarm.RunFunc, error) {
+	policies := rn.config.DirectionalPolicies()
+	rn.incomingRoutePolicy = svc.NewRoutePolicy(policies.Incoming)
+	rn.outgoingRoutePolicy = svc.NewRoutePolicy(policies.Outgoing)
+	rn.classifiers = map[byte]*clusterurl.ClusterURLClassifier{}
+
+	directionalPolicies := []struct {
+		configured bool
+		policy     *svc.RoutePolicy
+	}{
+		{configured: rn.config.HasIncomingPolicy(), policy: rn.incomingRoutePolicy},
+		{configured: rn.config.HasOutgoingPolicy(), policy: rn.outgoingRoutePolicy},
+	}
+	for _, directionalPolicy := range directionalPolicies {
+		if !directionalPolicy.configured {
+			continue
+		}
+		policy := directionalPolicy.policy
+		if !usesHeuristic(policy.Config.Unmatch) {
+			continue
+		}
+		if _, err := rn.classifierFor(policy.Config); err != nil {
+			return nil, err
+		}
+	}
+
+	in := rn.input.Subscribe(msg.SubscriberName("transform.Routes"))
+	out := rn.output
+	return func(ctx context.Context) {
+		defer rn.output.Close()
+
+		swarms.ForEachInput(ctx, in, nil, func(spans []request.Span) {
+			for i := range spans {
+				rn.applyDirectionalPolicy(&spans[i])
+			}
+			out.SendCtx(ctx, spans)
+		})
+	}, nil
+}
+
+func (rn *routerNode) applyDirectionalPolicy(span *request.Span) {
+	if !span.IsHTTPSpan() {
+		return
+	}
+
+	policy := rn.routePolicy(span)
+	if policy == nil {
+		return
+	}
+
+	ignoreMode := policy.Config.IgnoredEvents
+	if ignoreMode == "" {
+		ignoreMode = services.IgnoreDefault
+	}
+	if policy.IgnoreMatcher.Find(span.Path) != "" {
+		if ignoreMode == services.IgnoreAll {
+			request.SetIgnoreMetrics(span)
+			request.SetIgnoreTraces(span)
+		}
+		setSpanIgnoreMode(IgnoreMode(ignoreMode), span)
+	}
+
+	if span.Route == "" {
+		span.Route = policy.Matcher.Find(span.Path)
+	}
+	if span.Route == "" && span.IsHTTPSpan() && span.Service.HarvestedRouteMatcher != nil {
+		span.Route = span.Service.HarvestedRouteMatcher.Find(span.Path)
+	}
+	if span.Route != "" {
+		return
+	}
+
+	switch policy.Config.Unmatch {
+	case services.UnmatchUnset:
+		return
+	case services.UnmatchPath:
+		span.Route = span.Path
+	case services.UnmatchHeuristic, services.UnmatchLowCardinality:
+		if !span.IsHTTPSpan() {
+			return
+		}
+		classifier, err := rn.classifierFor(policy.Config)
+		if err != nil {
+			slog.With("component", "RoutesProvider").Error("creating route classifier", "error", err)
+			span.Route = wildCard
+			return
+		}
+		span.Route = classifier.ClusterURL(span.Path)
+		if policy.Config.Unmatch == services.UnmatchLowCardinality {
+			if pathTrie := rn.pathTrie(span); pathTrie != nil {
+				span.Route = pathTrie.Insert(span.Route)
+			}
+		}
+	case services.UnmatchWildcard, "":
+		span.Route = wildCard
+	default:
+		slog.With("component", "RoutesProvider").Warn(
+			"invalid 'unmatch' value in configuration, defaulting to wildcard",
+			"value", policy.Config.Unmatch)
+		span.Route = wildCard
+	}
+}
+
+func (rn *routerNode) routePolicy(span *request.Span) *svc.RoutePolicy {
+	var servicePolicy, globalPolicy *svc.RoutePolicy
+	if span.IsClientSpan() {
+		servicePolicy = span.Service.OutgoingRoutePolicy
+		globalPolicy = rn.outgoingRoutePolicy
+	} else {
+		servicePolicy = span.Service.IncomingRoutePolicy
+		globalPolicy = rn.incomingRoutePolicy
+	}
+	if servicePolicy != nil {
+		return servicePolicy
+	}
+	if rn.config.DirectionalRuleOnly {
+		return nil
+	}
+	if span.IsClientSpan() && !rn.config.HasOutgoingPolicy() {
+		return nil
+	}
+	if !span.IsClientSpan() && !rn.config.HasIncomingPolicy() {
+		return nil
+	}
+	return globalPolicy
+}
+
+func (rn *routerNode) pathTrie(span *request.Span) *clusterurl.PathTrie {
+	if span.IsClientSpan() {
+		if span.Service.OutgoingRoutePolicy != nil {
+			return span.Service.OutgoingRoutePolicy.PathTrie
+		}
+		if span.Service.OutgoingPathTrie != nil {
+			return span.Service.OutgoingPathTrie
+		}
+		return rn.outgoingRoutePolicy.PathTrie
+	}
+
+	if span.Service.IncomingRoutePolicy != nil {
+		return span.Service.IncomingRoutePolicy.PathTrie
+	}
+	if span.Service.IncomingPathTrie != nil {
+		return span.Service.IncomingPathTrie
+	}
+	return rn.incomingRoutePolicy.PathTrie
+}
+
+func (rn *routerNode) classifierFor(policy services.RoutePolicy) (*clusterurl.ClusterURLClassifier, error) {
+	wildcard := byte('*')
+	if policy.WildcardChar != "" {
+		wildcard = policy.WildcardChar[0]
+	}
+	if classifier := rn.classifiers[wildcard]; classifier != nil {
+		return classifier, nil
+	}
+
+	classifierCfg := clusterurl.DefaultConfig()
+	classifierCfg.ReplaceWith = wildcard
+	classifier, err := clusterurl.NewClusterURLClassifier(classifierCfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating directional route classifier: %w", err)
+	}
+	rn.classifiers[wildcard] = classifier
+	return classifier, nil
+}
+
+func usesHeuristic(unmatch services.RouteUnmatch) bool {
+	return unmatch == services.UnmatchHeuristic || unmatch == services.UnmatchLowCardinality
 }
 
 func makeHeuristicClassifier(rc *RoutesConfig) (*clusterurl.ClusterURLClassifier, error) {

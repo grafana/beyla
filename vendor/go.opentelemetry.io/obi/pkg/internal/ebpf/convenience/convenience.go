@@ -112,10 +112,13 @@ const (
 
 // isResizableMapType returns true for map types where scaling MaxEntries
 // is meaningful. Excludes special map types whose MaxEntries has fixed
-// semantics (e.g. ProgramArray entries are tail-call slots, not data).
+// semantics (e.g. ProgramArray entries are tail-call slots, not data), and
+// array types, whose MaxEntries is a valid index space rather than a capacity
+// (e.g. valid_pids is indexed using a constant shared with userspace).
 func isResizableMapType(t ebpf.MapType) bool {
 	switch t {
-	case ebpf.ProgramArray, ebpf.PerfEventArray, ebpf.CGroupArray,
+	case ebpf.Array, ebpf.PerCPUArray,
+		ebpf.ProgramArray, ebpf.PerfEventArray, ebpf.CGroupArray,
 		ebpf.ArrayOfMaps, ebpf.HashOfMaps,
 		ebpf.DevMap, ebpf.SockMap, ebpf.CPUMap, ebpf.XSKMap, ebpf.SockHash,
 		ebpf.DevMapHash, ebpf.ReusePortSockArray:

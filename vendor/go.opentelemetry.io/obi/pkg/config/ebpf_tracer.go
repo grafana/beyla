@@ -77,6 +77,10 @@ type EBPFTracer struct {
 	// Must be at least 0
 	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"OTEL_EBPF_BPF_HTTP_REQUEST_TIMEOUT" validate:"gte=0"`
 
+	// GoHTTPClientBufferTimeout is the inactivity period after which a pending Go HTTP client
+	// event is enriched with its captured buffers and emitted. A zero value disables deferral.
+	GoHTTPClientBufferTimeout time.Duration `yaml:"go_http_client_buffer_timeout" env:"OTEL_EBPF_BPF_GO_HTTP_CLIENT_BUFFER_TIMEOUT" validate:"gte=0"`
+
 	// Enables distributed context propagation.
 	// Can be a combination of: headers, tcp (e.g., "headers,tcp" or "all")
 	ContextPropagation ContextPropagationMode `yaml:"context_propagation" env:"OTEL_EBPF_BPF_CONTEXT_PROPAGATION"`

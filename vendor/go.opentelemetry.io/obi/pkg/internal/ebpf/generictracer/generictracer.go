@@ -7,6 +7,7 @@ package generictracer // import "go.opentelemetry.io/obi/pkg/internal/ebpf/gener
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -73,12 +74,16 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 	}
 }
 
-// Updating these requires updating the constants below in pid.h
-// #define MAX_CONCURRENT_PIDS 3001 // estimate: 1000 concurrent processes (including children) * 3 namespaces per pid
-// #define PRIME_HASH 192053 // closest prime to 3001 * 64
+// Keep in sync with the BPF side, which asserts the relation between both
+// constants at compile time (bpf/pid/pid.h).
 const (
+	// mirrors k_max_concurrent_pids (bpf/pid/maps/map_sizing.h): estimate of
+	// 1000 concurrent processes (including children) * 3 namespaces per pid
 	maxConcurrentPids = 3001
-	primeHash         = 192053
+	// mirrors k_prime_hash (bpf/pid/pid.h): closest prime below
+	// maxConcurrentPids * 64; modulo by a prime distributes the hash evenly
+	// across the segment bit array
+	primeHash = 192053
 )
 
 func pidSegmentBit(k uint64) (uint32, uint32) {
@@ -109,25 +114,47 @@ func (p *Tracer) buildPidFilter() []uint64 {
 	return result
 }
 
-func (p *Tracer) rebuildValidPids() {
-	if p.bpfObjects.ValidPids != nil {
-		v := p.buildPidFilter()
+// validateValidPidsMap ensures the loaded map matches the index space written
+// by rebuildValidPids: a smaller map makes pid_matches() lookups miss and fail
+// open, while a larger one leaves segments unset, silently filtering out
+// matching PIDs.
+func (p *Tracer) validateValidPidsMap() error {
+	if got := p.bpfObjects.ValidPids.MaxEntries(); got != maxConcurrentPids {
+		return fmt.Errorf(
+			"valid_pids BPF map holds %d entries, expected %d: BPF and userspace PID filter constants have diverged",
+			got, maxConcurrentPids)
+	}
 
-		p.log.Debug("number of segments in pid filter cache", "len", len(v))
+	return nil
+}
 
-		for i, segment := range v {
-			err := p.bpfObjects.ValidPids.Put(uint32(i), segment)
-			if err != nil {
-				p.log.Error("Error setting up pid in BPF space, sizes of Go and BPF maps don't match", "error", err, "i", i)
-			}
+func (p *Tracer) rebuildValidPids() error {
+	if p.bpfObjects.ValidPids == nil {
+		return nil
+	}
+
+	v := p.buildPidFilter()
+
+	p.log.Debug("number of segments in pid filter cache", "len", len(v))
+
+	for i, segment := range v {
+		if err := p.bpfObjects.ValidPids.Put(uint32(i), segment); err != nil {
+			return fmt.Errorf("setting up pid segment %d in BPF space: %w", i, err)
 		}
 	}
+
+	return nil
 }
 
 func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	p.pidsFilter.AllowPID(pid, ns, fi, ebpfcommon.PIDTypeKProbes)
-	p.rebuildValidPids()
-	// Override potential negative cache entry for this PID
+
+	if err := p.rebuildValidPids(); err != nil {
+		p.log.Error("rebuilding the BPF PID filter", "error", err)
+		return
+	}
+
+	// Keep the cache consistent with the updated filter.
 	if p.bpfObjects.PidCache != nil {
 		pidU32 := uint32(pid)
 		_ = p.bpfObjects.PidCache.Put(pidU32, pidU32)
@@ -136,8 +163,13 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.pidsFilter.BlockPID(pid, ns)
-	p.rebuildValidPids()
-	// Remove from cache so next access re-evaluates
+
+	if err := p.rebuildValidPids(); err != nil {
+		p.log.Error("rebuilding the BPF PID filter", "error", err)
+		return
+	}
+
+	// Remove from cache so next access re-evaluates.
 	if p.bpfObjects.PidCache != nil {
 		pidU32 := uint32(pid)
 		_ = p.bpfObjects.PidCache.Delete(pidU32)
@@ -181,7 +213,8 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
 		// Large buffer multi-batch emission
-		p.bpfObjects.ObiLargeBufEmitContinue, // 13  k_tail_large_buf_emit_continue
+		p.bpfObjects.ObiLargeBufEmitContinue,                          // 13  k_tail_large_buf_emit_continue
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit, // 14
 	} {
 		if prog == nil {
 			continue
@@ -567,6 +600,10 @@ func (p *Tracer) runItersForPids() {
 				if err := netns.WithNetNS(int(pid), func() error {
 					return it.Run(p.log)
 				}); err != nil {
+					if errors.Is(err, os.ErrNotExist) {
+						p.log.Debug("process gone before iterating its netns", "pid", pid)
+						break
+					}
 					p.log.Error("error running iterator in netns", "pid", pid, "error", err)
 				}
 			}
@@ -626,13 +663,19 @@ func (p *Tracer) Run(
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
-		p.rebuildValidPids()
+		if err := p.validateValidPidsMap(); err != nil {
+			p.log.Error("BPF PID filter map sizing is invalid, discovery filtering may not be enforced", "error", err)
+		}
+		if err := p.rebuildValidPids(); err != nil {
+			p.log.Error("setting up the BPF PID filter, discovery filtering may not be enforced", "error", err)
+		}
 	} else {
 		p.log.Error("BPF Pids map is not created yet, this is a bug.")
 	}
 
 	timeoutTicker := time.NewTicker(2 * time.Second)
 	parseContext := ebpfcommon.NewEBPFParseContext(&p.cfg.EBPF, eventsChan, p.pidsFilter)
+	defer parseContext.Close()
 
 	go p.watchForMisclassifedEvents(ctx)
 	go p.lookForTimeouts(ctx, parseContext, timeoutTicker, eventsChan)
@@ -769,13 +812,6 @@ func (p *Tracer) parseJVMMemoryPoolRecord(record *ringbuf.Record) ([]jvmruntime.
 	return events, false, nil
 }
 
-func kernelTime(ktime uint64) time.Time {
-	now := time.Now()
-	delta := timing.MonoTimeNow() - time.Duration(int64(ktime))
-
-	return now.Add(-delta)
-}
-
 //nolint:cyclop
 func (p *Tracer) lookForTimeouts(ctx context.Context, parseCtx *ebpfcommon.EBPFParseContext, ticker *time.Ticker, eventsChan *msg.Queue[[]request.Span]) {
 	for {
@@ -792,7 +828,7 @@ func (p *Tracer) lookForTimeouts(ctx context.Context, parseCtx *ebpfcommon.EBPFP
 					// but it hasn't been posted yet, likely missed by the logic that looks at finishing requests
 					// where we track the full response. If we haven't updated the EndMonotimeNs in more than some
 					// short interval, we are likely not going to finish this request from eBPF, so let's do it here.
-					if v.EndMonotimeNs != 0 && v.Submitted == 0 && t.After(kernelTime(v.EndMonotimeNs).Add(10*time.Second)) {
+					if v.EndMonotimeNs != 0 && v.Submitted == 0 && t.After(timing.KernelTime(v.EndMonotimeNs).Add(10*time.Second)) {
 						// Must use unsafe here, the two bpfHttpInfoTs are the same but generated from different
 						// ebpf2go outputs
 						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(parseCtx, (*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))
@@ -802,7 +838,7 @@ func (p *Tracer) lookForTimeouts(ctx context.Context, parseCtx *ebpfcommon.EBPFP
 						if err := p.bpfObjects.OngoingHttp.Delete(k); err != nil {
 							p.log.Debug("Error deleting ongoing request", "error", err)
 						}
-					} else if v.EndMonotimeNs == 0 && p.cfg.EBPF.HTTPRequestTimeout.Milliseconds() > 0 && t.After(kernelTime(v.StartMonotimeNs).Add(p.cfg.EBPF.HTTPRequestTimeout)) {
+					} else if v.EndMonotimeNs == 0 && p.cfg.EBPF.HTTPRequestTimeout.Milliseconds() > 0 && t.After(timing.KernelTime(v.StartMonotimeNs).Add(p.cfg.EBPF.HTTPRequestTimeout)) {
 						// If we don't have a request finish with endTime by the configured request timeout, terminate the
 						// waiting request with a timeout 408
 						s, ignore, err := ebpfcommon.HTTPInfoEventToSpan(parseCtx, (*ebpfcommon.BPFHTTPInfo)(unsafe.Pointer(&v)))

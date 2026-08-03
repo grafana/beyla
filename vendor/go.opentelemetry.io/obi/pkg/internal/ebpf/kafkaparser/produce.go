@@ -19,7 +19,10 @@ type ProduceRequest struct {
 	Topics []*ProduceTopic
 }
 
-var errNoTopicsInProduce = errors.New("no Topics found in produce request")
+var (
+	errInvalidProduceRecordsLength = errors.New("invalid produce records length")
+	errNoTopicsInProduce           = errors.New("no Topics found in produce request")
+)
 
 func ParseProduceRequest(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*ProduceRequest, error) {
 	if err := produceRequestSkipUntilTopics(r, header); err != nil {
@@ -61,18 +64,19 @@ func parseProduceTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader
 	if err != nil {
 		return nil, err
 	}
-	var topics []*ProduceTopic
 	if topicsLen <= 0 {
-		return topics, nil
+		return nil, nil
 	}
-	// read single topic for now, because skipping records is complicated
-	topic, err := parseProduceTopic(r, header)
-	if err != nil {
-		// return the Topics parsed so far, even if one topic failed
-		return topics, nil
-	}
-	if topic != nil {
-		topics = append(topics, topic)
+
+	var topics []*ProduceTopic
+	for range topicsLen {
+		topic, err := parseProduceTopic(r, header)
+		if err != nil {
+			return topics, nil
+		}
+		if topic != nil {
+			topics = append(topics, topic)
+		}
 	}
 	return topics, nil
 }
@@ -103,15 +107,56 @@ func parseProduceTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader)
 		// return the topic even if partitions can't be read
 		return &topic, nil
 	}
-	if partitionsLen != 1 {
-		// if more than 1 Partition, we just won't report Partition
+	for i := range partitionsLen {
+		partition, perr := parseProducePartition(r, header)
+		if i == 0 {
+			topic.Partition = &partition
+		}
+		if perr != nil {
+			return &topic, nil
+		}
+	}
+	if err = skipTaggedFields(r, header); err != nil {
 		return &topic, nil
 	}
-	// read single Partition for now, because skipping records is complicated
-	firstPartition, err := readInt32(r)
-	if err != nil {
-		return &topic, nil
-	}
-	topic.Partition = &firstPartition
 	return &topic, nil
+}
+
+func parseProducePartition(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (int, error) {
+	partition, err := readInt32(r)
+	if err != nil {
+		return 0, err
+	}
+	if err = skipProduceRecords(r, header); err != nil {
+		return partition, err
+	}
+	if err = skipTaggedFields(r, header); err != nil {
+		return partition, err
+	}
+	return partition, nil
+}
+
+func skipProduceRecords(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	if isFlexible(header) {
+		recordsLen, err := readUnsignedVarint(r)
+		if err != nil {
+			return err
+		}
+		if recordsLen == 0 {
+			return nil
+		}
+		return r.Skip(recordsLen - 1)
+	}
+
+	recordsLen, err := readInt32(r)
+	if err != nil {
+		return err
+	}
+	if recordsLen == -1 {
+		return nil
+	}
+	if recordsLen < 0 {
+		return errInvalidProduceRecordsLength
+	}
+	return r.Skip(recordsLen)
 }

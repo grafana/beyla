@@ -167,11 +167,11 @@ func (i *NodeInjector) requestDebuggerURL(conn net.Conn) (string, error) {
 	return targets[0].WebSocketDebuggerURL, nil
 }
 
-func upgradeConn(conn net.Conn, wsURL string) (*websocket.Conn, *http.Response, error) {
-	return upgradeConnWithTimeout(conn, wsURL, inspectorRequestTimeout)
+func upgradeConn(conn net.Conn, wsURL string, writeBufferSize int) (*websocket.Conn, *http.Response, error) {
+	return upgradeConnWithTimeout(conn, wsURL, writeBufferSize, inspectorRequestTimeout)
 }
 
-func upgradeConnWithTimeout(conn net.Conn, wsURL string, timeout time.Duration) (*websocket.Conn, *http.Response, error) {
+func upgradeConnWithTimeout(conn net.Conn, wsURL string, writeBufferSize int, timeout time.Duration) (*websocket.Conn, *http.Response, error) {
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, nil, fmt.Errorf("connection deadline error: %w", err)
 	}
@@ -181,6 +181,7 @@ func upgradeConnWithTimeout(conn net.Conn, wsURL string, timeout time.Duration) 
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: timeout,
+		WriteBufferSize:  writeBufferSize,
 		NetDial: func(_, _ string) (net.Conn, error) {
 			return conn, nil
 		},
@@ -190,11 +191,7 @@ func upgradeConnWithTimeout(conn net.Conn, wsURL string, timeout time.Duration) 
 	return wsConn, resp, err
 }
 
-func sendEvaluate(wsConn *websocket.Conn, exp string, id int) error {
-	return sendEvaluateWithTimeout(wsConn, exp, id, inspectorRequestTimeout)
-}
-
-func sendEvaluateWithTimeout(wsConn *websocket.Conn, exp string, id int, timeout time.Duration) error {
+func evaluateRequest(exp string, id int) ([]byte, error) {
 	req := cdpRequest{
 		ID:     id,
 		Method: "Runtime.evaluate",
@@ -206,9 +203,24 @@ func sendEvaluateWithTimeout(wsConn *websocket.Conn, exp string, id int, timeout
 
 	data, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("failed to serialize request: %w", err)
+		return nil, fmt.Errorf("failed to serialize request: %w", err)
 	}
+	return data, nil
+}
 
+func sendEvaluate(wsConn *websocket.Conn, exp string, id int) error {
+	return sendEvaluateWithTimeout(wsConn, exp, id, inspectorRequestTimeout)
+}
+
+func sendEvaluateWithTimeout(wsConn *websocket.Conn, exp string, id int, timeout time.Duration) error {
+	data, err := evaluateRequest(exp, id)
+	if err != nil {
+		return err
+	}
+	return sendMessageWithTimeout(wsConn, data, timeout)
+}
+
+func sendMessageWithTimeout(wsConn *websocket.Conn, data []byte, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	if err := wsConn.SetWriteDeadline(deadline); err != nil {
@@ -227,6 +239,9 @@ func sendEvaluateWithTimeout(wsConn *websocket.Conn, exp string, id int, timeout
 		return fmt.Errorf("websocket write error: %w", err)
 	}
 
+	// NOTE: the next message is assumed to be the response to `data`: valid as
+	// long as no CDP event domain is enabled on this session (e.g.
+	// Runtime.enable), since events would interleave before the response
 	_, msg, err := wsConn.ReadMessage()
 	if err != nil {
 		return fmt.Errorf("websocket read error: %w", err)
@@ -257,16 +272,12 @@ func sendEvaluateWithTimeout(wsConn *websocket.Conn, exp string, id int, timeout
 	return nil
 }
 
-func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn) error {
+func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn, payload []byte) error {
 	defer func() {
 		_ = sendEvaluate(wsConn, "process._debugEnd();", 2)
 	}()
 
-	script := string(_extractorBytes)
-
-	wrapped := fmt.Sprintf("(()=>{\n%s\n})()", script)
-
-	if err := sendEvaluate(wsConn, wrapped, 1); err != nil {
+	if err := sendMessageWithTimeout(wsConn, payload, inspectorRequestTimeout); err != nil {
 		return err
 	}
 
@@ -284,11 +295,18 @@ func (i *NodeInjector) injectViaConn(conn net.Conn) error {
 
 	i.log.Debug("found debugger url", "url", wsURL)
 
-	wsConn, _, err := upgradeConn(conn, wsURL)
+	payload, err := evaluateRequest(_extractorCode, 1)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+
+	// buffer sized to the payload: the inspector rejects fragmented messages
+	wsConn, _, err := upgradeConn(conn, wsURL, len(payload))
 	if err != nil {
 		conn.Close()
 		return fmt.Errorf("failed to connect to inspector WebSocket: %w", err)
 	}
 
-	return i.injectFileWS(wsConn)
+	return i.injectFileWS(wsConn, payload)
 }

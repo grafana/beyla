@@ -227,6 +227,29 @@ func instrumentTracesExporter(internalMetrics imetrics.Reporter, in exporter.Tra
 	}
 }
 
+// queueInstrumentedTraces stacks the sending queue and retry on top of the
+// instrumentation wrapper, whose base exporter must be synchronous so it
+// observes the real send outcome instead of the sending-queue enqueue result.
+func queueInstrumentedTraces(
+	ctx context.Context,
+	set exporter.Settings,
+	cfg otelcfg.TracesConfig,
+	im imetrics.Reporter,
+	base exporter.Traces,
+	queueCfg configoptional.Optional[exporterhelper.QueueBatchConfig],
+	retryCfg configretry.BackOffConfig,
+) (exporter.Traces, error) {
+	instrumented := instrumentTracesExporter(im, base)
+	return exporterhelper.NewTraces(ctx, set, cfg,
+		instrumented.ConsumeTraces,
+		exporterhelper.WithStart(instrumented.Start),
+		exporterhelper.WithShutdown(instrumented.Shutdown),
+		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
+		exporterhelper.WithQueue(queueCfg),
+		exporterhelper.WithRetry(retryCfg),
+	)
+}
+
 //nolint:cyclop
 func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetrics.Reporter) (exporter.Traces, component.Host, error) {
 	if cfg.TracesConsumer != nil {
@@ -257,8 +280,12 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		}
 		factory := otlphttpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlphttpexporter.Config)
-		config.QueueConfig = getQueueConfig(cfg)
-		config.RetryConfig = getRetrySettings(cfg)
+		queueCfg := getQueueConfig(cfg)
+		retryCfg := getRetrySettings(cfg)
+		disabledRetry := configretry.NewDefaultBackOffConfig()
+		disabledRetry.Enabled = false
+		config.QueueConfig = configoptional.None[exporterhelper.QueueBatchConfig]()
+		config.RetryConfig = disabledRetry
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
 			TLS: configtls.ClientConfig{
@@ -282,16 +309,13 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 			slog.Error("can't create OTLP HTTP traces exporter", "error", err)
 			return nil, nil, err
 		}
-		exp = instrumentTracesExporter(im, exp)
 		// TODO: remove this once the batcher helper is added to otlphttpexporter
-		wrapped, err := exporterhelper.NewTraces(ctx, set, cfg,
-			exp.ConsumeTraces,
-			exporterhelper.WithStart(exp.Start),
-			exporterhelper.WithShutdown(exp.Shutdown),
-			exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
-			exporterhelper.WithQueue(config.QueueConfig),
-			exporterhelper.WithRetry(config.RetryConfig))
-		return wrapped, host, err
+		wrapped, err := queueInstrumentedTraces(ctx, set, cfg, im, exp, queueCfg, retryCfg)
+		if err != nil {
+			_ = exp.Shutdown(ctx)
+			return nil, nil, err
+		}
+		return wrapped, host, nil
 	case otelcfg.ProtocolGRPC:
 		slog.Debug("instantiating GRPC TracesReporter", "protocol", proto)
 		var err error
@@ -311,8 +335,12 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		}
 		factory := otlpexporter.NewFactory()
 		config := factory.CreateDefaultConfig().(*otlpexporter.Config)
-		config.QueueConfig = getQueueConfig(cfg)
-		config.RetryConfig = getRetrySettings(cfg)
+		queueCfg := getQueueConfig(cfg)
+		retryCfg := getRetrySettings(cfg)
+		disabledRetry := configretry.NewDefaultBackOffConfig()
+		disabledRetry.Enabled = false
+		config.QueueConfig = configoptional.None[exporterhelper.QueueBatchConfig]()
+		config.RetryConfig = disabledRetry
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: grpcEndpoint,
 			TLS: configtls.ClientConfig{
@@ -326,8 +354,12 @@ func getTracesExporter(ctx context.Context, cfg otelcfg.TracesConfig, im imetric
 		if err != nil {
 			return nil, nil, err
 		}
-		exp = instrumentTracesExporter(im, exp)
-		return exp, emptyHost{}, nil
+		wrapped, err := queueInstrumentedTraces(ctx, set, cfg, im, exp, queueCfg, retryCfg)
+		if err != nil {
+			_ = exp.Shutdown(ctx)
+			return nil, nil, err
+		}
+		return wrapped, emptyHost{}, nil
 	case otelcfg.ProtocolDebug:
 		slog.Debug("instantiating Debug TracesReporter", "protocol", proto)
 		factory := debugexporter.NewFactory()

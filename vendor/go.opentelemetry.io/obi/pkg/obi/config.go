@@ -35,6 +35,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
+	"go.opentelemetry.io/obi/pkg/health"
 	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
@@ -123,14 +124,15 @@ var DefaultConfig = Config{
 	ShutdownTimeout:         10 * time.Second,
 	EnforceSysCaps:          false,
 	EBPF: config.EBPFTracer{
-		BatchLength:          100,
-		BatchTimeout:         time.Second,
-		HTTPRequestTimeout:   0,
-		WakeupLen:            500,
-		StatsWakeupDataBytes: 4096,
-		TCBackend:            config.TCBackendAuto,
-		DNSRequestTimeout:    5 * time.Second,
-		ContextPropagation:   config.ContextPropagationDisabled,
+		BatchLength:               100,
+		BatchTimeout:              time.Second,
+		HTTPRequestTimeout:        0,
+		GoHTTPClientBufferTimeout: time.Second,
+		WakeupLen:                 500,
+		StatsWakeupDataBytes:      4096,
+		TCBackend:                 config.TCBackendAuto,
+		DNSRequestTimeout:         5 * time.Second,
+		ContextPropagation:        config.ContextPropagationDisabled,
 		RedisDBCache: config.RedisDBCacheConfig{
 			Enabled: false,
 			MaxSize: 1000,
@@ -202,6 +204,15 @@ var DefaultConfig = Config{
 		},
 		MaxTransactionTime: 5 * time.Minute,
 		LogEnricher: config.LogEnricherConfig{
+			FieldNames: config.LogEnricherFieldNames{
+				TraceID: "trace_id",
+				SpanID:  "span_id",
+			},
+			PlainText: config.LogEnricherPlainTextConfig{
+				Enabled:   true,
+				Placement: config.LogEnricherPlacementSuffix,
+				Multiline: config.LogEnricherMultilineFirstLine,
+			},
 			CacheTTL:              30 * time.Minute,
 			CacheSize:             128,
 			AsyncWriterWorkers:    8,
@@ -343,7 +354,8 @@ var DefaultConfig = Config{
 		SamplingInterval: time.Second,
 	},
 	HealthCheck: HealthCheckConfig{
-		Port: 0,
+		Port:          0,
+		ListenAddress: health.DefaultListenAddress,
 	},
 }
 
@@ -462,6 +474,9 @@ func (c *Config) JoinMetricsConfig() *perapp.MetricsConfig {
 type HealthCheckConfig struct {
 	// 0 (default) means disabled
 	Port int `yaml:"port" env:"OTEL_EBPF_HEALTH_CHECK_PORT" validate:"gte=0,lte=65535"`
+	// IP address the TCP health endpoint binds to. Defaults to 127.0.0.1. Set to 0.0.0.0
+	// or :: only when external probes require access.
+	ListenAddress string `yaml:"listen_address" env:"OTEL_EBPF_HEALTH_CHECK_LISTEN_ADDRESS" validate:"omitempty,ip" jsonschema:"type=string,format=ip"`
 	// when set, the health endpoint binds this unix socket (a filesystem path or a leading-'@'
 	// abstract name) instead of the TCP port
 	UnixSocketPath string `yaml:"unix_socket_path" env:"OTEL_EBPF_HEALTH_CHECK_UNIX_SOCKET_PATH"`
@@ -666,10 +681,41 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
-// Validate configuration
-//
-//nolint:cyclop
+// Validate validates a standalone OBI configuration.
 func (c *Config) Validate() error {
+	return c.validate(validationContext{checkCiliumCompatibility: tcmanager.EnsureCiliumCompatibility})
+}
+
+// ValidateStatic validates a standalone OBI configuration without inspecting
+// host state.
+func (c *Config) ValidateStatic() error {
+	return c.validate(validationContext{})
+}
+
+// ValidateForReceiver validates an OBI configuration whose signal consumers
+// are supplied by a Collector receiver.
+func (c *Config) ValidateForReceiver() error {
+	return c.validate(validationContext{
+		hostTracesSink:           true,
+		hostMetricsSink:          true,
+		checkCiliumCompatibility: tcmanager.EnsureCiliumCompatibility,
+	})
+}
+
+// ValidateStaticForReceiver validates a Collector receiver configuration
+// without inspecting host state.
+func (c *Config) ValidateStaticForReceiver() error {
+	return c.validate(validationContext{hostTracesSink: true, hostMetricsSink: true})
+}
+
+type validationContext struct {
+	hostTracesSink           bool
+	hostMetricsSink          bool
+	checkCiliumCompatibility func(config.TCBackend) error
+}
+
+//nolint:cyclop
+func (c *Config) validate(context validationContext) error {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 
 	// for future custom validations
@@ -682,6 +728,10 @@ func (c *Config) Validate() error {
 	}
 
 	if err := validate.Struct(c); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if err := c.EBPF.LogEnricher.Validate(); err != nil {
 		return ConfigError(err.Error())
 	}
 
@@ -709,20 +759,26 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Enabled(FeatureStatsO11y) {
+	networkEnabled := c.enabledForValidation(FeatureNetO11y, context)
+	applicationEnabled := c.enabledForValidation(FeatureAppO11y, context)
+	statsEnabled := c.enabledForValidation(FeatureStatsO11y, context)
+	if !networkEnabled && !applicationEnabled && !statsEnabled {
 		return ConfigError("at least one of 'network', 'application' or 'stats' features must be enabled. " +
 			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network*, application* or stats*" +
 			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application,stats' environment variable " +
 			"or 'meter_provider: { features: [network,application,stats] }' in the YAML configuration file. ")
 	}
 
-	if c.willUseTC() {
-		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
+	if networkEnabled && c.NetworkFlows.Source == EbpfSourceTC && context.checkCiliumCompatibility != nil {
+		if err := context.checkCiliumCompatibility(c.EBPF.TCBackend); err != nil {
 			return ConfigError("Cilium compatibility error: " + err.Error())
 		}
 	}
 
-	if c.Enabled(FeatureNetO11y) && !c.OTELMetrics.EndpointEnabled() &&
+	otelMetricsEnabled := context.hostMetricsSink || c.OTELMetrics.EndpointEnabled()
+	tracesEnabled := context.hostTracesSink || c.Traces.Enabled()
+
+	if networkEnabled && !otelMetricsEnabled &&
 		!c.Prometheus.EndpointEnabled() && !c.NetworkFlows.Print {
 		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
@@ -730,7 +786,7 @@ func (c *Config) Validate() error {
 			" purposes, you can also set OTEL_EBPF_NETWORK_PRINT_FLOWS=true")
 	}
 
-	if c.Enabled(FeatureStatsO11y) && !c.OTELMetrics.EndpointEnabled() &&
+	if statsEnabled && !otelMetricsEnabled &&
 		!c.Prometheus.EndpointEnabled() && !c.Stats.Print {
 		return ConfigError("enabling stat metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
@@ -742,14 +798,14 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("invalid value for trace_printer: '%s'", c.TracePrinter))
 	}
 
-	if c.Enabled(FeatureAppO11y) && !c.TracePrinter.Enabled() &&
-		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() &&
+	if applicationEnabled && !c.TracePrinter.Enabled() &&
+		!otelMetricsEnabled && !tracesEnabled &&
 		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
-	if c.Enabled(FeatureAppO11y) && (c.Prometheus.EndpointEnabled() || c.OTELMetrics.EndpointEnabled()) {
+	if applicationEnabled && (c.Prometheus.EndpointEnabled() || otelMetricsEnabled) {
 		if c.Metrics.Features.InvalidSpanMetricsConfig() {
 			return ConfigError("you can only enable one format of span metrics," +
 				" application_span or application_span_otel")
@@ -762,11 +818,29 @@ func (c *Config) Validate() error {
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && c.InternalMetrics.Prometheus.Port != 0 {
 		return ConfigError("you can't enable both OTEL and Prometheus internal metrics")
 	}
-	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.OTELMetrics.EndpointEnabled() {
+	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !otelMetricsEnabled {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
 	}
 
 	return nil
+}
+
+func (c *Config) enabledForValidation(feature Feature, context validationContext) bool {
+	if c.Enabled(feature) {
+		return true
+	}
+	if !context.hostMetricsSink {
+		return false
+	}
+
+	switch feature {
+	case FeatureNetO11y:
+		return c.Metrics.Features.AnyNetwork()
+	case FeatureStatsO11y:
+		return c.Metrics.Features.StatMetrics()
+	default:
+		return false
+	}
 }
 
 func (c *Config) promNetO11yEnabled() bool {
@@ -829,13 +903,9 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
 	cfg := DefaultConfig
-	// Note: deep-copy each pointer field so YAML/env unmarshal cannot mutate DefaultConfig through shared
-	// pointers. This is a one-level copy: slice fields inside (e.g. Patterns, Sources) still share
-	// their underlying arrays, which is safe because YAML unmarshal replaces slices rather than
-	// appending to them.
+	// Deep-copy pointer fields so YAML/env unmarshal cannot mutate DefaultConfig through shared pointers.
 	if cfg.Routes != nil {
-		routesCopy := *cfg.Routes
-		cfg.Routes = &routesCopy
+		cfg.Routes = cfg.Routes.Clone()
 	}
 	if cfg.NameResolver != nil {
 		nrCopy := *cfg.NameResolver

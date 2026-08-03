@@ -58,6 +58,16 @@ const (
 	goRuntimeMetricCPUTimeMask        uint64 = 1 << 4
 	goRuntimeMetricMemoryUsedMask     uint64 = 1 << 5
 	goRuntimeMetricMemoryAllocsMask   uint64 = 1 << 6
+	goRuntimeMetricGoroutineCountMask uint64 = 1 << 9
+	goRuntimeMetricMemoryGCGoalMask   uint64 = 1 << 10
+)
+
+type goRuntimeGCGoalSource uint32
+
+const (
+	goRuntimeGCGoalSourceNone goRuntimeGCGoalSource = iota
+	goRuntimeGCGoalSourceHeapGoalField
+	goRuntimeGCGoalSourcePaceScavengerArgument
 )
 
 const goRuntimeMetricBaseMask = goRuntimeMetricGCCyclesMask | goRuntimeMetricGOGCMask
@@ -99,6 +109,12 @@ var goRuntimeMetricOffsetFields = [...]goexec.GoOffset{
 	goexec.RuntimeHeapStatsDeltaLargeAllocCountPos,
 	goexec.RuntimeHeapStatsDeltaSmallAllocCountPos,
 	goexec.RuntimeHeapStatsDeltaSmallFreeCountPos,
+	goexec.RuntimeSchedNgSysPos,
+	goexec.RuntimeSchedGFreeStackPos,
+	goexec.RuntimeSchedGFreeNoStackPos,
+	goexec.RuntimePFreeGPos,
+	goexec.RuntimeGListSizePos,
+	goexec.RuntimeGCControllerHeapGoalPos,
 }
 
 var goRuntimeCPUTimeOffsetFields = [...]goexec.GoOffset{
@@ -130,6 +146,13 @@ var goRuntimeMemoryOffsetFields = [...]goexec.GoOffset{
 	goexec.RuntimeHeapStatsDeltaSmallFreeCountPos,
 }
 
+var goRuntimeGoroutineCountCommonOffsetFields = [...]goexec.GoOffset{
+	goexec.RuntimeSchedGFreeStackPos,
+	goexec.RuntimeSchedGFreeNoStackPos,
+	goexec.RuntimePFreeGPos,
+	goexec.RuntimeGListSizePos,
+}
+
 var goRuntimeMetricOffsetGroups = [...]struct {
 	mask   uint64
 	fields []goexec.GoOffset
@@ -142,18 +165,19 @@ var goRuntimeMetricOffsetGroups = [...]struct {
 }
 
 type Tracer struct {
-	log                      *slog.Logger
-	pidsFilter               ebpfcommon.ServiceFilter
-	cfg                      *config.EBPFTracer
-	metrics                  imetrics.Reporter
-	bpfObjects               BpfObjects
-	closers                  []io.Closer
-	disabledRouteHarvesting  bool
-	supportsBPFLoop          bool
-	runtimeMetricTargetKeys  map[runtimeMetricTargetKey]BpfPidInfo
-	goChannelOffsetsByIno    map[uint64]bool
-	goRuntimeMetricMaskByIno map[uint64]uint64
-	currentBinaryIno         uint64
+	log                        *slog.Logger
+	pidsFilter                 ebpfcommon.ServiceFilter
+	cfg                        *config.EBPFTracer
+	metrics                    imetrics.Reporter
+	bpfObjects                 BpfObjects
+	closers                    []io.Closer
+	disabledRouteHarvesting    bool
+	supportsBPFLoop            bool
+	runtimeMetricTargetKeys    map[runtimeMetricTargetKey]BpfPidInfo
+	goChannelOffsetsByIno      map[uint64]bool
+	goRuntimeMetricMaskByIno   map[uint64]uint64
+	goRuntimeGCGoalSourceByIno map[uint64]goRuntimeGCGoalSource
+	currentBinaryIno           uint64
 }
 
 func New(
@@ -173,15 +197,16 @@ func New(
 	}
 
 	return &Tracer{
-		log:                      log,
-		pidsFilter:               pidFilter,
-		cfg:                      &cfg.EBPF,
-		metrics:                  metrics,
-		disabledRouteHarvesting:  disabledRouteHarvesting,
-		supportsBPFLoop:          ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
-		runtimeMetricTargetKeys:  map[runtimeMetricTargetKey]BpfPidInfo{},
-		goChannelOffsetsByIno:    map[uint64]bool{},
-		goRuntimeMetricMaskByIno: map[uint64]uint64{},
+		log:                        log,
+		pidsFilter:                 pidFilter,
+		cfg:                        &cfg.EBPF,
+		metrics:                    metrics,
+		disabledRouteHarvesting:    disabledRouteHarvesting,
+		supportsBPFLoop:            ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
+		runtimeMetricTargetKeys:    map[runtimeMetricTargetKey]BpfPidInfo{},
+		goChannelOffsetsByIno:      map[uint64]bool{},
+		goRuntimeMetricMaskByIno:   map[uint64]uint64{},
+		goRuntimeGCGoalSourceByIno: map[uint64]goRuntimeGCGoalSource{},
 	}
 }
 
@@ -291,7 +316,8 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
 		// Large buffer multi-batch emission
-		p.bpfObjects.ObiLargeBufEmitContinue, // 13  k_tail_large_buf_emit_continue
+		p.bpfObjects.ObiLargeBufEmitContinue,                          // 13  k_tail_large_buf_emit_continue
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit, // 14
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
@@ -378,6 +404,9 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcClientStreamStream,
 		// go manual spans
 		goexec.GoTracerDelegatePos,
+		goexec.SpanContextTraceIDPos,
+		goexec.SpanContextSpanIDPos,
+		goexec.SpanContextTraceFlagsPos,
 		// go runtime channels
 		goexec.HchanQcountPos,
 		goexec.HchanDataqsizPos,
@@ -495,9 +524,24 @@ func (p *Tracer) recordGoRuntimeMetricAvailability(fileInfo *exec.FileInfo, offs
 	if p.goRuntimeMetricMaskByIno == nil {
 		p.goRuntimeMetricMaskByIno = map[uint64]uint64{}
 	}
+	if p.goRuntimeGCGoalSourceByIno == nil {
+		p.goRuntimeGCGoalSourceByIno = map[uint64]goRuntimeGCGoalSource{}
+	}
 
 	ino := fileInfo.Ino()
 	mask := goRuntimeMetricMask(offsets)
+	gcGoalSource := selectGoRuntimeGCGoalSource(
+		offsets,
+		goexec.RuntimeMetricGCGoalArgumentSupported(fileInfo.ELF()),
+	)
+	if gcGoalSource != goRuntimeGCGoalSourceNone {
+		mask |= goRuntimeMetricMemoryGCGoalMask
+	}
+	p.goRuntimeGCGoalSourceByIno[ino] = gcGoalSource
+	includesSystem, modeKnown := goexec.RuntimeMetricGoroutineCountMode(fileInfo.ELF())
+	if hasGoRuntimeGoroutineCountOffsets(offsets, includesSystem, modeKnown) {
+		mask |= goRuntimeMetricGoroutineCountMask
+	}
 	supportsStableHeapSnapshotVersion, err := goexec.SupportsGoRuntimeMemoryMetrics(fileInfo.ELF())
 	if err != nil && p.log != nil {
 		p.log.Debug("Go runtime memory metric version detection failed",
@@ -510,7 +554,7 @@ func (p *Tracer) recordGoRuntimeMetricAvailability(fileInfo *exec.FileInfo, offs
 	heapMetricsEnabled := mask&goRuntimeMetricHeapSnapshotMask != 0
 	nextGenResolved := false
 	if offsets != nil {
-		_, nextGenResolved = offsets.Funcs[goRuntimeMetricProbeSymbols[1]]
+		_, nextGenResolved = offsets.Funcs[goRuntimeMetricHeapSnapshotSymbol]
 	}
 
 	if !supportsStableHeapSnapshotVersion {
@@ -522,8 +566,8 @@ func (p *Tracer) recordGoRuntimeMetricAvailability(fileInfo *exec.FileInfo, offs
 				"pid", fileInfo.Pid(),
 				"ino", ino,
 				"cmd", fileInfo.CmdExePath(),
-				"missing_probe", goRuntimeMetricProbeSymbols[1],
-				"fallback_probe", goRuntimeMetricProbeSymbols[0])
+				"missing_probe", goRuntimeMetricHeapSnapshotSymbol,
+				"fallback_probe", goRuntimeMetricGCMarkDoneSymbol)
 		}
 	}
 	p.goRuntimeMetricMaskByIno[ino] = mask
@@ -536,8 +580,27 @@ func (p *Tracer) recordGoRuntimeMetricAvailability(fileInfo *exec.FileInfo, offs
 			"available_mask", mask,
 			"base_available", hasBaseGoRuntimeMetrics(mask),
 			"cpu_time_available", mask&goRuntimeMetricCPUTimeMask != 0,
-			"memory_available", mask&goRuntimeMetricMemoryUsedMask != 0)
+			"memory_available", mask&goRuntimeMetricMemoryUsedMask != 0,
+			"goroutine_count_available", mask&goRuntimeMetricGoroutineCountMask != 0,
+			"memory_gc_goal_available", mask&goRuntimeMetricMemoryGCGoalMask != 0,
+			"memory_gc_goal_source", gcGoalSource)
 	}
+}
+
+func selectGoRuntimeGCGoalSource(
+	offsets *goexec.Offsets,
+	goalArgumentSupported bool,
+) goRuntimeGCGoalSource {
+	if offsets == nil {
+		return goRuntimeGCGoalSourceNone
+	}
+	if hasGoRuntimeMetricOffsets(offsets, goexec.RuntimeGCControllerHeapGoalPos) {
+		return goRuntimeGCGoalSourceHeapGoalField
+	}
+	if _, ok := offsets.Funcs[goRuntimeMetricGCGoalSymbol]; ok && goalArgumentSupported {
+		return goRuntimeGCGoalSourcePaceScavengerArgument
+	}
+	return goRuntimeGCGoalSourceNone
 }
 
 func goRuntimeMetricMask(offsets *goexec.Offsets) uint64 {
@@ -565,6 +628,17 @@ func hasGoRuntimeMetricOffsets(offsets *goexec.Offsets, fields ...goexec.GoOffse
 		}
 	}
 	return true
+}
+
+func hasGoRuntimeGoroutineCountOffsets(
+	offsets *goexec.Offsets,
+	includesSystem bool,
+	modeKnown bool,
+) bool {
+	if !modeKnown || !hasGoRuntimeMetricOffsets(offsets, goRuntimeGoroutineCountCommonOffsetFields[:]...) {
+		return false
+	}
+	return includesSystem || hasGoRuntimeMetricOffsets(offsets, goexec.RuntimeSchedNgSysPos)
 }
 
 func hasBaseGoRuntimeMetrics(mask uint64) bool {
@@ -598,12 +672,17 @@ func (p *Tracer) registerRuntimeMetricTarget(pid app.PID, ns uint32, fileInfo *e
 	p.goRuntimeMetricMaskByIno[fileInfo.Ino()] = availableMask
 
 	value := BpfGoRuntimeMetricTargetT{
-		MemstatsAddr:         symbols.MemstatsAddr,
-		GcControllerAddr:     symbols.GCControllerAddr,
-		GomaxprocsAddr:       symbols.GOMAXPROCSAddr,
-		WorkAddr:             symbols.WorkAddr,
-		AvailableMask:        availableMask,
-		SizeClassToSizesAddr: symbols.SizeClassToSizesAddr,
+		MemstatsAddr:                 symbols.MemstatsAddr,
+		GcControllerAddr:             symbols.GCControllerAddr,
+		GomaxprocsAddr:               symbols.GOMAXPROCSAddr,
+		WorkAddr:                     symbols.WorkAddr,
+		AvailableMask:                availableMask,
+		SizeClassToSizesAddr:         symbols.SizeClassToSizesAddr,
+		SchedAddr:                    symbols.SchedAddr,
+		AllglenAddr:                  symbols.AllgLenAddr,
+		AllpAddr:                     symbols.AllpAddr,
+		GoroutineCountIncludesSystem: symbols.GoroutineCountIncludesSystem,
+		GcGoalSource:                 uint32(p.goRuntimeGCGoalSourceByIno[fileInfo.Ino()]),
 	}
 
 	if err := p.bpfObjects.GoRuntimeMetricTargets.Put(pidInfo, value); err != nil {
@@ -622,16 +701,26 @@ func (p *Tracer) goRuntimeMetricMaskForSymbols(
 	mask uint64,
 	symbols goexec.RuntimeMetricSymbols,
 ) uint64 {
-	if mask&goRuntimeMetricMemoryAllocsMask == 0 || symbols.SizeClassToSizesAddr != 0 {
-		return mask
+	if mask&goRuntimeMetricMemoryAllocsMask != 0 && symbols.SizeClassToSizesAddr == 0 {
+		mask &^= goRuntimeMetricMemoryAllocsMask
+		if p.log != nil {
+			p.log.Warn("Go runtime size-class table symbol unresolved; disabling allocation metrics",
+				"pid", fileInfo.Pid(),
+				"ino", fileInfo.Ino(),
+				"cmd", fileInfo.CmdExePath())
+		}
 	}
 
-	mask &^= goRuntimeMetricMemoryAllocsMask
-	if p.log != nil {
-		p.log.Warn("Go runtime size-class table symbol unresolved; disabling allocation metrics",
-			"pid", fileInfo.Pid(),
-			"ino", fileInfo.Ino(),
-			"cmd", fileInfo.CmdExePath())
+	if mask&goRuntimeMetricGoroutineCountMask != 0 &&
+		(symbols.SchedAddr == 0 || symbols.AllgLenAddr == 0 || symbols.AllpAddr == 0 ||
+			!symbols.GoroutineCountModeKnown) {
+		mask &^= goRuntimeMetricGoroutineCountMask
+		if p.log != nil {
+			p.log.Warn("Go runtime goroutine count metadata unresolved; disabling goroutine metric",
+				"pid", fileInfo.Pid(),
+				"ino", fileInfo.Ino(),
+				"cmd", fileInfo.CmdExePath())
+		}
 	}
 	return mask
 }
@@ -697,9 +786,16 @@ var goChannelLinkProbeSymbols = []string{
 	"runtime.chanrecv2",
 }
 
+const (
+	goRuntimeMetricGCMarkDoneSymbol   = "runtime.gcMarkDone"
+	goRuntimeMetricHeapSnapshotSymbol = "runtime.(*scavengeIndex).nextGen"
+	goRuntimeMetricGCGoalSymbol       = "runtime.gcPaceScavenger"
+)
+
 var goRuntimeMetricProbeSymbols = []string{
-	"runtime.gcMarkDone",
-	"runtime.(*scavengeIndex).nextGen",
+	goRuntimeMetricGCMarkDoneSymbol,
+	goRuntimeMetricHeapSnapshotSymbol,
+	goRuntimeMetricGCGoalSymbol,
 }
 
 // GoChannelLinkProbeSymbols returns the Go runtime symbols used to correlate direct channel handoffs.
@@ -731,7 +827,9 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		// Go net/http
 		"net/http.serverHandler.ServeHTTP": {{
 			Start: p.bpfObjects.ObiUprobeServeHTTP,
-			End:   p.bpfObjects.ObiUprobeServeHTTPReturns,
+		}},
+		"net/http.(*response).finishRequest": {{
+			End: p.bpfObjects.ObiUprobeServeHTTPReturns,
 		}},
 		"net/http.(*conn).readRequest": {{
 			Start: p.bpfObjects.ObiUprobeReadRequestStart,
@@ -757,6 +855,12 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"net/http.(*http2ClientConn).RoundTrip": {{ // http2 client vendored in Go
 			Start: p.bpfObjects.ObiUprobeHttp2RoundTrip,
 			End:   p.bpfObjects.ObiUprobeRoundTripReturn, // return is the same as for http 1.1
+		}},
+		"net/http.(*http2responseWriter).handlerDone": {{
+			End: p.bpfObjects.ObiUprobeServeHTTPReturns,
+		}},
+		"golang.org/x/net/http2.(*responseWriter).handlerDone": {{
+			End: p.bpfObjects.ObiUprobeServeHTTPReturns,
 		}},
 		"golang.org/x/net/http2.(*ClientConn).writeHeaders": {{ // http2 client
 			Start: p.bpfObjects.ObiUprobeHttp2WriteHeaders,
@@ -1058,14 +1162,20 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	if p.goRuntimeHeapSnapshotProbeEnabled() {
 		// Go 1.23+ heap statistics use a rotating ring. Collect at nextGen after GC
 		// accounting and before the world restarts so the ring cannot rotate mid-read.
-		m[goRuntimeMetricProbeSymbols[1]] = []*ebpfcommon.ProbeDesc{{
+		m[goRuntimeMetricHeapSnapshotSymbol] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeGoRuntimeMetrics,
 		}}
 	} else {
 		// Older Go versions expose only the scalar metric set and may not contain
 		// nextGen. Keep the gcMarkDone return probe for backward compatibility.
-		m[goRuntimeMetricProbeSymbols[0]] = []*ebpfcommon.ProbeDesc{{
+		m[goRuntimeMetricGCMarkDoneSymbol] = []*ebpfcommon.ProbeDesc{{
 			End: p.bpfObjects.ObiUprobeGoRuntimeMetrics,
+		}}
+	}
+
+	if p.goRuntimeGCGoalSourceEnabled() {
+		m[goRuntimeMetricGCGoalSymbol] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeGoRuntimeGcGoal,
 		}}
 	}
 
@@ -1122,7 +1232,8 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 
 	if p.supportsContextPropagation() {
 		m["net/http.Header.writeSubset"] = []*ebpfcommon.ProbeDesc{{
-			Start: p.bpfObjects.ObiUprobeWriteSubset, // http 1.x context propagation
+			Start: p.bpfObjects.ObiUprobeWriteSubset,        // http 1.x context propagation
+			End:   p.bpfObjects.ObiUprobeWriteSubsetReturns, // inject only if no traceparent present
 		}}
 		m["golang.org/x/net/http2.(*Framer).WriteHeaders"] = []*ebpfcommon.ProbeDesc{
 			{ // http2 context propagation
@@ -1157,6 +1268,14 @@ func (p *Tracer) goRuntimeHeapSnapshotProbeEnabled() bool {
 	}
 
 	return p.goRuntimeMetricMaskByIno[p.currentBinaryIno]&goRuntimeMetricHeapSnapshotMask != 0
+}
+
+func (p *Tracer) goRuntimeGCGoalSourceEnabled() bool {
+	if p == nil || p.currentBinaryIno == 0 {
+		return false
+	}
+	return p.goRuntimeGCGoalSourceByIno[p.currentBinaryIno] ==
+		goRuntimeGCGoalSourcePaceScavengerArgument
 }
 
 func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
@@ -1199,6 +1318,7 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 
 func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
 	parseContext := ebpfcommon.NewEBPFParseContext(p.cfg, eventsChan, p.pidsFilter)
+	defer parseContext.Close()
 	ebpfcommon.SharedRingbuf(
 		ebpfEventContext,
 		p.cfg,

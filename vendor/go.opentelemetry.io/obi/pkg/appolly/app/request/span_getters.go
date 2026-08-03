@@ -52,7 +52,12 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			return K8SClientClusterMetric(otherCluster)
 		}
 	case attr.HTTPRequestMethod:
-		getter = func(s *Span) attribute.KeyValue { return HTTPRequestMethod(s.Method) }
+		getter = func(s *Span) attribute.KeyValue {
+			if s.Method == "" {
+				return attribute.KeyValue{}
+			}
+			return HTTPRequestMethod(s.Method)
+		}
 	case attr.HTTPResponseStatusCode:
 		getter = func(s *Span) attribute.KeyValue { return HTTPResponseStatusCode(s.Status) }
 	case attr.HTTPRoute:

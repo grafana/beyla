@@ -356,8 +356,11 @@ func RetrievalSpan(baseSpan *request.Span, req *http.Request, resp *http.Respons
 
 	var parsedResponse request.RetrievalResponse
 	if len(respB) > 0 {
-		if err := json.Unmarshal(respB, &parsedResponse); err != nil {
-			slog.Debug("failed to parse retrieval response", "provider", provider, "error", err)
+		unmarshalJSONBestEffort(respB, &parsedResponse)
+		var usage request.RetrievalUsage
+		if unmarshalJSONContainerBestEffort(respB, &usage, "usage") {
+			parsedResponse.Usage.TotalTokens.Merge(usage.TotalTokens)
+			parsedResponse.Usage.PromptTokens.Merge(usage.PromptTokens)
 		}
 	}
 

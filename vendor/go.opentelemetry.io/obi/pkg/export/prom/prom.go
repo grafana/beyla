@@ -1034,8 +1034,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.observeHistogram(r.grpcClientDuration.WithLabelValues(labelValues(span, r.attrGRPCClientDuration)...).Metric, duration, span)
 			case r.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType):
 				r.observeHistogram(r.genAIClientDuration.WithLabelValues(labelValues(span, r.attrGenAIClientDuration)...).Metric, duration, span)
-				r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIInputTokenUsage)...).Metric, float64(span.GenAIInputTokens()), span)
-				r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIOutputTokenUsage)...).Metric, float64(span.GenAIOutputTokens()), span)
+				if tokens, reported := span.GenAIInputTokenCount(); reported {
+					r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIInputTokenUsage)...).Metric, float64(tokens), span)
+				}
+				if tokens, reported := span.GenAIOutputTokenCount(); reported {
+					r.observeHistogram(r.genAITokenUsage.WithLabelValues(labelValues(span, r.attrGenAIOutputTokenUsage)...).Metric, float64(tokens), span)
+				}
 			default:
 				if r.is.HTTPEnabled() {
 					r.observeHistogram(r.httpClientDuration.WithLabelValues(labelValues(span, r.attrHTTPClientDuration)...).Metric, duration, span)
@@ -1059,8 +1063,28 @@ func (r *metricsReporter) observe(span *request.Span) {
 			if r.is.SunRPCEnabled() {
 				r.observeHistogram(r.grpcDuration.WithLabelValues(labelValues(span, r.attrGRPCDuration)...).Metric, duration, span)
 			}
-		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeMemcachedServer, request.EventTypeAerospikeClient:
-			if r.is.DBEnabled() {
+		case request.EventTypeRedisClient, request.EventTypeRedisServer:
+			if r.is.RedisEnabled() {
+				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
+			}
+		case request.EventTypeSQLClient:
+			if r.is.SQLEnabled() {
+				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
+			}
+		case request.EventTypeMongoClient:
+			if r.is.MongoEnabled() {
+				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
+			}
+		case request.EventTypeCouchbaseClient:
+			if r.is.CouchbaseEnabled() {
+				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
+			}
+		case request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
+			if r.is.MemcachedEnabled() {
+				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
+			}
+		case request.EventTypeAerospikeClient:
+			if r.is.AerospikeEnabled() {
 				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
 			}
 		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:

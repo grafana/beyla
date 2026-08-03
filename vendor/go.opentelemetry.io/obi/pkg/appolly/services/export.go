@@ -27,6 +27,9 @@ var modeForText = map[string]maps.Bits{
 	"logs":    blockLogs,
 }
 
+// YAML serialization must use a fixed order to keep generated configuration reproducible.
+var orderedExportModes = []string{"metrics", "traces", "logs"}
+
 const (
 	// the zero-value of ExportModes (blockSignal == 0) means that the value is unset.
 	// This is, all the signals are allowed.
@@ -164,7 +167,8 @@ func (modes ExportModes) MarshalYAML() (any, error) {
 	if modes.blockSignal == blockAll {
 		return node, nil
 	}
-	for text, mode := range modeForText {
+	for _, text := range orderedExportModes {
+		mode := modeForText[text]
 		// the given signal is not explicitly blocked, so we can list it as allowed
 		if !modes.blockSignal.Has(mode) {
 			node.Content = append(node.Content, &yaml.Node{

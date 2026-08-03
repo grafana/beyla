@@ -388,8 +388,6 @@ func LogEnricherFindingCriteria(cfg *obi.Config) []services.Selector {
 
 // FindingCriteria returns discovery criteria from config.
 func FindingCriteria(cfg *obi.Config) []services.Selector {
-	logDeprecationAndConflicts(cfg)
-
 	if cfg.TargetPIDs.Len() > 0 {
 		vals := cfg.TargetPIDs.AllValues()
 		pids := make([]uint32, 0, len(vals))

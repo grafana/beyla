@@ -162,20 +162,25 @@ func parseFetchTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (
 		// if we fail to read Partition count, we can still return the topic
 		return &topic, nil
 	}
-	if partitionCount != 1 {
-		// no need to capture multiple partitions for fetch request, if its 1 Partition we can add it to the span
-		if err = skipFetchPartitions(r, header, partitionCount); err != nil {
-			// if we fail to skip partitions, we can still return the topic
+	// Walk every partition so the reader stays aligned for the next topic. We only
+	// keep the first partition for the span, but each entry MUST be fully consumed
+	// (including its trailing fields and per-partition tagged fields); otherwise a
+	// multi-topic Fetch request mis-parses every topic after the first.
+	for i := range partitionCount {
+		partition, fetchOffset, perr := parseFetchPartition(r, header)
+		if perr != nil {
+			// if we fail to parse a Partition, we can still return the topic
 			return &topic, nil
 		}
-	} else {
-		var partition *FetchPartition
-		partition, err = parseFetchPartition(r, header)
-		if err != nil {
-			// if we fail to parse Partition, we can still return the topic
-			return &topic, nil
+		// Only the first partition is kept for the span; the rest are parsed
+		// solely to advance the reader (a topic can have many partitions, e.g. 47),
+		// so allocate a FetchPartition for the first entry only.
+		if i == 0 {
+			topic.Partition = &FetchPartition{
+				Partition:   partition,
+				FetchOffset: fetchOffset,
+			}
 		}
-		topic.Partition = partition
 	}
 	if err = skipTaggedFields(r, header); err != nil {
 		return &topic, nil
@@ -183,93 +188,45 @@ func parseFetchTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (
 	return &topic, nil
 }
 
-func parseFetchPartition(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*FetchPartition, error) {
-	/*
-	   partitions => Partition fetch_offset log_start_offset partition_max_bytes
-	     Partition => INT32
-	     fetch_offset => INT64
-	*/
-	partition, err := readInt32(r)
+// parseFetchPartition reads one partition entry, advancing the reader past the
+// entire entry (including version-specific fields and flexible tagged fields).
+//
+// partitions => partition current_leader_epoch(9+) fetch_offset last_fetched_epoch(12+) log_start_offset(5+) partition_max_bytes _tagged_fields(12+)
+func parseFetchPartition(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (partition int, fetchOffset int64, err error) {
+	partition, err = readInt32(r)
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 	if header.APIVersion() >= 9 {
-		/*
-				fetch request version 9 and above include current_leader_epoch between Partition and fetch_offset.
-			    partitions => Partition current_leader_epoch fetch_offset last_fetched_epoch log_start_offset partition_max_bytes _tagged_fields
-			      Partition => INT32
-			      current_leader_epoch => INT32
-			      fetch_offset => INT64
-		*/
 		if err = r.Skip(Int32Len); err != nil { // current_leader_epoch
-			return nil, err
+			return 0, 0, err
 		}
 	}
-	fetchOffset, err := readInt64(r)
+	fetchOffset, err = readInt64(r)
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
-	return &FetchPartition{
-		Partition:   partition,
-		FetchOffset: fetchOffset,
-	}, nil
-}
-
-func skipFetchPartitions(r *largebuf.LargeBufferReader, header KafkaRequestHeader, partitionCount int) error {
-	var fetchPartitionLen int
+	// Skip the remaining fixed fields of this partition; the set is version-dependent.
 	switch {
 	case header.APIVersion() >= 12:
-		/*
-		   partitions => Partition current_leader_epoch fetch_offset last_fetched_epoch log_start_offset partition_max_bytes _tagged_fields
-		     Partition => INT32
-		     current_leader_epoch => INT32
-		     fetch_offset => INT64
-		     last_fetched_epoch => INT32
-		     log_start_offset => INT64
-		     partition_max_bytes => INT32
-		*/
-		fetchPartitionLen = Int32Len + // Partition
-			Int32Len + // current_leader_epoch
-			Int64Len + // fetch_offset
-			Int32Len + // last_fetched_epoch
-			Int64Len + // log_start_offset
-			Int32Len // partition_max_bytes
-	case header.APIVersion() >= 9:
-		/*
-		   partitions => Partition current_leader_epoch fetch_offset log_start_offset partition_max_bytes
-		     Partition => INT32
-		     current_leader_epoch => INT32
-		     fetch_offset => INT64
-		     log_start_offset => INT64
-		     partition_max_bytes => INT32
-		*/
-		fetchPartitionLen = Int32Len + // Partition
-			Int32Len + // current_leader_epoch
-			Int64Len + // fetch_offset
-			Int64Len + // log_start_offset
-			Int32Len // partition_max_bytes
+		// last_fetched_epoch(INT32) log_start_offset(INT64) partition_max_bytes(INT32)
+		if err = r.Skip(Int32Len + Int64Len + Int32Len); err != nil {
+			return 0, 0, err
+		}
 	case header.APIVersion() >= 5:
-		/*
-		   partitions => Partition fetch_offset log_start_offset partition_max_bytes
-		     Partition => INT32
-		     fetch_offset => INT64
-		     log_start_offset => INT64
-		     partition_max_bytes => INT32
-		*/
-		fetchPartitionLen = Int32Len + // Partition
-			Int64Len + // fetch_offset
-			Int64Len + // log_start_offset
-			Int32Len // partition_max_bytes
+		// log_start_offset(INT64) partition_max_bytes(INT32)
+		if err = r.Skip(Int64Len + Int32Len); err != nil {
+			return 0, 0, err
+		}
 	default:
-		/*
-		   partitions => Partition fetch_offset partition_max_bytes
-		     Partition => INT32
-		     fetch_offset => INT64
-		     partition_max_bytes => INT32
-		*/
-		fetchPartitionLen = Int32Len + // Partition
-			Int64Len + // fetch_offset
-			Int32Len // partition_max_bytes
+		// partition_max_bytes(INT32)
+		if err = r.Skip(Int32Len); err != nil {
+			return 0, 0, err
+		}
 	}
-	return r.Skip(fetchPartitionLen * partitionCount)
+	// per-partition tagged fields (flexible versions only; no-op otherwise)
+	if err = skipTaggedFields(r, header); err != nil {
+		return 0, 0, err
+	}
+	return partition, fetchOffset, nil
 }

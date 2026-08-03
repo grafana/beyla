@@ -47,6 +47,26 @@ func (o *Offsets) HasGoChannelOffsets() bool {
 	return true
 }
 
+// HasGoAutoSDKSpanContextOffsets reports whether all trace.SpanContext offsets
+// needed for Go Auto SDK span integration are available for an inspected executable.
+func (o *Offsets) HasGoAutoSDKSpanContextOffsets() bool {
+	if o == nil {
+		return false
+	}
+
+	for _, field := range []GoOffset{
+		SpanContextTraceIDPos,
+		SpanContextSpanIDPos,
+		SpanContextTraceFlagsPos,
+	} {
+		if _, ok := o.Field[field].(uint64); !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 // InspectOffsets gets the memory addresses/offsets of the instrumenting function, as well as the required
 // parameters fields to be read from the eBPF code
 func InspectOffsets(execElf *exec.FileInfo, funcs []string) (*Offsets, error) {

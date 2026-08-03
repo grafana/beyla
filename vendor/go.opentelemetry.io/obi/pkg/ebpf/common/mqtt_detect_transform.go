@@ -103,12 +103,33 @@ func ProcessMQTTEvent(pkt []byte) (*MQTTInfo, bool, error) {
 			continue
 		}
 		if !ignore {
+			if !isValidMQTTPacket(info) {
+				offset += packet.Length()
+				continue
+			}
 			return info, false, nil
 		}
 		offset += packet.Length()
 	}
 
 	return nil, true, errNoSpanWorthyMQTTPackets
+}
+
+func isValidMQTTPacket(info *MQTTInfo) bool {
+	if info == nil {
+		return false
+	}
+	if info.ClientID != "" && mqttparser.ValidUTF8String(info.ClientID) {
+		return true
+	}
+	switch info.PacketType {
+	case mqttparser.PacketTypePUBLISH:
+		return mqttparser.ValidTopicName(info.Topic)
+	case mqttparser.PacketTypeSUBSCRIBE:
+		return mqttparser.ValidTopicFilter(info.Topic)
+	default:
+		return false
+	}
 }
 
 // processMQTTPacket processes a single MQTT packet based on its type.

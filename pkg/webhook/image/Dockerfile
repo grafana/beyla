@@ -23,7 +23,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
     cat requirements.extra.txt >> requirements.txt
 
 # Get the Python SDK for glibc
-FROM python:3.14.5-trixie@sha256:11591407222400cafc1b2bd03fe09a90988f091fc9ddff4a901f80ceb02b78b3 AS build-python-glibc
+FROM python:3.14.6-trixie@sha256:55dd7c1ea6c2b2c45a26d797187706eb9e5e0046f8e54fd759e38647b505c36b AS build-python-glibc
 WORKDIR /operator-build
 COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -93,7 +93,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
         package-operator.json package.extra.json > package.json
 
 # Build the Node.js artifacts
-FROM node:24@sha256:5711a0d445a1af54af9589066c646df387d1831a608226f4cd694fc59e745059 AS build-nodejs-sdk
+FROM node:24@sha256:19cd848a0e073d34bd8cd5545a1b6b4d28489b3e3b607366621ced442bd5f6b4 AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY --from=prepare-nodejs-deps /build/package.json .

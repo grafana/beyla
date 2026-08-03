@@ -98,6 +98,7 @@ github.com/moby/spdystream/spdy,https://github.com/grafana/beyla/blob/HEAD/vendo
 github.com/modern-go/concurrent,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/modern-go/concurrent/LICENSE,Apache-2.0
 github.com/modern-go/reflect2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/modern-go/reflect2/LICENSE,Apache-2.0
 github.com/munnerz/goautoneg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/munnerz/goautoneg/LICENSE,BSD-3-Clause
+github.com/mxk/go-flowrate/flowrate,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/mxk/go-flowrate/LICENSE,BSD-3-Clause
 github.com/ohler55/ojg,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/ohler55/ojg/LICENSE,MIT
 github.com/opencontainers/go-digest,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/opencontainers/go-digest/LICENSE,Apache-2.0
 github.com/opencontainers/image-spec/specs-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/opencontainers/image-spec/LICENSE,Apache-2.0
@@ -135,7 +136,6 @@ k8s.io/klog/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/klog/v2/
 k8s.io/kube-openapi/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/kube-openapi/LICENSE,Apache-2.0
 k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json/LICENSE,BSD-3-Clause
 k8s.io/kube-openapi/pkg/validation/spec,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/kube-openapi/pkg/validation/spec/LICENSE,Apache-2.0
-k8s.io/streaming/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/streaming/LICENSE,Apache-2.0
 k8s.io/utils,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/utils/LICENSE,Apache-2.0
 k8s.io/utils/internal/third_party/forked/golang/net,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/utils/internal/third_party/forked/golang/LICENSE,BSD-3-Clause
 sigs.k8s.io/controller-runtime/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/sigs.k8s.io/controller-runtime/LICENSE,Apache-2.0

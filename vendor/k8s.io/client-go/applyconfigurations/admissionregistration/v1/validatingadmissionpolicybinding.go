@@ -43,9 +43,9 @@ import (
 // given (policy, binding, param) combination is within its own CEL budget.
 type ValidatingAdmissionPolicyBindingApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration `json:",inline"`
-	// metadata is the standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.
+	// Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	// spec defines the desired behavior of the ValidatingAdmissionPolicyBinding.
+	// Specification of the desired behavior of the ValidatingAdmissionPolicyBinding.
 	Spec *ValidatingAdmissionPolicyBindingSpecApplyConfiguration `json:"spec,omitempty"`
 }
 

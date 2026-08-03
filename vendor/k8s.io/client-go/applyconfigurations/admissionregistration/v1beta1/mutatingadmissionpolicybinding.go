@@ -43,9 +43,9 @@ import (
 // given (policy, binding, param) combination is within its own CEL budget.
 type MutatingAdmissionPolicyBindingApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration `json:",inline"`
-	// metadata is the standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.
+	// Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	// spec defines the desired behavior of the MutatingAdmissionPolicyBinding.
+	// Specification of the desired behavior of the MutatingAdmissionPolicyBinding.
 	Spec *MutatingAdmissionPolicyBindingSpecApplyConfiguration `json:"spec,omitempty"`
 }
 

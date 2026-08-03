@@ -35,6 +35,9 @@ import (
 // with specific properties, this is how that request is expressed. The status
 // stanza tracks whether this claim has been satisfied and what specific
 // resources have been allocated.
+//
+// This is an alpha type and requires enabling the DynamicResourceAllocation
+// feature gate.
 type ResourceClaimApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration `json:",inline"`
 	// Standard object metadata

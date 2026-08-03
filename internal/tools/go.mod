@@ -1,6 +1,6 @@
 module github.com/grafana/beyla/v3/internal/tools
 
-go 1.26.0
+go 1.25.11
 
 tool (
 	github.com/cilium/ebpf/cmd/bpf2go
@@ -244,7 +244,7 @@ require (
 	k8s.io/klog/v2 v2.140.0 // indirect
 	mvdan.cc/gofumpt v0.11.0 // indirect
 	mvdan.cc/unparam v0.0.0-20251027182757-5beb8c8f8f15 // indirect
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.24.1 // indirect
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20260331052815-773c064a8064 // indirect
 	sigs.k8s.io/kind v0.32.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )

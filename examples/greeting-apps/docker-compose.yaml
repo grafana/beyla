@@ -172,7 +172,7 @@ services:
       - "9096:9096"
 
   grafana:
-    image: grafana/grafana@sha256:1c1bd67c54c5fcf6e759897852b5a584191bd6796e8d328a5ace457799801261
+    image: grafana/grafana@sha256:d177053ab62253815f130d81504f77063baf5fd4ca93299d6048453bd31e047a
     container_name: demo-grafana
     volumes:
       - ./configs/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml

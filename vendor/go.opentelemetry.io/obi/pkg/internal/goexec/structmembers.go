@@ -107,6 +107,9 @@ const (
 	GoTracerDelegatePos
 	GoTracerAttributeOptOffset
 	GoErrorStringOffset
+	SpanContextTraceIDPos
+	SpanContextSpanIDPos
+	SpanContextTraceFlagsPos
 	// go runtime channels
 	HchanQcountPos
 	HchanDataqsizPos
@@ -451,6 +454,14 @@ var structMembers = map[string]structInfo{
 		lib: "go.opentelemetry.io/otel",
 		fields: map[string]GoOffset{
 			"delegate": GoTracerDelegatePos,
+		},
+	},
+	"go.opentelemetry.io/otel/trace.SpanContext": {
+		lib: "go.opentelemetry.io/otel/trace",
+		fields: map[string]GoOffset{
+			"traceID":    SpanContextTraceIDPos,
+			"spanID":     SpanContextSpanIDPos,
+			"traceFlags": SpanContextTraceFlagsPos,
 		},
 	},
 	"runtime.hchan": {

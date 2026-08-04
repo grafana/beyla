@@ -666,10 +666,41 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
-// Validate configuration
-//
-//nolint:cyclop
+// Validate validates a standalone OBI configuration.
 func (c *Config) Validate() error {
+	return c.validate(validationContext{checkCiliumCompatibility: tcmanager.EnsureCiliumCompatibility})
+}
+
+// ValidateStatic validates a standalone OBI configuration without inspecting
+// host state.
+func (c *Config) ValidateStatic() error {
+	return c.validate(validationContext{})
+}
+
+// ValidateForReceiver validates an OBI configuration whose signal consumers
+// are supplied by a Collector receiver.
+func (c *Config) ValidateForReceiver() error {
+	return c.validate(validationContext{
+		hostTracesSink:           true,
+		hostMetricsSink:          true,
+		checkCiliumCompatibility: tcmanager.EnsureCiliumCompatibility,
+	})
+}
+
+// ValidateStaticForReceiver validates a Collector receiver configuration
+// without inspecting host state.
+func (c *Config) ValidateStaticForReceiver() error {
+	return c.validate(validationContext{hostTracesSink: true, hostMetricsSink: true})
+}
+
+type validationContext struct {
+	hostTracesSink           bool
+	hostMetricsSink          bool
+	checkCiliumCompatibility func(config.TCBackend) error
+}
+
+//nolint:cyclop
+func (c *Config) validate(context validationContext) error {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 
 	// for future custom validations
@@ -709,20 +740,26 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) && !c.Enabled(FeatureStatsO11y) {
+	networkEnabled := c.enabledForValidation(FeatureNetO11y, context)
+	applicationEnabled := c.enabledForValidation(FeatureAppO11y, context)
+	statsEnabled := c.enabledForValidation(FeatureStatsO11y, context)
+	if !networkEnabled && !applicationEnabled && !statsEnabled {
 		return ConfigError("at least one of 'network', 'application' or 'stats' features must be enabled. " +
 			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network*, application* or stats*" +
 			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application,stats' environment variable " +
 			"or 'meter_provider: { features: [network,application,stats] }' in the YAML configuration file. ")
 	}
 
-	if c.willUseTC() {
-		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
+	if networkEnabled && c.NetworkFlows.Source == EbpfSourceTC && context.checkCiliumCompatibility != nil {
+		if err := context.checkCiliumCompatibility(c.EBPF.TCBackend); err != nil {
 			return ConfigError("Cilium compatibility error: " + err.Error())
 		}
 	}
 
-	if c.Enabled(FeatureNetO11y) && !c.OTELMetrics.EndpointEnabled() &&
+	otelMetricsEnabled := context.hostMetricsSink || c.OTELMetrics.EndpointEnabled()
+	tracesEnabled := context.hostTracesSink || c.Traces.Enabled()
+
+	if networkEnabled && !otelMetricsEnabled &&
 		!c.Prometheus.EndpointEnabled() && !c.NetworkFlows.Print {
 		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
@@ -730,7 +767,7 @@ func (c *Config) Validate() error {
 			" purposes, you can also set OTEL_EBPF_NETWORK_PRINT_FLOWS=true")
 	}
 
-	if c.Enabled(FeatureStatsO11y) && !c.OTELMetrics.EndpointEnabled() &&
+	if statsEnabled && !otelMetricsEnabled &&
 		!c.Prometheus.EndpointEnabled() && !c.Stats.Print {
 		return ConfigError("enabling stat metrics requires to enable at least the OpenTelemetry" +
 			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
@@ -742,14 +779,14 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("invalid value for trace_printer: '%s'", c.TracePrinter))
 	}
 
-	if c.Enabled(FeatureAppO11y) && !c.TracePrinter.Enabled() &&
-		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() &&
+	if applicationEnabled && !c.TracePrinter.Enabled() &&
+		!otelMetricsEnabled && !tracesEnabled &&
 		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
-	if c.Enabled(FeatureAppO11y) && (c.Prometheus.EndpointEnabled() || c.OTELMetrics.EndpointEnabled()) {
+	if applicationEnabled && (c.Prometheus.EndpointEnabled() || otelMetricsEnabled) {
 		if c.Metrics.Features.InvalidSpanMetricsConfig() {
 			return ConfigError("you can only enable one format of span metrics," +
 				" application_span or application_span_otel")
@@ -762,11 +799,29 @@ func (c *Config) Validate() error {
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && c.InternalMetrics.Prometheus.Port != 0 {
 		return ConfigError("you can't enable both OTEL and Prometheus internal metrics")
 	}
-	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !c.OTELMetrics.EndpointEnabled() {
+	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !otelMetricsEnabled {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
 	}
 
 	return nil
+}
+
+func (c *Config) enabledForValidation(feature Feature, context validationContext) bool {
+	if c.Enabled(feature) {
+		return true
+	}
+	if !context.hostMetricsSink {
+		return false
+	}
+
+	switch feature {
+	case FeatureNetO11y:
+		return c.Metrics.Features.AnyNetwork()
+	case FeatureStatsO11y:
+		return c.Metrics.Features.StatMetrics()
+	default:
+		return false
+	}
 }
 
 func (c *Config) promNetO11yEnabled() bool {

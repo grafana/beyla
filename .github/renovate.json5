@@ -7,6 +7,9 @@
   postUpdateOptions: [
     'gomodMassage',
   ],
+  'git-submodules': {
+    enabled: false,
+  },
   ignorePaths: [
     '.obi-src/**',
     'internal/test/beyla_extensions/k8s/manifests/**',

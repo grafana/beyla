@@ -9,17 +9,28 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
+
+	"golang.org/x/net/netutil"
 )
 
 const (
 	path          = "/healthz"
 	schemaVersion = 1
+
+	maxOpenConns      = 100
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 5 * time.Second
+	writeTimeout      = 5 * time.Second
+	idleTimeout       = 5 * time.Second
 )
+
+// DefaultListenAddress keeps the TCP health endpoint local unless configured otherwise.
+const DefaultListenAddress = "127.0.0.1"
 
 func log() *slog.Logger {
 	return slog.With("component", "health")
@@ -45,10 +56,23 @@ func (e *endpoint) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(&resp)
 }
 
+func tcpListenAddr(address string, port int) string {
+	if address == "" {
+		address = DefaultListenAddress
+	}
+
+	return net.JoinHostPort(address, strconv.Itoa(port))
+}
+
 func ListenAndServe(ctx context.Context, port int) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	return ListenAndServeTCP(ctx, DefaultListenAddress, port)
+}
+
+func ListenAndServeTCP(ctx context.Context, address string, port int) error {
+	listenAddr := tcpListenAddr(address, port)
+	lis, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		log().With("port", port).Error("can't bind health endpoint", "err", err)
+		log().With("address", listenAddr).Error("can't bind health endpoint", "err", err)
 		return nil
 	}
 
@@ -65,14 +89,22 @@ func ListenAndServeUDS(ctx context.Context, addr string) error {
 	return Serve(ctx, lis)
 }
 
-func Serve(ctx context.Context, lis net.Listener) error {
+func newServer() *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle(path, &endpoint{start: time.Now()})
 
-	server := &http.Server{
+	return &http.Server{
 		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
+}
+
+func Serve(ctx context.Context, lis net.Listener) error {
+	server := newServer()
+	lis = netutil.LimitListener(lis, maxOpenConns)
 
 	l := log().With("addr", lis.Addr().String(), "path", path)
 	l.Info("starting health endpoint")

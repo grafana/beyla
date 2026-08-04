@@ -53,13 +53,6 @@ type JVMRuntimeEvent struct {
 	ValueBytes     uint64
 }
 
-type jvmRuntimeClocks struct {
-	clock     func() time.Time
-	monoClock func() time.Duration
-}
-
-var jvmClocks = jvmRuntimeClocks{clock: time.Now, monoClock: timing.MonoTimeNow}
-
 type RawJVMGCWhenType uint32
 
 const (
@@ -88,7 +81,7 @@ func ParseJVMMemoryPoolEvent(
 	base := JVMRuntimeEvent{
 		PID:            app.PID(nsPID),
 		PIDNamespaceID: pidNamespaceID,
-		Time:           jvmKernelTime(timestamp),
+		Time:           timing.KernelTime(timestamp),
 		PoolName:       poolName,
 		MemoryType:     memoryType,
 		GCPhase:        phase,
@@ -105,12 +98,6 @@ func ParseJVMMemoryPoolEvent(
 		events = append(events, withJVMMetric(base, JVMMetricMemoryUsedAfterLastGC, used))
 	}
 	return events, nil
-}
-
-func jvmKernelTime(ktime uint64) time.Time {
-	now := jvmClocks.clock()
-	delta := jvmClocks.monoClock() - time.Duration(int64(ktime))
-	return now.Add(-delta)
 }
 
 func DecodeJVMRawString(raw [JVMRawStringLen]byte) string {

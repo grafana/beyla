@@ -23,11 +23,17 @@ const maxGeminiStreamCandidates = 256
 // partialArgs to prevent unbounded memory allocation from malformed paths.
 const maxPartialArgArrayIndex = 1024
 
+// maxPartialArgArraySlots bounds the cumulative number of array slots that
+// can be allocated while reconstructing Vertex AI partialArgs. The per-index
+// guard above prevents a single huge index from allocating an enormous slice;
+// this cumulative guard prevents many distinct bounded high-index paths from
+// expanding a small captured stream into excessive heap usage and span output.
+const maxPartialArgArraySlots = 4096
+
 type geminiStreamChunk struct {
-	Candidates    []geminiStreamCandidate `json:"candidates"`
-	UsageMetadata *request.GeminiUsage    `json:"usageMetadata"`
-	ModelVersion  string                  `json:"modelVersion"`
-	ResponseID    string                  `json:"responseId"`
+	Candidates   []geminiStreamCandidate `json:"candidates"`
+	ModelVersion string                  `json:"modelVersion"`
+	ResponseID   string                  `json:"responseId"`
 }
 
 type geminiStreamCandidate struct {
@@ -98,9 +104,17 @@ type fcAggregator struct {
 	// splits a single string argument across multiple PartialArg elements that
 	// share a jsonPath and set willContinue=true until the final fragment, so
 	// the fragments must be concatenated rather than overwritten.
-	strFrags   map[string]string
-	hasFullArg bool            // true if args came as a complete JSON object
-	fullArg    json.RawMessage // stored when args is a complete JSON object
+	strFrags map[string]string
+	// rejectedStrFrags marks incomplete sequences whose prefix could not be
+	// assigned, so later fragments are skipped until the sequence terminates.
+	rejectedStrFrags map[string]struct{}
+	hasFullArg       bool            // true if args came as a complete JSON object
+	fullArg          json.RawMessage // stored when args is a complete JSON object
+}
+
+type partialArgBudget struct {
+	arraySlots       int
+	arrayAllocations int
 }
 
 // geminiPartialArg mirrors a single Vertex AI PartialArg element from the
@@ -122,10 +136,10 @@ type geminiPartialArg struct {
 // addPartialArgs interprets a raw partialArgs value, supporting both the
 // Vertex AI array-of-objects shape ([{jsonPath, <typed value>}, ...]) and the
 // plain string-fragment shape. Unknown shapes are ignored rather than fatal.
-func (fc *fcAggregator) addPartialArgs(raw json.RawMessage) {
+func (fc *fcAggregator) addPartialArgs(raw json.RawMessage, budget partialArgBudget) partialArgBudget {
 	trimmed := strings.TrimSpace(string(raw))
 	if trimmed == "" {
-		return
+		return budget
 	}
 	switch trimmed[0] {
 	case '"':
@@ -139,12 +153,13 @@ func (fc *fcAggregator) addPartialArgs(raw json.RawMessage) {
 		// one typed value from the value union.
 		var elems []geminiPartialArg
 		if err := json.Unmarshal(raw, &elems); err != nil {
-			return
+			return budget
 		}
 		for i := range elems {
-			fc.applyPartialArg(&elems[i])
+			budget = fc.applyPartialArg(&elems[i], budget)
 		}
 	}
+	return budget
 }
 
 // applyPartialArg decodes one PartialArg's typed value and assigns it at the
@@ -152,51 +167,85 @@ func (fc *fcAggregator) addPartialArgs(raw json.RawMessage) {
 // (Vertex AI streams them with willContinue=true until the final fragment) so
 // that a trailing empty terminator does not clobber the accumulated text; other
 // typed values are assigned directly.
-func (fc *fcAggregator) applyPartialArg(arg *geminiPartialArg) {
+func (fc *fcAggregator) applyPartialArg(arg *geminiPartialArg, budget partialArgBudget) partialArgBudget {
 	if arg.JSONPath == "" {
-		return
+		return budget
 	}
 	if fc.argsObj == nil {
 		fc.argsObj = map[string]any{}
 	}
 	switch {
 	case arg.StringValue != nil:
+		continuing := arg.WillContinue != nil && *arg.WillContinue
+		if _, rejected := fc.rejectedStrFrags[arg.JSONPath]; rejected {
+			if !continuing {
+				delete(fc.rejectedStrFrags, arg.JSONPath)
+			}
+			return budget
+		}
 		if fc.strFrags == nil {
 			fc.strFrags = map[string]string{}
 		}
 		acc := fc.strFrags[arg.JSONPath] + *arg.StringValue
-		fc.strFrags[arg.JSONPath] = acc
-		setByJSONPath(fc.argsObj, arg.JSONPath, acc)
+		var ok bool
+		budget, ok = setByJSONPathWithBudget(fc.argsObj, arg.JSONPath, acc, budget)
+		if ok {
+			fc.strFrags[arg.JSONPath] = acc
+		} else if continuing {
+			if fc.rejectedStrFrags == nil {
+				fc.rejectedStrFrags = map[string]struct{}{}
+			}
+			fc.rejectedStrFrags[arg.JSONPath] = struct{}{}
+			delete(fc.strFrags, arg.JSONPath)
+		}
 		// Once the provider signals the fragment sequence is complete, drop
 		// the per-path accumulator so a later argument at the same path starts
 		// fresh.
-		if arg.WillContinue == nil || !*arg.WillContinue {
+		if !continuing {
 			delete(fc.strFrags, arg.JSONPath)
 		}
 	case arg.NumberValue != nil:
-		setByJSONPath(fc.argsObj, arg.JSONPath, *arg.NumberValue)
+		budget, _ = setByJSONPathWithBudget(fc.argsObj, arg.JSONPath, *arg.NumberValue, budget)
 	case arg.BoolValue != nil:
-		setByJSONPath(fc.argsObj, arg.JSONPath, *arg.BoolValue)
+		budget, _ = setByJSONPathWithBudget(fc.argsObj, arg.JSONPath, *arg.BoolValue, budget)
 	case arg.NullValue != nil:
-		setByJSONPath(fc.argsObj, arg.JSONPath, nil)
+		budget, _ = setByJSONPathWithBudget(fc.argsObj, arg.JSONPath, nil, budget)
 	}
+	return budget
 }
 
-// setByJSONPath assigns value at the given JSONPath within the target map,
-// creating intermediate objects and arrays as needed. It reuses the shared
+// setByJSONPathWithBudget assigns value at the given JSONPath within the target
+// map, creating intermediate objects and arrays as needed. It reuses the shared
 // github.com/ohler55/ojg/jp parser so array segments (e.g. "$.items[0].id")
 // are handled per the Vertex AI contract instead of a hand-rolled dotted-key
 // parser. Invalid paths are skipped rather than fatal.
-func setByJSONPath(m map[string]any, path string, value any) {
+func setByJSONPathWithBudget(
+	m map[string]any,
+	path string,
+	value any,
+	budget partialArgBudget,
+) (partialArgBudget, bool) {
 	expr, err := jsonpath.ParseString(path)
 	if err != nil {
-		return
+		return budget, false
 	}
 	frags := stripRootFrags([]jsonpath.Frag(expr))
 	if len(frags) == 0 {
-		return
+		return budget, false
 	}
-	setAtFrags(m, frags, value)
+	if _, ok := frags[0].(jsonpath.Child); !ok {
+		return budget, false
+	}
+	freshArrayAllocations, ok := validateJSONPathFrags(frags)
+	if !ok {
+		return budget, false
+	}
+	previousArraySlots := budget.arraySlots
+	_, budget, ok = setAtFrags(m, frags, value, budget, freshArrayAllocations)
+	if !ok {
+		budget.arraySlots = previousArraySlots
+	}
+	return budget, ok
 }
 
 // stripRootFrags drops the leading root ("$") or current-node ("@") markers
@@ -214,37 +263,133 @@ func stripRootFrags(frags []jsonpath.Frag) []jsonpath.Frag {
 	return frags
 }
 
+func validateJSONPathFrags(frags []jsonpath.Frag) (int, bool) {
+	freshArrayAllocations := 0
+	for _, frag := range frags {
+		switch frag := frag.(type) {
+		case jsonpath.Child:
+		case jsonpath.Nth:
+			idx := int(frag)
+			if idx < 0 || idx >= maxPartialArgArrayIndex {
+				return 0, false
+			}
+			freshArrayAllocations += idx + 1
+		default:
+			return 0, false
+		}
+	}
+	return freshArrayAllocations, true
+}
+
 // setAtFrags recursively assigns value at the location described by frags
 // within container, creating intermediate maps and arrays (including nested
 // array elements) as needed. It returns the possibly reallocated container so
 // callers can reattach a grown slice. Only plain object-key (Child) and array
 // index (Nth) fragments are supported; other fragment kinds stop the descent.
-func setAtFrags(container any, frags []jsonpath.Frag, value any) any {
+// freshArrayAllocations is the precomputed allocation required by Nth fragments
+// in frags.
+func setAtFrags(
+	container any,
+	frags []jsonpath.Frag,
+	value any,
+	budget partialArgBudget,
+	freshArrayAllocations int,
+) (any, partialArgBudget, bool) {
 	if len(frags) == 0 {
-		return value
+		updatedArraySlots := budget.arraySlots -
+			min(countArraySlots(container), budget.arraySlots) +
+			countArraySlots(value)
+		if updatedArraySlots > maxPartialArgArraySlots {
+			return container, budget, false
+		}
+		budget.arraySlots = updatedArraySlots
+		return value, budget, true
+	}
+	remainingFreshArrayAllocations := freshArrayAllocations
+	if idx, ok := frags[0].(jsonpath.Nth); ok {
+		remainingFreshArrayAllocations -= int(idx) + 1
 	}
 	switch f := frags[0].(type) {
 	case jsonpath.Child:
 		m, ok := container.(map[string]any)
 		if !ok || m == nil {
+			if remainingFreshArrayAllocations >
+				maxPartialArgArraySlots-budget.arrayAllocations {
+				return container, budget, false
+			}
+			budget.arraySlots -= min(countArraySlots(container), budget.arraySlots)
 			m = map[string]any{}
 		}
 		key := string(f)
-		m[key] = setAtFrags(m[key], frags[1:], value)
-		return m
+		child, budget, ok := setAtFrags(
+			m[key],
+			frags[1:],
+			value,
+			budget,
+			remainingFreshArrayAllocations,
+		)
+		if !ok {
+			return m, budget, false
+		}
+		m[key] = child
+		return m, budget, true
 	case jsonpath.Nth:
 		idx := int(f)
 		if idx < 0 || idx >= maxPartialArgArrayIndex {
-			return container
+			return container, budget, false
 		}
-		s, _ := container.([]any)
-		for len(s) <= idx {
-			s = append(s, nil)
+		s, ok := container.([]any)
+		if !ok {
+			if budget.arrayAllocations+idx+1 > maxPartialArgArraySlots {
+				return container, budget, false
+			}
+			budget.arraySlots -= min(countArraySlots(container), budget.arraySlots)
 		}
-		s[idx] = setAtFrags(s[idx], frags[1:], value)
-		return s
+		if idx >= len(s) {
+			additionalSlots := idx + 1 - len(s)
+			if budget.arraySlots+additionalSlots > maxPartialArgArraySlots ||
+				budget.arrayAllocations+additionalSlots > maxPartialArgArraySlots {
+				return container, budget, false
+			}
+			budget.arraySlots += additionalSlots
+			budget.arrayAllocations += additionalSlots
+			for len(s) <= idx {
+				s = append(s, nil)
+			}
+		}
+		child, budget, ok := setAtFrags(
+			s[idx],
+			frags[1:],
+			value,
+			budget,
+			remainingFreshArrayAllocations,
+		)
+		if !ok {
+			return s, budget, false
+		}
+		s[idx] = child
+		return s, budget, true
 	default:
-		return container
+		return container, budget, false
+	}
+}
+
+func countArraySlots(value any) int {
+	switch value := value.(type) {
+	case []any:
+		slots := len(value)
+		for _, element := range value {
+			slots += countArraySlots(element)
+		}
+		return slots
+	case map[string]any:
+		slots := 0
+		for _, element := range value {
+			slots += countArraySlots(element)
+		}
+		return slots
+	default:
+		return 0
 	}
 }
 
@@ -334,10 +479,11 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
 
 	candidates := make(map[int]*candidateAggregator)
+	partialArgsBudget := partialArgBudget{}
 	var toolCalls []request.ToolCall
 	var modelVersion string
 	var responseID string
-	var usage *request.GeminiUsage
+	var usage request.GeminiUsage
 	var streamError *request.GeminiError
 
 	for scanner.Scan() {
@@ -353,13 +499,12 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 		}
 
 		var chunk geminiStreamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			slog.Debug("parseGeminiStream: failed to parse chunk", "error", err)
-			continue
-		}
+		unmarshalJSONBestEffort([]byte(data), &chunk)
+		var chunkUsage request.GeminiUsage
+		hasUsage := unmarshalJSONContainerBestEffort([]byte(data), &chunkUsage, "usageMetadata")
 
 		// Check if this data line is itself an error envelope.
-		if chunk.Candidates == nil && chunk.UsageMetadata == nil {
+		if chunk.Candidates == nil && !hasUsage {
 			if err := tryParseErrorLine(data); err != nil {
 				streamError = err
 				continue
@@ -372,8 +517,8 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 		if chunk.ResponseID != "" {
 			responseID = chunk.ResponseID
 		}
-		if chunk.UsageMetadata != nil && geminiUsageHasTokens(chunk.UsageMetadata) {
-			usage = chunk.UsageMetadata
+		if hasUsage {
+			usage.Merge(chunkUsage)
 		}
 
 		for i := range chunk.Candidates {
@@ -405,7 +550,10 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 				}
 
 				if part.FunctionCall != nil {
-					processFunctionCallPart(agg, part.FunctionCall, part.ThoughtSignature, &toolCalls)
+					partialArgsBudget, toolCalls = processFunctionCallPart(
+						agg, part.FunctionCall, part.ThoughtSignature,
+						partialArgsBudget, toolCalls,
+					)
 					continue
 				}
 
@@ -438,9 +586,7 @@ func parseGeminiStream(reader io.Reader) (*request.GeminiResponse, []request.Too
 		ResponseID:   responseID,
 	}
 
-	if usage != nil {
-		resp.UsageMetadata = *usage
-	}
+	resp.UsageMetadata = usage
 	if streamError != nil {
 		resp.Error = streamError
 	}
@@ -477,11 +623,17 @@ func appendTextPart(agg *candidateAggregator, tp geminiStreamPart) {
 // complete single-chunk calls and Vertex AI's streaming function call
 // arguments where the name arrives first and args follow in subsequent chunks.
 // signature is the part's outer thoughtSignature (if any).
-func processFunctionCallPart(agg *candidateAggregator, fc *geminiFunctionCallData, signature string, toolCalls *[]request.ToolCall) {
+func processFunctionCallPart(
+	agg *candidateAggregator,
+	fc *geminiFunctionCallData,
+	signature string,
+	budget partialArgBudget,
+	toolCalls []request.ToolCall,
+) (partialArgBudget, []request.ToolCall) {
 	if fc.Name != "" {
 		// New named function call: flush any previous active FC.
 		if name := agg.flushActiveFC(); name != "" {
-			*toolCalls = append(*toolCalls, request.ToolCall{Name: name})
+			toolCalls = append(toolCalls, request.ToolCall{Name: name})
 		}
 
 		// If the call has complete args and no continuation, store directly.
@@ -495,31 +647,31 @@ func processFunctionCallPart(agg *candidateAggregator, fc *geminiFunctionCallDat
 			// If willContinue is nil or false, this is a complete call.
 			if fc.WillContinue == nil || !*fc.WillContinue {
 				if name := agg.flushActiveFC(); name != "" {
-					*toolCalls = append(*toolCalls, request.ToolCall{Name: name})
+					toolCalls = append(toolCalls, request.ToolCall{Name: name})
 				}
 			}
-			return
+			return budget, toolCalls
 		}
 
 		// Start aggregation (name only, or name with partial args).
 		agg.activeFC = &fcAggregator{name: fc.Name, signature: signature}
-		agg.activeFC.addPartialArgs(fc.PartialArgs)
+		budget = agg.activeFC.addPartialArgs(fc.PartialArgs, budget)
 
 		// If no continuation expected and no partial args, flush immediately.
 		if fc.WillContinue == nil && len(fc.PartialArgs) == 0 && len(fc.Args) == 0 {
 			if name := agg.flushActiveFC(); name != "" {
-				*toolCalls = append(*toolCalls, request.ToolCall{Name: name})
+				toolCalls = append(toolCalls, request.ToolCall{Name: name})
 			}
 		}
-		return
+		return budget, toolCalls
 	}
 
 	// Continuation fragment (no name): append to active function call.
 	if agg.activeFC == nil {
-		return
+		return budget, toolCalls
 	}
 	if len(fc.PartialArgs) > 0 {
-		agg.activeFC.addPartialArgs(fc.PartialArgs)
+		budget = agg.activeFC.addPartialArgs(fc.PartialArgs, budget)
 	} else if len(fc.Args) > 0 {
 		// Args as JSON in continuation.
 		agg.activeFC.argsAccum.Write(fc.Args)
@@ -528,9 +680,10 @@ func processFunctionCallPart(agg *candidateAggregator, fc *geminiFunctionCallDat
 	// If willContinue is explicitly false or absent, the call is complete.
 	if fc.WillContinue == nil || !*fc.WillContinue {
 		if name := agg.flushActiveFC(); name != "" {
-			*toolCalls = append(*toolCalls, request.ToolCall{Name: name})
+			toolCalls = append(toolCalls, request.ToolCall{Name: name})
 		}
 	}
+	return budget, toolCalls
 }
 
 // tryParseErrorLine attempts to parse a line as a bare Gemini error envelope.
@@ -560,12 +713,6 @@ func extractSSEData(line string) (string, bool) {
 		return line[5:], true
 	}
 	return "", false
-}
-
-// geminiUsageHasTokens returns true when any of the exported token
-// fields are populated, not just totalTokenCount.
-func geminiUsageHasTokens(u *request.GeminiUsage) bool {
-	return u.PromptTokenCount > 0 || u.CandidatesTokenCount > 0 || u.TotalTokenCount > 0
 }
 
 // buildGeminiCandidates constructs the final candidate list from the

@@ -19,13 +19,7 @@ type PayloadExtraction struct {
 }
 
 func (p PayloadExtraction) Enabled() bool {
-	return p.HTTP.GraphQL.Enabled ||
-		p.HTTP.Elasticsearch.Enabled ||
-		p.HTTP.AWS.Enabled ||
-		p.HTTP.SQLPP.Enabled ||
-		p.HTTP.GenAI.Enabled() ||
-		p.HTTP.JSONRPC.Enabled ||
-		p.HTTP.Enrichment.Enabled
+	return p.HTTP.GraphQL.Enabled || p.HTTP.ClientEnabled()
 }
 
 type HTTPConfig struct {
@@ -43,6 +37,16 @@ type HTTPConfig struct {
 	JSONRPC JSONRPCConfig `yaml:"jsonrpc"`
 	// Enrichment configures HTTP header and payload extraction with policy-based rules
 	Enrichment EnrichmentConfig `yaml:"enrichment"`
+}
+
+// ClientEnabled reports whether any HTTP client payload extraction is enabled.
+func (h HTTPConfig) ClientEnabled() bool {
+	return h.Elasticsearch.Enabled ||
+		h.AWS.Enabled ||
+		h.SQLPP.Enabled ||
+		h.GenAI.Enabled() ||
+		h.JSONRPC.Enabled ||
+		h.Enrichment.Enabled
 }
 
 // NumericRange defines numeric comparison criteria for a rule match condition.
@@ -98,6 +102,8 @@ type GenAIConfig struct {
 	Rerank RerankConfig `yaml:"rerank"`
 	// Vector retrieval payload extraction and parsing (Pinecone, Qdrant, Milvus, Chroma, Weaviate, etc.)
 	Retrieval RetrievalConfig `yaml:"retrieval"`
+	// Ollama native API payload extraction and parsing
+	Ollama OllamaConfig `yaml:"ollama"`
 	// OpenAI-compatible gateway payload extraction and parsing
 	OpenAICompatible OpenAICompatibleConfig `yaml:"openai_compatible"`
 }
@@ -105,7 +111,7 @@ type GenAIConfig struct {
 func (g *GenAIConfig) Enabled() bool {
 	return g.Anthropic.Enabled || g.OpenAI.Enabled ||
 		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled ||
-		g.MCP.Enabled ||
+		g.MCP.Enabled || g.Ollama.Enabled ||
 		g.Embedding.Enabled || g.Rerank.Enabled || g.Retrieval.Enabled ||
 		g.OpenAICompatible.Enabled
 }
@@ -153,6 +159,11 @@ type RerankConfig struct {
 type RetrievalConfig struct {
 	// Enable vector retrieval (Pinecone, Qdrant, Milvus, Chroma, Weaviate, etc.) payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_RETRIEVAL_ENABLED" validate:"boolean"`
+}
+
+type OllamaConfig struct {
+	// Enable Ollama native API payload extraction and parsing
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_OLLAMA_ENABLED" validate:"boolean"`
 }
 
 type OpenAICompatibleConfig struct {

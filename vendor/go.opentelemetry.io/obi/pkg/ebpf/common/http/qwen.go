@@ -20,12 +20,33 @@ func isQwen(respHeader http.Header) bool {
 	return false
 }
 
+func looksLikeQwenBody(reqB, respB []byte) bool {
+	model := strings.ToLower(genaiModel(reqB, respB))
+	if strings.HasPrefix(model, "qwen") || isDashScopeEmbeddingModel(model) {
+		return true
+	}
+	return extractJSONRawField(respB, "request_id") != nil
+}
+
+// isDashScopeEmbeddingModel reports whether the model follows the DashScope
+// embedding naming scheme "text-embedding-v<N>", distinct from OpenAI's
+// "text-embedding-3-*" and "text-embedding-ada-*" models.
+func isDashScopeEmbeddingModel(model string) bool {
+	return strings.HasPrefix(model, "text-embedding-v")
+}
+
 func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
 	headerDetected := isQwen(resp.Header)
+	urlDetected := isQwenCompatibleURL(req)
+	maybeQwen := false
 
-	// Fast exit: not detected by headers and URL doesn't match
-	if !headerDetected && !isQwenCompatibleURL(req) {
-		return *baseSpan, false
+	// Not detected by headers or URL: under HTTP/2 (no usable headers) fall back
+	// to matching a Qwen model or DashScope request_id in the bodies.
+	if !headerDetected && !urlDetected {
+		if !isHTTP2Request(req) || !strings.Contains(baseSpan.Path, "/v1/") {
+			return *baseSpan, false
+		}
+		maybeQwen = true
 	}
 
 	reqB, ok := readHTTPRequestBody("QwenSpan", req, baseSpan)
@@ -33,10 +54,11 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 		return *baseSpan, false
 	}
 
-	// If not detected by headers, verify model name starts with "qwen"
-	if !headerDetected {
-		model := extractModelField(reqB)
-		if !strings.HasPrefix(strings.ToLower(model), "qwen") {
+	// If detected only by URL, verify the model belongs to Qwen. The header
+	// and HTTP/2-body paths have already confirmed the provider.
+	if !headerDetected && !maybeQwen {
+		model := strings.ToLower(extractModelField(reqB))
+		if !strings.HasPrefix(model, "qwen") && !isDashScopeEmbeddingModel(model) {
 			return *baseSpan, false
 		}
 	}
@@ -44,6 +66,12 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 	respB, ok := readHTTPResponseBody("QwenSpan", resp, baseSpan)
 	if !ok {
 		return *baseSpan, false
+	}
+
+	if maybeQwen {
+		if !looksLikeQwenBody(reqB, respB) {
+			return *baseSpan, false
+		}
 	}
 
 	parsedRequest := parseOpenAIInput(reqB)

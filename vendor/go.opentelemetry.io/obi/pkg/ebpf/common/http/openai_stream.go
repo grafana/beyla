@@ -30,13 +30,6 @@ type openAIStreamChunk struct {
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
-	Usage *struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-		InputTokens      int `json:"input_tokens"`
-		OutputTokens     int `json:"output_tokens"`
-	} `json:"usage"`
 }
 
 type openAIStreamToolCall struct {
@@ -69,19 +62,35 @@ func parseOpenAIStream(reader io.Reader) (*request.VendorOpenAI, []request.ToolC
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if !strings.HasPrefix(line, "data: ") {
+		data, ok := extractSSEData(line)
+		if !ok {
 			continue
 		}
-
-		data := strings.TrimPrefix(line, "data: ")
 
 		if data == "[DONE]" {
 			break
 		}
 
 		var chunk openAIStreamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
+		unmarshalJSONBestEffort([]byte(data), &chunk)
+		var responseFields struct {
+			ID    string `json:"id"`
+			Model string `json:"model"`
+		}
+		if unmarshalJSONContainerBestEffort([]byte(data), &responseFields, "response") {
+			if chunk.ID == "" {
+				chunk.ID = responseFields.ID
+			}
+			if chunk.Model == "" {
+				chunk.Model = responseFields.Model
+			}
+		}
+		var usage request.OpenAIUsage
+		if unmarshalJSONContainerBestEffort([]byte(data), &usage, "response", "usage") {
+			response.Usage.Merge(usage)
+		}
+		if unmarshalJSONContainerBestEffort([]byte(data), &usage, "usage") {
+			response.Usage.Merge(usage)
 		}
 
 		// Extract model and id from the first chunk that has them.
@@ -90,15 +99,6 @@ func parseOpenAIStream(reader io.Reader) (*request.VendorOpenAI, []request.ToolC
 		}
 		if response.ResponseModel == "" && chunk.Model != "" {
 			response.ResponseModel = chunk.Model
-		}
-
-		// Extract usage from the chunk that contains it (typically the last one).
-		if chunk.Usage != nil {
-			response.Usage.PromptTokens = chunk.Usage.PromptTokens
-			response.Usage.CompletionTokens = chunk.Usage.CompletionTokens
-			response.Usage.TotalTokens = chunk.Usage.TotalTokens
-			response.Usage.InputTokens = chunk.Usage.InputTokens
-			response.Usage.OutputTokens = chunk.Usage.OutputTokens
 		}
 
 		// Process choices.
@@ -184,7 +184,9 @@ func parseOpenAIStream(reader io.Reader) (*request.VendorOpenAI, []request.ToolC
 		})
 	}
 
-	if response.Usage.GetInputTokens() == 0 && response.Usage.GetOutputTokens() == 0 && response.ID != "" {
+	_, inputReported := response.Usage.InputTokenCount()
+	_, outputReported := response.Usage.OutputTokenCount()
+	if !inputReported && !outputReported && response.ID != "" {
 		slog.Debug("parseOpenAIStream: no usage data found in SSE stream, token counts will be 0",
 			"id", response.ID, "model", response.ResponseModel, "finishReason", finishReason)
 	}

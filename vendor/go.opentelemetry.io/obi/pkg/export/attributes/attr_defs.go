@@ -408,6 +408,7 @@ func getDefinitions(
 				attr.GenAITools:             false,
 				attr.GenAIToolCallArguments: false,
 				attr.GenAIToolCallResult:    false,
+				attr.GenAIResponseError:     false,
 				attr.DBResponseError:        false,
 			},
 		},
@@ -479,6 +480,14 @@ func getDefinitions(
 				attr.ServerPort:         true,
 				attr.ServerAddr:         true,
 			},
+		},
+		GoRuntimeMemoryGCGoal.Section: {
+			SubGroups:  []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		GoRuntimeGoroutineCount.Section: {
+			SubGroups:  []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{},
 		},
 		JVMMemoryUsed.Section: {
 			SubGroups:  []*AttrReportGroup{&jvmMemoryAttributes},

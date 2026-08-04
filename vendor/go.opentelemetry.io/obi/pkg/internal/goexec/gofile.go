@@ -19,8 +19,10 @@ import (
 const (
 	// minGoVersion defines the minimum instrumentable Go version. If the target binary was
 	// compiled using an older Go version, it will be treated as a non-Go program.
-	minGoVersion                    = "1.17"
-	minGoRuntimeMemoryMetricVersion = "1.23"
+	minGoVersion                                    = "1.17"
+	minGoRuntimeMemoryMetricVersion                 = "1.23"
+	minGoRuntimeGCGoalArgumentVersion               = "1.19"
+	minGoRuntimeGoroutineCountIncludesSystemVersion = "1.26"
 )
 
 var goVersionPattern = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?`)
@@ -54,6 +56,17 @@ func goVersionAtLeast(version, minimum string) bool {
 
 	// 'semver' package requires version strings to begin with a leading "v".
 	return semver.Compare("v"+match, "v"+minimum) >= 0
+}
+
+func runtimeMetricGoroutineCountModeVersion(version string) (includesSystem, known bool) {
+	if goVersionPattern.FindString(version) == "" {
+		return false, false
+	}
+	return goVersionAtLeast(version, minGoRuntimeGoroutineCountIncludesSystemVersion), true
+}
+
+func runtimeMetricGCGoalArgumentSupportedVersion(version string) bool {
+	return goVersionAtLeast(version, minGoRuntimeGCGoalArgumentVersion)
 }
 
 // findLibraryVersions looks for all the libraries and versions inside the elf file.

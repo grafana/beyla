@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +24,11 @@ import (
 // MaxJSFileScanBytes caps opportunistic JS/TS source scans to avoid spending
 // unbounded work on large application files.
 const MaxJSFileScanBytes int64 = 10 * 1024 * 1024
+
+const (
+	maxNestDecoratorValues = 64
+	maxNestRouteVariants   = 256
+)
 
 // /root is purposefully missing, since we need it to star the file walk
 // we skip later any root directories we find that don't match our original
@@ -127,6 +133,12 @@ type FrameworkPatterns struct {
 	QuotedString *regexp.Regexp
 	// HTTPDispatcher: dispatcher.onGet('/path', ...), dispatcher.onPost(/^\/ratings\/[0-9]*/, ...)
 	HTTPDispatcher *regexp.Regexp
+	// URLPattern: new URLPattern({ pathname: "/users/:id" });
+	URLPattern *regexp.Regexp
+	// key of the 'pathname' member of a URLPattern init object
+	URLPatternPathname *regexp.Regexp
+	// key of the 'baseURL' member of a URLPattern init object
+	URLPatternBaseURL *regexp.Regexp
 	// Fallback
 	Fallback *regexp.Regexp
 
@@ -213,6 +225,23 @@ func newFrameworkPatterns() *FrameworkPatterns {
 		// Supports both string literals and regex literals
 		HTTPDispatcher: regexp.MustCompile(`\.on(Get|Post|Put|Patch|Delete|Head|Options|All)\s*\(\s*(?:['"\x60]([^'"\x60]+)['"\x60]|/((?:[^\\,]|\\.)+))`),
 
+		// URLPattern WEB API: matches the opening of the constructor call, whose
+		// arguments are then read until the call closes. The pattern is given
+		// either as a string or as an init object, and either of them may be
+		// spread over several lines:
+		//   new URLPattern("https://example.com/books/:id")
+		//   new URLPattern({ pathname: "/books/:id" })
+		//   new urlpattern.URLPattern("/books/:id", base)
+		// The 'new' operator and the optional namespace are required, so that a
+		// helper whose name ends in URLPattern (createURLPattern(...)) is not
+		// taken for the standard constructor.
+		URLPattern: regexp.MustCompile(`\bnew\s+(?:[\w$]+\s*\.\s*)*URLPattern\s*\(`),
+
+		// Match the key of a URLPattern init object member, so that its value
+		// can be read from the source that follows
+		URLPatternPathname: jsObjectKeyPattern("pathname"),
+		URLPatternBaseURL:  jsObjectKeyPattern("baseURL"),
+
 		// Fallback (e.g. NextJS)
 		Fallback: regexp.MustCompile(`['"\x60](/[^'"\x60]+)['"\x60]`),
 
@@ -247,13 +276,18 @@ type RouteExtractor struct {
 	// (@Version() may appear above or below @Get()), so the route is emitted
 	// only when the stack ends: at the first non-decorator line, the next
 	// method or controller decorator, or the end of the file.
-	pendingNestMethod *RoutePattern
+	pendingNestMethod    *RoutePattern
+	nestRouteVariants    int
+	nestRouteLimitLogged bool
 	// inEnableVersioning tracks a multi-line app.enableVersioning({...}) call
 	// until its closing parenthesis
 	inEnableVersioning bool
 	// enableVersioningTypeSeen tracks whether the current enableVersioning call
 	// named an explicit VersioningType (URI is NestJS's default when it didn't)
 	enableVersioningTypeSeen bool
+	// urlPatternCall buffers the arguments of the URLPattern call currently
+	// being scanned, nil when no call is open
+	urlPatternCall *urlPatternCall
 
 	// application-level NestJS settings, harvested from any scanned file
 	// (typically main.ts) and applied to Nest routes after the scan
@@ -366,7 +400,7 @@ func (e *RouteExtractor) handleRestify(filePath, line string, lineNum int) bool 
 // quotedStrings returns the contents of every quoted string in s: the single
 // value of 'x' as well as every element of ['x', 'y'].
 func (e *RouteExtractor) quotedStrings(s string) []string {
-	matches := e.patterns.QuotedString.FindAllStringSubmatch(s, -1)
+	matches := e.patterns.QuotedString.FindAllStringSubmatch(s, maxNestDecoratorValues)
 	result := make([]string, 0, len(matches))
 	for _, m := range matches {
 		result = append(result, m[1])
@@ -413,16 +447,34 @@ func (e *RouteExtractor) flushNestMethod() {
 
 	for _, prefix := range prefixes {
 		for _, version := range versions {
-			e.routes = append(e.routes, RoutePattern{
+			if !e.appendNestRoute(RoutePattern{
 				Method:  m.Method,
 				Path:    joinNestPaths(prefix, m.Path),
 				File:    m.File,
 				Line:    m.Line,
 				Nest:    true,
 				Version: version,
-			})
+			}) {
+				return
+			}
 		}
 	}
+}
+
+func (e *RouteExtractor) appendNestRoute(route RoutePattern) bool {
+	if e.nestRouteVariants >= maxNestRouteVariants {
+		if !e.nestRouteLimitLogged {
+			e.log.Debug("nestjs route variant limit reached",
+				"file", route.File,
+				"limit", maxNestRouteVariants)
+			e.nestRouteLimitLogged = true
+		}
+		return false
+	}
+
+	e.routes = append(e.routes, route)
+	e.nestRouteVariants++
+	return true
 }
 
 func (e *RouteExtractor) handleNestJSController(line string) bool {
@@ -573,7 +625,7 @@ func (e *RouteExtractor) handleNestJS(filePath, line string, lineNum int) bool {
 // declared versions become fragments too (/v2).
 func (e *RouteExtractor) handleCompiledNestController(filePath, line string, lineNum int) bool {
 	addFragment := func(path string) {
-		e.routes = append(e.routes, RoutePattern{
+		e.appendNestRoute(RoutePattern{
 			Method: "ALL",
 			Path:   ensureLeadingSlash(path),
 			File:   filePath,
@@ -617,12 +669,14 @@ func (e *RouteExtractor) handleCompiledNestVersion(filePath, line string, lineNu
 		return false
 	}
 	for _, version := range e.quotedStrings(matches[1]) {
-		e.routes = append(e.routes, RoutePattern{
+		if !e.appendNestRoute(RoutePattern{
 			Method: "ALL",
 			Path:   "/v" + version,
 			File:   filePath,
 			Line:   lineNum,
-		})
+		}) {
+			break
+		}
 	}
 	return true
 }
@@ -637,7 +691,7 @@ func (e *RouteExtractor) handleCompiledNestMethod(filePath, line string, lineNum
 		return false
 	}
 	if matches[2] != "" {
-		e.routes = append(e.routes, RoutePattern{
+		e.appendNestRoute(RoutePattern{
 			Method: strings.ToUpper(matches[1]),
 			Path:   ensureLeadingSlash(matches[2]),
 			File:   filePath,
@@ -680,6 +734,406 @@ func sortRouteFragments(fragments []string) {
 		}
 		return fragments[i] < fragments[j]
 	})
+}
+
+// urlPatternPathname returns the pathname component of the string form of a
+// URLPattern, which may be a full URL pattern or a path relative to the
+// constructor's baseURL argument.
+func urlPatternPathname(pattern string, base urlPatternBase) string {
+	if pattern == "" {
+		return ""
+	}
+
+	pattern = pattern[:urlPatternPathnameEnd(pattern)]
+
+	if _, authority, hasScheme := strings.Cut(pattern, "://"); hasScheme {
+		_, path, hasPath := strings.Cut(authority, "/")
+		if !hasPath {
+			return ""
+		}
+		return "/" + path
+	}
+
+	return resolveURLPatternPathname(pattern, base)
+}
+
+// urlPatternPathnameEnd returns the offset at which the pathname of a
+// URLPattern string ends: the first '?' or '#' that opens the search or hash
+// component. A bare '?' following a named group, a group or a wildcard is the
+// optional modifier of that token and belongs to the pathname, which is why an
+// escaped '\?' is the way to open a search component after one of them.
+func urlPatternPathnameEnd(pattern string) int {
+	// whether a '?' at the current offset would be the optional modifier of
+	// the token just read instead of the start of the search component
+	modifier := false
+
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\':
+			if i+1 < len(pattern) && (pattern[i+1] == '?' || pattern[i+1] == '#') {
+				return i
+			}
+			i++
+			modifier = false
+		case '?':
+			if !modifier {
+				return i
+			}
+			modifier = false
+		case '#':
+			return i
+		case ':':
+			end := endOfURLPatternName(pattern, i)
+			modifier = end > i
+			i = end
+		case '(':
+			i = endOfURLPatternGroup(pattern, i)
+			modifier = true
+		case '}', '*':
+			modifier = true
+		default:
+			modifier = false
+		}
+	}
+
+	return len(pattern)
+}
+
+// endOfURLPatternName returns the offset of the last character of the named
+// group that starts at colon, or colon itself when no name follows it.
+func endOfURLPatternName(pattern string, colon int) int {
+	end := colon
+	for end+1 < len(pattern) && isURLPatternNameChar(pattern[end+1]) {
+		end++
+	}
+	return end
+}
+
+func isURLPatternNameChar(c byte) bool {
+	return c == '_' || c == '$' ||
+		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+// endOfURLPatternGroup returns the offset of the parenthesis closing the group
+// that starts at open, or the last offset of pattern when it does not close.
+func endOfURLPatternGroup(pattern string, open int) int {
+	depth := 0
+	for i := open; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\':
+			i++
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return len(pattern) - 1
+}
+
+// urlPatternBase is the base URL a relative pathname is resolved against. A
+// base that is declared by the call but is not a string literal leaves the
+// resulting pathname unknown, which a zero url with declared set represents.
+type urlPatternBase struct {
+	url      string
+	declared bool
+}
+
+// resolveURLPatternPathname resolves a relative pathname against the pathname
+// of the base URL, as the URL Pattern API does. It returns an empty string when
+// the base is declared but is not statically resolvable, as the pathname the
+// call ends up with is then unknown.
+func resolveURLPatternPathname(pathname string, base urlPatternBase) string {
+	if strings.HasPrefix(pathname, "/") {
+		return pathname
+	}
+
+	if !base.declared {
+		return ensureLeadingSlash(pathname)
+	}
+
+	// a base URL must be absolute, so anything else is not statically resolvable
+	baseURL, err := url.Parse(base.url)
+	if err != nil || !baseURL.IsAbs() {
+		return ""
+	}
+
+	// the pathname is escaped and unescaped back by the resolution, so the
+	// pattern syntax it holds survives it unchanged
+	return baseURL.ResolveReference(&url.URL{Path: pathname}).Path
+}
+
+// urlPatternCall buffers the arguments of a URLPattern call while it is being
+// scanned. The scanner reads one physical line at a time and the call may span
+// several of them, so its arguments are parsed only once the call closes.
+type urlPatternCall struct {
+	args  strings.Builder
+	depth int
+	file  string
+	line  int
+}
+
+// consume appends the part of text that belongs to the call and returns the
+// offset just past its closing parenthesis, or -1 when the call is still open.
+// Parentheses inside a string literal belong to a component pattern
+// (protocol: "(https?)"), not to the call, so they are skipped.
+func (c *urlPatternCall) consume(text string) int {
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\'', '"', '`':
+			i = endOfJSString(text, i)
+		case '(':
+			c.depth++
+		case ')':
+			c.depth--
+			if c.depth == 0 {
+				c.args.WriteString(text[:i])
+				return i + 1
+			}
+		}
+	}
+
+	c.args.WriteString(text)
+	return -1
+}
+
+// endOfJSString returns the offset of the closing quote of the string literal
+// that starts at open, or len(s) when the literal does not close in s.
+func endOfJSString(s string, open int) int {
+	quote := s[open]
+	for i := open + 1; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case quote:
+			return i
+		}
+	}
+	return len(s)
+}
+
+func isJSQuote(c byte) bool {
+	return c == '\'' || c == '"' || c == '`'
+}
+
+// handleURLPattern harvests routes declared through the URL Pattern API. A call
+// may open, span, and close any number of lines, so each line is fed to the
+// buffered call and the route is emitted when the call closes.
+func (e *RouteExtractor) handleURLPattern(filePath, line string, lineNum int) bool {
+	if e.urlPatternCall != nil {
+		e.urlPatternCall.args.WriteString("\n")
+	} else if !e.patterns.URLPattern.MatchString(line) {
+		return false
+	}
+
+	rest := line
+	for {
+		if e.urlPatternCall == nil {
+			opening := e.patterns.URLPattern.FindStringIndex(rest)
+			if opening == nil {
+				return true
+			}
+			e.urlPatternCall = &urlPatternCall{depth: 1, file: filePath, line: lineNum}
+			rest = rest[opening[1]:]
+		}
+
+		end := e.urlPatternCall.consume(rest)
+		if end < 0 {
+			return true
+		}
+
+		e.flushURLPattern()
+		rest = rest[end:]
+	}
+}
+
+// flushURLPattern emits the route declared by the buffered URLPattern call. It
+// is also called at the end of a file, which may end (or be truncated at
+// MaxJSFileScanBytes) while a call is still open.
+func (e *RouteExtractor) flushURLPattern() {
+	call := e.urlPatternCall
+	if call == nil {
+		return
+	}
+	e.urlPatternCall = nil
+
+	path := e.urlPatternPath(call.args.String())
+	if path == "" {
+		return
+	}
+
+	// URLPattern declares no method, so the route applies to all of them
+	e.routes = append(e.routes, RoutePattern{
+		Method: "ALL",
+		Path:   path,
+		File:   call.file,
+		Line:   call.line,
+	})
+}
+
+// urlPatternPath returns the route declared by the arguments of a URLPattern
+// call. Only the first argument holds the pattern, either as an init object
+// with a pathname member or as a pattern string. Any other argument shape (a
+// variable, a spread) is not statically resolvable.
+func (e *RouteExtractor) urlPatternPath(args string) string {
+	parsed := splitJSArguments(args)
+	if len(parsed) == 0 || parsed[0] == "" {
+		return ""
+	}
+
+	pattern := parsed[0]
+
+	if pattern[0] == '{' {
+		return e.urlPatternInitPath(pattern)
+	}
+
+	if isJSQuote(pattern[0]) {
+		return urlPatternPathname(jsStringLiteral(pattern), stringURLPatternBase(parsed))
+	}
+
+	return ""
+}
+
+// urlPatternInitPath returns the route declared by the init object form of a
+// URLPattern call. This overload takes its base URL as the baseURL member of
+// the init object, its second argument being the options of the call.
+func (e *RouteExtractor) urlPatternInitPath(init string) string {
+	pathname := jsStringLiteral(jsObjectMemberValue(init, e.patterns.URLPatternPathname))
+	if pathname == "" {
+		return ""
+	}
+
+	var base urlPatternBase
+	if baseURL := jsObjectMemberValue(init, e.patterns.URLPatternBaseURL); baseURL != "" {
+		base = urlPatternBase{url: jsStringLiteral(baseURL), declared: true}
+	}
+
+	return resolveURLPatternPathname(pathname, base)
+}
+
+// stringURLPatternBase returns the base URL of the string form of a URLPattern
+// call, whose second argument is either a base URL or the options of the call.
+func stringURLPatternBase(args []string) urlPatternBase {
+	if len(args) < 2 || args[1] == "" || args[1][0] == '{' {
+		return urlPatternBase{}
+	}
+
+	return urlPatternBase{url: jsStringLiteral(args[1]), declared: true}
+}
+
+// splitJSArguments splits an argument list into its top-level arguments.
+// Commas inside a string literal or a nested object, array or call do not
+// separate arguments.
+func splitJSArguments(args string) []string {
+	var (
+		arguments []string
+		depth     int
+		start     int
+	)
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case '\'', '"', '`':
+			i = endOfJSString(args, i)
+		case '{', '[', '(':
+			depth++
+		case '}', ']', ')':
+			depth--
+		case ',':
+			if depth == 0 {
+				arguments = append(arguments, strings.TrimSpace(args[start:i]))
+				start = i + 1
+			}
+		}
+	}
+
+	return append(arguments, strings.TrimSpace(args[start:]))
+}
+
+// jsStringLiteral returns the contents of s when the whole of it is a single
+// string literal, and an empty string otherwise. A literal that only prefixes a
+// larger expression ("/books/" + segment) or a template with an interpolation
+// is not statically resolvable, as the value it ends up with is unknown.
+func jsStringLiteral(s string) string {
+	if s == "" || !isJSQuote(s[0]) {
+		return ""
+	}
+
+	end := endOfJSString(s, 0)
+	if end != len(s)-1 {
+		return ""
+	}
+
+	contents := s[1:end]
+	if s[0] == '`' && hasJSInterpolation(contents) {
+		return ""
+	}
+
+	return contents
+}
+
+// hasJSInterpolation reports whether the contents of a template literal hold a
+// substitution.
+func hasJSInterpolation(contents string) bool {
+	for i := 0; i+1 < len(contents); i++ {
+		switch contents[i] {
+		case '\\':
+			i++
+		case '$':
+			if contents[i+1] == '{' {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// jsObjectKeyPattern matches the key of the named member of an object literal
+// in every legal property key form: name, 'name', ["name"]. The value of the
+// member is the source that follows the match.
+func jsObjectKeyPattern(name string) *regexp.Regexp {
+	return regexp.MustCompile(
+		`(?:\b` + name + `|['"]` + name + `['"]|\[\s*['"\x60]` + name + `['"\x60]\s*\])\s*:\s*`)
+}
+
+// jsObjectMemberValue returns the source of the value of the object literal
+// member whose key matches key, or an empty string when there is no such
+// member. The value ends at the comma separating it from the next member or at
+// the closing brace of the object.
+func jsObjectMemberValue(object string, key *regexp.Regexp) string {
+	loc := key.FindStringIndex(object)
+	if loc == nil {
+		return ""
+	}
+
+	value := object[loc[1]:]
+
+	depth := 0
+	for i := 0; i < len(value); i++ {
+		switch value[i] {
+		case '\'', '"', '`':
+			i = endOfJSString(value, i)
+		case '{', '[', '(':
+			depth++
+		case ']', ')':
+			depth--
+		case '}':
+			if depth == 0 {
+				return strings.TrimSpace(value[:i])
+			}
+			depth--
+		case ',':
+			if depth == 0 {
+				return strings.TrimSpace(value[:i])
+			}
+		}
+	}
+
+	return strings.TrimSpace(value)
 }
 
 func (e *RouteExtractor) handleHTTPDispatcher(filePath, line string, lineNum int) bool {
@@ -859,7 +1313,9 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 	e.nestCtrlVersions = nil
 	e.pendingNestVersions = nil
 	e.pendingNestMethod = nil
+	e.nestRouteVariants = 0
 	e.inEnableVersioning = false
+	e.urlPatternCall = nil
 
 	for scanner.Scan() {
 		lineNum++
@@ -954,6 +1410,11 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 			}
 		}
 
+		// URL Pattern web API
+		if e.handleURLPattern(filePath, line, lineNum) {
+			continue
+		}
+
 		// HttpDispatcher
 		if e.handleHTTPDispatcher(filePath, line, lineNum) {
 			continue
@@ -968,8 +1429,10 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 		save = line
 	}
 
-	// the file may end while a method decorator stack is still buffered
+	// the file may end while a method decorator stack or a URLPattern call is
+	// still buffered
 	e.flushNestMethod()
+	e.flushURLPattern()
 
 	if err := scanner.Err(); err != nil {
 		return err

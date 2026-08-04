@@ -75,10 +75,13 @@ func (pt *PathTrie) cleanup(path string) string {
 // Insert adds a path to the trie and returns the normalized path
 // If a segment exceeds maxCardinality, it collapses to "*"
 func (pt *PathTrie) Insert(path string) string {
+	path = pt.cleanup(path)
+	if pt.maxCardinality <= 0 {
+		return path
+	}
+
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
-
-	path = pt.cleanup(path)
 
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) == 0 || (len(segments) == 1 && segments[0] == "") {

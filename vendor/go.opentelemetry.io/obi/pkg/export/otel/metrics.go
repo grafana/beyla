@@ -958,10 +958,14 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			} else if mr.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType) {
 				genAIClientDuration, attrs := r.genAIClientDuration.ForRecord(span)
 				genAIClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-				genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)
-				genAIInputTokenUsage.Record(ctx, float64(span.GenAIInputTokens()), instrument.WithAttributeSet(attrs))
-				genAIOutputTokenUsage, attrs := r.genAIOutputTokenUsage.ForRecord(span)
-				genAIOutputTokenUsage.Record(ctx, float64(span.GenAIOutputTokens()), instrument.WithAttributeSet(attrs))
+				if tokens, reported := span.GenAIInputTokenCount(); reported {
+					genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)
+					genAIInputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+				}
+				if tokens, reported := span.GenAIOutputTokenCount(); reported {
+					genAIOutputTokenUsage, attrs := r.genAIOutputTokenUsage.ForRecord(span)
+					genAIOutputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+				}
 			} else if mr.is.HTTPEnabled() {
 				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
 				httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
@@ -970,8 +974,33 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 				httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
 				httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
 			}
-		case request.EventTypeRedisServer, request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeMongoClient, request.EventTypeCouchbaseClient, request.EventTypeMemcachedClient, request.EventTypeMemcachedServer, request.EventTypeAerospikeClient:
-			if mr.is.DBEnabled() {
+		case request.EventTypeRedisServer, request.EventTypeRedisClient:
+			if mr.is.RedisEnabled() {
+				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeSQLClient:
+			if mr.is.SQLEnabled() {
+				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeMongoClient:
+			if mr.is.MongoEnabled() {
+				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeCouchbaseClient:
+			if mr.is.CouchbaseEnabled() {
+				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
+			if mr.is.MemcachedEnabled() {
+				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeAerospikeClient:
+			if mr.is.AerospikeEnabled() {
 				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
 				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 			}

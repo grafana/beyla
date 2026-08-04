@@ -144,6 +144,7 @@ type AttrSelector struct {
 var exactIncludeOnlyAttrs = map[attr.Name]struct{}{
 	attr.GenAIToolCallArguments: {},
 	attr.GenAIToolCallResult:    {},
+	attr.GenAIResponseError:     {},
 }
 
 // NewAttrSelector returns an AttrSelector instance based on the user-provided attributes Selection

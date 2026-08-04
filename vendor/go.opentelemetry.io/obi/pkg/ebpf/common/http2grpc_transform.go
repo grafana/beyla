@@ -164,16 +164,77 @@ func knownFrameKeys(fr *http2.Framer, hf *http2.HeadersFrame) bool {
 	return knownCount > 1
 }
 
-func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool) {
+// hpackFieldStart is the offset of the first header field in frag, past the dynamic table size
+// updates a block may open with. Negative when the block holds no field.
+func hpackFieldStart(frag []byte) int {
+	const (
+		sizeUpdate     = 0x20
+		sizeUpdateMask = 0xe0
+		intPrefix5     = 0x1f
+		more           = 0x80
+	)
+
+	i := 0
+	for i < len(frag) && frag[i]&sizeUpdateMask == sizeUpdate {
+		if frag[i]&intPrefix5 != intPrefix5 {
+			i++
+			continue
+		}
+		i++
+		for i < len(frag) && frag[i]&more != 0 {
+			i++
+		}
+		i++
+	}
+
+	if i >= len(frag) {
+		return -1
+	}
+
+	return i
+}
+
+// A block opening with :status is a response. Indexed forms carry the whole field; literal
+// forms reference only the name, and every static entry 8-14 names :status.
+func hpackOpensResponse(frag []byte) bool {
+	const (
+		statusFirst = 8
+		statusLast  = 14
+		indexed     = 0x80
+		formMask    = 0x40 | 0x10
+	)
+
+	i := hpackFieldStart(frag)
+	if i < 0 {
+		return false
+	}
+
+	b := frag[i]
+	if b&indexed != 0 {
+		idx := b &^ byte(indexed)
+		return idx >= statusFirst && idx <= statusLast
+	}
+
+	idx := b &^ byte(formMask)
+	if idx < statusFirst || idx > statusLast {
+		return false
+	}
+
+	// 0x50 is not a literal prefix, so the form must be checked, not just the index
+	return b&formMask != formMask
+}
+
+func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Framer, hf *http2.HeadersFrame) (string, string, string, bool, bool) {
 	h2c := getOrInitH2Conn(parseContext.h2c, connID)
 
 	ok := false
+	isResponse := false
 	method := ""
 	path := ""
 	contentType := ""
 
 	if h2c == nil {
-		return method, path, contentType, ok
+		return method, path, contentType, ok, isResponse
 	}
 
 	h2c.hdec.SetEmitFunc(func(hf bhpack.HeaderField) {
@@ -184,6 +245,9 @@ func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Fram
 		case ":path":
 			path = hf.Value
 			ok = true
+		case ":status":
+			// only responses carry :status — this HEADERS was misread as a request start
+			isResponse = true
 		case "content-type":
 			contentType = hf.Value
 			if contentType == "application/grpc" {
@@ -197,9 +261,16 @@ func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Fram
 	defer h2c.hdec.Close()
 
 	frag := hf.HeaderBlockFragment()
+
+	// HPACK state is per direction. Decoding a response block with the request decoder
+	// desyncs its dynamic table against the peer's, so every later index resolves wrong.
+	if hpackOpensResponse(frag) {
+		return method, path, contentType, ok, true
+	}
+
 	for {
 		if _, err := h2c.hdec.Write(frag); err != nil {
-			return method, path, contentType, ok
+			return method, path, contentType, ok, isResponse
 		}
 		if hf.HeadersEnded() {
 			break
@@ -215,7 +286,7 @@ func readMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.Fram
 		frag = cf.HeaderBlockFragment()
 	}
 
-	return method, path, contentType, ok
+	return method, path, contentType, ok, isResponse
 }
 
 func http2grpcStatus(status int) int {
@@ -401,7 +472,10 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 
 		if ff, ok := f.(*http2.HeadersFrame); ok {
 			rok := false
-			method, path, contentType, ok := readMetaFrame(parseContext, connID, framer, ff)
+			method, path, contentType, ok, isResponse := readMetaFrame(parseContext, connID, framer, ff)
+			if isResponse {
+				return request.Span{}, true, nil // response HEADERS misread as a request start
+			}
 			fullPath := path
 			if pos := strings.Index(path, "?"); pos >= 0 {
 				path = path[:pos]

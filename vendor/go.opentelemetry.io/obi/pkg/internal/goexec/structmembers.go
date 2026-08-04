@@ -166,6 +166,12 @@ const (
 	RuntimeHeapStatsDeltaLargeAllocCountPos
 	RuntimeHeapStatsDeltaSmallAllocCountPos
 	RuntimeHeapStatsDeltaSmallFreeCountPos
+	RuntimeSchedNgSysPos
+	RuntimeSchedGFreeStackPos
+	RuntimeSchedGFreeNoStackPos
+	RuntimePFreeGPos
+	RuntimeGListSizePos
+	RuntimeGCControllerHeapGoalPos
 )
 
 //go:embed offsets.json
@@ -177,6 +183,33 @@ type structInfo struct {
 	lib string
 	// fields of the struct as key, and the name of the constant defined in the eBPF code as value
 	fields map[string]GoOffset
+}
+
+type nestedStructField struct {
+	parentType  string
+	parentField string
+	childField  string
+	offset      GoOffset
+}
+
+const (
+	runtimePointerSize = 8
+	runtimeInt32Size   = 4
+)
+
+var nestedRuntimeFields = []nestedStructField{
+	{
+		parentType:  "runtime.schedt",
+		parentField: "gFree",
+		childField:  "stack",
+		offset:      RuntimeSchedGFreeStackPos,
+	},
+	{
+		parentType:  "runtime.schedt",
+		parentField: "gFree",
+		childField:  "noStack",
+		offset:      RuntimeSchedGFreeNoStackPos,
+	},
 }
 
 // level-1 key = Struct type name and its containing library
@@ -571,6 +604,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"memoryLimit": RuntimeGCControllerMemoryLimitPos,
 			"gcPercent":   RuntimeGCControllerGCPercentPos,
+			"heapGoal":    RuntimeGCControllerHeapGoalPos,
 		},
 	},
 	"runtime.workType": {
@@ -607,6 +641,24 @@ var structMembers = map[string]structInfo{
 			"largeAllocCount": RuntimeHeapStatsDeltaLargeAllocCountPos,
 			"smallAllocCount": RuntimeHeapStatsDeltaSmallAllocCountPos,
 			"smallFreeCount":  RuntimeHeapStatsDeltaSmallFreeCountPos,
+		},
+	},
+	"runtime.schedt": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"ngsys": RuntimeSchedNgSysPos,
+		},
+	},
+	"runtime.p": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"gFree": RuntimePFreeGPos,
+		},
+	},
+	"runtime.gList": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"size": RuntimeGListSizePos,
 		},
 	},
 }
@@ -736,8 +788,15 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 		version, ok := libVersions[strInfo.lib]
 		version = cleanLibVersion(version, ok, strInfo.lib, log)
 		for fieldName, constantName := range strInfo.fields {
+			if _, found := fieldOffsets[constantName]; found {
+				continue
+			}
+
 			// look the version of the required field in the offsets.json memory copy
 			offset, ok := offs.Find(strName, fieldName, version)
+			if constantName == RuntimeGCControllerHeapGoalPos {
+				offset, ok = prefetchedGoRuntimeGCGoalOffset(offs, version)
+			}
 			if !ok {
 				log.Debug("can't find offsets for field",
 					"lib", strInfo.lib, "name", strName, "field", fieldName, "version", version)
@@ -747,7 +806,81 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 			fieldOffsets[constantName] = offset
 		}
 	}
+	version, ok := libVersions["go"]
+	resolveNestedStructPreFetchedOffsets(
+		offs, fieldOffsets, cleanLibVersion(version, ok, "go", log), log,
+	)
 	return fieldOffsets, nil
+}
+
+func prefetchedGoRuntimeGCGoalOffset(offs *offsets.Track, goVersion string) (uint64, bool) {
+	field, ok := offs.Data["runtime.gcControllerState"]["heapGoal"]
+	if !ok {
+		return 0, false
+	}
+
+	target, err := version.NewVersion(goVersion)
+	if err != nil {
+		return 0, false
+	}
+	newest, err := version.NewVersion(field.Versions.Newest)
+	if err != nil || target.GreaterThan(newest) {
+		return 0, false
+	}
+
+	return field.GetOffset(goVersion)
+}
+
+func resolveNestedStructPreFetchedOffsets(
+	offs *offsets.Track,
+	fieldOffsets FieldOffsets,
+	goVersion string,
+	log *slog.Logger,
+) {
+	if _, stackOK := fieldOffsets[RuntimeSchedGFreeStackPos]; stackOK {
+		if _, noStackOK := fieldOffsets[RuntimeSchedGFreeNoStackPos]; noStackOK {
+			return
+		}
+	}
+
+	gFreeOff, ok := offs.Find("runtime.schedt", "gFree", goVersion)
+	if !ok {
+		log.Debug("can't derive nested runtime offsets",
+			"missing_field", "runtime.schedt.gFree", "go_version", goVersion)
+		return
+	}
+	mutexKeyOff, ok := offs.Find("runtime.mutex", "key", goVersion)
+	if !ok {
+		log.Debug("can't derive nested runtime offsets",
+			"missing_field", "runtime.mutex.key", "go_version", goVersion)
+		return
+	}
+	gListSizeOff, ok := offs.Find("runtime.gList", "size", goVersion)
+	if !ok {
+		log.Debug("can't derive nested runtime offsets",
+			"missing_field", "runtime.gList.size", "go_version", goVersion)
+		return
+	}
+
+	mutexSize := alignRuntimeOffset(mutexKeyOff+runtimePointerSize, runtimePointerSize)
+	gListSize := alignRuntimeOffset(gListSizeOff+runtimeInt32Size, runtimePointerSize)
+	stackOff := gFreeOff + mutexSize
+	noStackOff := stackOff + gListSize
+	if _, ok := fieldOffsets[RuntimeSchedGFreeStackPos]; !ok {
+		log.Debug("found nested offset", "fieldName", "gFree.stack", "offset", stackOff)
+		fieldOffsets[RuntimeSchedGFreeStackPos] = stackOff
+	}
+	if _, ok := fieldOffsets[RuntimeSchedGFreeNoStackPos]; !ok {
+		log.Debug("found nested offset", "fieldName", "gFree.noStack", "offset", noStackOff)
+		fieldOffsets[RuntimeSchedGFreeNoStackPos] = noStackOff
+	}
+}
+
+func alignRuntimeOffset(offset, alignment uint64) uint64 {
+	if alignment == 0 || offset%alignment == 0 {
+		return offset
+	}
+	return offset + alignment - offset%alignment
 }
 
 // structMemberOffsetsFromDwarf reads the executable dwarf information to get
@@ -759,6 +892,9 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 		for _, ctName := range str.fields {
 			expectedReturns[ctName] = struct{}{}
 		}
+	}
+	for _, field := range nestedRuntimeFields {
+		expectedReturns[field.offset] = struct{}{}
 	}
 	log.Debug("searching offests for field constants", "constants", expectedReturns)
 
@@ -777,22 +913,75 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 			continue
 		}
 		attrs := getAttrs(entry)
-		typeName, ok := attrs[dwarf.AttrName]
+		typeName, ok := attrs[dwarf.AttrName].(string)
 		if !ok {
 			reader.SkipChildren()
 			continue
 		}
-		structMember, ok := structMembers[typeName.(string)]
+		structMember, ok := structMembers[typeName]
 		if !ok {
 			reader.SkipChildren()
 			continue
 		}
 		log.Debug("inspecting fields for struct type", "type", typeName)
+		resolveNestedStructOffsets(data, entry.Offset, typeName, expectedReturns, fieldOffsets)
 		if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
 			log.Debug("error reading DWARF info", "type", typeName, "error", err)
 			return fieldOffsets, expectedReturns
 		}
 	}
+}
+
+func resolveNestedStructOffsets(
+	data *dwarf.Data,
+	typeOffset dwarf.Offset,
+	typeName string,
+	expectedReturns map[GoOffset]struct{},
+	offsets FieldOffsets,
+) {
+	var fields []nestedStructField
+	for _, field := range nestedRuntimeFields {
+		if field.parentType == typeName {
+			fields = append(fields, field)
+		}
+	}
+	if len(fields) == 0 {
+		return
+	}
+
+	typeInfo, err := data.Type(typeOffset)
+	if err != nil {
+		return
+	}
+	parent, ok := typeInfo.(*dwarf.StructType)
+	if !ok {
+		return
+	}
+	for _, field := range fields {
+		parentField := dwarfStructFieldByName(parent, field.parentField)
+		if parentField == nil {
+			continue
+		}
+		child, ok := parentField.Type.(*dwarf.StructType)
+		if !ok {
+			continue
+		}
+		childField := dwarfStructFieldByName(child, field.childField)
+		if childField == nil {
+			continue
+		}
+		offsets[field.offset] = uint64(parentField.ByteOffset + childField.ByteOffset)
+		delete(expectedReturns, field.offset)
+	}
+}
+
+func dwarfStructFieldByName(structType *dwarf.StructType, name string) *dwarf.StructField {
+	for _, field := range structType.Field {
+		if field.Name == name {
+			return field
+		}
+	}
+	return nil
 }
 
 type dwarfReader interface {

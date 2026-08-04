@@ -87,6 +87,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 
 	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, "tracerEvents")
 
+	logDeprecationAndConflicts(pf.cfg)
 	configCriteria := FindingCriteria(pf.cfg)
 	var appDynamicSelector *dynamicPIDSignalView
 	if startConfig.dynamicPIDSelector != nil {

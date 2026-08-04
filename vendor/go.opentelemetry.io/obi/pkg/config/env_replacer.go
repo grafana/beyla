@@ -11,6 +11,15 @@ import (
 
 var envVarRegex = regexp.MustCompile(`\$?\$[\{\(](?:env:)?([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}\)]*))?[\}\)]`)
 
+// EscapeEnv escapes substitution tokens so one ReplaceEnv pass preserves them.
+func EscapeEnv(content []byte) []byte {
+	return envVarRegex.ReplaceAllFunc(content, func(match []byte) []byte {
+		escaped := make([]byte, 0, len(match)+1)
+		escaped = append(escaped, '$')
+		return append(escaped, match...)
+	})
+}
+
 func ReplaceEnv(content []byte) []byte {
 	// Process normal environment variable substitutions
 	return envVarRegex.ReplaceAllFunc(content, func(match []byte) []byte {

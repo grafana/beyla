@@ -143,12 +143,6 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		}
 	}
 
-	routesCfg := t.cfg.Routes
-	wildcard := byte('*')
-	if routesCfg.WildcardChar != "" {
-		wildcard = routesCfg.WildcardChar[0]
-	}
-
 	s := svc.Attrs{
 		UID: svc.UID{
 			Name:      name,
@@ -159,11 +153,53 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		DynamicSelectorPID: processMatch.DynamicSelectorPID,
 		ExportModes:        exportModes,
 		Sampler:            samplerFromConfig(samplerConfig),
-		PathTrie:           clusterurl.NewPathTrie(routesCfg.MaxPathSegmentCardinality, wildcard),
 		Features:           svcFeatures,
 		LogEnricherEnabled: processMatch.LogEnricherEnabled(),
 	}
 
+	routesCfg := t.cfg.Routes
+	if routesCfg != nil && routesCfg.Directional != nil {
+		policies := routesCfg.DirectionalPolicies()
+		var overrides *services.DirectionalRoutePolicyOverrides
+		if routesConfig != nil {
+			overrides = routesConfig.PolicyOverrides
+		}
+		if routesCfg.DirectionalRuleOnly {
+			if overrides == nil {
+				return s
+			}
+			if overrides.Incoming != nil {
+				s.IncomingRoutePolicy = svc.NewRoutePolicy(
+					overrides.Incoming.Apply(policies.Incoming))
+			}
+			if overrides.Outgoing != nil {
+				s.OutgoingRoutePolicy = svc.NewRoutePolicy(
+					overrides.Outgoing.Apply(policies.Outgoing))
+			}
+			return s
+		}
+		if overrides != nil && overrides.Incoming != nil {
+			s.IncomingRoutePolicy = svc.NewRoutePolicy(overrides.Incoming.Apply(policies.Incoming))
+		} else if routesCfg.HasIncomingPolicy() {
+			s.IncomingPathTrie = svc.NewRoutePathTrie(policies.Incoming)
+		}
+		if overrides != nil && overrides.Outgoing != nil {
+			s.OutgoingRoutePolicy = svc.NewRoutePolicy(overrides.Outgoing.Apply(policies.Outgoing))
+		} else if routesCfg.HasOutgoingPolicy() {
+			s.OutgoingPathTrie = svc.NewRoutePathTrie(policies.Outgoing)
+		}
+		return s
+	}
+
+	wildcard := byte('*')
+	maxPathSegmentCardinality := 0
+	if routesCfg != nil {
+		maxPathSegmentCardinality = routesCfg.MaxPathSegmentCardinality
+		if routesCfg.WildcardChar != "" {
+			wildcard = routesCfg.WildcardChar[0]
+		}
+	}
+	s.PathTrie = clusterurl.NewPathTrie(maxPathSegmentCardinality, wildcard)
 	if routesConfig != nil {
 		s.SetCustomRoutes(routesConfig)
 	}

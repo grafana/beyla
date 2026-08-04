@@ -38,6 +38,10 @@ func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
 	if strings.HasSuffix(moduleName, "/node") || moduleName == "node" {
 		return svc.InstrumentableNodejs
 	}
+	if strings.HasSuffix(moduleName, "/deno") || moduleName == "deno" {
+		// For JavaScript, OTEL semantic conventions only defines telemetry.sdk.language=nodejs
+		return svc.InstrumentableNodejs
+	}
 	if rubyModule.MatchString(moduleName) {
 		return svc.InstrumentableRuby
 	}

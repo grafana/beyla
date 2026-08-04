@@ -42,6 +42,8 @@ type GoRuntimeMetricSnapshot struct {
 	MemoryUsedOther   *int64
 	MemoryAllocated   *uint64
 	MemoryAllocations *uint64
+	GoroutineCount    *int64
+	MemoryGCGoal      *int64
 }
 
 type GoRuntimeCPUTimeSnapshot struct {
@@ -160,6 +162,8 @@ type goRuntimeMetricRawSnapshot struct {
 	MemoryUsedOther       int64
 	MemoryAllocated       uint64
 	MemoryAllocations     uint64
+	GoroutineCount        int64
+	MemoryGCGoal          uint64
 }
 
 // Mirrors go_runtime_metric_valid_t in bpf/gotracer/maps/runtime.h.
@@ -172,6 +176,8 @@ const (
 	goRuntimeMetricValidCPUTime        uint64 = 1 << 4
 	goRuntimeMetricValidMemoryUsed     uint64 = 1 << 5
 	goRuntimeMetricValidMemoryAllocs   uint64 = 1 << 6
+	goRuntimeMetricValidGoroutineCount uint64 = 1 << 9
+	goRuntimeMetricValidMemoryGCGoal   uint64 = 1 << 10
 )
 
 func SnapshotFromRingbuf(
@@ -277,6 +283,16 @@ func convertGoRuntimeMetricSnapshot(
 		memoryAllocated = &raw.MemoryAllocated
 		memoryAllocations = &raw.MemoryAllocations
 	}
+	var goroutineCount *int64
+	if raw.ValidMask&goRuntimeMetricValidGoroutineCount != 0 && raw.GoroutineCount > 0 {
+		goroutineCount = &raw.GoroutineCount
+	}
+	var memoryGCGoal *int64
+	if raw.ValidMask&goRuntimeMetricValidMemoryGCGoal != 0 &&
+		raw.MemoryGCGoal > 0 && raw.MemoryGCGoal <= math.MaxInt64 {
+		value := int64(raw.MemoryGCGoal)
+		memoryGCGoal = &value
+	}
 
 	return RuntimeMetricSnapshot{
 		Service: service,
@@ -292,6 +308,8 @@ func convertGoRuntimeMetricSnapshot(
 			MemoryUsedOther:   memoryUsedOther,
 			MemoryAllocated:   memoryAllocated,
 			MemoryAllocations: memoryAllocations,
+			GoroutineCount:    goroutineCount,
+			MemoryGCGoal:      memoryGCGoal,
 		},
 	}
 }

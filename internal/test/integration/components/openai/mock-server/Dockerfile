@@ -1,6 +1,6 @@
 # Build the mock OpenAI server binary
 # Docker command must be invoked from the project root directory
-FROM golang:1.26.5@sha256:3aff6657219a4d9c14e27fb1d8976c49c29fddb70ba835014f477e1c70636647 AS builder
+FROM golang:1.26.5@sha256:2005724102f45917a63e9d092fc0e4ea56ea575048ce147caad5f5f61502c365 AS builder
 
 ARG TARGETARCH
 
@@ -15,7 +15,7 @@ COPY main.go main.go
 RUN go build -o openai-mock main.go
 
 # Create final image from minimal + built binary
-FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 WORKDIR /
 COPY --from=builder /src/openai-mock .

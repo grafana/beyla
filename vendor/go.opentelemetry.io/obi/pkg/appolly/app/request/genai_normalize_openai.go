@@ -269,6 +269,70 @@ func normalizeOpenAIResponsesOutput(raw json.RawMessage) string {
 	return string(b)
 }
 
+// normalizeOpenAIResponsesInput converts the OpenAI Responses API `input`
+// array to the semconv input messages schema. The array is heterogeneous:
+// "message" items carry conversation turns, "function_call" items carry the
+// model's tool calls, and "function_call_output" items carry the tool results
+// sent back to the model. Preserving all three keeps output-only stateful
+// continuations (previous_response_id / Conversation) visible in
+// gen_ai.input.messages. Unknown item types are dropped.
+func normalizeOpenAIResponsesInput(raw json.RawMessage) string {
+	var items []struct {
+		Type      string          `json:"type"`
+		Role      string          `json:"role"`
+		Content   json.RawMessage `json:"content"`
+		CallID    string          `json:"call_id"`
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+		Output    json.RawMessage `json:"output"`
+	}
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return string(raw)
+	}
+
+	out := make([]normalizedMessage, 0, len(items))
+	for i := range items {
+		item := &items[i]
+		switch item.Type {
+		case "function_call":
+			out = append(out, normalizedMessage{
+				Role: "assistant",
+				Parts: []normalizedPart{{
+					Type:      "tool_call",
+					ID:        item.CallID,
+					Name:      item.Name,
+					Arguments: item.Arguments,
+				}},
+			})
+		case "function_call_output":
+			var resp any
+			if len(item.Output) > 0 {
+				_ = json.Unmarshal(item.Output, &resp)
+			}
+			out = append(out, normalizedMessage{
+				Role: "tool",
+				Parts: []normalizedPart{{
+					Type:     "tool_call_response",
+					ID:       item.CallID,
+					Response: resp,
+				}},
+			})
+		case "", "message":
+			parts := openAIContentToParts(item.Content)
+			if len(parts) == 0 {
+				continue
+			}
+			out = append(out, normalizedMessage{Role: item.Role, Parts: parts})
+		}
+	}
+
+	b, err := json.Marshal(out)
+	if err != nil {
+		return string(raw)
+	}
+	return string(b)
+}
+
 func normalizeOpenAIChoices(raw json.RawMessage) string {
 	var choices []struct {
 		Message struct {

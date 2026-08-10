@@ -4,6 +4,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 The structure and content of this file follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.28.3] - unreleased
+### Fixed
+- JSONPath slices support negative ranges correctly now and the slice
+  end values are exclusive to match the JSONPath specification.
+
 ## [1.28.2] - 2026-07-05
 ### Fixed
 - JSONPath parsing performance improved thanks to @trevorprater.

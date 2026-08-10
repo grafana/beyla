@@ -11,26 +11,41 @@ import (
 )
 
 type PidServiceTracker struct {
-	pidToService map[app.PID]svc.UID
-	servicePIDs  map[svc.UID]map[app.PID]struct{}
-	lock         sync.Mutex
-	names        map[svc.ServiceNameNamespace]svc.UID
+	pidToService   map[app.PID]svc.UID
+	pidGenerations map[app.PID]uint64
+	servicePIDs    map[svc.UID]map[app.PID]struct{}
+	terminatedPIDs map[app.PID]pidServiceGeneration
+	lock           sync.Mutex
+	names          map[svc.ServiceNameNamespace]svc.UID
+}
+
+type pidServiceGeneration struct {
+	uid        svc.UID
+	generation uint64
 }
 
 func NewPidServiceTracker() PidServiceTracker {
 	return PidServiceTracker{
-		pidToService: map[app.PID]svc.UID{},
-		servicePIDs:  map[svc.UID]map[app.PID]struct{}{},
-		lock:         sync.Mutex{},
-		names:        map[svc.ServiceNameNamespace]svc.UID{},
+		pidToService:   map[app.PID]svc.UID{},
+		pidGenerations: map[app.PID]uint64{},
+		servicePIDs:    map[svc.UID]map[app.PID]struct{}{},
+		terminatedPIDs: map[app.PID]pidServiceGeneration{},
+		lock:           sync.Mutex{},
+		names:          map[svc.ServiceNameNamespace]svc.UID{},
 	}
 }
 
 func (p *PidServiceTracker) AddPID(pid app.PID, uid svc.UID) {
+	p.AddPIDWithGeneration(pid, uid, 0)
+}
+
+func (p *PidServiceTracker) AddPIDWithGeneration(pid app.PID, uid svc.UID, generation uint64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
+	delete(p.terminatedPIDs, pid)
 	p.pidToService[pid] = uid
+	p.pidGenerations[pid] = generation
 
 	pids, ok := p.servicePIDs[uid]
 	if !ok {
@@ -49,6 +64,8 @@ func (p *PidServiceTracker) RemovePID(pid app.PID) (bool, svc.UID) {
 	uid, ok := p.pidToService[pid]
 	if ok {
 		delete(p.pidToService, pid)
+		p.terminatedPIDs[pid] = pidServiceGeneration{uid: uid, generation: p.pidGenerations[pid]}
+		delete(p.pidGenerations, pid)
 
 		if pids, exists := p.servicePIDs[uid]; exists {
 			delete(pids, pid)
@@ -72,6 +89,24 @@ func (p *PidServiceTracker) TracksPID(pid app.PID) (svc.UID, bool) {
 	u, ok := p.pidToService[pid]
 
 	return u, ok
+}
+
+func (p *PidServiceTracker) PIDLiveOrUnknown(pid app.PID, uid svc.UID, generation uint64) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	if trackedUID, ok := p.pidToService[pid]; ok {
+		if !trackedUID.Equals(&uid) {
+			return false
+		}
+		trackedGeneration := p.pidGenerations[pid]
+		return trackedGeneration == 0 || generation == 0 || trackedGeneration == generation
+	}
+	terminatedProcess, terminated := p.terminatedPIDs[pid]
+	if !terminated || !terminatedProcess.uid.Equals(&uid) {
+		return true
+	}
+	return generation != 0 && terminatedProcess.generation != generation
 }
 
 func (p *PidServiceTracker) ReplaceUID(staleUID, newUID svc.UID) {

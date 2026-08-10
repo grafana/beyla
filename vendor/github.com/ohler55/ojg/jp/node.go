@@ -254,44 +254,17 @@ func (x Expr) GetNodes(n gen.Node) (results []gen.Node) {
 				}
 			}
 		case Slice:
-			start := 0
-			end := maxEnd
-			step := 1
-			if 0 < len(tf) {
-				start = tf[0]
-			}
-			if 1 < len(tf) {
-				end = tf[1]
-			}
-			if 2 < len(tf) {
-				step = tf[2]
+			if tv, ok := prev.(gen.Array); ok {
+				start, end, step := tf.startEndStep(len(tv))
 				if step == 0 {
 					continue
 				}
-			}
-			if tv, ok := prev.(gen.Array); ok {
-				if start < 0 {
-					start = len(tv) + start
-					if start < 0 {
-						start = 0
-					}
-				}
-				if end < 0 {
-					end = len(tv) + end
-				}
-				if len(tv) <= start {
-					continue
-				}
-				if len(tv) < end {
-					end = len(tv)
-				}
 				if 0 < step {
 					if int(fi) == len(x)-1 { // last one
-						for i := start; i < end; i += step {
+						for i := start; i <= end; i += step {
 							results = append(results, tv[i])
 						}
 					} else {
-						end = start + (end-start-1)/step*step
 						for i := end; start <= i; i -= step {
 							v = tv[i]
 							switch v.(type) {
@@ -301,15 +274,11 @@ func (x Expr) GetNodes(n gen.Node) (results []gen.Node) {
 						}
 					}
 				} else {
-					if end < -1 {
-						end = -1
-					}
 					if int(fi) == len(x)-1 { // last one
-						for i := start; end < i; i += step {
+						for i := start; end <= i; i += step {
 							results = append(results, tv[i])
 						}
 					} else {
-						end = start - (start-end-1)/step*step
 						for i := end; i <= start; i -= step {
 							v = tv[i]
 							switch v.(type) {
@@ -528,42 +497,16 @@ func (x Expr) FirstNode(n gen.Node) (result gen.Node) {
 				}
 			}
 		case Slice:
-			start := 0
-			end := maxEnd
-			step := 1
-			if 0 < len(tf) {
-				start = tf[0]
-			}
-			if 1 < len(tf) {
-				end = tf[1]
-			}
-			if 2 < len(tf) {
-				step = tf[2]
+			if tv, ok := prev.(gen.Array); ok {
+				start, end, step := tf.startEndStep(len(tv))
 				if step == 0 {
 					continue
 				}
-			}
-			if tv, ok := prev.(gen.Array); ok {
-				if start < 0 {
-					start = len(tv) + start
-					if start < 0 {
-						start = 0
-					}
-				}
-				if len(tv) <= start {
-					continue
-				}
-				if end < 0 {
-					end = len(tv) + end
-				}
-				if len(tv) < end {
-					end = len(tv)
-				}
 				if 0 < step {
-					if int(fi) == len(x)-1 && start < end { // last one
+					if int(fi) == len(x)-1 && start <= end { // last one
 						return tv[start]
 					}
-					end = start + (end-start-1)/step*step
+					end = start + (end-start)/step*step
 					for i := end; start <= i; i -= step {
 						v = tv[i]
 						switch v.(type) {
@@ -572,13 +515,10 @@ func (x Expr) FirstNode(n gen.Node) (result gen.Node) {
 						}
 					}
 				} else {
-					if end < -1 {
-						end = -1
-					}
-					if int(fi) == len(x)-1 && end < start { // last one
+					if int(fi) == len(x)-1 && end <= start { // last one
 						return tv[start]
 					}
-					end = start - (start-end-1)/step*step
+					end = start + (start-end)/step*step
 					for i := end; i <= start; i -= step {
 						v = tv[i]
 						switch v.(type) {

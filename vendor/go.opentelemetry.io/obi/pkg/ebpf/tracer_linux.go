@@ -34,12 +34,16 @@ import (
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
 type instrumenter struct {
-	offsets     *goexec.Offsets
-	exe         *link.Executable
-	closables   []io.Closer
-	modules     map[uint64]struct{}
-	metrics     imetrics.Reporter
-	processName string
+	key                         ExecutableKey
+	references                  uint64
+	offsets                     *goexec.Offsets
+	exe                         *link.Executable
+	closables                   []io.Closer
+	optionalGoProbeGroupClosers []io.Closer
+	processScopedGoProbes       []processScopedGoProbeRegistration
+	modules                     map[uint64]struct{}
+	metrics                     imetrics.Reporter
+	processName                 string
 }
 
 func loadSpec(eventContext *common.EBPFEventContext, bundle *common.SpecBundle, otelBPFFSPath string, idx int, cache *btf.Cache) error {
@@ -79,12 +83,14 @@ func unloadInternalMaps(eventContext *common.EBPFEventContext) {
 
 func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, cfg *obi.Config, metrics imetrics.Reporter) *ProcessTracer {
 	return &ProcessTracer{
-		Programs:        programs,
-		Type:            tracerType,
-		Instrumentables: map[uint64]*instrumenter{},
-		shutdownTimeout: cfg.ShutdownTimeout,
-		metrics:         metrics,
-		bpffsPath:       cfg.EBPF.BPFFSPath,
+		Programs:                  programs,
+		Type:                      tracerType,
+		Instrumentables:           map[ExecutableKey]*instrumenter{},
+		instrumentableGenerations: map[ExecutableKey]uint64{},
+		goInstrumentablesByInode:  map[uint64]*instrumenter{},
+		shutdownTimeout:           cfg.ShutdownTimeout,
+		metrics:                   metrics,
+		bpffsPath:                 cfg.EBPF.BPFFSPath,
 	}
 }
 
@@ -313,7 +319,11 @@ func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext, cfg *obi.Co
 }
 
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
-	if i, ok := pt.Instrumentables[ie.FileInfo.Ino()]; ok {
+	key := ExecutableKey{Dev: ie.FileInfo.Dev(), Ino: ie.FileInfo.Ino()}
+	pt.instrumentablesMu.Lock()
+	defer pt.instrumentablesMu.Unlock()
+
+	if i, ok := pt.Instrumentables[key]; ok {
 		maps, err := processMaps(ie.FileInfo.Pid())
 		if err != nil {
 			return err
@@ -338,13 +348,24 @@ func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
 }
 
 func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
+	if pt.reuseGoInstrumenter(ie) {
+		return nil
+	}
+
 	i := instrumenter{
+		key:         ExecutableKey{Dev: ie.FileInfo.Dev(), Ino: ie.FileInfo.Ino()},
 		exe:         exe,
 		offsets:     ie.Offsets, // this is needed for the function offsets, not fields
 		modules:     map[uint64]struct{}{},
 		metrics:     pt.metrics,
 		processName: ie.FileInfo.ExecutableName(),
 	}
+	committed := false
+	defer func() {
+		if !committed {
+			i.rollbackOptionalGoProbeGroups()
+		}
+	}()
 
 	maps, err := processMaps(ie.FileInfo.Pid())
 	if err != nil {
@@ -372,29 +393,131 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 		}
 	}
 
-	pt.Instrumentables[ie.FileInfo.Ino()] = &i
+	pt.commitInstrumenter(&i, ie)
+	committed = true
 
 	return nil
 }
 
-func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo) {
-	if i, ok := pt.Instrumentables[info.Ino()]; ok {
-		for _, c := range i.closables {
-			if err := c.Close(); err != nil {
-				pt.log.Debug("Unable to close on unlink", "closable", c)
-			}
-		}
-		for ino := range i.modules {
-			for _, p := range pt.Programs {
-				p.UnlinkInstrumentedLib(ino)
-			}
-		}
-		delete(pt.Instrumentables, info.Ino())
-	} else {
+func (pt *ProcessTracer) commitInstrumenter(i *instrumenter, ie *Instrumentable) {
+	pt.instrumentablesMu.Lock()
+	defer pt.instrumentablesMu.Unlock()
+
+	if previous := pt.Instrumentables[i.key]; previous != nil {
+		pt.removeInstrumenterReference(i.key, previous)
+	}
+	if pt.Instrumentables == nil {
+		pt.Instrumentables = map[ExecutableKey]*instrumenter{}
+	}
+	if pt.goInstrumentablesByInode == nil {
+		pt.goInstrumentablesByInode = map[uint64]*instrumenter{}
+	}
+
+	pt.Instrumentables[i.key] = i
+	i.references++
+	if pt.Type == Go {
+		pt.goInstrumentablesByInode[i.key.Ino] = i
+	}
+	ie.ExecutableGeneration = pt.recordExecutableGeneration(i.key)
+	i.registerProcessScopedGoProbes(i.key)
+}
+
+func (pt *ProcessTracer) reuseGoInstrumenter(ie *Instrumentable) bool {
+	if pt.Type != Go {
+		return false
+	}
+
+	key := ExecutableKey{Dev: ie.FileInfo.Dev(), Ino: ie.FileInfo.Ino()}
+	pt.instrumentablesMu.Lock()
+	defer pt.instrumentablesMu.Unlock()
+
+	i := pt.goInstrumentablesByInode[key.Ino]
+	if i == nil {
+		return false
+	}
+
+	if previous := pt.Instrumentables[key]; previous != nil {
+		pt.removeInstrumenterReference(key, previous)
+	}
+	pt.Instrumentables[key] = i
+	i.references++
+	ie.ExecutableGeneration = pt.recordExecutableGeneration(key)
+	i.registerProcessScopedGoProbes(key)
+
+	return true
+}
+
+func (pt *ProcessTracer) recordExecutableGeneration(key ExecutableKey) uint64 {
+	pt.nextExecutableGeneration++
+	if pt.nextExecutableGeneration == 0 {
+		pt.nextExecutableGeneration++
+	}
+	if pt.instrumentableGenerations == nil {
+		pt.instrumentableGenerations = map[ExecutableKey]uint64{}
+	}
+	pt.instrumentableGenerations[key] = pt.nextExecutableGeneration
+
+	return pt.nextExecutableGeneration
+}
+
+func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo, generation uint64) {
+	key := ExecutableKey{Dev: info.Dev(), Ino: info.Ino()}
+	pt.instrumentablesMu.Lock()
+	defer pt.instrumentablesMu.Unlock()
+
+	i, ok := pt.Instrumentables[key]
+	if !ok {
 		pt.log.Warn("Unable to find executable to unlink",
 			"path", info.CmdExePath(),
 			"pid", info.Pid(),
 			"inode", info.Ino())
+		return
+	}
+	currentGeneration := pt.instrumentableGenerations[key]
+	if currentGeneration != generation {
+		pt.log.Debug("Ignoring stale executable unlink",
+			"path", info.CmdExePath(),
+			"pid", info.Pid(),
+			"inode", info.Ino(),
+			"generation", generation,
+			"current_generation", currentGeneration)
+		return
+	}
+
+	pt.removeInstrumenterReference(key, i)
+}
+
+func (pt *ProcessTracer) removeInstrumenterReference(key ExecutableKey, i *instrumenter) {
+	for _, p := range pt.Programs {
+		if processScopedTracer, ok := p.(processScopedGoProbeTracer); ok {
+			processScopedTracer.UnregisterProcessScopedGoProbes(key.Dev, key.Ino)
+		}
+	}
+	delete(pt.Instrumentables, key)
+	delete(pt.instrumentableGenerations, key)
+
+	if i.references > 0 {
+		i.references--
+	}
+	if i.references != 0 {
+		return
+	}
+	if pt.goInstrumentablesByInode[i.key.Ino] == i {
+		delete(pt.goInstrumentablesByInode, i.key.Ino)
+	}
+	pt.unlinkInstrumenter(i)
+}
+
+func (pt *ProcessTracer) unlinkInstrumenter(i *instrumenter) {
+	for _, c := range i.closables {
+		if err := c.Close(); err != nil {
+			pt.log.Debug("Unable to close on unlink", "closable", c)
+		}
+	}
+	for ino := range i.modules {
+		for _, p := range pt.Programs {
+			p.UnlinkInstrumentedLib(ino)
+		}
 	}
 }
 

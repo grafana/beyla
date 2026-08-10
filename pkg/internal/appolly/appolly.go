@@ -181,7 +181,7 @@ func (i *Instrumenter) instrumentedEventLoop(ctx context.Context, processEvents 
 				log.Debug("stopping ProcessTracer because there are no more instances of such process",
 					"inode", dp.FileInfo.Ino, "pid", dp.FileInfo.Pid, "exec", dp.FileInfo.CmdExePath)
 				if dp.Tracer != nil {
-					dp.Tracer.UnlinkExecutable(dp.FileInfo)
+					dp.Tracer.UnlinkExecutable(dp.FileInfo, dp.ExecutableGeneration)
 				}
 				i.handleAndDispatchProcessEvent(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: dp.FileInfo})
 			case obiDiscover.EventInstanceDeleted:

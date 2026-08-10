@@ -109,7 +109,7 @@ func (f Descent) locate(pp Expr, data any, rest Expr, max int) (locs []Expr) {
 	default:
 		rd := reflect.ValueOf(data)
 		rt := rd.Type()
-		if rt.Kind() == reflect.Ptr {
+		if rt.Kind() == reflect.Pointer {
 			rt = rt.Elem()
 			rd = rd.Elem()
 		}

@@ -181,7 +181,7 @@ func newFinfo(f *reflect.StructField, key string, fx byte) *finfo {
 	case reflect.Struct:
 		fi.value = valJustVal
 		fi.ivalue = valJustVal
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if (fx & omitMask) != 0 {
 			fi.value = valPtrNotEmpty
 			fi.ivalue = valPtrNotEmpty

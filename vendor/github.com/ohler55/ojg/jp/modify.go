@@ -538,160 +538,117 @@ done:
 				}
 			}
 		case Slice:
-			start := 0
-			end := -1
-			step := 1
-			if 0 < len(tf) {
-				start = tf[0]
-			}
-			if 1 < len(tf) {
-				end = tf[1]
-			}
-			if 2 < len(tf) {
-				step = tf[2]
-			}
 			switch tv := prev.(type) {
 			case []any:
-				if start < 0 {
-					start = len(tv) + start
-				}
-				if end < 0 {
-					end = len(tv) + end
-				}
-				if len(tv) <= end {
-					end = len(tv) - 1
-				}
-				if start < 0 || end < 0 || len(tv) <= start || step == 0 {
-					continue
-				}
-				if 0 < step {
-					for i := start; i <= end; i += step {
-						v = tv[i]
-						if int(fi) == len(wx)-1 { // last one
-							if nv, changed := modifier(v); changed {
-								tv[i] = nv
-								if one && changed {
-									break done
+				if start, end, step := tf.startEndStep(len(tv)); step != 0 {
+					if 0 < step {
+						for i := start; i <= end; i += step {
+							v = tv[i]
+							if int(fi) == len(wx)-1 { // last one
+								if nv, changed := modifier(v); changed {
+									tv[i] = nv
+									if one && changed {
+										break done
+									}
 								}
-							}
-						} else {
-							switch v.(type) {
-							case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
-								stack = append(stack, v)
+							} else {
+								switch v.(type) {
+								case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
+									stack = append(stack, v)
+								}
 							}
 						}
-					}
-				} else {
-					for i := start; end <= i; i += step {
-						v = tv[i]
-						if int(fi) == len(wx)-1 { // last one
-							if nv, changed := modifier(v); changed {
-								tv[i] = nv
-								if one && changed {
-									break done
+					} else {
+						for i := start; end <= i; i += step {
+							v = tv[i]
+							if int(fi) == len(wx)-1 { // last one
+								if nv, changed := modifier(v); changed {
+									tv[i] = nv
+									if one && changed {
+										break done
+									}
 								}
-							}
-						} else {
-							switch v.(type) {
-							case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
-								stack = append(stack, v)
+							} else {
+								switch v.(type) {
+								case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
+									stack = append(stack, v)
+								}
 							}
 						}
 					}
 				}
 			case Indexed:
-				size := tv.Size()
-				if start < 0 {
-					start = size + start
-				}
-				if end < 0 {
-					end = size + end
-				}
-				if size <= end {
-					end = size - 1
-				}
-				if start < 0 || end < 0 || size <= start || step == 0 {
-					continue
-				}
-				if 0 < step {
-					for i := start; i <= end; i += step {
-						v = tv.ValueAtIndex(i)
-						if int(fi) == len(wx)-1 { // last one
-							if nv, changed := modifier(v); changed {
-								tv.SetValueAtIndex(i, nv)
-								if one && changed {
-									break done
+				if start, end, step := tf.startEndStep(tv.Size()); step != 0 {
+					if 0 < step {
+						for i := start; i <= end; i += step {
+							v = tv.ValueAtIndex(i)
+							if int(fi) == len(wx)-1 { // last one
+								if nv, changed := modifier(v); changed {
+									tv.SetValueAtIndex(i, nv)
+									if one && changed {
+										break done
+									}
 								}
-							}
-						} else {
-							switch v.(type) {
-							case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
-								stack = append(stack, v)
+							} else {
+								switch v.(type) {
+								case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
+									stack = append(stack, v)
+								}
 							}
 						}
-					}
-				} else {
-					for i := start; end <= i; i += step {
-						v = tv.ValueAtIndex(i)
-						if int(fi) == len(wx)-1 { // last one
-							if nv, changed := modifier(v); changed {
-								tv.SetValueAtIndex(i, nv)
-								if one && changed {
-									break done
+					} else {
+						for i := start; end <= i; i += step {
+							v = tv.ValueAtIndex(i)
+							if int(fi) == len(wx)-1 { // last one
+								if nv, changed := modifier(v); changed {
+									tv.SetValueAtIndex(i, nv)
+									if one && changed {
+										break done
+									}
 								}
-							}
-						} else {
-							switch v.(type) {
-							case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
-								stack = append(stack, v)
+							} else {
+								switch v.(type) {
+								case map[string]any, []any, gen.Object, gen.Array, Keyed, Indexed:
+									stack = append(stack, v)
+								}
 							}
 						}
 					}
 				}
 			case gen.Array:
-				if start < 0 {
-					start = len(tv) + start
-				}
-				if end < 0 {
-					end = len(tv) + end
-				}
-				if len(tv) <= end {
-					end = len(tv) - 1
-				}
-				if start < 0 || end < 0 || len(tv) <= start || step == 0 {
-					continue
-				}
-				if 0 < step {
-					for i := start; i <= end; i += step {
-						if int(fi) == len(wx)-1 { // last one
-							if nv, changed := modifier(tv[i]); changed {
-								tv[i] = nv.(gen.Node)
-								if one && changed {
-									break done
+				if start, end, step := tf.startEndStep(len(tv)); step != 0 {
+					if 0 < step {
+						for i := start; i <= end; i += step {
+							if int(fi) == len(wx)-1 { // last one
+								if nv, changed := modifier(tv[i]); changed {
+									tv[i] = nv.(gen.Node)
+									if one && changed {
+										break done
+									}
 								}
-							}
-						} else {
-							v = tv[i]
-							switch v.(type) {
-							case gen.Object, gen.Array:
-								stack = append(stack, v)
+							} else {
+								v = tv[i]
+								switch v.(type) {
+								case gen.Object, gen.Array:
+									stack = append(stack, v)
+								}
 							}
 						}
-					}
-				} else {
-					for i := start; end <= i; i += step {
-						if int(fi) == len(wx)-1 { // last one
-							if nv, changed := modifier(tv[i]); changed {
-								tv[i] = nv.(gen.Node)
-								if one && changed {
-									break done
+					} else {
+						for i := start; end <= i; i += step {
+							if int(fi) == len(wx)-1 { // last one
+								if nv, changed := modifier(tv[i]); changed {
+									tv[i] = nv.(gen.Node)
+									if one && changed {
+										break done
+									}
 								}
-							}
-						} else {
-							v = tv[i]
-							switch v.(type) {
-							case gen.Object, gen.Array:
-								stack = append(stack, v)
+							} else {
+								v = tv[i]
+								switch v.(type) {
+								case gen.Object, gen.Array:
+									stack = append(stack, v)
+								}
 							}
 						}
 					}
@@ -700,43 +657,32 @@ done:
 				if int(fi) == len(wx)-1 {
 					rv := reflect.ValueOf(tv)
 					if rv.Kind() == reflect.Slice {
-						cnt := rv.Len()
-						if start < 0 {
-							start = cnt + start
-						}
-						if end < 0 {
-							end = cnt + end
-						}
-						if cnt <= end {
-							end = cnt - 1
-						}
-						if start < 0 || end < 0 || cnt <= start || step == 0 {
-							continue
-						}
-						if 0 < step {
-							for i := start; i <= end; i += step {
-								iv := rv.Index(i)
-								if nv, changed := modifier(iv.Interface()); changed {
-									iv.Set(reflect.ValueOf(nv))
-									if one && changed {
-										break done
+						if start, end, step := tf.startEndStep(rv.Len()); step != 0 {
+							if 0 < step {
+								for i := start; i <= end; i += step {
+									iv := rv.Index(i)
+									if nv, changed := modifier(iv.Interface()); changed {
+										iv.Set(reflect.ValueOf(nv))
+										if one && changed {
+											break done
+										}
 									}
 								}
-							}
-						} else {
-							for i := start; end <= i; i += step {
-								iv := rv.Index(i)
-								if nv, changed := modifier(iv.Interface()); changed {
-									iv.Set(reflect.ValueOf(nv))
-									if one && changed {
-										break done
+							} else {
+								for i := start; end <= i; i += step {
+									iv := rv.Index(i)
+									if nv, changed := modifier(iv.Interface()); changed {
+										iv.Set(reflect.ValueOf(nv))
+										if one && changed {
+											break done
+										}
 									}
 								}
 							}
 						}
 					}
 				} else {
-					for _, v = range reflectGetSlice(tv, start, end, step) {
+					for _, v := range reflectGetSlice(tv, tf) {
 						stack = stackAddValue(stack, v)
 					}
 				}
@@ -924,7 +870,7 @@ func stackAddValue(stack []any, v any) []any {
 			kind = rt.Kind()
 		}
 		switch kind {
-		case reflect.Ptr, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
+		case reflect.Pointer, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
 			stack = append(stack, v)
 		}
 	}
@@ -945,7 +891,7 @@ func descentAddValue(stack []any, v any, fi fragIndex) []any {
 			kind = rt.Kind()
 		}
 		switch kind {
-		case reflect.Ptr, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
+		case reflect.Pointer, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
 			stack = append(stack, v)
 		}
 	}

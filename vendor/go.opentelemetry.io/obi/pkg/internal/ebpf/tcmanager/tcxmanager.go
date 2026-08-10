@@ -22,12 +22,22 @@ type attachedProg struct {
 	*ebpf.Program
 	attachType AttachmentType
 	name       string
+	closeFn    func() error
+}
+
+func (p *attachedProg) Close() error {
+	return closeWith(p.closeFn, p.Program)
 }
 
 type ifaceLink struct {
 	link.Link
 	progName string
 	iface    int
+	closeFn  func() error
+}
+
+func (l *ifaceLink) Close() error {
+	return closeWith(l.closeFn, l.Link)
 }
 
 type tcxManager struct {
@@ -39,22 +49,26 @@ type tcxManager struct {
 	addedCallbackID   uint64
 	removedCallbackID uint64
 	errorCallbackID   uint64
-	errorCh           chan error
+	errors            errorReporter
+	attachProgramFn   func(*attachedProg, int)
+	shutdown          bool
 }
 
 func NewTCXManager() TCManager {
-	return &tcxManager{
+	tcx := &tcxManager{
 		ifaceManager: nil,
 		programs:     []*attachedProg{},
 		links:        []*ifaceLink{},
 		log:          slog.With("component", "tcx_manager"),
 		mutex:        sync.Mutex{},
-		errorCh:      make(chan error),
+		errors:       newErrorReporter(),
 	}
+	tcx.attachProgramFn = tcx.attachProgramToIfaceLocked
+	return tcx
 }
 
 func (tcx *tcxManager) Errors() chan error {
-	return tcx.errorCh
+	return tcx.errors.ch
 }
 
 func (tcx *tcxManager) emitError(msg string, args ...any) {
@@ -63,17 +77,17 @@ func (tcx *tcxManager) emitError(msg string, args ...any) {
 	formattedArgs := fmt.Sprint(args...)
 	compositeError := fmt.Errorf("%s: %s", msg, formattedArgs)
 
-	tcx.errorCh <- compositeError
+	tcx.errors.enqueue(compositeError)
 }
 
 func (tcx *tcxManager) SetInterfaceManager(im *InterfaceManager) {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
 
-	if tcx.ifaceManager != nil {
-		tcx.ifaceManager.RemoveCallback(tcx.addedCallbackID)
-		tcx.ifaceManager.RemoveCallback(tcx.removedCallbackID)
-		tcx.ifaceManager.RemoveCallback(tcx.errorCallbackID)
+	tcx.unregisterCallbacksLocked()
+
+	if tcx.shutdown {
+		return
 	}
 
 	if im != nil {
@@ -83,6 +97,17 @@ func (tcx *tcxManager) SetInterfaceManager(im *InterfaceManager) {
 	}
 
 	tcx.ifaceManager = im
+}
+
+func (tcx *tcxManager) unregisterCallbacksLocked() {
+	if tcx.ifaceManager == nil {
+		return
+	}
+
+	tcx.ifaceManager.RemoveCallback(tcx.addedCallbackID)
+	tcx.ifaceManager.RemoveCallback(tcx.removedCallbackID)
+	tcx.ifaceManager.RemoveCallback(tcx.errorCallbackID)
+	tcx.ifaceManager = nil
 }
 
 func tcxAttachType(attachment AttachmentType) (ebpf.AttachType, error) {
@@ -102,16 +127,15 @@ func (tcx *tcxManager) Shutdown() {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
 
-	if tcx.ifaceManager != nil {
-		for _, iface := range tcx.ifaceManager.Interfaces() {
-			tcx.closeLinksLocked(iface)
-		}
+	if tcx.shutdown {
+		return
 	}
+	tcx.shutdown = true
 
-	tcx.programs = []*attachedProg{}
-	tcx.links = []*ifaceLink{}
-
-	close(tcx.errorCh)
+	tcx.unregisterCallbacksLocked()
+	tcx.cleanupLinksLocked()
+	tcx.cleanupProgsLocked()
+	tcx.errors.close()
 
 	tcx.log.Debug("TCX completed shutdown")
 }
@@ -119,6 +143,9 @@ func (tcx *tcxManager) Shutdown() {
 func (tcx *tcxManager) AddProgram(name string, prog *ebpf.Program, attachment AttachmentType) {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
+	if tcx.shutdown {
+		return
+	}
 
 	p := &attachedProg{
 		Program:    prog,
@@ -143,6 +170,9 @@ func (tcx *tcxManager) attachProgramLocked(prog *attachedProg) {
 func (tcx *tcxManager) RemoveProgram(name string) {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
+	if tcx.shutdown {
+		return
+	}
 
 	tcx.unlinkProgramLocked(name)
 	tcx.removeProgramLocked(name)
@@ -211,15 +241,21 @@ func (tcx *tcxManager) attachProgramToIfaceLocked(prog *attachedProg, iface int)
 func (tcx *tcxManager) onInterfaceAdded(iface *ifaces.Interface) {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
+	if tcx.shutdown {
+		return
+	}
 
 	for _, prog := range tcx.programs {
-		tcx.attachProgramToIfaceLocked(prog, iface.Index)
+		tcx.attachProgramFn(prog, iface.Index)
 	}
 }
 
 func (tcx *tcxManager) onInterfaceRemoved(iface *ifaces.Interface) {
 	tcx.mutex.Lock()
 	defer tcx.mutex.Unlock()
+	if tcx.shutdown {
+		return
+	}
 
 	tcx.closeLinksLocked(iface)
 }
@@ -227,12 +263,37 @@ func (tcx *tcxManager) onInterfaceRemoved(iface *ifaces.Interface) {
 func (tcx *tcxManager) closeLinksLocked(iface *ifaces.Interface) {
 	closeLinks := func(link *ifaceLink) {
 		if link.iface == iface.Index {
-			link.Close()
+			if err := link.Close(); err != nil {
+				tcx.emitError("Failed to unlink program", "program", link.progName,
+					"iface", iface.Index, "error", err)
+			}
 		}
 	}
 
 	apply(tcx.links, closeLinks)
 	tcx.links = removeIf(tcx.links, func(l *ifaceLink) bool { return l.iface == iface.Index })
+}
+
+func (tcx *tcxManager) cleanupLinksLocked() {
+	for _, ifaceLink := range tcx.links {
+		if err := ifaceLink.Close(); err != nil {
+			tcx.emitError("Failed to unlink program", "program", ifaceLink.progName,
+				"iface", ifaceLink.iface, "error", err)
+		}
+	}
+
+	tcx.links = []*ifaceLink{}
+}
+
+func (tcx *tcxManager) cleanupProgsLocked() {
+	for _, prog := range tcx.programs {
+		tcx.log.Debug("closing tcx program", "name", prog.name)
+		if err := prog.Close(); err != nil {
+			tcx.emitError("Failed to close program", "program", prog.name, "error", err)
+		}
+	}
+
+	tcx.programs = []*attachedProg{}
 }
 
 func (tcx *tcxManager) onIfaceManagerError(err error) {

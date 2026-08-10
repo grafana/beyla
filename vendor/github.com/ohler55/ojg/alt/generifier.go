@@ -203,7 +203,7 @@ func reflectGenValue(rv reflect.Value, opt *Options) (v gen.Node) {
 		v = reflectGenComplex(rv, opt)
 	case reflect.Map:
 		v = reflectGenMap(rv, opt)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		v = reflectGenValue(rv.Elem(), opt)
 	case reflect.Slice, reflect.Array:
 		v = reflectGenArray(rv, opt)

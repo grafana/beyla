@@ -5,7 +5,17 @@
 
 package tcmanager // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
 
+import "io"
+
 const eNoDevMsg = "Interface no longer exists"
+
+func closeWith(override func() error, fallback io.Closer) error {
+	if override != nil {
+		return override()
+	}
+
+	return fallback.Close()
+}
 
 func removeIf[T any](s []T, pred func(T) bool) []T {
 	i := 0

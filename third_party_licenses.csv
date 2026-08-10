@@ -39,7 +39,6 @@ github.com/emicklei/go-restful/v3,https://github.com/grafana/beyla/blob/HEAD/ven
 github.com/evanphx/json-patch/v5,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/evanphx/json-patch/v5/LICENSE,BSD-3-Clause
 github.com/felixge/httpsnoop,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/felixge/httpsnoop/LICENSE.txt,MIT
 github.com/foxboron/go-tpm-keyfiles,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/foxboron/go-tpm-keyfiles/LICENSE,MIT
-github.com/fsnotify/fsnotify,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/fsnotify/fsnotify/LICENSE,BSD-3-Clause
 github.com/fxamacker/cbor/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/fxamacker/cbor/v2/LICENSE,MIT
 github.com/gabriel-vasile/mimetype,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/gabriel-vasile/mimetype/LICENSE,MIT
 github.com/go-logr/logr,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/go-logr/logr/LICENSE,Apache-2.0

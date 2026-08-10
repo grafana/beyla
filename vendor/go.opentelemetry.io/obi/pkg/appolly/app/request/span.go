@@ -517,6 +517,10 @@ type OpenAIInput struct {
 	Tools            json.RawMessage `json:"tools,omitempty"`
 	ServiceTier      string          `json:"service_tier,omitempty"`
 	Parameters       json.RawMessage `json:"parameters,omitempty"`
+	// InputItems retains the Responses API `input` array (function_call /
+	// function_call_output items), which cannot be held by the string Input
+	// field. Populated only for /v1/responses traffic.
+	InputItems json.RawMessage `json:"-"`
 }
 
 // ParameterDimension extracts the requested embedding dimension from the
@@ -550,6 +554,10 @@ func (air *OpenAIInput) GetStopSequences() []string {
 }
 
 func (air *OpenAIInput) GetInput() string {
+	if len(air.InputItems) > 0 {
+		return normalizeOpenAIResponsesInput(air.InputItems)
+	}
+
 	if len(air.Input) > 0 {
 		return wrapTextAsInputMessage(air.Input)
 	}

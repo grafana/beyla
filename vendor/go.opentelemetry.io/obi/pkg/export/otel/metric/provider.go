@@ -71,7 +71,7 @@ func (mp *MeterProvider) Meter(name string, options ...metric.MeterOption) metri
 	}
 
 	if mp.stopped.Load() {
-		return nil
+		return newMeter(instrumentation.Scope{Name: name}, nil)
 	}
 
 	c := metric.NewMeterConfig(options...)

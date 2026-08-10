@@ -8,7 +8,7 @@ data:
       kubernetes:
         enable: true
         resource_labels:
-          deployment.environment: ["deployment.environment"]
+          deployment.environment.name: ["deployment.environment.name"]
       select:
         process_*:
           include: ["*"]

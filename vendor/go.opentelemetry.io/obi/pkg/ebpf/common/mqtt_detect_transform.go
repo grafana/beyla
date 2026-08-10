@@ -134,6 +134,11 @@ func isValidMQTTPacket(info *MQTTInfo) bool {
 
 // processMQTTPacket processes a single MQTT packet based on its type.
 func processMQTTPacket(pkt []byte, startOffset int, packet *mqttparser.MQTTControlPacket) (*MQTTInfo, bool, error) {
+	if startOffset < 0 || startOffset > len(pkt) || packet.Length() > len(pkt)-startOffset {
+		return nil, true, errPacketTooShortForMQTT
+	}
+	pkt = pkt[:startOffset+packet.Length()]
+
 	// Variable header starts after fixed header
 	varHeaderOffset := startOffset + packet.FixedHeader.Length
 

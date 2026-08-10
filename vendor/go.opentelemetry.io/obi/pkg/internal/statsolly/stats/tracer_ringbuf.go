@@ -5,6 +5,7 @@ package stats // import "go.opentelemetry.io/obi/pkg/internal/statsolly/stats"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -28,27 +29,21 @@ func rtlog() *slog.Logger {
 type RingBufTracer struct {
 	statsMap *ciliumebpf.Map
 	cfg      *config.EBPFTracer
+	forward  func(context.Context, *msg.Queue[[]*ebpf.Stat])
 }
 
 func NewRingBufTracer(statsMap *ciliumebpf.Map, cfg *config.EBPFTracer) *RingBufTracer {
 	return &RingBufTracer{
 		statsMap: statsMap,
 		cfg:      cfg,
+		forward:  ebpfcommon.ForwardRingbuf(cfg, statsMap, parseStat, nil, rtlog(), nil),
 	}
 }
 
 func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Stat]) swarm.RunFunc {
-	forward := ebpfcommon.ForwardRingbuf(
-		m.cfg,
-		m.statsMap,
-		parseStat,
-		nil, // filter: no batch-level filtering
-		rtlog(),
-		nil, // metrics
-	)
 	return func(ctx context.Context) {
 		defer out.MarkCloseable()
-		forward(ctx, out)
+		m.forward(ctx, out)
 	}
 }
 
@@ -61,6 +56,10 @@ func parseStat(record *ringbuf.Record) (*ebpf.Stat, bool, error) {
 }
 
 func handleStatEvent(record *ringbuf.Record) (ebpf.Stat, error) {
+	if record == nil || len(record.RawSample) == 0 {
+		return ebpf.Stat{}, errors.New("empty stats event")
+	}
+
 	eventType := ebpf.StatType(record.RawSample[0])
 	switch eventType {
 	case ebpf.StatTypeTCPRtt:

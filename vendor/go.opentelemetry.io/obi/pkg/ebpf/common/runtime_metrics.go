@@ -23,7 +23,8 @@ type RuntimeMetricRecordHandler func(context.Context, *ringbuf.Record) (bool, er
 func IsGoRuntimeMetricRecord(record *ringbuf.Record) bool {
 	return record != nil &&
 		len(record.RawSample) > 0 &&
-		record.RawSample[0] == EventTypeGoRuntimeMetric
+		(record.RawSample[0] == EventTypeGoRuntimeMetric ||
+			record.RawSample[0] == EventTypeGoRuntimeHistogram)
 }
 
 func HandleRuntimeMetricsRecord(
@@ -40,7 +41,7 @@ func HandleRuntimeMetricsRecord(
 
 	eventType := record.RawSample[0]
 	switch eventType {
-	case EventTypeGoRuntimeMetric:
+	case EventTypeGoRuntimeMetric, EventTypeGoRuntimeHistogram:
 		if eventContext == nil || eventContext.RuntimeMetrics == nil {
 			return true, nil
 		}

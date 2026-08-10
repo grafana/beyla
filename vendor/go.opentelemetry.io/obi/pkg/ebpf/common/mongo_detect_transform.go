@@ -36,6 +36,8 @@ var (
 	errMongoNoSections                           = errors.New("no MongoDB sections found in the message")
 	errMongoNotEnoughDataForSectionType          = errors.New("not enough data for MongoDB section type")
 	errMongoNotEnoughDataForSectionLength        = errors.New("not enough data for MongoDB section length")
+	errMongoInvalidSectionLength                 = errors.New("invalid MongoDB section length")
+	errMongoInvalidBSONLength                    = errors.New("invalid MongoDB BSON length")
 	errMongoUnsupportedSectionType               = errors.New("unsupported MongoDB section type")
 	errMongoInvalidMessageLength                 = errors.New("invalid MongoDB message length")
 	errMongoInvalidRequestID                     = errors.New("invalid MongoDB request ID")
@@ -83,6 +85,7 @@ type mongoSection struct {
 const (
 	msgHeaderSize = 16
 	int32Size     = 4
+	minOpMsgSize  = msgHeaderSize + int32Size + 1 + int32Size + 1
 	// Flags https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#flag-bits
 
 	flagCheckSumPreset = 0x1 // indicates that the checksum is present
@@ -162,17 +165,24 @@ func ProcessMongoEvent(buf []uint8, startTime int64, endTime int64, connInfo Bpf
 	if err != nil {
 		return nil, false, err
 	}
+	partialCapture := len(buf) < int(header.MessageLength)
+	if messageLength := int(header.MessageLength); messageLength < len(buf) {
+		buf = buf[:messageLength]
+	}
 
 	isResponse := header.ResponseTo != 0
 	var pendingRequest *MongoRequestValue
 	var moreToCome bool
 	time := requestTime(isResponse, startTime, endTime)
 	key := makeRequestKey(isResponse, header, connInfo)
-	inFlightRequest, ok := requests.Get(key)
+	inFlightRequest, ok := requests.Peek(key)
 	if !ok && isResponse {
 		return nil, false, errMongoNoInFlightRequestForResponse
 	}
 	if isResponse && len(buf) == msgHeaderSize {
+		if header.OpCode != opMsg {
+			return nil, false, errMongoFailedToParseResponse
+		}
 		// TODO (mongo) currently the response is only the header, since the client sends only the first 16 bytes at first,
 		// we need to fix the tcp path to send the response body as well
 		// for now we just dont add response section
@@ -180,7 +190,7 @@ func ProcessMongoEvent(buf []uint8, startTime int64, endTime int64, connInfo Bpf
 		// If this is a response and there are no more sections to come, we can finalize the request
 		return inFlightRequest, false, nil
 	}
-	pendingRequest, moreToCome, err = parseMongoMessage(buf, *header, time, isResponse, inFlightRequest)
+	pendingRequest, moreToCome, err = parseMongoMessage(buf, *header, time, isResponse, inFlightRequest, partialCapture)
 	if err != nil {
 		return nil, false, errMongoFailedToParseResponse
 	}
@@ -189,16 +199,17 @@ func ProcessMongoEvent(buf []uint8, startTime int64, endTime int64, connInfo Bpf
 	}
 	if !moreToCome && isResponse {
 		// If this is a response and there are no more sections to come, we can finalize the request
+		requests.Get(key)
 		return pendingRequest, false, nil
 	}
 	requests.Add(key, pendingRequest)
 	return nil, true, nil
 }
 
-func parseMongoMessage(buf []uint8, hdr msgHeader, time int64, isResponse bool, pendingRequest *MongoRequestValue) (*MongoRequestValue, bool, error) {
+func parseMongoMessage(buf []uint8, hdr msgHeader, time int64, isResponse bool, pendingRequest *MongoRequestValue, partialCapture bool) (*MongoRequestValue, bool, error) {
 	switch hdr.OpCode {
 	case opMsg:
-		return parseOpMessage(buf, time, isResponse, pendingRequest)
+		return parseOpMessage(buf, time, isResponse, pendingRequest, partialCapture)
 	default:
 		return nil, false, errMongoUnsupportedOpCode
 	}
@@ -262,7 +273,7 @@ func addSectionToMessage(isResponse bool, pendingRequest *MongoRequestValue, sec
 // +------------+-------------+------------------+
 // |    16B      |     4B      |     ?     | optional 4B |
 // +------------+-------------+------------------+
-func parseOpMessage(buf []uint8, time int64, isResponse bool, pendingRequest *MongoRequestValue) (*MongoRequestValue, bool, error) {
+func parseOpMessage(buf []uint8, time int64, isResponse bool, pendingRequest *MongoRequestValue, partialCapture bool) (*MongoRequestValue, bool, error) {
 	if len(buf) < msgHeaderSize+int32Size {
 		return nil, false, errMongoPacketTooShortForFlagBits
 	}
@@ -276,7 +287,7 @@ func parseOpMessage(buf []uint8, time int64, isResponse bool, pendingRequest *Mo
 	if err != nil {
 		return nil, false, err
 	}
-	sections, err := parseSections(buf[msgHeaderSize+int32Size:])
+	sections, err := parseSections(buf[msgHeaderSize+int32Size:], partialCapture)
 	if err != nil {
 		return nil, false, errMongoFailedToParseSections
 	}
@@ -290,7 +301,7 @@ func parseOpMessage(buf []uint8, time int64, isResponse bool, pendingRequest *Mo
 	return pendingRequest, moreToCome, nil
 }
 
-func parseSections(buf []uint8) ([]mongoSection, error) {
+func parseSections(buf []uint8, partialCapture bool) ([]mongoSection, error) {
 	offSet := 0
 	var sections []mongoSection
 	for offSet < len(buf) {
@@ -304,7 +315,10 @@ func parseSections(buf []uint8) ([]mongoSection, error) {
 		switch sectionType {
 		// https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#kind-0--body
 		case sectionTypeBody:
-			doc, bodyLength := parseBodySection(buf[offSet:])
+			doc, bodyLength, err := parseBodySection(buf[offSet:], partialCapture)
+			if err != nil {
+				return nil, err
+			}
 			sections = append(sections, mongoSection{
 				Type: sectionType,
 				Body: doc,
@@ -318,7 +332,10 @@ func parseSections(buf []uint8) ([]mongoSection, error) {
 			if len(buf) < offSet+int32Size {
 				return nil, errMongoNotEnoughDataForSectionLength
 			}
-			length := int(binary.LittleEndian.Uint32(buf[offSet : offSet+int32Size]))
+			length := int(int32(binary.LittleEndian.Uint32(buf[offSet : offSet+int32Size])))
+			if length < int32Size+1 || length > len(buf)-offSet {
+				return nil, errMongoInvalidSectionLength
+			}
 			offSet += length
 			// TODO (mongo) actually read documents? for now we just skip them
 		default:
@@ -331,14 +348,20 @@ func parseSections(buf []uint8) ([]mongoSection, error) {
 	return sections, nil
 }
 
-func parseBodySection(buf []byte) (bson.D, int) {
+func parseBodySection(buf []byte, partialCapture bool) (bson.D, int, error) {
 	if len(buf) < int32Size {
-		return bson.D{}, len(buf)
+		return nil, 0, errMongoInvalidBSONLength
 	}
-	bodyLength := int(binary.LittleEndian.Uint32(buf[:int32Size]))
+	bodyLength := int(int32(binary.LittleEndian.Uint32(buf[:int32Size])))
+	if bodyLength < int32Size+1 {
+		return nil, 0, errMongoInvalidBSONLength
+	}
 
 	if len(buf) < bodyLength {
-		return bson.D{}, len(buf)
+		if !partialCapture {
+			return nil, 0, errMongoInvalidBSONLength
+		}
+		return bson.D{}, len(buf), nil
 	}
 
 	bodyData := buf[:bodyLength]
@@ -346,9 +369,9 @@ func parseBodySection(buf []byte) (bson.D, int) {
 	var doc bson.D
 	err := bson.Unmarshal(bodyData, &doc)
 	if err != nil {
-		return bson.D{}, bodyLength
+		return bson.D{}, bodyLength, nil
 	}
-	return doc, bodyLength
+	return doc, bodyLength, nil
 }
 
 func parseMongoHeader(pkt []byte) (*msgHeader, error) {
@@ -366,7 +389,7 @@ func parseMongoHeader(pkt []byte) (*msgHeader, error) {
 }
 
 func validateMsgHeader(header *msgHeader) error {
-	if header.MessageLength < msgHeaderSize {
+	if header.MessageLength <= msgHeaderSize || header.OpCode == opMsg && header.MessageLength < minOpMsgSize {
 		return errMongoInvalidMessageLength
 	}
 	if header.RequestID < 0 {

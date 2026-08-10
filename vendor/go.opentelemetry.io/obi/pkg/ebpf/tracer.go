@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -34,7 +35,8 @@ type Instrumentable struct {
 	Offsets  *goexec.Offsets
 	Tracer   *ProcessTracer
 
-	LogEnricherEnabled bool
+	LogEnricherEnabled   bool
+	ExecutableGeneration uint64
 }
 
 func (ie *Instrumentable) CopyToServiceAttributes() {
@@ -135,19 +137,29 @@ const (
 	Generic
 )
 
+// ExecutableKey identifies an executable across filesystems.
+type ExecutableKey struct {
+	Dev uint64
+	Ino uint64
+}
+
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
 // TODO: We need to pass the ELFInfo from this ProcessTracker to inside a Tracer
 // so that the GPU kernel event listener can find symbols names from addresses
 // in the ELF file.
 type ProcessTracer struct {
-	log             *slog.Logger
-	metrics         imetrics.Reporter
-	shutdownTimeout time.Duration
-	bpffsPath       string
+	log                       *slog.Logger
+	metrics                   imetrics.Reporter
+	shutdownTimeout           time.Duration
+	bpffsPath                 string
+	instrumentablesMu         sync.Mutex
+	nextExecutableGeneration  uint64
+	instrumentableGenerations map[ExecutableKey]uint64
+	goInstrumentablesByInode  map[uint64]*instrumenter
 
 	Type            ProcessTracerType
-	Instrumentables map[uint64]*instrumenter
+	Instrumentables map[ExecutableKey]*instrumenter
 	Programs        []Tracer
 }
 

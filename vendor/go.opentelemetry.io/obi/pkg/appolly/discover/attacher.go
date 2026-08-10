@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -44,10 +45,10 @@ type traceAttacher struct {
 	// processInstances keeps track of the instances of each process. This will help making sure
 	// that we don't remove the BPF resources of an executable until all their instances are removed
 	// are stopped
-	processInstances maps.MultiCounter[uint64]
+	processInstances maps.MultiCounter[ebpf.ExecutableKey]
 
 	// keeps a copy of all the tracers for a given executable path
-	existingTracers     map[uint64]*ebpf.ProcessTracer
+	existingTracers     map[ebpf.ExecutableKey]executableTracer
 	nodeInjector        *nodejs.NodeInjector
 	javaInjector        *javaagent.JavaInjector
 	reusableTracer      *ebpf.ProcessTracer
@@ -84,13 +85,22 @@ type traceAttacher struct {
 	DynamicPIDSelector *DynamicPIDSelector
 }
 
+type executableTracer struct {
+	tracer     *ebpf.ProcessTracer
+	generation uint64
+}
+
+func executableKey(fileInfo *exec.FileInfo) ebpf.ExecutableKey {
+	return ebpf.ExecutableKey{Dev: fileInfo.Dev(), Ino: fileInfo.Ino()}
+}
+
 func traceAttacherProvider(ta *traceAttacher) swarm.InstanceFunc {
 	return ta.attacherLoop
 }
 
 func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) {
 	ta.log = slog.With("component", "discover.traceAttacher")
-	ta.existingTracers = map[uint64]*ebpf.ProcessTracer{}
+	ta.existingTracers = map[ebpf.ExecutableKey]executableTracer{}
 	ta.nodeInjector = nodejs.NewNodeInjector(ta.Cfg)
 	javaInjector, err := javaagent.NewJavaInjector(ta.Cfg)
 	if err != nil {
@@ -98,7 +108,7 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	} else {
 		ta.javaInjector = javaInjector
 	}
-	ta.processInstances = maps.MultiCounter[uint64]{}
+	ta.processInstances = maps.MultiCounter[ebpf.ExecutableKey]{}
 	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.NewPIDsFilter(&ta.Cfg.Discovery, slog.With("component", "ebpfCommon.CommonPIDsFilter"), ta.Metrics)
 	if ta.RuntimeMetrics != nil {
 		ta.EbpfEventContext.RuntimeMetrics = runtimemetrics.NewQueueSender(ta.RuntimeMetrics)
@@ -127,7 +137,7 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 						}
 					}
 
-					ta.processInstances.Inc(instr.Obj.FileInfo.Ino())
+					ta.processInstances.Inc(executableKey(instr.Obj.FileInfo))
 					if ok := ta.getTracer(&instr.Obj); ok {
 						ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
 					}
@@ -145,7 +155,9 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 
 //nolint:cyclop
 func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
-	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino()]; ok {
+	key := executableKey(ie.FileInfo)
+	if existing, ok := ta.existingTracers[key]; ok {
+		tracer := existing.tracer
 		ta.log.Debug("new process for already instrumented executable",
 			"pid", ie.FileInfo.Pid(),
 			"child", ie.ChildPids,
@@ -263,7 +275,10 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 		"type", ie.Type)
 	// allowing the tracer to forward traces from the discovered PID and its children processes
 	ta.monitorPIDs(tracer, ie)
-	ta.existingTracers[ie.FileInfo.Ino()] = tracer
+	ta.existingTracers[key] = executableTracer{
+		tracer:     tracer,
+		generation: ie.ExecutableGeneration,
+	}
 	if tracer.Type == ebpf.Generic {
 		if ta.reusableTracer != nil {
 			ta.monitorPIDs(ta.reusableTracer, ie)
@@ -359,7 +374,10 @@ func (ta *traceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 		"language", ie.Type)
 
 	ta.monitorPIDs(tracer, ie)
-	ta.existingTracers[ie.FileInfo.Ino()] = tracer
+	ta.existingTracers[executableKey(ie.FileInfo)] = executableTracer{
+		tracer:     tracer,
+		generation: ie.ExecutableGeneration,
+	}
 	ta.Metrics.InstrumentProcess(ie.FileInfo.ExecutableName())
 
 	return true
@@ -455,7 +473,10 @@ func (ta *traceAttacher) unregisterDynamicFileInfo(ie *ebpf.Instrumentable) {
 
 func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 	ta.unregisterDynamicFileInfo(ie)
-	if tracer, ok := ta.existingTracers[ie.FileInfo.Ino()]; ok {
+	key := executableKey(ie.FileInfo)
+	if existing, ok := ta.existingTracers[key]; ok {
+		tracer := existing.tracer
+		ie.ExecutableGeneration = existing.generation
 		ta.log.Info("process ended for already instrumented executable",
 			"cmd", ie.FileInfo.CmdExePath(),
 			"pid", ie.FileInfo.Pid(),
@@ -475,8 +496,8 @@ func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		// if there are no more trace instances for a program, we need to notify that
 		// the tracer needs to be stopped and deleted.
 		// We don't remove kernel-based traces as there is only one tracer per host
-		if ta.processInstances.Dec(ie.FileInfo.Ino()) == 0 {
-			delete(ta.existingTracers, ie.FileInfo.Ino())
+		if ta.processInstances.Dec(key) == 0 {
+			delete(ta.existingTracers, key)
 			ie.Tracer = tracer
 			ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventDeleted, Obj: ie})
 		} else {

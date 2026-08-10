@@ -510,6 +510,20 @@
         ]
       }
     },
+    "go.opentelemetry.io/auto/sdk.span": {
+      "spanContext": {
+        "versions": {
+          "oldest": "1.1.0",
+          "newest": "1.2.1"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.1.0"
+          }
+        ]
+      }
+    },
     "go.opentelemetry.io/otel/trace.SpanContext": {
       "spanID": {
         "versions": {
@@ -1946,6 +1960,72 @@
           {
             "offset": 96,
             "since": "1.26.0"
+          }
+        ]
+      },
+      "stwTotalTimeGC": {
+        "versions": {
+          "oldest": "1.22.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 4224,
+            "since": "1.22.0"
+          },
+          {
+            "offset": 4248,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 4264,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "timeToRun": {
+        "versions": {
+          "oldest": "1.20.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 320,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 344,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 360,
+            "since": "1.26.0"
+          }
+        ]
+      }
+    },
+    "runtime.timeHistogram": {
+      "overflow": {
+        "versions": {
+          "oldest": "1.20.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 1288,
+            "since": "1.20.0"
+          }
+        ]
+      },
+      "underflow": {
+        "versions": {
+          "oldest": "1.20.0",
+          "newest": "1.26.5"
+        },
+        "offsets": [
+          {
+            "offset": 1280,
+            "since": "1.20.0"
           }
         ]
       }

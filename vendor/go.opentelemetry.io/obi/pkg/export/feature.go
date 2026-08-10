@@ -5,6 +5,7 @@ package export // import "go.opentelemetry.io/obi/pkg/export"
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/invopop/jsonschema"
@@ -64,23 +65,18 @@ var FeatureMapper = map[string]Features{
 	"application_service_graph":    FeatureGraph,
 	"application_host":             FeatureApplicationHost,
 	"application_runtime":          FeatureApplicationRuntime,
-	// Deprecated alias kept for v0.10 config compatibility.
-	"application_jvm": FeatureApplicationRuntime,
-	"ebpf":            FeatureEBPF,
-	"all":             FeatureAll,
-	"*":               FeatureAll,
+	"ebpf":                         FeatureEBPF,
+	"all":                          FeatureAll,
+	"*":                            FeatureAll,
 }
 
 func (Features) JSONSchema() *jsonschema.Schema {
-	features := make([]any, 0, len(FeatureMapper))
-
-	for k := range FeatureMapper {
-		// Keep application_jvm accepted for v0.10 config compatibility, but do not advertise it in generated docs.
-		if k == "application_jvm" {
-			continue
-		}
-		features = append(features, k)
+	names := validFeatureNames()
+	features := make([]any, 0, len(names)+1)
+	for _, name := range names {
+		features = append(features, name)
 	}
+	features = append(features, "*")
 	return &jsonschema.Schema{
 		Type: "array",
 		Items: &jsonschema.Schema{
@@ -100,16 +96,37 @@ var AppO11yFeatures = FeatureApplicationRED |
 	FeatureGraph |
 	FeatureApplicationHost
 
-func LoadFeatures(features []string) Features {
+func validFeatureNames() []string {
+	names := make([]string, 0, len(FeatureMapper))
+	for name := range FeatureMapper {
+		if name == "*" {
+			continue
+		}
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+func LoadFeatures(features []string) (Features, error) {
 	if len(features) == 0 {
-		return FeatureEmpty
+		return FeatureEmpty, nil
 	}
 	// convert the public data type to the internal representation
 	feats := Features(0)
 	for _, f := range features {
-		feats |= FeatureMapper[f]
+		name := strings.TrimSpace(f)
+		if name == "" {
+			continue
+		}
+		feature, ok := FeatureMapper[name]
+		if !ok {
+			return Features(0), fmt.Errorf("unknown metrics feature %q (valid features: %s)",
+				name, strings.Join(validFeatureNames(), ", "))
+		}
+		feats |= feature
 	}
-	return feats
+	return feats, nil
 }
 
 func (f Features) has(feature Features) bool {
@@ -132,12 +149,20 @@ func (f *Features) UnmarshalYAML(value *yaml.Node) error {
 		}
 		features = append(features, item.Value)
 	}
-	*f = LoadFeatures(features)
+	feats, err := LoadFeatures(features)
+	if err != nil {
+		return err
+	}
+	*f = feats
 	return nil
 }
 
 func (f *Features) UnmarshalText(text []byte) error {
-	*f = LoadFeatures(strings.Split(string(text), ","))
+	feats, err := LoadFeatures(strings.Split(string(text), ","))
+	if err != nil {
+		return err
+	}
+	*f = feats
 	return nil
 }
 

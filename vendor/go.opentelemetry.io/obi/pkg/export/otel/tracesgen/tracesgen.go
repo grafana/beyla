@@ -122,7 +122,10 @@ func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.N
 		if responseErrorSelected {
 			exportAttrs = append(slices.Clone(samplerAttrs), genAIResponseErrorControlKey.Bool(true))
 		}
-		group = append(group, TraceSpanAndAttributes{Span: span, Attributes: exportAttrs})
+		group = append(group, TraceSpanAndAttributes{
+			Span:       span,
+			Attributes: exportAttrs,
+		})
 		spanGroups[span.Service.UID] = group
 	}
 
@@ -257,11 +260,6 @@ func generateTracesWithAttributes(
 			appendSpanLinks(s, span.Links)
 		}
 		s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
-
-		// Create individual execute_tool child spans per tool call (OTel GenAI semconv compliance)
-		if toolCalls := getSpanToolCalls(span); len(toolCalls) > 0 {
-			createToolCallSpans(toolCalls, spanID, traceID, &ss, start, t.End)
-		}
 	}
 	return traces
 }
@@ -457,55 +455,6 @@ var (
 	messagingSystemAMQP = attribute.String(string(attr.MessagingSystem), "amqp")
 	spanMetricsSkip     = attribute.Bool(string(attr.SkipSpanMetrics), true)
 )
-
-// getSpanToolCalls extracts tool calls from a GenAI span regardless of vendor.
-func getSpanToolCalls(span *request.Span) []request.ToolCall {
-	if span.GenAI == nil {
-		return nil
-	}
-	switch {
-	case span.GenAI.OpenAI != nil:
-		return span.GenAI.OpenAI.ToolCalls
-	case span.GenAI.Anthropic != nil:
-		return span.GenAI.Anthropic.ToolCalls
-	case span.GenAI.Gemini != nil:
-		return span.GenAI.Gemini.ToolCalls
-	case span.GenAI.Qwen != nil:
-		return span.GenAI.Qwen.ToolCalls
-	case span.GenAI.Ollama != nil:
-		return span.GenAI.Ollama.ToolCalls
-	case span.GenAI.OpenAICompatible != nil:
-		return span.GenAI.OpenAICompatible.ToolCalls
-	default:
-		return nil
-	}
-}
-
-// createToolCallSpans creates individual execute_tool child spans for each tool call,
-// following the OTel GenAI semantic conventions where gen_ai.tool.name is a single string
-// per span rather than an aggregated string array.
-func createToolCallSpans(toolCalls []request.ToolCall, parentSpanID pcommon.SpanID, traceID pcommon.TraceID, ss *ptrace.ScopeSpans, start, end time.Time) {
-	for _, tc := range toolCalls {
-		if tc.Name == "" {
-			continue
-		}
-		sp := ss.Spans().AppendEmpty()
-		sp.SetName("execute_tool " + tc.Name)
-		sp.SetKind(ptrace.SpanKindInternal)
-		sp.SetTraceID(traceID)
-		sp.SetSpanID(pcommon.SpanID(idgen.RandomSpanID()))
-		sp.SetParentSpanID(parentSpanID)
-		sp.SetStartTimestamp(pcommon.NewTimestampFromTime(start))
-		sp.SetEndTimestamp(pcommon.NewTimestampFromTime(end))
-
-		attrs := sp.Attributes()
-		attrs.PutStr(string(semconv.GenAIOperationNameKey), "execute_tool")
-		attrs.PutStr(string(attr.GenAIToolName), tc.Name)
-		if tc.ID != "" {
-			attrs.PutStr(string(attr.GenAIToolCallID), tc.ID)
-		}
-	}
-}
 
 // mcpAttributes returns MCP span attributes following the OTEL MCP semantic conventions.
 // Tool call arguments and results are gated behind their own optionalAttrs

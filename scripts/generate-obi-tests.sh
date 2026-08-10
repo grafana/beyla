@@ -126,6 +126,33 @@ BEHAVIORAL_TRANSFORMS=(
     'image: obi-k8s-cache:dev|image: beyla-k8s-cache:dev'
 )
 
+# ---- Schema-only transforms: registry ↔ Beyla runtime naming ----------------
+# Applied AFTER BEHAVIORAL_TRANSFORMS and ONLY to the weaver registry
+# (schemas/obi/groups/*.yaml), so these corrections cannot leak into the
+# generated Go/YAML test files.
+#
+# Since weaver 0.25.1 (OBI cd0756833) the live-check filters live in
+# schemas/obi/.weaver.toml instead of the Go harness, and the old
+# advice-message ignore list — which used to swallow "does not exist in the
+# registry" advisories — is gone. A registry declaration that does not match
+# the signal Beyla actually emits is therefore now a hard violation.
+SCHEMA_TRANSFORMS=(
+    # Beyla exports OBI's internal ("meta") metrics under the "beyla" vendor
+    # prefix (pkg/beyla/config_obi.go: attr.VendorPrefix = "beyla"), so the
+    # registry must declare beyla.* metric names. The OBI registry declares
+    # them as obi.* because attr.VendorPrefix defaults to "obi" upstream.
+    'metric_name: obi\.|metric_name: beyla.'
+    'id: metric\.obi\.|id: metric.beyla.'
+
+    # ...but the build-info attribute keys are hardcoded "obi.version" /
+    # "obi.revision" in OBI (pkg/export/otel/metrics_internal.go:252) and are
+    # NOT derived from attr.VendorPrefix, so Beyla emits them unchanged. Undo
+    # the generic obi.version / obi.revision renames applied by
+    # BEHAVIORAL_TRANSFORMS, but only inside the registry.
+    'beyla\.version|obi.version'
+    'beyla\.revision|obi.revision'
+)
+
 # ---- Code injections (line inserted after a matching line in Go files) --------
 # For cases where a simple substitution isn't enough — e.g. overriding a value
 # returned by a vendored function, or adding a statement after a specific call.
@@ -418,6 +445,19 @@ transform_go_imports_and_paths() {
     if [[ -f "$OBI_DEST/http_go_otel_test.go" ]]; then
         sed_i -e 's|buildDockerImage(t\.Context(), t\.Output(), "hatest-testserver", "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")|buildDockerImageWithContext(t.Context(), t.Output(), "hatest-testserver", pathObiSrc, "internal/test/integration/components/go_otel/Dockerfile")|' \
             "$OBI_DEST/http_go_otel_test.go"
+    fi
+
+    # goautosdk fixtures: same situation as go_otel above. The Dockerfiles do
+    # `COPY internal/test/integration/components/goautosdk/...`, a path that
+    # only resolves inside .obi-src, so the build context must be pathObiSrc
+    # and the dockerfile literals must stay relative to that context (undo the
+    # ".obi-src/…" rewrite apply_go_import_path_transforms just applied).
+    if [[ -f "$OBI_DEST/go_auto_sdk_test.go" ]] \
+        && grep -q 'buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile)' "$OBI_DEST/go_auto_sdk_test.go"; then
+        sed_i \
+            -e 's|dockerfile: "\.obi-src/internal/test/integration/components/goautosdk/|dockerfile: "internal/test/integration/components/goautosdk/|g' \
+            -e 's|buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile)|buildDockerImageWithContext(t.Context(), t.Output(), version.image, pathObiSrc, version.dockerfile)|g' \
+            "$OBI_DEST/go_auto_sdk_test.go"
     fi
 
     # Component file paths: testserver, rusttestserver etc. live in .obi-src.
@@ -789,8 +829,12 @@ copy_schemas() {
 
 apply_schema_transforms() {
     local jobs="$1"
+    # apply_transforms builds one `sed -e …` per rule in array order, so the
+    # SCHEMA_TRANSFORMS rules operate on the output of the behavioral ones
+    # (that is what lets them undo the obi.version / obi.revision renames).
     find "$SCHEMAS_DEST/obi/groups" -name "*.yaml" -type f \
-        | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
+        | run_parallel "$jobs" apply_transforms \
+            "${BEHAVIORAL_TRANSFORMS[@]}" "${SCHEMA_TRANSFORMS[@]}"
 }
 
 # ---- Schema injections: registry override groups not (yet) in OBI ------------
@@ -892,6 +936,58 @@ groups:
               stability: development
         stability: development
         examples: [ "user", "system" ]
+EOF
+
+    # survey_info — a Beyla-only metric with no OBI counterpart.
+    #
+    # pkg/export/otel/metrics_survey.go emits `survey_info` (name from
+    # SurveyInfoMetricName in pkg/export/otel/common.go) for every process
+    # discovered via `discovery.survey` but NOT instrumented. OBI has no survey
+    # feature, so its registry declares no such group and weaver live-check
+    # reports "Metric does not exist in the registry" — which is fatal since
+    # weaver 0.25.1 moved the advice-message ignore list out of the Go harness.
+    # This is what fails the k8s daemonset suite (whose 06-obi-daemonset.yml
+    # gets a `survey:` block from ensure_daemonset_process_metrics_enabled).
+    #
+    # `updowncounter` mirrors what is actually emitted over OTLP
+    # (meter.Int64UpDownCounter, no unit) rather than the OTel-canonical gauge
+    # mapping of the Prometheus `*_info` convention — same reasoning as the
+    # comment on metric.target.info in OBI's own obi_internal.yaml. Weaver only
+    # validates the OTLP tap, so prom_survey.go's gauge is irrelevant here.
+    #
+    # The attribute set is whatever GetAppResourceAttrs/ResourceAttrsFromEnv
+    # produce (service.*, k8s.*, host.*, …), all already declared by upstream
+    # semconv; only the service.* refs are declared here, opt_in, mirroring how
+    # metric.target.info declares a subset of what it carries.
+    #
+    # Group id is x.beyla.survey so it sorts last, consistent with x.obi.cpu.
+    #
+    # NOTE: injected by scripts/generate-obi-tests.sh (apply_schema_injections).
+    # Unlike x_obi_cpu there is NO durable upstream fix for this one: survey is
+    # a Beyla-only feature, so the declaration cannot flow back into OBI's
+    # schemas/obi/groups/ and this injection is permanent.
+    cat > "$SCHEMAS_DEST/obi/groups/x_beyla_survey.yaml" <<'EOF'
+groups:
+  # Beyla-only `survey_info` meta-metric. See scripts/generate-obi-tests.sh
+  # (apply_schema_injections) for why this is injected rather than inherited
+  # from OBI's registry.
+  - id: x.beyla.survey
+    type: metric
+    metric_name: survey_info
+    instrument: updowncounter
+    unit: ""
+    stability: development
+    brief: >
+      Beyla-only counterpart of `target.info` for surveyed processes: emitted
+      with value 1 to carry the resource attributes of a process that Beyla
+      discovered through `discovery.survey` but did not instrument
+      (pkg/export/otel/metrics_survey.go). Removed again when the process
+      terminates. OBI has no survey feature and therefore no such metric.
+    attributes:
+      - ref: service.name
+        requirement_level: opt_in
+      - ref: service.namespace
+        requirement_level: opt_in
 EOF
 }
 

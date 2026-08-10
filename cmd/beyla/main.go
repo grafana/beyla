@@ -11,6 +11,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,14 +27,24 @@ import (
 	"github.com/grafana/beyla/v3/pkg/components"
 )
 
+// configVersionV1 is the only configuration document version Beyla can load.
+// OBI additionally understands "v2" (a `file_format` / `extensions.obi`
+// document), but its loader lives in the module-internal packages
+// go.opentelemetry.io/obi/internal/config/{schema,convert}, which Beyla cannot
+// import — the local `replace` directive does not lift Go's internal-package
+// rule, and OBI exposes no wrapper under pkg/. Supporting v2 here requires an
+// exported versioned loader in OBI first.
+const configVersionV1 = "v1"
+
 func main() {
 	lvl := slog.LevelVar{}
 	lvl.Set(slog.LevelInfo)
+	// Bootstrap logger. The configured handler can only be installed once the
+	// configuration (and with it log_format) has been read, but loading it may
+	// itself fail, so log through a default text handler until then.
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: &lvl,
 	})))
-
-	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
 
 	if err := obi.CheckOSSupport(); err != nil {
 		slog.Error("can't start Beyla", "error", err)
@@ -57,6 +68,11 @@ func main() {
 		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", "error", err)
 		os.Exit(-1)
 	}
+
+	setupLogHandler(config.LogFormat, &lvl)
+
+	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
+	slog.Info("configuration loaded", "version", configVersionV1)
 
 	if err := obi.CheckOSCapabilities(config.AsOBI()); err != nil {
 		if config.EnforceSysCaps {
@@ -91,6 +107,23 @@ func main() {
 		slog.Info("Waiting 1s to collect coverage data...")
 		time.Sleep(time.Second)
 	}
+}
+
+// setupLogHandler installs the slog handler matching the configured
+// log_format (BEYLA_LOG_FORMAT), replacing the bootstrap text handler.
+// Mirrors .obi-src/cmd/obi/main.go.
+func setupLogHandler(format obi.LogFormat, lvl *slog.LevelVar) {
+	var handler slog.Handler
+	switch obi.LogFormat(strings.ToLower(string(format))) {
+	default:
+		slog.Warn("unknown log format specified, defaulting to text", "format", format)
+		fallthrough
+	case obi.LogFormatText:
+		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})
+	case obi.LogFormatJSON:
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})
+	}
+	slog.SetDefault(slog.New(handler))
 }
 
 func logConfig(config *beyla.Config) {

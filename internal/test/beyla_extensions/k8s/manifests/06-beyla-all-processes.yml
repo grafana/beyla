@@ -28,7 +28,7 @@ data:
       kubernetes:
         enable: true
         resource_labels:
-          deployment.environment: ["deployment.environment"]
+          deployment.environment.name: ["deployment.environment.name"]
     trace_printer: text
     log_level: debug
     discovery:

@@ -14,7 +14,7 @@ prometheus_export:
     - application
     - application_process
     - application_host
-  extra_resource_attributes: ["deployment_environment"]
+  extra_resource_attributes: ["deployment_environment_name"]
   exemplar_filter: "always_on"
 attributes:
   select:

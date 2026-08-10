@@ -92,6 +92,26 @@ BEHAVIORAL_TRANSFORMS=(
     # --- Metric name prefixes (exported output) ---
     'obi_|beyla_'
 
+    # --- BPF program names (consumed verbatim, NEVER renamed) ---
+    # Undo the generic obi_ → beyla_ rename for the `____` prefix that
+    # bpf_dbg_printk puts in front of the BPF program name (BPF_KPROBE(name)
+    # expands to an inner ____name function, and `__func__` is what gets
+    # printed). Those program names come from .obi-src/bpf/** and are compiled
+    # into the objects Beyla loads unchanged — e.g.
+    # BPF_KPROBE(obi_kprobe_sys_ioctl) in bpf/generictracer/java_tls.c, whose
+    # name is still `obi_kprobe_sys_ioctl` in
+    # vendor/go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer/*.o. So a
+    # Beyla run emits `____obi_kprobe_sys_ioctl`, never `____beyla_…`.
+    #
+    # Without this rule the log-scraping assertion in
+    # TestJavaMalformedIoctlFailsClosed counts a string that can never appear,
+    # so both counts are 0 and its assert.Never — the "fails closed" check the
+    # test is named after — becomes vacuous.
+    #
+    # Must stay AFTER the 'obi_|beyla_' rule above: apply_transforms builds one
+    # `sed -e` per entry in array order, so this one runs on its output.
+    '____beyla_|____obi_'
+
     # --- Attribute names (exported output) ---
     'obi\.ip|beyla.ip'
     'obi\.network\.flow|beyla.network.flow'
@@ -746,6 +766,85 @@ routes:
 EOF
 }
 
+ensure_malicious_ioctl_local_downstream() {
+    # Take TestJavaMalformedIoctlFailsClosed off the public internet.
+    #
+    # Upstream's last step is `testJavaNestedTraces(t, "request")`, which drives
+    #   GET /api/request?url=https://httpbin.org/get
+    # and asserts a nested `GET /get` client span. httpbin.org is chronically
+    # rate-limited: on this branch it answered 503 SERVICE_UNAVAILABLE to every
+    # one of the ~25 attempts inside the 2-minute Eventually window, on the
+    # initial run and both re-runs. HttpClientService.makeGetRequest swallows the
+    # exception and still returns 200 ("Error making request: …"), so the
+    # DoHTTPGet step passes and only `require.Len(res, 1)` fails — i.e. the suite
+    # is red for reasons that have nothing to do with the instrumentation.
+    #
+    # OBI's own docker-compose-java-dist.yml already shows the right pattern: it
+    # defines a container-local `downstream` testserver, and
+    # testJavaNestedTracesPlainHTTP (same file, upstream's own helper and
+    # assertions) exercises the identical server→client nesting against
+    # http://downstream:8086/rolldice/1. So this step adds that same service to
+    # the malicious-ioctl compose file and repoints the final check at the
+    # upstream helper that uses it. No assertion is weakened: the nested
+    # client-span check still runs, over 10 requests per iteration with an 80%
+    # nesting floor, only the target moves off the public internet.
+    #
+    # DURABLE FIX (upstream, then drop this step): make the same change in OBI —
+    # add the `downstream` service to
+    # internal/test/integration/docker-compose-java-dist-malicious-ioctl.yml and
+    # change the tail of TestJavaMalformedIoctlFailsClosed to a local target.
+    # Ideally upstream points it at the testserver's TLS port (STD_TLS_PORT
+    # 8383) rather than plain HTTP, which would keep the post-attack check on
+    # the Java TLS path that the malicious ioctl actually targets; the plain-HTTP
+    # variant is used here because it is the one upstream already proves green
+    # in TestJavaNestedTraces.
+    local compose="$OBI_DEST/docker-compose-java-dist-malicious-ioctl.yml"
+    local go_file="$OBI_DEST/java_dist_test.go"
+
+    if [[ -f "$compose" ]] && ! grep -q '^  downstream:' "$compose"; then
+        awk '
+        /^  obi:[[:space:]]*$/ && !done {
+            print "  # Injected by ensure_malicious_ioctl_local_downstream in"
+            print "  # scripts/generate-obi-tests.sh: local target for the nested-trace check"
+            print "  # at the end of TestJavaMalformedIoctlFailsClosed, replacing httpbin.org."
+            print "  # Mirrors the downstream service of docker-compose-java-dist.yml."
+            print "  downstream:"
+            print "    build:"
+            print "      context: ../../../.obi-src"
+            print "      dockerfile: internal/test/integration/components/testserver/Dockerfile"
+            print "    image: hatest-testserver"
+            print "    environment:"
+            print "      STD_PORT: \"8086\""
+            print "      LOG_LEVEL: DEBUG"
+            print ""
+            done = 1
+        }
+        { print }
+        ' "$compose" > "$compose.tmp" && mv "$compose.tmp" "$compose"
+
+        if ! grep -q '^  downstream:' "$compose"; then
+            echo "  WARNING: could not inject the downstream service into $compose"
+        fi
+    fi
+
+    if [[ -f "$go_file" ]] && grep -q '^	testJavaNestedTraces(t, "request")$' "$go_file"; then
+        awk '
+        /^\ttestJavaNestedTraces\(t, "request"\)$/ {
+            print "\t// Beyla-only: upstream calls testJavaNestedTraces(t, \"request\"), which"
+            print "\t// targets https://httpbin.org/get and fails whenever that public service"
+            print "\t// rate-limits us. testJavaNestedTracesPlainHTTP is upstream'"'"'s own helper"
+            print "\t// and makes the same server-to-client nesting assertion against the"
+            print "\t// container-local downstream service. Rewritten by"
+            print "\t// ensure_malicious_ioctl_local_downstream in scripts/generate-obi-tests.sh;"
+            print "\t// drop it once OBI takes this suite off the public internet."
+            print "\ttestJavaNestedTracesPlainHTTP(t, \"request\")"
+            next
+        }
+        { print }
+        ' "$go_file" > "$go_file.tmp" && mv "$go_file.tmp" "$go_file"
+    fi
+}
+
 ensure_weaver_tap_survives_weavercol_startup() {
     # Make the weaver first hop (otelcol → weavercol) tolerate weavercol's pod
     # startup window.
@@ -1265,6 +1364,7 @@ generate() {
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports
     ensure_config_v2_v1_equivalents
+    ensure_malicious_ioctl_local_downstream
     ensure_weaver_tap_survives_weavercol_startup
     cleanup_and_inject_build_tags "$jobs"
 

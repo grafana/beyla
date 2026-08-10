@@ -34,6 +34,13 @@ import (
 // import — the local `replace` directive does not lift Go's internal-package
 // rule, and OBI exposes no wrapper under pkg/. Supporting v2 here requires an
 // exported versioned loader in OBI first.
+//
+// Two other places encode the same limitation and disappear with it, once that
+// loader exists — both in scripts/generate-obi-tests.sh: the `"version":"v2"`
+// BEHAVIORAL_TRANSFORMS rule (which rewrites config_v2_test.go's expected
+// label), and ensure_config_v2_v1_equivalents (which appends v1-equivalent keys
+// to configs/obi-config-v2.yml, because the v1 loader silently drops the whole
+// v2 document rather than rejecting it).
 const configVersionV1 = "v1"
 
 func main() {

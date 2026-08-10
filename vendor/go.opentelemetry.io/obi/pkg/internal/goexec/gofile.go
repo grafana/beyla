@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"strings"
 
 	"golang.org/x/mod/semver"
@@ -58,6 +59,13 @@ func goVersionAtLeast(version, minimum string) bool {
 	return semver.Compare("v"+match, "v"+minimum) >= 0
 }
 
+type moduleVersions struct {
+	versions     map[string]string
+	sums         map[string]string
+	replacements map[string]struct{}
+	invalid      bool
+}
+
 func runtimeMetricGoroutineCountModeVersion(version string) (includesSystem, known bool) {
 	if goVersionPattern.FindString(version) == "" {
 		return false, false
@@ -70,19 +78,18 @@ func runtimeMetricGCGoalArgumentSupportedVersion(version string) bool {
 }
 
 // findLibraryVersions looks for all the libraries and versions inside the elf file.
-// It returns a map where the key is the library name and the value is the library version
-func findLibraryVersions(elfFile *elf.File) (map[string]string, error) {
+func findLibraryVersions(elfFile *elf.File) (moduleVersions, error) {
 	goVersion, modules, err := getGoDetails(elfFile)
 	if err != nil {
-		return nil, fmt.Errorf("getting Go details: %w", err)
+		return moduleVersions{}, fmt.Errorf("getting Go details: %w", err)
 	}
 
 	goVersion = strings.ReplaceAll(goVersion, "go", "")
 	log().Debug("Go version detected", "version", goVersion)
 
-	modsMap := parseModules(modules)
-	modsMap["go"] = goVersion
-	return modsMap, nil
+	mods := parseModules(modules)
+	mods.versions["go"] = goVersion
+	return mods, nil
 }
 
 // The build info blob left by the linker is identified by
@@ -212,29 +219,73 @@ func readString(f *elf.File, ptrSize int, readPtr func([]byte) uint64, addr uint
 	return string(data)
 }
 
-func parseModules(mod string) map[string]string {
-	lines := strings.Split(mod, "\n")
-	result := map[string]string{}
-	for _, line := range lines {
-		parts := strings.Fields(line)
-		if len(parts) > 1 {
-			modType := parts[0]
-			modPackage := parts[1]
-			if modType == "dep" {
-				v := ""
-				if len(parts) > 2 {
-					v = parts[2]
-				}
-				log().Debug("library detected",
-					"modType", modType,
-					"modPackage", modPackage,
-					"version", v)
-				result[modPackage] = v
-			}
+func parseModules(mod string) moduleVersions {
+	result := moduleVersions{
+		versions:     map[string]string{},
+		sums:         map[string]string{},
+		replacements: map[string]struct{}{},
+	}
+
+	if !validModuleReplacementLayout(mod) {
+		log().Debug("invalid module replacement layout")
+		result.invalid = true
+		return result
+	}
+
+	buildInfo, err := debug.ParseBuildInfo(mod)
+	if err != nil {
+		log().Debug("can't parse module build information", "error", err)
+		result.invalid = true
+		return result
+	}
+
+	for _, dependency := range buildInfo.Deps {
+		if dependency == nil {
+			continue
+		}
+		if _, exists := result.versions[dependency.Path]; exists {
+			log().Debug("duplicate module build information", "module", dependency.Path)
+			result.invalid = true
+			continue
+		}
+
+		log().Debug("library detected",
+			"modType", "dep",
+			"modPackage", dependency.Path,
+			"version", dependency.Version)
+		result.versions[dependency.Path] = dependency.Version
+		result.sums[dependency.Path] = dependency.Sum
+		if dependency.Replace != nil {
+			result.replacements[dependency.Path] = struct{}{}
 		}
 	}
 
 	return result
+}
+
+func validModuleReplacementLayout(mod string) bool {
+	lines := strings.Split(mod, "\n")
+	for index, line := range lines {
+		fields := strings.Split(line, "\t")
+		switch fields[0] {
+		case "dep", "mod":
+			nextIsReplacement := index+1 < len(lines) && strings.HasPrefix(lines[index+1], "=>\t")
+			if (len(fields) == 3) != nextIsReplacement {
+				return false
+			}
+		case "=>":
+			if len(fields) != 4 || index == 0 {
+				return false
+			}
+
+			previous := strings.Split(lines[index-1], "\t")
+			if len(previous) != 3 || (previous[0] != "dep" && previous[0] != "mod") {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func decodeString(data []byte) (s string, rest []byte) {

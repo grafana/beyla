@@ -200,7 +200,7 @@ func (p *parser) afterBracket() Frag {
 			p.raise("invalid bracket fragment")
 		}
 	case ':':
-		return p.readSlice(0)
+		return p.readSlice(SliceNotSet)
 	case '?':
 		return p.readFilter()
 	case '(':
@@ -341,29 +341,25 @@ func (p *parser) readSlice(i int) Frag {
 	if len(p.buf) <= p.pos {
 		p.raise("not terminated")
 	}
-	f := Slice{i}
+	f := Slice{i, SliceNotSet, SliceNotSet}
 	b := p.buf[p.pos]
 	if b == ']' {
-		f = append(f, maxEnd)
 		p.pos++
 		return f
 	}
 	b = p.skipSpace()
 	// read the end
 	if b == ':' {
-		f = append(f, maxEnd)
 		if len(p.buf) <= p.pos {
 			p.raise("not terminated")
 		}
 		b = p.buf[p.pos]
 		p.pos++
 		if b != ']' {
-			i, b = p.readInt(b)
-			f = append(f, i)
+			f[2], b = p.readInt(b)
 		}
 	} else {
-		i, b = p.readInt(b)
-		f = append(f, i)
+		f[1], b = p.readInt(b)
 		if b == ':' {
 			if len(p.buf) <= p.pos {
 				p.raise("not terminated")
@@ -371,8 +367,7 @@ func (p *parser) readSlice(i int) Frag {
 			b = p.buf[p.pos]
 			p.pos++
 			if b != ']' {
-				i, b = p.readInt(b)
-				f = append(f, i)
+				f[2], b = p.readInt(b)
 			}
 		}
 	}

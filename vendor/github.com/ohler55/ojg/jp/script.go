@@ -229,7 +229,7 @@ func (s *Script) evalWithRoot(stack, data, root any) (any, Expr) {
 		data = da
 	default:
 		rv := reflect.ValueOf(td)
-		if rt := rv.Type(); rt.Kind() == reflect.Ptr {
+		if rt := rv.Type(); rt.Kind() == reflect.Pointer {
 			rv = rv.Elem()
 		}
 		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
@@ -424,7 +424,7 @@ Start:
 	default:
 		switch rv := reflect.ValueOf(v); rv.Kind() {
 		// recursively handle pointers
-		case reflect.Ptr:
+		case reflect.Pointer:
 			if !rv.IsNil() {
 				v = rv.Elem().Interface()
 				goto Start

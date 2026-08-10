@@ -32,9 +32,9 @@ func roundToNearestMultiple(x, n uint32) uint32 {
 	return (x + n/2) / n * n
 }
 
-// RingBuf map types must be a multiple of os.Getpagesize()
+// RingBuf and UserRingbuf max_entries must be page-aligned: both go through the kernel's ringbuf_map_alloc
 func alignMaxEntriesIfRingBuf(m *ebpf.MapSpec) {
-	if m.Type == ebpf.RingBuf {
+	if m.Type == ebpf.RingBuf || m.Type == ebpf.UserRingbuf {
 		m.MaxEntries = roundToNearestMultiple(m.MaxEntries, uint32(os.Getpagesize()))
 	}
 }

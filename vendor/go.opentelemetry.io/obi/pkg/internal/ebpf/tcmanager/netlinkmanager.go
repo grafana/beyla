@@ -32,6 +32,11 @@ type netlinkProg struct {
 	*ebpf.Program
 	name       string
 	attachType AttachmentType
+	closeFn    func() error
+}
+
+func (p *netlinkProg) Close() error {
+	return closeWith(p.closeFn, p.Program)
 }
 
 type netlinkIface struct {
@@ -51,7 +56,9 @@ type netlinkManager struct {
 	addedCallbackID   uint64
 	removedCallbackID uint64
 	errorCallbackID   uint64
-	errorCh           chan error
+	errors            errorReporter
+	installQdiscFn    func(*ifaces.Interface) *netlink.GenericQdisc
+	shutdown          bool
 }
 
 func netlinkAttachType(attachment AttachmentType) (uint32, error) {
@@ -66,24 +73,26 @@ func netlinkAttachType(attachment AttachmentType) (uint32, error) {
 }
 
 func NewNetlinkManager() TCManager {
-	return &netlinkManager{
+	tc := &netlinkManager{
 		ifaceManager: nil,
 		interfaces:   netlinkIfaceMap{},
 		programs:     []*netlinkProg{},
 		log:          slog.With("component", "tc_manager_netlink"),
 		mutex:        sync.Mutex{},
-		errorCh:      make(chan error),
+		errors:       newErrorReporter(),
 	}
+	tc.installQdiscFn = tc.installQdisc
+	return tc
 }
 
 func (tc *netlinkManager) SetInterfaceManager(im *InterfaceManager) {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
 
-	if tc.ifaceManager != nil {
-		tc.ifaceManager.RemoveCallback(tc.addedCallbackID)
-		tc.ifaceManager.RemoveCallback(tc.removedCallbackID)
-		tc.ifaceManager.RemoveCallback(tc.errorCallbackID)
+	tc.unregisterCallbacksLocked()
+
+	if tc.shutdown {
+		return
 	}
 
 	if im != nil {
@@ -95,16 +104,33 @@ func (tc *netlinkManager) SetInterfaceManager(im *InterfaceManager) {
 	tc.ifaceManager = im
 }
 
+func (tc *netlinkManager) unregisterCallbacksLocked() {
+	if tc.ifaceManager == nil {
+		return
+	}
+
+	tc.ifaceManager.RemoveCallback(tc.addedCallbackID)
+	tc.ifaceManager.RemoveCallback(tc.removedCallbackID)
+	tc.ifaceManager.RemoveCallback(tc.errorCallbackID)
+	tc.ifaceManager = nil
+}
+
 func (tc *netlinkManager) Shutdown() {
 	tc.log.Debug("TC initiated shutdown")
 
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
 
+	if tc.shutdown {
+		return
+	}
+	tc.shutdown = true
+
+	tc.unregisterCallbacksLocked()
 	tc.cleanupInterfacesLocked()
 	tc.cleanupProgsLocked()
 
-	close(tc.errorCh)
+	tc.errors.close()
 
 	tc.log.Debug("TC completed shutdown")
 }
@@ -112,6 +138,9 @@ func (tc *netlinkManager) Shutdown() {
 func (tc *netlinkManager) AddProgram(name string, prog *ebpf.Program, attachment AttachmentType) {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
+	if tc.shutdown {
+		return
+	}
 
 	p := &netlinkProg{
 		Program:    prog,
@@ -126,13 +155,16 @@ func (tc *netlinkManager) AddProgram(name string, prog *ebpf.Program, attachment
 func (tc *netlinkManager) RemoveProgram(name string) {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
+	if tc.shutdown {
+		return
+	}
 
 	tc.detachProgramLocked(name)
 	tc.removeProgramLocked(name)
 }
 
 func (tc *netlinkManager) Errors() chan error {
-	return tc.errorCh
+	return tc.errors.ch
 }
 
 func (tc *netlinkManager) attachProgramLocked(prog *netlinkProg) {
@@ -225,8 +257,11 @@ func (tc *netlinkManager) removeProgramLocked(name string) {
 func (tc *netlinkManager) onInterfaceAdded(i *ifaces.Interface) {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
+	if tc.shutdown {
+		return
+	}
 
-	qdisc := tc.installQdisc(i)
+	qdisc := tc.installQdiscFn(i)
 
 	if qdisc == nil {
 		tc.log.Debug("Unable to install qdisc, ignoring interface", "interface", i.Name)
@@ -244,6 +279,9 @@ func (tc *netlinkManager) onInterfaceAdded(i *ifaces.Interface) {
 func (tc *netlinkManager) onInterfaceRemoved(iface *ifaces.Interface) {
 	tc.mutex.Lock()
 	defer tc.mutex.Unlock()
+	if tc.shutdown {
+		return
+	}
 
 	// links, qdiscs and other associated resources are automatically removed
 	// when an interface is removed, there's no need to explicitly remove them
@@ -355,7 +393,9 @@ func ifaceHasFilters(iface *netlinkIface, parent uint32) bool {
 func (tc *netlinkManager) cleanupProgsLocked() {
 	for _, prog := range tc.programs {
 		tc.log.Debug("closing tc program", "name", prog.name)
-		prog.Close()
+		if err := prog.Close(); err != nil {
+			tc.emitError("Failed to close program", "program", prog.name, "error", err)
+		}
 	}
 
 	tc.programs = []*netlinkProg{}
@@ -367,7 +407,7 @@ func (tc *netlinkManager) emitError(msg string, args ...any) {
 	formattedArgs := fmt.Sprint(args...)
 	compositeError := fmt.Errorf("%s: %s", msg, formattedArgs)
 
-	tc.errorCh <- compositeError
+	tc.errors.enqueue(compositeError)
 }
 
 // doIgnoreNoDev runs the provided syscall over the provided device and ignores the error

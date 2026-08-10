@@ -420,6 +420,10 @@ func readFrameHeader(buf []byte) (http2.FrameHeader, error) {
 
 //nolint:cyclop
 func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (request.Span, bool, error) {
+	if event.Len < 0 {
+		return request.Span{}, true, errors.New("invalid HTTP/2 record length")
+	}
+
 	bLen := len(event.Data)
 	if event.Len < int32(bLen) {
 		bLen = int(event.Len)

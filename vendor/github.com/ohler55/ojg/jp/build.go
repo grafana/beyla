@@ -44,7 +44,14 @@ func R() Expr {
 
 // S creates an Expr with a Slice fragment.
 func S(start int, rest ...int) Expr {
-	return Expr{Slice(append([]int{start}, rest...))}
+	s := Slice{start, SliceNotSet, SliceNotSet}
+	for i, n := range rest {
+		if 2 <= i {
+			break
+		}
+		s[i+1] = n
+	}
+	return Expr{s}
 }
 
 // U creates an Expr with an Union fragment.
@@ -124,12 +131,26 @@ func (x Expr) Root() Expr {
 
 // S appends a Slice fragment to the Expr.
 func (x Expr) S(start int, rest ...int) Expr {
-	return append(x, Slice(append([]int{start}, rest...)))
+	s := Slice{start, SliceNotSet, SliceNotSet}
+	for i, n := range rest {
+		if 2 <= i {
+			break
+		}
+		s[i+1] = n
+	}
+	return append(x, s)
 }
 
 // Slice appends a Slice fragment to the Expr.
 func (x Expr) Slice(start int, rest ...int) Expr {
-	return append(x, Slice(append([]int{start}, rest...)))
+	s := Slice{start, SliceNotSet, SliceNotSet}
+	for i, n := range rest {
+		if 2 <= i {
+			break
+		}
+		s[i+1] = n
+	}
+	return append(x, s)
 }
 
 // U appends a Union fragment to the Expr.

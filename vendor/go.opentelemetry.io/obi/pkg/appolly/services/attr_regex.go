@@ -30,6 +30,7 @@ func (dc RegexDefinitionCriteria) Validate() error {
 			!dc[i].Languages.IsSet() &&
 			len(dc[i].PIDs) == 0 &&
 			!dc[i].CmdArgs.IsSet() &&
+			!dc[i].ContainersOnly &&
 			len(dc[i].Metadata) == 0 &&
 			len(dc[i].PodLabels) == 0 &&
 			len(dc[i].PodAnnotations) == 0 {

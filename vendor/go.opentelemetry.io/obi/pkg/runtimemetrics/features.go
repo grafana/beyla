@@ -24,7 +24,7 @@ func (e Enabled) Any() bool {
 }
 
 func (e Enabled) ShouldReport(snapshot RuntimeMetricSnapshot) bool {
-	if snapshot.Go != nil {
+	if snapshot.Go != nil || snapshot.Histogram != nil {
 		return e.Runtime && snapshot.Service.SDKLanguage == svc.InstrumentableGolang
 	}
 	if snapshot.JVM != nil {

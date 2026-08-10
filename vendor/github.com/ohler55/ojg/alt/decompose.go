@@ -177,7 +177,7 @@ func reflectValue(rv reflect.Value, val any, opt *Options) (v any) {
 		v = reflectComplex(rv, opt)
 	case reflect.Map:
 		v = reflectMap(rv, opt)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		elem := rv.Elem()
 		if elem.IsValid() && elem.CanInterface() {
 			v = reflectValue(elem, elem.Interface(), opt)
@@ -305,7 +305,7 @@ func reflectArray(rv reflect.Value, opt *Options) any {
 
 func isNil(rv reflect.Value) bool {
 	switch rv.Kind() {
-	case reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return rv.IsNil()
 	}
 	return false

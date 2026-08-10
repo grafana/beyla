@@ -717,6 +717,10 @@ func (p *Tracer) processSharedRingbufRecord(
 	cfg *config.EBPFTracer,
 	record *ringbuf.Record,
 ) (request.Span, bool, error) {
+	if handled, err := p.eventCtx.HandleInternalEvent(record); handled {
+		return request.Span{}, true, err
+	}
+
 	if handled, err := ebpfcommon.HandleRuntimeMetricsRecord(
 		ctx,
 		p.eventCtx,

@@ -33,7 +33,7 @@ func locateNthChildHas(pp Expr, f Frag, v any, rest Expr, max int) (locs []Expr)
 		default:
 			if rt := reflect.TypeOf(v); rt != nil {
 				switch rt.Kind() {
-				case reflect.Ptr, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
+				case reflect.Pointer, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
 					locs = rest[0].locate(append(pp, f), v, rest[1:], max)
 				}
 			}
@@ -63,7 +63,7 @@ func locateContinueFrag(locs []Expr, cp Expr, v any, rest Expr, max int) []Expr 
 	default:
 		if rt := reflect.TypeOf(v); rt != nil {
 			switch rt.Kind() {
-			case reflect.Ptr, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
+			case reflect.Pointer, reflect.Slice, reflect.Struct, reflect.Array, reflect.Map:
 				locs = append(locs, rest[0].locate(cp, v, rest[1:], mx)...)
 			}
 		}

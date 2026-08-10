@@ -132,8 +132,8 @@ type DiscoveryConfig struct {
 
 	RouteHarvestConfig RouteHarvestingConfig `yaml:"route_harvester_advanced"`
 
-	// Executable paths for which we don't run language detection and cannot be
-	// selected using the path or language selection criteria
+	// Executable path prefixes for which preliminary language detection is
+	// skipped. Processes can still be selected using non-language criteria.
 	ExcludedLinuxSystemPaths []string `yaml:"excluded_linux_system_paths"`
 }
 

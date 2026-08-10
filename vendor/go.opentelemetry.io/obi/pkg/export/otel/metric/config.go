@@ -5,7 +5,7 @@ package metric // import "go.opentelemetry.io/obi/pkg/export/otel/metric"
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -57,7 +57,7 @@ func unifyErrors(errs []error) error {
 	case 1:
 		return errs[0]
 	default:
-		return fmt.Errorf("%v", errs)
+		return errors.Join(errs...)
 	}
 }
 

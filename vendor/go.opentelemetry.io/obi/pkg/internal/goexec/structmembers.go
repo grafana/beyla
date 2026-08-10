@@ -32,6 +32,57 @@ var (
 	pqOneElevenZero     = version.Must(version.NewVersion("1.11.0"))
 )
 
+type activationModule struct {
+	path string
+	sums map[string]string
+}
+
+// Activation writes private structs owned by each of these modules.
+var goAutoSDKActivationModules = [...]activationModule{
+	{
+		path: "go.opentelemetry.io/auto/sdk",
+		sums: map[string]string{
+			"v1.1.0": "h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=",
+			"v1.2.0": "h1:YpRtUFjvhSymycLS2T81lT6IGhcUP+LUPtv0iv1N8bM=",
+			"v1.2.1": "h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=",
+		},
+	},
+	{
+		path: "go.opentelemetry.io/otel",
+		sums: map[string]string{
+			"v1.33.0": "h1:/FerN9bax5LoK51X/sI0SVYrjSE0/yUL7DpxW4K3FWw=",
+			"v1.34.0": "h1:zRLXxLCgL1WyKsPVrgbSdMN4c0FMkDAskSTQP+0hdUY=",
+			"v1.35.0": "h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ=",
+			"v1.36.0": "h1:UumtzIklRBY6cI/lllNZlALOF5nNIzJVb16APdvgTXg=",
+			"v1.37.0": "h1:9zhNfelUvx0KBfu/gb+ZgeAfAgtWrfHJZcAqFC228wQ=",
+			"v1.38.0": "h1:RkfdswUDRimDg0m2Az18RKOsnI8UDzppJAtj01/Ymk8=",
+			"v1.39.0": "h1:8yPrr/S0ND9QEfTfdP9V+SiwT4E0G7Y5MO7p85nis48=",
+			"v1.40.0": "h1:oA5YeOcpRTXq6NN7frwmwFR0Cn3RhTVZvXsP4duvCms=",
+			"v1.41.0": "h1:YlEwVsGAlCvczDILpUXpIpPSL/VPugt7zHThEMLce1c=",
+			"v1.42.0": "h1:lSQGzTgVR3+sgJDAU/7/ZMjN9Z+vUip7leaqBKy4sho=",
+			"v1.43.0": "h1:mYIM03dnh5zfN7HautFE4ieIig9amkNANT+xcVxAj9I=",
+			"v1.44.0": "h1:JjwHmHpA4iZ3wBxluu2fbbE7j4kqlE8jXyAyPXH7HqU=",
+		},
+	},
+	{
+		path: "go.opentelemetry.io/otel/trace",
+		sums: map[string]string{
+			"v1.33.0": "h1:cCJuF7LRjUFso9LPnEAHJDB2pqzp+hbO8eu1qqW2d/s=",
+			"v1.34.0": "h1:+ouXS2V8Rd4hp4580a8q23bg0azF2nI8cqLYnC8mh/k=",
+			"v1.35.0": "h1:dPpEfJu1sDIqruz7BHFG3c7528f6ddfSWfFDVt/xgMs=",
+			"v1.36.0": "h1:ahxWNuqZjpdiFAyrIoQ4GIiAIhxAunQR6MUoKrsNd4w=",
+			"v1.37.0": "h1:HLdcFNbRQBE2imdSEgm/kwqmQj1Or1l/7bW6mxVK7z4=",
+			"v1.38.0": "h1:Fxk5bKrDZJUH+AMyyIXGcFAPah0oRcT+LuNtJrmcNLE=",
+			"v1.39.0": "h1:2d2vfpEDmCJ5zVYz7ijaJdOF59xLomrvj7bjt6/qCJI=",
+			"v1.40.0": "h1:WA4etStDttCSYuhwvEa8OP8I5EWu24lkOzp+ZYblVjw=",
+			"v1.41.0": "h1:Vbk2co6bhj8L59ZJ6/xFTskY+tGAbOnCtQGVVa9TIN0=",
+			"v1.42.0": "h1:OUCgIPt+mzOnaUTpOQcBiM/PLQ/Op7oq6g4LenLmOYY=",
+			"v1.43.0": "h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09nk+3A=",
+			"v1.44.0": "h1:jxF5CsGYCe74MCRx2X4g7WsY/VBKRqqpNvXlX/6gtIk=",
+		},
+	},
+}
+
 const (
 	// go common
 	ConnFdPos GoOffset = iota + 1 // start at 1, must match what's in go_offsets.h
@@ -110,6 +161,8 @@ const (
 	SpanContextTraceIDPos
 	SpanContextSpanIDPos
 	SpanContextTraceFlagsPos
+	AutoSDKSpanContextPos
+	AutoSDKActivationSupported
 	// go runtime channels
 	HchanQcountPos
 	HchanDataqsizPos
@@ -172,6 +225,10 @@ const (
 	RuntimePFreeGPos
 	RuntimeGListSizePos
 	RuntimeGCControllerHeapGoalPos
+	RuntimeSchedTimeToRunPos
+	RuntimeSchedSTWTotalTimeGCPos
+	RuntimeTimeHistogramUnderflowPos
+	RuntimeTimeHistogramOverflowPos
 )
 
 //go:embed offsets.json
@@ -497,6 +554,12 @@ var structMembers = map[string]structInfo{
 			"traceFlags": SpanContextTraceFlagsPos,
 		},
 	},
+	"go.opentelemetry.io/auto/sdk.span": {
+		lib: "go.opentelemetry.io/auto/sdk",
+		fields: map[string]GoOffset{
+			"spanContext": AutoSDKSpanContextPos,
+		},
+	},
 	"runtime.hchan": {
 		lib: "go",
 		fields: map[string]GoOffset{
@@ -646,7 +709,9 @@ var structMembers = map[string]structInfo{
 	"runtime.schedt": {
 		lib: "go",
 		fields: map[string]GoOffset{
-			"ngsys": RuntimeSchedNgSysPos,
+			"ngsys":          RuntimeSchedNgSysPos,
+			"timeToRun":      RuntimeSchedTimeToRunPos,
+			"stwTotalTimeGC": RuntimeSchedSTWTotalTimeGCPos,
 		},
 	},
 	"runtime.p": {
@@ -659,6 +724,13 @@ var structMembers = map[string]structInfo{
 		lib: "go",
 		fields: map[string]GoOffset{
 			"size": RuntimeGListSizePos,
+		},
+	},
+	"runtime.timeHistogram": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"underflow": RuntimeTimeHistogramUnderflowPos,
+			"overflow":  RuntimeTimeHistogramOverflowPos,
 		},
 	},
 }
@@ -677,7 +749,8 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 			if err != nil {
 				return nil, fmt.Errorf("searching for library versions: %w", err)
 			}
-			offs = offsetsForLibVersions(offs, libVersions, log())
+			offs = offsetsForLibVersions(offs, libVersions.versions, log())
+			setGoAutoSDKActivationSupport(offs, libVersions, elfFile)
 			return offs, nil
 		}
 	} else {
@@ -756,6 +829,47 @@ func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]str
 	return fieldOffsets
 }
 
+func setGoAutoSDKActivationSupport(
+	fieldOffsets FieldOffsets,
+	modules moduleVersions,
+	elfFile *elf.File,
+) {
+	fieldOffsets[AutoSDKActivationSupported] = uint64(0)
+	if goAutoSDKActivationArchitectureSupported(elfFile) &&
+		goAutoSDKActivationSupported(modules) {
+		fieldOffsets[AutoSDKActivationSupported] = uint64(1)
+	}
+}
+
+func goAutoSDKActivationArchitectureSupported(elfFile *elf.File) bool {
+	if elfFile == nil || elfFile.Class != elf.ELFCLASS64 {
+		return false
+	}
+
+	return elfFile.Machine == elf.EM_X86_64 || elfFile.Machine == elf.EM_AARCH64
+}
+
+func goAutoSDKActivationSupported(modules moduleVersions) bool {
+	if modules.invalid {
+		return false
+	}
+
+	for _, required := range goAutoSDKActivationModules {
+		if _, replaced := modules.replacements[required.path]; replaced {
+			return false
+		}
+
+		moduleVersion, found := modules.versions[required.path]
+		moduleSum, checksummed := modules.sums[required.path]
+		canonicalSum, supported := required.sums[moduleVersion]
+		if !found || !checksummed || !supported || moduleSum != canonicalSum {
+			return false
+		}
+	}
+
+	return true
+}
+
 func cleanLibVersion(version string, found bool, lib string, log *slog.Logger) string {
 	if !found {
 		log.Debug("can't find version for library. Assuming 0.0.0", "lib", lib)
@@ -781,11 +895,12 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 	if err != nil {
 		return nil, fmt.Errorf("searching for library versions: %w", err)
 	}
-	fieldOffsets = offsetsForLibVersions(fieldOffsets, libVersions, log)
+	fieldOffsets = offsetsForLibVersions(fieldOffsets, libVersions.versions, log)
+	setGoAutoSDKActivationSupport(fieldOffsets, libVersions, elfFile)
 	// after putting the offsets.json in a Go structure, we search all the
 	// structMembers elements on it, to get the annotated offsets
 	for strName, strInfo := range structMembers {
-		version, ok := libVersions[strInfo.lib]
+		version, ok := libVersions.versions[strInfo.lib]
 		version = cleanLibVersion(version, ok, strInfo.lib, log)
 		for fieldName, constantName := range strInfo.fields {
 			if _, found := fieldOffsets[constantName]; found {
@@ -806,7 +921,7 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 			fieldOffsets[constantName] = offset
 		}
 	}
-	version, ok := libVersions["go"]
+	version, ok := libVersions.versions["go"]
 	resolveNestedStructPreFetchedOffsets(
 		offs, fieldOffsets, cleanLibVersion(version, ok, "go", log), log,
 	)

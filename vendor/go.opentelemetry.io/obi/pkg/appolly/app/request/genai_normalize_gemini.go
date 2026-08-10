@@ -15,11 +15,13 @@ type geminiPart struct {
 }
 
 type geminiFuncCall struct {
+	ID   string          `json:"id,omitempty"`
 	Name string          `json:"name"`
 	Args json.RawMessage `json:"args,omitempty"`
 }
 
 type geminiFuncResp struct {
+	ID       string          `json:"id,omitempty"`
 	Name     string          `json:"name"`
 	Response json.RawMessage `json:"response,omitempty"`
 }
@@ -28,6 +30,7 @@ func geminiPartToNormalized(p geminiPart) normalizedPart {
 	if p.FunctionCall != nil {
 		return normalizedPart{
 			Type:      "tool_call",
+			ID:        p.FunctionCall.ID,
 			Name:      p.FunctionCall.Name,
 			Arguments: p.FunctionCall.Args,
 		}
@@ -39,6 +42,7 @@ func geminiPartToNormalized(p geminiPart) normalizedPart {
 		}
 		return normalizedPart{
 			Type:     "tool_call_response",
+			ID:       p.FunctionResponse.ID,
 			Name:     p.FunctionResponse.Name,
 			Response: resp,
 		}

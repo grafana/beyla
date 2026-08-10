@@ -15,6 +15,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
@@ -38,15 +39,18 @@ type RuntimeMetricsReporter struct {
 	exporter       sdkmetric.Exporter
 	reporters      otelcfg.ReporterPool[*svc.Attrs, *RuntimeMetrics]
 	input          <-chan []runtimemetrics.RuntimeMetricSnapshot
+	processEvents  <-chan exec.ProcessEvent
+	pidTracker     PidServiceTracker
 	log            *slog.Logger
 	selector       attributes.Selection
 	runtimeEnabled runtimemetrics.Enabled
 }
 
 type RuntimeMetrics struct {
-	ctx      context.Context
-	service  *svc.Attrs
-	provider *metric.MeterProvider
+	ctx                 context.Context
+	service             *svc.Attrs
+	provider            *metric.MeterProvider
+	goHistogramProducer *goRuntimeHistogramProducer
 
 	goMetrics  goRuntimeMetrics
 	jvmMetrics jvmRuntimeMetrics
@@ -82,17 +86,21 @@ func ReportRuntimeMetrics(
 	jointMetricsConfig *perapp.MetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+	processEvents *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		runtimeEnabled := runtimemetrics.EnabledFeatures(jointMetricsConfig.Features)
 		if !cfg.EndpointEnabled() ||
 			!runtimeEnabled.Any() ||
-			input == nil {
+			input == nil ||
+			processEvents == nil {
 			return swarm.EmptyRunFunc()
 		}
 		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
 
-		reporter, err := newRuntimeMetricsReporter(ctx, ctxInfo, cfg, jointMetricsConfig, selectorCfg, input)
+		reporter, err := newRuntimeMetricsReporter(
+			ctx, ctxInfo, cfg, jointMetricsConfig, selectorCfg, input, processEvents,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OTEL runtime metrics reporter: %w", err)
 		}
@@ -108,6 +116,7 @@ func newRuntimeMetricsReporter(
 	jointMetricsConfig *perapp.MetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+	processEvents *msg.Queue[exec.ProcessEvent],
 ) (*RuntimeMetricsReporter, error) {
 	log := rmlog()
 
@@ -122,6 +131,8 @@ func newRuntimeMetricsReporter(
 		nodeMeta:       ctxInfo.NodeMeta,
 		exporter:       instrumentMetricsExporter(ctxInfo.Metrics, exporter),
 		input:          input.Subscribe(msg.SubscriberName("otel.RuntimeMetricsReporter")),
+		processEvents:  processEvents.Subscribe(msg.SubscriberName("otel.RuntimeMetricsReporter.ProcessEvents")),
+		pidTracker:     NewPidServiceTracker(),
 		log:            log,
 		selector:       selectorCfg.SelectionCfg,
 		runtimeEnabled: runtimemetrics.EnabledFeatures(jointMetricsConfig.Features),
@@ -156,16 +167,21 @@ func (r *RuntimeMetricsReporter) newMetricsInstance(service *svc.Attrs) RuntimeM
 	log.Debug("creating new runtime metrics reporter")
 
 	resources := resource.NewWithAttributes(semconv.SchemaURL, resourceAttributes...)
+	goHistogramProducer := newGoRuntimeHistogramProducer(
+		r.exporter.Temporality(sdkmetric.InstrumentKindHistogram),
+	)
 	provider := metric.NewMeterProvider(
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(sharedExporter{r.exporter},
-			metric.WithInterval(r.cfg.Interval))),
+			metric.WithInterval(r.cfg.Interval),
+			metric.WithProducer(goHistogramProducer))),
 	)
 
 	return RuntimeMetrics{
-		ctx:      r.ctx,
-		service:  service,
-		provider: provider,
+		ctx:                 r.ctx,
+		service:             service,
+		provider:            provider,
+		goHistogramProducer: goHistogramProducer,
 	}
 }
 
@@ -253,6 +269,12 @@ func (r *RuntimeMetricsReporter) reportMetrics(ctx context.Context) {
 		case <-ctx.Done():
 			r.log.Debug("context done, stopping runtime metrics reporting")
 			return
+		case pe, ok := <-r.processEvents:
+			if !ok {
+				r.log.Debug("process events channel closed, stopping runtime metrics reporting")
+				return
+			}
+			r.onProcessEvent(&pe)
 		case snapshots, ok := <-r.input:
 			if !ok {
 				r.log.Debug("runtime metrics input channel closed, stopping metrics reporting")
@@ -263,9 +285,41 @@ func (r *RuntimeMetricsReporter) reportMetrics(ctx context.Context) {
 	}
 }
 
+func (r *RuntimeMetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
+	service := pe.File.ServiceAttrs()
+	pid := pe.File.Pid()
+
+	if pe.Type == exec.ProcessEventCreated {
+		if staleUID, exists := r.pidTracker.TracksPID(pid); exists && !staleUID.Equals(&service.UID) {
+			r.pidTracker.ReplaceUID(staleUID, service.UID)
+			r.reporters.Remove(staleUID)
+			return
+		}
+		r.pidTracker.AddPIDWithGeneration(pid, service.UID, pe.File.RuntimeMetricGeneration(pid))
+		return
+	}
+
+	uid, tracked := r.pidTracker.TracksPID(pid)
+	if !tracked {
+		return
+	}
+	if metrics, exists := r.reporters.Lookup(uid); exists && metrics.goHistogramProducer != nil {
+		metrics.goHistogramProducer.Delete(pid)
+	}
+	if removed, _ := r.pidTracker.RemovePID(pid); removed {
+		r.reporters.Remove(uid)
+	}
+}
+
 func (r *RuntimeMetricsReporter) reportRuntimeMetrics(snapshots []runtimemetrics.RuntimeMetricSnapshot) {
 	for _, snapshot := range snapshots {
 		if !r.shouldReportSnapshot(snapshot) {
+			continue
+		}
+		// A snapshot may still be in flight after its process terminated.
+		if !r.snapshotProcessLive(snapshot) {
+			r.log.Debug("skipping snapshot for terminated process",
+				"pid", snapshot.PID, "service", snapshot.Service.UID)
 			continue
 		}
 		metrics, err := r.reporters.For(&snapshot.Service)
@@ -277,6 +331,17 @@ func (r *RuntimeMetricsReporter) reportRuntimeMetrics(snapshots []runtimemetrics
 	}
 }
 
+func (r *RuntimeMetricsReporter) snapshotProcessLive(snapshot runtimemetrics.RuntimeMetricSnapshot) bool {
+	pid := snapshot.Service.ProcPID
+	if snapshot.Histogram != nil {
+		pid = snapshot.PID
+	}
+	if pid == 0 {
+		return true
+	}
+	return r.pidTracker.PIDLiveOrUnknown(pid, snapshot.Service.UID, snapshot.Generation)
+}
+
 func (r *RuntimeMetricsReporter) shouldReportSnapshot(snapshot runtimemetrics.RuntimeMetricSnapshot) bool {
 	return r.runtimeEnabled.ShouldReport(snapshot)
 }
@@ -286,11 +351,13 @@ func recordRuntimeMetrics(ctx context.Context, metrics *RuntimeMetrics, snapshot
 		return
 	}
 
-	if snapshot.Go != nil {
-		if snapshot.Service.SDKLanguage != svc.InstrumentableGolang {
-			return
+	if snapshot.Service.SDKLanguage == svc.InstrumentableGolang {
+		if snapshot.Histogram != nil && metrics.goHistogramProducer != nil {
+			metrics.goHistogramProducer.Update(snapshot)
 		}
-		recordGoRuntimeMetrics(ctx, &metrics.goMetrics, snapshot)
+		if snapshot.Go != nil {
+			recordGoRuntimeMetrics(ctx, &metrics.goMetrics, snapshot)
+		}
 	}
 	if snapshot.JVM != nil {
 		if !snapshot.Service.ExportModes.CanExportMetrics() || !snapshot.Service.Features.AppRuntime() {

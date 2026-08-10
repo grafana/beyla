@@ -339,12 +339,20 @@ func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, e
 	return offsets, true, nil
 }
 
+var supportOnlyGoProbeSymbols = map[string]struct{}{
+	"context.WithValue": {},
+}
+
 func isGoProxy(offsets *goexec.Offsets) bool {
 	for f := range offsets.Funcs {
-		// if we find anything of interest other than the Go runtime, we consider this a valid application
-		if !strings.HasPrefix(f, "runtime.") {
-			return false
+		if strings.HasPrefix(f, "runtime.") {
+			continue
 		}
+		if _, ok := supportOnlyGoProbeSymbols[f]; ok {
+			continue
+		}
+
+		return false
 	}
 
 	return true
@@ -363,6 +371,9 @@ func (t *typer) loadAllGoFunctionNames() {
 		t.addGoFunctionName(uniqueFunctions, symbolName)
 	}
 	for _, symbolName := range gotracer.GoRuntimeMetricProbeSymbols() {
+		t.addGoFunctionName(uniqueFunctions, symbolName)
+	}
+	for _, symbolName := range gotracer.GoAutoSDKActivationProbeSymbols() {
 		t.addGoFunctionName(uniqueFunctions, symbolName)
 	}
 }

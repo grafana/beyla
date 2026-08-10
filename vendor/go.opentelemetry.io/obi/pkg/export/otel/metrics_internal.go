@@ -249,7 +249,7 @@ func newInternalMeterProvider(res *resource.Resource, exporter *metric.Exporter,
 }
 
 func (p *InternalMetricsReporter) Start(ctx context.Context) {
-	p.buildInfo.Record(ctx, 1, instrument.WithAttributes(attribute.String("goarch", runtime.GOARCH), attribute.String("goos", runtime.GOOS), attribute.String("goversion", runtime.Version()), attribute.String("version", buildinfo.Version), attribute.String("revision", buildinfo.Revision)))
+	p.buildInfo.Record(ctx, 1, instrument.WithAttributes(attribute.String("obi.goarch", runtime.GOARCH), attribute.String("obi.goos", runtime.GOOS), attribute.String("obi.goversion", runtime.Version()), attribute.String("obi.version", buildinfo.Version), attribute.String("obi.revision", buildinfo.Revision)))
 }
 
 func (p *InternalMetricsReporter) TracerFlush(length int) {
@@ -261,7 +261,7 @@ func (p *InternalMetricsReporter) OTELMetricExport(length int) {
 }
 
 func (p *InternalMetricsReporter) OTELMetricExportError(err error) {
-	p.otelMetricExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("error", err.Error())))
+	p.otelMetricExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("obi.error", err.Error())))
 }
 
 func (p *InternalMetricsReporter) OTELTraceExport(length int) {
@@ -269,24 +269,24 @@ func (p *InternalMetricsReporter) OTELTraceExport(length int) {
 }
 
 func (p *InternalMetricsReporter) OTELTraceExportError(err error) {
-	p.otelTraceExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("error", err.Error())))
+	p.otelTraceExportErrs.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("obi.error", err.Error())))
 }
 
 func (p *InternalMetricsReporter) PrometheusRequest(_, _ string) {
 }
 
 func (p *InternalMetricsReporter) InstrumentProcess(processName string) {
-	p.instrumentedProcesses.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("process_name", processName)))
+	p.instrumentedProcesses.Add(p.ctx, 1, instrument.WithAttributes(attribute.String("process.executable.name", processName)))
 }
 
 func (p *InternalMetricsReporter) UninstrumentProcess(processName string) {
-	p.instrumentedProcesses.Add(p.ctx, -1, instrument.WithAttributes(attribute.String("process_name", processName)))
+	p.instrumentedProcesses.Add(p.ctx, -1, instrument.WithAttributes(attribute.String("process.executable.name", processName)))
 }
 
 func (p *InternalMetricsReporter) InstrumentationError(processName, errorType string) {
 	p.instrumentationErrors.Add(p.ctx, 1, instrument.WithAttributes(
-		attribute.String("process_name", processName),
-		attribute.String("error_type", errorType),
+		attribute.String("process.executable.name", processName),
+		attribute.String("error.type", errorType),
 	))
 }
 

@@ -237,6 +237,7 @@ func setupMetricsSubPipeline(
 			jointMetricsConfig,
 			selectorCfg,
 			runtimeMetricsInput,
+			metricsProcessEvents,
 		), swarm.WithID("OTELRuntimeMetricsExport"))
 	}
 }

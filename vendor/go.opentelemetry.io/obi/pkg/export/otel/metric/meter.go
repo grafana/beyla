@@ -281,7 +281,7 @@ func (m *meter) float64ObservableInstrument(id Instrument, callbacks []metric.Fl
 		Unit:        id.Unit,
 		Kind:        id.Kind,
 	}
-	if m.int64ObservableInsts.HasKey(key) && len(callbacks) > 0 {
+	if m.float64ObservableInsts.HasKey(key) && len(callbacks) > 0 {
 		warnRepeatedObservableCallbacks(id)
 	}
 	return m.float64ObservableInsts.Lookup(key, func() (float64Observable, error) {

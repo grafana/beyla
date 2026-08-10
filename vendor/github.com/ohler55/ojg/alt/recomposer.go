@@ -78,7 +78,7 @@ func (r *Recomposer) RegisterUnmarshalerComposer(fun RecomposeAnyFunc) {
 }
 
 func (r *Recomposer) registerComposer(rt reflect.Type, fun RecomposeFunc, typeName string) (*composer, error) {
-	if rt.Kind() == reflect.Ptr {
+	if rt.Kind() == reflect.Pointer {
 		rt = rt.Elem()
 	}
 	name := rt.Name()
@@ -117,7 +117,7 @@ func (r *Recomposer) registerComposer(rt reflect.Type, fun RecomposeFunc, typeNa
 		}
 		ft := f.Type
 		switch ft.Kind() {
-		case reflect.Array, reflect.Slice, reflect.Map, reflect.Ptr:
+		case reflect.Array, reflect.Slice, reflect.Map, reflect.Pointer:
 			ft = ft.Elem()
 		}
 		fname := ft.Name()
@@ -140,7 +140,7 @@ func (r *Recomposer) registerComposer(rt reflect.Type, fun RecomposeFunc, typeNa
 }
 
 func (r *Recomposer) registerAnyComposer(rt reflect.Type, fun RecomposeAnyFunc) (*composer, error) {
-	if rt.Kind() == reflect.Ptr {
+	if rt.Kind() == reflect.Pointer {
 		rt = rt.Elem()
 	}
 	full := rt.PkgPath() + "/" + rt.Name()
@@ -197,7 +197,7 @@ func (r *Recomposer) MustRecompose(v any, tv ...any) (out any) {
 			out = rv.Elem().Interface()
 		case reflect.Map:
 			r.recomp(v, rv, "")
-		case reflect.Ptr:
+		case reflect.Pointer:
 			r.recomp(v, rv, "")
 			switch rv.Elem().Kind() {
 			case reflect.Slice, reflect.Array, reflect.Map, reflect.Interface:
@@ -327,7 +327,7 @@ func (r *Recomposer) recompAny(v any) any {
 
 func (r *Recomposer) recomp(v any, rv reflect.Value, typeName string) {
 	as, _ := rv.Interface().(AttrSetter)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		if v == nil {
 			return
 		}
@@ -349,7 +349,7 @@ func (r *Recomposer) recomp(v any, rv reflect.Value, typeName string) {
 		size := len(va)
 		av := reflect.MakeSlice(rv.Type(), size, size)
 		et := av.Type().Elem()
-		if et.Kind() == reflect.Ptr {
+		if et.Kind() == reflect.Pointer {
 			et = et.Elem()
 			for i := 0; i < size; i++ {
 				ev := reflect.New(et)
@@ -405,7 +405,7 @@ func (r *Recomposer) recomp(v any, rv reflect.Value, typeName string) {
 			for k, m := range vm {
 				rv.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(r.recompAny(m)))
 			}
-		case et.Kind() == reflect.Ptr:
+		case et.Kind() == reflect.Pointer:
 			et = et.Elem()
 			for k, m := range vm {
 				ev := reflect.New(et)
@@ -432,7 +432,7 @@ func (r *Recomposer) recomp(v any, rv reflect.Value, typeName string) {
 						break
 					}
 					vv := reflect.ValueOf(val)
-					if vv.Type().Kind() == reflect.Ptr {
+					if vv.Type().Kind() == reflect.Pointer {
 						vv = vv.Elem()
 					}
 					rv.Set(vv)
@@ -468,7 +468,7 @@ func (r *Recomposer) recomp(v any, rv reflect.Value, typeName string) {
 			if c.fun != nil {
 				if val, err := c.fun(vm); err == nil {
 					vv := reflect.ValueOf(val)
-					if vv.Type().Kind() == reflect.Ptr {
+					if vv.Type().Kind() == reflect.Pointer {
 						vv = vv.Elem()
 					}
 					rv.Set(vv)
@@ -567,12 +567,12 @@ func (r *Recomposer) setValue(v any, rv reflect.Value, sf *reflect.StructField, 
 	case reflect.Interface:
 		v = r.recompAny(v)
 		rv.Set(reflect.ValueOf(v))
-	case reflect.Ptr:
+	case reflect.Pointer:
 		ev := reflect.New(rv.Type().Elem())
 		r.recomp(v, ev, "")
 		rv.Set(ev)
 	default:
-		if reflect.PtrTo(rv.Type()).Implements(jsonUnmarshalerType) {
+		if reflect.PointerTo(rv.Type()).Implements(jsonUnmarshalerType) {
 			ev := rv.Addr().Interface().(json.Unmarshaler)
 			if comp := r.composers["json.Unmarshaler"]; comp != nil {
 				b, _ := comp.any(v) // Special case. Must return []byte.

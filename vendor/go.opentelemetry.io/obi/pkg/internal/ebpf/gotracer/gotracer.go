@@ -16,12 +16,19 @@ package gotracer // import "go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
+	"github.com/prometheus/procfs"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -46,20 +53,90 @@ type runtimeMetricTargetKey struct {
 	ns  uint32
 }
 
+type goAutoSDKTargetState struct {
+	generation         uint64
+	needsRotation      bool
+	cleanupGenerations []uint64
+	dev                uint64
+	ino                uint64
+	startTime          uint64
+	activated          bool
+}
+
+type goAutoSDKActivationLinkKey struct {
+	pid        app.PID
+	generation uint64
+}
+
+type goAutoSDKActivationProbe struct {
+	program *ebpf.Program
+	offset  uint64
+}
+
+type goAutoSDKExecutableKey struct {
+	dev uint64
+	ino uint64
+}
+
+func normalizeDeviceID[T ~int32 | ~uint64](dev T) uint64 {
+	return uint64(dev)
+}
+
+type goAutoSDKActivationLink struct {
+	executable goAutoSDKExecutableKey
+	link       *onceCloser
+}
+
+type onceCloser struct {
+	closer io.Closer
+	once   sync.Once
+	err    error
+}
+
+func (c *onceCloser) Close() error {
+	c.once.Do(func() {
+		if c.closer != nil {
+			c.err = c.closer.Close()
+		}
+	})
+	return c.err
+}
+
+type goAutoSDKActivationEvent struct {
+	Type       uint8
+	Pad        [3]uint8
+	Pid        uint32
+	Generation uint64
+}
+
 const missingGoOffset = ^uint64(0)
 
-// Mirrors go_runtime_metric_valid_t in bpf/gotracer/maps/runtime.h and the
-// raw snapshot masks in pkg/runtimemetrics/reader.go.
+const goAutoSDKActivationMaxAttempts = 3
+
+var nextRuntimeMetricGeneration atomic.Uint64
+
+func newRuntimeMetricGeneration() uint64 {
+	for {
+		if generation := nextRuntimeMetricGeneration.Add(1); generation != 0 {
+			return generation
+		}
+	}
+}
+
+// Mirrors go_runtime_metric_valid_t in bpf/gotracer/maps/runtime.h. Scalar
+// bits also mirror the raw snapshot masks in pkg/runtimemetrics/reader.go.
 const (
-	goRuntimeMetricGCCyclesMask       uint64 = 1 << 0
-	goRuntimeMetricMemoryLimitMask    uint64 = 1 << 1
-	goRuntimeMetricProcessorLimitMask uint64 = 1 << 2
-	goRuntimeMetricGOGCMask           uint64 = 1 << 3
-	goRuntimeMetricCPUTimeMask        uint64 = 1 << 4
-	goRuntimeMetricMemoryUsedMask     uint64 = 1 << 5
-	goRuntimeMetricMemoryAllocsMask   uint64 = 1 << 6
-	goRuntimeMetricGoroutineCountMask uint64 = 1 << 9
-	goRuntimeMetricMemoryGCGoalMask   uint64 = 1 << 10
+	goRuntimeMetricGCCyclesMask                  uint64 = 1 << 0
+	goRuntimeMetricMemoryLimitMask               uint64 = 1 << 1
+	goRuntimeMetricProcessorLimitMask            uint64 = 1 << 2
+	goRuntimeMetricGOGCMask                      uint64 = 1 << 3
+	goRuntimeMetricCPUTimeMask                   uint64 = 1 << 4
+	goRuntimeMetricMemoryUsedMask                uint64 = 1 << 5
+	goRuntimeMetricMemoryAllocsMask              uint64 = 1 << 6
+	goRuntimeMetricGCPauseHistogramMask          uint64 = 1 << 7
+	goRuntimeMetricScheduleDurationHistogramMask uint64 = 1 << 8
+	goRuntimeMetricGoroutineCountMask            uint64 = 1 << 9
+	goRuntimeMetricMemoryGCGoalMask              uint64 = 1 << 10
 )
 
 type goRuntimeGCGoalSource uint32
@@ -75,11 +152,27 @@ const goRuntimeMetricBaseMask = goRuntimeMetricGCCyclesMask | goRuntimeMetricGOG
 const goRuntimeMetricHeapSnapshotMask = goRuntimeMetricMemoryUsedMask |
 	goRuntimeMetricMemoryAllocsMask
 
+const goRuntimeMetricHistogramMask = goRuntimeMetricGCPauseHistogramMask |
+	goRuntimeMetricScheduleDurationHistogramMask
+
+const (
+	goRuntimeHistogramMaxBuckets uint64 = 160
+	goRuntimeHistogramBucketSize uint64 = 8
+)
+
 var goChannelOffsetFields = [...]goexec.GoOffset{
 	goexec.HchanQcountPos,
 	goexec.HchanDataqsizPos,
 	goexec.HchanSendxPos,
 	goexec.HchanRecvxPos,
+}
+
+var goAutoSDKSpanContextOffsetFields = [...]goexec.GoOffset{
+	goexec.SpanContextTraceIDPos,
+	goexec.SpanContextSpanIDPos,
+	goexec.SpanContextTraceFlagsPos,
+	goexec.AutoSDKSpanContextPos,
+	goexec.AutoSDKActivationSupported,
 }
 
 var goRuntimeMetricOffsetFields = [...]goexec.GoOffset{
@@ -115,6 +208,10 @@ var goRuntimeMetricOffsetFields = [...]goexec.GoOffset{
 	goexec.RuntimePFreeGPos,
 	goexec.RuntimeGListSizePos,
 	goexec.RuntimeGCControllerHeapGoalPos,
+	goexec.RuntimeSchedTimeToRunPos,
+	goexec.RuntimeSchedSTWTotalTimeGCPos,
+	goexec.RuntimeTimeHistogramUnderflowPos,
+	goexec.RuntimeTimeHistogramOverflowPos,
 }
 
 var goRuntimeCPUTimeOffsetFields = [...]goexec.GoOffset{
@@ -162,7 +259,19 @@ var goRuntimeMetricOffsetGroups = [...]struct {
 	{goRuntimeMetricGOGCMask, []goexec.GoOffset{goexec.RuntimeGCControllerGCPercentPos}},
 	{goRuntimeMetricCPUTimeMask, goRuntimeCPUTimeOffsetFields[:]},
 	{goRuntimeMetricMemoryUsedMask | goRuntimeMetricMemoryAllocsMask, goRuntimeMemoryOffsetFields[:]},
+	{goRuntimeMetricGCPauseHistogramMask, []goexec.GoOffset{
+		goexec.RuntimeSchedSTWTotalTimeGCPos,
+		goexec.RuntimeTimeHistogramUnderflowPos,
+		goexec.RuntimeTimeHistogramOverflowPos,
+	}},
+	{goRuntimeMetricScheduleDurationHistogramMask, []goexec.GoOffset{
+		goexec.RuntimeSchedTimeToRunPos,
+		goexec.RuntimeTimeHistogramUnderflowPos,
+		goexec.RuntimeTimeHistogramOverflowPos,
+	}},
 }
+
+var supportsContextPropagationWithProbe = ebpfcommon.SupportsContextPropagationWithProbe
 
 type Tracer struct {
 	log                        *slog.Logger
@@ -177,7 +286,17 @@ type Tracer struct {
 	goChannelOffsetsByIno      map[uint64]bool
 	goRuntimeMetricMaskByIno   map[uint64]uint64
 	goRuntimeGCGoalSourceByIno map[uint64]goRuntimeGCGoalSource
+	goAutoSDKActivationByIno   map[uint64]bool
+	goAutoSDKTargetsMu         sync.Mutex
+	goAutoSDKTargets           map[app.PID]goAutoSDKTargetState
+	goAutoSDKActivationProbes  map[goAutoSDKExecutableKey]goAutoSDKActivationProbe
+	goAutoSDKActivationLinks   map[goAutoSDKActivationLinkKey]goAutoSDKActivationLink
+	goAutoSDKTargetGeneration  uint64
 	currentBinaryIno           uint64
+	goAutoSDKTargetMap         mapKeyPutDeleter
+	goAutoSDKAttemptMap        mapKeyDeleter
+	attachGoAutoSDKProbe       func(goAutoSDKActivationProbe, app.PID, uint64, uint64, uint64) (io.Closer, error)
+	goAutoSDKProcessStartTime  func(app.PID) (uint64, error)
 }
 
 func New(
@@ -207,21 +326,79 @@ func New(
 		goChannelOffsetsByIno:      map[uint64]bool{},
 		goRuntimeMetricMaskByIno:   map[uint64]uint64{},
 		goRuntimeGCGoalSourceByIno: map[uint64]goRuntimeGCGoalSource{},
+		goAutoSDKActivationByIno:   map[uint64]bool{},
+		goAutoSDKTargets:           map[app.PID]goAutoSDKTargetState{},
+		goAutoSDKActivationProbes:  map[goAutoSDKExecutableKey]goAutoSDKActivationProbe{},
+		goAutoSDKActivationLinks:   map[goAutoSDKActivationLinkKey]goAutoSDKActivationLink{},
+		attachGoAutoSDKProbe:       attachGoAutoSDKActivationProbe,
+		goAutoSDKProcessStartTime:  readGoAutoSDKProcessStartTime,
 	}
 }
 
 func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	p.goAutoSDKTargetsMu.Lock()
 	p.pidsFilter.AllowPID(pid, ns, fi, ebpfcommon.PIDTypeGo)
+	if p.pidsFilter.ValidPID(pid, ns, ebpfcommon.PIDTypeGo) {
+		ino := uint64(0)
+		dev := uint64(0)
+		if fi != nil {
+			ino = fi.Ino()
+			dev = fi.Dev()
+		}
+		startTime := uint64(0)
+		var identityErr error
+		if p.goAutoSDKProcessStartTime != nil {
+			startTime, identityErr = p.goAutoSDKProcessStartTime(pid)
+			if identityErr == nil && startTime == 0 {
+				identityErr = errors.New("target process start time is unavailable")
+			}
+			if identityErr != nil && p.log != nil {
+				p.log.Debug("reading Go Auto SDK target identity failed",
+					"pid", pid, "error", identityErr)
+			}
+		} else {
+			identityErr = errors.New("target process identity reader is unavailable")
+		}
+		state := p.goAutoSDKTargets[pid]
+		processChanged := startTime != 0 &&
+			(state.startTime == 0 || state.startTime != startTime)
+		if state.generation != 0 && (state.dev != dev || state.ino != ino || processChanged) {
+			p.disableGoAutoSDKTarget(pid)
+			p.closeGoAutoSDKActivationLinksLocked(func(key goAutoSDKActivationLinkKey, _ goAutoSDKActivationLink) bool {
+				return key.pid == pid
+			})
+		}
+		generation, err := p.enableGoAutoSDKTarget(pid, dev, ino, startTime)
+		if err == nil && identityErr != nil {
+			err = identityErr
+		}
+		if err == nil {
+			err = p.ensureGoAutoSDKActivationLinkLocked(pid, ino, generation)
+		}
+		if err != nil && p.log != nil {
+			p.log.Warn("attaching process-scoped Go Auto SDK activation probe failed",
+				"pid", pid, "generation", generation, "error", err)
+		}
+	}
+	p.goAutoSDKTargetsMu.Unlock()
+
 	p.registerRuntimeMetricTarget(pid, ns, fi)
 }
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
-	p.deleteRuntimeMetricTarget(pid, ns)
+	p.goAutoSDKTargetsMu.Lock()
+	p.disableGoAutoSDKTarget(pid)
+	p.closeGoAutoSDKActivationLinksLocked(func(key goAutoSDKActivationLinkKey, _ goAutoSDKActivationLink) bool {
+		return key.pid == pid
+	})
 	p.pidsFilter.BlockPID(pid, ns)
+	p.goAutoSDKTargetsMu.Unlock()
+
+	p.deleteRuntimeMetricTarget(pid, ns)
 }
 
 func (p *Tracer) supportsContextPropagation() bool {
-	return !ebpfcommon.IntegrityModeOverride && ebpfcommon.SupportsContextPropagationWithProbe(p.log)
+	return !ebpfcommon.IntegrityModeOverride && supportsContextPropagationWithProbe(p.log)
 }
 
 func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
@@ -331,6 +508,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 
 	offTable := BpfOffTableT{}
 	initMissingGoChannelOffsets(&offTable)
+	initMissingGoAutoSDKSpanContextOffsets(&offTable)
 	// Set the field offsets and the logLevel for the Go BPF program in a map
 	for _, field := range []goexec.GoOffset{
 		goexec.ConnFdPos,
@@ -404,9 +582,6 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcClientStreamStream,
 		// go manual spans
 		goexec.GoTracerDelegatePos,
-		goexec.SpanContextTraceIDPos,
-		goexec.SpanContextSpanIDPos,
-		goexec.SpanContextTraceFlagsPos,
 		// go runtime channels
 		goexec.HchanQcountPos,
 		goexec.HchanDataqsizPos,
@@ -438,6 +613,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 			offTable.Table[field] = val
 		}
 	}
+	setGoAutoSDKSpanContextOffsets(&offTable, offsets)
 	for _, field := range goRuntimeMetricOffsetFields {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -473,11 +649,13 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 	ino := fileInfo.Ino()
 	if err := p.bpfObjects.GoOffsetsMap.Put(ino, offTable); err != nil {
 		p.log.Error("setting Go offsets map failed", "pid", fileInfo.Pid(), "ino", ino, "error", err)
+		delete(p.goAutoSDKActivationByIno, ino)
 		delete(p.goRuntimeMetricMaskByIno, ino)
 		p.deleteRuntimeMetricTarget(fileInfo.Pid(), fileInfo.Ns())
 		return
 	}
 
+	p.recordGoAutoSDKActivationSupport(fileInfo, offsets)
 	p.recordGoRuntimeMetricAvailability(fileInfo, offsets)
 	if hasBaseGoRuntimeMetrics(p.goRuntimeMetricMaskByIno[ino]) {
 		p.registerRuntimeMetricTarget(fileInfo.Pid(), fileInfo.Ns(), fileInfo)
@@ -494,6 +672,511 @@ func initMissingGoChannelOffsets(offTable *BpfOffTableT) {
 	for _, field := range goChannelOffsetFields {
 		offTable.Table[field] = missingGoOffset
 	}
+}
+
+func initMissingGoAutoSDKSpanContextOffsets(offTable *BpfOffTableT) {
+	if offTable == nil {
+		return
+	}
+
+	for _, field := range goAutoSDKSpanContextOffsetFields {
+		offTable.Table[field] = missingGoOffset
+	}
+}
+
+func setGoAutoSDKSpanContextOffsets(offTable *BpfOffTableT, offsets *goexec.Offsets) {
+	if offTable == nil || offsets == nil {
+		return
+	}
+
+	for _, field := range goAutoSDKSpanContextOffsetFields {
+		if value, ok := offsets.Field[field].(uint64); ok {
+			offTable.Table[field] = value
+		}
+	}
+}
+
+type mapKeyDeleter interface {
+	Delete(key any) error
+}
+
+type mapKeyPutter interface {
+	Put(key, value any) error
+}
+
+type mapKeyPutDeleter interface {
+	mapKeyDeleter
+	mapKeyPutter
+}
+
+func resetGoAutoSDKActivationAttempts(
+	attempts mapKeyDeleter,
+	pid app.PID,
+	generation uint64,
+	log *slog.Logger,
+) error {
+	if attempts == nil {
+		return nil
+	}
+
+	var cleanupErrors []error
+	for attempt := uint8(0); attempt < goAutoSDKActivationMaxAttempts; attempt++ {
+		key := BpfGoAutoActivationAttemptKeyT{
+			Generation: generation,
+			Pid:        uint32(pid),
+			Attempt:    attempt,
+		}
+		if err := attempts.Delete(&key); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+			if log != nil {
+				log.Warn("resetting Go Auto SDK activation attempt failed",
+					"pid", pid, "attempt", attempt, "error", err)
+			}
+			cleanupErrors = append(cleanupErrors,
+				fmt.Errorf("delete activation attempt %d for PID %d: %w", attempt, pid, err))
+		}
+	}
+	return errors.Join(cleanupErrors...)
+}
+
+func retryGoAutoSDKActivationAttemptCleanup(
+	attempts mapKeyDeleter,
+	pid app.PID,
+	generations []uint64,
+	log *slog.Logger,
+) ([]uint64, error) {
+	var pending []uint64
+	var cleanupErrors []error
+	for _, generation := range generations {
+		if err := resetGoAutoSDKActivationAttempts(attempts, pid, generation, log); err != nil {
+			pending = append(pending, generation)
+			cleanupErrors = append(cleanupErrors, err)
+		}
+	}
+
+	return pending, errors.Join(cleanupErrors...)
+}
+
+func activateGoAutoSDKTarget(
+	targets mapKeyPutter,
+	attempts mapKeyDeleter,
+	active map[app.PID]goAutoSDKTargetState,
+	nextGeneration *uint64,
+	pid app.PID,
+	log *slog.Logger,
+) (uint64, error) {
+	current := active[pid]
+	if current.generation != 0 && !current.needsRotation {
+		current.cleanupGenerations, _ = retryGoAutoSDKActivationAttemptCleanup(
+			attempts,
+			pid,
+			current.cleanupGenerations,
+			log,
+		)
+		active[pid] = current
+		return current.generation, nil
+	}
+
+	(*nextGeneration)++
+	if *nextGeneration == 0 {
+		(*nextGeneration)++
+	}
+	generation := *nextGeneration
+	key := uint32(pid)
+	if err := targets.Put(&key, &generation); err != nil {
+		return generation, err
+	}
+
+	if current.generation != 0 {
+		current.cleanupGenerations = append(current.cleanupGenerations, current.generation)
+	}
+	current.cleanupGenerations, _ = retryGoAutoSDKActivationAttemptCleanup(
+		attempts,
+		pid,
+		current.cleanupGenerations,
+		log,
+	)
+	active[pid] = goAutoSDKTargetState{
+		generation:         generation,
+		cleanupGenerations: current.cleanupGenerations,
+	}
+
+	return generation, nil
+}
+
+func deactivateGoAutoSDKTarget(
+	targets mapKeyPutDeleter,
+	attempts mapKeyDeleter,
+	active map[app.PID]goAutoSDKTargetState,
+	pid app.PID,
+	log *slog.Logger,
+) error {
+	state := active[pid]
+	key := uint32(pid)
+	var cleanupErr error
+	if err := targets.Delete(&key); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+		disabled := uint64(0)
+		if updateErr := targets.Put(&key, &disabled); updateErr != nil {
+			if state.generation != 0 {
+				state.needsRotation = true
+			}
+			state.cleanupGenerations, cleanupErr = retryGoAutoSDKActivationAttemptCleanup(
+				attempts,
+				pid,
+				state.cleanupGenerations,
+				log,
+			)
+			active[pid] = state
+			return errors.Join(err, updateErr, cleanupErr)
+		}
+	}
+
+	if state.generation != 0 {
+		state.cleanupGenerations = append(state.cleanupGenerations, state.generation)
+		state.generation = 0
+		state.needsRotation = false
+	}
+	state.cleanupGenerations, cleanupErr = retryGoAutoSDKActivationAttemptCleanup(
+		attempts,
+		pid,
+		state.cleanupGenerations,
+		log,
+	)
+	if len(state.cleanupGenerations) == 0 {
+		delete(active, pid)
+	} else {
+		active[pid] = state
+	}
+
+	return cleanupErr
+}
+
+func (p *Tracer) enableGoAutoSDKTarget(
+	pid app.PID,
+	dev uint64,
+	ino uint64,
+	startTime uint64,
+) (uint64, error) {
+	targets, attempts := p.goAutoSDKMaps()
+	if targets == nil {
+		return 0, nil
+	}
+	if p.goAutoSDKTargets == nil {
+		p.goAutoSDKTargets = map[app.PID]goAutoSDKTargetState{}
+	}
+
+	generation, err := activateGoAutoSDKTarget(
+		targets,
+		attempts,
+		p.goAutoSDKTargets,
+		&p.goAutoSDKTargetGeneration,
+		pid,
+		p.log,
+	)
+	if err != nil {
+		if p.log != nil {
+			p.log.Warn("enabling Go Auto SDK target failed",
+				"pid", pid, "generation", generation, "error", err)
+		}
+		return generation, err
+	}
+
+	state := p.goAutoSDKTargets[pid]
+	state.dev = dev
+	state.ino = ino
+	if startTime != 0 {
+		state.startTime = startTime
+	}
+	p.goAutoSDKTargets[pid] = state
+	return generation, nil
+}
+
+func (p *Tracer) disableGoAutoSDKTarget(pid app.PID) {
+	targets, attempts := p.goAutoSDKMaps()
+	if targets == nil {
+		delete(p.goAutoSDKTargets, pid)
+		return
+	}
+
+	if err := deactivateGoAutoSDKTarget(
+		targets,
+		attempts,
+		p.goAutoSDKTargets,
+		pid,
+		p.log,
+	); err != nil && p.log != nil {
+		p.log.Warn("disabling Go Auto SDK target failed", "pid", pid, "error", err)
+	}
+}
+
+func (p *Tracer) goAutoSDKMaps() (mapKeyPutDeleter, mapKeyDeleter) {
+	targets := p.goAutoSDKTargetMap
+	if targets == nil && p.bpfObjects.GoAutoTargets != nil {
+		targets = p.bpfObjects.GoAutoTargets
+	}
+	attempts := p.goAutoSDKAttemptMap
+	if attempts == nil && p.bpfObjects.GoAutoActivationAttempts != nil {
+		attempts = p.bpfObjects.GoAutoActivationAttempts
+	}
+	return targets, attempts
+}
+
+func readGoAutoSDKProcessStartTime(pid app.PID) (uint64, error) {
+	process, err := procfs.NewProc(int(pid))
+	if err != nil {
+		return 0, fmt.Errorf("opening process: %w", err)
+	}
+	stat, err := process.Stat()
+	if err != nil {
+		return 0, fmt.Errorf("reading process stat: %w", err)
+	}
+	return stat.Starttime, nil
+}
+
+func attachGoAutoSDKActivationProbe(
+	probe goAutoSDKActivationProbe,
+	pid app.PID,
+	dev uint64,
+	ino uint64,
+	startTime uint64,
+) (io.Closer, error) {
+	if probe.program == nil {
+		return nil, errors.New("process-scoped Go Auto SDK activation probe is incomplete")
+	}
+
+	target, err := os.Open(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return nil, fmt.Errorf("opening target executable: %w", err)
+	}
+	defer target.Close()
+
+	info, err := target.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stating target executable: %w", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, errors.New("reading target executable identity")
+	}
+	actualDev := normalizeDeviceID(stat.Dev)
+	if actualDev != dev || stat.Ino != ino {
+		return nil, fmt.Errorf(
+			"target executable identity changed: got %d:%d, want %d:%d",
+			actualDev,
+			stat.Ino,
+			dev,
+			ino,
+		)
+	}
+	if err := validateGoAutoSDKProcessStartTime(pid, startTime); err != nil {
+		return nil, err
+	}
+
+	executable, err := link.OpenExecutable(fmt.Sprintf("/proc/self/fd/%d", target.Fd()))
+	if err != nil {
+		return nil, fmt.Errorf("opening target executable: %w", err)
+	}
+
+	activationLink, err := executable.Uprobe(
+		"",
+		probe.program,
+		goAutoSDKActivationUprobeOptions(probe, pid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateGoAutoSDKProcessStartTime(pid, startTime); err != nil {
+		_ = activationLink.Close()
+		return nil, err
+	}
+	return activationLink, nil
+}
+
+func validateGoAutoSDKProcessStartTime(pid app.PID, expected uint64) error {
+	if expected == 0 {
+		return nil
+	}
+
+	actual, err := readGoAutoSDKProcessStartTime(pid)
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return fmt.Errorf("target process identity changed: got %d, want %d", actual, expected)
+	}
+	return nil
+}
+
+func goAutoSDKActivationUprobeOptions(
+	probe goAutoSDKActivationProbe,
+	pid app.PID,
+) *link.UprobeOptions {
+	return &link.UprobeOptions{
+		Address: probe.offset,
+		PID:     int(pid),
+	}
+}
+
+func (p *Tracer) RegisterProcessScopedGoProbe(
+	dev uint64,
+	ino uint64,
+	candidate ebpfcommon.GoProbe,
+) {
+	if p == nil || !candidate.ProcessScoped || candidate.Probe == nil ||
+		candidate.Probe.Start == nil {
+		return
+	}
+
+	p.goAutoSDKTargetsMu.Lock()
+	defer p.goAutoSDKTargetsMu.Unlock()
+
+	if p.goAutoSDKActivationProbes == nil {
+		p.goAutoSDKActivationProbes = map[goAutoSDKExecutableKey]goAutoSDKActivationProbe{}
+	}
+	executable := goAutoSDKExecutableKey{dev: dev, ino: ino}
+	p.goAutoSDKActivationProbes[executable] = goAutoSDKActivationProbe{
+		program: candidate.Probe.Start,
+		offset:  candidate.Probe.StartOffset,
+	}
+	for pid, state := range p.goAutoSDKTargets {
+		if state.dev != dev || state.ino != ino {
+			continue
+		}
+		if err := p.ensureGoAutoSDKActivationLinkLocked(pid, ino, state.generation); err != nil &&
+			p.log != nil {
+			p.log.Warn("attaching process-scoped Go Auto SDK activation probe failed",
+				"pid", pid, "generation", state.generation, "error", err)
+		}
+	}
+}
+
+func (p *Tracer) UnregisterProcessScopedGoProbes(dev, ino uint64) {
+	if p == nil {
+		return
+	}
+
+	p.goAutoSDKTargetsMu.Lock()
+	defer p.goAutoSDKTargetsMu.Unlock()
+
+	executable := goAutoSDKExecutableKey{dev: dev, ino: ino}
+	delete(p.goAutoSDKActivationProbes, executable)
+	p.closeGoAutoSDKActivationLinksLocked(func(_ goAutoSDKActivationLinkKey, activationLink goAutoSDKActivationLink) bool {
+		return activationLink.executable == executable
+	})
+}
+
+func (p *Tracer) ensureGoAutoSDKActivationLinkLocked(
+	pid app.PID,
+	ino uint64,
+	generation uint64,
+) error {
+	if generation == 0 {
+		return nil
+	}
+
+	state, ok := p.goAutoSDKTargets[pid]
+	if !ok || state.generation != generation || state.ino != ino || state.activated {
+		return nil
+	}
+
+	key := goAutoSDKActivationLinkKey{pid: pid, generation: generation}
+	if _, ok := p.goAutoSDKActivationLinks[key]; ok {
+		return nil
+	}
+
+	executable := goAutoSDKExecutableKey{dev: state.dev, ino: ino}
+	probe, ok := p.goAutoSDKActivationProbes[executable]
+	if !ok {
+		return nil
+	}
+
+	attach := p.attachGoAutoSDKProbe
+	if attach == nil {
+		attach = attachGoAutoSDKActivationProbe
+	}
+	activationLink, err := attach(probe, pid, state.dev, ino, state.startTime)
+	if err != nil {
+		return err
+	}
+	if activationLink == nil {
+		return errors.New("process-scoped Go Auto SDK activation probe returned no link")
+	}
+
+	if p.goAutoSDKActivationLinks == nil {
+		p.goAutoSDKActivationLinks = map[goAutoSDKActivationLinkKey]goAutoSDKActivationLink{}
+	}
+	p.goAutoSDKActivationLinks[key] = goAutoSDKActivationLink{
+		executable: executable,
+		link:       &onceCloser{closer: activationLink},
+	}
+	return nil
+}
+
+func (p *Tracer) closeGoAutoSDKActivationLinksLocked(
+	match func(goAutoSDKActivationLinkKey, goAutoSDKActivationLink) bool,
+) {
+	for key, activationLink := range p.goAutoSDKActivationLinks {
+		if !match(key, activationLink) {
+			continue
+		}
+
+		delete(p.goAutoSDKActivationLinks, key)
+		if err := activationLink.link.Close(); err != nil && p.log != nil {
+			p.log.Debug("closing process-scoped Go Auto SDK activation probe failed",
+				"pid", key.pid, "generation", key.generation, "error", err)
+		}
+	}
+}
+
+func (p *Tracer) closeAllGoAutoSDKActivationLinks() error {
+	if p == nil {
+		return nil
+	}
+
+	p.goAutoSDKTargetsMu.Lock()
+	defer p.goAutoSDKTargetsMu.Unlock()
+
+	p.closeGoAutoSDKActivationLinksLocked(func(goAutoSDKActivationLinkKey, goAutoSDKActivationLink) bool {
+		return true
+	})
+	return nil
+}
+
+func (p *Tracer) handleGoAutoSDKActivationEvent(record *ringbuf.Record) (bool, error) {
+	if len(record.RawSample) == 0 ||
+		record.RawSample[0] != ebpfcommon.EventTypeGoAutoActivated {
+		return false, nil
+	}
+
+	event, err := ebpfcommon.ReinterpretCast[goAutoSDKActivationEvent](record.RawSample)
+	if err != nil {
+		return true, err
+	}
+
+	key := goAutoSDKActivationLinkKey{
+		pid:        app.PID(event.Pid),
+		generation: event.Generation,
+	}
+
+	p.goAutoSDKTargetsMu.Lock()
+	defer p.goAutoSDKTargetsMu.Unlock()
+
+	state, ok := p.goAutoSDKTargets[key.pid]
+	if !ok || state.generation != key.generation {
+		return true, nil
+	}
+	activationLink, ok := p.goAutoSDKActivationLinks[key]
+	if !ok {
+		return true, nil
+	}
+
+	state.activated = true
+	p.goAutoSDKTargets[key.pid] = state
+	delete(p.goAutoSDKActivationLinks, key)
+	if err := activationLink.link.Close(); err != nil && p.log != nil {
+		p.log.Debug("closing completed Go Auto SDK activation probe failed",
+			"pid", key.pid, "generation", key.generation, "error", err)
+	}
+	return true, nil
 }
 
 func (p *Tracer) recordGoChannelOffsetAvailability(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
@@ -583,8 +1266,22 @@ func (p *Tracer) recordGoRuntimeMetricAvailability(fileInfo *exec.FileInfo, offs
 			"memory_available", mask&goRuntimeMetricMemoryUsedMask != 0,
 			"goroutine_count_available", mask&goRuntimeMetricGoroutineCountMask != 0,
 			"memory_gc_goal_available", mask&goRuntimeMetricMemoryGCGoalMask != 0,
-			"memory_gc_goal_source", gcGoalSource)
+			"memory_gc_goal_source", gcGoalSource,
+			"gc_pause_histogram_available", mask&goRuntimeMetricGCPauseHistogramMask != 0,
+			"schedule_duration_histogram_available", mask&goRuntimeMetricScheduleDurationHistogramMask != 0)
 	}
+}
+
+func (p *Tracer) recordGoAutoSDKActivationSupport(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
+	if p == nil || fileInfo == nil {
+		return
+	}
+
+	if p.goAutoSDKActivationByIno == nil {
+		p.goAutoSDKActivationByIno = map[uint64]bool{}
+	}
+
+	p.goAutoSDKActivationByIno[fileInfo.Ino()] = offsets.SupportsGoAutoSDKActivation()
 }
 
 func selectGoRuntimeGCGoalSource(
@@ -614,8 +1311,23 @@ func goRuntimeMetricMask(offsets *goexec.Offsets) uint64 {
 			mask |= group.mask
 		}
 	}
+	if !hasSupportedGoRuntimeHistogramLayout(offsets) {
+		mask &^= goRuntimeMetricHistogramMask
+	}
 
 	return mask
+}
+
+func hasSupportedGoRuntimeHistogramLayout(offsets *goexec.Offsets) bool {
+	underflowOffset, underflowOK := offsets.Field[goexec.RuntimeTimeHistogramUnderflowPos].(uint64)
+	overflowOffset, overflowOK := offsets.Field[goexec.RuntimeTimeHistogramOverflowPos].(uint64)
+	if !underflowOK || !overflowOK {
+		return false
+	}
+
+	expectedUnderflowOffset := goRuntimeHistogramMaxBuckets * goRuntimeHistogramBucketSize
+	return underflowOffset == expectedUnderflowOffset &&
+		overflowOffset == expectedUnderflowOffset+goRuntimeHistogramBucketSize
 }
 
 func hasGoRuntimeMetricOffsets(offsets *goexec.Offsets, fields ...goexec.GoOffset) bool {
@@ -670,6 +1382,10 @@ func (p *Tracer) registerRuntimeMetricTarget(pid app.PID, ns uint32, fileInfo *e
 	}
 	availableMask = p.goRuntimeMetricMaskForSymbols(fileInfo, availableMask, symbols)
 	p.goRuntimeMetricMaskByIno[fileInfo.Ino()] = availableMask
+	generation := fileInfo.RuntimeMetricGeneration(pid)
+	if generation == 0 {
+		generation = newRuntimeMetricGeneration()
+	}
 
 	value := BpfGoRuntimeMetricTargetT{
 		MemstatsAddr:                 symbols.MemstatsAddr,
@@ -683,12 +1399,14 @@ func (p *Tracer) registerRuntimeMetricTarget(pid app.PID, ns uint32, fileInfo *e
 		AllpAddr:                     symbols.AllpAddr,
 		GoroutineCountIncludesSystem: symbols.GoroutineCountIncludesSystem,
 		GcGoalSource:                 uint32(p.goRuntimeGCGoalSourceByIno[fileInfo.Ino()]),
+		Generation:                   generation,
 	}
 
 	if err := p.bpfObjects.GoRuntimeMetricTargets.Put(pidInfo, value); err != nil {
 		p.log.Debug("setting runtime metric target failed", "pid", pid, "ino", fileInfo.Ino(), "error", err)
 		return
 	}
+	fileInfo.SetRuntimeMetricGeneration(pid, generation)
 
 	if p.runtimeMetricTargetKeys == nil {
 		p.runtimeMetricTargetKeys = map[runtimeMetricTargetKey]BpfPidInfo{}
@@ -717,6 +1435,16 @@ func (p *Tracer) goRuntimeMetricMaskForSymbols(
 		mask &^= goRuntimeMetricGoroutineCountMask
 		if p.log != nil {
 			p.log.Warn("Go runtime goroutine count metadata unresolved; disabling goroutine metric",
+				"pid", fileInfo.Pid(),
+				"ino", fileInfo.Ino(),
+				"cmd", fileInfo.CmdExePath())
+		}
+	}
+
+	if mask&goRuntimeMetricHistogramMask != 0 && symbols.SchedAddr == 0 {
+		mask &^= goRuntimeMetricHistogramMask
+		if p.log != nil {
+			p.log.Warn("Go runtime scheduler symbol unresolved; disabling histogram metrics",
 				"pid", fileInfo.Pid(),
 				"ino", fileInfo.Ino(),
 				"cmd", fileInfo.CmdExePath())
@@ -798,6 +1526,20 @@ var goRuntimeMetricProbeSymbols = []string{
 	goRuntimeMetricGCGoalSymbol,
 }
 
+var goAutoSDKActivationProbeSymbols = []string{
+	"go.opentelemetry.io/auto/sdk.(*tracer).start",
+	"context.WithValue",
+	"go.opentelemetry.io/auto/sdk.(*span).ended",
+	"go.opentelemetry.io/otel/internal/global.(*tracer).newSpan",
+}
+
+var goAutoSDKActivationPrerequisiteSymbols = []string{
+	"go.opentelemetry.io/otel/internal/global.(*tracer).Start",
+	"go.opentelemetry.io/auto/sdk.(*tracer).Start",
+	"go.opentelemetry.io/otel/internal/global.(*nonRecordingSpan).End",
+	"go.opentelemetry.io/auto/sdk.(*span).End",
+}
+
 // GoChannelLinkProbeSymbols returns the Go runtime symbols used to correlate direct channel handoffs.
 func GoChannelLinkProbeSymbols() []string {
 	return append([]string(nil), goChannelLinkProbeSymbols...)
@@ -806,6 +1548,11 @@ func GoChannelLinkProbeSymbols() []string {
 // GoRuntimeMetricProbeSymbols returns every candidate used for per-binary runtime metric probes.
 func GoRuntimeMetricProbeSymbols() []string {
 	return append([]string(nil), goRuntimeMetricProbeSymbols...)
+}
+
+// GoAutoSDKActivationProbeSymbols returns the symbols in activation-safe attachment order.
+func GoAutoSDKActivationProbeSymbols() []string {
+	return append([]string(nil), goAutoSDKActivationProbeSymbols...)
 }
 
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
@@ -1254,6 +2001,52 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	return m
 }
 
+func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
+	if !p.goAutoSDKActivationProbesEnabled() {
+		return nil
+	}
+
+	return []ebpfcommon.GoProbeGroup{{
+		Name:          "go_auto_sdk_activation",
+		Prerequisites: append([]string(nil), goAutoSDKActivationPrerequisiteSymbols...),
+		Probes: []ebpfcommon.GoProbe{
+			{
+				Symbol: goAutoSDKActivationProbeSymbols[0],
+				Probe: &ebpfcommon.ProbeDesc{
+					Start: p.bpfObjects.ObiUprobeAutoSdkTracerStart,
+				},
+			},
+			{
+				Symbol: goAutoSDKActivationProbeSymbols[1],
+				Probe: &ebpfcommon.ProbeDesc{
+					Start: p.bpfObjects.ObiUprobeAutoSdkContextWithValue,
+				},
+			},
+			{
+				Symbol: goAutoSDKActivationProbeSymbols[2],
+				Probe: &ebpfcommon.ProbeDesc{
+					Start: p.bpfObjects.ObiUprobeAutoSdkSpanEnded,
+				},
+			},
+			{
+				Symbol: goAutoSDKActivationProbeSymbols[3],
+				Probe: &ebpfcommon.ProbeDesc{
+					Start: p.bpfObjects.ObiUprobeTracerNewSpan,
+				},
+				ProcessScoped: true,
+			},
+		},
+	}}
+}
+
+func (p *Tracer) goAutoSDKActivationProbesEnabled() bool {
+	if p == nil || p.currentBinaryIno == 0 {
+		return false
+	}
+
+	return p.goAutoSDKActivationByIno[p.currentBinaryIno] && p.supportsContextPropagation()
+}
+
 func (p *Tracer) goChannelLinkProbesEnabled() bool {
 	if p == nil || p.currentBinaryIno == 0 {
 		return false
@@ -1319,11 +2112,19 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
 	parseContext := ebpfcommon.NewEBPFParseContext(p.cfg, eventsChan, p.pidsFilter)
 	defer parseContext.Close()
+	defer func() {
+		_ = p.closeAllGoAutoSDKActivationLinks()
+	}()
+
+	p.SetEventContext(ebpfEventContext)
 	ebpfcommon.SharedRingbuf(
 		ebpfEventContext,
 		p.cfg,
 		p.bpfObjects.Events,
 		func(record *ringbuf.Record) (request.Span, bool, error) {
+			if handled, err := ebpfEventContext.HandleInternalEvent(record); handled {
+				return request.Span{}, true, err
+			}
 			if handled, err := ebpfcommon.HandleRuntimeMetricsRecord(ctx, ebpfEventContext, record, p.pidsFilter, p.log); handled {
 				return request.Span{}, true, err
 			}
@@ -1339,7 +2140,15 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
 }
 
-func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext) {}
+func (p *Tracer) SetEventContext(eventContext *ebpfcommon.EBPFEventContext) {
+	eventContext.RegisterInternalEventHandler(
+		ebpfcommon.EventTypeGoAutoActivated,
+		func(record *ringbuf.Record) error {
+			_, err := p.handleGoAutoSDKActivationEvent(record)
+			return err
+		},
+	)
+}
 
 func (p *Tracer) Capabilities() ebpfcommon.TracerCapability { return 0 }
 

@@ -188,12 +188,12 @@ func (lb *LargeBuffer) UnsafeView() []byte {
 //
 // Returns an error when the range [absOff, absOff+n) is out of [0, Len()).
 func (lb *LargeBuffer) UnsafeViewAt(absOff, n int) ([]byte, error) {
-	if n == 0 {
-		return []byte{}, nil
+	if absOff < 0 || n < 0 || absOff > lb.total || n > lb.total-absOff {
+		return nil, fmt.Errorf("LargeBuffer.UnsafeViewAt: offset %d with length %d out of range [0, %d)", absOff, n, lb.total)
 	}
 
-	if n < 0 || absOff < 0 || absOff+n > lb.total {
-		return nil, fmt.Errorf("LargeBuffer.UnsafeViewAt: [%d, %d) out of range [0, %d)", absOff, absOff+n, lb.total)
+	if n == 0 {
+		return []byte{}, nil
 	}
 
 	ci, off := lb.findChunk(absOff)
@@ -227,12 +227,12 @@ func (lb *LargeBuffer) UnsafeViewAt(absOff, n int) ([]byte, error) {
 func (lb *LargeBuffer) CopyAt(absOff int, dst []byte) error {
 	n := len(dst)
 
-	if n == 0 {
-		return nil
+	if absOff < 0 || absOff > lb.total || n > lb.total-absOff {
+		return fmt.Errorf("LargeBuffer.CopyAt: offset %d with length %d out of range [0, %d)", absOff, n, lb.total)
 	}
 
-	if absOff < 0 || absOff+n > lb.total {
-		return fmt.Errorf("LargeBuffer.CopyAt: [%d, %d) out of range [0, %d)", absOff, absOff+n, lb.total)
+	if n == 0 {
+		return nil
 	}
 
 	ci, off := lb.findChunk(absOff)
@@ -461,7 +461,7 @@ func (r *LargeBufferReader) ReadN(n int) ([]byte, error) {
 		return nil, nil
 	}
 
-	if n > r.Remaining() {
+	if n < 0 || n > r.Remaining() {
 		return nil, fmt.Errorf("LargeBuffer.ReadN: requested %d bytes but only %d remaining", n, r.Remaining())
 	}
 
@@ -503,7 +503,7 @@ func (r *LargeBufferReader) Peek(n int) ([]byte, error) {
 		return nil, nil
 	}
 
-	if n > r.Remaining() {
+	if n < 0 || n > r.Remaining() {
 		return nil, fmt.Errorf("LargeBuffer.Peek: requested %d bytes but only %d remaining", n, r.Remaining())
 	}
 
@@ -528,7 +528,7 @@ func (r *LargeBufferReader) Peek(n int) ([]byte, error) {
 
 // Skip advances the read cursor by n bytes without copying any data.
 func (r *LargeBufferReader) Skip(n int) error {
-	if n > r.Remaining() {
+	if n < 0 || n > r.Remaining() {
 		return fmt.Errorf("LargeBuffer.Skip: requested %d bytes but only %d remaining", n, r.Remaining())
 	}
 

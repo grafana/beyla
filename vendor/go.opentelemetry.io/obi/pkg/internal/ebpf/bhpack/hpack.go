@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 )
 
 // A DecodingError is something the spec defines as a decoding error.
@@ -97,8 +98,9 @@ type Decoder struct {
 	// to fully parse before. Unlike buf, we own this data.
 	saveBuf bytes.Buffer
 
-	firstField    bool // processing the first field of the header block
-	failedToIndex bool
+	firstField       bool // processing the first field of the header block
+	tableSizeUpdates uint8
+	failedToIndex    bool
 }
 
 // NewDecoder returns a new decoder with the provided maximum dynamic
@@ -239,11 +241,12 @@ func (d *Decoder) DecodeFull(p []byte) ([]HeaderField, error) {
 // to be reused again for a new header block. If there is any remaining
 // data in the decoder's buffer, Close returns an error.
 func (d *Decoder) Close() error {
+	d.firstField = true
+	d.tableSizeUpdates = 0
 	if d.saveBuf.Len() > 0 {
 		d.saveBuf.Reset()
 		return DecodingError{errors.New("truncated headers")}
 	}
-	d.firstField = true
 	return nil
 }
 
@@ -265,6 +268,7 @@ func (d *Decoder) Write(p []byte) (n int, err error) {
 	}
 
 	for len(d.buf) > 0 {
+		isTableSizeUpdate := d.buf[0]&224 == 32
 		err = d.parseHeaderFieldRepr()
 		if errors.Is(err, errNeedMore) {
 			// Extra paranoia, making sure saveBuf won't
@@ -279,9 +283,11 @@ func (d *Decoder) Write(p []byte) (n int, err error) {
 			d.saveBuf.Write(d.buf)
 			return len(p), nil
 		}
-		d.firstField = false
 		if err != nil {
 			break
+		}
+		if !isTableSizeUpdate {
+			d.firstField = false
 		}
 	}
 	return len(p), err
@@ -372,6 +378,7 @@ func (d *Decoder) parseFieldLiteral(n uint8, it indexType) error {
 	if nameIdx > 0 {
 		ihf, ok := d.at(nameIdx)
 		if !ok {
+			d.failedToIndex = true
 			hf.Name = "<BAD INDEX>"
 		} else {
 			hf.Name = ihf.Name
@@ -422,7 +429,7 @@ func (d *Decoder) callEmit(hf HeaderField) error {
 func (d *Decoder) parseDynamicTableSizeUpdate() error {
 	// RFC 7541, sec 4.2: This dynamic table size update MUST occur at the
 	// beginning of the first header block following the change to the dynamic table size.
-	if !d.firstField && d.dynTab.size > 0 {
+	if !d.firstField || d.tableSizeUpdates >= 2 {
 		return DecodingError{errors.New("dynamic table size update MUST occur at the beginning of a header block")}
 	}
 
@@ -435,6 +442,7 @@ func (d *Decoder) parseDynamicTableSizeUpdate() error {
 		return DecodingError{errors.New("dynamic table size update too large")}
 	}
 	d.dynTab.setMaxSize(uint32(size))
+	d.tableSizeUpdates++
 	d.buf = buf
 	return nil
 }
@@ -470,7 +478,11 @@ func readVarInt(n byte, p []byte) (i uint64, remain []byte, err error) {
 	for len(p) > 0 {
 		b := p[0]
 		p = p[1:]
-		i += uint64(b&127) << m
+		payload := uint64(b & 127)
+		if payload > (math.MaxUint64-i)>>m {
+			return 0, origP, errVarintOverflow
+		}
+		i += payload << m
 		if b&128 == 0 {
 			return i, p, nil
 		}

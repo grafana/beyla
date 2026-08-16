@@ -262,6 +262,31 @@ And the following table describes the metrics and their associated groups.
 | `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
 | `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
 
+## Redact sensitive query parameters
+
+YAML section: `attributes`
+
+Beyla replaces the values of known-sensitive query parameters with `REDACTED` in the `url.full` and `url.query` trace attributes. The built-in list covers the parameters recommended by the OpenTelemetry HTTP semantic conventions (`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `AWSAccessKeyId`, `Signature`, `SecurityToken`, `X-Goog-Signature`, `sig`) along with common credential, session and payment parameter names such as `token`, `access_token`, `api_key`, `client_secret`, `password`, `otp`, `SAMLResponse`, `cvv` and `ssn`.
+
+| YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `sensitive_query_params.add`<p>`BEYLA_SENSITIVE_QUERY_PARAMS_ADD`</p> | Parameter names to redact in addition to the built-in list. | list of strings | (empty) |
+| `sensitive_query_params.remove`<p>`BEYLA_SENSITIVE_QUERY_PARAMS_REMOVE`</p> | Parameter names to drop from the built-in list. | list of strings | (empty) |
+
+The effective list is the built-in list, minus the names in `remove`, plus the names in `add`. When both options are empty, the built-in list is used unchanged. In the environment variables, the names are comma separated.
+
+```yaml
+attributes:
+  sensitive_query_params:
+    add:
+      - internal_token
+      - X-Tenant-Key
+    remove:
+      - sig
+```
+
+Names are matched exactly and are case sensitive, so `token` does not cover `Token`. Percent-encoded parameter names are decoded before matching, which means `?X-Amz-Signatur%65=v` is redacted like `?X-Amz-Signature=v`; the parameter name is exported as it appeared in the request, only the value is replaced.
+
 ## Configure cardinality limits
 
 YAML section: `attributes`

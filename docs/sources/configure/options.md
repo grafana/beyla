@@ -112,3 +112,40 @@ This option prints any instrumented trace on the standard output using one of th
 
 If you set `enforce_sys_caps` to true and the required system capabilities are missing, Beyla aborts startup and logs the missing capabilities.
 If you set this option to `false`, Beyla only logs the missing capabilities.
+
+## BPF filesystem and profile correlation
+
+YAML section: `ebpf`
+
+Beyla pins some of its eBPF maps under an `otel` directory inside the BPF filesystem, by default `/sys/fs/bpf/otel`. The pinned maps are what lets other eBPF tools read Beyla's view of the instrumented processes, and they're what the OpenTelemetry eBPF Profiler reads to correlate CPU profiles with the traces Beyla produces.
+
+| YAML<p>environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `bpf_fs_path`<p>`BEYLA_BPF_FS_PATH`</p> | Directory where the BPF filesystem is mounted, under which Beyla creates its `otel` directory. | string | `/sys/fs/bpf/` |
+
+The BPF filesystem has to be mounted before Beyla starts. When it isn't, Beyla keeps running with the pinning disabled and logs:
+
+```
+creating OTEL namespace in bpffs failed (is bpffs mounted?)
+OBI will still work, but features depending on pinned maps (e.g., log enricher, profile correlation) will be disabled
+```
+
+On a host, mount it once with:
+
+```shell
+mount -t bpf bpffs /sys/fs/bpf
+```
+
+In Kubernetes, the directory has to be a `hostPath` volume shared by the Beyla container and by any tool reading the pinned maps, so that both see the same filesystem:
+
+```yaml
+volumes:
+  - name: bpffs
+    hostPath:
+      path: /sys/fs/bpf
+      type: Directory
+volumeMounts:
+  - name: bpffs
+    mountPath: /sys/fs/bpf
+    mountPropagation: HostToContainer
+```

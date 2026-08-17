@@ -847,6 +847,15 @@
       },
       "type": "array"
     },
+    "GlobalMetricsConfig": {
+      "properties": {
+        "features": {
+          "$ref": "#/$defs/Features",
+          "x-env-var": "OTEL_EBPF_METRICS_FEATURES"
+        }
+      },
+      "type": "object"
+    },
     "GrafanaConfig": {
       "properties": {
         "otlp": {
@@ -1156,7 +1165,7 @@
           "x-env-var": "OTEL_EBPF_INTERNAL_METRICS_EXPORTER"
         },
         "prometheus": {
-          "$ref": "#/$defs/PrometheusConfig"
+          "$ref": "#/$defs/PrometheusEndpointConfig"
         }
       },
       "type": "object"
@@ -1487,8 +1496,7 @@
           "x-env-var": "OTEL_EBPF_EXTRA_SPAN_RESOURCE_ATTRIBUTES"
         },
         "features": {
-          "$ref": "#/$defs/Features",
-          "x-env-var": "OTEL_EBPF_METRICS_FEATURES"
+          "$ref": "#/$defs/Features"
         },
         "histogram_aggregation": {
           "type": "string",
@@ -1946,6 +1954,19 @@
             "1ms"
           ],
           "x-env-var": "OTEL_EBPF_PROMETHEUS_TTL"
+        }
+      },
+      "type": "object"
+    },
+    "PrometheusEndpointConfig": {
+      "properties": {
+        "path": {
+          "type": "string",
+          "x-env-var": "OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PATH"
+        },
+        "port": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT"
         }
       },
       "type": "object"
@@ -2669,7 +2690,7 @@
       "x-env-var": "BEYLA_LOG_LEVEL"
     },
     "metrics": {
-      "$ref": "#/$defs/MetricsConfig"
+      "$ref": "#/$defs/GlobalMetricsConfig"
     },
     "name_resolver": {
       "$ref": "#/$defs/NameResolverConfig"

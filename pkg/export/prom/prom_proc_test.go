@@ -55,7 +55,7 @@ func TestProcPrometheusEndpoint_AggregatedMetrics(t *testing.T) {
 				extraattributes.ProcessDiskIO.Section:         attribs,
 				extraattributes.ProcessNetIO.Section:          attribs,
 			},
-		}, CommonCfg: &perapp.MetricsConfig{
+		}, CommonCfg: &perapp.GlobalMetricsConfig{
 			Features: export.FeatureApplicationRED | bexport.FeatureProcess,
 		}},
 		procsInput,
@@ -144,7 +144,7 @@ func TestProcPrometheusEndpoint_DisaggregatedMetrics(t *testing.T) {
 				extraattributes.ProcessDiskIO.Section:         attribs,
 				extraattributes.ProcessNetIO.Section:          attribs,
 			},
-		}, CommonCfg: &perapp.MetricsConfig{
+		}, CommonCfg: &perapp.GlobalMetricsConfig{
 			Features: export.FeatureApplicationRED | bexport.FeatureProcess,
 		}},
 		procsInput,

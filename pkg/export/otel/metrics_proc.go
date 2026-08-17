@@ -45,7 +45,7 @@ var (
 type ProcMetricsConfig struct {
 	Metrics     *otelcfg.MetricsConfig
 	SelectorCfg *attributes.SelectorConfig
-	CommonCfg   *perapp.MetricsConfig
+	CommonCfg   *perapp.GlobalMetricsConfig
 }
 
 func (mc *ProcMetricsConfig) Enabled() bool {

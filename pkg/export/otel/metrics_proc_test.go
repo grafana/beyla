@@ -58,7 +58,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 					extraattributes.ProcessNetIO.Section:          includedAttributes,
 				},
 			},
-			CommonCfg: &perapp.MetricsConfig{
+			CommonCfg: &perapp.GlobalMetricsConfig{
 				Features: export.FeatureApplicationRED | bexport.FeatureProcess,
 			},
 		}, procsInput)(ctx)

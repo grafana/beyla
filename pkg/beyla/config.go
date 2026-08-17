@@ -103,10 +103,10 @@ type Config struct {
 	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
 	// Same as the otel_traces_export option, except all environment variables
 	// are prefixed with BEYLA_GRAFANA_AI_
-	SigilExport  otelcfg.TracesConfig  `yaml:"sigil_export" envPrefix:"BEYLA_GRAFANA_AI_"`
-	Metrics      perapp.MetricsConfig  `yaml:"metrics"`
-	Prometheus   prom.PrometheusConfig `yaml:"prometheus_export"`
-	TracePrinter debug.TracePrinter    `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+	SigilExport  otelcfg.TracesConfig       `yaml:"sigil_export" envPrefix:"BEYLA_GRAFANA_AI_"`
+	Metrics      perapp.GlobalMetricsConfig `yaml:"metrics"`
+	Prometheus   prom.PrometheusConfig      `yaml:"prometheus_export"`
+	TracePrinter debug.TracePrinter         `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	//

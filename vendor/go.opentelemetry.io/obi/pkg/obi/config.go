@@ -226,7 +226,7 @@ var DefaultConfig = Config{
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
 	},
-	Metrics: perapp.MetricsConfig{
+	Metrics: perapp.GlobalMetricsConfig{
 		Features: export.FeatureApplicationRED,
 	},
 	OTELMetrics: otelcfg.MetricsConfig{
@@ -286,7 +286,7 @@ var DefaultConfig = Config{
 		AvoidedServices: imetrics.AvoidedServicesConfig{
 			Limit: avoidedsvc.DefaultLimit,
 		},
-		Prometheus: imetrics.PrometheusConfig{
+		Prometheus: imetrics.PrometheusEndpointConfig{
 			Port: 0, // disabled by default
 			Path: "/internal/metrics",
 		},
@@ -414,7 +414,7 @@ type Config struct {
 	ServiceNamespace string `yaml:"service_namespace" env:"OTEL_EBPF_SERVICE_NAMESPACE"`
 
 	// Metrics configures the progressive support of the OTEL declarative configuration.
-	Metrics perapp.MetricsConfig `yaml:"metrics"`
+	Metrics perapp.GlobalMetricsConfig `yaml:"metrics"`
 
 	// Discovery configuration
 	Discovery services.DiscoveryConfig `yaml:"discovery"`
@@ -456,9 +456,9 @@ type Config struct {
 // It is used to initialize resources that should be available if they are enabled
 // for any possible service match. Per-service features still decide whether each
 // service emits the corresponding metrics.
-func (c *Config) JoinMetricsConfig() *perapp.MetricsConfig {
+func (c *Config) JoinMetricsConfig() *perapp.GlobalMetricsConfig {
 	if c == nil {
-		return &perapp.MetricsConfig{}
+		return &perapp.GlobalMetricsConfig{}
 	}
 
 	mc := c.Metrics

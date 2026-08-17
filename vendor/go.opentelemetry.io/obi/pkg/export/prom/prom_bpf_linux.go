@@ -8,9 +8,18 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func (bc *BPFCollector) enableBPFStatsRuntime() {
-	_, err := ebpf.EnableStats(unix.BPF_STATS_RUN_TIME)
+var enableStats = ebpf.EnableStats
+
+func (bc *BPFCollector) enableBPFStatsRuntime() func() {
+	stats, err := enableStats(unix.BPF_STATS_RUN_TIME)
 	if err != nil {
 		bc.log.Error("failed to enable runtime stats", "error", err)
+		return func() {}
+	}
+
+	return func() {
+		if err := stats.Close(); err != nil {
+			bc.log.Error("failed to close runtime stats", "error", err)
+		}
 	}
 }

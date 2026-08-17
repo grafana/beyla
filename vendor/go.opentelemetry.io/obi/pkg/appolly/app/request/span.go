@@ -2272,6 +2272,17 @@ func (s *Span) sendsTracesOnOtelPort(defaultOtlpGRPCPort int) bool {
 	}
 }
 
+// A single OTLP endpoint carries every signal, so a port match alone cannot tell
+// which signal a span exports. Attributing an ambiguous export to both would
+// suppress the one the SDK never sends, and nothing else would produce it.
+func (s *Span) sendsOnlyMetricsOnOtelPort(defaultOtlpGRPCPort int) bool {
+	return s.sendsMetricsOnOtelPort(defaultOtlpGRPCPort) && !s.sendsTracesOnOtelPort(defaultOtlpGRPCPort)
+}
+
+func (s *Span) sendsOnlyTracesOnOtelPort(defaultOtlpGRPCPort int) bool {
+	return s.sendsTracesOnOtelPort(defaultOtlpGRPCPort) && !s.sendsMetricsOnOtelPort(defaultOtlpGRPCPort)
+}
+
 func (s *Span) sendsMetricsOnGrpcOtelPort(defaultOtlpGRPCPort int) bool {
 	otlpMetricsProtocol, ok := s.Service.EnvVars[envOTLPMetricsProtocol]
 	if ok && otlpMetricsProtocol != otlpGrpcProtocol {
@@ -2310,7 +2321,7 @@ func (s *Span) IsExportMetricsSpan(defaultOtlpGRPCPort int) bool {
 		return false
 	}
 
-	return s.isMetricsExportURL() || s.sendsMetricsOnOtelPort(defaultOtlpGRPCPort)
+	return s.isMetricsExportURL() || s.sendsOnlyMetricsOnOtelPort(defaultOtlpGRPCPort)
 }
 
 func (s *Span) IsExportTracesSpan(defaultOtlpGRPCPort int) bool {
@@ -2319,7 +2330,7 @@ func (s *Span) IsExportTracesSpan(defaultOtlpGRPCPort int) bool {
 		return false
 	}
 
-	return s.isTracesExportURL() || s.sendsTracesOnOtelPort(defaultOtlpGRPCPort)
+	return s.isTracesExportURL() || s.sendsOnlyTracesOnOtelPort(defaultOtlpGRPCPort)
 }
 
 func (s *Span) IsSelfReferenceSpan() bool {

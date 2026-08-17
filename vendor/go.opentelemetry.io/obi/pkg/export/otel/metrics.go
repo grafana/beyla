@@ -42,10 +42,14 @@ const (
 	// pkg/export/attributes/metric.go file as we are disabling user-provided attribute
 	// selection for them. They are very specific metrics with an opinionated format
 	// for Span Metrics and Service Graph Metrics functionalities
-	SpanMetricsLatency       = "traces_spanmetrics_latency"
-	SpanMetricsLatencyOTel   = "traces_span_metrics_duration"
-	SpanMetricsCalls         = "traces_spanmetrics_calls_total"
-	SpanMetricsCallsOTel     = "traces_span_metrics_calls_total"
+	SpanMetricsLatency = "traces_spanmetrics_latency"
+	SpanMetricsCalls   = "traces_spanmetrics_calls_total"
+	// SpanMetricsLatencyOTel and SpanMetricsCallsOTel use OTel dot notation,
+	// matching the default `traces.span.metrics` namespace of the
+	// collector-contrib spanmetricsconnector. The Prometheus exporter emits the
+	// underscore counterparts (see pkg/export/prom).
+	SpanMetricsLatencyOTel   = "traces.span.metrics.duration"
+	SpanMetricsCallsOTel     = "traces.span.metrics.calls"
 	SpanMetricsRequestSizes  = "traces_spanmetrics_size_total"
 	SpanMetricsResponseSizes = "traces_spanmetrics_response_size_total"
 	// TracesTargetInfo, TargetInfo and TracesHostInfo use OTel dot notation.
@@ -73,7 +77,7 @@ var MetricTypes = []string{
 type MetricsReporter struct {
 	ctx              context.Context
 	cfg              *otelcfg.MetricsConfig
-	jointMetricsCfg  *perapp.MetricsConfig
+	jointMetricsCfg  *perapp.GlobalMetricsConfig
 	nodeMeta         meta.NodeMeta
 	attributes       *attributes.AttrSelector
 	exporter         sdkmetric.Exporter
@@ -168,7 +172,7 @@ type TargetMetrics struct {
 func ReportMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
-	jointMetricsCfg *perapp.MetricsConfig,
+	jointMetricsCfg *perapp.GlobalMetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
@@ -202,7 +206,7 @@ func newMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
-	jointMetricsCfg *perapp.MetricsConfig,
+	jointMetricsCfg *perapp.GlobalMetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
@@ -435,42 +439,42 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.HTTPEnabled() {
-		httpDuration, err := meter.Float64Histogram(attributes.HTTPServerDuration.OTEL, instrument.WithUnit("s"))
+		httpDuration, err := meter.Float64Histogram(attributes.HTTPServerDuration.OTEL, instrument.WithUnit(attributes.HTTPServerDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
 		m.httpDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpDuration, mr.attrHTTPDuration, timeNow, mr.cfg.TTL)
 
-		httpClientDuration, err := meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit("s"))
+		httpClientDuration, err := meter.Float64Histogram(attributes.HTTPClientDuration.OTEL, instrument.WithUnit(attributes.HTTPClientDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating http duration histogram metric: %w", err)
 		}
 		m.httpClientDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientDuration, mr.attrHTTPClientDuration, timeNow, mr.cfg.TTL)
 
-		httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit("By"))
+		httpRequestSize, err := meter.Float64Histogram(attributes.HTTPServerRequestSize.OTEL, instrument.WithUnit(attributes.HTTPServerRequestSize.Unit))
 		if err != nil {
 			return fmt.Errorf("creating http request size histogram metric: %w", err)
 		}
 		m.httpRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpRequestSize, mr.attrHTTPRequestSize, timeNow, mr.cfg.TTL)
 
-		httpResponseSize, err := meter.Float64Histogram(attributes.HTTPServerResponseSize.OTEL, instrument.WithUnit("By"))
+		httpResponseSize, err := meter.Float64Histogram(attributes.HTTPServerResponseSize.OTEL, instrument.WithUnit(attributes.HTTPServerResponseSize.Unit))
 		if err != nil {
 			return fmt.Errorf("creating http response size histogram metric: %w", err)
 		}
 		m.httpResponseSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpResponseSize, mr.attrHTTPResponseSize, timeNow, mr.cfg.TTL)
 
-		httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit("By"))
+		httpClientRequestSize, err := meter.Float64Histogram(attributes.HTTPClientRequestSize.OTEL, instrument.WithUnit(attributes.HTTPClientRequestSize.Unit))
 		if err != nil {
 			return fmt.Errorf("creating http client request size histogram metric: %w", err)
 		}
 		m.httpClientRequestSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, httpClientRequestSize, mr.attrHTTPClientRequestSize, timeNow, mr.cfg.TTL)
 
-		httpClientResponseSize, err := meter.Float64Histogram(attributes.HTTPClientResponseSize.OTEL, instrument.WithUnit("By"))
+		httpClientResponseSize, err := meter.Float64Histogram(attributes.HTTPClientResponseSize.OTEL, instrument.WithUnit(attributes.HTTPClientResponseSize.Unit))
 		if err != nil {
 			return fmt.Errorf("creating http client response size histogram metric: %w", err)
 		}
@@ -479,14 +483,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.GRPCEnabled() || mr.is.SunRPCEnabled() {
-		grpcDuration, err := meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit("s"))
+		grpcDuration, err := meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit(attributes.RPCServerDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
 		m.grpcDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, grpcDuration, mr.attrGRPCServer, timeNow, mr.cfg.TTL)
 
-		grpcClientDuration, err := meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit("s"))
+		grpcClientDuration, err := meter.Float64Histogram(attributes.RPCClientDuration.OTEL, instrument.WithUnit(attributes.RPCClientDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
 		}
@@ -495,7 +499,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.DBEnabled() {
-		dbClientDuration, err := meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit("s"))
+		dbClientDuration, err := meter.Float64Histogram(attributes.DBClientDuration.OTEL, instrument.WithUnit(attributes.DBClientDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating db client duration histogram metric: %w", err)
 		}
@@ -504,14 +508,14 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.MQEnabled() {
-		msgPublishDuration, err := meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit("s"))
+		msgPublishDuration, err := meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit(attributes.MessagingPublishDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
 		}
 		m.msgPublishDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, msgPublishDuration, mr.attrMessagingPublish, timeNow, mr.cfg.TTL)
 
-		msgProcessDuration, err := meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit("s"))
+		msgProcessDuration, err := meter.Float64Histogram(attributes.MessagingProcessDuration.OTEL, instrument.WithUnit(attributes.MessagingProcessDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating messaging client process duration histogram metric: %w", err)
 		}
@@ -534,28 +538,28 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		m.gpuGraphCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuGraphCallsTotal, mr.attrGPUGraphCalls, timeNow, mr.cfg.TTL)
 
-		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attributes.GPUCudaMemoryAllocations.OTEL, instrument.WithUnit("By"))
+		gpuMemoryAllocationsTotal, err := meter.Int64Counter(attributes.GPUCudaMemoryAllocations.OTEL, instrument.WithUnit(attributes.GPUCudaMemoryAllocations.Unit))
 		if err != nil {
 			return fmt.Errorf("creating gpu memory allocations total: %w", err)
 		}
 		m.gpuMemoryAllocsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuMemoryAllocationsTotal, mr.attrGPUMemoryAllocations, timeNow, mr.cfg.TTL)
 
-		gpuKernelGridSize, err := meter.Float64Histogram(attributes.GPUCudaKernelGridSize.OTEL, instrument.WithUnit("1"))
+		gpuKernelGridSize, err := meter.Float64Histogram(attributes.GPUCudaKernelGridSize.OTEL, instrument.WithUnit(attributes.GPUCudaKernelGridSize.Unit))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel grid size histogram: %w", err)
 		}
 		m.gpuKernelGridSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuKernelGridSize, mr.attrGPUKernelGridSize, timeNow, mr.cfg.TTL)
 
-		gpuKernelBlockSize, err := meter.Float64Histogram(attributes.GPUCudaKernelBlockSize.OTEL, instrument.WithUnit("1"))
+		gpuKernelBlockSize, err := meter.Float64Histogram(attributes.GPUCudaKernelBlockSize.OTEL, instrument.WithUnit(attributes.GPUCudaKernelBlockSize.Unit))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel block size histogram: %w", err)
 		}
 		m.gpuKernelBlockSize = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, gpuKernelBlockSize, mr.attrGPUKernelBlockSize, timeNow, mr.cfg.TTL)
 
-		gpuMemoryCopySize, err := meter.Float64Histogram(attributes.GPUCudaMemoryCopies.OTEL, instrument.WithUnit("1"))
+		gpuMemoryCopySize, err := meter.Float64Histogram(attributes.GPUCudaMemoryCopies.OTEL, instrument.WithUnit(attributes.GPUCudaMemoryCopies.Unit))
 		if err != nil {
 			return fmt.Errorf("creating gpu memcpy size histogram: %w", err)
 		}
@@ -564,7 +568,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.DNSEnabled() {
-		dnsLookupDuration, err := meter.Float64Histogram(attributes.DNSLookupDuration.OTEL, instrument.WithUnit("s"))
+		dnsLookupDuration, err := meter.Float64Histogram(attributes.DNSLookupDuration.OTEL, instrument.WithUnit(attributes.DNSLookupDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating dns lookup duration histogram: %w", err)
 		}
@@ -573,7 +577,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	}
 
 	if mr.is.GenAIEnabled() {
-		genAIClientDuration, err := meter.Float64Histogram(attributes.GenAIClientOperationDuration.OTEL, instrument.WithUnit("s"))
+		genAIClientDuration, err := meter.Float64Histogram(attributes.GenAIClientOperationDuration.OTEL, instrument.WithUnit(attributes.GenAIClientOperationDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating genai client operation duration histogram: %w", err)
 		}
@@ -581,7 +585,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			m.ctx, genAIClientDuration, mr.attrGenAIClientDuration, timeNow, mr.cfg.TTL)
 
 		// the input tokens and output tokens are the same metric, we just need to distinguish the attributes, so we can write the token type
-		genAITokenUsage, err := meter.Float64Histogram(attributes.GenAIClientInputTokenUsage.OTEL, instrument.WithUnit("{token}"))
+		genAITokenUsage, err := meter.Float64Histogram(attributes.GenAIClientInputTokenUsage.OTEL, instrument.WithUnit(attributes.GenAIClientInputTokenUsage.Unit))
 		if err != nil {
 			return fmt.Errorf("creating genai client token usage histogram: %w", err)
 		}

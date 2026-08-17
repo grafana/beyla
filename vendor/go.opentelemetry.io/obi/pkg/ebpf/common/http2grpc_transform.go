@@ -8,7 +8,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"maps"
+	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -38,15 +41,29 @@ const (
 
 const initialHeaderTableSize = 4096
 
+// mirrors k_h2_seq_unreliable: the kernel couldn't number this event
+const h2SeqUnreliable = math.MaxUint32
+
 var (
-	validPath        = regexp.MustCompile(`^[A-Za-z0-9\-/._~]+$`)
+	// anchored to '/': a desynced HPACK dynamic table can resolve :path to another
+	// field's value (e.g. a traceparent), which must degrade to "*", not a label
+	validPath        = regexp.MustCompile(`^/[A-Za-z0-9\-/._~]*$`)
 	validContentType = regexp.MustCompile(`^[A-Za-z\-/\+]+$`)
 )
+
+// how far out of order events may arrive before we give up waiting; two
+// exchanges completing at once can take their ordinals and ring-buffer slots
+// in opposite orders
+const seqReorderWindow = 4
 
 type h2Connection struct {
 	hdec     *bhpack.Decoder
 	hdecRet  *bhpack.Decoder
 	protocol Protocol
+	// highest ordinal released in order; a lasting gap means a lost event
+	lastSeq uint32
+	// out-of-order successors waiting for the ordinal before them
+	stash map[uint32]*BPFHTTP2Info
 }
 
 func byteFramer(data []uint8) *http2.Framer {
@@ -62,7 +79,7 @@ func byteFramer(data []uint8) *http2.Framer {
 // we remember if we see grpc mentioned and tag the rest of the streams for
 // a given connection as grpc. default assumes plain HTTP2
 // this is why we need the h2c cache
-func getOrInitH2Conn(activeGRPCConnections *lru.Cache[uint64, h2Connection], connID uint64) *h2Connection {
+func getOrInitH2Conn(activeGRPCConnections *lru.Cache[uint64, *h2Connection], connID uint64) *h2Connection {
 	v, ok := activeGRPCConnections.Get(connID)
 
 	dynamicTableSize := initialHeaderTableSize
@@ -71,22 +88,111 @@ func getOrInitH2Conn(activeGRPCConnections *lru.Cache[uint64, h2Connection], con
 	}
 
 	if !ok {
-		h := h2Connection{
+		v = &h2Connection{
 			hdec:     bhpack.NewDecoder(uint32(dynamicTableSize), nil),
 			hdecRet:  bhpack.NewDecoder(uint32(dynamicTableSize), nil),
 			protocol: HTTP2,
 		}
-		activeGRPCConnections.Add(connID, h)
-		v, ok = activeGRPCConnections.Get(connID)
-		if !ok {
-			return nil
-		}
+		activeGRPCConnections.Add(connID, v)
 	}
 
-	return &v
+	return v
 }
 
-func protocolIsGRPC(activeGRPCConnections *lru.Cache[uint64, h2Connection], connID uint64) {
+type seqVerdict int
+
+const (
+	// decode the event now
+	seqProcess seqVerdict = iota
+	// event stashed until its predecessor arrives; skip it for now
+	seqHold
+)
+
+// drainStash pops the run of stashed successors starting at lastSeq+1, in
+// order, advancing lastSeq past each. With flush=true it then releases anything
+// left (the decoders are already unreliable), so nothing is stranded.
+func (h2c *h2Connection) drainStash(flush bool) []*BPFHTTP2Info {
+	var replay []*BPFHTTP2Info
+	for {
+		next, ok := h2c.stash[h2c.lastSeq+1]
+		if !ok {
+			break
+		}
+		delete(h2c.stash, h2c.lastSeq+1)
+		h2c.lastSeq++
+		replay = append(replay, next)
+	}
+	if flush {
+		for _, seq := range slices.Sorted(maps.Keys(h2c.stash)) {
+			replay = append(replay, h2c.stash[seq])
+			h2c.lastSeq = seq
+		}
+		clear(h2c.stash)
+	}
+	return replay
+}
+
+func (h2c *h2Connection) markUnreliable() {
+	h2c.hdec.MarkUnreliable()
+	h2c.hdecRet.MarkUnreliable()
+}
+
+// gateConnSeq releases events in ordinal order. An event past the next
+// expected ordinal is held until the gap fills; if the gap outlives the
+// window the missing event was lost, so the decoders are marked unreliable
+// and the held events flushed (methods degrade to `*` rather than resolve
+// another request's fields). Returns the events ready to decode now.
+func gateConnSeq(parseContext *EBPFParseContext, connID uint64, event *BPFHTTP2Info) (seqVerdict, []*BPFHTTP2Info) {
+	seq := event.Seq
+	if seq == 0 || connID == 0 {
+		return seqProcess, nil
+	}
+	h2c := getOrInitH2Conn(parseContext.h2c, connID)
+	if h2c == nil {
+		return seqProcess, nil
+	}
+
+	if seq == h2SeqUnreliable {
+		h2c.markUnreliable()
+		return seqProcess, h2c.drainStash(true)
+	}
+
+	switch {
+	case h2c.lastSeq == 0:
+		// first ordinal seen anchors the connection; ordinals only ever climb
+		h2c.lastSeq = seq
+		return seqProcess, h2c.drainStash(false)
+	case seq <= h2c.lastSeq:
+		// duplicate or already released
+		return seqProcess, nil
+	case seq == h2c.lastSeq+1:
+		h2c.lastSeq = seq
+		return seqProcess, h2c.drainStash(false)
+	}
+
+	if h2c.stash == nil {
+		h2c.stash = map[uint32]*BPFHTTP2Info{}
+	}
+	stashed := *event
+	h2c.stash[seq] = &stashed
+	if len(h2c.stash) <= seqReorderWindow && seq-h2c.lastSeq <= seqReorderWindow+1 {
+		return seqHold, nil
+	}
+
+	h2c.markUnreliable()
+	return seqHold, h2c.drainStash(true)
+}
+
+// replayStashedH2Event decodes a held event; it already passed the PID filter
+func replayStashedH2Event(parseContext *EBPFParseContext, event *BPFHTTP2Info) {
+	span, ignore, err := http2FromBuffers(parseContext, event)
+	if err != nil || ignore {
+		return
+	}
+	parseContext.emitExtraSpans(span)
+}
+
+func protocolIsGRPC(activeGRPCConnections *lru.Cache[uint64, *h2Connection], connID uint64) {
 	h2c := getOrInitH2Conn(activeGRPCConnections, connID)
 	if h2c != nil {
 		h2c.protocol = GRPC
@@ -443,6 +549,19 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 	eventType := HTTP2
 	connID := event.NewConnId
 
+	verdict, replay := gateConnSeq(parseContext, connID, event)
+	// replay after the current event so ordinals decode in order
+	if len(replay) > 0 {
+		defer func() {
+			for _, stashed := range replay {
+				replayStashedH2Event(parseContext, stashed)
+			}
+		}()
+	}
+	if verdict == seqHold {
+		return request.Span{}, true, nil
+	}
+
 	for {
 		f, err := framer.ReadFrame()
 		if err != nil {
@@ -454,12 +573,9 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 			if strings.Contains(err.Error(), "unexpected EOF") && bLen > frameHeaderLen {
 				fh, err := readFrameHeader(event.Data[:bLen])
 				if err == nil && fh.Length > uint32(bLen-frameHeaderLen) {
-					newLen := min(
-						// If we ever use more than 256 for the buffers we have to
-						// change this to encode properly in more than 1 byte
-						bLen-frameHeaderLen, 255)
-					event.Data[0] = 0
-					event.Data[1] = 0
+					newLen := bLen - frameHeaderLen
+					event.Data[0] = uint8(newLen >> 16)
+					event.Data[1] = uint8(newLen >> 8)
 					event.Data[2] = uint8(newLen)
 					framer = byteFramer(event.Data[:bLen])
 

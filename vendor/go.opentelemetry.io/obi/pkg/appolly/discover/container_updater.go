@@ -48,11 +48,13 @@ func updateLoop(
 					log.Debug("adding process", "pid", ev.Obj.FileInfo.Pid())
 					store.AddProcess(ev.Obj.FileInfo.Pid())
 				case EventDeleted:
-					// we don't need to handle process deletion from here, as the Kubernetes informer will
-					// remove the process from the database when the Pod that contains it is deleted.
+					log.Debug("deleting process", "pid", ev.Obj.FileInfo.Pid())
+					// Apply deletion in this stage's event order so a delayed create cannot
+					// restore stale PID state after upstream cleanup.
+					store.DeleteProcess(ev.Obj.FileInfo.Pid())
 				}
 			}
-			out.Send(instrumentables)
+			out.SendCtx(ctx, instrumentables)
 		})
 	}
 }

@@ -80,7 +80,7 @@ type SvcGraphMetrics struct {
 func ReportSvcGraphMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
-	jointMetricsConfig *perapp.MetricsConfig,
+	jointMetricsConfig *perapp.GlobalMetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],

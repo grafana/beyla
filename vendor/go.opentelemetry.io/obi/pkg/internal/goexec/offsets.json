@@ -1345,6 +1345,22 @@
           }
         ]
       },
+      "RawQuery": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.4"
+        },
+        "offsets": [
+          {
+            "offset": 96,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 88,
+            "since": "1.26.0"
+          }
+        ]
+      },
       "Scheme": {
         "versions": {
           "oldest": "1.17.0",

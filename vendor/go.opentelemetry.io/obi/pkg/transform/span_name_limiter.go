@@ -39,7 +39,7 @@ type routesCount struct {
 
 type SpanNameLimiterConfig struct {
 	Limit      int
-	MetricsCfg *perapp.MetricsConfig
+	MetricsCfg *perapp.GlobalMetricsConfig
 	OTEL       *otelcfg.MetricsConfig
 	Prom       *prom.PrometheusConfig
 }

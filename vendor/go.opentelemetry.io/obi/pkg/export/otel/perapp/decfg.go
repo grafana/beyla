@@ -9,16 +9,16 @@ import (
 	"go.opentelemetry.io/obi/pkg/export"
 )
 
-// MetricsConfig is a placeholder for the progressive support of global and per-service
+// GlobalMetricsConfig is a placeholder for the progressive support of global and per-service
 // configuration of metrics.
-type MetricsConfig struct {
+type GlobalMetricsConfig struct {
 	// Features specifies which metric features to export. Accepted values: application, network,
 	// application_span, application_service_graph, stats, ...
 	// envDefault is provided to avoid breaking changes
 	Features export.Features `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}" envSeparator:","`
 }
 
-// SvcMetricsConfig is equivalent to MetricsConfig, but avoids defining environment variable, since this
+// SvcMetricsConfig is equivalent to GlobalMetricsConfig, but avoids defining environment variable, since this
 // is a per-service configuration that needs to be defined exclusively in the service definition YAML.
 type SvcMetricsConfig struct {
 	// Features specifies which metric features to export. Accepted values: application, network,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package ec2 provides a resource detector for EC2 instances using aws-sdk-go-v2.
-package ec2 // import "go.opentelemetry.io/contrib/detectors/aws/ec2/v2"
+package ec2
 
 import (
 	"context"
@@ -11,15 +11,23 @@ import (
 	"io"
 	"net/http"
 
+	aws "github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 )
 
 var errClient = errors.New("EC2 Client Error")
+
+var (
+	loadDefaultConfig = awsconfig.LoadDefaultConfig
+	newIMDSClient     = func(cfg aws.Config) client {
+		return imds.NewFromConfig(cfg)
+	}
+)
 
 // client implements methods to capture EC2 environment metadata information.
 type client interface {
@@ -85,12 +93,12 @@ func (detector *resourceDetector) Detect(ctx context.Context) (*resource.Resourc
 }
 
 func newClient() client {
-	cfg, err := awsconfig.LoadDefaultConfig(context.Background())
+	cfg, err := loadDefaultConfig(context.Background())
 	if err != nil {
 		return nil
 	}
 
-	return imds.NewFromConfig(cfg)
+	return newIMDSClient(cfg)
 }
 
 type metadata struct {

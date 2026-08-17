@@ -14,9 +14,10 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/cilium/ebpf"
-	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"golang.org/x/sys/unix"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
@@ -46,15 +47,16 @@ type Tracer struct {
 	fionreadFixupEnabled    bool
 	iterMu                  sync.Mutex
 	itersOnce               sync.Once
-	seenNetns               *lru.Cache[uint64, struct{}]
-	netnsAttempts           *lru.Cache[uint64, int]
+	seenNetns               *expirable.LRU[uint64, struct{}]
+	netnsAttempts           *expirable.LRU[uint64, int]
 	backfillDisabled        bool
 }
 
 const (
-	// netns inodes are recycled, so entries have to age out or a new namespace that lands on a
-	// freed inode never gets backfilled
 	seenNetnsCacheLen = 1024
+	// the kernel reuses netns inodes and a capacity bound never evicts below the cap, so a new
+	// container landing on a freed inode would look already backfilled
+	seenNetnsTTL = 5 * time.Minute
 	// a namespace that keeps failing is dropped, so one broken container cannot stop the
 	// backfill for every other namespace on the host
 	maxNetnsAttempts = 3
@@ -62,19 +64,11 @@ const (
 
 func New(cfg *obi.Config) *Tracer {
 	log := slog.With("component", "tpinjector")
-	seen, err := lru.New[uint64, struct{}](seenNetnsCacheLen)
-	attempts, attemptsErr := lru.New[uint64, int](seenNetnsCacheLen)
-	if err != nil || attemptsErr != nil {
-		log.Error("cannot create netns caches, disabling socket backfill",
-			"error", errors.Join(err, attemptsErr))
-	}
-
 	return &Tracer{
-		log:              log,
-		cfg:              cfg,
-		seenNetns:        seen,
-		netnsAttempts:    attempts,
-		backfillDisabled: err != nil || attemptsErr != nil,
+		log:           log,
+		cfg:           cfg,
+		seenNetns:     expirable.NewLRU[uint64, struct{}](seenNetnsCacheLen, nil, seenNetnsTTL),
+		netnsAttempts: expirable.NewLRU[uint64, int](seenNetnsCacheLen, nil, seenNetnsTTL),
 	}
 }
 

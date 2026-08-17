@@ -74,7 +74,7 @@ type MetricsConfig struct {
 	// Features specifies which metric features to export. Accepted values: application, network,
 	// application_span, application_service_graph, ...
 	//
-	// Deprecated: use top-level MetricsConfig.Features instead.
+	// Deprecated: use the top-level metrics.features property (perapp.GlobalMetricsConfig.Features) instead.
 	DeprFeatures export.Features `yaml:"features"`
 
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...

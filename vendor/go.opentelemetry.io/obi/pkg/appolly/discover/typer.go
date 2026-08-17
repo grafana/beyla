@@ -155,6 +155,7 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		Sampler:            samplerFromConfig(samplerConfig),
 		Features:           svcFeatures,
 		LogEnricherEnabled: processMatch.LogEnricherEnabled(),
+		SDKLanguage:        svc.InstrumentableGeneric,
 	}
 
 	routesCfg := t.cfg.Routes

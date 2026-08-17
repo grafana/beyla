@@ -91,6 +91,7 @@ const (
 )
 
 // Kernel-side classification
+// Keep these values aligned with protocol_type in bpf/common/connection_info.h
 const (
 	ProtocolTypeUnknown uint8 = iota
 	ProtocolTypeMySQL
@@ -102,6 +103,7 @@ const (
 	ProtocolTypeSunRPC
 	ProtocolTypeNATS // placeholder for future kernel-space detection
 	ProtocolTypeAMQP // placeholder for future kernel-space detection
+	ProtocolTypeAerospike
 )
 
 const (
@@ -282,7 +284,7 @@ type pendingGoHTTPClientKey struct {
 
 type EBPFParseContext struct {
 	protocolDebug               bool
-	h2c                         *lru.Cache[uint64, h2Connection]
+	h2c                         *lru.Cache[uint64, *h2Connection]
 	redisDBCache                *simplelru.LRU[BpfConnectionInfoT, int]
 	couchbaseBucketCache        *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]
 	largeBuffers                *expirable.LRU[largeBufferKey, *largebuf.LargeBuffer]
@@ -390,7 +392,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		emitSpans                  func([]request.Span)
 	)
 
-	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
+	h2c, _ := lru.New[uint64, *h2Connection](1024 * 10)
 	largeBuffers := expirable.NewLRU[largeBufferKey, *largebuf.LargeBuffer](1024, nil, 5*time.Minute)
 	postgresDBNames, _ := simplelru.NewLRU[BpfConnectionInfoT, string](4096, nil)
 
@@ -758,6 +760,17 @@ func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
 		// subprog reconciliation. Replace with a dummy so it loads safely.
 		if _, ok := spec.Programs["obi_uprobe_readMimeHeader"]; ok {
 			spec.Programs["obi_uprobe_readMimeHeader"] = dummy
+		}
+
+		// The huffman decode's bpf_loop callback trips the same func_info validation;
+		// the BPF side skips the detour to it when g_bpf_loop_enabled=false
+		if _, ok := spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffman"]; ok {
+			spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffman"] = dummy
+		}
+
+		// the candidate sweep scans under bpf_loop as well
+		if _, ok := spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffscan"]; ok {
+			spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffscan"] = dummy
 		}
 
 		// gotracer's HTTP/1 client traceparent injection scans the request

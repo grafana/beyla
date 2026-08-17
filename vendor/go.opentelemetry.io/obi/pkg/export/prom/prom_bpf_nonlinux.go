@@ -5,4 +5,6 @@
 
 package prom // import "go.opentelemetry.io/obi/pkg/export/prom"
 
-func (bc *BPFCollector) enableBPFStatsRuntime() {}
+func (bc *BPFCollector) enableBPFStatsRuntime() func() {
+	return func() {}
+}

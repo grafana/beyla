@@ -16,6 +16,11 @@ GOARCH ?= amd64
 RELEASE_VERSION := $(shell git describe --all | cut -d/ -f2)
 RELEASE_REVISION := $(shell git rev-parse --short HEAD )
 BUILDINFO_PKG ?= github.com/grafana/beyla/v3/pkg/buildinfo
+OBI_NAMES_PKG ?= go.opentelemetry.io/obi/pkg/export/attributes/names
+# attr.VendorPrefix is read at package-init time by OBI's pre-aggregated
+# bpf.probe.latency producer, before OverrideOBIGlobalConfig() can set it,
+# so it has to be baked in by the linker.
+VENDOR_PREFIX_LDFLAG = -X '$(OBI_NAMES_PKG).VendorPrefix=beyla'
 TEST_OUTPUT ?= ./testoutput
 
 IMG_REGISTRY ?= docker.io
@@ -275,14 +280,14 @@ all: vendor-obi build
 .PHONY: compile compile-cache
 compile:
 	@echo "### Compiling Beyla"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)' $(VENDOR_PREFIX_LDFLAG)" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 compile-cache:
 	@echo "### Compiling Beyla K8s cache"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)' $(VENDOR_PREFIX_LDFLAG)" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
 .PHONY: debug
 debug:
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)' $(VENDOR_PREFIX_LDFLAG)" -a -o bin/$(CMD) $(MAIN_GO_FILE)
 
 .PHONY: dev
 dev: prereqs generate compile-for-coverage
@@ -291,10 +296,10 @@ dev: prereqs generate compile-for-coverage
 .PHONY: compile-for-coverage compile-cache-for-coverage
 compile-for-coverage:
 	@echo "### Compiling project to generate coverage profiles"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=test-$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=test-$(RELEASE_REVISION)'" -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=test-$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=test-$(RELEASE_REVISION)' $(VENDOR_PREFIX_LDFLAG)" -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
 compile-cache-for-coverage:
 	@echo "### Compiling K8s cache service to generate coverage profiles"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="$(VENDOR_PREFIX_LDFLAG)" -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
 
 # Java agent targets
 JAVA_AGENT_DIR      := .obi-src/pkg/internal/java

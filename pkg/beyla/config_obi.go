@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 
 	"github.com/grafana/beyla/v3/pkg/buildinfo"
+	"github.com/grafana/beyla/v3/pkg/export/extraattributes"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
 	cfgutil "github.com/grafana/beyla/v3/pkg/helpers/config"
 )
@@ -90,39 +91,49 @@ func OverrideOBIGlobalConfig() {
 	attr.VendorPrefix = "beyla"
 	attr.VendorSDKName = "beyla"
 	attr.OBIIP = "beyla.ip"
-	attributes.NetworkFlow = attributes.Name{
+	// Unit and Type must be kept in sync with OBI's own definitions in
+	// pkg/export/attributes/metric.go: OBI's exporters declare the OTLP instrument unit
+	// from Name.Unit, and extraattributes.Metric derives Prom from OTEL+Unit+Type the
+	// same way OBI does, so the Prometheus exporter and any Prometheus consumer of
+	// Beyla's OTLP output name each metric identically.
+	attributes.NetworkFlow = extraattributes.Metric(attributes.Name{
 		Section: "beyla.network.flow",
-		Prom:    "beyla_network_flow_bytes_total",
 		OTEL:    "beyla.network.flow.bytes",
-	}
-	attributes.NetworkFlowPackets = attributes.Name{
+		Unit:    "{bytes}",
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.NetworkFlowPackets = extraattributes.Metric(attributes.Name{
 		Section: "beyla.network.flow.packets",
-		Prom:    "beyla_network_flow_packets_total",
 		OTEL:    "beyla.network.flow.packets",
-	}
-	attributes.NetworkInterZone = attributes.Name{
+		Unit:    "{packets}",
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.NetworkInterZone = extraattributes.Metric(attributes.Name{
 		Section: "beyla.network.inter.zone",
-		Prom:    "beyla_network_inter_zone_bytes_total",
 		OTEL:    "beyla.network.inter.zone.bytes",
-	}
-	attributes.StatTCPRtt = attributes.Name{
+		Unit:    "{bytes}",
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.StatTCPRtt = extraattributes.Metric(attributes.Name{
 		Section: "beyla.stat.tcp.rtt",
-		Prom:    "beyla_stat_tcp_rtt_seconds",
 		OTEL:    "beyla.stat.tcp.rtt",
-	}
-	attributes.StatTCPFailedConnections = attributes.Name{
+		Unit:    "s",
+		Type:    attributes.InstrumentHistogram,
+	})
+	attributes.StatTCPFailedConnections = extraattributes.Metric(attributes.Name{
 		Section: "beyla.stat.tcp.failed.connections",
-		Prom:    "beyla_stat_tcp_failed_connections",
 		OTEL:    "beyla.stat.tcp.failed.connections",
-	}
-	attributes.StatTCPRetransmits = attributes.Name{
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.StatTCPRetransmits = extraattributes.Metric(attributes.Name{
 		Section: "beyla.stat.tcp.retransmits",
-		Prom:    "beyla_stat_tcp_retransmits",
 		OTEL:    "beyla.stat.tcp.retransmits",
-	}
-	attributes.StatTCPIo = attributes.Name{
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.StatTCPIo = extraattributes.Metric(attributes.Name{
 		Section: "beyla.stat.tcp.io",
-		Prom:    "beyla_stat_tcp_io_bytes_total",
 		OTEL:    "beyla.stat.tcp.io",
-	}
+		Unit:    "By",
+		Type:    attributes.InstrumentCounter,
+	})
 }

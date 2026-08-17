@@ -21,6 +21,33 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
+// TestOverrideOBIGlobalConfig_MetricNames pins the Beyla-renamed metric definitions. Unit
+// is what OBI's exporters declare to the OTLP instrument, and Prom is derived from
+// OTEL+Unit+Type, so an override that forgets Unit silently emits a unitless instrument and
+// a Prometheus name that disagrees with the one a collector derives from Beyla's OTLP output.
+func TestOverrideOBIGlobalConfig_MetricNames(t *testing.T) {
+	OverrideOBIGlobalConfig()
+
+	for _, tc := range []struct {
+		name         attributes.Name
+		expectedProm string
+		expectedUnit string
+	}{
+		{attributes.NetworkFlow, "beyla_network_flow_bytes_total", "{bytes}"},
+		{attributes.NetworkFlowPackets, "beyla_network_flow_packets_total", "{packets}"},
+		{attributes.NetworkInterZone, "beyla_network_inter_zone_bytes_total", "{bytes}"},
+		{attributes.StatTCPRtt, "beyla_stat_tcp_rtt_seconds", "s"},
+		{attributes.StatTCPFailedConnections, "beyla_stat_tcp_failed_connections_total", ""},
+		{attributes.StatTCPRetransmits, "beyla_stat_tcp_retransmits_total", ""},
+		{attributes.StatTCPIo, "beyla_stat_tcp_io_bytes_total", "By"},
+	} {
+		t.Run(tc.expectedProm, func(t *testing.T) {
+			assert.Equal(t, tc.expectedProm, tc.name.Prom)
+			assert.Equal(t, tc.expectedUnit, tc.name.Unit)
+		})
+	}
+}
+
 func TestGrafanaEndpointOverride(t *testing.T) {
 	// GIVEN a Grafana Cloud configuration
 	config, err := LoadConfig(strings.NewReader(`

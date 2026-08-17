@@ -131,6 +131,22 @@ BEHAVIORAL_TRANSFORMS=(
     'internal/test/integration/components/beyla|internal/test/beyla_extensions/components/beyla'
     'internal/test/integration/components/beyla-k8s-cache|internal/test/beyla_extensions/components/beyla-k8s-cache'
 
+    # --- GeoIP test databases (docker-compose-netolly-geoip.yml) ---
+    # Upstream mounts the MaxMind test databases as a sibling of the compose file's
+    # directory: internal/test/integration/../geoip → .obi-src/internal/test/geoip.
+    # The generated compose file lives in internal/testgenerated/integration/, where
+    # `../geoip` would resolve to internal/testgenerated/geoip — a path that does not
+    # exist, so Docker silently creates an empty bind mount, no .mmdb is found, and no
+    # src/dst asn+country attribute is ever decorated (TestNetwork_GeoIP then queries an
+    # empty result set). Point it at the submodule copy instead of duplicating binary
+    # fixtures under internal/test/beyla_extensions/, which would go stale unnoticed.
+    #
+    # `../../..` from internal/testgenerated/integration/ is the repo root — the same
+    # base as the `context: ../../../.obi-src` rewrites in adjust_docker_compose_paths.
+    # Anchoring on the full `../geoip:/geoip` mount means no other line in any generated
+    # compose file can match.
+    '\.\./geoip:/geoip|../../../.obi-src/internal/test/geoip:/geoip'
+
     # --- Test assertion fixes: hard-fail t → collect-t ct inside EventuallyWithT ---
     # OBI upstream bug: python/rails span checks in testNestedHTTPTracesKProbes use
     # require.Len(t, ...) instead of require.Len(ct, ...), causing immediate hard-fail

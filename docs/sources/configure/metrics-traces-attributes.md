@@ -59,6 +59,47 @@ In the previous example, all metrics with a name starting with `http_` or `http.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
+## Select trace attributes
+
+Besides metric names, the `select` subsection accepts the special key `traces`, which controls the optional attributes exported on OTLP spans.
+
+Keys are matched as globs against the section name, and spans use the section name `traces`. A key like `http_*` therefore never reaches these attributes, while a catch-all `*` does match them along with every metric.
+
+Most of these attributes carry request payloads, so they're opt-in: they're only exported when listed in `include`. The exceptions are `dns.question.name` and `url.query`, which are exported by default and can be turned off with `exclude`.
+
+| Attribute | Exported by default |
+| --------- | ------------------- |
+| `dns.question.name` | yes |
+| `url.query` | yes |
+| `db.query.text` | no |
+| `db.response.error` | no |
+| `graphql.document` | no |
+| `gen_ai.input.messages` | no |
+| `gen_ai.output.messages` | no |
+| `gen_ai.system_instructions` | no |
+| `gen_ai.metadata` | no |
+| `gen_ai.tool.definitions` | no |
+| `gen_ai.tool.call.arguments` | no |
+| `gen_ai.tool.call.result` | no |
+| `gen_ai.response.error` | no |
+
+Example:
+
+```yaml
+attributes:
+  select:
+    traces:
+      # export the SQL statement and the GraphQL query on spans
+      include:
+        - db.query.text
+        - graphql.document
+      # stop exporting the query string
+      exclude:
+        - url.query
+```
+
+Values of known-sensitive query parameters are redacted inside `url.query` before export. The other attributes in this table are exported as captured, so enable them only when the payloads they carry are safe to store.
+
 ## Instance ID decoration
 
 YAML section: `attributes.instance_id`

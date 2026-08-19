@@ -262,6 +262,37 @@ And the following table describes the metrics and their associated groups.
 | `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
 | `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
 
+## Redact sensitive query parameters
+
+YAML section: `attributes`
+
+Beyla replaces the values of known-sensitive query parameters with `REDACTED` in the `url.full` and `url.query` trace attributes.
+
+The built-in list is:
+
+`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `AWSAccessKeyId`, `Signature`, `SecurityToken`, `X-Goog-Signature`, `sig`, `token`, `access_token`, `refresh_token`, `id_token`, `jwt`, `session`, `sid`, `signature`, `api_key`, `apikey`, `client_secret`, `secret`, `password`, `pass`, `pwd`, `reset_token`, `invite_token`, `verify_token`, `otp`, `totp`, `mfa_code`, `verification_code`, `SAMLResponse`, `assertion`, `card`, `cc`, `pan`, `cvv`, `ssn`, `tax_id`.
+
+The first eight come from the [OpenTelemetry HTTP semantic conventions](https://opentelemetry.io/docs/specs/semconv/http/http-spans/); the rest are common credential, session and payment parameter names. The list is defined in [`attr_selector.go`](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/blob/main/pkg/export/attributes/attr_selector.go) in OpenTelemetry eBPF Instrumentation.
+
+| YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `sensitive_query_params.add`<p>`BEYLA_SENSITIVE_QUERY_PARAMS_ADD`</p> | Parameter names to redact in addition to the built-in list. | list of strings | (empty) |
+| `sensitive_query_params.remove`<p>`BEYLA_SENSITIVE_QUERY_PARAMS_REMOVE`</p> | Parameter names to drop from the built-in list. | list of strings | (empty) |
+
+The effective list is the built-in list, minus the names in `remove`, plus the names in `add`. When both options are empty, the built-in list is used unchanged. In the environment variables, the names are comma separated.
+
+```yaml
+attributes:
+  sensitive_query_params:
+    add:
+      - internal_token
+      - X-Tenant-Key
+    remove:
+      - sig
+```
+
+Names are matched exactly and are case sensitive, so `token` does not cover `Token`. Percent-encoded parameter names are decoded before matching, which means `?X-Amz-Signatur%65=v` is redacted like `?X-Amz-Signature=v`; the parameter name is exported as it appeared in the request, only the value is replaced.
+
 ## Configure cardinality limits
 
 YAML section: `attributes`

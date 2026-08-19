@@ -10,6 +10,12 @@
   'git-submodules': {
     enabled: false,
   },
+  // Grafana's global force.enabled: true re-enables git-submodules after the
+  // manager-level enabled: false above. ignoreDeps and the packageRule below
+  // set skipReason, which force.enabled does not clear.
+  ignoreDeps: [
+    '.obi-src',
+  ],
   ignorePaths: [
     '.obi-src/**',
     'internal/test/beyla_extensions/k8s/manifests/**',
@@ -84,6 +90,13 @@
     },
   ],
   packageRules: [
+    {
+      description: 'OBI submodule is updated by bot_sync-obi-submodule.yml, not Renovate',
+      matchManagers: [
+        'git-submodules',
+      ],
+      enabled: false,
+    },
     {
       // Group updates by ecosystem (manager) rather than by update type, each
       // on its own day. This isolates failures: a flaky Go/license build can no

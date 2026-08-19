@@ -55,7 +55,7 @@ func (p *goRuntimeHistogramProducer) Update(snapshot runtimemetrics.RuntimeMetri
 
 	histogram := *snapshot.Histogram
 	histogram.Counts = append([]uint64(nil), snapshot.Histogram.Counts...)
-	name, err := goRuntimeHistogramMetricName(histogram.Kind)
+	metric, err := goRuntimeHistogramMetric(histogram.Kind)
 	if err != nil {
 		rmlog().Warn("skipping unsupported Go runtime histogram",
 			"pid", snapshot.PID,
@@ -63,6 +63,7 @@ func (p *goRuntimeHistogramProducer) Update(snapshot runtimemetrics.RuntimeMetri
 			"error", err)
 		return
 	}
+	name := metric.OTEL
 	if _, err := histogram.Data(); err != nil {
 		rmlog().Warn("skipping malformed Go runtime histogram",
 			"pid", snapshot.PID,
@@ -323,18 +324,18 @@ func produceGoRuntimeHistogram(
 	state goRuntimeHistogramState,
 	temporality metricdata.Temporality,
 ) (metricdata.Metrics, error) {
-	name, err := goRuntimeHistogramMetricName(kind)
+	metric, err := goRuntimeHistogramMetric(kind)
 	if err != nil {
 		return metricdata.Metrics{}, err
 	}
 	data, err := state.histogram.Data()
 	if err != nil {
-		return metricdata.Metrics{}, fmt.Errorf("converting %s histogram: %w", name, err)
+		return metricdata.Metrics{}, fmt.Errorf("converting %s histogram: %w", metric.OTEL, err)
 	}
 
 	return metricdata.Metrics{
-		Name: name,
-		Unit: "s",
+		Name: metric.OTEL,
+		Unit: metric.Unit,
 		Data: metricdata.Histogram[float64]{
 			Temporality: temporality,
 			DataPoints: []metricdata.HistogramDataPoint[float64]{
@@ -351,13 +352,13 @@ func produceGoRuntimeHistogram(
 	}, nil
 }
 
-func goRuntimeHistogramMetricName(kind runtimemetrics.GoHistogramKind) (string, error) {
+func goRuntimeHistogramMetric(kind runtimemetrics.GoHistogramKind) (attributes.Name, error) {
 	switch kind {
 	case runtimemetrics.GoHistogramKindGCPause:
-		return attributes.GoRuntimeMemoryGCPauseDuration.OTEL, nil
+		return attributes.GoRuntimeMemoryGCPauseDuration, nil
 	case runtimemetrics.GoHistogramKindSchedLatency:
-		return attributes.GoRuntimeScheduleDuration.OTEL, nil
+		return attributes.GoRuntimeScheduleDuration, nil
 	default:
-		return "", fmt.Errorf("producing Go runtime histogram kind %d: unsupported kind", kind)
+		return attributes.Name{}, fmt.Errorf("producing Go runtime histogram kind %d: unsupported kind", kind)
 	}
 }

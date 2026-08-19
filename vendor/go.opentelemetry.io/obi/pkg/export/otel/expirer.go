@@ -95,19 +95,50 @@ func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttr
 	vals := make([]string, 0, len(ex.attrs)+len(extraAttrs))
 
 	for _, attr := range ex.attrs {
-		kv := attr.Get(m)
+		kv := sanitizeKeyValue(attr.Get(m))
 		if !kv.Valid() {
 			continue
 		}
 		keyVals = append(keyVals, kv)
 		vals = append(vals, kv.Value.Emit())
 	}
-	keyVals = append(keyVals, extraAttrs...)
 	for i := range extraAttrs {
-		vals = append(vals, extraAttrs[i].Value.Emit())
+		kv := sanitizeKeyValue(extraAttrs[i])
+		keyVals = append(keyVals, kv)
+		vals = append(vals, kv.Value.Emit())
 	}
 
 	return attribute.NewSet(keyVals...), vals
+}
+
+func sanitizeKeyValue(kv attribute.KeyValue) attribute.KeyValue {
+	switch kv.Value.Type() {
+	case attribute.STRING:
+		raw := kv.Value.AsString()
+		sanitized := attributes.SanitizeUTF8(raw)
+		if sanitized == raw {
+			return kv
+		}
+		return kv.Key.String(sanitized)
+
+	case attribute.STRINGSLICE:
+		raw := kv.Value.AsStringSlice()
+		sanitized := make([]string, len(raw))
+		changed := false
+		for i, v := range raw {
+			sanitized[i] = attributes.SanitizeUTF8(v)
+			if sanitized[i] != v {
+				changed = true
+			}
+		}
+		if !changed {
+			return kv
+		}
+		return kv.Key.StringSlice(sanitized)
+
+	default:
+		return kv
+	}
 }
 
 func (ex *Expirer[Record, Metric, ValType]) removeOutdated(ctx context.Context) {

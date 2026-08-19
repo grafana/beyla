@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -151,25 +152,26 @@ func (i *instrumenter) goprobes(p Tracer) error {
 			if goProbeGroupHasProcessScopedProbe(group) && !hasProcessScopedTracer {
 				continue
 			}
-			i.gatherGoProbeGroupOffsets(group)
-			groupClosers := i.instrumentOptionalGoProbeGroup(i.exe, group)
-			if len(groupClosers) == 0 {
-				continue
-			}
-			closer := &reverseCloser{closers: groupClosers}
-			i.closables = append(i.closables, closer)
-			i.optionalGoProbeGroupClosers = append(i.optionalGoProbeGroupClosers, closer)
-			p.AddCloser(closer)
-			if hasProcessScopedTracer {
-				for _, candidate := range group.Probes {
-					if candidate.ProcessScoped {
-						i.processScopedGoProbes = append(
-							i.processScopedGoProbes,
-							processScopedGoProbeRegistration{
-								tracer: processScopedTracer,
-								probe:  candidate,
-							},
-						)
+			for _, resolvedGroup := range i.gatherGoProbeGroupOffsets(group) {
+				groupClosers := i.instrumentOptionalGoProbeGroup(i.exe, resolvedGroup)
+				if len(groupClosers) == 0 {
+					continue
+				}
+				closer := &reverseCloser{closers: groupClosers}
+				i.closables = append(i.closables, closer)
+				i.optionalGoProbeGroupClosers = append(i.optionalGoProbeGroupClosers, closer)
+				p.AddCloser(closer)
+				if hasProcessScopedTracer {
+					for _, candidate := range resolvedGroup.Probes {
+						if candidate.ProcessScoped {
+							i.processScopedGoProbes = append(
+								i.processScopedGoProbes,
+								processScopedGoProbeRegistration{
+									tracer: processScopedTracer,
+									probe:  candidate,
+								},
+							)
+						}
 					}
 				}
 			}
@@ -416,13 +418,60 @@ func (i *instrumenter) uprobeModules(p Tracer, pid app.PID, maps []*procfs.ProcM
 
 		mod, ok := modules[instrumentedIno]
 		if ok {
-			mod.probes = append(mod.probes, pMap)
+			if filtered := dedupModuleProbes(mod.probes, pMap); len(filtered) > 0 {
+				mod.probes = append(mod.probes, filtered)
+			}
 		} else {
 			modules[instrumentedIno] = &uprobeModule{lib: lib, instrPath: instrPath, probes: []map[string][]*ebpfcommon.ProbeDesc{pMap}}
 		}
 	}
 
 	return modules
+}
+
+// dedupModuleProbes filters out probe descriptors that would attach the same
+// eBPF programs to the same symbol as an already-collected probe map for the
+// module. This happens when several library entries (e.g. "node" and
+// "libuv.so") resolve to the same file — typically through the
+// instrument-the-executable fallback — and would otherwise attach the same
+// program twice at the same offset, duplicating every event it emits.
+func dedupModuleProbes(
+	existing []map[string][]*ebpfcommon.ProbeDesc,
+	pMap map[string][]*ebpfcommon.ProbeDesc,
+) map[string][]*ebpfcommon.ProbeDesc {
+	type probeKey struct {
+		symbol     string
+		start, end *ebpf.Program
+	}
+
+	seen := map[probeKey]struct{}{}
+
+	for _, m := range existing {
+		for sym, descs := range m {
+			for _, d := range descs {
+				seen[probeKey{sym, d.Start, d.End}] = struct{}{}
+			}
+		}
+	}
+
+	filtered := make(map[string][]*ebpfcommon.ProbeDesc, len(pMap))
+
+	for sym, descs := range pMap {
+		kept := make([]*ebpfcommon.ProbeDesc, 0, len(descs))
+
+		for _, d := range descs {
+			if _, dup := seen[probeKey{sym, d.Start, d.End}]; dup {
+				continue
+			}
+			kept = append(kept, d)
+		}
+
+		if len(kept) > 0 {
+			filtered[sym] = kept
+		}
+	}
+
+	return filtered
 }
 
 // matchVersionedUprobeLibrary reports whether a (possibly annotated) library name should be
@@ -1160,9 +1209,9 @@ func (i *instrumenter) gatherGoOffsets(goProbes map[string][]*ebpfcommon.ProbeDe
 	log := ilog().With("probes", "gatherGoOffsets")
 
 	for symbolName, descs := range goProbes {
-		offs, ok := i.offsets.Funcs[symbolName]
+		offsets, ok := i.offsets.Funcs[symbolName]
 
-		if !ok {
+		if !ok || len(offsets) == 0 {
 			// The program function is not in the detected offsets. Mark the
 			// probes as Skip so instrumentProbes does not attempt to attach
 			// them with Address=0, which would force cilium/ebpf to parse the
@@ -1181,30 +1230,97 @@ func (i *instrumenter) gatherGoOffsets(goProbes map[string][]*ebpfcommon.ProbeDe
 			continue
 		}
 
+		resolved := make([]*ebpfcommon.ProbeDesc, 0, len(descs)*len(offsets))
 		for _, probe := range descs {
-			probe.Skip = false
-			probe.StartOffset = offs.Start
-			probe.ReturnOffsets = offs.Returns
+			resolvedForProbe := 0
+			for _, offs := range offsets {
+				if probe.End != nil && len(offs.Returns) == 0 {
+					continue
+				}
+				probeCopy := *probe
+				probeCopy.Skip = false
+				probeCopy.StartOffset = offs.Start
+				probeCopy.ReturnOffsets = append([]uint64(nil), offs.Returns...)
+				resolved = append(resolved, &probeCopy)
+				resolvedForProbe++
+			}
+			if resolvedForProbe == 0 {
+				probeCopy := *probe
+				probeCopy.Skip = false
+				probeCopy.StartOffset = offsets[0].Start
+				probeCopy.ReturnOffsets = append([]uint64(nil), offsets[0].Returns...)
+				resolved = append(resolved, &probeCopy)
+			}
 		}
+		goProbes[symbolName] = resolved
 	}
 }
 
-func (i *instrumenter) gatherGoProbeGroupOffsets(group ebpfcommon.GoProbeGroup) {
+func (i *instrumenter) gatherGoProbeGroupOffsets(group ebpfcommon.GoProbeGroup) []ebpfcommon.GoProbeGroup {
+	copyIDs := map[string]struct{}{}
+	resolvedBySymbol := make(map[string]map[string][]goexec.FuncOffsets, len(group.Probes))
 	for _, candidate := range group.Probes {
-		if candidate.Probe == nil {
-			continue
+		byCopy := map[string][]goexec.FuncOffsets{}
+		for _, offs := range i.offsets.Funcs[candidate.Symbol] {
+			copyID, ok := goFunctionCopyID(candidate.Symbol, offs.Symbol)
+			if !ok {
+				continue
+			}
+			byCopy[copyID] = append(byCopy[copyID], offs)
+			copyIDs[copyID] = struct{}{}
 		}
-
-		offs, ok := i.offsets.Funcs[candidate.Symbol]
-		if !ok {
-			candidate.Probe.Skip = true
-			continue
-		}
-
-		candidate.Probe.Skip = false
-		candidate.Probe.StartOffset = offs.Start
-		candidate.Probe.ReturnOffsets = offs.Returns
+		resolvedBySymbol[candidate.Symbol] = byCopy
 	}
+
+	orderedCopyIDs := make([]string, 0, len(copyIDs))
+	for copyID := range copyIDs {
+		orderedCopyIDs = append(orderedCopyIDs, copyID)
+	}
+	slices.Sort(orderedCopyIDs)
+
+	resolvedGroups := make([]ebpfcommon.GoProbeGroup, 0, len(orderedCopyIDs))
+	for _, copyID := range orderedCopyIDs {
+		resolved := ebpfcommon.GoProbeGroup{
+			Name:          group.Name,
+			Prerequisites: append([]string(nil), group.Prerequisites...),
+		}
+		complete := true
+		for _, candidate := range group.Probes {
+			offsets := resolvedBySymbol[candidate.Symbol][copyID]
+			if candidate.Probe == nil || len(offsets) == 0 {
+				complete = false
+				break
+			}
+			for _, offs := range offsets {
+				probeCopy := *candidate.Probe
+				probeCopy.Skip = false
+				probeCopy.StartOffset = offs.Start
+				probeCopy.ReturnOffsets = append([]uint64(nil), offs.Returns...)
+				resolved.Probes = append(resolved.Probes, ebpfcommon.GoProbe{
+					Symbol:        candidate.Symbol,
+					Probe:         &probeCopy,
+					ProcessScoped: candidate.ProcessScoped,
+				})
+			}
+		}
+		if complete {
+			resolvedGroups = append(resolvedGroups, resolved)
+		}
+	}
+
+	return resolvedGroups
+}
+
+func goFunctionCopyID(requestedName, resolvedName string) (string, bool) {
+	if resolvedName == requestedName {
+		return "", true
+	}
+
+	prefix, found := strings.CutSuffix(resolvedName, requestedName)
+	if !found || !strings.HasSuffix(prefix, "/vendor/") {
+		return "", false
+	}
+	return prefix, true
 }
 
 func readSymbolData(sym *procs.Sym) []byte {

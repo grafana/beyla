@@ -209,7 +209,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 					return DBSystemName(span.DBSystem)
 				}
 			}
-			return DBSystemName("unknown")
+			return attribute.KeyValue{}
 		}
 	case attr.DBNamespace:
 		getter = func(span *Span) attribute.KeyValue { return DBNamespace(span.DBNamespace) }
@@ -245,7 +245,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
 				return semconv.MessagingSystemAWSSQS
 			}
-			return semconv.MessagingSystemKey.String("unknown")
+			return attribute.KeyValue{}
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) attribute.KeyValue {

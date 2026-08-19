@@ -115,9 +115,12 @@ func sockhashFIONREADProbe(cookies *ebpf.Map) (bool, error) {
 
 func (p *Tracer) kernelBreaksFIONREAD() bool {
 	p.fionreadOnce.Do(func() {
-		broken, err := sockhashFIONREADProbe(nil)
+		broken, err := p.fionreadProbe(nil)
 		if err != nil {
-			p.log.Warn("FIONREAD sockhash probe failed", "error", err)
+			// an inconclusive probe must not enable propagation on its own; the
+			// end-to-end check in sockhashSafe makes the final call
+			p.log.Warn("FIONREAD sockhash probe failed, assuming an affected kernel", "error", err)
+			p.fionreadBroken = true
 			return
 		}
 		p.fionreadBroken = broken
@@ -151,19 +154,43 @@ func loadableFIONREADFixup() (*ebpf.CollectionSpec, error) {
 	return spec, nil
 }
 
-// end-to-end check that the attached fixup actually corrects FIONREAD
-func (p *Tracer) verifyFIONREADFix() {
-	stillBroken, err := sockhashFIONREADProbe(p.bpfObjects.TrackedSockCookies)
-	if err != nil {
-		p.log.Warn("cannot verify FIONREAD compensation", "error", err)
-		return
-	}
-	if stillBroken {
-		p.log.Error("FIONREAD compensation is ineffective (attach failed or blocked?); " +
-			"applications sizing reads via FIONREAD (nginx, Java, .NET) may stall or " +
-			"truncate transfers; set context_propagation: disabled " +
-			"(OTEL_EBPF_BPF_CONTEXT_PROPAGATION=disabled) to avoid impact")
-		return
-	}
-	p.log.Info("FIONREAD compensation verified")
+// every bail-out has the same consequence, so each reason is reported with a common explanation
+func (p *Tracer) reportPropagationDisabled(reason string, args ...any) {
+	p.log.Error("context propagation is disabled: "+reason+". This kernel misreports "+
+		"ioctl(FIONREAD) for sockets in a sockhash (kernel commit 929e30f93125), or could not "+
+		"be verified to report it correctly, so keeping propagation enabled would risk making "+
+		"applications sizing reads via FIONREAD stall or truncate transfers", args...)
+}
+
+// Inserting sockets into a sockhash is what triggers the kernel bug, so on an affected
+// kernel propagation stays off unless the compensation is verified end to end: losing
+// propagation is preferable to breaking the instrumented applications
+func (p *Tracer) sockhashSafe() bool {
+	p.sockhashOnce.Do(func() {
+		if !p.kernelBreaksFIONREAD() {
+			p.sockhashOK = true
+			return
+		}
+
+		if !p.fionreadFixupEnabled {
+			p.reportPropagationDisabled("the BPF compensation could not be loaded")
+			return
+		}
+
+		stillBroken, err := p.fionreadProbe(p.bpfObjects.TrackedSockCookies)
+		if err != nil {
+			p.reportPropagationDisabled("the BPF compensation cannot be verified", "error", err)
+			return
+		}
+
+		if stillBroken {
+			p.reportPropagationDisabled("the BPF compensation is ineffective (attach failed or blocked?)")
+			return
+		}
+
+		p.sockhashOK = true
+		p.log.Info("FIONREAD compensation verified")
+	})
+
+	return p.sockhashOK
 }

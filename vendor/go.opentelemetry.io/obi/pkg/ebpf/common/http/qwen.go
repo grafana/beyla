@@ -74,7 +74,7 @@ func QwenSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (r
 		}
 	}
 
-	parsedRequest := parseOpenAIInput(reqB)
+	parsedRequest := parseOpenAIInput(reqB, false)
 	parsedResponse, toolCalls := parseOpenAICompatibleResponse(respB)
 
 	// Qwen-specific: try to extract request_id from response body

@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
@@ -24,13 +25,23 @@ func aflog() *slog.Logger {
 // AttributesConfig stores the user-provided section for filtering either Application or Network
 // records by attribute values
 type AttributesConfig struct {
-	Application AttributeFamilyConfig `yaml:"application"`
-	Network     AttributeFamilyConfig `yaml:"network"`
-	Stats       AttributeFamilyConfig `yaml:"stats"`
+	Application                  AttributeFamilyConfig                `yaml:"application"`
+	ApplicationByInstrumentation InstrumentationAttributeFamilyConfig `yaml:"-" env:"-" json:"-"`
+	Network                      AttributeFamilyConfig                `yaml:"network"`
+	Stats                        AttributeFamilyConfig                `yaml:"stats"`
 }
 
 // AttributeFamilyConfig maps, for a given record, each attribute with its MatchDefinition
 type AttributeFamilyConfig map[string]MatchDefinition
+
+// SignalAttributeFamilyConfig groups attribute filters by telemetry signal.
+type SignalAttributeFamilyConfig struct {
+	Traces  AttributeFamilyConfig
+	Metrics AttributeFamilyConfig
+}
+
+// InstrumentationAttributeFamilyConfig groups signal filters by instrumentation.
+type InstrumentationAttributeFamilyConfig map[instrumentations.Instrumentation]SignalAttributeFamilyConfig
 
 // ByAttribute provides a pipeline node that drops all the records of type T (*ebpf.Record, or *request.Span)
 // that do not match the provided AttributeFamilyConfig.
@@ -55,10 +66,13 @@ func ByAttribute[T any](
 }
 
 type filter[T any] struct {
-	matchers []Matcher[T]
+	matchers MatcherSet[T]
 	input    <-chan []T
 	output   *msg.Queue[[]T]
 }
+
+// MatcherSet matches a record when all of its configured attribute matchers match.
+type MatcherSet[T any] []Matcher[T]
 
 func newFilter[T any](
 	config AttributeFamilyConfig,
@@ -67,6 +81,29 @@ func newFilter[T any](
 	getters attributes.NamedGetters[T, string],
 	input, output *msg.Queue[[]T],
 ) (*filter[T], error) {
+	matchers, err := NewMatcherSet(
+		config,
+		extraDefinitionsProvider,
+		extraGroupAttributesCfg,
+		getters,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &filter[T]{
+		matchers: matchers,
+		input:    input.Subscribe(msg.SubscriberName("AttributesFilter")),
+		output:   output,
+	}, nil
+}
+
+// NewMatcherSet validates an attribute filter configuration and compiles its matchers.
+func NewMatcherSet[T any](
+	config AttributeFamilyConfig,
+	extraDefinitionsProvider func(groups attributes.AttrGroups, extraGroupAttributes attributes.GroupAttributes) map[attributes.Section]attributes.AttrReportGroup,
+	extraGroupAttributesCfg map[string][]attr.Name,
+	getters attributes.NamedGetters[T, string],
+) (MatcherSet[T], error) {
 	// Internally, from code, we use the OTEL-like naming (attr.Name) for the attributes,
 	// which usually uses dot-separation but sometimes also use underscore.
 	// Since we allow users to specify metrics in both formats, we convert any user-provided
@@ -78,7 +115,7 @@ func newFilter[T any](
 		attrProm2Normal[normalizedName.Prom()] = normalizedName
 	}
 	// Validate and build Matcher implementations for the user-provided attributes.
-	var matchers []Matcher[T]
+	matchers := make(MatcherSet[T], 0, len(config))
 	for attrStr, match := range config {
 		normalAttr, ok := attrProm2Normal[attr.Name(attrStr).Prom()]
 		if !ok {
@@ -90,11 +127,17 @@ func newFilter[T any](
 		}
 		matchers = append(matchers, matcher)
 	}
-	return &filter[T]{
-		matchers: matchers,
-		input:    input.Subscribe(msg.SubscriberName("AttributesFilter")),
-		output:   output,
-	}, nil
+	return matchers, nil
+}
+
+// Matches reports whether all configured attribute matchers match record.
+func (m MatcherSet[T]) Matches(record T) bool {
+	for i := range m {
+		if !m[i].Matches(record) {
+			return false
+		}
+	}
+	return true
 }
 
 // buildMatcher returns a Matcher given an attribute name, the user-provided MatchDefinition, and the provided
@@ -166,12 +209,9 @@ func (f *filter[T]) doFilter(ctx context.Context) {
 // the user-provided attribute matchers
 func (f *filter[T]) filterBatch(batch []T) []T {
 	w := 0
-batchLoop:
 	for t := range batch {
-		for m := range f.matchers {
-			if !f.matchers[m].Matches(batch[t]) {
-				continue batchLoop
-			}
+		if !f.matchers.Matches(batch[t]) {
+			continue
 		}
 		batch[w] = batch[t]
 		w++

@@ -10,8 +10,15 @@ import (
 	"strings"
 )
 
-// wordSize represents the size of a DNS message word (2 bytes)
-const wordSize = 2
+const (
+	// wordSize represents the size of a DNS message word (2 bytes)
+	wordSize = 2
+
+	maxLabelLength    = 63
+	maxNameLength     = 255
+	minQuestionLength = 1 + 2*wordSize
+	minRecordLength   = 1 + 5*wordSize
+)
 
 // readByte reads and returns a single byte from the buffer
 func readByte(b *bytes.Buffer) byte {
@@ -27,6 +34,10 @@ func readWord(b *bytes.Buffer) []byte {
 // readDWord reads and returns a 4-byte double word from the buffer
 func readDWord(b *bytes.Buffer) []byte {
 	return b.Next(2 * wordSize)
+}
+
+func sectionCapacity(count uint16, remaining, minimumLength int) int {
+	return min(int(count), remaining/minimumLength)
 }
 
 // parseDNSMessage parses a raw DNS message into a structured dnsMessage object.
@@ -79,11 +90,11 @@ func parseDNSMessage(rawData []byte) *dnsMessage {
 // It processes the specified number of questions and returns them as a slice.
 // Returns nil if any question is malformed.
 func parseQSections(data *bytes.Buffer, qdcount uint16) []*question {
-	questions := make([]*question, 0, qdcount)
+	questions := make([]*question, 0, sectionCapacity(qdcount, data.Len(), minQuestionLength))
 	for range qdcount {
 		q := parseQSection(data)
 		if q == nil {
-			break
+			return nil
 		}
 		questions = append(questions, q)
 	}
@@ -96,9 +107,10 @@ func parseQSections(data *bytes.Buffer, qdcount uint16) []*question {
 func parseQSection(data *bytes.Buffer) *question {
 	s := question{}
 
-	s.qName = parseSectionLabel(data)
+	var valid bool
+	s.qName, valid = parseSectionLabel(data)
 
-	if s.qName == "" {
+	if !valid || s.qName == "" {
 		return nil
 	}
 
@@ -114,42 +126,52 @@ func parseQSection(data *bytes.Buffer) *question {
 
 // parseSectionLabel parses a DNS label sequence from the buffer.
 // Labels are separated by dots and terminated by a zero-length label.
-// Returns an empty string if the label sequence is malformed.
-func parseSectionLabel(data *bytes.Buffer) string {
+// Returns false if the label sequence is malformed.
+func parseSectionLabel(data *bytes.Buffer) (string, bool) {
 	var labelBuilder strings.Builder
 
 	sep := ""
+	nameLength := 0
 
 	for {
 		if data.Len() == 0 {
-			return ""
+			return "", false
 		}
 
 		labelLen := int(readByte(data))
+		nameLength++
+		if nameLength > maxNameLength {
+			return "", false
+		}
 
 		if labelLen == 0 {
 			break
 		}
 
+		if labelLen > maxLabelLength || data.Len() < labelLen || nameLength+labelLen > maxNameLength {
+			return "", false
+		}
+
 		labelBuilder.WriteString(sep)
 		labelBuilder.Write(data.Next(labelLen))
+		nameLength += labelLen
 
 		sep = "."
 	}
 
-	return labelBuilder.String()
+	return labelBuilder.String(), true
 }
 
 // parseRecords parses the answer records section of a DNS message.
 // It processes the specified number of records and returns them as a slice.
 // Returns nil if any record is malformed.
 func parseRecords(data *bytes.Buffer, base []byte, count uint16) []*record {
-	records := make([]*record, 0, count)
+	records := make([]*record, 0, sectionCapacity(count, data.Len(), minRecordLength))
 
 	for range count {
 		r := parseRecord(data, base)
 		if r == nil {
-			break
+			return nil
 		}
 		records = append(records, r)
 	}
@@ -167,6 +189,7 @@ func parseRecord(data *bytes.Buffer, base []byte) *record {
 	}
 
 	r := record{}
+	validName := false
 
 	labelLen := readByte(data)
 
@@ -182,14 +205,18 @@ func parseRecord(data *bytes.Buffer, base []byte) *record {
 		offsetBe := []byte{labelLen, lenLo}
 		offset := binary.BigEndian.Uint16(offsetBe)
 
-		if uint16(len(base)) < offset {
+		if int(offset) >= len(base) {
 			return nil
 		}
 
-		r.name = parseSectionLabel(bytes.NewBuffer(base[offset:]))
+		r.name, validName = parseSectionLabel(bytes.NewBuffer(base[offset:]))
 	} else {
 		_ = data.UnreadByte()
-		r.name = parseSectionLabel(data)
+		r.name, validName = parseSectionLabel(data)
+	}
+
+	if !validName {
+		return nil
 	}
 
 	if data.Len() < 5*wordSize {
@@ -201,7 +228,7 @@ func parseRecord(data *bytes.Buffer, base []byte) *record {
 	r.ttl = binary.BigEndian.Uint32(readDWord(data))
 	rdlength := binary.BigEndian.Uint16(readWord(data))
 
-	if data.Len() < 0 || uint16(data.Len()) < rdlength {
+	if data.Len() < int(rdlength) {
 		return nil
 	}
 

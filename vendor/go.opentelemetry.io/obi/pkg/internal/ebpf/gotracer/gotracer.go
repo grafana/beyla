@@ -401,6 +401,11 @@ func (p *Tracer) supportsContextPropagation() bool {
 	return !ebpfcommon.IntegrityModeOverride && supportsContextPropagationWithProbe(p.log)
 }
 
+func (p *Tracer) headerPropagationEnabled() bool {
+	return p != nil && p.cfg != nil && p.cfg.ContextPropagation.HasHeaders() &&
+		p.supportsContextPropagation()
+}
+
 func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 	if !p.supportsContextPropagation() {
 		p.log.Info("Kernel in lockdown mode or missing CAP_SYS_ADMIN.")
@@ -432,21 +437,22 @@ func (p *Tracer) constants() map[string]any {
 	}
 
 	m := map[string]any{
-		"g_bpf_debug":               p.cfg.BpfDebug,
-		"g_bpf_header_propagation":  p.supportsContextPropagation(),
-		"wakeup_data_bytes":         uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
-		"disable_black_box_cp":      blackBoxCP,
-		"attr_type_invalid":         uint64(attribute.INVALID),
-		"attr_type_bool":            uint64(attribute.BOOL),
-		"attr_type_int64":           uint64(attribute.INT64),
-		"attr_type_float64":         uint64(attribute.FLOAT64),
-		"attr_type_string":          uint64(attribute.STRING),
-		"attr_type_boolslice":       uint64(attribute.BOOLSLICE),
-		"attr_type_int64slice":      uint64(attribute.INT64SLICE),
-		"attr_type_float64slice":    uint64(attribute.FLOAT64SLICE),
-		"attr_type_stringslice":     uint64(attribute.STRINGSLICE),
-		"g_bpf_traceparent_enabled": true,
-		"g_bpf_loop_enabled":        p.supportsBPFLoop,
+		"g_bpf_debug":                    p.cfg.BpfDebug,
+		"g_bpf_header_propagation":       p.cfg.ContextPropagation.HasHeaders(),
+		"g_bpf_probe_write_user_enabled": p.supportsContextPropagation(),
+		"wakeup_data_bytes":              uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"disable_black_box_cp":           blackBoxCP,
+		"attr_type_invalid":              uint64(attribute.INVALID),
+		"attr_type_bool":                 uint64(attribute.BOOL),
+		"attr_type_int64":                uint64(attribute.INT64),
+		"attr_type_float64":              uint64(attribute.FLOAT64),
+		"attr_type_string":               uint64(attribute.STRING),
+		"attr_type_boolslice":            uint64(attribute.BOOLSLICE),
+		"attr_type_int64slice":           uint64(attribute.INT64SLICE),
+		"attr_type_float64slice":         uint64(attribute.FLOAT64SLICE),
+		"attr_type_stringslice":          uint64(attribute.STRINGSLICE),
+		"g_bpf_traceparent_enabled":      true,
+		"g_bpf_loop_enabled":             p.supportsBPFLoop,
 	}
 
 	if p.cfg.TrackRequestHeaders ||
@@ -493,8 +499,10 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
 		// Large buffer multi-batch emission
-		p.bpfObjects.ObiLargeBufEmitContinue,                          // 13  k_tail_large_buf_emit_continue
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit, // 14
+		p.bpfObjects.ObiLargeBufEmitContinue,                            // 13  k_tail_large_buf_emit_continue
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit,   // 14
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffman,  // 15
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffscan, // 16
 	} {
 		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
 		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
@@ -519,6 +527,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		// http
 		goexec.URLPtrPos,
 		goexec.PathPtrPos,
+		goexec.RawQueryPtrPos,
 		goexec.HostPtrPos,
 		goexec.SchemePtrPos,
 		goexec.MethodPtrPos,
@@ -1237,7 +1246,7 @@ func (p *Tracer) recordGoRuntimeMetricAvailability(fileInfo *exec.FileInfo, offs
 	heapMetricsEnabled := mask&goRuntimeMetricHeapSnapshotMask != 0
 	nextGenResolved := false
 	if offsets != nil {
-		_, nextGenResolved = offsets.Funcs[goRuntimeMetricHeapSnapshotSymbol]
+		nextGenResolved = len(offsets.Funcs[goRuntimeMetricHeapSnapshotSymbol]) > 0
 	}
 
 	if !supportsStableHeapSnapshotVersion {
@@ -1294,7 +1303,7 @@ func selectGoRuntimeGCGoalSource(
 	if hasGoRuntimeMetricOffsets(offsets, goexec.RuntimeGCControllerHeapGoalPos) {
 		return goRuntimeGCGoalSourceHeapGoalField
 	}
-	if _, ok := offsets.Funcs[goRuntimeMetricGCGoalSymbol]; ok && goalArgumentSupported {
+	if len(offsets.Funcs[goRuntimeMetricGCGoalSymbol]) > 0 && goalArgumentSupported {
 		return goRuntimeGCGoalSourcePaceScavengerArgument
 	}
 	return goRuntimeGCGoalSourceNone
@@ -1662,6 +1671,11 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"net/http.(*persistConn).roundTrip": {{ // http client
 			Start: p.bpfObjects.ObiUprobePersistConnRoundTrip,
 		}},
+		// runs on persistConn.writeLoop, the only place the request's connection can be
+		// read when the application wraps net.Conn
+		"net/http.persistConnWriter.Write": {{
+			Start: p.bpfObjects.ObiUprobePersistConnWriterWrite,
+		}},
 		// sql
 		"database/sql.(*DB).queryDC": {{
 			Start: p.bpfObjects.ObiUprobeQueryDC,
@@ -1977,7 +1991,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}}
 	}
 
-	if p.supportsContextPropagation() {
+	if p.headerPropagationEnabled() {
 		m["net/http.Header.writeSubset"] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeWriteSubset,        // http 1.x context propagation
 			End:   p.bpfObjects.ObiUprobeWriteSubsetReturns, // inject only if no traceparent present

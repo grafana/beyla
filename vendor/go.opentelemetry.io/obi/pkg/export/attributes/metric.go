@@ -3,7 +3,12 @@
 
 package attributes // import "go.opentelemetry.io/obi/pkg/export/attributes"
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/prometheus/otlptranslator"
+)
 
 // Section of the attributes.select configuration. They are metric names
 // using the dot.notation and suppressing any .total .sum or .count suffix.
@@ -11,244 +16,387 @@ import "strings"
 // metric format or name the user provides.
 type Section string
 
-// Name of a metric in three forms
+// Instrument is the kind of instrument a metric is recorded with. It selects the
+// type suffix a Prometheus consumer appends to the metric name.
+type Instrument uint8
+
+const (
+	InstrumentUnknown Instrument = iota
+	InstrumentCounter
+	InstrumentUpDownCounter
+	InstrumentGauge
+	InstrumentHistogram
+)
+
+func (i Instrument) otlp() otlptranslator.MetricType {
+	switch i {
+	case InstrumentCounter:
+		return otlptranslator.MetricTypeMonotonicCounter
+	case InstrumentUpDownCounter:
+		return otlptranslator.MetricTypeNonMonotonicCounter
+	case InstrumentGauge:
+		return otlptranslator.MetricTypeGauge
+	case InstrumentHistogram:
+		return otlptranslator.MetricTypeHistogram
+	default:
+		return otlptranslator.MetricTypeUnknown
+	}
+}
+
+// Name of a metric. OTEL, Unit and Type are the definition; Prom is derived from
+// them so that OBI's Prometheus exporter and any Prometheus consumer of OBI's OTLP
+// output name the same metric identically.
 type Name struct {
 	// Section name in the attributes.select configuration option. It is
 	// a normalized form accorting to the normalizeMetric function below.
 	// It makes sure that it does not have metric nor aggregation suffix.
 	Section Section
-	// Prom name of a metric for the Prometheus exporter
-	Prom string
 	// OTEL name of a metric for the OTEL exporter
 	OTEL string
+	// Unit of the metric, in UCUM notation, as declared to the OTEL instrument
+	Unit string
+	// Type of instrument the metric is recorded with
+	Type Instrument
+	// Prom name of a metric for the Prometheus exporter. Derived, never set by hand.
+	Prom string
+}
+
+// metric derives the Prometheus name of a metric from its OTLP definition, applying the
+// same translation a collector re-exporting OBI's OTLP metrics in Prometheus format does.
+func metric(n Name) Name {
+	namer := otlptranslator.MetricNamer{WithMetricSuffixes: true}
+
+	prom, err := namer.Build(otlptranslator.Metric{Name: n.OTEL, Unit: n.Unit, Type: n.Type.otlp()})
+	if err != nil {
+		panic(fmt.Sprintf("cannot derive Prometheus name for metric %q: %s", n.OTEL, err))
+	}
+
+	n.Prom = prom
+	return n
 }
 
 var (
-	NetworkFlow = Name{
+	NetworkFlow = metric(Name{
 		Section: "obi.network.flow",
-		Prom:    "obi_network_flow_bytes_total",
 		OTEL:    "obi.network.flow.bytes",
-	}
-	NetworkFlowPackets = Name{
+		Unit:    "{bytes}",
+		Type:    InstrumentCounter,
+	})
+	NetworkFlowPackets = metric(Name{
 		Section: "obi.network.flow.packets",
-		Prom:    "obi_network_flow_packets_total",
 		OTEL:    "obi.network.flow.packets",
-	}
-	NetworkInterZone = Name{
+		Unit:    "{packets}",
+		Type:    InstrumentCounter,
+	})
+	NetworkInterZone = metric(Name{
 		Section: "obi.network.inter.zone",
-		Prom:    "obi_network_inter_zone_bytes_total",
 		OTEL:    "obi.network.inter.zone.bytes",
-	}
-	HTTPServerRequestSize = Name{
+		Unit:    "{bytes}",
+		Type:    InstrumentCounter,
+	})
+	HTTPServerRequestSize = metric(Name{
 		Section: "http.server.request.body.size",
-		Prom:    "http_server_request_body_size_bytes",
 		OTEL:    "http.server.request.body.size",
-	}
-	HTTPServerResponseSize = Name{
+		Unit:    "By",
+		Type:    InstrumentHistogram,
+	})
+	HTTPServerResponseSize = metric(Name{
 		Section: "http.server.response.body.size",
-		Prom:    "http_server_response_body_size_bytes",
 		OTEL:    "http.server.response.body.size",
-	}
-	HTTPClientRequestSize = Name{
+		Unit:    "By",
+		Type:    InstrumentHistogram,
+	})
+	HTTPClientRequestSize = metric(Name{
 		Section: "http.client.request.body.size",
-		Prom:    "http_client_request_body_size_bytes",
 		OTEL:    "http.client.request.body.size",
-	}
-	HTTPClientResponseSize = Name{
+		Unit:    "By",
+		Type:    InstrumentHistogram,
+	})
+	HTTPClientResponseSize = metric(Name{
 		Section: "http.client.response.body.size",
-		Prom:    "http_client_response_body_size_bytes",
 		OTEL:    "http.client.response.body.size",
-	}
-	HTTPServerDuration = Name{
+		Unit:    "By",
+		Type:    InstrumentHistogram,
+	})
+	HTTPServerDuration = metric(Name{
 		Section: "http.server.request.duration",
-		Prom:    "http_server_request_duration_seconds",
 		OTEL:    "http.server.request.duration",
-	}
-	HTTPClientDuration = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	HTTPClientDuration = metric(Name{
 		Section: "http.client.request.duration",
-		Prom:    "http_client_request_duration_seconds",
 		OTEL:    "http.client.request.duration",
-	}
-	RPCServerDuration = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	RPCServerDuration = metric(Name{
 		Section: "rpc.server.call.duration",
-		Prom:    "rpc_server_call_duration_seconds",
 		OTEL:    "rpc.server.call.duration",
-	}
-	RPCClientDuration = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	RPCClientDuration = metric(Name{
 		Section: "rpc.client.call.duration",
-		Prom:    "rpc_client_call_duration_seconds",
 		OTEL:    "rpc.client.call.duration",
-	}
-	DBClientDuration = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	DBClientDuration = metric(Name{
 		Section: "db.client.operation.duration",
-		Prom:    "db_client_operation_duration_seconds",
 		OTEL:    "db.client.operation.duration",
-	}
-	MessagingPublishDuration = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	MessagingPublishDuration = metric(Name{
 		Section: "messaging.client.operation.duration",
-		Prom:    "messaging_client_operation_duration_seconds",
 		OTEL:    "messaging.client.operation.duration",
-	}
-	MessagingProcessDuration = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	MessagingProcessDuration = metric(Name{
 		Section: "messaging.process.duration",
-		Prom:    "messaging_process_duration_seconds",
 		OTEL:    "messaging.process.duration",
-	}
-	GPUCudaKernelLaunchCalls = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	GPUCudaKernelLaunchCalls = metric(Name{
 		Section: "gpu.cuda.kernel.launch.calls",
-		Prom:    "gpu_cuda_kernel_launch_calls_total",
 		OTEL:    "gpu.cuda.kernel.launch.calls",
-	}
-	GPUCudaGraphLaunchCalls = Name{
+		Type:    InstrumentCounter,
+	})
+	GPUCudaGraphLaunchCalls = metric(Name{
 		Section: "gpu.cuda.graph.launch.calls",
-		Prom:    "gpu_cuda_graph_launch_calls_total",
 		OTEL:    "gpu.cuda.graph.launch.calls",
-	}
-	GPUCudaKernelGridSize = Name{
+		Type:    InstrumentCounter,
+	})
+	GPUCudaKernelGridSize = metric(Name{
 		Section: "gpu.cuda.kernel.grid.size",
-		Prom:    "gpu_cuda_kernel_grid_size_total",
 		OTEL:    "gpu.cuda.kernel.grid.size",
-	}
-	GPUCudaKernelBlockSize = Name{
+		Unit:    "1",
+		Type:    InstrumentHistogram,
+	})
+	GPUCudaKernelBlockSize = metric(Name{
 		Section: "gpu.cuda.kernel.block.size",
-		Prom:    "gpu_cuda_kernel_block_size_total",
 		OTEL:    "gpu.cuda.kernel.block.size",
-	}
-	GPUCudaMemoryAllocations = Name{
+		Unit:    "1",
+		Type:    InstrumentHistogram,
+	})
+	GPUCudaMemoryAllocations = metric(Name{
 		Section: "gpu.cuda.memory.allocations",
-		Prom:    "gpu_cuda_memory_allocations_bytes_total",
 		OTEL:    "gpu.cuda.memory.allocations",
-	}
-	GPUCudaMemoryCopies = Name{
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaMemoryCopies = metric(Name{
 		Section: "gpu.cuda.memory.copies",
-		Prom:    "gpu_cuda_memory_copies_bytes_total",
 		OTEL:    "gpu.cuda.memory.copies",
-	}
-	DNSLookupDuration = Name{
+		Unit:    "By",
+		Type:    InstrumentHistogram,
+	})
+	DNSLookupDuration = metric(Name{
 		Section: "dns.lookup.duration",
-		Prom:    "dns_lookup_duration_seconds",
 		OTEL:    "dns.lookup.duration",
-	}
-	GenAIClientInputTokenUsage = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	GenAIClientInputTokenUsage = metric(Name{
 		Section: "gen_ai.client.token.usage.input",
-		Prom:    "gen_ai_client_token_usage",
 		OTEL:    "gen_ai.client.token.usage",
-	}
-	GenAIClientOutputTokenUsage = Name{
+		Unit:    "{token}",
+		Type:    InstrumentHistogram,
+	})
+	GenAIClientOutputTokenUsage = metric(Name{
 		Section: "gen_ai.client.token.usage.output",
-		Prom:    "gen_ai_client_token_usage",
 		OTEL:    "gen_ai.client.token.usage",
-	}
-	GenAIClientOperationDuration = Name{
+		Unit:    "{token}",
+		Type:    InstrumentHistogram,
+	})
+	GenAIClientOperationDuration = metric(Name{
 		Section: "gen_ai.client.operation.duration",
-		Prom:    "gen_ai_client_operation_duration_seconds",
 		OTEL:    "gen_ai.client.operation.duration",
-	}
-	GoRuntimeMemoryLimit = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	GoRuntimeMemoryLimit = metric(Name{
 		Section: "go.memory.limit",
-		Prom:    "go_memory_limit_bytes",
 		OTEL:    "go.memory.limit",
-	}
-	GoRuntimeMemoryGCGoal = Name{
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	GoRuntimeMemoryGCGoal = metric(Name{
 		Section: "go.memory.gc.goal",
-		Prom:    "go_memory_gc_goal_bytes",
 		OTEL:    "go.memory.gc.goal",
-	}
-	GoRuntimeMemoryGCCycles = Name{
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	GoRuntimeMemoryGCCycles = metric(Name{
 		Section: "go.memory.gc.cycles",
-		Prom:    "go_memory_gc_cycles_total",
 		OTEL:    "go.memory.gc.cycles",
-	}
-	GoRuntimeMemoryGCPauseDuration = Name{
+		Unit:    "{gc_cycle}",
+		Type:    InstrumentCounter,
+	})
+	GoRuntimeMemoryGCPauseDuration = metric(Name{
 		Section: "go.memory.gc.pause.duration",
-		Prom:    "go_memory_gc_pause_duration_seconds",
 		OTEL:    "go.memory.gc.pause.duration",
-	}
-	GoRuntimeMemoryUsed = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	GoRuntimeMemoryUsed = metric(Name{
 		Section: "go.memory.used",
-		Prom:    "go_memory_used_bytes",
 		OTEL:    "go.memory.used",
-	}
-	GoRuntimeMemoryAllocated = Name{
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	GoRuntimeMemoryAllocated = metric(Name{
 		Section: "go.memory.allocated",
-		Prom:    "go_memory_allocated_bytes_total",
 		OTEL:    "go.memory.allocated",
-	}
-	GoRuntimeMemoryAllocations = Name{
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
+	GoRuntimeMemoryAllocations = metric(Name{
 		Section: "go.memory.allocations",
-		Prom:    "go_memory_allocations_total",
 		OTEL:    "go.memory.allocations",
-	}
-	GoRuntimeCPUTime = Name{
+		Unit:    "{allocation}",
+		Type:    InstrumentCounter,
+	})
+	GoRuntimeCPUTime = metric(Name{
 		Section: "go.cpu.time",
-		Prom:    "go_cpu_time_seconds_total",
 		OTEL:    "go.cpu.time",
-	}
-	GoRuntimeGoroutineCount = Name{
+		Unit:    "s",
+		Type:    InstrumentCounter,
+	})
+	GoRuntimeGoroutineCount = metric(Name{
 		Section: "go.goroutine.count",
-		Prom:    "go_goroutine_count",
 		OTEL:    "go.goroutine.count",
-	}
-	GoRuntimeProcessorLimit = Name{
+		Unit:    "{goroutine}",
+		Type:    InstrumentUpDownCounter,
+	})
+	GoRuntimeProcessorLimit = metric(Name{
 		Section: "go.processor.limit",
-		Prom:    "go_processor_limit",
 		OTEL:    "go.processor.limit",
-	}
-	GoRuntimeConfigGOGC = Name{
+		Unit:    "{thread}",
+		Type:    InstrumentUpDownCounter,
+	})
+	GoRuntimeConfigGOGC = metric(Name{
 		Section: "go.config.gogc",
-		Prom:    "go_config_gogc_percent",
 		OTEL:    "go.config.gogc",
-	}
-	GoRuntimeScheduleDuration = Name{
+		Unit:    "%",
+		Type:    InstrumentUpDownCounter,
+	})
+	GoRuntimeScheduleDuration = metric(Name{
 		Section: "go.schedule.duration",
-		Prom:    "go_schedule_duration_seconds",
 		OTEL:    "go.schedule.duration",
-	}
-	JVMMemoryUsed = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	JVMMemoryUsed = metric(Name{
 		Section: "jvm.memory.used",
-		Prom:    "jvm_memory_used_bytes",
 		OTEL:    "jvm.memory.used",
-	}
-	JVMMemoryCommitted = Name{
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	JVMMemoryCommitted = metric(Name{
 		Section: "jvm.memory.committed",
-		Prom:    "jvm_memory_committed_bytes",
 		OTEL:    "jvm.memory.committed",
-	}
-	JVMMemoryLimit = Name{
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	JVMMemoryLimit = metric(Name{
 		Section: "jvm.memory.limit",
-		Prom:    "jvm_memory_limit_bytes",
 		OTEL:    "jvm.memory.limit",
-	}
-	JVMMemoryUsedAfterLastGC = Name{
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	JVMMemoryUsedAfterLastGC = metric(Name{
 		Section: "jvm.memory.used_after_last_gc",
-		Prom:    "jvm_memory_used_after_last_gc_bytes",
 		OTEL:    "jvm.memory.used_after_last_gc",
-	}
-	Resource = Name{
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	NodejsEventLoopTime = metric(Name{
+		Section: "nodejs.eventloop.time",
+		OTEL:    "nodejs.eventloop.time",
+		Unit:    "s",
+		Type:    InstrumentCounter,
+	})
+	NodejsEventLoopUtilization = metric(Name{
+		Section: "nodejs.eventloop.utilization",
+		OTEL:    "nodejs.eventloop.utilization",
+		Unit:    "1",
+		Type:    InstrumentGauge,
+	})
+	NodejsEventLoopDelayMin = metric(Name{
+		Section: "nodejs.eventloop.delay.min",
+		OTEL:    "nodejs.eventloop.delay.min",
+		Unit:    "s",
+		Type:    InstrumentGauge,
+	})
+	NodejsEventLoopDelayMax = metric(Name{
+		Section: "nodejs.eventloop.delay.max",
+		OTEL:    "nodejs.eventloop.delay.max",
+		Unit:    "s",
+		Type:    InstrumentGauge,
+	})
+	NodejsEventLoopDelayMean = metric(Name{
+		Section: "nodejs.eventloop.delay.mean",
+		OTEL:    "nodejs.eventloop.delay.mean",
+		Unit:    "s",
+		Type:    InstrumentGauge,
+	})
+	NodejsEventLoopDelayStddev = metric(Name{
+		Section: "nodejs.eventloop.delay.stddev",
+		OTEL:    "nodejs.eventloop.delay.stddev",
+		Unit:    "s",
+		Type:    InstrumentGauge,
+	})
+	NodejsEventLoopDelayP50 = metric(Name{
+		Section: "nodejs.eventloop.delay.p50",
+		OTEL:    "nodejs.eventloop.delay.p50",
+		Unit:    "s",
+		Type:    InstrumentGauge,
+	})
+	NodejsEventLoopDelayP90 = metric(Name{
+		Section: "nodejs.eventloop.delay.p90",
+		OTEL:    "nodejs.eventloop.delay.p90",
+		Unit:    "s",
+		Type:    InstrumentGauge,
+	})
+	NodejsEventLoopDelayP99 = metric(Name{
+		Section: "nodejs.eventloop.delay.p99",
+		OTEL:    "nodejs.eventloop.delay.p99",
+		Unit:    "s",
+		Type:    InstrumentGauge,
+	})
+	// Resource is not an instrument: it only names the attributes.select section
+	// that selects resource attributes. It still goes through metric() so its
+	// Prom and OTEL forms stay populated like every other entry.
+	Resource = metric(Name{
 		Section: "resource",
-		Prom:    "resource",
 		OTEL:    "resource",
-	}
-	StatTCPRtt = Name{
+	})
+	StatTCPRtt = metric(Name{
 		Section: "obi.stat.tcp.rtt",
-		Prom:    "obi_stat_tcp_rtt_seconds",
 		OTEL:    "obi.stat.tcp.rtt",
-	}
-	StatTCPFailedConnections = Name{
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	StatTCPFailedConnections = metric(Name{
 		Section: "obi.stat.tcp.failed.connections",
-		Prom:    "obi_stat_tcp_failed_connections",
 		OTEL:    "obi.stat.tcp.failed.connections",
-	}
-	StatTCPRetransmits = Name{
+		Type:    InstrumentCounter,
+	})
+	StatTCPRetransmits = metric(Name{
 		Section: "obi.stat.tcp.retransmits",
-		Prom:    "obi_stat_tcp_retransmits",
 		OTEL:    "obi.stat.tcp.retransmits",
-	}
-	StatTCPIo = Name{
+		Type:    InstrumentCounter,
+	})
+	StatTCPIo = metric(Name{
 		Section: "obi.stat.tcp.io",
-		Prom:    "obi_stat_tcp_io_bytes_total",
 		OTEL:    "obi.stat.tcp.io",
-	}
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

@@ -84,8 +84,9 @@ var DefaultResourceLabels = ResourceLabels{
 // - the inspected container.Info objects, indexed either by container ID and PID namespace
 // - a cache of decorated PodInfo that would avoid reconstructing them on each trace decoration
 type Store struct {
-	log    *slog.Logger
-	access sync.RWMutex
+	log           *slog.Logger
+	access        sync.RWMutex
+	processAccess sync.Mutex
 
 	metadataNotifier meta.Notifier
 
@@ -244,6 +245,8 @@ func (s *Store) On(event *informer.Event) error {
 var InfoForPID = container.InfoForPID
 
 func (s *Store) AddProcess(pid app.PID) {
+	s.processAccess.Lock()
+	defer s.processAccess.Unlock()
 	ifp, err := InfoForPID(pid)
 	if err != nil {
 		s.log.Debug("failing to get container information", "pid", pid, "error", err)
@@ -254,12 +257,18 @@ func (s *Store) AddProcess(pid app.PID) {
 
 	s.access.Lock()
 	defer s.access.Unlock()
+	if previous, ok := s.containerByPID[pid]; ok {
+		s.namespaces.Delete(previous.PIDNamespace, pid)
+		s.containerIDs.Delete(previous.ContainerID, pid)
+	}
 	s.namespaces.Put(ifp.PIDNamespace, pid, &ifp)
 	s.containerIDs.Put(ifp.ContainerID, pid, &ifp)
 	s.containerByPID[pid] = &ifp
 }
 
 func (s *Store) DeleteProcess(pid app.PID) {
+	s.processAccess.Lock()
+	defer s.processAccess.Unlock()
 	s.access.Lock()
 	defer s.access.Unlock()
 	info, ok := s.containerByPID[pid]

@@ -5,6 +5,7 @@ package transform // import "go.opentelemetry.io/obi/pkg/transform"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -21,6 +22,7 @@ import (
 	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -29,6 +31,10 @@ import (
 )
 
 var containerInfoForPID = container.InfoForPID
+
+var errProcEventDecoratorStopped = errors.New("process event metadata decorator stopped")
+
+const procEventDecoratorMaxPendingProcessEvents = 1024
 
 func klog() *slog.Logger {
 	return slog.With("component", "transform.KubernetesDecorator")
@@ -129,13 +135,17 @@ func KubeProcessEventDecoratorProvider(
 		}
 
 		decorator := &procEventMetadataDecorator{
-			log:         slog.With("component", "transform.KubeProcessEventDecoratorProvider"),
-			store:       store,
-			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
-			input:       input.Subscribe(msg.SubscriberName("transform.KubeProcessEventDecorator")),
-			output:      output,
-			podsInfoCh:  make(chan Event[*informer.ObjectMeta]),
-			tracker:     newPidContainerTracker(),
+			log:                 slog.With("component", "transform.KubeProcessEventDecoratorProvider"),
+			store:               store,
+			clusterName:         KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
+			input:               input.Subscribe(msg.SubscriberName("transform.KubeProcessEventDecorator")),
+			output:              output,
+			podsInfoCh:          make(chan Event[*informer.ObjectMeta]),
+			observerDone:        make(chan struct{}),
+			subscribeObserver:   store.Subscribe,
+			waitForSubscription: waitForSubscription,
+			unsubscribeObserver: store.Unsubscribe,
+			tracker:             newPidContainerTracker(),
 		}
 
 		decorator.log.Debug("starting KubeDecoratorProvider")
@@ -196,13 +206,23 @@ type Event[T any] struct {
 }
 
 type procEventMetadataDecorator struct {
-	log         *slog.Logger
-	store       *kube.Store
-	clusterName string
-	input       <-chan exec.ProcessEvent
-	output      *msg.Queue[exec.ProcessEvent]
-	podsInfoCh  chan Event[*informer.ObjectMeta]
-	tracker     *pidContainerTracker
+	log                 *slog.Logger
+	store               *kube.Store
+	clusterName         string
+	input               <-chan exec.ProcessEvent
+	output              *msg.Queue[exec.ProcessEvent]
+	podsInfoCh          chan Event[*informer.ObjectMeta]
+	observerDone        chan struct{}
+	deliveryReady       chan<- struct{}
+	subscribeObserver   func(meta.Observer)
+	waitForSubscription func(<-chan struct{})
+	unsubscribeObserver func(meta.Observer)
+	tracker             *pidContainerTracker
+}
+
+type procEventDecoratorInput struct {
+	processEvent *exec.ProcessEvent
+	podEvent     *Event[*informer.ObjectMeta]
 }
 
 type pidContainerTracker struct {
@@ -264,70 +284,151 @@ func (t *pidContainerTracker) info(containerID string) (map[app.PID]*exec.Proces
 func (md *procEventMetadataDecorator) ID() string { return "unique-proc-event-metadata-decorator-id" }
 
 func (md *procEventMetadataDecorator) On(event *informer.Event) error {
+	select {
+	case <-md.observerDone:
+		return errProcEventDecoratorStopped
+	default:
+	}
+
 	// ignoring updates on non-pod resources
 	if event.Resource == nil || event.GetResource().GetPod() == nil {
 		return nil
 	}
+	var podEvent Event[*informer.ObjectMeta]
 	switch event.Type {
 	case informer.EventType_CREATED, informer.EventType_UPDATED:
-		md.podsInfoCh <- Event[*informer.ObjectMeta]{Type: EventCreated, Obj: event.Resource}
+		podEvent = Event[*informer.ObjectMeta]{Type: EventCreated, Obj: event.Resource}
 	case informer.EventType_DELETED:
-		md.podsInfoCh <- Event[*informer.ObjectMeta]{Type: EventDeleted, Obj: event.Resource}
+		podEvent = Event[*informer.ObjectMeta]{Type: EventDeleted, Obj: event.Resource}
+	default:
+		return nil
 	}
-	return nil
+
+	if md.deliveryReady != nil {
+		select {
+		case md.deliveryReady <- struct{}{}:
+		default:
+		}
+	}
+	select {
+	case md.podsInfoCh <- podEvent:
+		return nil
+	case <-md.observerDone:
+		return errProcEventDecoratorStopped
+	}
 }
 
 func (md *procEventMetadataDecorator) k8sLoop(ctx context.Context) {
+	md.log.Debug("starting kubernetes process event decoration loop")
+	subscriptionDone := make(chan struct{})
+	go func() {
+		defer close(subscriptionDone)
+		md.subscribeObserver(md)
+	}()
+	defer func() {
+		close(md.observerDone)
+		md.waitForSubscription(subscriptionDone)
+		md.unsubscribeObserver(md)
+	}()
 	// output channel must be closed so later stages in the pipeline can finish in cascade
 	defer md.output.Close()
-
-	md.log.Debug("starting kubernetes process event decoration loop")
-	go md.store.Subscribe(md)
+	subscribing := (<-chan struct{})(subscriptionDone)
+	var pending []procEventDecoratorInput
+	pendingProcessEvents := 0
 
 mainLoop:
 	for {
+		if subscribing == nil && len(pending) > 0 {
+			select {
+			case <-ctx.Done():
+				break mainLoop
+			default:
+			}
+			event := pending[0]
+			pending[0] = procEventDecoratorInput{}
+			pending = pending[1:]
+			if len(pending) == 0 {
+				pending = nil
+			}
+			if event.processEvent != nil {
+				pendingProcessEvents--
+				md.handleProcessEvent(*event.processEvent)
+			} else {
+				md.handlePodEvent(*event.podEvent)
+			}
+			continue
+		}
+
+		input := md.input
+		if subscribing != nil && pendingProcessEvents >= procEventDecoratorMaxPendingProcessEvents {
+			input = nil
+		}
+
 		select {
 		case <-ctx.Done():
 			break mainLoop
-		case pe, ok := <-md.input:
+		case <-subscribing:
+			subscribing = nil
+		case pe, ok := <-input:
 			if !ok {
 				break mainLoop
 			}
-			md.log.Debug("annotating process event", "event", pe)
-
-			if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns(), pe.File.Pid()); podMeta != nil {
-				AppendKubeMetadata(md.store, pe.File, podMeta, md.clusterName, containerName)
+			if subscribing != nil {
+				pending = append(pending, procEventDecoratorInput{processEvent: &pe})
+				pendingProcessEvents++
 			} else {
-				// do not leave the service attributes map as nil
-				pe.File.SetMetadata(map[attr.Name]string{})
-
-				md.log.Debug("no metadata for event", "event", pe)
-
-				if pe.Type == exec.ProcessEventCreated {
-					if containerInfo, err := md.getContainerInfo(pe.File.Pid()); err == nil {
-						md.log.Debug("storing pid info", "pid", pe.File.Pid(), "containerId", containerInfo.ContainerID)
-						md.tracker.track(containerInfo.ContainerID, &pe)
-					}
-				} else {
-					md.tracker.remove(pe.File.Pid())
-				}
+				md.handleProcessEvent(pe)
 			}
-
-			// in-place decoration and forwarding
-			md.output.Send(pe)
 		case podEvent := <-md.podsInfoCh:
-			switch podEvent.Type {
-			case EventCreated:
-				md.log.Debug("created pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
-				md.handlePodUpdateEvent(podEvent.Obj)
-			case EventDeleted:
-				md.cleanupPodData(podEvent.Obj)
-				md.log.Debug("deleted pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
+			if subscribing != nil {
+				pending = append(pending, procEventDecoratorInput{podEvent: &podEvent})
+			} else {
+				md.handlePodEvent(podEvent)
 			}
 		}
 	}
 
 	md.log.Debug("stopping kubernetes process event decoration loop")
+}
+
+func waitForSubscription(done <-chan struct{}) {
+	<-done
+}
+
+func (md *procEventMetadataDecorator) handleProcessEvent(pe exec.ProcessEvent) {
+	md.log.Debug("annotating process event", "event", pe)
+
+	if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns(), pe.File.Pid()); podMeta != nil {
+		AppendKubeMetadata(md.store, pe.File, podMeta, md.clusterName, containerName)
+	} else {
+		// do not leave the service attributes map as nil
+		pe.File.SetMetadata(map[attr.Name]string{})
+
+		md.log.Debug("no metadata for event", "event", pe)
+
+		if pe.Type == exec.ProcessEventCreated {
+			if containerInfo, err := md.getContainerInfo(pe.File.Pid()); err == nil {
+				md.log.Debug("storing pid info", "pid", pe.File.Pid(), "containerId", containerInfo.ContainerID)
+				md.tracker.track(containerInfo.ContainerID, &pe)
+			}
+		} else {
+			md.tracker.remove(pe.File.Pid())
+		}
+	}
+
+	// in-place decoration and forwarding
+	md.output.Send(pe)
+}
+
+func (md *procEventMetadataDecorator) handlePodEvent(podEvent Event[*informer.ObjectMeta]) {
+	switch podEvent.Type {
+	case EventCreated:
+		md.log.Debug("created pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
+		md.handlePodUpdateEvent(podEvent.Obj)
+	case EventDeleted:
+		md.cleanupPodData(podEvent.Obj)
+		md.log.Debug("deleted pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
+	}
 }
 
 func (md *procEventMetadataDecorator) getContainerInfo(pid app.PID) (container.Info, error) {

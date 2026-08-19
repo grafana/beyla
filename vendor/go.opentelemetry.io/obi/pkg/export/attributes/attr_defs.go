@@ -270,6 +270,15 @@ func getDefinitions(
 		nil,
 	)
 
+	nodejsEventLoopTimeAttributes := NewAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&appAttributes},
+		map[attr.Name]Default{
+			attr.NodejsEventLoopState: true,
+		},
+		nil,
+	)
+
 	httpRoutes := NewAttrReportGroup(
 		!groups.Has(GroupHTTPRoutes),
 		nil,
@@ -511,6 +520,10 @@ func getDefinitions(
 		},
 		JVMMemoryUsedAfterLastGC.Section: {
 			SubGroups:  []*AttrReportGroup{&jvmMemoryAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		NodejsEventLoopTime.Section: {
+			SubGroups:  []*AttrReportGroup{&nodejsEventLoopTimeAttributes},
 			Attributes: map[attr.Name]Default{},
 		},
 		StatTCPRtt.Section: {

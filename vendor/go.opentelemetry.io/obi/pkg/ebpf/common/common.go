@@ -38,7 +38,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t Bpf ../../../bpf/common/common.c -- -I../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t -type node_span_event_t Bpf ../../../bpf/common/common.c -- -I../../../bpf
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
@@ -57,6 +57,7 @@ type (
 	GoAutoSpanTrace      BpfGoAutoSpanT
 	GoMongoClientInfo    BpfMongoGoClientReqT
 	DNSInfo              BpfDnsReqT
+	NodeSpanEvent        BpfNodeSpanEventT
 )
 
 // Go mirror of tp_info.h -> enum tp_flags
@@ -88,9 +89,12 @@ const (
 	EventTypeGoAutoSpan         = 20 // EVENT_GO_AUTO_SPAN - Go Auto SDK OTLP JSON span
 	EventTypeGoRuntimeHistogram = 21 // EVENT_GO_RUNTIME_HISTOGRAM - Go runtime histogram metrics
 	EventTypeGoAutoActivated    = 22 // EVENT_GO_AUTO_ACTIVATED - internal Auto SDK activation control event
+	EventTypeNodejsEventLoop    = 23 // EVENT_NODEJS_EVENTLOOP - Node.js event-loop runtime metrics
+	EventNodeSpan               = 24 // EVENT_NODE_SPAN - OTel API manual span from the Node.js span bridge
 )
 
 // Kernel-side classification
+// Keep these values aligned with protocol_type in bpf/common/connection_info.h
 const (
 	ProtocolTypeUnknown uint8 = iota
 	ProtocolTypeMySQL
@@ -102,6 +106,7 @@ const (
 	ProtocolTypeSunRPC
 	ProtocolTypeNATS // placeholder for future kernel-space detection
 	ProtocolTypeAMQP // placeholder for future kernel-space detection
+	ProtocolTypeAerospike
 )
 
 const (
@@ -282,7 +287,7 @@ type pendingGoHTTPClientKey struct {
 
 type EBPFParseContext struct {
 	protocolDebug               bool
-	h2c                         *lru.Cache[uint64, h2Connection]
+	h2c                         *lru.Cache[uint64, *h2Connection]
 	redisDBCache                *simplelru.LRU[BpfConnectionInfoT, int]
 	couchbaseBucketCache        *simplelru.LRU[BpfConnectionInfoT, CouchbaseBucketInfo]
 	largeBuffers                *expirable.LRU[largeBufferKey, *largebuf.LargeBuffer]
@@ -390,7 +395,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		emitSpans                  func([]request.Span)
 	)
 
-	h2c, _ := lru.New[uint64, h2Connection](1024 * 10)
+	h2c, _ := lru.New[uint64, *h2Connection](1024 * 10)
 	largeBuffers := expirable.NewLRU[largeBufferKey, *largebuf.LargeBuffer](1024, nil, 5*time.Minute)
 	postgresDBNames, _ := simplelru.NewLRU[BpfConnectionInfoT, string](4096, nil)
 
@@ -612,6 +617,9 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 	case EventTypeGoAutoSpan:
 		span, ignore, err := ReadGoAutoSpanEventIntoSpan(record)
 		return finalizeParsedSpan(parseCtx, span, ignore, err)
+	case EventNodeSpan:
+		span, ignore, err := ReadNodeSpanEventIntoSpan(record)
+		return finalizeParsedSpan(parseCtx, span, ignore, err)
 	case EventTypeFailedConnect:
 		span, ignore, err := ReadFailedConnectIntoSpan(record, filter)
 		return finalizeParsedSpan(parseCtx, span, ignore, err)
@@ -758,6 +766,17 @@ func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
 		// subprog reconciliation. Replace with a dummy so it loads safely.
 		if _, ok := spec.Programs["obi_uprobe_readMimeHeader"]; ok {
 			spec.Programs["obi_uprobe_readMimeHeader"] = dummy
+		}
+
+		// The huffman decode's bpf_loop callback trips the same func_info validation;
+		// the BPF side skips the detour to it when g_bpf_loop_enabled=false
+		if _, ok := spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffman"]; ok {
+			spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffman"] = dummy
+		}
+
+		// the candidate sweep scans under bpf_loop as well
+		if _, ok := spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffscan"]; ok {
+			spec.Programs["obi_protocol_http2_grpc_handle_start_frame_server_huffscan"] = dummy
 		}
 
 		// gotracer's HTTP/1 client traceparent injection scans the request

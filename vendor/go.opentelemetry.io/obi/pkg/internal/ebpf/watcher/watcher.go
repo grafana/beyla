@@ -26,7 +26,10 @@ type Watcher struct {
 	closers    []io.Closer
 	log        *slog.Logger
 	events     chan<- Event
+	forward    func(context.Context, watchEventParser)
 }
+
+type watchEventParser func(*ringbuf.Record) (request.Span, bool, error)
 
 type EventType int
 
@@ -34,6 +37,8 @@ const (
 	Ready = EventType(iota)
 	NewPort
 )
+
+const watchBind uint64 = 1
 
 type Event struct {
 	Type    EventType
@@ -87,11 +92,18 @@ func (p *Watcher) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 func (p *Watcher) SetupTailCalls() {}
 
 func (p *Watcher) Run(ctx context.Context) {
-	p.events <- Event{Type: Ready}
+	parse := func(record *ringbuf.Record) (request.Span, bool, error) {
+		return p.processWatchEvent(ctx, record)
+	}
+	_ = p.sendEvent(ctx, Event{Type: Ready})
+	if p.forward != nil {
+		p.forward(ctx, parse)
+		return
+	}
 	ebpfcommon.ForwardRingbuf(
 		&p.cfg.EBPF,
 		p.bpfObjects.WatchEvents,
-		p.processWatchEvent,
+		parse,
 		nil,
 		p.log,
 		nil,
@@ -99,7 +111,19 @@ func (p *Watcher) Run(ctx context.Context) {
 	)(ctx, nil)
 }
 
-func (p *Watcher) processWatchEvent(record *ringbuf.Record) (request.Span, bool, error) {
+func (p *Watcher) sendEvent(ctx context.Context, event Event) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case p.events <- event:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (p *Watcher) processWatchEvent(ctx context.Context, record *ringbuf.Record) (request.Span, bool, error) {
 	var flags uint64
 	var event BPFWatchInfo
 
@@ -108,12 +132,15 @@ func (p *Watcher) processWatchEvent(record *ringbuf.Record) (request.Span, bool,
 		return request.Span{}, true, err
 	}
 
-	if flags == 1 { // socket bind
+	if flags == watchBind { // socket bind
 		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+		if err != nil {
+			return request.Span{}, true, err
+		}
 
-		if err == nil {
-			p.log.Debug("New port bind event", "port", event.Payload)
-			p.events <- Event{Type: NewPort, Payload: uint32(event.Payload)}
+		p.log.Debug("New port bind event", "port", event.Payload)
+		if err := p.sendEvent(ctx, Event{Type: NewPort, Payload: uint32(event.Payload)}); err != nil {
+			return request.Span{}, true, err
 		}
 	}
 

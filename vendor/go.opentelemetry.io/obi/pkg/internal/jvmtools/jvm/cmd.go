@@ -14,65 +14,141 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"sync"
 	"syscall"
 
 	"go.opentelemetry.io/obi/pkg/internal/jvmtools/util"
 )
 
+// extracted for testing
+var (
+	getEUID = syscall.Geteuid
+	getEGID = syscall.Getegid
+	setEUID = syscall.Seteuid
+	setEGID = syscall.Setegid
+)
+
+var errTerminated = errors.New("attach terminated")
+
 type JAttacher struct {
-	logger     *slog.Logger
-	j9attacher *j9Attacher
-	myUID      int
-	myGID      int
+	logger             *slog.Logger
+	j9attacher         *j9Attacher
+	myUID              int
+	myGID              int
+	mu                 sync.Mutex
+	initialized        bool
+	terminated         bool
+	attachID           int64
+	runIfCurrentAttach func(int64, func() error) error
 }
 
-func NewJAttacher(logger *slog.Logger) *JAttacher {
+func NewJAttacher(logger *slog.Logger, attachID int64, runIfCurrentAttach func(int64, func() error) error) *JAttacher {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	return &JAttacher{
-		logger:     logger,
-		j9attacher: nil,
+		logger:             logger,
+		j9attacher:         nil,
+		attachID:           attachID,
+		runIfCurrentAttach: runIfCurrentAttach,
 	}
+}
+
+func (j *JAttacher) setEUID(euid int) (err error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.terminated && euid != j.myUID {
+		return errTerminated
+	}
+	return setEUID(euid)
+}
+
+func (j *JAttacher) setEGID(egid int) (err error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.terminated && egid != j.myGID {
+		return errTerminated
+	}
+	return setEGID(egid)
 }
 
 func (j *JAttacher) Init() {
-	j.myUID = syscall.Geteuid()
-	j.myGID = syscall.Getegid()
-}
+	j.mu.Lock()
+	defer j.mu.Unlock()
 
-func (j *JAttacher) Cleanup() error {
-	var cleanupErr error
-
-	if j.j9attacher != nil {
-		cleanupErr = errors.Join(cleanupErr, j.j9attacher.detach())
+	if j.initialized {
+		return
 	}
 
+	j.myUID = getEUID()
+	j.myGID = getEGID()
+	j.initialized = true
+}
+
+func (j *JAttacher) restoreCredentialsLocked() error {
+	var restoreErr error
 	// Credentials (euid/egid) are switched process-wide during Attach, so they
 	// must be restored here. Namespaces are NOT restored: the namespace switch
 	// happens only on the dedicated sacrificial thread spawned by Attach, which
 	// is destroyed once attach completes — the runtime's pool threads never
 	// leave their original namespaces, so there is nothing to roll back.
-	if err := syscall.Seteuid(j.myUID); err != nil {
-		cleanupErr = errors.Join(cleanupErr, err)
+	if err := setEUID(j.myUID); err != nil {
+		restoreErr = errors.Join(restoreErr, err)
 	}
-	if err := syscall.Setegid(j.myGID); err != nil {
-		cleanupErr = errors.Join(cleanupErr, err)
+	if err := setEGID(j.myGID); err != nil {
+		restoreErr = errors.Join(restoreErr, err)
 	}
 
 	// No need to restore the pid namespace, since we do this on a
 	// locked thread that's never unlocked, which means the Go runtime
 	// will destroy it when the goroutine ends.
 
+	return restoreErr
+}
+
+func (j *JAttacher) Terminate() error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	j.terminated = true
+
+	if !j.initialized {
+		return nil
+	}
+
+	return j.restoreCredentialsLocked()
+}
+
+func (j *JAttacher) Cleanup() error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	if !j.initialized {
+		return nil
+	}
+
+	var cleanupErr error
+
+	if j.j9attacher != nil {
+		cleanupErr = errors.Join(cleanupErr, j.j9attacher.detach())
+	}
+
+	// Restore credentials if we are the active attach happening on the pipeline.
+	// If we were delayed and the main loop abandoned us, they would reset the
+	// credentials in Terminate and they might be in process of other JVM attach.
+	cleanupErr = errors.Join(
+		cleanupErr,
+		j.runIfCurrentAttach(
+			j.attachID,
+			j.restoreCredentialsLocked,
+		),
+	)
+
 	return cleanupErr
 }
 
-func (j *JAttacher) Attach(pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
-	return j.AttachContext(context.Background(), pid, argv, ignoreOnJ9)
-}
-
-func (j *JAttacher) AttachContext(ctx context.Context, pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
+func (j *JAttacher) Attach(ctx context.Context, pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -149,8 +225,11 @@ func (j *JAttacher) attachInNamespace(ctx context.Context, pid, nspid, targetUID
 
 	// In HotSpot, dynamic attach is allowed only for the clients with the same euid/egid.
 	// If we are running under root, switch to the required euid/egid automatically.
-	if (j.myGID != targetGID && syscall.Setegid(targetGID) != nil) ||
-		(j.myUID != targetUID && syscall.Seteuid(targetUID) != nil) {
+	// We must use j.setEGID and j.setEUID instead of setEUID and setEGID to ensure OBI
+	// is still waiting on the attach, rather than changing the user credentials after OBI
+	// has abandoned this attach in the pipeline.
+	if (j.myGID != targetGID && j.setEGID(targetGID) != nil) ||
+		(j.myUID != targetUID && j.setEUID(targetUID) != nil) {
 		return nil, errors.New("failed to change credentials to match the target process")
 	}
 

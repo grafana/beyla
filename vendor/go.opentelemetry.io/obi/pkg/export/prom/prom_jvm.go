@@ -4,8 +4,6 @@
 package prom // import "go.opentelemetry.io/obi/pkg/export/prom"
 
 import (
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
@@ -24,13 +22,13 @@ type jvmRuntimeMetricsCollector struct {
 func newJVMRuntimeMetricsCollector(cfg *PrometheusConfig) jvmRuntimeMetricsCollector {
 	clock := timeNow
 	return jvmRuntimeMetricsCollector{
-		memoryUsed: newJVMGauge(attributes.JVMMemoryUsed.Prom,
+		memoryUsed: newRuntimeGauge(attributes.JVMMemoryUsed.Prom,
 			"Current used JVM memory in bytes.", jvmMemoryLabels(), clock, cfg.TTL),
-		memoryCommitted: newJVMGauge(attributes.JVMMemoryCommitted.Prom,
+		memoryCommitted: newRuntimeGauge(attributes.JVMMemoryCommitted.Prom,
 			"Current committed JVM memory in bytes.", jvmMemoryLabels(), clock, cfg.TTL),
-		memoryLimit: newJVMGauge(attributes.JVMMemoryLimit.Prom,
+		memoryLimit: newRuntimeGauge(attributes.JVMMemoryLimit.Prom,
 			"Current maximum JVM memory in bytes.", jvmMemoryLabels(), clock, cfg.TTL),
-		memoryUsedAfterLastGC: newJVMGauge(attributes.JVMMemoryUsedAfterLastGC.Prom,
+		memoryUsedAfterLastGC: newRuntimeGauge(attributes.JVMMemoryUsedAfterLastGC.Prom,
 			"JVM memory used after the last garbage collection in bytes.", jvmMemoryLabels(), clock, cfg.TTL),
 	}
 }
@@ -45,13 +43,6 @@ func (c *jvmRuntimeMetricsCollector) collectors() []prometheus.Collector {
 		c.memoryLimit,
 		c.memoryUsedAfterLastGC,
 	}
-}
-
-func newJVMGauge(name, help string, labels []string, clock func() time.Time, ttl time.Duration) *Expirer[prometheus.Gauge] {
-	return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: name,
-		Help: help,
-	}, labels).MetricVec, clock, ttl)
 }
 
 func (r *metricsReporter) collectJVMRuntimeMetrics(snapshot runtimemetrics.RuntimeMetricSnapshot) {
@@ -74,26 +65,10 @@ func (r *metricsReporter) collectJVMRuntimeMetrics(snapshot runtimemetrics.Runti
 	}
 }
 
-func jvmServiceLabels() []string {
-	return []string{
-		attr.ServiceName.Prom(),
-		attr.ServiceNamespace.Prom(),
-		attr.ServiceInstanceID.Prom(),
-	}
-}
-
 func jvmMemoryLabels() []string {
-	return append(jvmServiceLabels(), attr.JVMMemoryType.Prom(), attr.JVMMemoryPoolName.Prom())
-}
-
-func jvmServiceLabelValues(snapshot runtimemetrics.RuntimeMetricSnapshot) []string {
-	return []string{
-		snapshot.Service.UID.Name,
-		snapshot.Service.UID.Namespace,
-		snapshot.Service.UID.Instance,
-	}
+	return append(runtimeServiceLabels(), attr.JVMMemoryType.Prom(), attr.JVMMemoryPoolName.Prom())
 }
 
 func jvmMemoryLabelValues(snapshot runtimemetrics.RuntimeMetricSnapshot) []string {
-	return append(jvmServiceLabelValues(snapshot), string(snapshot.JVM.MemoryType), snapshot.JVM.PoolName)
+	return append(runtimeServiceLabelValues(snapshot), string(snapshot.JVM.MemoryType), snapshot.JVM.PoolName)
 }

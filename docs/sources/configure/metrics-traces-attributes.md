@@ -266,7 +266,13 @@ And the following table describes the metrics and their associated groups.
 
 YAML section: `attributes`
 
-Beyla replaces the values of known-sensitive query parameters with `REDACTED` in the `url.full` and `url.query` trace attributes. The built-in list covers the parameters recommended by the OpenTelemetry HTTP semantic conventions (`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `AWSAccessKeyId`, `Signature`, `SecurityToken`, `X-Goog-Signature`, `sig`) along with common credential, session and payment parameter names such as `token`, `access_token`, `api_key`, `client_secret`, `password`, `otp`, `SAMLResponse`, `cvv` and `ssn`.
+Beyla replaces the values of known-sensitive query parameters with `REDACTED` in the `url.full` and `url.query` trace attributes.
+
+The built-in list is:
+
+`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `AWSAccessKeyId`, `Signature`, `SecurityToken`, `X-Goog-Signature`, `sig`, `token`, `access_token`, `refresh_token`, `id_token`, `jwt`, `session`, `sid`, `signature`, `api_key`, `apikey`, `client_secret`, `secret`, `password`, `pass`, `pwd`, `reset_token`, `invite_token`, `verify_token`, `otp`, `totp`, `mfa_code`, `verification_code`, `SAMLResponse`, `assertion`, `card`, `cc`, `pan`, `cvv`, `ssn`, `tax_id`.
+
+The first eight come from the [OpenTelemetry HTTP semantic conventions](https://opentelemetry.io/docs/specs/semconv/http/http-spans/); the rest are common credential, session and payment parameter names. The list is defined in [`attr_selector.go`](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/blob/main/pkg/export/attributes/attr_selector.go) in OpenTelemetry eBPF Instrumentation.
 
 | YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |

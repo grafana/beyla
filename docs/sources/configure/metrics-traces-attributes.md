@@ -61,7 +61,9 @@ When a metric name matches multiple definitions using wildcards, exact matches t
 
 ## Select trace attributes
 
-Besides metric names, the `select` subsection accepts the special key `traces`, which controls the optional attributes exported on OTLP spans. A metric key selects attributes for one metric, while `traces` applies to every exported span, so wildcards over metric names never reach these attributes.
+Besides metric names, the `select` subsection accepts the special key `traces`, which controls the optional attributes exported on OTLP spans.
+
+Keys are matched as globs against the section name, and spans use the section name `traces`. A key like `http_*` therefore never reaches these attributes, while a catch-all `*` does match them along with every metric.
 
 Most of these attributes carry request payloads, so they're opt-in: they're only exported when listed in `include`. The exceptions are `dns.question.name` and `url.query`, which are exported by default and can be turned off with `exclude`.
 

@@ -136,6 +136,8 @@ On a host, mount it once with:
 mount -t bpf bpffs /sys/fs/bpf
 ```
 
+On the profiler side, the OpenTelemetry eBPF Profiler reads these maps through its own collector configuration: `obi_process_ctx` enables the process context sharing, and `bpf_fs_root` points at the BPF filesystem. See the [profiler collector config](https://pkg.go.dev/go.opentelemetry.io/ebpf-profiler/collector/config#Config). Its `bpf_fs_root` has to match Beyla's `bpf_fs_path`, otherwise each side pins and reads in a different place.
+
 In Kubernetes, the directory has to be a `hostPath` volume shared by the Beyla container and by any tool reading the pinned maps, so that both see the same filesystem:
 
 ```yaml

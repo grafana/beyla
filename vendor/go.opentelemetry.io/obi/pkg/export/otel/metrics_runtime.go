@@ -52,8 +52,9 @@ type RuntimeMetrics struct {
 	provider            *metric.MeterProvider
 	goHistogramProducer *goRuntimeHistogramProducer
 
-	goMetrics  goRuntimeMetrics
-	jvmMetrics jvmRuntimeMetrics
+	goMetrics     goRuntimeMetrics
+	jvmMetrics    jvmRuntimeMetrics
+	nodejsMetrics nodejsRuntimeMetrics
 }
 
 type goRuntimeMetrics struct {
@@ -83,7 +84,7 @@ type goRuntimeMetrics struct {
 func ReportRuntimeMetrics(
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
-	jointMetricsConfig *perapp.MetricsConfig,
+	jointMetricsConfig *perapp.GlobalMetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 	processEvents *msg.Queue[exec.ProcessEvent],
@@ -113,7 +114,7 @@ func newRuntimeMetricsReporter(
 	ctx context.Context,
 	ctxInfo *global.ContextInfo,
 	cfg *otelcfg.MetricsConfig,
-	jointMetricsConfig *perapp.MetricsConfig,
+	jointMetricsConfig *perapp.GlobalMetricsConfig,
 	selectorCfg *attributes.SelectorConfig,
 	input *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 	processEvents *msg.Queue[exec.ProcessEvent],
@@ -209,51 +210,54 @@ func setupRuntimeMeters(
 	if err := setupJVMRuntimeMeters(metrics.ctx, &metrics.jvmMetrics, meter, ttl); err != nil {
 		return err
 	}
+	if err := setupNodejsRuntimeMeters(metrics.ctx, &metrics.nodejsMetrics, meter, ttl); err != nil {
+		return err
+	}
 	return nil
 }
 
 func setupGoRuntimeMeters(metrics *goRuntimeMetrics, meter instrument.Meter) error {
 	var err error
-	metrics.memoryLimit, err = meter.Int64UpDownCounter(attributes.GoRuntimeMemoryLimit.OTEL, instrument.WithUnit("By"))
+	metrics.memoryLimit, err = meter.Int64UpDownCounter(attributes.GoRuntimeMemoryLimit.OTEL, instrument.WithUnit(attributes.GoRuntimeMemoryLimit.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go memory limit: %w", err)
 	}
-	metrics.memoryGCGoal, err = meter.Int64UpDownCounter(attributes.GoRuntimeMemoryGCGoal.OTEL, instrument.WithUnit("By"))
+	metrics.memoryGCGoal, err = meter.Int64UpDownCounter(attributes.GoRuntimeMemoryGCGoal.OTEL, instrument.WithUnit(attributes.GoRuntimeMemoryGCGoal.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go memory gc goal: %w", err)
 	}
-	metrics.memoryGCCycles, err = meter.Int64Counter(attributes.GoRuntimeMemoryGCCycles.OTEL, instrument.WithUnit("{gc_cycle}"))
+	metrics.memoryGCCycles, err = meter.Int64Counter(attributes.GoRuntimeMemoryGCCycles.OTEL, instrument.WithUnit(attributes.GoRuntimeMemoryGCCycles.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go memory gc cycles: %w", err)
 	}
-	metrics.memoryUsed, err = meter.Int64UpDownCounter(attributes.GoRuntimeMemoryUsed.OTEL, instrument.WithUnit("By"))
+	metrics.memoryUsed, err = meter.Int64UpDownCounter(attributes.GoRuntimeMemoryUsed.OTEL, instrument.WithUnit(attributes.GoRuntimeMemoryUsed.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go memory used: %w", err)
 	}
-	metrics.memoryAllocated, err = meter.Int64Counter(attributes.GoRuntimeMemoryAllocated.OTEL, instrument.WithUnit("By"))
+	metrics.memoryAllocated, err = meter.Int64Counter(attributes.GoRuntimeMemoryAllocated.OTEL, instrument.WithUnit(attributes.GoRuntimeMemoryAllocated.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go memory allocated: %w", err)
 	}
-	metrics.memoryAllocations, err = meter.Int64Counter(attributes.GoRuntimeMemoryAllocations.OTEL, instrument.WithUnit("{allocation}"))
+	metrics.memoryAllocations, err = meter.Int64Counter(attributes.GoRuntimeMemoryAllocations.OTEL, instrument.WithUnit(attributes.GoRuntimeMemoryAllocations.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go memory allocations: %w", err)
 	}
-	metrics.cpuTime, err = meter.Float64Counter(attributes.GoRuntimeCPUTime.OTEL, instrument.WithUnit("s"))
+	metrics.cpuTime, err = meter.Float64Counter(attributes.GoRuntimeCPUTime.OTEL, instrument.WithUnit(attributes.GoRuntimeCPUTime.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go cpu time: %w", err)
 	}
 	metrics.goroutineCount, err = meter.Int64UpDownCounter(
 		attributes.GoRuntimeGoroutineCount.OTEL,
-		instrument.WithUnit("{goroutine}"),
+		instrument.WithUnit(attributes.GoRuntimeGoroutineCount.Unit),
 	)
 	if err != nil {
 		return fmt.Errorf("creating go goroutine count: %w", err)
 	}
-	metrics.processorLimit, err = meter.Int64UpDownCounter(attributes.GoRuntimeProcessorLimit.OTEL, instrument.WithUnit("{thread}"))
+	metrics.processorLimit, err = meter.Int64UpDownCounter(attributes.GoRuntimeProcessorLimit.OTEL, instrument.WithUnit(attributes.GoRuntimeProcessorLimit.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go processor limit: %w", err)
 	}
-	metrics.configGOGC, err = meter.Int64UpDownCounter(attributes.GoRuntimeConfigGOGC.OTEL, instrument.WithUnit("%"))
+	metrics.configGOGC, err = meter.Int64UpDownCounter(attributes.GoRuntimeConfigGOGC.OTEL, instrument.WithUnit(attributes.GoRuntimeConfigGOGC.Unit))
 	if err != nil {
 		return fmt.Errorf("creating go config gogc: %w", err)
 	}
@@ -364,6 +368,12 @@ func recordRuntimeMetrics(ctx context.Context, metrics *RuntimeMetrics, snapshot
 			return
 		}
 		metrics.jvmMetrics.record(snapshot)
+	}
+	if snapshot.Nodejs != nil {
+		if !snapshot.Service.ExportModes.CanExportMetrics() || !snapshot.Service.Features.AppRuntime() {
+			return
+		}
+		metrics.nodejsMetrics.record(snapshot)
 	}
 }
 

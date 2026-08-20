@@ -21,6 +21,45 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
+// TestOverrideOBIGlobalConfig_MetricNames pins the Beyla-renamed metric definitions. The
+// Unit and Type must stay in sync with their OBI counterparts in
+// vendor/go.opentelemetry.io/obi/pkg/export/attributes/metric.go: the OTEL exporters declare
+// the unit on the instrument (so the weaver semconv registry validates against it) and both
+// unit and type feed the derived Prometheus name. Failing here on an OBI bump is much
+// cheaper than failing in a 30-minute integration run.
+func TestOverrideOBIGlobalConfig_MetricNames(t *testing.T) {
+	OverrideOBIGlobalConfig()
+
+	for _, tc := range []struct {
+		name                      attributes.Name
+		section, otel, unit, prom string
+		instrument                attributes.Instrument
+	}{
+		{attributes.NetworkFlow, "beyla.network.flow", "beyla.network.flow.bytes", "{bytes}",
+			"beyla_network_flow_bytes_total", attributes.InstrumentCounter},
+		{attributes.NetworkFlowPackets, "beyla.network.flow.packets", "beyla.network.flow.packets", "{packets}",
+			"beyla_network_flow_packets_total", attributes.InstrumentCounter},
+		{attributes.NetworkInterZone, "beyla.network.inter.zone", "beyla.network.inter.zone.bytes", "{bytes}",
+			"beyla_network_inter_zone_bytes_total", attributes.InstrumentCounter},
+		{attributes.StatTCPRtt, "beyla.stat.tcp.rtt", "beyla.stat.tcp.rtt", "s",
+			"beyla_stat_tcp_rtt_seconds", attributes.InstrumentHistogram},
+		{attributes.StatTCPFailedConnections, "beyla.stat.tcp.failed.connections", "beyla.stat.tcp.failed.connections", "",
+			"beyla_stat_tcp_failed_connections_total", attributes.InstrumentCounter},
+		{attributes.StatTCPRetransmits, "beyla.stat.tcp.retransmits", "beyla.stat.tcp.retransmits", "",
+			"beyla_stat_tcp_retransmits_total", attributes.InstrumentCounter},
+		{attributes.StatTCPIo, "beyla.stat.tcp.io", "beyla.stat.tcp.io", "By",
+			"beyla_stat_tcp_io_bytes_total", attributes.InstrumentCounter},
+	} {
+		t.Run(tc.otel, func(t *testing.T) {
+			assert.Equal(t, attributes.Section(tc.section), tc.name.Section)
+			assert.Equal(t, tc.otel, tc.name.OTEL)
+			assert.Equal(t, tc.unit, tc.name.Unit)
+			assert.Equal(t, tc.instrument, tc.name.Type)
+			assert.Equal(t, tc.prom, tc.name.Prom)
+		})
+	}
+}
+
 func TestGrafanaEndpointOverride(t *testing.T) {
 	// GIVEN a Grafana Cloud configuration
 	config, err := LoadConfig(strings.NewReader(`

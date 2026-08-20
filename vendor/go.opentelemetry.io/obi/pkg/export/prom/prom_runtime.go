@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
@@ -118,6 +119,9 @@ func (r *metricsReporter) collectRuntimeMetrics(snapshots []runtimemetrics.Runti
 		if snapshot.JVM != nil {
 			r.collectJVMRuntimeMetrics(snapshot)
 		}
+		if snapshot.Nodejs != nil {
+			r.collectNodejsRuntimeMetrics(snapshot)
+		}
 	}
 }
 
@@ -132,7 +136,9 @@ func (r *metricsReporter) runtimeSnapshotProcessLive(
 
 func (r *metricsReporter) runtimeMetricsEnabled() runtimemetrics.Enabled {
 	return runtimemetrics.Enabled{
-		Runtime: r.goRuntimeMetrics.memoryLimit != nil && r.jvmRuntimeMetrics.memoryUsed != nil,
+		Runtime: r.goRuntimeMetrics.memoryLimit != nil &&
+			r.jvmRuntimeMetrics.memoryUsed != nil &&
+			r.nodejsRuntimeMetrics.eventLoopTime != nil,
 	}
 }
 
@@ -352,4 +358,29 @@ func (r *metricsReporter) deleteRuntimeHistograms(service *svc.Attrs) {
 	if service != nil && r.goRuntimeHistograms != nil {
 		r.goRuntimeHistograms.Delete(r.labelValuesTargetInfo(service))
 	}
+}
+
+// Labels shared by the JVM and Node.js runtime metric collectors.
+
+func runtimeServiceLabels() []string {
+	return []string{
+		attr.ServiceName.Prom(),
+		attr.ServiceNamespace.Prom(),
+		attr.ServiceInstanceID.Prom(),
+	}
+}
+
+func runtimeServiceLabelValues(snapshot runtimemetrics.RuntimeMetricSnapshot) []string {
+	return []string{
+		snapshot.Service.UID.Name,
+		snapshot.Service.UID.Namespace,
+		snapshot.Service.UID.Instance,
+	}
+}
+
+func newRuntimeGauge(name, help string, labels []string, clock func() time.Time, ttl time.Duration) *Expirer[prometheus.Gauge] {
+	return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: name,
+		Help: help,
+	}, labels).MetricVec, clock, ttl)
 }

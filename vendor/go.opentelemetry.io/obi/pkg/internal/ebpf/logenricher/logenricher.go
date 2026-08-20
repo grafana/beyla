@@ -349,11 +349,46 @@ func (p *Tracer) handleLogEvent(record *ringbuf.Record) (request.Span, bool, err
 		return request.Span{}, true, nil
 	}
 
-	err = p.asyncWriter.Enqueue(p.ctx, LogEvent{
+	e := LogEvent{
 		orig:    *event,
 		logLine: unix.ByteSliceToString(record.RawSample[hdrSize : hdrSize+event.Len]),
-	})
+	}
+
+	// Open the destination now, while the writing process is still alive: the
+	// open file description keeps the log pipe writable even if the process is
+	// gone by the time the async writer gets to this line.
+	if _, err := p.openLogDestination(e.filePath()); err != nil {
+		p.logOpenError(e.filePath(), err)
+		return request.Span{}, true, nil
+	}
+
+	err = p.asyncWriter.Enqueue(p.ctx, e)
 	return request.Span{}, true, err
+}
+
+func (p *Tracer) openLogDestination(path string) (*os.File, error) {
+	if f, ok := p.fdCache.Get(path); ok {
+		return f, nil
+	}
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		return nil, err
+	}
+	p.fdCache.Add(path, f)
+
+	return f, nil
+}
+
+// a destination that is already gone means its process died between writing
+// the line and us getting to it: expected for short-lived processes
+func (p *Tracer) logOpenError(path string, err error) {
+	if errors.Is(err, os.ErrNotExist) {
+		p.log.Debug("log destination is gone, dropping line", "path", path, "error", err)
+		return
+	}
+
+	p.log.Error("failed to open log file for writing", "path", path, "error", err)
 }
 
 func (e LogEvent) filePath() string {
@@ -379,16 +414,11 @@ func (e LogEvent) filePath() string {
 }
 
 func (p *Tracer) handle(e LogEvent) {
-	// Get or open the file descriptor
-	f, ok := p.fdCache.Get(e.filePath())
-	if !ok {
-		f2, err2 := os.OpenFile(e.filePath(), os.O_WRONLY|os.O_APPEND, 0)
-		if err2 != nil {
-			p.log.Error("failed to open log file for writing", "path", e.filePath(), "error", err2)
-			return
-		}
-		p.fdCache.Add(e.filePath(), f2)
-		f = f2
+	// normally warmed at capture time; reopened only if the cache evicted it
+	f, err := p.openLogDestination(e.filePath())
+	if err != nil {
+		p.logOpenError(e.filePath(), err)
+		return
 	}
 
 	var (

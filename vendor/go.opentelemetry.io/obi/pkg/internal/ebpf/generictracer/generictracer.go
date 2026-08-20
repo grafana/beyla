@@ -213,8 +213,10 @@ func (p *Tracer) SetupTailCalls() {
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
 		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
 		// Large buffer multi-batch emission
-		p.bpfObjects.ObiLargeBufEmitContinue,                          // 13  k_tail_large_buf_emit_continue
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit, // 14
+		p.bpfObjects.ObiLargeBufEmitContinue,                            // 13  k_tail_large_buf_emit_continue
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit,   // 14
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffman,  // 15
+		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffscan, // 16
 	} {
 		if prog == nil {
 			continue
@@ -260,6 +262,9 @@ func (p *Tracer) constants() map[string]any {
 		m["disable_black_box_cp"] = uint32(0)
 	}
 
+	// gates the bpf_loop paths; unset it defaults to false and const-DCE drops them
+	m["g_bpf_loop_enabled"] = ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled)
+
 	m["http_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.HTTP
 	m["tcp_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.TCP
 	m["mysql_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.MySQL
@@ -272,8 +277,12 @@ func (p *Tracer) constants() map[string]any {
 	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
 	m["g_bpf_traceparent_enabled"] = p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.ContextPropagation.IsEnabled()
 	m["jvm_sampling_interval_ns"] = uint64(0)
-	if p.jvmRuntimeMetricsEnabled() {
+	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["jvm_sampling_interval_ns"] = uint64(p.cfg.JVMRuntimeMetrics.SamplingInterval.Nanoseconds())
+	}
+	m["nodejs_runtime_metrics_enabled"] = uint64(0)
+	if p.cfg.AppRuntimeMetricsEnabled() {
+		m["nodejs_runtime_metrics_enabled"] = uint64(1)
 	}
 
 	return m
@@ -529,7 +538,7 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 }
 
 func (p *Tracer) USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc {
-	if !p.jvmRuntimeMetricsEnabled() {
+	if !p.cfg.AppRuntimeMetricsEnabled() {
 		return nil
 	}
 	return map[string][]*ebpfcommon.USDTProbeDesc{
@@ -686,11 +695,11 @@ func (p *Tracer) Run(
 	p.log.Info("Launching p.Tracer")
 
 	cfg := &p.cfg.EBPF
-	if p.jvmRuntimeMetricsEnabled() {
+	if p.cfg.AppRuntimeMetricsEnabled() {
 		if p.runtimeMetricsSender() == nil {
-			p.log.Warn("JVM runtime metrics enabled without runtime metrics queue")
+			p.log.Warn("runtime metrics enabled without runtime metrics queue")
 		} else {
-			p.log.Debug("reading JVM runtime metrics from shared ring buffer")
+			p.log.Debug("reading runtime metrics from shared ring buffer")
 		}
 	}
 
@@ -705,10 +714,6 @@ func (p *Tracer) Run(
 		p.log,
 		p.metrics,
 	)(ctx, append(p.closers, &p.bpfObjects), eventsChan)
-}
-
-func (p *Tracer) jvmRuntimeMetricsEnabled() bool {
-	return p.cfg != nil && p.cfg.JoinMetricsConfig().Features.AppRuntime()
 }
 
 func (p *Tracer) processSharedRingbufRecord(

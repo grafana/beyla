@@ -412,41 +412,18 @@ func CodeToStatusCode(code string) ptrace.StatusCode {
 
 func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span) bool {
 	switch span.Type {
-	case request.EventTypeHTTP, request.EventTypeHTTPClient:
-		return is.HTTPEnabled()
-	case request.EventTypeGRPC, request.EventTypeGRPCClient:
-		return is.GRPCEnabled()
-	case request.EventTypeSQLClient, request.EventTypeSQLServer:
-		return is.SQLEnabled()
-	case request.EventTypeRedisClient, request.EventTypeRedisServer:
-		return is.RedisEnabled()
-	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
-		return is.KafkaEnabled()
-	case request.EventTypeMQTTClient, request.EventTypeMQTTServer:
-		return is.MQTTEnabled()
-	case request.EventTypeNATSClient, request.EventTypeNATSServer:
-		return is.NATSEnabled()
-	case request.EventTypeAMQPClient:
-		return is.AMQPEnabled()
-	case request.EventTypeSunRPCClient, request.EventTypeSunRPCServer:
-		return is.SunRPCEnabled()
-	case request.EventTypeMongoClient:
-		return is.MongoEnabled()
-	case request.EventTypeManualSpan:
+	case request.EventTypeManualSpan, request.EventTypeFailedConnect:
 		return true
-	case request.EventTypeFailedConnect:
-		return true
-	case request.EventTypeDNS:
-		return is.DNSEnabled()
-	case request.EventTypeCouchbaseClient:
-		return is.CouchbaseEnabled()
-	case request.EventTypeMemcachedClient, request.EventTypeMemcachedServer:
-		return is.MemcachedEnabled()
-	case request.EventTypeAerospikeClient:
-		return is.AerospikeEnabled()
+	case request.EventTypeGPUCudaKernelLaunch,
+		request.EventTypeGPUCudaGraphLaunch,
+		request.EventTypeGPUCudaMalloc,
+		request.EventTypeGPUCudaMemcpy:
+		// GPU events currently feed metrics only.
+		return false
 	}
 
-	return false
+	instrumentation, ok := span.Type.Instrumentation()
+	return ok && is.Enabled(instrumentation)
 }
 
 var (

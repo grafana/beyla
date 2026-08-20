@@ -435,6 +435,21 @@ copy_test_tools() {
     fi
 }
 
+copy_geoip_fixtures() {
+    # MaxMind test databases, bind-mounted read-only by
+    # docker-compose-netolly-geoip.yml as "../geoip:/geoip". That path is relative to
+    # $OBI_DEST, so the destination is its sibling internal/testgenerated/geoip.
+    # These are binary .mmdb files: copy them verbatim, never through sed_i.
+    local src=".obi-src/internal/test/geoip"
+    local dest="internal/testgenerated/geoip"
+    if [[ -d "$src" ]]; then
+        echo "  Copying GeoIP test fixtures..."
+        rm -rf "$dest"
+        mkdir -p "$dest"
+        cp -r "$src/"* "$dest/"
+    fi
+}
+
 copy_weavercheck() {
     # The new OBI revision extracted the transport-agnostic weaver live-check
     # parsing/validation into go.opentelemetry.io/obi/internal/test/weavercheck,
@@ -1350,6 +1365,7 @@ generate() {
     copy_beyla_manifests
     copy_discovered_go_subpackages
     copy_test_tools
+    copy_geoip_fixtures
     copy_weavercheck
     copy_beyla_extensions
     transform_go_imports_and_paths "$jobs"

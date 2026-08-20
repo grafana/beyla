@@ -39,7 +39,7 @@ type routesCount struct {
 
 type SpanNameLimiterConfig struct {
 	Limit      int
-	MetricsCfg *perapp.MetricsConfig
+	MetricsCfg *perapp.GlobalMetricsConfig
 	OTEL       *otelcfg.MetricsConfig
 	Prom       *prom.PrometheusConfig
 }
@@ -101,6 +101,9 @@ func (l *spanNameLimiter) aggregate(spans []request.Span) []request.Span {
 	alreadyCopying := false
 	for i := 0; i < len(output); i++ {
 		span := &output[i]
+		if request.IgnoreMetrics(span) {
+			continue
+		}
 		if key := span.Service.UID.NameNamespace(); lastCount == nil || key != lastKey {
 			lastKey = key
 			count, ok := l.spanNamesCount.Get(key)

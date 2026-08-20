@@ -50,25 +50,25 @@ func setupJVMRuntimeMeters(ctx context.Context, m *jvmRuntimeMetrics, meter inst
 	var err error
 
 	m.ctx = ctx
-	memoryUsed, err := meter.Int64UpDownCounter(attributes.JVMMemoryUsed.OTEL, instrument.WithUnit("By"))
+	memoryUsed, err := meter.Int64UpDownCounter(attributes.JVMMemoryUsed.OTEL, instrument.WithUnit(attributes.JVMMemoryUsed.Unit))
 	if err != nil {
 		return fmt.Errorf("creating JVM memory used up-down counter: %w", err)
 	}
 	m.memoryUsed = newJVMCurrentUpDownCounter(ctx, memoryUsed, memoryAttrs, timeNow, ttl)
 
-	memoryCommitted, err := meter.Int64UpDownCounter(attributes.JVMMemoryCommitted.OTEL, instrument.WithUnit("By"))
+	memoryCommitted, err := meter.Int64UpDownCounter(attributes.JVMMemoryCommitted.OTEL, instrument.WithUnit(attributes.JVMMemoryCommitted.Unit))
 	if err != nil {
 		return fmt.Errorf("creating JVM memory committed up-down counter: %w", err)
 	}
 	m.memoryCommitted = newJVMCurrentUpDownCounter(ctx, memoryCommitted, memoryAttrs, timeNow, ttl)
 
-	memoryLimit, err := meter.Int64UpDownCounter(attributes.JVMMemoryLimit.OTEL, instrument.WithUnit("By"))
+	memoryLimit, err := meter.Int64UpDownCounter(attributes.JVMMemoryLimit.OTEL, instrument.WithUnit(attributes.JVMMemoryLimit.Unit))
 	if err != nil {
 		return fmt.Errorf("creating JVM memory limit up-down counter: %w", err)
 	}
 	m.memoryLimit = newJVMCurrentUpDownCounter(ctx, memoryLimit, memoryAttrs, timeNow, ttl)
 
-	memoryUsedAfterLastGC, err := meter.Int64UpDownCounter(attributes.JVMMemoryUsedAfterLastGC.OTEL, instrument.WithUnit("By"))
+	memoryUsedAfterLastGC, err := meter.Int64UpDownCounter(attributes.JVMMemoryUsedAfterLastGC.OTEL, instrument.WithUnit(attributes.JVMMemoryUsedAfterLastGC.Unit))
 	if err != nil {
 		return fmt.Errorf("creating JVM memory used after last GC up-down counter: %w", err)
 	}
@@ -150,7 +150,7 @@ func jvmRuntimeAttributeSet(
 	vals := make([]string, 0, len(fields))
 
 	for _, field := range fields {
-		kv := field.Get(snapshot)
+		kv := sanitizeKeyValue(field.Get(snapshot))
 		keyVals = append(keyVals, kv)
 		vals = append(vals, kv.Value.Emit())
 	}

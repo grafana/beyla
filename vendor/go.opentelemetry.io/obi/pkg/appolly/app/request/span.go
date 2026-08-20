@@ -1302,28 +1302,32 @@ type SpanLink struct {
 // and SpanPromGetters in pkg/appolly/app/request/span_getters_providers.go and
 // getDefinitions in pkg/export/attributes/attr_defs.go
 type Span struct {
-	Type              EventType      `json:"type"`
-	SpanKind          trace.SpanKind `json:"-"`
-	Flags             uint8          `json:"-"`
-	Method            string         `json:"-"`
-	Path              string         `json:"-"`
-	FullPath          string         `json:"-"`
-	Route             string         `json:"-"`
-	Peer              string         `json:"peer"`
-	PeerPort          int            `json:"peerPort,string"`
-	Host              string         `json:"host"`
-	HostPort          int            `json:"hostPort,string"`
-	Status            int            `json:"-"`
-	ResponseLength    int64          `json:"-"`
-	ContentLength     int64          `json:"-"`
-	DBBatchSize       int            `json:"-"`
-	RequestStart      int64          `json:"-"`
-	Start             int64          `json:"-"`
-	End               int64          `json:"-"`
-	Service           svc.Attrs      `json:"-"`
-	TraceID           trace.TraceID  `json:"traceID"`
-	SpanID            trace.SpanID   `json:"spanID"`
-	ParentSpanID      trace.SpanID   `json:"parentSpanID"`
+	Type           EventType      `json:"type"`
+	SpanKind       trace.SpanKind `json:"-"`
+	Flags          uint8          `json:"-"`
+	Method         string         `json:"-"`
+	Path           string         `json:"-"`
+	FullPath       string         `json:"-"`
+	Route          string         `json:"-"`
+	Peer           string         `json:"peer"`
+	PeerPort       int            `json:"peerPort,string"`
+	Host           string         `json:"host"`
+	HostPort       int            `json:"hostPort,string"`
+	Status         int            `json:"-"`
+	ResponseLength int64          `json:"-"`
+	ContentLength  int64          `json:"-"`
+	DBBatchSize    int            `json:"-"`
+	RequestStart   int64          `json:"-"`
+	Start          int64          `json:"-"`
+	End            int64          `json:"-"`
+	Service        svc.Attrs      `json:"-"`
+	TraceID        trace.TraceID  `json:"traceID"`
+	SpanID         trace.SpanID   `json:"spanID"`
+	ParentSpanID   trace.SpanID   `json:"parentSpanID"`
+	// ParentConditional marks a parent that may already have finished when this
+	// span started: BPF cannot tell at that moment, so the pipeline settles the
+	// link against the parent span's real end timestamp before export.
+	ParentConditional bool           `json:"-"`
 	TraceFlags        uint8          `json:"traceFlags,string"`
 	Links             []SpanLink     `json:"links,omitempty"`
 	Pid               PidInfo        `json:"-"`
@@ -2272,6 +2276,17 @@ func (s *Span) sendsTracesOnOtelPort(defaultOtlpGRPCPort int) bool {
 	}
 }
 
+// A single OTLP endpoint carries every signal, so a port match alone cannot tell
+// which signal a span exports. Attributing an ambiguous export to both would
+// suppress the one the SDK never sends, and nothing else would produce it.
+func (s *Span) sendsOnlyMetricsOnOtelPort(defaultOtlpGRPCPort int) bool {
+	return s.sendsMetricsOnOtelPort(defaultOtlpGRPCPort) && !s.sendsTracesOnOtelPort(defaultOtlpGRPCPort)
+}
+
+func (s *Span) sendsOnlyTracesOnOtelPort(defaultOtlpGRPCPort int) bool {
+	return s.sendsTracesOnOtelPort(defaultOtlpGRPCPort) && !s.sendsMetricsOnOtelPort(defaultOtlpGRPCPort)
+}
+
 func (s *Span) sendsMetricsOnGrpcOtelPort(defaultOtlpGRPCPort int) bool {
 	otlpMetricsProtocol, ok := s.Service.EnvVars[envOTLPMetricsProtocol]
 	if ok && otlpMetricsProtocol != otlpGrpcProtocol {
@@ -2310,7 +2325,7 @@ func (s *Span) IsExportMetricsSpan(defaultOtlpGRPCPort int) bool {
 		return false
 	}
 
-	return s.isMetricsExportURL() || s.sendsMetricsOnOtelPort(defaultOtlpGRPCPort)
+	return s.isMetricsExportURL() || s.sendsOnlyMetricsOnOtelPort(defaultOtlpGRPCPort)
 }
 
 func (s *Span) IsExportTracesSpan(defaultOtlpGRPCPort int) bool {
@@ -2319,7 +2334,7 @@ func (s *Span) IsExportTracesSpan(defaultOtlpGRPCPort int) bool {
 		return false
 	}
 
-	return s.isTracesExportURL() || s.sendsTracesOnOtelPort(defaultOtlpGRPCPort)
+	return s.isTracesExportURL() || s.sendsOnlyTracesOnOtelPort(defaultOtlpGRPCPort)
 }
 
 func (s *Span) IsSelfReferenceSpan() bool {

@@ -136,11 +136,15 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes),
 		swarm.WithID("ExecTyper"))
 
+	processContextEnrichedTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "processContextEnrichedTypes")
+	swi.Add(ProcessContextDecoratorProvider(pf.cfg.Discovery.ProcessContextPollInterval, executableTypes, processContextEnrichedTypes),
+		swarm.WithID("ProcessContextDecorator"))
+
 	// we could subscribe ContainerStoreUpdater directly to the executableTypes queue and not providing any output channel
 	// but forcing the output by the executableTypesReplica channel only after the Container DB has been updated
 	// prevents race conditions in later stages of the pipeline
 	storedExecutableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "storedExecutableTypes")
-	swi.Add(ContainerStoreUpdaterProvider(pf.ctxInfo.K8sInformer, executableTypes, storedExecutableTypes),
+	swi.Add(ContainerStoreUpdaterProvider(pf.ctxInfo.K8sInformer, processContextEnrichedTypes, storedExecutableTypes),
 		swarm.WithID("ContainerStoreUpdater"))
 
 	swi.Add(traceAttacherProvider(&traceAttacher{

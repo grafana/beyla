@@ -25,7 +25,7 @@ import (
 type StatsPrometheusConfig struct {
 	Config      *PrometheusConfig
 	SelectorCfg *attributes.SelectorConfig
-	CommonCfg   *perapp.MetricsConfig
+	CommonCfg   *perapp.GlobalMetricsConfig
 }
 
 // Enabled returns whether the node needs to be activated

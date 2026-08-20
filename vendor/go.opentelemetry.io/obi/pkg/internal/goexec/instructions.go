@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/grafana/go-offsets-tracker/pkg/offsets"
@@ -56,7 +57,7 @@ func isSupportedGoBinary(elfF *elf.File) error {
 
 // instrumentationPoints loads the provided executable and looks for the addresses
 // where the start and return probes must be inserted.
-func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncOffsets, error) {
+func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string][]FuncOffsets, error) {
 	ilog := slog.With("component", "goexec.instructions")
 	ilog.Debug("searching for instrumentation points", "functions", funcNames)
 	functions := map[string]struct{}{}
@@ -75,46 +76,116 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string]FuncO
 
 	gosyms := elfF.Section(".gosymtab")
 
-	var allSyms map[string]procs.Sym
+	type functionCandidate struct {
+		requestedName string
+		function      gosym.Func
+	}
+	candidates := make([]functionCandidate, 0)
+	for _, f := range symTab.Funcs {
+		requestedName, _, ok := requestedFunctionName(f.Name, functions)
+		if ok {
+			candidates = append(candidates, functionCandidate{requestedName: requestedName, function: f})
+		}
+	}
 
 	// no go symbols in the executable, maybe it's statically linked
 	// find regular elf symbols
+	var allSyms map[string]procs.Sym
 	if gosyms == nil {
-		allSyms, _ = procs.FindExeSymbols(elfF, funcNames)
+		symbolNames := make([]string, 0, len(candidates))
+		for _, candidate := range candidates {
+			symbolNames = append(symbolNames, candidate.function.Name)
+		}
+		allSyms, _ = procs.FindExeSymbols(elfF, symbolNames)
 	}
 
-	allOffsets := map[string]FuncOffsets{}
-	for _, f := range symTab.Funcs {
-		fName := f.Name
-		// fetch short path of function for vendor scene
-		if paths := strings.Split(fName, "/vendor/"); len(paths) > 1 {
-			fName = paths[1]
+	allOffsets := map[string][]FuncOffsets{}
+	for _, candidate := range candidates {
+		f := candidate.function
+		var offs FuncOffsets
+		var found bool
+
+		// when we don't have a Go symbol table, the executable is statically linked, we don't look for offsets
+		// using the gosym tab, we lookup offsets just like a regular elf file.
+		// we still need to find the return statements, since go linkage is non-standard we can't use uretprobe
+		if gosyms == nil && len(allSyms) > 0 {
+			offs, found = staticSymbolOffsets(f.Name, allSyms, ilog)
 		}
-
-		if _, ok := functions[fName]; ok {
-			// when we don't have a Go symbol table, the executable is statically linked, we don't look for offsets
-			// using the gosym tab, we lookup offsets just like a regular elf file.
-			// we still need to find the return statements, since go linkage is non-standard we can't use uretprobe
-			if gosyms == nil && len(allSyms) > 0 {
-				handleStaticSymbol(fName, allOffsets, allSyms, ilog)
-				continue
-			}
-
-			offs, ok, err := findFuncOffset(&f, elfF)
+		if !found {
+			var err error
+			offs, found, err = findFuncOffset(&f, elfF)
 			if err != nil {
 				return nil, err
 			}
-			if ok {
-				ilog.Debug("found relevant function for instrumentation", "function", fName, "offsets", offs)
-				allOffsets[fName] = offs
-			}
+		}
+		if found {
+			offs.Symbol = f.Name
+			ilog.Debug("found relevant function for instrumentation", "function", candidate.requestedName,
+				"matched_symbol", f.Name, "offsets", offs)
+			storeFunctionOffset(allOffsets, candidate.requestedName, offs)
 		}
 	}
 
 	return allOffsets, nil
 }
 
-func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms map[string]procs.Sym, ilog *slog.Logger) {
+func requestedFunctionName(rawName string, functions map[string]struct{}) (string, bool, bool) {
+	if _, ok := functions[rawName]; ok {
+		return rawName, true, true
+	}
+
+	if paths := strings.Split(rawName, "/vendor/"); len(paths) > 1 {
+		if _, ok := functions[paths[1]]; ok {
+			return paths[1], false, true
+		}
+	}
+
+	return "", false, false
+}
+
+func storeFunctionOffset(
+	allOffsets map[string][]FuncOffsets,
+	fName string,
+	offs FuncOffsets,
+) {
+	offs.Returns = sortedUniqueOffsets(offs.Returns)
+	for index, existing := range allOffsets[fName] {
+		if existing.Start != offs.Start {
+			continue
+		}
+
+		existing.Returns = sortedUniqueOffsets(append(existing.Returns, offs.Returns...))
+		if offs.Symbol == fName || (existing.Symbol != fName && offs.Symbol < existing.Symbol) {
+			existing.Symbol = offs.Symbol
+		}
+		allOffsets[fName][index] = existing
+		sortFunctionOffsets(allOffsets[fName])
+		return
+	}
+
+	allOffsets[fName] = append(allOffsets[fName], offs)
+	sortFunctionOffsets(allOffsets[fName])
+}
+
+func sortedUniqueOffsets(offsets []uint64) []uint64 {
+	offsets = append([]uint64(nil), offsets...)
+	slices.Sort(offsets)
+	return slices.Compact(offsets)
+}
+
+func sortFunctionOffsets(offsets []FuncOffsets) {
+	slices.SortFunc(offsets, func(a, b FuncOffsets) int {
+		if a.Start < b.Start {
+			return -1
+		}
+		if a.Start > b.Start {
+			return 1
+		}
+		return strings.Compare(a.Symbol, b.Symbol)
+	})
+}
+
+func staticSymbolOffsets(fName string, allSyms map[string]procs.Sym, ilog *slog.Logger) (FuncOffsets, bool) {
 	s, ok := allSyms[fName]
 
 	if ok && s.Prog != nil {
@@ -122,18 +193,20 @@ func handleStaticSymbol(fName string, allOffsets map[string]FuncOffsets, allSyms
 		_, err := s.Prog.ReadAt(data, int64(s.Off-s.Prog.Off))
 		if err != nil {
 			ilog.Error("error reading instructions for symbol", "symbol", fName, "error", err)
-			return
+			return FuncOffsets{}, false
 		}
 
 		returns, err := FindReturnOffsets(s.Off, data)
 		if err != nil {
 			ilog.Error("error finding returns for symbol", "symbol", fName, "offset", s.Off-s.Prog.Off, "size", s.Len, "error", err)
-			return
+			return FuncOffsets{}, false
 		}
-		allOffsets[fName] = FuncOffsets{Start: s.Off, Returns: returns}
+		return FuncOffsets{Start: s.Off, Returns: returns}, true
 	} else {
 		ilog.Debug("can't find in elf symbol table", "symbol", fName, "ok", ok, "prog", s.Prog)
 	}
+
+	return FuncOffsets{}, false
 }
 
 // findFuncOffset gets the start address and end addresses of the function whose symbol is passed

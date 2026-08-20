@@ -2,21 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package eks provides a resource detector for AWS EKS.
-package eks // import "go.opentelemetry.io/contrib/detectors/aws/eks"
+package eks
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"k8s.io/client-go/rest"
 )
 
@@ -40,7 +41,13 @@ type detectorUtils interface {
 
 // This struct will implement the detectorUtils interface.
 type eksDetectorUtils struct {
-	clientset *kubernetes.Clientset
+	host   string
+	client *http.Client
+}
+
+// configMap is the subset of a Kubernetes ConfigMap response needed by the detector.
+type configMap struct {
+	Data map[string]string `json:"data"`
 }
 
 // resourceDetector for detecting resources running on Amazon EKS.
@@ -127,7 +134,7 @@ func isEKS(ctx context.Context, utils detectorUtils) (bool, error) {
 	return awsAuth != nil, nil
 }
 
-// newK8sDetectorUtils creates the Kubernetes clientset.
+// newK8sDetectorUtils creates utilities that fetch ConfigMaps over the in-cluster HTTP client.
 func newK8sDetectorUtils() (*eksDetectorUtils, error) {
 	// Get cluster configuration
 	confs, err := rest.InClusterConfig()
@@ -135,13 +142,12 @@ func newK8sDetectorUtils() (*eksDetectorUtils, error) {
 		return nil, fmt.Errorf("failed to create config: %w", err)
 	}
 
-	// Create clientset using generated configuration
-	clientset, err := kubernetes.NewForConfig(confs)
+	client, err := rest.HTTPClientFor(confs)
 	if err != nil {
-		return nil, errors.New("failed to create clientset for Kubernetes client")
+		return nil, fmt.Errorf("failed to create HTTP client for Kubernetes: %w", err)
 	}
 
-	return &eksDetectorUtils{clientset: clientset}, nil
+	return &eksDetectorUtils{host: confs.Host, client: client}, nil
 }
 
 // isK8s checks if the current environment is running in a Kubernetes environment.
@@ -157,9 +163,30 @@ func (eksDetectorUtils) fileExists(filename string) bool {
 
 // getConfigMap retrieves the configuration map from the k8s API.
 func (eksUtils eksDetectorUtils) getConfigMap(ctx context.Context, namespace, name string) (map[string]string, error) {
-	cm, err := eksUtils.clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	u, err := url.JoinPath(eksUtils.host, "api", "v1", "namespaces", namespace, "configmaps", name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ConfigMap URL for %s/%s: %w", namespace, name, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ConfigMap request for %s/%s: %w", namespace, name, err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := eksUtils.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve ConfigMap %s/%s: %w", namespace, name, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("failed to retrieve ConfigMap %s/%s: unexpected status %s", namespace, name, resp.Status)
+	}
+
+	var cm configMap
+	if err := json.NewDecoder(resp.Body).Decode(&cm); err != nil {
+		return nil, fmt.Errorf("failed to decode ConfigMap %s/%s: %w", namespace, name, err)
 	}
 
 	return cm.Data, nil

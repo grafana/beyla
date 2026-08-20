@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/contrib/detectors/aws/ec2/v2"
 	"go.opentelemetry.io/contrib/detectors/azure/azurevm"
 	"go.opentelemetry.io/contrib/detectors/gcp"
+	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -35,6 +36,23 @@ var filterAttrs = map[attr.Name]struct{}{
 	attr.Name(semconv.OSTypeKey): {},
 	attr.K8sClusterName:          {},
 	attr.K8sNodeName:             {},
+}
+
+var azureVMAttrs = map[attribute.Key]struct{}{
+	semconv.CloudProviderKey:   {},
+	semconv.CloudPlatformKey:   {},
+	semconv.HostIDKey:          {},
+	semconv.CloudRegionKey:     {},
+	semconv.CloudResourceIDKey: {},
+	semconv.HostNameKey:        {},
+	semconv.HostTypeKey:        {},
+	semconv.OSTypeKey:          {},
+	semconv.OSVersionKey:       {},
+}
+
+func azureVMAttributeFilter(kv attribute.KeyValue) bool {
+	_, ok := azureVMAttrs[kv.Key]
+	return ok
 }
 
 // host metadata is common to all the instrumented applications within a single
@@ -75,7 +93,9 @@ func NewNodeMeta(
 		// in order of the priority below (the later the highest)
 		linuxLocalFetcher,
 		kubeNodeFetcher(kubeInformer),
-		otelNodeFetcher(azurevm.New()),
+		otelNodeFetcher(azurevm.NewResourceDetector(
+			azurevm.WithAttributeFilter(azureVMAttributeFilter),
+		)),
 		otelNodeFetcher(gcp.NewDetector()),
 		otelNodeFetcher(ec2.NewResourceDetector()),
 		func(_ context.Context) (NodeMeta, error) {

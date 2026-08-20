@@ -823,7 +823,7 @@ go.opentelemetry.io/ebpf-profiler/processcontext
 go.opentelemetry.io/ebpf-profiler/remotememory
 go.opentelemetry.io/ebpf-profiler/stringutil
 go.opentelemetry.io/ebpf-profiler/support
-# go.opentelemetry.io/obi v0.12.0 => ./.obi-src
+# go.opentelemetry.io/obi v0.12.1 => ./.obi-src
 ## explicit; go 1.25.11
 go.opentelemetry.io/obi/pkg/appolly
 go.opentelemetry.io/obi/pkg/appolly/app

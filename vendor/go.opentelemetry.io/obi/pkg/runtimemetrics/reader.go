@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
-	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
+	appruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
@@ -33,8 +33,9 @@ type RuntimeMetricSnapshot struct {
 	Generation uint64
 	Time       time.Time
 
-	Go  *GoRuntimeMetricSnapshot
-	JVM *JVMRuntimeMetricSnapshot
+	Go     *GoRuntimeMetricSnapshot
+	JVM    *JVMRuntimeMetricSnapshot
+	Nodejs *NodejsRuntimeMetricSnapshot
 
 	Histogram *GoRuntimeHistogramSnapshot
 }
@@ -111,11 +112,15 @@ func GoRuntimeCPUTimeValues(cpu *GoRuntimeCPUTimeSnapshot) [goRuntimeCPUTimeValu
 }
 
 type JVMRuntimeMetricSnapshot struct {
-	Kind       jvmruntime.JVMRuntimeMetricKind
+	Kind       appruntime.JVMRuntimeMetricKind
 	PoolName   string
-	MemoryType jvmruntime.JVMMemoryType
-	GCPhase    jvmruntime.JVMGCPhase
+	MemoryType appruntime.JVMMemoryType
+	GCPhase    appruntime.JVMGCPhase
 	ValueBytes uint64
+}
+
+type NodejsRuntimeMetricSnapshot struct {
+	appruntime.NodejsEventLoopValues
 }
 
 type QueueSender struct {
@@ -143,7 +148,19 @@ func (s *QueueSender) SendGoRuntimeMetricRecord(
 	return nil
 }
 
-func (s *QueueSender) SendJVMRuntimeMetrics(ctx context.Context, events []jvmruntime.JVMRuntimeEvent) {
+func (s *QueueSender) SendNodejsRuntimeMetrics(ctx context.Context, events []appruntime.NodejsRuntimeEvent) {
+	if s == nil || s.queue == nil || len(events) == 0 {
+		return
+	}
+
+	snapshots := make([]RuntimeMetricSnapshot, 0, len(events))
+	for i := range events {
+		snapshots = append(snapshots, SnapshotFromNodejsRuntimeEvent(events[i]))
+	}
+	s.queue.SendCtx(ctx, snapshots)
+}
+
+func (s *QueueSender) SendJVMRuntimeMetrics(ctx context.Context, events []appruntime.JVMRuntimeEvent) {
 	if s == nil || s.queue == nil || len(events) == 0 {
 		return
 	}
@@ -411,7 +428,18 @@ func convertGoRuntimeMetricSnapshot(
 	}
 }
 
-func SnapshotFromJVMRuntimeEvent(event jvmruntime.JVMRuntimeEvent) RuntimeMetricSnapshot {
+func SnapshotFromNodejsRuntimeEvent(event appruntime.NodejsRuntimeEvent) RuntimeMetricSnapshot {
+	return RuntimeMetricSnapshot{
+		Service: event.Service,
+		PID:     event.PID,
+		Time:    event.Time,
+		Nodejs: &NodejsRuntimeMetricSnapshot{
+			NodejsEventLoopValues: event.NodejsEventLoopValues,
+		},
+	}
+}
+
+func SnapshotFromJVMRuntimeEvent(event appruntime.JVMRuntimeEvent) RuntimeMetricSnapshot {
 	return RuntimeMetricSnapshot{
 		Service: event.Service,
 		PID:     event.PID,

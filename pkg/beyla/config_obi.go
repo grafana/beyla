@@ -1,9 +1,12 @@
 package beyla
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/prometheus/otlptranslator"
 
 	obibuildinfo "go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -90,39 +93,77 @@ func OverrideOBIGlobalConfig() {
 	attr.VendorPrefix = "beyla"
 	attr.VendorSDKName = "beyla"
 	attr.OBIIP = "beyla.ip"
-	attributes.NetworkFlow = attributes.Name{
+	attributes.NetworkFlow = beylaMetric(attributes.Name{
 		Section: "beyla.network.flow",
-		Prom:    "beyla_network_flow_bytes_total",
 		OTEL:    "beyla.network.flow.bytes",
-	}
-	attributes.NetworkFlowPackets = attributes.Name{
+		Unit:    "{bytes}",
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.NetworkFlowPackets = beylaMetric(attributes.Name{
 		Section: "beyla.network.flow.packets",
-		Prom:    "beyla_network_flow_packets_total",
 		OTEL:    "beyla.network.flow.packets",
-	}
-	attributes.NetworkInterZone = attributes.Name{
+		Unit:    "{packets}",
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.NetworkInterZone = beylaMetric(attributes.Name{
 		Section: "beyla.network.inter.zone",
-		Prom:    "beyla_network_inter_zone_bytes_total",
 		OTEL:    "beyla.network.inter.zone.bytes",
-	}
-	attributes.StatTCPRtt = attributes.Name{
+		Unit:    "{bytes}",
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.StatTCPRtt = beylaMetric(attributes.Name{
 		Section: "beyla.stat.tcp.rtt",
-		Prom:    "beyla_stat_tcp_rtt_seconds",
 		OTEL:    "beyla.stat.tcp.rtt",
-	}
-	attributes.StatTCPFailedConnections = attributes.Name{
+		Unit:    "s",
+		Type:    attributes.InstrumentHistogram,
+	})
+	attributes.StatTCPFailedConnections = beylaMetric(attributes.Name{
 		Section: "beyla.stat.tcp.failed.connections",
-		Prom:    "beyla_stat_tcp_failed_connections",
 		OTEL:    "beyla.stat.tcp.failed.connections",
-	}
-	attributes.StatTCPRetransmits = attributes.Name{
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.StatTCPRetransmits = beylaMetric(attributes.Name{
 		Section: "beyla.stat.tcp.retransmits",
-		Prom:    "beyla_stat_tcp_retransmits",
 		OTEL:    "beyla.stat.tcp.retransmits",
-	}
-	attributes.StatTCPIo = attributes.Name{
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.StatTCPIo = beylaMetric(attributes.Name{
 		Section: "beyla.stat.tcp.io",
-		Prom:    "beyla_stat_tcp_io_bytes_total",
 		OTEL:    "beyla.stat.tcp.io",
+		Unit:    "By",
+		Type:    attributes.InstrumentCounter,
+	})
+}
+
+// beylaMetric mirrors the unexported attributes.metric() constructor in OBI: it derives the
+// Prometheus name from the OTLP definition (name + unit + instrument type), so that Beyla's
+// Prometheus exporter and any collector re-exporting Beyla's OTLP output name the metric
+// identically. OBI documents Name.Prom as "Derived, never set by hand", so the Beyla renames
+// above must go through this instead of hardcoding the Prometheus name.
+func beylaMetric(n attributes.Name) attributes.Name {
+	namer := otlptranslator.MetricNamer{WithMetricSuffixes: true}
+
+	prom, err := namer.Build(otlptranslator.Metric{Name: n.OTEL, Unit: n.Unit, Type: otlpInstrumentType(n.Type)})
+	if err != nil {
+		panic(fmt.Sprintf("cannot derive Prometheus name for metric %q: %s", n.OTEL, err))
+	}
+
+	n.Prom = prom
+	return n
+}
+
+// otlpInstrumentType mirrors attributes.Instrument.otlp(), which OBI does not export.
+func otlpInstrumentType(i attributes.Instrument) otlptranslator.MetricType {
+	switch i {
+	case attributes.InstrumentCounter:
+		return otlptranslator.MetricTypeMonotonicCounter
+	case attributes.InstrumentUpDownCounter:
+		return otlptranslator.MetricTypeNonMonotonicCounter
+	case attributes.InstrumentGauge:
+		return otlptranslator.MetricTypeGauge
+	case attributes.InstrumentHistogram:
+		return otlptranslator.MetricTypeHistogram
+	default:
+		return otlptranslator.MetricTypeUnknown
 	}
 }

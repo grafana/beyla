@@ -64,14 +64,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Query grafana/helm-charts for the latest beyla-* release
-          LATEST_RELEASE=$(gh api repos/grafana/helm-charts/releases \
-            --paginate -q '.[].tag_name' | grep '^beyla-' | head -1 || echo "")
-          if [[ -n "${LATEST_RELEASE}" ]]; then
-            RELEASED_VERSION="${LATEST_RELEASE#beyla-}"
-          else
+          # GitHub's /releases API sorts by created_at, not semver, and helm-charts
+          # often stamps several beyla-* tags with the same created_at. Take the
+          # highest beyla-X.Y.Z tag instead of the first API result.
+          TAGS=$(gh api --paginate repos/grafana/helm-charts/git/matching-refs/tags/beyla- -q '.[].ref')
+          RELEASED_VERSION=$(printf '%s\n' "${TAGS}" | sed 's|^refs/tags/beyla-||' | { grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -1)
+          if [[ -z "${RELEASED_VERSION}" ]]; then
             echo "::warning::No beyla release found on grafana/helm-charts, will bump chart version"
-            RELEASED_VERSION=""
           fi
           echo "chart_version=${RELEASED_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "Last released chart version: ${RELEASED_VERSION:-none}"
@@ -90,24 +89,26 @@ jobs:
           if [[ "${CURRENT_APP_VERSION}" == "${NEW_APP_VERSION}" ]]; then
             echo "::notice::appVersion already matches ${NEW_APP_VERSION}"
             echo "app_version_changed=false" >> "${GITHUB_OUTPUT}"
-          else
-            echo "app_version_changed=true" >> "${GITHUB_OUTPUT}"
-          fi
-
-          # Determine if chart version needs bumping
-          # Bump if current chart version == last released version, or if no prior release exists
-          if [[ -z "${RELEASED_CHART_VERSION}" || "${CURRENT_CHART_VERSION}" == "${RELEASED_CHART_VERSION}" ]]; then
-            # Parse semver and bump patch
-            IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_CHART_VERSION}"
-            NEW_CHART_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
-            echo "new_chart_version=${NEW_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
-            echo "chart_version_changed=true" >> "${GITHUB_OUTPUT}"
-            echo "Chart version: ${CURRENT_CHART_VERSION} -> ${NEW_CHART_VERSION} (patch bump, last released: ${RELEASED_CHART_VERSION:-none})"
-          else
             echo "new_chart_version=${CURRENT_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
             echo "chart_version_changed=false" >> "${GITHUB_OUTPUT}"
-            echo "Chart version already bumped: ${CURRENT_CHART_VERSION} (last released: ${RELEASED_CHART_VERSION})"
+            exit 0
           fi
+          echo "app_version_changed=true" >> "${GITHUB_OUTPUT}"
+
+          # Helm indexes charts by `version`, not `appVersion`. Always patch-bump
+          # version when shipping a new Beyla release so helm repo update sees it.
+          # Base the bump on the greater of Chart.yaml and the last published
+          # grafana/helm-charts version so we never reuse a version already on the repo.
+          if [[ -n "${RELEASED_CHART_VERSION}" ]]; then
+            BASE_CHART_VERSION=$(printf '%s\n' "${CURRENT_CHART_VERSION}" "${RELEASED_CHART_VERSION}" | sort -V | tail -1)
+          else
+            BASE_CHART_VERSION="${CURRENT_CHART_VERSION}"
+          fi
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${BASE_CHART_VERSION}"
+          NEW_CHART_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "new_chart_version=${NEW_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "chart_version_changed=true" >> "${GITHUB_OUTPUT}"
+          echo "Chart version: ${CURRENT_CHART_VERSION} -> ${NEW_CHART_VERSION} (patch bump from ${BASE_CHART_VERSION}, last released: ${RELEASED_CHART_VERSION:-none})"
 
       - name: Check if any changes needed
         id: gate
@@ -141,7 +142,7 @@ jobs:
       - name: Get GitHub App token
         if: steps.gate.outputs.skip != 'true'
         id: get-github-app-token
-        uses: grafana/shared-workflows/actions/create-github-app-token@ae92934a14a48b94494dbc06d74a81d47fe08a40 # create-github-app-token/v0.2.2
+        uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
         with:
           github_app: grafana-beyla-bot
 

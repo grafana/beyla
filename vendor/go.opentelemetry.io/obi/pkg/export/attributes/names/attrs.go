@@ -210,6 +210,8 @@ const (
 	JVMMemoryType     = Name("jvm.memory.type")
 	JVMMemoryPoolName = Name("jvm.memory.pool.name")
 
+	NodejsEventLoopState = Name("nodejs.eventloop.state")
+
 	VendorVersionSuffix  = Name(".version")
 	VendorRevisionSuffix = Name(".revision")
 )

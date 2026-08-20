@@ -58,7 +58,7 @@ func OpenAICompatibleSpan(baseSpan *request.Span, req *http.Request, resp *http.
 		return *baseSpan, false
 	}
 
-	parsedRequest := parseOpenAIInput(reqB)
+	parsedRequest := parseOpenAIInput(reqB, isOpenAIResponsesRequest(req))
 	parsedResponse, toolCalls := parseOpenAICompatibleResponse(respB)
 
 	if parsedResponse.ResponseModel == "" && len(parsedResponse.Choices) == 0 &&

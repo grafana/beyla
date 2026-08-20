@@ -355,13 +355,27 @@ func (d *Decoder) parseFieldIndexed() error {
 	}
 	hf, ok := d.at(idx)
 	d.buf = buf
-	// If we've failed once to find an index, don't allow us to find
-	// a value for index that's greater than the last successful one
-	if !ok {
+	// One failed lookup means the dynamic table is out of sync with the peer's:
+	// from then on any dynamic resolution may name the wrong field, so emit
+	// <BAD INDEX> for all of them instead of a plausible-but-wrong header
+	if !ok || d.dynTableUnreliable(idx) {
 		d.failedToIndex = true
 		return d.callEmit(HeaderField{Name: "<BAD INDEX>", Value: ""})
 	}
 	return d.callEmit(HeaderField{Name: hf.Name, Value: hf.Value})
+}
+
+// dynTableUnreliable reports whether idx resolves through a dynamic table already
+// known to be out of sync with the peer's; static table entries stay valid
+func (d *Decoder) dynTableUnreliable(idx uint64) bool {
+	return d.failedToIndex && idx > uint64(staticTable.len())
+}
+
+// MarkUnreliable records that part of this direction's header stream was never
+// observed: the dynamic table may be out of sync with the peer's, so dynamic
+// resolutions must no longer be trusted.
+func (d *Decoder) MarkUnreliable() {
+	d.failedToIndex = true
 }
 
 // (same invariants and behavior as parseHeaderFieldRepr)
@@ -377,7 +391,7 @@ func (d *Decoder) parseFieldLiteral(n uint8, it indexType) error {
 	var undecodedName undecodedString
 	if nameIdx > 0 {
 		ihf, ok := d.at(nameIdx)
-		if !ok {
+		if !ok || d.dynTableUnreliable(nameIdx) {
 			d.failedToIndex = true
 			hf.Name = "<BAD INDEX>"
 		} else {

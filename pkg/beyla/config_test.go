@@ -225,7 +225,7 @@ network:
 		},
 		NetworkFlows: nc,
 		Stats:        obi.DefaultStatsConfig,
-		Metrics: perapp.MetricsConfig{
+		Metrics: perapp.GlobalMetricsConfig{
 			Features: export.FeatureApplicationRED | export.FeatureNetwork,
 		},
 		OTELMetrics: otelcfg.MetricsConfig{
@@ -319,7 +319,7 @@ network:
 			AvoidedServices: imetrics.AvoidedServicesConfig{
 				Limit: 2000, // avoidedsvc.DefaultLimit (OBI internal pkg, not importable)
 			},
-			Prometheus: imetrics.PrometheusConfig{
+			Prometheus: imetrics.PrometheusEndpointConfig{
 				Port: 3210,
 				Path: "/internal/metrics",
 			},
@@ -372,6 +372,7 @@ network:
 		Discovery: servicesextra.BeylaDiscoveryConfig{
 			ExcludeOTelInstrumentedServices: true,
 			MinProcessAge:                   5 * time.Second,
+			ProcessContextPollInterval:      time.Second,
 			Services: services.RegexDefinitionCriteria{{Metadata: map[string]*services.RegexpAttr{
 				"k8s_namespace": &nsNamespaceAttr,
 			}}},

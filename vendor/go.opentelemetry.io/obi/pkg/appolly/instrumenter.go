@@ -124,8 +124,19 @@ func newGraphBuilder(
 		nameResolverToAttrFilter,
 		attrFilteredSpans),
 		swarm.WithID("AttributesFilter"))
-	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicPIDSelector, attrFilteredSpans, exportableSpans),
+	instrumentationFilteredSpans := msg2.QueueFromConfig[[]request.Span](config, "instrumentationFilteredSpans")
+	swi.Add(InstrumentationFilterSpanGate(
+		config.Filters.ApplicationByInstrumentation,
+		selectorCfg.ExtraGroupAttributesCfg,
+		spanPtrPromGetters(config),
+		attrFilteredSpans,
+		instrumentationFilteredSpans,
+	), swarm.WithID("InstrumentationFilterSpanGate"))
+	gatedSpans := msg2.QueueFromConfig[[]request.Span](config, "gatedSpans")
+	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicPIDSelector, instrumentationFilteredSpans, gatedSpans),
 		swarm.WithID("DynamicSignalSpanGate"))
+	swi.Add(SettleConditionalParents(config.EBPF.MaxTransactionTime, gatedSpans, exportableSpans),
+		swarm.WithID("SettleConditionalParents"))
 
 	swi.Add(otel.TracesReceiver(
 		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,
@@ -160,7 +171,7 @@ func setupMetricsSubPipeline(
 	exportableSpans *msg.Queue[[]request.Span],
 	selectorCfg *attributes.SelectorConfig,
 	processEventsCh *msg.Queue[exec.ProcessEvent],
-	jointMetricsConfig *perapp.MetricsConfig,
+	jointMetricsConfig *perapp.GlobalMetricsConfig,
 	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) {
 	metricsProcessEvents := msg2.QueueFromConfig[exec.ProcessEvent](config, "metricsProcessEvents")
@@ -292,6 +303,6 @@ func spanPtrPromGetters(cfg *obi.Config) attributes.NamedGetters[request.Span, s
 // it is used to initialize some resources that should be only initialized if they are enabled
 // for any of the possible service matches.
 // Then they would be used or not for each service, based on the per-service features-.
-func JoinMetricsConfig(cfg *obi.Config) *perapp.MetricsConfig {
+func JoinMetricsConfig(cfg *obi.Config) *perapp.GlobalMetricsConfig {
 	return cfg.JoinMetricsConfig()
 }

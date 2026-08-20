@@ -123,6 +123,12 @@ type DiscoveryConfig struct {
 	// Min process age to be considered for discovery.
 	MinProcessAge time.Duration `yaml:"min_process_age" env:"OTEL_EBPF_MIN_PROCESS_AGE" validate:"gte=0"`
 
+	// ProcessContextPollInterval controls how often OBI re-reads the OTEL_CTX
+	// mapping of each discovered process.  Polling handles both SDKs that
+	// publish the mapping after startup and context updates published later.
+	// 0 disables polling; only the initial enrichment on process creation runs.
+	ProcessContextPollInterval time.Duration `yaml:"process_context_poll_interval" env:"OTEL_EBPF_PROCESS_CONTEXT_POLL_INTERVAL" validate:"gte=0"`
+
 	// Disables generation of span metrics of services which are already instrumented
 	ExcludeOTelInstrumentedServicesSpanMetrics bool `yaml:"exclude_otel_instrumented_services_span_metrics" env:"OTEL_EBPF_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS"`
 

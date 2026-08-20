@@ -248,7 +248,11 @@ func logTruncatedResponseBody(component string, err error, got int, resp *http.R
 	)
 }
 
-func parseOpenAIInput(body []byte) request.OpenAIInput {
+func isOpenAIResponsesRequest(req *http.Request) bool {
+	return strings.HasSuffix(strings.TrimSuffix(requestPath(req), "/"), "/v1/responses")
+}
+
+func parseOpenAIInput(body []byte, captureInputItems bool) request.OpenAIInput {
 	var parsed request.OpenAIInput
 	unmarshalJSONBestEffort(body, &parsed)
 	if parsed.Model == "" {
@@ -259,11 +263,14 @@ func parseOpenAIInput(body []byte) request.OpenAIInput {
 	}
 	// The `input` field is a plain string for Chat/text Completions, but an
 	// array of items for the Responses API and an object wrapping `messages`
-	// for native DashScope generation. Retain the array and unwrap the nested
-	// messages so tool-call pairing can reach both schemas.
+	// for native DashScope generation. Retain Responses items and unwrap the
+	// nested messages so content normalization can reach both schemas.
 	if len(body) > 0 {
 		switch raw := extractJSONRawField(body, "input"); firstJSONByte(raw) {
 		case '[':
+			if !captureInputItems {
+				break
+			}
 			parsed.InputItems = raw
 		case '{':
 			if len(parsed.Messages) == 0 {

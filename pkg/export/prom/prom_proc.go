@@ -26,7 +26,7 @@ import (
 type ProcPrometheusConfig struct {
 	Metrics     *prom.PrometheusConfig
 	SelectorCfg *attributes.SelectorConfig
-	CommonCfg   *perapp.MetricsConfig
+	CommonCfg   *perapp.GlobalMetricsConfig
 }
 
 // nolint:gocritic

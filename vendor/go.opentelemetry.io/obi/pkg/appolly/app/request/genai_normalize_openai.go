@@ -8,6 +8,23 @@ import (
 	"strings"
 )
 
+type openAIInputAudio struct {
+	Data   string `json:"data"`
+	Format string `json:"format,omitempty"`
+}
+
+type openAIResponsesContentBlock struct {
+	Type       string            `json:"type"`
+	Text       string            `json:"text,omitempty"`
+	Refusal    string            `json:"refusal,omitempty"`
+	ImageURL   string            `json:"image_url,omitempty"`
+	FileID     string            `json:"file_id,omitempty"`
+	FileData   string            `json:"file_data,omitempty"`
+	FileURL    string            `json:"file_url,omitempty"`
+	Filename   string            `json:"filename,omitempty"`
+	InputAudio *openAIInputAudio `json:"input_audio,omitempty"`
+}
+
 // normalizeOpenAIMessages converts OpenAI-style messages (flat "content")
 // to the semconv parts schema.
 func normalizeOpenAIMessages(raw json.RawMessage) string {
@@ -74,11 +91,8 @@ func openAIContentToParts(content json.RawMessage) []normalizedPart {
 			URL    string `json:"url"`
 			Detail string `json:"detail,omitempty"`
 		} `json:"image_url,omitempty"`
-		InputAudio *struct {
-			Data   string `json:"data"`
-			Format string `json:"format,omitempty"`
-		} `json:"input_audio,omitempty"`
-		File *struct {
+		InputAudio *openAIInputAudio `json:"input_audio,omitempty"`
+		File       *struct {
 			FileID   string `json:"file_id,omitempty"`
 			Filename string `json:"filename,omitempty"`
 			FileData string `json:"file_data,omitempty"`
@@ -95,23 +109,13 @@ func openAIContentToParts(content json.RawMessage) []normalizedPart {
 			parts = append(parts, normalizedPart{Type: "text", Content: b.Text})
 		case "image_url":
 			if b.ImageURL != nil {
-				parts = append(parts, normalizedPart{
-					Type:     "uri",
-					URI:      b.ImageURL.URL,
-					Modality: "image",
-				})
+				if part, ok := openAIImageURLPart(b.ImageURL.URL); ok {
+					parts = append(parts, part)
+				}
 			}
 		case "input_audio":
 			if b.InputAudio != nil {
-				p := normalizedPart{
-					Type:     "blob",
-					Content:  b.InputAudio.Data,
-					Modality: "audio",
-				}
-				if b.InputAudio.Format != "" {
-					p.MimeType = "audio/" + b.InputAudio.Format
-				}
-				parts = append(parts, p)
+				parts = append(parts, openAIAudioPart(b.InputAudio))
 			}
 		case "file":
 			if b.File != nil {
@@ -123,11 +127,7 @@ func openAIContentToParts(content json.RawMessage) []normalizedPart {
 						Modality: modality,
 					})
 				} else if b.File.FileData != "" {
-					parts = append(parts, normalizedPart{
-						Type:     "blob",
-						Content:  b.File.FileData,
-						Modality: modality,
-					})
+					parts = append(parts, openAIFileDataPart(b.File.FileData, modality))
 				}
 			}
 		case "refusal":
@@ -139,16 +139,141 @@ func openAIContentToParts(content json.RawMessage) []normalizedPart {
 	return parts
 }
 
+func openAIResponsesContentToParts(content json.RawMessage) []normalizedPart {
+	if len(content) == 0 {
+		return nil
+	}
+
+	var text string
+	if err := json.Unmarshal(content, &text); err == nil {
+		return []normalizedPart{{Type: "text", Content: text}}
+	}
+
+	var blocks []openAIResponsesContentBlock
+	if err := json.Unmarshal(content, &blocks); err != nil {
+		return []normalizedPart{{Type: "text", Content: string(content)}}
+	}
+
+	parts := make([]normalizedPart, 0, len(blocks))
+	for _, block := range blocks {
+		if part, ok := openAIResponsesContentBlockToPart(block); ok {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
+func openAIResponsesContentBlockToPart(block openAIResponsesContentBlock) (normalizedPart, bool) {
+	switch block.Type {
+	case "text", "input_text", "output_text":
+		return normalizedPart{Type: "text", Content: block.Text}, true
+	case "refusal":
+		return normalizedPart{Type: "text", Content: block.Refusal}, true
+	case "input_image":
+		if block.FileID != "" {
+			return normalizedPart{
+				Type:     "file",
+				FileID:   block.FileID,
+				Modality: "image",
+			}, true
+		}
+		return openAIImageURLPart(block.ImageURL)
+	case "input_file":
+		return openAIResponsesFilePart(block)
+	case "input_audio":
+		if block.InputAudio == nil {
+			return normalizedPart{}, false
+		}
+		return openAIAudioPart(block.InputAudio), true
+	default:
+		return normalizedPart{Type: block.Type, Content: block.Text}, true
+	}
+}
+
+func openAIResponsesFilePart(block openAIResponsesContentBlock) (normalizedPart, bool) {
+	modalitySource := block.Filename
+	if modalitySource == "" {
+		modalitySource = block.FileURL
+	}
+	modality := modalityFromFilename(modalitySource)
+
+	switch {
+	case block.FileID != "":
+		return normalizedPart{Type: "file", FileID: block.FileID, Modality: modality}, true
+	case block.FileURL != "":
+		return normalizedPart{Type: "uri", URI: block.FileURL, Modality: modality}, true
+	case block.FileData != "":
+		return openAIFileDataPart(block.FileData, modality), true
+	default:
+		return normalizedPart{}, false
+	}
+}
+
+func openAIFileDataPart(fileData, modality string) normalizedPart {
+	part := normalizedPart{
+		Type:     "blob",
+		Content:  fileData,
+		Modality: modality,
+	}
+	if data, mimeType, ok := openAIBase64DataURL(fileData); ok {
+		part.Content = data
+		part.MimeType = mimeType
+	}
+	return part
+}
+
+func openAIAudioPart(audio *openAIInputAudio) normalizedPart {
+	part := normalizedPart{
+		Type:     "blob",
+		Content:  audio.Data,
+		Modality: "audio",
+	}
+	if audio.Format != "" {
+		part.MimeType = "audio/" + audio.Format
+	}
+	return part
+}
+
+func openAIImageURLPart(imageURL string) (normalizedPart, bool) {
+	if imageURL == "" {
+		return normalizedPart{}, false
+	}
+
+	if data, mimeType, ok := openAIBase64DataURL(imageURL); ok {
+		return normalizedPart{
+			Type:     "blob",
+			Content:  data,
+			Modality: "image",
+			MimeType: mimeType,
+		}, true
+	}
+
+	return normalizedPart{
+		Type:     "uri",
+		URI:      imageURL,
+		Modality: "image",
+	}, true
+}
+
+func openAIBase64DataURL(value string) (data, mimeType string, ok bool) {
+	metadata, data, ok := strings.Cut(value, ",")
+	if !ok || !strings.HasPrefix(metadata, "data:") || !strings.HasSuffix(metadata, ";base64") {
+		return "", "", false
+	}
+
+	mimeType = strings.TrimSuffix(strings.TrimPrefix(metadata, "data:"), ";base64")
+	return data, mimeType, true
+}
+
 // modalityFromFilename returns a semconv modality string derived from a
-// filename's extension, or "file" when the modality cannot be determined.
-// The semconv schema accepts the enum image|video|audio or any string.
+// filename's extension. Non-media files use the standard document modality.
 func modalityFromFilename(filename string) string {
 	if filename == "" {
-		return "file"
+		return "document"
 	}
 	dot := strings.LastIndex(filename, ".")
 	if dot < 0 || dot == len(filename)-1 {
-		return "file"
+		return "document"
 	}
 	switch strings.ToLower(filename[dot+1:]) {
 	case "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "tiff":
@@ -158,7 +283,7 @@ func modalityFromFilename(filename string) string {
 	case "mp4", "webm", "mov", "mkv", "avi":
 		return "video"
 	}
-	return "file"
+	return "document"
 }
 
 func openAIToolCallsToParts(raw json.RawMessage) []normalizedPart {
@@ -212,13 +337,10 @@ func normalizeOpenAIOutput(ai *VendorOpenAI) string {
 // items have semconv mappings; unknown item types are dropped.
 func normalizeOpenAIResponsesOutput(raw json.RawMessage) string {
 	var items []struct {
-		Type    string `json:"type"`
-		Role    string `json:"role"`
-		Status  string `json:"status"`
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
+		Type    string          `json:"type"`
+		Role    string          `json:"role"`
+		Status  string          `json:"status"`
+		Content json.RawMessage `json:"content"`
 		// function_call items
 		ID        string          `json:"id"`
 		CallID    string          `json:"call_id"`
@@ -247,10 +369,7 @@ func normalizeOpenAIResponsesOutput(raw json.RawMessage) string {
 				}},
 			})
 		case "", "message":
-			parts := make([]normalizedPart, 0, len(item.Content))
-			for _, c := range item.Content {
-				parts = append(parts, normalizedPart{Type: "text", Content: c.Text})
-			}
+			parts := openAIResponsesContentToParts(item.Content)
 			if len(parts) == 0 {
 				continue
 			}
@@ -318,7 +437,7 @@ func normalizeOpenAIResponsesInput(raw json.RawMessage) string {
 				}},
 			})
 		case "", "message":
-			parts := openAIContentToParts(item.Content)
+			parts := openAIResponsesContentToParts(item.Content)
 			if len(parts) == 0 {
 				continue
 			}

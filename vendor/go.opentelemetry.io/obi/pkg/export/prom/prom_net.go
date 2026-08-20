@@ -26,7 +26,7 @@ import (
 type NetPrometheusConfig struct {
 	Config      *PrometheusConfig
 	SelectorCfg *attributes.SelectorConfig
-	CommonCfg   *perapp.MetricsConfig
+	CommonCfg   *perapp.GlobalMetricsConfig
 	GuessPorts  flowdef.PortGuessPolicy
 }
 

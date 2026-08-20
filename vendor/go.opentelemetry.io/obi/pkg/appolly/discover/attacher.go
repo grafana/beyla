@@ -225,7 +225,7 @@ func (ta *traceAttacher) getTracer(ie *ebpf.Instrumentable) bool {
 				ta.Metrics,
 			))
 		}
-	case svc.InstrumentableNodejs, svc.InstrumentableJava, svc.InstrumentableJavaNative, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP, svc.InstrumentableCPP:
+	case svc.InstrumentableNodejs, svc.InstrumentableDeno, svc.InstrumentableJava, svc.InstrumentableJavaNative, svc.InstrumentableRuby, svc.InstrumentablePython, svc.InstrumentableDotnet, svc.InstrumentableGeneric, svc.InstrumentableRust, svc.InstrumentablePHP, svc.InstrumentableCPP:
 		if ta.reusableTracer != nil {
 			return ta.reuseTracer(ta.reusableTracer, ie)
 		}

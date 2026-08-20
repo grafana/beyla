@@ -32,6 +32,7 @@ const (
 	InstrumentableGeneric
 	InstrumentablePHP
 	InstrumentableCPP
+	InstrumentableDeno
 )
 
 func (it InstrumentableType) String() string {
@@ -46,7 +47,7 @@ func (it InstrumentableType) String() string {
 		return semconv.TelemetrySDKLanguagePython.Value.AsString()
 	case InstrumentableRuby:
 		return semconv.TelemetrySDKLanguageRuby.Value.AsString()
-	case InstrumentableNodejs:
+	case InstrumentableNodejs, InstrumentableDeno:
 		return semconv.TelemetrySDKLanguageNodejs.Value.AsString()
 	case InstrumentableRust:
 		return semconv.TelemetrySDKLanguageRust.Value.AsString()

@@ -69,24 +69,25 @@ func httpInfoToSpanLegacy(info *HTTPInfo) request.Span {
 	}
 
 	return request.Span{
-		Type:           request.EventType(info.Type),
-		Method:         info.Method,
-		Path:           removeQuery(info.URL),
-		FullPath:       info.URL,
-		Peer:           info.Peer,
-		PeerPort:       int(info.ConnInfo.S_port),
-		Host:           info.Host,
-		HostPort:       int(info.ConnInfo.D_port),
-		ContentLength:  int64(info.Len),
-		ResponseLength: int64(info.RespLen),
-		RequestStart:   int64(info.ReqMonotimeNs),
-		Start:          int64(info.StartMonotimeNs),
-		End:            int64(info.EndMonotimeNs),
-		Status:         int(info.Status),
-		TraceID:        info.Tp.TraceId,
-		SpanID:         info.Tp.SpanId,
-		ParentSpanID:   info.Tp.ParentId,
-		TraceFlags:     info.Tp.Flags,
+		Type:              request.EventType(info.Type),
+		Method:            info.Method,
+		Path:              removeQuery(info.URL),
+		FullPath:          info.URL,
+		Peer:              info.Peer,
+		PeerPort:          int(info.ConnInfo.S_port),
+		Host:              info.Host,
+		HostPort:          int(info.ConnInfo.D_port),
+		ContentLength:     int64(info.Len),
+		ResponseLength:    int64(info.RespLen),
+		RequestStart:      int64(info.ReqMonotimeNs),
+		Start:             int64(info.StartMonotimeNs),
+		End:               int64(info.EndMonotimeNs),
+		Status:            int(info.Status),
+		TraceID:           info.Tp.TraceId,
+		SpanID:            info.Tp.SpanId,
+		ParentSpanID:      info.Tp.ParentId,
+		ParentConditional: info.ParentStatus == parentStatusConditional,
+		TraceFlags:        info.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   app.PID(info.Pid.HostPid),
 			UserPID:   app.PID(info.Pid.UserPid),
@@ -132,24 +133,25 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 
 	// FullPath matches net/url.URL.String() (full URL or request-target), not RequestURI().
 	httpSpan := request.Span{
-		Type:           reqType,
-		Method:         req.Method,
-		Path:           removeQuery(req.URL.String()),
-		FullPath:       req.URL.String(),
-		Peer:           peer,
-		PeerPort:       int(event.ConnInfo.S_port),
-		Host:           host,
-		HostPort:       int(event.ConnInfo.D_port),
-		ContentLength:  reqContentLen,
-		ResponseLength: respContentLen,
-		RequestStart:   int64(event.ReqMonotimeNs),
-		Start:          int64(event.StartMonotimeNs),
-		End:            int64(event.EndMonotimeNs),
-		Status:         resp.StatusCode,
-		TraceID:        event.Tp.TraceId,
-		SpanID:         event.Tp.SpanId,
-		ParentSpanID:   event.Tp.ParentId,
-		TraceFlags:     event.Tp.Flags,
+		Type:              reqType,
+		Method:            req.Method,
+		Path:              removeQuery(req.URL.String()),
+		FullPath:          req.URL.String(),
+		Peer:              peer,
+		PeerPort:          int(event.ConnInfo.S_port),
+		Host:              host,
+		HostPort:          int(event.ConnInfo.D_port),
+		ContentLength:     reqContentLen,
+		ResponseLength:    respContentLen,
+		RequestStart:      int64(event.ReqMonotimeNs),
+		Start:             int64(event.StartMonotimeNs),
+		End:               int64(event.EndMonotimeNs),
+		Status:            resp.StatusCode,
+		TraceID:           event.Tp.TraceId,
+		SpanID:            event.Tp.SpanId,
+		ParentSpanID:      event.Tp.ParentId,
+		ParentConditional: event.ParentStatus == parentStatusConditional,
+		TraceFlags:        event.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   app.PID(event.Pid.HostPid),
 			UserPID:   app.PID(event.Pid.UserPid),
@@ -294,6 +296,9 @@ func postProcessHTTPSpan(parseCtx *EBPFParseContext, httpSpan *request.Span, req
 
 	return *httpSpan
 }
+
+// mirrors the k_parent_status_* enum in bpf/common/trace_parent.h
+const parentStatusConditional = 2
 
 func ReadHTTPInfoIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	event, err := ReinterpretCast[BPFHTTPInfo](record.RawSample)

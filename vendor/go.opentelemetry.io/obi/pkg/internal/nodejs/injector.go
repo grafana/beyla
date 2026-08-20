@@ -181,7 +181,12 @@ func upgradeConnWithTimeout(conn net.Conn, wsURL string, writeBufferSize int, ti
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: timeout,
-		WriteBufferSize:  writeBufferSize,
+		// Messages larger than the write buffer are sent as fragmented
+		// websocket frames, which the Node.js inspector does not support
+		// (it abruptly closes the connection). The caller sizes writeBufferSize
+		// to the payload so every message is sent as a single frame.
+		WriteBufferSize: writeBufferSize,
+		ReadBufferSize:  64 * 1024,
 		NetDial: func(_, _ string) (net.Conn, error) {
 			return conn, nil
 		},
@@ -295,7 +300,7 @@ func (i *NodeInjector) injectViaConn(conn net.Conn) error {
 
 	i.log.Debug("found debugger url", "url", wsURL)
 
-	payload, err := evaluateRequest(_extractorCode, 1)
+	payload, err := evaluateRequest(i.agentCode(), 1)
 	if err != nil {
 		conn.Close()
 		return err

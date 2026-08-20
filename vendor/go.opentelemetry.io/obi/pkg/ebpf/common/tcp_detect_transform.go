@@ -60,14 +60,17 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 	}
 
 	if span, ignore, matched, err := dispatchKernelAssignedProtocol(parseCtx, event, requestBuffer, responseBuffer); matched {
+		span.ParentConditional = event.ParentStatus == parentStatusConditional
 		return span, ignore, err
 	}
 
 	if span, ignore, matched, err := detectGenericProtocol(parseCtx, cfg, event, requestBuffer, responseBuffer); matched {
+		span.ParentConditional = event.ParentStatus == parentStatusConditional
 		return span, ignore, err
 	}
 
 	if span, ignore, matched, err := detectHeuristicProtocol(parseCtx, event, requestBuffer, responseBuffer); matched {
+		span.ParentConditional = event.ParentStatus == parentStatusConditional
 		return span, ignore, err
 	}
 
@@ -95,6 +98,8 @@ func dispatchKernelAssignedProtocol(parseCtx *EBPFParseContext, event *TCPReques
 		return dispatchMSSQL(parseCtx, event, requestBuffer, responseBuffer)
 	case ProtocolTypeSunRPC:
 		return dispatchSunRPC(event, requestBuffer, responseBuffer)
+	case ProtocolTypeAerospike:
+		return dispatchAerospike(event, requestBuffer, responseBuffer)
 	}
 
 	return request.Span{}, false, false, nil
@@ -378,6 +383,14 @@ func detectHeuristicProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, 
 	}
 
 	return request.Span{}, false, false, nil
+}
+
+func dispatchAerospike(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) {
+	span, ignore, matched, err := matchAerospike(event, requestBuffer, responseBuffer)
+	if !matched {
+		return request.Span{}, true, true, nil
+	}
+	return span, ignore, matched, err
 }
 
 // matchAerospike detects the Aerospike native client protocol (proto v2) from the

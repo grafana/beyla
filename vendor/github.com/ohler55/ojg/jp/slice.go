@@ -343,8 +343,19 @@ func (f Slice) startEndStep(size int) (start, end, step int) {
 			}
 		}
 	}
-	if step != 0 {
-		end = start + (end-start)/step*step
+	switch {
+	case 0 < step:
+		if end < start {
+			step = 0
+		} else {
+			end = start + (end-start)/step*step
+		}
+	case step < 0:
+		if start < end {
+			step = 0
+		} else {
+			end = start + (end-start)/step*step
+		}
 	}
 	return
 }

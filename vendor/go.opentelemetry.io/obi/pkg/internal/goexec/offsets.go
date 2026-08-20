@@ -13,13 +13,15 @@ import (
 )
 
 type Offsets struct {
-	// Funcs key: function name
-	Funcs  map[string]FuncOffsets
+	// Funcs key: requested function name. Each value contains every resolved
+	// canonical or vendored copy of that function.
+	Funcs  map[string][]FuncOffsets
 	Field  FieldOffsets
 	ITypes map[string]uint64
 }
 
 type FuncOffsets struct {
+	Symbol  string
 	Start   uint64
 	Returns []uint64
 }

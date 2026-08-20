@@ -23,6 +23,7 @@ func HTTPRequestTraceToSpan(parseCtx *EBPFParseContext, trace *HTTPRequestTrace)
 	// From C, assuming 0-ended strings
 	method := cstr(trace.Method[:])
 	path := cstr(trace.Path[:])
+	rawQuery := cstr(trace.RawQuery[:])
 	pattern := cstr(trace.Pattern[:])
 	scheme := cstr(trace.Scheme[:])
 	origHost := cstr(trace.Host[:])
@@ -60,11 +61,16 @@ func HTTPRequestTraceToSpan(parseCtx *EBPFParseContext, trace *HTTPRequestTrace)
 		schemeHost = strings.Join([]string{scheme, origHost}, request.SchemeHostSeparator)
 	}
 
+	fullPath := path
+	if rawQuery != "" {
+		fullPath = path + "?" + rawQuery
+	}
+
 	span := request.Span{
 		Type:           request.EventType(trace.Type),
 		Method:         method,
 		Path:           path,
-		FullPath:       path,
+		FullPath:       fullPath,
 		Route:          pattern,
 		Peer:           peer,
 		PeerPort:       int(trace.Conn.S_port),

@@ -62,6 +62,7 @@ func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []services.
 		}
 		if lang == services.RouteHarvesterLanguageNodejs {
 			dMap[svc.InstrumentableNodejs] = struct{}{}
+			dMap[svc.InstrumentableDeno] = struct{}{}
 		}
 	}
 
@@ -106,7 +107,8 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			}
 		}()
 
-		switch fileInfo.SDKLanguage() {
+		runtime := fileInfo.SDKLanguage()
+		switch runtime {
 		case svc.InstrumentableJava:
 			if _, ok := h.disabled[svc.InstrumentableJava]; !ok {
 				r, err := h.javaExtractRoutes(ctx, fileInfo)
@@ -118,14 +120,18 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			} else {
 				resultChan <- result{r: nil}
 			}
-		case svc.InstrumentableNodejs:
-			if _, ok := h.disabled[svc.InstrumentableNodejs]; !ok {
+		case svc.InstrumentableNodejs, svc.InstrumentableDeno:
+			if _, ok := h.disabled[runtime]; !ok {
 				r, err := h.nodeExtractRoutes(fileInfo.Pid())
 				if err != nil {
 					resultChan <- result{err: err}
 					return
 				}
-				h.log.Debug("found node js application routes", "routes", r.Routes)
+				runtimeName := runtime.String()
+				if runtime == svc.InstrumentableDeno {
+					runtimeName = "deno"
+				}
+				h.log.Debug("found application routes", "runtime", runtimeName, "routes", r.Routes)
 
 				resultChan <- result{r: r}
 			} else {

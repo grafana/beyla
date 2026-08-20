@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"go.opentelemetry.io/obi/pkg/buildinfo"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
@@ -21,7 +22,8 @@ import (
 // TODO: let users override it or create it from the batch_length value
 var pipelineBufferLengths = []float64{0, 10, 20, 40, 80, 160, 320}
 
-type PrometheusConfig struct {
+type PrometheusEndpointConfig struct {
+	// 0 (default) means disabled
 	Port int    `yaml:"port,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT" validate:"gte=0,lte=65535"`
 	Path string `yaml:"path,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PATH"`
 }
@@ -57,10 +59,12 @@ type PrometheusReporter struct {
 }
 
 func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.PrometheusManager, registry *prometheus.Registry) *PrometheusReporter {
+	internalNames := attributes.NewInternalMetrics(attr.VendorPrefix)
+
 	pr := &PrometheusReporter{
 		connector: manager,
 		tracerFlushes: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Name:                            attr.VendorPrefix + "_ebpf_tracer_flushes",
+			Name:                            internalNames.TracerFlushes.Prom,
 			Help:                            "Length of the groups of traces flushed from the eBPF tracer to the next pipeline stage",
 			Buckets:                         pipelineBufferLengths,
 			NativeHistogramBucketFactor:     1.1,
@@ -68,19 +72,19 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			NativeHistogramMinResetDuration: 1 * time.Hour,
 		}),
 		otelMetricExports: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_otel_metric_exports_total",
+			Name: internalNames.OTELMetricExports.Prom,
 			Help: "Length of the metric batches submitted to the remote OTEL collector",
 		}),
 		otelMetricExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_otel_metric_export_errors_total",
+			Name: internalNames.OTELMetricExportErrors.Prom,
 			Help: "Error count on each failed OTEL metric export",
 		}, []string{"error"}),
 		otelTraceExports: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_otel_trace_exports_total",
+			Name: internalNames.OTELTraceExports.Prom,
 			Help: "Length of the trace batches submitted to the remote OTEL collector",
 		}),
 		otelTraceExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_otel_trace_export_errors_total",
+			Name: internalNames.OTELTraceExportErrors.Prom,
 			Help: "Error count on each failed OTEL trace export",
 		}, []string{"error"}),
 		prometheusRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -88,15 +92,15 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			Help: "Requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
 		instrumentedProcesses: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attr.VendorPrefix + "_instrumented_processes",
+			Name: internalNames.InstrumentedProcesses.Prom,
 			Help: "Total number of instrumented processes by process name",
 		}, []string{"process_name"}),
 		instrumentationErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_instrumentation_errors_total",
+			Name: internalNames.InstrumentationErrors.Prom,
 			Help: "Total number of instrumentation errors by process name and error type",
 		}, []string{"process_name", "error_type"}),
 		buildInfo: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: attr.VendorPrefix + "_internal_build_info",
+			Name: internalNames.BuildInfo.Prom,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion, goos and goarch during build.",
 			ConstLabels: map[string]string{
@@ -107,6 +111,8 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 				"revision":  buildinfo.Revision,
 			},
 		}),
+		// These two have no OTLP counterpart to derive from: the OTLP path exports the
+		// obi.bpf.probe.latency histogram instead, whose count and sum carry the same values.
 		bpfProbeExecutions: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attr.VendorPrefix + "_bpf_probe_executions_total",
 			Help: "Total number of BPF probe executions",
@@ -116,16 +122,16 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			Help: "Total latency of the BPF probes in seconds",
 		}, []string{"probe_id", "probe_type", "probe_name"}),
 		bpfMapEntries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attr.VendorPrefix + "_bpf_map_entries_total",
+			Name: internalNames.BpfMapEntries.Prom,
 			Help: "Total number of entries in the BPF maps",
 		}, []string{"map_id", "map_name", "map_type"}),
 		bpfMapMaxEntries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attr.VendorPrefix + "_bpf_map_max_entries_total",
+			Name: internalNames.BpfMapMaxEntries.Prom,
 			Help: "Maximum number of entries in the BPF maps",
 		}, []string{"map_id", "map_name", "map_type"}),
 		bpfInternalMetricsScrapeInterval: cfg.BpfMetricScrapeInterval,
 		informerLag: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Name: attr.VendorPrefix + "_kube_cache_forward_lag_seconds",
+			Name: internalNames.KubeCacheForwardLag.Prom,
 			Help: "How long, in seconds, it takes since a Kubernetes event happens until it is forwarded to the subscribers",
 			// Since K8s stores the timestamps with second precision, we initially provide buckets larger than 0.5s
 			Buckets:                         InformerLagBuckets,
@@ -134,22 +140,22 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			NativeHistogramMinResetDuration: 10 * time.Minute,
 		}),
 		bpfIgnoredPacketCount: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_bpf_network_ignored_packets_total",
+			Name: internalNames.BpfNetworkIgnoredPackets.Prom,
 			Help: "How many network packets have been internally ignored due to collisions in the internal eBPF cache",
 		}),
 		bpfPacketCount: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: attr.VendorPrefix + "_bpf_network_packets_total",
+			Name: internalNames.BpfNetworkPackets.Prom,
 			Help: "How many network packets have been internally accounted",
 		}),
 		queueCapacityRatio: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attr.VendorPrefix + "_queue_capacity_ratio",
+			Name: internalNames.QueueCapacityRatio.Prom,
 			Help: "Ratio [0-1] between the unread messages of an internal Go channel and its total capacity",
 		}, []string{"subscriber"}),
 	}
 	if !cfg.AvoidedServices.Disabled {
 		pr.avoidedServicesLimiter = avoidedsvc.NewLimiter(cfg.AvoidedServices.Limit)
 		pr.avoidedServices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: attr.VendorPrefix + "_avoided_services",
+			Name: internalNames.AvoidedServices.Prom,
 			Help: "Services avoided due to existing OpenTelemetry instrumentation",
 		}, []string{
 			"service_name",
@@ -249,7 +255,7 @@ func (p *PrometheusReporter) AvoidInstrumentationTraces(serviceName, serviceName
 	p.recordAvoidedService(serviceName, serviceNamespace, serviceInstanceID, "traces")
 }
 
-func (p *PrometheusReporter) BpfProbeStats(probeID, probeType, probeName string, count uint64, latencySumSeconds float64) {
+func (p *PrometheusReporter) BpfProbeStats(probeID, probeType, probeName string, count uint64, latencySumSeconds float64, _ map[float64]uint64) {
 	p.bpfProbeExecutions.WithLabelValues(probeID, probeType, probeName).Add(float64(count))
 	p.bpfProbeLatencySum.WithLabelValues(probeID, probeType, probeName).Add(latencySumSeconds)
 }

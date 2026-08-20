@@ -35,7 +35,7 @@ func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") 
 
 type instrumenter struct {
 	key                         ExecutableKey
-	references                  uint64
+	uprobeKey                   ExecutableKey
 	offsets                     *goexec.Offsets
 	exe                         *link.Executable
 	closables                   []io.Closer
@@ -45,6 +45,12 @@ type instrumenter struct {
 	metrics                     imetrics.Reporter
 	processName                 string
 }
+
+type uprobeTargetResolver interface {
+	ResolveUprobeTarget(*link.Executable, uint64) (uint64, uint64, error)
+}
+
+const goUprobeTargetProbeSymbol = "runtime.newproc1"
 
 func loadSpec(eventContext *common.EBPFEventContext, bundle *common.SpecBundle, otelBPFFSPath string, idx int, cache *btf.Cache) error {
 	if err := ebpfconvenience.LoadSpec(
@@ -87,7 +93,6 @@ func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, cfg *obi.
 		Type:                      tracerType,
 		Instrumentables:           map[ExecutableKey]*instrumenter{},
 		instrumentableGenerations: map[ExecutableKey]uint64{},
-		goInstrumentablesByInode:  map[uint64]*instrumenter{},
 		shutdownTimeout:           cfg.ShutdownTimeout,
 		metrics:                   metrics,
 		bpffsPath:                 cfg.EBPF.BPFFSPath,
@@ -348,10 +353,6 @@ func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {
 }
 
 func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable) error {
-	if pt.reuseGoInstrumenter(ie) {
-		return nil
-	}
-
 	i := instrumenter{
 		key:         ExecutableKey{Dev: ie.FileInfo.Dev(), Ino: ie.FileInfo.Ino()},
 		exe:         exe,
@@ -374,7 +375,30 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 
 	for _, p := range pt.Programs {
 		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
+	}
 
+	if uprobeKey, ok := pt.resolveUprobeTarget(exe, ie.Offsets); ok {
+		i.uprobeKey = uprobeKey
+		if existing := pt.instrumenterForUprobeTarget(uprobeKey); existing != nil {
+			for _, p := range pt.Programs {
+				if err := existing.uprobes(ie.FileInfo.Pid(), p, maps); err != nil {
+					printVerifierErrorInfo(err)
+					return err
+				}
+
+				if err := existing.usdtProbes(ie.FileInfo.Pid(), ie.FileInfo.Ns(), p, maps); err != nil {
+					printVerifierErrorInfo(err)
+					return err
+				}
+			}
+
+			pt.commitInstrumenterForKey(i.key, existing, ie)
+			committed = true
+			return nil
+		}
+	}
+
+	for _, p := range pt.Programs {
 		// Go style Uprobes
 		if err := i.goprobes(p); err != nil {
 			printVerifierErrorInfo(err)
@@ -399,52 +423,64 @@ func (pt *ProcessTracer) NewExecutable(exe *link.Executable, ie *Instrumentable)
 	return nil
 }
 
-func (pt *ProcessTracer) commitInstrumenter(i *instrumenter, ie *Instrumentable) {
+func (pt *ProcessTracer) resolveUprobeTarget(exe *link.Executable, offsets *goexec.Offsets) (ExecutableKey, bool) {
+	if pt.Type != Go || offsets == nil {
+		return ExecutableKey{}, false
+	}
+
+	probes, ok := offsets.Funcs[goUprobeTargetProbeSymbol]
+	if !ok || len(probes) == 0 {
+		return ExecutableKey{}, false
+	}
+
+	for _, p := range pt.Programs {
+		resolver, ok := p.(uprobeTargetResolver)
+		if !ok {
+			continue
+		}
+
+		dev, ino, err := resolver.ResolveUprobeTarget(exe, probes[0].Start)
+		if err != nil {
+			ptlog().Debug("resolving kernel uprobe target failed", "error", err)
+			return ExecutableKey{}, false
+		}
+
+		return ExecutableKey{Dev: dev, Ino: ino}, true
+	}
+
+	return ExecutableKey{}, false
+}
+
+func (pt *ProcessTracer) instrumenterForUprobeTarget(key ExecutableKey) *instrumenter {
 	pt.instrumentablesMu.Lock()
 	defer pt.instrumentablesMu.Unlock()
 
-	if previous := pt.Instrumentables[i.key]; previous != nil {
-		pt.removeInstrumenterReference(i.key, previous)
+	for _, i := range pt.Instrumentables {
+		if i.uprobeKey == key {
+			return i
+		}
+	}
+
+	return nil
+}
+
+func (pt *ProcessTracer) commitInstrumenter(i *instrumenter, ie *Instrumentable) {
+	pt.commitInstrumenterForKey(i.key, i, ie)
+}
+
+func (pt *ProcessTracer) commitInstrumenterForKey(key ExecutableKey, i *instrumenter, ie *Instrumentable) {
+	pt.instrumentablesMu.Lock()
+	defer pt.instrumentablesMu.Unlock()
+
+	if previous := pt.Instrumentables[key]; previous != nil && previous != i {
+		pt.removeInstrumenter(key, previous)
 	}
 	if pt.Instrumentables == nil {
 		pt.Instrumentables = map[ExecutableKey]*instrumenter{}
 	}
-	if pt.goInstrumentablesByInode == nil {
-		pt.goInstrumentablesByInode = map[uint64]*instrumenter{}
-	}
-
-	pt.Instrumentables[i.key] = i
-	i.references++
-	if pt.Type == Go {
-		pt.goInstrumentablesByInode[i.key.Ino] = i
-	}
-	ie.ExecutableGeneration = pt.recordExecutableGeneration(i.key)
-	i.registerProcessScopedGoProbes(i.key)
-}
-
-func (pt *ProcessTracer) reuseGoInstrumenter(ie *Instrumentable) bool {
-	if pt.Type != Go {
-		return false
-	}
-
-	key := ExecutableKey{Dev: ie.FileInfo.Dev(), Ino: ie.FileInfo.Ino()}
-	pt.instrumentablesMu.Lock()
-	defer pt.instrumentablesMu.Unlock()
-
-	i := pt.goInstrumentablesByInode[key.Ino]
-	if i == nil {
-		return false
-	}
-
-	if previous := pt.Instrumentables[key]; previous != nil {
-		pt.removeInstrumenterReference(key, previous)
-	}
 	pt.Instrumentables[key] = i
-	i.references++
 	ie.ExecutableGeneration = pt.recordExecutableGeneration(key)
 	i.registerProcessScopedGoProbes(key)
-
-	return true
 }
 
 func (pt *ProcessTracer) recordExecutableGeneration(key ExecutableKey) uint64 {
@@ -484,10 +520,10 @@ func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo, generation uint64
 		return
 	}
 
-	pt.removeInstrumenterReference(key, i)
+	pt.removeInstrumenter(key, i)
 }
 
-func (pt *ProcessTracer) removeInstrumenterReference(key ExecutableKey, i *instrumenter) {
+func (pt *ProcessTracer) removeInstrumenter(key ExecutableKey, i *instrumenter) {
 	for _, p := range pt.Programs {
 		if processScopedTracer, ok := p.(processScopedGoProbeTracer); ok {
 			processScopedTracer.UnregisterProcessScopedGoProbes(key.Dev, key.Ino)
@@ -495,15 +531,10 @@ func (pt *ProcessTracer) removeInstrumenterReference(key ExecutableKey, i *instr
 	}
 	delete(pt.Instrumentables, key)
 	delete(pt.instrumentableGenerations, key)
-
-	if i.references > 0 {
-		i.references--
-	}
-	if i.references != 0 {
-		return
-	}
-	if pt.goInstrumentablesByInode[i.key.Ino] == i {
-		delete(pt.goInstrumentablesByInode, i.key.Ino)
+	for _, remaining := range pt.Instrumentables {
+		if remaining == i {
+			return
+		}
 	}
 	pt.unlinkInstrumenter(i)
 }

@@ -42,21 +42,18 @@ ebpf:
 
 ```
 
+You can also select `headers`, `tcp`, or `headers,tcp`. The values `all` and `headers,tcp` are equivalent. Set the value to `disabled` to disable outgoing context propagation.
+
 ### Context propagation at network level
 
-The context propagation at network level is implemented by writing the trace context information in the outgoing HTTP headers as well at the TCP/IP packet level.
-HTTP context propagation is fully compatible with any other OpenTelemetry based tracing library. This means that Beyla instrumented services correctly
-propagate the trace information, when sending to and receiving from services instrumented with the OpenTelemetry SDKs. We use
-[Linux Traffic Control (TC)](https://en.wikipedia.org/wiki/Tc_(Linux)) to perform the adjustment of the network packets, which requires that other eBPF
-programs that use Linux Traffic Control chain properly with Beyla. For special considerations
-regarding Cilium CNI, consult our [Cilium Compatibility](../cilium-compatibility/) guide.
+Beyla supports two network propagation mechanisms:
 
-For TLS encrypted traffic (HTTPS), Beyla is unable to inject the trace information in the outgoing HTTP headers and instead it injects the information
-at TCP/IP packet level. Because of this limitation, Beyla is only able to send the trace information to other Beyla instrumented services. L7 proxies
-and load balancers disrupt the TCP/IP context propagation, because the original packets are discarded and replayed downstream.
-Parsing incoming trace context information from OpenTelemetry SDK instrumented services still works.
+- `headers` injects W3C `traceparent` values into HTTP headers. This mechanism interoperates with services instrumented by OpenTelemetry SDKs.
+- `tcp` sends the trace ID and span ID in TCP option kind 25. Beyla must instrument both endpoints because other OpenTelemetry instrumentation does not read this option.
 
-gRPC and HTTP2 are not supported at the moment.
+Combined mode enables both mechanisms. If an incoming request contains context in both an HTTP header and a TCP option, Beyla uses the HTTP header. TCP propagation can carry context for encrypted HTTP/1 traffic because it does not modify the encrypted payload. It does not survive proxies or load balancers that terminate the original TCP connection.
+
+HTTP/2 and gRPC use per-stream HTTP header propagation rather than TCP options, because one connection can carry concurrent streams with different contexts. Network header injection is limited to unencrypted HTTP/2 traffic. Go library instrumentation can propagate headers for HTTP/2, HTTPS, and gRPC, subject to the kernel restrictions described in [Kernel integrity mode limitations](#kernel-integrity-mode-limitations).
 
 #### Kubernetes Configuration
 

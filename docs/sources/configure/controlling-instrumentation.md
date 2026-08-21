@@ -21,7 +21,7 @@ You can configure the component under the `ebpf` section of your YAML configurat
 | YAML<p>environment variable</p>                                           | Description                                                                                                                                                                      | Type    | Default  |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
 | `enable_context_propagation`<p>`BEYLA_BPF_ENABLE_CONTEXT_PROPAGATION`</p> | Deprecated. Use `context_propagation` instead. For more information, refer to the [enable context propagation section](#enable-context-propagation).                             | boolean | false    |
-| `context_propagation`<p>`BEYLA_BPF_CONTEXT_PROPAGATION`</p>               | Controls trace context propagation method. Accepted: `all`, `headers`, `ip`, `disabled`. For more information, refer to the [context propagation section](#context-propagation). | string  | disabled |
+| `context_propagation`<p>`BEYLA_BPF_CONTEXT_PROPAGATION`</p>               | Controls trace context propagation. Accepted values are `headers`, `tcp`, `headers,tcp`, `all`, and `disabled`. For more information, refer to the [context propagation section](#context-propagation). | string  | disabled |
 | `track_request_headers`<p>`BEYLA_BPF_TRACK_REQUEST_HEADERS`</p>           | Track incoming `Traceparent` headers for trace spans. For more information, refer to the [track request headers section](#track-request-headers).                                | boolean | false    |
 
 ### Enable context propagation
@@ -30,20 +30,28 @@ Deprecated. Use `context_propagation` instead.
 
 ### Context propagation
 
-Beyla injects the `Traceparent` header value for outgoing HTTP requests, so it can propagate any incoming context to downstream services. This context propagation works for any programming language.
+Beyla can inject trace context into HTTP headers, TCP options, or both. Configure one of the following values:
 
-For TLS encrypted HTTP requests (HTTPS), Beyla encodes the `Traceparent` header value at the TCP/IP packet level. Beyla must be present on both sides of the communication.
+- `headers`: Inject W3C `traceparent` headers. This interoperates with services instrumented by OpenTelemetry SDKs.
+- `tcp`: Inject context into TCP option kind 25. Beyla must instrument both endpoints.
+- `headers,tcp`: Enable both mechanisms. Incoming HTTP headers take precedence when both mechanisms provide context.
+- `all`: Enable both mechanisms. This is equivalent to `headers,tcp`.
+- `disabled`: Disable trace context propagation. This is the default.
 
-The TCP/IP packet level encoding uses Linux Traffic Control (TC). eBPF programs that also use TC must chain correctly with Beyla. For more information about chaining programs, see the [Cilium compatibility documentation](../../cilium-compatibility/).
+For example, enable both mechanisms in the YAML configuration:
 
-You can disable the TCP/IP level encoding and TC programs by setting `context_propagation="headers"`. This context propagation is fully compatible with any OpenTelemetry distributed tracing library.
+```yaml
+ebpf:
+  context_propagation: headers,tcp
+```
 
-Context propagation values:
+To enable only HTTP header propagation with an environment variable:
 
-- `all`: Enable both HTTP and IP options context propagation
-- `headers`: Enable context propagation via the HTTP headers only
-- `ip`: Enable context propagation via the IP options field only
-- `disabled`: Disable trace context propagation
+```shell
+export BEYLA_BPF_CONTEXT_PROPAGATION=headers
+```
+
+TCP propagation can carry context for encrypted HTTP/1 traffic because it does not modify the encrypted payload. It does not cross proxies or load balancers that terminate and create new TCP connections. TCP options are not used for HTTP/2 or gRPC because one connection can carry concurrent streams with different trace contexts.
 
 To use this option in containerized environments (Kubernetes and Docker), you must:
 
@@ -53,9 +61,7 @@ To use this option in containerized environments (Kubernetes and Docker), you mu
   mitigation code added to handle the [FIONREAD kernel bug](https://lore.kernel.org/bpf/CAOvpEWN6xgFx4GWFnnWLGCB+_1auDcAZPYPSv1PDu3UfXkcriw@mail.gmail.com/t/#r36b3618483204331fed2978fbaa67be0cb6ad975).
 - Grant the `CAP_NET_ADMIN` capability to the Beyla container
 
-gRPC and HTTP2 are not supported.
-
-For an example of how to configure distributed traces in Kubernetes, see our [Distributed traces with Beyla](../../distributed-traces/) guide.
+For more information about protocol support and limitations, including a Kubernetes configuration example, refer to [Distributed traces with Beyla](../../distributed-traces/).
 
 ### Track request headers
 

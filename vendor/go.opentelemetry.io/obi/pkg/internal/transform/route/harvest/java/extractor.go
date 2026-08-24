@@ -66,13 +66,13 @@ func (e *Extractor) ExtractRoutes(ctx context.Context, fileInfo *exec.FileInfo) 
 		if e.routeLimitReached() || e.classLimitReached() {
 			break
 		}
-		if root.dir {
-			if err := e.scanDir(ctx, root.path); err != nil {
+		if root.Directory {
+			if err := e.scanDir(ctx, root.Path); err != nil {
 				return nil, err
 			}
 			continue
 		}
-		if err := e.scanArchive(ctx, root.path); err != nil {
+		if err := e.scanArchive(ctx, root.Path); err != nil {
 			return nil, err
 		}
 	}

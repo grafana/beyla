@@ -1,78 +1,60 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package java // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest/java"
+package jvmtools // import "go.opentelemetry.io/obi/pkg/internal/jvmtools"
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 )
 
 const envClasspath = "CLASSPATH"
 
-type scanRoot struct {
-	path string
-	dir  bool
+// JavaLaunch contains the application archive or classpath parsed from a Java command line.
+type JavaLaunch struct {
+	Jar       string
+	Classpath string
 }
 
-type javaLaunch struct {
-	jar       string
-	classpath string
+// ScanRoot identifies an application archive or classes directory.
+type ScanRoot struct {
+	Path      string
+	Directory bool
 }
 
-var (
-	rootDirForPID = ebpfcommon.RootDirectoryForPID
-	cmdlineForPID = ebpfcommon.CMDLineForPID
-	cwdForPID     = ebpfcommon.CWDForPID
-)
-
-func (e *Extractor) findScanRoots(fileInfo *exec.FileInfo) ([]scanRoot, error) {
-	pid := fileInfo.Pid()
-	root := rootDirForPID(pid)
-	_, args, err := cmdlineForPID(pid)
-	if err != nil {
-		return nil, fmt.Errorf("error finding Java cmd line: %w", err)
-	}
-
-	cwd, err := cwdForPID(pid)
-	if err != nil {
-		return nil, fmt.Errorf("error finding Java cwd: %w", err)
-	}
-
-	launch := parseJavaLaunch(args, fileInfo.ServiceAttrs().EnvVars)
-	if launch.jar != "" {
-		root, ok := resolveProcessPath(root, cwd, launch.jar)
+// ScanRoots resolves the application roots from a Java command line inside a process root.
+func ScanRoots(root, cwd string, args []string, env map[string]string) ([]ScanRoot, error) {
+	launch := ParseJavaLaunch(args, env)
+	if launch.Jar != "" {
+		path, ok := ResolveProcessPath(root, cwd, launch.Jar)
 		if !ok {
-			return nil, fmt.Errorf("invalid Java jar path %q", launch.jar)
+			return nil, fmt.Errorf("invalid Java jar path %q", launch.Jar)
 		}
-		if isRegularFile(root) {
-			return []scanRoot{{path: root}}, nil
+		if !isRegularFile(path) {
+			return nil, fmt.Errorf("java jar path %q is not a regular file", launch.Jar)
 		}
-		return nil, fmt.Errorf("java jar path %q is not a regular file", launch.jar)
+		return []ScanRoot{{Path: path}}, nil
 	}
 
-	if launch.classpath == "" {
-		launch.classpath = cwd
+	classpath := launch.Classpath
+	if classpath == "" {
+		classpath = cwd
 	}
-
-	return scanRootsFromClasspath(root, cwd, launch.classpath), nil
+	return ScanRootsFromClasspath(root, cwd, classpath), nil
 }
 
-func parseJavaLaunch(args []string, env map[string]string) javaLaunch {
+func ParseJavaLaunch(args []string, env map[string]string) JavaLaunch {
 	var classpath string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "-jar":
 			if i+1 < len(args) {
-				return javaLaunch{jar: args[i+1]}
+				return JavaLaunch{Jar: args[i+1]}
 			}
-			return javaLaunch{}
+			return JavaLaunch{}
 		case arg == "-cp" || arg == "-classpath" || arg == "--class-path":
 			if i+1 < len(args) {
 				classpath = args[i+1]
@@ -84,17 +66,33 @@ func parseJavaLaunch(args []string, env map[string]string) javaLaunch {
 	}
 
 	if classpath != "" {
-		return javaLaunch{classpath: classpath}
+		return JavaLaunch{Classpath: classpath}
 	}
 
 	if env != nil {
-		return javaLaunch{classpath: env[envClasspath]}
+		return JavaLaunch{Classpath: env[envClasspath]}
 	}
-	return javaLaunch{}
+	return JavaLaunch{}
 }
 
-func scanRootsFromClasspath(root, cwd, classpath string) []scanRoot {
-	var roots []scanRoot
+func classpathRoots(root, cwd string, launch JavaLaunch) []ScanRoot {
+	if launch.Jar != "" {
+		path, ok := ResolveProcessPath(root, cwd, launch.Jar)
+		if ok && isRegularFile(path) {
+			return []ScanRoot{{Path: path}}
+		}
+		return nil
+	}
+
+	classpath := launch.Classpath
+	if classpath == "" {
+		classpath = cwd
+	}
+	return ScanRootsFromClasspath(root, cwd, classpath)
+}
+
+func ScanRootsFromClasspath(root, cwd, classpath string) []ScanRoot {
+	var roots []ScanRoot
 	for _, entry := range filepath.SplitList(classpath) {
 		if entry == "" {
 			continue
@@ -105,43 +103,43 @@ func scanRootsFromClasspath(root, cwd, classpath string) []scanRoot {
 			continue
 		}
 
-		scanRoot, ok := scanRootFromClasspathEntry(root, cwd, entry)
+		ScanRoot, ok := ScanRootFromClasspathEntry(root, cwd, entry)
 		if !ok {
 			continue
 		}
 
-		roots = append(roots, scanRoot)
+		roots = append(roots, ScanRoot)
 	}
 
 	return roots
 }
 
-func scanRootFromClasspathEntry(root, cwd, entry string) (scanRoot, bool) {
-	path, ok := resolveProcessPath(root, cwd, entry)
+func ScanRootFromClasspathEntry(root, cwd, entry string) (ScanRoot, bool) {
+	path, ok := ResolveProcessPath(root, cwd, entry)
 	if !ok {
-		return scanRoot{}, false
+		return ScanRoot{}, false
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return scanRoot{}, false
+		return ScanRoot{}, false
 	}
 	if info.IsDir() {
-		return scanRoot{path: path, dir: true}, true
+		return ScanRoot{Path: path, Directory: true}, true
 	}
 	if info.Mode().IsRegular() && isJavaArchive(path) {
-		return scanRoot{path: path}, true
+		return ScanRoot{Path: path}, true
 	}
-	return scanRoot{}, false
+	return ScanRoot{}, false
 }
 
-func scanArchiveRootsFromWildcard(root, cwd, entry string) []scanRoot {
+func scanArchiveRootsFromWildcard(root, cwd, entry string) []ScanRoot {
 	dirEntry, ok := classpathWildcardDir(entry)
 	if !ok {
 		return nil
 	}
 
-	dir, ok := resolveProcessPath(root, cwd, dirEntry)
+	dir, ok := ResolveProcessPath(root, cwd, dirEntry)
 	if !ok {
 		return nil
 	}
@@ -151,16 +149,16 @@ func scanArchiveRootsFromWildcard(root, cwd, entry string) []scanRoot {
 		return nil
 	}
 
-	var roots []scanRoot
+	var roots []ScanRoot
 	for _, file := range entries {
 		if file.IsDir() || !isJavaArchive(file.Name()) {
 			continue
 		}
 
 		childEntry := filepath.Join(dirEntry, file.Name())
-		scanRoot, ok := scanRootFromClasspathEntry(root, cwd, childEntry)
-		if ok && !scanRoot.dir {
-			roots = append(roots, scanRoot)
+		ScanRoot, ok := ScanRootFromClasspathEntry(root, cwd, childEntry)
+		if ok && !ScanRoot.Directory {
+			roots = append(roots, ScanRoot)
 		}
 	}
 	return roots
@@ -178,7 +176,7 @@ func classpathWildcardDir(entry string) (string, bool) {
 	return dir, true
 }
 
-func resolveProcessPath(root, cwd, path string) (string, bool) {
+func ResolveProcessPath(root, cwd, path string) (string, bool) {
 	if root == "" || path == "" {
 		return "", false
 	}
@@ -223,7 +221,7 @@ func resolveProcessPath(root, cwd, path string) (string, bool) {
 	return hostEval, true
 }
 
-var procRootPath = isProcRoot
+var procRootPath = IsProcRoot
 
 func pathHasSymlink(root, containerPath string) bool {
 	parts := strings.Split(strings.TrimPrefix(containerPath, string(filepath.Separator)), string(filepath.Separator))
@@ -245,7 +243,7 @@ func pathHasSymlink(root, containerPath string) bool {
 	return false
 }
 
-func isProcRoot(root string) bool {
+func IsProcRoot(root string) bool {
 	root = filepath.Clean(root)
 	if !strings.HasPrefix(root, "/proc/") || !strings.HasSuffix(root, "/root") {
 		return false

@@ -31,8 +31,19 @@ const (
 	FeatureStatsTCPIo
 	FeatureNetworkInterZone
 	FeatureApplicationRED
+	// FeatureSpanLegacy emits span metrics under the Grafana-convention
+	// traces_spanmetrics_* names.
+	//
+	// Deprecated: use FeatureSpanOTel, which emits the traces_span_metrics_* names of
+	// the OTel collector-contrib spanmetrics connector.
 	FeatureSpanLegacy
 	FeatureSpanOTel
+	// FeatureSpanSizes emits the request and response size counters of the same
+	// Grafana-convention traces_spanmetrics_* family as FeatureSpanLegacy.
+	//
+	// Deprecated: there is no OTel-named equivalent; the semantic-convention
+	// http.server.request.body.size and http.server.response.body.size metrics are the
+	// closest replacement, but they are HTTP-specific and not keyed by span.
 	FeatureSpanSizes
 	FeatureGraph
 	FeatureApplicationHost
@@ -70,18 +81,85 @@ var FeatureMapper = map[string]Features{
 	"*":                            FeatureAll,
 }
 
+// deprecatedFeatures maps each deprecated feature name to the feature that supersedes it.
+// An empty replacement means the feature is going away without a direct equivalent.
+// The names keep working; they are reported at startup and flagged as deprecated in the
+// generated JSON schema and configuration reference.
+var deprecatedFeatures = map[string]string{
+	"application_span":       "application_span_otel",
+	"application_span_sizes": "",
+}
+
+// DeprecatedFeature is a deprecated feature name together with the feature that
+// supersedes it. Replacement is empty when there is no direct equivalent.
+type DeprecatedFeature struct {
+	Name        string
+	Replacement string
+}
+
+// deprecatedFeatureNames returns the deprecated feature names, sorted.
+func deprecatedFeatureNames() []string {
+	names := make([]string, 0, len(deprecatedFeatures))
+	for name := range deprecatedFeatures {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// DeprecatedEnabled returns the deprecated features enabled in f, sorted by name.
+func (f Features) DeprecatedEnabled() []DeprecatedFeature {
+	enabled := make([]DeprecatedFeature, 0, len(deprecatedFeatures))
+	for _, name := range deprecatedFeatureNames() {
+		if f.any(FeatureMapper[name]) {
+			enabled = append(enabled, DeprecatedFeature{Name: name, Replacement: deprecatedFeatures[name]})
+		}
+	}
+	return enabled
+}
+
+// deprecatedSchemaDescription documents each deprecated value and its replacement, so the
+// generated schema and configuration reference name the migration target directly.
+func deprecatedSchemaDescription() string {
+	migrations := make([]string, 0, len(deprecatedFeatures))
+	for _, name := range deprecatedFeatureNames() {
+		if replacement := deprecatedFeatures[name]; replacement != "" {
+			migrations = append(migrations, fmt.Sprintf("%s (use %s)", name, replacement))
+			continue
+		}
+		migrations = append(migrations, name+" (no direct replacement)")
+	}
+	return "Deprecated feature names, kept for backwards compatibility: " +
+		strings.Join(migrations, ", ") + "."
+}
+
 func (Features) JSONSchema() *jsonschema.Schema {
 	names := validFeatureNames()
-	features := make([]any, 0, len(names)+1)
+	supported := make([]any, 0, len(names)+1)
+	deprecated := make([]any, 0, len(deprecatedFeatures))
 	for _, name := range names {
-		features = append(features, name)
+		if _, ok := deprecatedFeatures[name]; ok {
+			deprecated = append(deprecated, name)
+			continue
+		}
+		supported = append(supported, name)
 	}
-	features = append(features, "*")
+	supported = append(supported, "*")
 	return &jsonschema.Schema{
 		Type: "array",
 		Items: &jsonschema.Schema{
-			Type: "string",
-			Enum: features,
+			OneOf: []*jsonschema.Schema{
+				{
+					Type: "string",
+					Enum: supported,
+				},
+				{
+					Type:        "string",
+					Enum:        deprecated,
+					Deprecated:  true,
+					Description: deprecatedSchemaDescription(),
+				},
+			},
 		},
 		Description: "List of metric features to enable.",
 	}
@@ -199,6 +277,10 @@ func (f Features) AppOrSpan() bool {
 		FeatureSpanOTel)
 }
 
+// LegacySpanMetrics reports whether FeatureSpanLegacy is enabled.
+//
+// Deprecated: kept only to keep emitting traces_spanmetrics_* while FeatureSpanLegacy
+// still exists.
 func (f Features) LegacySpanMetrics() bool {
 	return f.any(FeatureSpanLegacy)
 }

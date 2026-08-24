@@ -368,10 +368,13 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Enabled(FeatureAppO11y) &&
-		c.Metrics.Features.InvalidSpanMetricsConfig() &&
 		(c.Prometheus.EndpointEnabled() && c.OTELMetrics.EndpointEnabled()) {
-		return ConfigError("you can only enable one format of span metrics," +
-			" application_span or application_span_otel")
+		if err := c.resolveSpanMetricsFormats(); err != nil {
+			return err
+		}
+		// Per-service sections can enable features the top-level list does not, and they
+		// drive the exporters through JoinMetricsConfig, so report against the same set.
+		c.warnDeprecatedMetricsFeatures()
 	}
 
 	if c.Routes != nil && len(c.Routes.WildcardChar) > 1 {
@@ -403,6 +406,76 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// spanMetricsFeatureMasks returns every feature list that feeds the span-metrics exporters:
+// the top-level one plus each per-service one. JoinMetricsConfig ORs them together, so a
+// format conflict left unresolved in any of them decides the naming for all services.
+// The masks are taken from the Beyla configuration, so that resolving a conflict mutates
+// the configuration that is later converted into the OBI one.
+func (c *Config) spanMetricsFeatureMasks() []*export.Features {
+	masks := make([]*export.Features, 0, 1+len(c.Discovery.Instrument)+len(c.Discovery.Services))
+	masks = append(masks, &c.Metrics.Features)
+	for i := range c.Discovery.Instrument {
+		masks = append(masks, &c.Discovery.Instrument[i].Metrics.Features)
+	}
+	for i := range c.Discovery.Services {
+		masks = append(masks, &c.Discovery.Services[i].Metrics.Features)
+	}
+	return masks
+}
+
+// resolveSpanMetricsFormats rejects an explicit legacy + OTel combination and resolves the
+// implicit one coming from "all"/"*" in favor of OTel, for every feature list that reaches
+// the exporters. Resolving only the top-level list would let a per-service "all" put every
+// span-metrics service back on the legacy names.
+func (c *Config) resolveSpanMetricsFormats() error {
+	resolved := false
+	for _, features := range c.spanMetricsFeatureMasks() {
+		if features.InvalidSpanMetricsConfig() {
+			return ConfigError("you can only enable one format of span metrics," +
+				" application_span or application_span_otel")
+		}
+		if features.ResolveSpanMetricsConflict() {
+			resolved = true
+		}
+	}
+	if resolved {
+		// AsOBI caches its result and copies the top-level metrics section by value, so the
+		// cached conversion must be dropped for the exporters to see the resolved features.
+		c.invalidateOBICache()
+	}
+
+	// The exporters choose the metric names from the OR of all masks, so a legacy format in
+	// one list and OTel in another would silently select legacy names for every service.
+	// Each mask is already conflict-free here, so a joined conflict is always cross-mask.
+	if c.AsOBI().JoinMetricsConfig().Features.InvalidSpanMetricsConfig() {
+		return ConfigError("you can only enable one format of span metrics across the" +
+			" top-level and per-service metrics features, application_span or" +
+			" application_span_otel")
+	}
+
+	// Reachable only through "all"/"*": an explicit combination is rejected above. The user
+	// did not pick the legacy format, so report the resolution without a deprecation notice.
+	if resolved {
+		slog.Warn("application_span and application_span_otel cannot be used together," +
+			" application_span_otel is selected automatically")
+	}
+	return nil
+}
+
+// warnDeprecatedMetricsFeatures reports every deprecated metrics feature that is still
+// enabled, across the top-level and per-service configurations.
+func (c *Config) warnDeprecatedMetricsFeatures() {
+	for _, deprecated := range c.AsOBI().JoinMetricsConfig().Features.DeprecatedEnabled() {
+		if deprecated.Replacement == "" {
+			slog.Warn("metrics feature is deprecated and will be removed in a future release",
+				"feature", deprecated.Name)
+			continue
+		}
+		slog.Warn("metrics feature is deprecated and will be removed in a future release",
+			"feature", deprecated.Name, "use", deprecated.Replacement)
+	}
 }
 
 func (c *Config) promNetO11yEnabled() bool {

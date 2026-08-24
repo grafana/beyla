@@ -52,6 +52,13 @@ func (c *Config) AsOBI() *obi.Config {
 	return c.obi
 }
 
+// invalidateOBICache drops the cached OBI conversion, so the next AsOBI invocation rebuilds
+// it from the current Beyla configuration. Required after mutating the Beyla Config, as the
+// conversion copies by value any field whose type is shared with OBI.
+func (c *Config) invalidateOBICache() {
+	c.obi = nil
+}
+
 // overrideOBI contains some extra tweaking that are required in the destination OBI configuration,
 // to override some behaviors such as letting the OTEL exporters to adopt the Grafana credentials
 func overrideOBI(src *Config, dst *obi.Config) {

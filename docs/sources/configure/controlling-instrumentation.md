@@ -220,6 +220,7 @@ ebpf:
 
 | YAML option<p>Environment variable</p>            | Description                                                         | Type    | Default | Maximum |
 | ------------------------------------------------- | ------------------------------------------------------------------- | ------- | ------- | ------- |
+| `aerospike`<p>`BEYLA_BPF_BUFFER_SIZE_AEROSPIKE`</p> | Auxiliary buffer size (in bytes) for Aerospike protocol capture.  | int     | (0)     | 8192    |
 | `http`<p>`BEYLA_BPF_BUFFER_SIZE_HTTP`</p>         | Auxiliary buffer size (in bytes) for HTTP protocol capture.         | int     | (0)     | 8192    |
 | `mysql`<p>`BEYLA_BPF_BUFFER_SIZE_MYSQL`</p>       | Auxiliary buffer size (in bytes) for MYSQL protocol capture.        | int     | (0)     | 8192    |
 | `postgres`<p>`BEYLA_BPF_BUFFER_SIZE_POSTGRES`</p> | Auxiliary buffer size (in bytes) for POSTGRESQL protocol capture.   | int     | (0)     | 8192    |

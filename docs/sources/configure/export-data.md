@@ -99,8 +99,11 @@ If you don't set a protocol Beyla sets the protocol as follows:
 The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery](./) configuration.
 
 - `application`: Application-level metrics
-- `application_span`: Application-level trace span metrics using legacy naming conventions
+- `application_span`: Application-level trace span metrics using legacy naming conventions.
+  Deprecated: use `application_span_otel` instead. The name keeps working, but Beyla logs a deprecation warning at startup and the feature is removed in a future release
 - `application_span_otel`: Application-level trace span metrics using OpenTelemetry naming conventions. Refer to [span metrics formats](#span-metrics-formats) for differences between `application_span` and `application_span_otel`
+- `application_span_sizes`: Application-level request and response body size metrics for trace spans.
+  Deprecated: there is no direct replacement. The closest equivalents are the `http.server.request.body.size` and `http.server.response.body.size` metrics
 - `application_host`: Application-level host metrics for host based pricing
 - `application_service_graph`: Application-level service graph metrics.
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
@@ -113,10 +116,12 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 
 Beyla provides two formats for span metrics:
 
-- `application_span`: Legacy format using the metric names `traces_spanmetrics_latency` and `traces_spanmetrics_calls_total`
+- `application_span`: Legacy format using the metric names `traces_spanmetrics_latency` and `traces_spanmetrics_calls_total`. Deprecated: use `application_span_otel` instead
 - `application_span_otel`: OpenTelemetry-compliant format using the metric names `traces_span_metrics_duration_seconds` and `traces_span_metrics_calls_total`
 
-You can only enable one span metrics format at a time. If you specify both `application_span` and `application_span_otel` in the `features` list, Beyla returns a configuration error.
+You can only enable one span metrics format at a time. If you specify both `application_span` and `application_span_otel` in the `features` list, Beyla returns a configuration error. The same applies when one format comes from the top-level `metrics` section and the other from a per-service `discovery` `metrics.features` section, because the exported metric names are selected from the combination of both.
+
+If you select the formats implicitly with `all` or `*`, Beyla resolves the conflict automatically in favor of `application_span_otel` and logs a warning. This resolution also applies to per-service `metrics.features` sections, so a single service requesting `all` doesn't move every service back to the legacy names.
 
 ### Metrics instrumentation
 

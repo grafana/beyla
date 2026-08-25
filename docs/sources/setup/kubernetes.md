@@ -30,6 +30,7 @@ Contents:
     - [Deploy Beyla as a sidecar container](#deploy-beyla-as-a-sidecar-container)
     - [Deploy Beyla as a Daemonset](#deploy-beyla-as-a-daemonset)
     - [Deploy Beyla unprivileged](#deploy-beyla-unprivileged)
+      - [Deploy unprivileged Beyla on OpenShift](#deploy-unprivileged-beyla-on-openshift)
   - [Providing an external configuration file](#providing-an-external-configuration-file)
   - [Providing secret configuration](#providing-secret-configuration)
   <!-- TOC -->
@@ -332,6 +333,52 @@ metadata:
 ---
 
 ```
+
+#### Deploy unprivileged Beyla on OpenShift
+
+The default OpenShift Security Context Constraint (SCC) policy doesn't allow the host access, user ID, and Linux capabilities required by the unprivileged deployment. A cluster administrator can create a dedicated SCC that permits the settings used by the example without allowing privileged containers:
+
+```yaml
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: beyla
+allowHostDirVolumePlugin: true
+allowHostNetwork: true
+allowHostPID: true
+allowHostPorts: true
+allowPrivilegedContainer: false
+allowedCapabilities:
+  - BPF
+  - SYS_PTRACE
+  - NET_RAW
+  - CHECKPOINT_RESTORE
+  - DAC_READ_SEARCH
+  - PERFMON
+  - SYS_ADMIN
+  - NET_ADMIN
+readOnlyRootFilesystem: true
+runAsUser:
+  type: MustRunAs
+  uid: 0
+seLinuxContext:
+  type: RunAsAny
+fsGroup:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+```
+
+Save the manifest as `beyla-scc.yaml`, apply it, and grant it only to the Beyla service account from the example:
+
+```sh
+oc apply -f beyla-scc.yaml
+oc adm policy add-scc-to-user beyla -z beyla -n beyla-demo
+```
+
+Keep the capability-based container `securityContext` from the unprivileged example. The custom SCC permits those settings but keeps `allowPrivilegedContainer` disabled.
+
+SCC assignments grant elevated permissions. Use a dedicated namespace and service account for Beyla, and review the SCC with your OpenShift administrator before deploying it in production.
 
 ## Providing an external configuration file
 

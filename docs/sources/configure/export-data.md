@@ -321,14 +321,14 @@ Example (global configuration):
 
 ```yaml
 jvm_runtime_metrics:
-  sampling_interval: 5s
+  sampling_interval: 1s
 ```
 
 To enable `application_runtime` only for specific services, use the per-service `metrics.features` override in service discovery:
 
 ```yaml
 jvm_runtime_metrics:
-  sampling_interval: 5s
+  sampling_interval: 1s
 discovery:
   instrument:
     - name: my-java-service

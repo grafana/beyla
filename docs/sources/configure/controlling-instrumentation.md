@@ -252,9 +252,66 @@ Header rules use the following fields:
 - `match.case_sensitive`: Whether the header name match is case-sensitive.
 - `match.url_path_patterns`: Optional URL path glob patterns for limiting where the rule applies.
 - `match.methods`: Optional list of HTTP methods for limiting where the rule applies.
-- `match.response_status_code`: Optional response status code range for limiting where the rule applies.
+- `match.response_status_code`: Optional response status code comparisons for
+  limiting where the rule applies. Supported comparisons are `equals`,
+  `not_equals`, `greater_than`, `greater_equals`, `less_than`, and `less_equals`.
+- `obfuscation_string`: Optional replacement string used when the rule action
+  is `obfuscate`. It overrides `policy.obfuscation_string` for that rule.
 
 Header rules are evaluated in order, and the first matching header rule wins. Put specific obfuscation or exclusion rules before broader include rules. Avoid setting `policy.default_action.headers: include` unless you have reviewed the data, because it can expose credentials, cookies, or user-identifying values and can add high-cardinality span attributes.
+
+When a rule specifies multiple response status code comparisons, all of them
+must match. For example, the following rule includes response headers only for
+4xx responses other than 404:
+
+```yaml
+ebpf:
+  payload_extraction:
+    http:
+      enrichment:
+        enabled: true
+        rules:
+          - action: include
+            type: headers
+            scope: response
+            match:
+              patterns: ["*"]
+              response_status_code:
+                greater_equals: 400
+                less_than: 500
+                not_equals: 404
+```
+
+Body obfuscation rules use `match.obfuscation_json_paths` to select fields in
+JSON request or response bodies. This field only applies to body rules with the
+`obfuscate` action. All matching body rules are combined, and each rule can use
+its own `obfuscation_string`; when omitted, the rule uses
+`policy.obfuscation_string`.
+
+```yaml
+ebpf:
+  payload_extraction:
+    http:
+      enrichment:
+        enabled: true
+        policy:
+          default_action:
+            headers: exclude
+            body: exclude
+          obfuscation_string: "***"
+        rules:
+          - action: obfuscate
+            type: body
+            scope: response
+            obfuscation_string: "PII"
+            match:
+              response_status_code:
+                greater_equals: 200
+                less_than: 300
+              obfuscation_json_paths:
+                - "$.user.email"
+                - "$.user.ssn"
+```
 
 ## Configure data processing buffer sizes
 

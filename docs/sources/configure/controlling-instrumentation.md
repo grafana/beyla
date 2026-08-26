@@ -126,6 +126,55 @@ List of supported AWS services protocol detectors:
 | S3                | CreateBucket, DeleteBucket, PutObject, DeleteObject, ListBuckets, ListObjects, GetObject |
 | SQS               | All                                                                                      |
 
+### Generative AI instrumentation
+
+Beyla can identify supported GenAI providers and higher-level GenAI operations by inspecting HTTP payloads. Each detector is disabled by default and can be enabled independently.
+
+YAML section:
+
+```yaml
+ebpf:
+  payload_extraction:
+    http:
+      genai:
+```
+
+| YAML option<p>Environment variable</p>                                   | Description                                                                                      | Type    | Default |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ------- | ------- |
+| `openai.enabled`<p>`BEYLA_HTTP_OPENAI_ENABLED`</p>                       | Enable OpenAI payload extraction and parsing.                                                    | boolean | false   |
+| `anthropic.enabled`<p>`BEYLA_HTTP_ANTHROPIC_ENABLED`</p>                 | Enable Anthropic payload extraction and parsing.                                                 | boolean | false   |
+| `gemini.enabled`<p>`BEYLA_HTTP_GEMINI_ENABLED`</p>                       | Enable Google AI Studio (Gemini) payload extraction and parsing.                                 | boolean | false   |
+| `qwen.enabled`<p>`BEYLA_HTTP_QWEN_ENABLED`</p>                           | Enable `Qwen` (`DashScope`) payload extraction and parsing.                                      | boolean | false   |
+| `bedrock.enabled`<p>`BEYLA_HTTP_BEDROCK_ENABLED`</p>                     | Enable AWS Bedrock payload extraction and parsing.                                               | boolean | false   |
+| `mcp.enabled`<p>`BEYLA_HTTP_MCP_ENABLED`</p>                             | Enable Model Context Protocol (MCP) payload extraction and parsing.                              | boolean | false   |
+| `embedding.enabled`<p>`BEYLA_HTTP_GENAI_EMBEDDING_ENABLED`</p>           | Enable generic embedding provider (`Voyage AI`, `Cohere`, `Jina AI`) payload extraction and parsing. | boolean | false   |
+| `rerank.enabled`<p>`BEYLA_HTTP_RERANK_ENABLED`</p>                       | Enable `rerank` (`Cohere`, `Jina AI`, `Voyage AI`, etc.) payload extraction and parsing.          | boolean | false   |
+| `retrieval.enabled`<p>`BEYLA_HTTP_RETRIEVAL_ENABLED`</p>                 | Enable vector retrieval (`Pinecone`, `Qdrant`, `Milvus`, `Chroma`, `Weaviate`, etc.) payload extraction and parsing. | boolean | false   |
+| `ollama.enabled`<p>`BEYLA_HTTP_OLLAMA_ENABLED`</p>                       | Enable the `Ollama` native API payload extraction and parsing.                                   | boolean | false   |
+| `openai_compatible.enabled`<p>`BEYLA_HTTP_OPENAI_COMPATIBLE_ENABLED`</p> | Enable payload extraction and parsing for configured OpenAI-compatible gateways.                 | boolean | false   |
+| `openai_compatible.gateways`                                             | Configure gateway destinations. Each entry requires `host` and can include `port` and `provider`. | list    | empty   |
+
+For example, enable OpenAI and embedding detection and configure an OpenAI-compatible gateway:
+
+```yaml
+ebpf:
+  payload_extraction:
+    http:
+      genai:
+        openai:
+          enabled: true
+        embedding:
+          enabled: true
+        openai_compatible:
+          enabled: true
+          gateways:
+            - host: llm-gateway.example.com
+              port: 443
+              provider: acme-gateway
+```
+
+The `host` match is case-insensitive. If `port` is omitted, Beyla matches any destination port. The optional `provider` value is reported in the `gen_ai.provider.name` span attribute.
+
 ### HTTP header extraction
 
 Beyla can extract selected HTTP request and response headers and add them as span attributes, and can obfuscate selected header values before export. To enable this feature, configure HTTP payload enrichment, select the header attributes for export, and set an HTTP buffer size large enough to capture the headers you want to inspect. Header extraction is disabled by default to avoid leaking sensitive data and increasing trace cardinality.

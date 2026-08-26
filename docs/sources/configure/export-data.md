@@ -142,9 +142,9 @@ JVM runtime metrics are collected via eBPF USDT probes on `libjvm.so` (`hotspot:
 | `jvm.memory.limit` | Maximum bytes the memory pool can use |
 | `jvm.memory.used_after_last_gc` | Bytes used in the pool immediately after the last GC cycle |
 
-All JVM metrics carry the attributes `jvm.memory.type` (e.g., `heap`, `non_heap`) and `jvm.memory.pool.name` (e.g., `G1 Eden Space`).
+All JVM metrics carry the attributes `jvm.memory.type` (for example, `heap`, `non_heap`) and `jvm.memory.pool.name` (for example, `G1 Eden Space`).
 
-To control how frequently JVM GC events are sampled, see [JVM runtime metrics sampling](#jvm-runtime-metrics-sampling).
+To control how frequently JVM GC events are sampled, refer to [JVM runtime metrics sampling](#jvm-runtime-metrics-sampling).
 
 ### Span metrics formats
 

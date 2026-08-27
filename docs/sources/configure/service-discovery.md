@@ -227,6 +227,8 @@ For an export signal to function, you must configure the corresponding exporter 
 Additionally to configuring custom export modes per discovery instrumentation criteria, Beyla allows you to override the global metrics export features
 for each discovery criteria by adding `metrics > features` as a property to individual `discovery > instrument` entries.
 
+Accepted values for `features` are: `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_process`, `application_runtime`, `network`, and `network_inter_zone`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
+
 For example:
 
 ```yaml

@@ -81,7 +81,7 @@ otel_metrics_export:
 | `OTEL_EXPORTER_OTLP_PROTOCOL`                                                                | Similar to the shared endpoint, the protocol for metrics and traces.                                                                                                                                                                                                                                                                                           | string          | Inferred from port usage    |
 | `insecure_skip_verify`<p>`BEYLA_OTEL_INSECURE_SKIP_VERIFY`</p>                               | If `true`, Beyla skips verifying and accepts any server certificate. Only override this setting for non-production environments.                                                                                                                                                                                                                               | boolean         | `false`                     |
 | `interval`<p>`BEYLA_METRICS_INTERVAL`</p>                                                    | The duration between exports.                                                                                                                                                                                                                                                                                                                                  | Duration        | `60s`                       |
-| `features`<p>`BEYLA_OTEL_METRICS_FEATURES`</p>                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features). Accepted values `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_process`, `network` and `network_inter_zone`.                                                        | list of strings | `["application"]`           |
+| `features`<p>`BEYLA_OTEL_METRICS_FEATURES`</p>                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features). Accepted values `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_process`, `application_runtime`, `network` and `network_inter_zone`.                                                        | list of strings | `["application"]`           |
 | `allow_service_graph_self_references`<p>`BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES`</p> | Controls if Beyla includes self-referencing services in service graph generation, for example a service that calls itself. Self referencing reduces service graph usefulness and increases data cardinality.                                                                                                                                                   | boolean         | `false`                     |
 | `instrumentations`<p>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`</p>                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation) section.                                                                                                                                                                                                                             | list of strings | `["*"]`                     |
 | `buckets`                                                                                    | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets](../metrics-histograms/).                                                                                                                                                                                                                              | (n/a)           | Object                      |
@@ -109,8 +109,45 @@ The Beyla metrics exporter can export the following metrics data groups for proc
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
+- `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
+
+### Application runtime metrics
+
+When `application_runtime` is enabled, Beyla collects language runtime metrics for instrumented Go and Java processes.
+
+**Go runtime metrics**
+
+| Metric | Description |
+| ------ | ----------- |
+| `go.memory.limit` | Runtime memory limit configured via `GOMEMLIMIT` |
+| `go.memory.gc.goal` | Heap size target for the next GC cycle |
+| `go.memory.gc.cycles` | Cumulative count of completed GC cycles |
+| `go.memory.gc.pause.duration` | Total time spent in GC stop-the-world pauses |
+| `go.memory.used` | Memory in use by the Go runtime |
+| `go.memory.allocated` | Cumulative bytes allocated by the runtime |
+| `go.memory.allocations` | Cumulative number of heap object allocations |
+| `go.cpu.time` | Cumulative CPU time consumed by the Go process |
+| `go.goroutine.count` | Number of live goroutines |
+| `go.processor.limit` | `GOMAXPROCS` value (logical CPU limit) |
+| `go.config.gogc` | Current GC target percentage (`GOGC`) |
+| `go.schedule.duration` | Time goroutines spend waiting on the scheduler run queue |
+
+**JVM runtime metrics**
+
+JVM runtime metrics are collected via eBPF USDT probes on `libjvm.so` (`hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end`) without requiring any bytecode agent.
+
+| Metric | Description |
+| ------ | ----------- |
+| `jvm.memory.used` | Current bytes used in the JVM memory pool |
+| `jvm.memory.committed` | Bytes committed (reserved) for the JVM memory pool |
+| `jvm.memory.limit` | Maximum bytes the memory pool can use |
+| `jvm.memory.used_after_last_gc` | Bytes used in the pool immediately after the last GC cycle |
+
+All JVM metrics carry the attributes `jvm.memory.type` (for example, `heap`, `non_heap`) and `jvm.memory.pool.name` (for example, `G1 Eden Space`).
+
+To control how frequently JVM GC events are sampled, refer to [JVM runtime metrics](#jvm-runtime-metrics).
 
 ### Span metrics formats
 
@@ -243,6 +280,7 @@ The Prometheus metrics exporter can export the following metrics data groups:
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
+- `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 
@@ -258,3 +296,46 @@ The list of instrumentation areas Beyla can collection data from:
 - `kafka`: Kafka client/server message queue metrics
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application metrics, and disables other instrumentation.
+
+## Global metrics features
+
+You can set the default `features` list for all exporters at once using the global `metrics` configuration block, rather than repeating it under each exporter. The global setting is overridden by any per-exporter `features` value.
+
+The `metrics.features` option (environment variable: `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
+
+To enable runtime metrics globally for all processes:
+
+```yaml
+metrics:
+  features:
+    - application
+    - application_runtime
+```
+
+To enable `application_runtime` only for a specific process, use the per-service `metrics.features` override in service discovery:
+
+```yaml
+discovery:
+  instrument:
+    - name: my-java-service
+      metrics:
+        features:
+          - application_runtime
+```
+
+## JVM runtime metrics
+
+When the `application_runtime` feature is enabled for Java services, Beyla collects JVM memory pool metrics by attaching eBPF USDT probes to `hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end` in `libjvm.so`.
+
+To prevent excessive data collection on JVMs with high GC frequency, Beyla throttles the collection with a configurable sampling interval.
+
+| YAML<p>environment variable</p> | Description | Type | Default |
+| -------------------------------- | ----------- | ---- | ------- |
+| `jvm_runtime_metrics.sampling_interval`<p>`OBI_JVM_RUNTIME_METRICS_SAMPLING_INTERVAL`</p> | Minimum time between successive JVM runtime metric samples. Must be greater than `0`. | Duration | `1s` |
+
+Example:
+
+```yaml
+jvm_runtime_metrics:
+  sampling_interval: 1s
+```

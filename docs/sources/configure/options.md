@@ -151,3 +151,31 @@ volumeMounts:
     mountPath: /sys/fs/bpf
     mountPropagation: HostToContainer
 ```
+
+## Health checks
+
+YAML section: `health_check`
+
+Beyla can expose the `/healthz` endpoint over TCP or a Unix socket. The endpoint reports that the Beyla process is reachable and its scheduler is running.
+
+| YAML<p>environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `port`<p>`BEYLA_HEALTH_CHECK_PORT`</p> | Sets the TCP port for the health endpoint. Valid values are `0` through `65535`. A value of `0` disables the TCP endpoint. | integer | `0` |
+| `listen_address`<p>`BEYLA_HEALTH_CHECK_LISTEN_ADDRESS`</p> | Sets the IP address for the TCP health endpoint. Use `0.0.0.0` or `::` only when external probes require access. | string | `127.0.0.1` |
+| `unix_socket_path`<p>`BEYLA_HEALTH_CHECK_UNIX_SOCKET_PATH`</p> | Sets the Unix socket for the health endpoint. Use a filesystem path or, on Linux, an abstract socket name beginning with `@`. | string | unset |
+
+If you configure `unix_socket_path`, Beyla uses the Unix socket and ignores the TCP `port` and `listen_address` settings.
+
+To expose the health endpoint on TCP port `8080` using the default loopback address:
+
+```yaml
+health_check:
+  port: 8080
+```
+
+To expose the health endpoint on a filesystem Unix socket:
+
+```yaml
+health_check:
+  unix_socket_path: /var/run/beyla-health.sock
+```

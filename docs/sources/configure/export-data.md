@@ -144,7 +144,7 @@ JVM runtime metrics are collected via eBPF USDT probes on `libjvm.so` (`hotspot:
 
 All JVM metrics carry the attributes `jvm.memory.type` (for example, `heap`, `non_heap`) and `jvm.memory.pool.name` (for example, `G1 Eden Space`).
 
-To control how frequently JVM GC events are sampled, refer to [JVM runtime metrics sampling](#jvm-runtime-metrics-sampling).
+To control how frequently JVM GC events are sampled, refer to [JVM runtime metrics](#jvm-runtime-metrics).
 
 ### Span metrics formats
 
@@ -318,9 +318,11 @@ discovery:
           - application_runtime
 ```
 
-## JVM runtime metrics sampling
+## JVM runtime metrics
 
-When the `application_runtime` feature is enabled for Java services, Beyla collects JVM memory pool metrics by attaching eBPF USDT probes to `hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end` in `libjvm.so`. To prevent excessive data collection on JVMs with high GC frequency, Beyla throttles the collection with a configurable sampling interval.
+When the `application_runtime` feature is enabled for Java services, Beyla collects JVM memory pool metrics by attaching eBPF USDT probes to `hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end` in `libjvm.so`.
+
+To prevent excessive data collection on JVMs with high GC frequency, Beyla throttles the collection with a configurable sampling interval.
 
 | YAML<p>environment variable</p> | Description | Type | Default |
 | -------------------------------- | ----------- | ---- | ------- |

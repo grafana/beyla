@@ -272,6 +272,12 @@ ebpf:
 | `http`<p>`BEYLA_BPF_BUFFER_SIZE_HTTP`</p>         | Auxiliary buffer size (in bytes) for HTTP protocol capture.         | int     | (0)     | 8192    |
 | `mysql`<p>`BEYLA_BPF_BUFFER_SIZE_MYSQL`</p>       | Auxiliary buffer size (in bytes) for MYSQL protocol capture.        | int     | (0)     | 8192    |
 | `postgres`<p>`BEYLA_BPF_BUFFER_SIZE_POSTGRES`</p> | Auxiliary buffer size (in bytes) for POSTGRESQL protocol capture.   | int     | (0)     | 8192    |
+| `aerospike`<p>`BEYLA_BPF_BUFFER_SIZE_AEROSPIKE`</p> | Auxiliary buffer size (in bytes) for Aerospike capture and response reassembly. | int | (0) | 65536 |
+| `kafka`<p>`BEYLA_BPF_BUFFER_SIZE_KAFKA`</p>       | Auxiliary buffer size (in bytes) for Kafka protocol capture.        | int     | (0)     | 65536   |
+| `mssql`<p>`BEYLA_BPF_BUFFER_SIZE_MSSQL`</p>       | Auxiliary buffer size (in bytes) for MSSQL protocol capture.        | int     | (0)     | 65536   |
+| `tcp`<p>`BEYLA_BPF_BUFFER_SIZE_TCP`</p>           | Auxiliary buffer size (in bytes) for generic TCP protocol capture.  | int     | (0)     | 65536   |
+
+For all buffer size options, `0` disables the auxiliary buffer. The Aerospike buffer enables kernel-side reassembly of the first response frame. This improves status code capture for clients that read the response header and body separately.
 
 ## Other attributes
 
@@ -280,6 +286,7 @@ YAML section: `ebpf`
 | YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
 | `heuristic_sql_detect`<p>`BEYLA_HEURISTIC_SQL_DETECT`</p> | Enable heuristic SQL client detection. See below for details. | boolean | (false) |
+| `mssql_prepared_statements_cache_size`<p>`BEYLA_BPF_MSSQL_PREPARED_STATEMENTS_CACHE_SIZE`</p> | Maximum number of MSSQL prepared statements whose query text Beyla retains for later executions. Must be greater than `0`. Larger caches use more memory; smaller caches can evict statements and omit query text from later execution spans. | int | (1024) |
 
 The `heuristic sql detect` option lets Beyla detect SQL client requests by inspecting query statements, even if the protocol is not directly supported. By default, Beyla detects SQL client requests by their binary protocol format. If you use a database technology not directly supported by Beyla, you can enable this option to get database client telemetry. This option is not enabled by default, because it can create false positives, for example, if an application sends SQL text for logging through a TCP connection. Currently, Beyla natively supports the Postgres and MySQL binary protocols.
 

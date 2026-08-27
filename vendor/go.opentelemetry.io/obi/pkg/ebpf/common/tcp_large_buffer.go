@@ -156,7 +156,7 @@ func containsTCPLargeBuffer(
 
 func protocolToLargeBufferKind(protocolType uint8) largeBufferKind {
 	switch protocolType {
-	case ProtocolTypeKafka, ProtocolTypeMySQL, ProtocolTypePostgres, ProtocolTypeMSSQL, ProtocolTypeHTTP:
+	case ProtocolTypeKafka, ProtocolTypeMySQL, ProtocolTypePostgres, ProtocolTypeMSSQL, ProtocolTypeHTTP, ProtocolTypeAerospike:
 		return KindLayerApp
 	}
 	// No large buffers for MQTT the rest are generic TCP buffers

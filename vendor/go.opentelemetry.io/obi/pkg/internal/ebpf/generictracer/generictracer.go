@@ -271,6 +271,7 @@ func (p *Tracer) constants() map[string]any {
 	m["kafka_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Kafka
 	m["postgres_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Postgres
 	m["mssql_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.MSSQL
+	m["aerospike_max_captured_bytes"] = p.cfg.EBPF.BufferSizes.Aerospike
 
 	m["max_transaction_time"] = uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds())
 
@@ -442,6 +443,25 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"SSL_shutdown": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUprobeSslShutdown,
+			}},
+			"SSL_set_bio": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeSslSetBio,
+			}},
+			"SSL_free": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeSslFree,
+			}},
+		},
+		// BIO_write is a libcrypto symbol. A process that links libssl and
+		// libcrypto separately, as CPython does, resolves it from its own
+		// object, so it gets its own key here. Statically linked runtimes such
+		// as node resolve both keys to the executable and are grouped into a
+		// single attachment by inode.
+		"libcrypto.so": {
+			"BIO_write": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeBioWrite,
 			}},
 		},
 		"libSystem.Security.Cryptography.Native.OpenSsl.so": {

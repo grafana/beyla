@@ -36,6 +36,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
 	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 )
@@ -472,6 +473,173 @@ func TestConfigValidate_error(t *testing.T) {
 			assert.Error(t, loadConfig(t, tc).Validate())
 		})
 	}
+}
+
+// Ported from OBI's TestConfigValidate_DeprecatedMetricsFeatureWarning. Beyla only resolves
+// the span-metrics format when both metrics exporters are enabled, so every case below
+// configures them.
+func TestConfigValidate_SpanMetricsFeatures(t *testing.T) {
+	const exporters = `
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+prometheus_export:
+  port: 9090
+`
+	captureWarnings := func(t *testing.T, validate func(t *testing.T)) string {
+		t.Helper()
+		var logs bytes.Buffer
+		restore := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
+		t.Cleanup(func() { slog.SetDefault(restore) })
+
+		validate(t)
+		return logs.String()
+	}
+
+	// validates the configuration, requiring it to be accepted, and returns it together with
+	// the warnings logged during validation
+	validConfig := func(t *testing.T, userConfig string) (*Config, string) {
+		t.Helper()
+		var cfg *Config
+		logs := captureWarnings(t, func(t *testing.T) {
+			loaded, err := LoadConfig(bytes.NewBufferString(exporters + userConfig))
+			require.NoError(t, err)
+			require.NoError(t, loaded.Validate())
+			cfg = loaded
+		})
+		return cfg, logs
+	}
+
+	validationError := func(t *testing.T, userConfig string) error {
+		t.Helper()
+		cfg, err := LoadConfig(bytes.NewBufferString(exporters + userConfig))
+		require.NoError(t, err)
+		return cfg.Validate()
+	}
+
+	withFeatures := func(features string) string {
+		return `
+metrics:
+  features: ` + features + `
+discovery:
+  instrument:
+    - exe_path: foo
+`
+	}
+
+	t.Run("warns for application_span", func(t *testing.T) {
+		_, logs := validConfig(t, withFeatures(`["application", "application_span"]`))
+		assert.Contains(t, logs, "feature=application_span")
+		assert.Contains(t, logs, "use=application_span_otel")
+	})
+
+	// application_span_sizes has no OTel-named equivalent, so it is reported without a
+	// replacement rather than pointing at a feature that does not exist.
+	t.Run("warns for application_span_sizes without a replacement", func(t *testing.T) {
+		_, logs := validConfig(t, withFeatures(`["application", "application_span_sizes"]`))
+		assert.Contains(t, logs, "feature=application_span_sizes")
+		assert.NotContains(t, logs, "use=")
+	})
+
+	t.Run("silent for application_span_otel", func(t *testing.T) {
+		_, logs := validConfig(t, withFeatures(`["application", "application_span_otel"]`))
+		assert.NotContains(t, logs, "deprecated")
+	})
+
+	// "all" enables both span-metric formats; the conflict is resolved in favor of OTel,
+	// so application_span must not be reported as deprecated anywhere in the output --
+	// including inside the conflict-resolution message, which only "all"/"*" ever sees.
+	// application_span_sizes is not resolved away and keeps emitting, so it is reported.
+	t.Run("all reports only the features that remain enabled", func(t *testing.T) {
+		cfg, logs := validConfig(t, withFeatures(`["all"]`))
+		assert.False(t, bexport.Any(cfg.Metrics.Features, export.FeatureSpanLegacy),
+			"all must not select the legacy span metric names")
+		assert.False(t, cfg.AsOBI().JoinMetricsConfig().Features.LegacySpanMetrics(),
+			"the resolved features must reach the OBI configuration driving the exporters")
+		assert.NotContains(t, logs, "feature=application_span ")
+		assert.Contains(t, logs, "application_span_otel is selected automatically")
+		assert.Contains(t, logs, "feature=application_span_sizes")
+	})
+
+	// A per-service "all" is joined into the mask that selects the exported metric names,
+	// so it must be resolved to OTel just like the top-level list. Otherwise one service
+	// saying "all" silently puts every span-metrics service back on the legacy names.
+	t.Run("per-service all resolves to otel", func(t *testing.T) {
+		cfg, logs := validConfig(t, `
+metrics:
+  features: ["application", "application_span_otel"]
+discovery:
+  instrument:
+    - exe_path: foo
+      metrics:
+        features: ["all"]
+`)
+		assert.False(t, cfg.AsOBI().JoinMetricsConfig().Features.LegacySpanMetrics(),
+			"per-service all must not select the legacy span metric names")
+		assert.NotContains(t, logs, "feature=application_span ")
+		assert.Contains(t, logs, "application_span_otel is selected automatically")
+	})
+
+	t.Run("explicit legacy and otel top-level is rejected", func(t *testing.T) {
+		require.ErrorContains(t,
+			validationError(t, withFeatures(`["application", "application_span", "application_span_otel"]`)),
+			"you can only enable one format of span metrics")
+	})
+
+	t.Run("explicit legacy and otel per-service is rejected", func(t *testing.T) {
+		require.ErrorContains(t, validationError(t, `
+metrics:
+  features: ["application"]
+discovery:
+  instrument:
+    - exe_path: foo
+      metrics:
+        features: ["application_span", "application_span_otel"]
+`), "you can only enable one format of span metrics")
+	})
+
+	// Each mask can be conflict-free while their OR is not: the exporters pick the metric
+	// names from the joined mask, so a top-level legacy format with a per-service OTel one
+	// would silently select legacy names for the very service that requested OTel.
+	t.Run("legacy top-level with otel per-service is rejected", func(t *testing.T) {
+		require.ErrorContains(t, validationError(t, `
+metrics:
+  features: ["application", "application_span"]
+discovery:
+  instrument:
+    - exe_path: foo
+      metrics:
+        features: ["application_span_otel"]
+`), "across the top-level and per-service metrics features")
+	})
+
+	t.Run("otel top-level with legacy per-service is rejected", func(t *testing.T) {
+		require.ErrorContains(t, validationError(t, `
+metrics:
+  features: ["application", "application_span_otel"]
+discovery:
+  instrument:
+    - exe_path: foo
+      metrics:
+        features: ["application_span"]
+`), "across the top-level and per-service metrics features")
+	})
+
+	// Per-service sections feed the exporters through JoinMetricsConfig, so a feature
+	// enabled only there must still be reported.
+	t.Run("warns for a feature enabled only per-service", func(t *testing.T) {
+		_, logs := validConfig(t, `
+metrics:
+  features: ["application"]
+discovery:
+  instrument:
+    - exe_path: foo
+      metrics:
+        features: ["application_span"]
+`)
+		assert.Contains(t, logs, "feature=application_span")
+		assert.Contains(t, logs, "use=application_span_otel")
+	})
 }
 
 func TestConfigValidateDiscovery(t *testing.T) {

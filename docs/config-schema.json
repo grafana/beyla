@@ -399,6 +399,10 @@
     },
     "EBPFBufferSizes": {
       "properties": {
+        "aerospike": {
+          "type": "integer",
+          "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_AEROSPIKE"
+        },
         "http": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_BUFFER_SIZE_HTTP"
@@ -653,27 +657,38 @@
     },
     "Features": {
       "items": {
-        "type": "string",
-        "enum": [
-          "*",
-          "all",
-          "application",
-          "application_host",
-          "application_process",
-          "application_runtime",
-          "application_service_graph",
-          "application_span",
-          "application_span_otel",
-          "application_span_sizes",
-          "ebpf",
-          "network",
-          "network_flow_packets",
-          "network_inter_zone",
-          "stats",
-          "stats_tcp_failed_connections",
-          "stats_tcp_io",
-          "stats_tcp_retransmits",
-          "stats_tcp_rtt"
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "*",
+              "all",
+              "application",
+              "application_host",
+              "application_process",
+              "application_runtime",
+              "application_service_graph",
+              "application_span_otel",
+              "ebpf",
+              "network",
+              "network_flow_packets",
+              "network_inter_zone",
+              "stats",
+              "stats_tcp_failed_connections",
+              "stats_tcp_io",
+              "stats_tcp_retransmits",
+              "stats_tcp_rtt"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "application_span",
+              "application_span_sizes"
+            ],
+            "description": "Deprecated feature names, kept for backwards compatibility: application_span (use application_span_otel), application_span_sizes (no direct replacement).",
+            "deprecated": true
+          }
         ]
       },
       "type": "array",

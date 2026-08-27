@@ -296,17 +296,26 @@ For example, setting the `instrumentations` option to: `http,grpc` enables the c
 
 You can set the default `features` list for all exporters at once using the global `metrics` configuration block, rather than repeating it under each exporter. The global setting is overridden by any per-exporter `features` value.
 
-| YAML<p>environment variable</p> | Description | Type | Default |
-| -------------------------------- | ----------- | ---- | ------- |
-| `metrics.features`<p>`OTEL_EBPF_METRICS_FEATURES`</p> | Default metrics feature groups applied to all exporters. Accepted values: `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_process`, `application_runtime`, `network`, `network_inter_zone`. | list of strings | `["application"]` |
+The `metrics.features` option (environment variable: `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
 
-Example:
+To enable runtime metrics globally for all processes:
 
 ```yaml
 metrics:
   features:
     - application
     - application_runtime
+```
+
+To enable `application_runtime` only for a specific process, use the per-service `metrics.features` override in service discovery:
+
+```yaml
+discovery:
+  instrument:
+    - name: my-java-service
+      metrics:
+        features:
+          - application_runtime
 ```
 
 ## JVM runtime metrics sampling
@@ -317,22 +326,9 @@ When the `application_runtime` feature is enabled for Java services, Beyla colle
 | -------------------------------- | ----------- | ---- | ------- |
 | `jvm_runtime_metrics.sampling_interval`<p>`OBI_JVM_RUNTIME_METRICS_SAMPLING_INTERVAL`</p> | Minimum time between successive JVM runtime metric samples. Must be greater than `0`. | Duration | `1s` |
 
-Example (global configuration):
+Example:
 
 ```yaml
 jvm_runtime_metrics:
   sampling_interval: 1s
-```
-
-To enable `application_runtime` only for specific services, use the per-service `metrics.features` override in service discovery:
-
-```yaml
-jvm_runtime_metrics:
-  sampling_interval: 1s
-discovery:
-  instrument:
-    - name: my-java-service
-      metrics:
-        features:
-          - application_runtime
 ```

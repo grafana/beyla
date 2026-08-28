@@ -165,12 +165,22 @@ If you select the formats implicitly with `all` or `*`, Beyla resolves the confl
 The list of instrumentation areas Beyla can collection data from:
 
 - `*`: all instrumentation, if `*` is present Beyla ignores other values
+- `aerospike`: Aerospike database metrics
+- `amqp`: AMQP message queue metrics
+- `couchbase`: Couchbase database metrics
+- `dns`: DNS request metrics
+- `genai`: Generative AI metrics
+- `gpu`: GPU operation metrics
 - `http`: HTTP/HTTPS/HTTP2 application metrics
 - `grpc`: gRPC application metrics
-- `sql`: SQL database client call metrics
-- `redis`: Redis client/server database metrics
 - `kafka`: Kafka client/server message queue metrics
-- `mongodb`: MongoDB client/server database metrics
+- `memcached`: Memcached database metrics
+- `mongo`: MongoDB client/server database metrics
+- `mqtt`: MQTT message queue metrics
+- `nats`: NATS message queue metrics
+- `redis`: Redis client/server database metrics
+- `sql`: SQL database client call metrics
+- `sunrpc`: SunRPC call metrics
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application metrics, and disables other instrumentation.
 
@@ -194,7 +204,7 @@ otel_traces_export:
 | `endpoint`<p>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`<p>`OTEL_EXPORTER_OTLP_ENDPOINT`</p> | The endpoint Beyla sends traces to. When using `OTEL_EXPORTER_OTLP_ENDPOINT`, Beyla follows the OpenTelemetry standard and automatically adds `/v1/traces` path to the URL. If you don't want this to happen, use the traces specific setting.                                                            | URL             |                          |
 | `protocol`<p>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`<p>`OTEL_EXPORTER_OTLP_PROTOCOL`</p> | The protocol transport/encoding of the OpenTelemetry endpoint, refer to [traces export protocol](#traces-export-protocol). [Accepted values](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/#otel_exporter_otlp_protocol) `http/json`, `http/protobuf`, and `grpc`. | string          | Inferred from port usage |
 | `insecure_skip_verify`<p>`BEYLA_OTEL_INSECURE_SKIP_VERIFY`</p>                        | If `true`, Beyla skips verifying and accepts any server certificate. Only override this setting for non-production environments.                                                                                                                                                                          | boolean         | `false`                  |
-| `instrumentations`<p>`BEYLA_OTEL_TRACES_INSTRUMENTATIONS`</p>                         | The list of instrumentation Beyla collects data for, refer to [traces instrumentation](#traces-instrumentation) section.                                                                                                                                                                                  | list of strings | `["http", "grpc", "sql", "redis", "kafka", "mongo"]` |
+| `instrumentations`<p>`BEYLA_OTEL_TRACES_INSTRUMENTATIONS`</p>                         | The list of instrumentation Beyla collects data for, refer to [traces instrumentation](#traces-instrumentation) section.                                                                                                                                                                                  | list of strings | `["http", "grpc", "sql", "redis", "kafka", "mqtt", "nats", "amqp", "mongo", "couchbase", "memcached", "sunrpc", "aerospike"]` |
 
 ### Traces export protocol
 
@@ -208,18 +218,26 @@ If you don't set a protocol Beyla sets the protocol as follows:
 The list of instrumentation areas Beyla can collection data from:
 
 - `*`: all instrumentation, if `*` is present Beyla ignores other values
+- `aerospike`: Aerospike database traces
+- `amqp`: AMQP message queue traces
+- `couchbase`: Couchbase database traces
+- `dns`: DNS request traces
+- `genai`: Generative AI traces
+- `gpu`: GPU operation traces
 - `http`: HTTP/HTTPS/HTTP2 application traces
 - `grpc`: gRPC application traces
-- `sql`: SQL database client call traces
-- `redis`: Redis client/server database traces
 - `kafka`: Kafka client/server message queue traces
+- `memcached`: Memcached database traces
 - `mongo`: MongoDB client/server database traces
-- `dns`: DNS request traces (not enabled by default)
-- `gpu`: GPU operation traces (not enabled by default)
+- `mqtt`: MQTT message queue traces
+- `nats`: NATS message queue traces
+- `redis`: Redis client/server database traces
+- `sql`: SQL database client call traces
+- `sunrpc`: SunRPC call traces
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application traces, and disables other instrumentation.
 
-**Note**: By default, Beyla enables the most commonly used instrumentations (`http`, `grpc`, `sql`, `redis`, `kafka`, `mongo`). DNS and GPU traces are not enabled by default to reduce overhead, but can be explicitly enabled if needed.
+**Note**: By default, Beyla enables all supported trace instrumentations except `dns`, `genai`, and `gpu`. You can explicitly enable these instrumentations if needed.
 
 ## Prometheus exporter component
 
@@ -289,11 +307,22 @@ The Prometheus metrics exporter can export the following metrics data groups:
 The list of instrumentation areas Beyla can collection data from:
 
 - `*`: all instrumentation, if `*` is present Beyla ignores other values
+- `aerospike`: Aerospike database metrics
+- `amqp`: AMQP message queue metrics
+- `couchbase`: Couchbase database metrics
+- `dns`: DNS request metrics
+- `genai`: Generative AI metrics
+- `gpu`: GPU operation metrics
 - `http`: HTTP/HTTPS/HTTP2 application metrics
 - `grpc`: gRPC application metrics
-- `sql`: SQL database client call metrics
-- `redis`: Redis client/server database metrics
 - `kafka`: Kafka client/server message queue metrics
+- `memcached`: Memcached database metrics
+- `mongo`: MongoDB client/server database metrics
+- `mqtt`: MQTT message queue metrics
+- `nats`: NATS message queue metrics
+- `redis`: Redis client/server database metrics
+- `sql`: SQL database client call metrics
+- `sunrpc`: SunRPC call metrics
 
 For example, setting the `instrumentations` option to: `http,grpc` enables the collection of `HTTP/HTTPS/HTTP2` and `gRPC` application metrics, and disables other instrumentation.
 

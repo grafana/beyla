@@ -39,6 +39,28 @@ attributes:
       exclude: ["k8s.pod.*"]
 ```
 
+### Select database client metric attributes
+
+The `db.client.operation.duration` (`db_client_operation_duration_seconds` in
+Prometheus) metric includes `server.port` by default when Beyla detects a valid
+database port. The `include` and `exclude` lists accept both `server.port` and
+its Prometheus-style name, `server_port`.
+
+For example, you can remove the port from the default attribute set by using
+the Prometheus-style names:
+
+```yaml
+attributes:
+  select:
+    db_client_operation_duration:
+      exclude: ["server_port"]
+```
+
+You can use `server.port` instead of `server_port` in the example; the two forms
+are equivalent. Including a server port can increase metric cardinality when an
+application connects to many database ports, so exclude it when that
+distinction isn't useful.
+
 Additionally, you can use wildcards as metric names to add and exclude attributes for groups of metrics with the same name. For example:
 
 ```yaml

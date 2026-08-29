@@ -57,7 +57,7 @@ The updating of eligible deployments works the following way:
       restarted, that is added to the eligible deployments. If it's an eligible deployment we write
       the config map state with this updated information. 
     - If we fail to find the process attributes we do a rebuild of the process state, while we
-      haven't received all of the initial state from the k8s informers. Once all of the inital 
+      haven't received all of the initial state from the k8s informers. Once all of the initial 
       k8s state is received we don't try to rebuild the local process state.
 3. After the initial state is processed, new events from the k8s informers typically don't find 
    a thing, and we purely rely on the controller being there to add instrumentation.

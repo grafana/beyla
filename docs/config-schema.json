@@ -294,6 +294,12 @@
             "type": "number"
           },
           "type": "array"
+        },
+        "v8js_gc_duration_histogram": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
         }
       },
       "type": "object"

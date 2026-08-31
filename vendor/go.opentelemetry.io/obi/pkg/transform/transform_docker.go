@@ -87,7 +87,7 @@ func DockerProcessEventDecoratorProvider(
 			return swarm.Bypass(input, output)
 		}
 
-		in := input.Subscribe()
+		in := input.Subscribe(msg.SubscriberName("transform.DockerProcessEventDecorator"))
 		containers := ctxInfo.DockerMetadata
 		containerByPID := map[app.PID]docker.ContainerMeta{}
 

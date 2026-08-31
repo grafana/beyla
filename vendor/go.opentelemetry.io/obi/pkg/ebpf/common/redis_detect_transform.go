@@ -263,7 +263,7 @@ func parseRedisCommand(buf []byte, pos int) (*redisCommand, int, bool) {
 	var text strings.Builder
 	pos = next
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		lenLine, tokStart, ok := readRESPLine(buf, pos)
 		if !ok || len(lenLine) < 2 || lenLine[0] != '$' {
 			return salvageRedisCommand(op, &text), 0, false

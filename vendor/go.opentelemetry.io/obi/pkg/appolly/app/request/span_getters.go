@@ -188,31 +188,20 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(span *Span) attribute.KeyValue { return DBOperationName(span.Method) }
 	case attr.DBSystemName:
 		getter = func(span *Span) attribute.KeyValue {
-			switch span.Type {
-			case EventTypeSQLClient, EventTypeSQLServer:
-				return DBSystemName(span.DBSystemName().Value.AsString())
-			case EventTypeRedisClient, EventTypeRedisServer:
-				return semconv.DBSystemNameRedis
-			case EventTypeMemcachedClient, EventTypeMemcachedServer:
-				return semconv.DBSystemNameMemcached
-			case EventTypeMongoClient:
-				return semconv.DBSystemNameMongoDB
-			case EventTypeCouchbaseClient:
-				return semconv.DBSystemNameCouchbase
-			case EventTypeAerospikeClient:
-				return DBSystemName("aerospike")
-			case EventTypeHTTPClient:
-				if span.SubType == HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
-					return DBSystemName(span.Elasticsearch.DBSystemName)
-				}
-				if span.SubType == HTTPSubtypeSQLPP && span.DBSystem != "" {
-					return DBSystemName(span.DBSystem)
-				}
+			if name := dbSystemNameForSpan(span); name != "" {
+				return DBSystemName(name)
 			}
 			return attribute.KeyValue{}
 		}
 	case attr.DBNamespace:
-		getter = func(span *Span) attribute.KeyValue { return DBNamespace(span.DBNamespace) }
+		getter = func(span *Span) attribute.KeyValue {
+			// db.namespace is Conditionally Required "if available": omit it
+			// instead of emitting an empty value
+			if span.DBNamespace == "" {
+				return attribute.KeyValue{}
+			}
+			return DBNamespace(span.DBNamespace)
+		}
 	case attr.ErrorType:
 		getter = func(span *Span) attribute.KeyValue {
 			if span.Type == EventTypeDNS && span.Status != int(dnsparser.RCodeSuccess) {
@@ -285,7 +274,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				EventTypeMQTTClient, EventTypeMQTTServer,
 				EventTypeNATSClient, EventTypeNATSServer,
 				EventTypeAMQPClient:
-				opType = span.Method
+				opType = MessagingOperationTypeOf(span.Method)
 			}
 			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
 				opType = span.AWS.SQS.OperationType
@@ -347,7 +336,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				} else if s.SubType == HTTPSubtypeSQLPP {
 					return DBCollectionName(s.Route)
 				}
-			case EventTypeSQLClient, EventTypeSQLServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeAerospikeClient:
+			case EventTypeSQLClient, EventTypeSQLServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeAerospikeClient, EventTypeAerospikeServer:
 				return DBCollectionName(s.Path)
 			}
 			return DBCollectionName("")
@@ -615,4 +604,29 @@ func spanPromGetters(attrName attr.Name) attributes.Getter[*Span, string] {
 	// unlike the OTEL getters, when the attribute is not found, we need to look for it
 	// in the metadata section
 	return func(s *Span) string { return s.Service.Metadata[attrName] }
+}
+
+func dbSystemNameForSpan(span *Span) string {
+	switch span.Type {
+	case EventTypeSQLClient, EventTypeSQLServer:
+		return span.DBSystemName().Value.AsString()
+	case EventTypeRedisClient, EventTypeRedisServer:
+		return semconv.DBSystemNameRedis.Value.AsString()
+	case EventTypeMemcachedClient, EventTypeMemcachedServer:
+		return semconv.DBSystemNameMemcached.Value.AsString()
+	case EventTypeMongoClient:
+		return semconv.DBSystemNameMongoDB.Value.AsString()
+	case EventTypeCouchbaseClient:
+		return semconv.DBSystemNameCouchbase.Value.AsString()
+	case EventTypeAerospikeClient, EventTypeAerospikeServer:
+		return "aerospike"
+	case EventTypeHTTPClient:
+		if span.SubType == HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
+			return span.Elasticsearch.DBSystemName
+		}
+		if span.SubType == HTTPSubtypeSQLPP && span.DBSystem != "" {
+			return span.DBSystem
+		}
+	}
+	return ""
 }

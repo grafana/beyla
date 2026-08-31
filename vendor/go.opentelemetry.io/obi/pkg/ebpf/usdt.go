@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -90,6 +91,12 @@ type usdtTarget struct {
 	SemaOff uint64
 	Spec    obiUSDTSpec
 	SpecKey string
+}
+
+// USDTProbeTarget contains the file offsets needed to attach one USDT probe.
+type USDTProbeTarget struct {
+	FileOffset      uint64
+	SemaphoreOffset uint64
 }
 
 var (
@@ -173,6 +180,26 @@ func readSDTHeader(order binary.ByteOrder, data []byte) (sdtHeader, error) {
 	return header, nil
 }
 
+// FindUSDTProbeTargets finds all matching probes in an ELF file.
+func FindUSDTProbeTargets(elfFile *elf.File, provider, name string) ([]USDTProbeTarget, error) {
+	parsedTargets, err := collectUSDTTargets(elfFile, 0, nil, "", provider, name)
+	if err != nil {
+		return nil, err
+	}
+
+	targets := make([]USDTProbeTarget, 0, len(parsedTargets))
+	for _, target := range parsedTargets {
+		if target.SemaOff > math.MaxUint32 {
+			return nil, errors.New("USDT semaphore offset exceeds uint32")
+		}
+		targets = append(targets, USDTProbeTarget{
+			FileOffset:      target.RelIP,
+			SemaphoreOffset: target.SemaOff,
+		})
+	}
+	return targets, nil
+}
+
 func collectUSDTTargets(
 	elfFile *elf.File,
 	pid app.PID,
@@ -246,7 +273,10 @@ func usdtTargetFromNote(
 	baseAddr uint64,
 	note usdtNote,
 ) (usdtTarget, error) {
-	location := adjustedUSDTAddress(baseAddr, note.Base, note.Location)
+	location, err := adjustedUSDTAddress(baseAddr, note.Base, note.Location)
+	if err != nil {
+		return usdtTarget{}, err
+	}
 	relIP, err := elfFileOffset(elfFile, location, true)
 	if err != nil {
 		return usdtTarget{}, err
@@ -259,7 +289,10 @@ func usdtTargetFromNote(
 
 	var semaOff uint64
 	if note.Semaphore != 0 {
-		semaphore := adjustedUSDTAddress(baseAddr, note.Base, note.Semaphore)
+		semaphore, err := adjustedUSDTAddress(baseAddr, note.Base, note.Semaphore)
+		if err != nil {
+			return usdtTarget{}, err
+		}
 		semaOff, err = elfFileOffset(elfFile, semaphore, false)
 		if err != nil {
 			return usdtTarget{}, err
@@ -280,11 +313,23 @@ func usdtTargetFromNote(
 	}, nil
 }
 
-func adjustedUSDTAddress(baseAddr, noteBase, addr uint64) uint64 {
+func adjustedUSDTAddress(baseAddr, noteBase, addr uint64) (uint64, error) {
 	if baseAddr == 0 || noteBase == 0 {
-		return addr
+		return addr, nil
 	}
-	return addr + baseAddr - noteBase
+	if baseAddr >= noteBase {
+		delta := baseAddr - noteBase
+		if addr > math.MaxUint64-delta {
+			return 0, errors.New("USDT address overflow")
+		}
+		return addr + delta, nil
+	}
+
+	delta := noteBase - baseAddr
+	if addr < delta {
+		return 0, errors.New("USDT address overflow")
+	}
+	return addr - delta, nil
 }
 
 func elfFileOffset(elfFile *elf.File, addr uint64, requireExecutable bool) (uint64, error) {
@@ -295,8 +340,12 @@ func elfFileOffset(elfFile *elf.File, addr uint64, requireExecutable bool) (uint
 		if requireExecutable && prog.Flags&elf.PF_X == 0 {
 			continue
 		}
-		if addr >= prog.Vaddr && addr < prog.Vaddr+prog.Memsz {
-			return addr - prog.Vaddr + prog.Off, nil
+		if addr >= prog.Vaddr && addr-prog.Vaddr < prog.Memsz {
+			delta := addr - prog.Vaddr
+			if prog.Off > math.MaxUint64-delta {
+				return 0, errors.New("USDT file offset overflow")
+			}
+			return delta + prog.Off, nil
 		}
 	}
 	return 0, fmt.Errorf("USDT address %#x is not in a loadable ELF segment", addr)
@@ -320,6 +369,9 @@ func absoluteUSDTIP(pid app.PID, maps []*procfs.ProcMap, mappedPath string, relI
 }
 
 func align4(v int) int {
+	if v > math.MaxInt-3 {
+		return math.MaxInt
+	}
 	return (v + 3) &^ 3
 }
 

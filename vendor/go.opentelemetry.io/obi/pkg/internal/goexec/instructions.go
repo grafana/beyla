@@ -39,12 +39,16 @@ type relocationInfo struct {
 
 // moduledataOffsets holds virtual-address offsets for the runtime.moduledata fields we read.
 type moduledataOffsets struct {
-	pcHeader  uint64
-	pclntable uint64 // offset of pclntable.data (slice header start)
-	minpc     uint64
-	maxpc     uint64
-	text      uint64
-	etext     uint64
+	pcHeader    uint64
+	pclntable   uint64 // offset of pclntable.data (slice header start)
+	minpc       uint64
+	maxpc       uint64
+	text        uint64
+	etext       uint64
+	types       uint64
+	typedesclen uint64
+	itaboffset  uint64
+	itabsize    uint64
 }
 
 func isSupportedGoBinary(elfF *elf.File) error {
@@ -409,6 +413,25 @@ func loadModuledataOffsets(elfF *elf.File) (moduledataOffsets, error) {
 		}
 	}
 
+	if goVersionAtLeast(goVersion, "1.27.0") {
+		fields = []struct {
+			name string
+			dest *uint64
+		}{
+			{"types", &md.types},
+			{"typedesclen", &md.typedesclen},
+			{"itaboffset", &md.itaboffset},
+			{"itabsize", &md.itabsize},
+		}
+		for _, f := range fields {
+			var ok bool
+			if *f.dest, ok = offs.Find("runtime.moduledata", f.name, goVersion); !ok {
+				return moduledataOffsets{},
+					fmt.Errorf("missing runtime.moduledata.%s offset for Go %s", f.name, goVersion)
+			}
+		}
+	}
+
 	return md, nil
 }
 
@@ -703,7 +726,7 @@ func decodeRelr(relr map[uint64]struct{}, data []byte, order binary.ByteOrder) {
 		} else {
 			// Bitmap entry: bits [1..63] select word slots after base.
 			bitmap := word >> 1
-			for b := 0; b < 63; b++ {
+			for b := range 63 {
 				if bitmap&(1<<uint(b)) != 0 {
 					relr[base+wordSize*uint64(b)] = struct{}{}
 				}

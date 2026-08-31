@@ -156,6 +156,7 @@ type NetVariableSpecs struct {
 	G_bpfLoopEnabled           *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.VariableSpec `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
+	G_goH2WriteFailStep        *ebpf.VariableSpec `ebpf:"g_go_h2_write_fail_step"`
 	Ip4in6                     *ebpf.VariableSpec `ebpf:"ip4in6"`
 	PortGuessing               *ebpf.VariableSpec `ebpf:"port_guessing"`
 	Sampling                   *ebpf.VariableSpec `ebpf:"sampling"`
@@ -213,6 +214,7 @@ type NetVariables struct {
 	G_bpfLoopEnabled           *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.Variable `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`
+	G_goH2WriteFailStep        *ebpf.Variable `ebpf:"g_go_h2_write_fail_step"`
 	Ip4in6                     *ebpf.Variable `ebpf:"ip4in6"`
 	PortGuessing               *ebpf.Variable `ebpf:"port_guessing"`
 	Sampling                   *ebpf.Variable `ebpf:"sampling"`

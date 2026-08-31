@@ -23,6 +23,14 @@ import (
 // Max interval before reading stale available bytes from the ring buffer
 const flushInterval = 3 * time.Second
 
+// How long the reader must have gone without consuming a record before a flush
+// is issued on its behalf. This has to stay strictly below flushInterval: a
+// flush wakes the reader, so the reads it causes are timestamped just after the
+// tick that issued it. Measuring idleness over the whole interval therefore
+// lets every flush suppress the tick that should follow it, halving the flush
+// rate and leaving records pending for two intervals instead of one.
+const readerStalledAfter = flushInterval / 2
+
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper
 // dependency injection during tests
 type ringBufReader interface {
@@ -174,7 +182,7 @@ func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, event
 		select {
 		case <-ticker.C:
 			available := eventsReader.AvailableBytes()
-			if available > 0 && rbf.hasPendingReadIdleSince(time.Now(), flushInterval) {
+			if available > 0 && rbf.hasPendingReadIdleSince(time.Now(), readerStalledAfter) {
 				err := eventsReader.Flush()
 				rbf.logger.Debug("flushing ringbuf", "available_bytes", available, "flush_err", err)
 			}

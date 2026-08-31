@@ -93,7 +93,7 @@ func (c *goRuntimeHistogramCollector) Update(
 	key := goRuntimeHistogramKey{
 		kind:       histogram.Kind,
 		pid:        pid,
-		labelTuple: runtimeHistogramLabelTuple(labels),
+		labelTuple: runtimeMetricLabelTuple(labels),
 	}
 
 	c.mu.Lock()
@@ -143,7 +143,7 @@ func (c *goRuntimeHistogramCollector) Delete(labels []string) {
 		return
 	}
 
-	labelTuple := runtimeHistogramLabelTuple(labels)
+	labelTuple := runtimeMetricLabelTuple(labels)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -305,7 +305,7 @@ func (c *goRuntimeHistogramCollector) descriptor(
 	}
 }
 
-func runtimeHistogramLabelTuple(labels []string) string {
+func runtimeMetricLabelTuple(labels []string) string {
 	key := make([]byte, 0, len(labels)*8)
 	for _, label := range labels {
 		key = strconv.AppendInt(key, int64(len(label)), 10)

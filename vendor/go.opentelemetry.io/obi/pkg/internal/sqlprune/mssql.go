@@ -96,7 +96,7 @@ func parseMSSQLError(buf []uint8) *request.SQLError {
 		msgBytes := buf[offset : offset+msgLen*2]
 
 		u16s := make([]uint16, msgLen)
-		for i := 0; i < msgLen; i++ {
+		for i := range msgLen {
 			u16s[i] = binary.LittleEndian.Uint16(msgBytes[i*2:])
 		}
 		message := string(utf16.Decode(u16s))

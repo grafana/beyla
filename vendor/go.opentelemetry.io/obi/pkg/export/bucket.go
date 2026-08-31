@@ -12,6 +12,7 @@ type Buckets struct {
 	GenAITokenUsageHistogram     []float64 `yaml:"gen_ai_client_token_usage_histogram"`
 	GenAIClientDurationHistogram []float64 `yaml:"gen_ai_client_operation_duration_histogram"`
 	StatTCPRttHistogram          []float64 `yaml:"stat_tcp_rtt_histogram"`
+	V8JSGCDurationHistogram      []float64 `yaml:"v8js_gc_duration_histogram"`
 }
 
 // DefaultBuckets define the default explicit bucket boundaries. They are ignored by the OTEL exporter when
@@ -31,4 +32,7 @@ var DefaultBuckets = Buckets{
 
 	// Covers sub-millisecond to low-second RTT range.
 	StatTCPRttHistogram: []float64{0.0005, 0.001, 0.002, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0},
+
+	// https://opentelemetry.io/docs/specs/semconv/runtime/nodejs-metrics/#metric-v8jsgcduration
+	V8JSGCDurationHistogram: []float64{0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10},
 }

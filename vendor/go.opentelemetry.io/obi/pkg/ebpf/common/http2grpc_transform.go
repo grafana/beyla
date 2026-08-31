@@ -421,6 +421,7 @@ func readRetMetaFrame(parseContext *EBPFParseContext, connID uint64, fr *http2.F
 func http2InfoToSpan(info *BPFHTTP2Info, method, path, fullPath, peer, host string, status int, protocol Protocol) request.Span {
 	return request.Span{
 		Type:              info.eventType(protocol),
+		ProtoVersion:      request.ProtoVersionHTTP2,
 		Method:            method,
 		Path:              removeQuery(path),
 		FullPath:          fullPath,

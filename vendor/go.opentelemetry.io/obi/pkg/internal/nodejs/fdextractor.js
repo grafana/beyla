@@ -22,7 +22,13 @@
   }
 
   const { AsyncLocalStorage, createHook } = require('async_hooks');
-  const { monitorEventLoopDelay, performance } = require('perf_hooks');
+  const {
+    monitorEventLoopDelay,
+    performance,
+    PerformanceObserver,
+    constants,
+  } = require('perf_hooks');
+  const v8 = require('v8');
 
   const debug_enabled = false;
 
@@ -176,6 +182,10 @@
     orig.rtHistogram.disable();
     orig.rtHistogram = undefined;
   }
+  if (!RT_ENABLED && orig.gcObserver) {
+    orig.gcObserver.disconnect();
+    orig.gcObserver = undefined;
+  }
 
   // eventLoopUtilization needs Node 14.10+. Without this guard the interval
   // callback below would throw an uncaught TypeError, which by default
@@ -193,6 +203,35 @@
       const n = Number.isFinite(v) && v > 0 ? Math.round(v) : 0;
       return n.toString(16).padStart(16, '0');
     };
+
+    if (!orig.gcObserver) {
+      // OBI wire codes (one hex char), looked up from THIS runtime's
+      // constants: the constant values differ across Node versions (e.g.
+      // major is 2 on older V8s, 4 on Node 26+), so they are never emitted
+      // verbatim. Unknown kinds are skipped so the kind slot is always
+      // exactly one character.
+      const gcKindHex = {
+        [constants.NODE_PERFORMANCE_GC_MINOR]: '1',
+        [constants.NODE_PERFORMANCE_GC_MAJOR]: '2',
+        [constants.NODE_PERFORMANCE_GC_INCREMENTAL]: '3',
+        [constants.NODE_PERFORMANCE_GC_WEAKCB]: '4',
+      };
+      orig.gcObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          // detail.kind since Node 16; before that the kind sits directly on
+          // the entry (deprecated accessor, the only form on 14.10-15.x)
+          const kind = gcKindHex[entry.detail ? entry.detail.kind : entry.kind];
+          if (!kind) {
+            continue;
+          }
+          try {
+            // entry.duration is milliseconds; the wire carries nanoseconds
+            fs.accessSync(`/dev/null/obi-v8/g${kind}${rtHex(entry.duration * 1e6)}`);
+          } catch (_) {}
+        }
+      });
+      orig.gcObserver.observe({ entryTypes: ['gc'] });
+    }
 
     orig.rtTimer = setInterval(() => {
       const h = orig.rtHistogram;
@@ -217,6 +256,13 @@
       try {
         fs.accessSync(`/dev/null/obi-rt/${fields.map(rtHex).join('')}`);
       } catch (_) {}
+      // v8js heap metrics: one h-record per heap space, numbers at fixed
+      // offsets, the engine-defined space name last (the path NUL ends it)
+      for (const s of v8.getHeapSpaceStatistics()) {
+        try {
+          fs.accessSync(`/dev/null/obi-v8/h${rtHex(s.space_size)}${rtHex(s.space_used_size)}${rtHex(s.space_available_size)}${rtHex(s.physical_space_size)}${s.space_name}`);
+        } catch (_) {}
+      }
     }, RT_SAMPLING_INTERVAL_MS);
     orig.rtTimer.unref();
   }

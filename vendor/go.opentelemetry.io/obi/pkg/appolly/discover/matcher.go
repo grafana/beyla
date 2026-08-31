@@ -267,12 +267,7 @@ func (m *Matcher) matchProcess(obj *ProcessAttrs, p *services.ProcessInfo, a ser
 }
 
 func pidInList(pid app.PID, list []app.PID) bool {
-	for _, p := range list {
-		if p == pid {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, pid)
 }
 
 func (m *Matcher) matchByPort(p *services.ProcessInfo, a services.Selector) bool {

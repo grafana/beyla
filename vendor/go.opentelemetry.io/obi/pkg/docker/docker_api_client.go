@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -110,10 +111,7 @@ func (s *ContainerStore) initialize(ctx context.Context) {
 		return
 	}
 
-	docker, err := client.NewClientWithOpts(
-		client.WithAPIVersionNegotiation(),
-		client.FromEnv,
-	)
+	docker, err := client.New(client.WithAPIVersionNegotiation(), client.FromEnv)
 	if err != nil {
 		s.log.Debug("trying to instantiate docker client", "error", err)
 		return
@@ -160,13 +158,7 @@ func (s *ContainerStore) ContainerInfo(ctx context.Context, pid app.PID) (Contai
 			return ContainerMeta{}, false
 		}
 		meta := entry.meta
-		seen := false
-		for _, cachedPID := range entry.pids {
-			if cachedPID == pid {
-				seen = true
-				break
-			}
-		}
+		seen := slices.Contains(entry.pids, pid)
 		if !seen {
 			entry.pids = append(entry.pids, pid)
 			s.byContainerID[fullContainerID] = entry
@@ -216,13 +208,7 @@ func (s *ContainerStore) ContainerInfo(ctx context.Context, pid app.PID) (Contai
 	}
 	if entry, ok := s.byContainerID[meta.FullID]; ok {
 		meta = entry.meta
-		seen := false
-		for _, cachedPID := range entry.pids {
-			if cachedPID == pid {
-				seen = true
-				break
-			}
-		}
+		seen := slices.Contains(entry.pids, pid)
 		if !seen {
 			entry.pids = append(entry.pids, pid)
 		}
@@ -250,6 +236,9 @@ func (ci *ContainerMeta) DecorateService(s *svc.Attrs) {
 		} else {
 			s.UID.Name = ci.Name
 		}
+	}
+	if s.AutoNamespace() {
+		s.UID.Namespace = ""
 	}
 	// overriding the Instance here will avoid reusing the OTEL resource reporter
 	// if the application/process was discovered and reported information

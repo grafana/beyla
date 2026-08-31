@@ -296,6 +296,24 @@ var (
 		Unit:    "s",
 		Type:    InstrumentHistogram,
 	})
+	CPythonGCCollections = metric(Name{
+		Section: "cpython.gc.collections",
+		OTEL:    "cpython.gc.collections",
+		Unit:    "{collection}",
+		Type:    InstrumentCounter,
+	})
+	CPythonGCCollectedObjects = metric(Name{
+		Section: "cpython.gc.collected_objects",
+		OTEL:    "cpython.gc.collected_objects",
+		Unit:    "{object}",
+		Type:    InstrumentCounter,
+	})
+	CPythonGCUncollectableObjects = metric(Name{
+		Section: "cpython.gc.uncollectable_objects",
+		OTEL:    "cpython.gc.uncollectable_objects",
+		Unit:    "{object}",
+		Type:    InstrumentCounter,
+	})
 	JVMMemoryUsed = metric(Name{
 		Section: "jvm.memory.used",
 		OTEL:    "jvm.memory.used",
@@ -319,6 +337,48 @@ var (
 		OTEL:    "jvm.memory.used_after_last_gc",
 		Unit:    "By",
 		Type:    InstrumentUpDownCounter,
+	})
+	JVMClassLoaded = metric(Name{
+		Section: "jvm.class.loaded",
+		OTEL:    "jvm.class.loaded",
+		Unit:    "{class}",
+		Type:    InstrumentCounter,
+	})
+	JVMClassUnloaded = metric(Name{
+		Section: "jvm.class.unloaded",
+		OTEL:    "jvm.class.unloaded",
+		Unit:    "{class}",
+		Type:    InstrumentCounter,
+	})
+	JVMClassCount = metric(Name{
+		Section: "jvm.class.count",
+		OTEL:    "jvm.class.count",
+		Unit:    "{class}",
+		Type:    InstrumentUpDownCounter,
+	})
+	JVMThreadCount = metric(Name{
+		Section: "jvm.thread.count",
+		OTEL:    "jvm.thread.count",
+		Unit:    "{thread}",
+		Type:    InstrumentUpDownCounter,
+	})
+	JVMCPUTime = metric(Name{
+		Section: "jvm.cpu.time",
+		OTEL:    "jvm.cpu.time",
+		Unit:    "s",
+		Type:    InstrumentCounter,
+	})
+	JVMCPUCount = metric(Name{
+		Section: "jvm.cpu.count",
+		OTEL:    "jvm.cpu.count",
+		Unit:    "{cpu}",
+		Type:    InstrumentUpDownCounter,
+	})
+	JVMCPURecentUtilization = metric(Name{
+		Section: "jvm.cpu.recent_utilization",
+		OTEL:    "jvm.cpu.recent_utilization",
+		Unit:    "1",
+		Type:    InstrumentGauge,
 	})
 	NodejsEventLoopTime = metric(Name{
 		Section: "nodejs.eventloop.time",
@@ -373,6 +433,36 @@ var (
 		OTEL:    "nodejs.eventloop.delay.p99",
 		Unit:    "s",
 		Type:    InstrumentGauge,
+	})
+	V8JSGCDuration = metric(Name{
+		Section: "v8js.gc.duration",
+		OTEL:    "v8js.gc.duration",
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	V8JSMemoryHeapLimit = metric(Name{
+		Section: "v8js.memory.heap.limit",
+		OTEL:    "v8js.memory.heap.limit",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	V8JSMemoryHeapUsed = metric(Name{
+		Section: "v8js.memory.heap.used",
+		OTEL:    "v8js.memory.heap.used",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	V8JSMemoryHeapSpaceAvailableSize = metric(Name{
+		Section: "v8js.memory.heap.space.available_size",
+		OTEL:    "v8js.memory.heap.space.available_size",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	V8JSMemoryHeapSpacePhysicalSize = metric(Name{
+		Section: "v8js.memory.heap.space.physical_size",
+		OTEL:    "v8js.memory.heap.space.physical_size",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
 	})
 	// Resource is not an instrument: it only names the attributes.select section
 	// that selects resource attributes. It still goes through metric() so its

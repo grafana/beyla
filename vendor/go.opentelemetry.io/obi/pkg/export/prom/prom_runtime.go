@@ -29,8 +29,12 @@ type goRuntimeMetricsCollector struct {
 	goroutineCount    *prometheus.GaugeVec
 	processorLimit    *prometheus.GaugeVec
 	configGOGC        *prometheus.GaugeVec
-	counterValuesMu   sync.Mutex
-	counterValues     map[string]uint64
+	counters          runtimeCounterTracker
+}
+
+type runtimeCounterTracker struct {
+	mu     sync.Mutex
+	values map[string]uint64
 }
 
 func newGoRuntimeMetricsCollector(runtimeLabelNames []string) goRuntimeMetricsCollector {
@@ -78,7 +82,7 @@ func newGoRuntimeMetricsCollector(runtimeLabelNames []string) goRuntimeMetricsCo
 			Name: attributes.GoRuntimeConfigGOGC.Prom,
 			Help: "Heap size target percentage configured by the user, otherwise 100.",
 		}, runtimeLabelNames),
-		counterValues: map[string]uint64{},
+		counters: runtimeCounterTracker{values: map[string]uint64{}},
 	}
 }
 
@@ -101,6 +105,12 @@ func (c *goRuntimeMetricsCollector) collectors() []prometheus.Collector {
 }
 
 func (r *metricsReporter) collectRuntimeMetrics(snapshots []runtimemetrics.RuntimeMetricSnapshot) {
+	r.runtimeMu.Lock()
+	defer r.runtimeMu.Unlock()
+	r.collectRuntimeMetricsLocked(snapshots)
+}
+
+func (r *metricsReporter) collectRuntimeMetricsLocked(snapshots []runtimemetrics.RuntimeMetricSnapshot) {
 	enabled := r.runtimeMetricsEnabled()
 	for _, snapshot := range snapshots {
 		if !enabled.ShouldReport(snapshot) {
@@ -110,17 +120,25 @@ func (r *metricsReporter) collectRuntimeMetrics(snapshots []runtimemetrics.Runti
 			r.collectGoRuntimeMetrics(snapshot)
 		}
 		if snapshot.Histogram != nil {
-			r.runtimeMu.Lock()
 			if r.runtimeSnapshotProcessLive(snapshot) {
 				r.collectGoRuntimeHistogram(snapshot)
 			}
-			r.runtimeMu.Unlock()
 		}
 		if snapshot.JVM != nil {
-			r.collectJVMRuntimeMetrics(snapshot)
+			if r.runtimeSnapshotProcessLive(snapshot) {
+				r.collectJVMRuntimeMetrics(snapshot)
+			}
 		}
 		if snapshot.Nodejs != nil {
 			r.collectNodejsRuntimeMetrics(snapshot)
+		}
+		if snapshot.NodejsGC != nil || snapshot.NodejsHeapSpace != nil {
+			r.collectNodejsV8Metrics(snapshot)
+		}
+		if snapshot.Python != nil {
+			if snapshot.Removed || r.runtimeSnapshotProcessLive(snapshot) {
+				r.collectPythonRuntimeMetrics(snapshot)
+			}
 		}
 	}
 }
@@ -128,17 +146,22 @@ func (r *metricsReporter) collectRuntimeMetrics(snapshots []runtimemetrics.Runti
 func (r *metricsReporter) runtimeSnapshotProcessLive(
 	snapshot runtimemetrics.RuntimeMetricSnapshot,
 ) bool {
-	if snapshot.PID == 0 {
+	pid := snapshot.PID
+	if snapshot.JVM != nil {
+		pid = snapshot.Service.ProcPID
+	}
+	if pid == 0 {
 		return true
 	}
-	return r.pidsTracker.PIDLiveOrUnknown(snapshot.PID, snapshot.Service.UID, snapshot.Generation)
+	return r.pidsTracker.PIDLiveOrUnknown(pid, snapshot.Service.UID, snapshot.Generation)
 }
 
 func (r *metricsReporter) runtimeMetricsEnabled() runtimemetrics.Enabled {
 	return runtimemetrics.Enabled{
-		Runtime: r.goRuntimeMetrics.memoryLimit != nil &&
-			r.jvmRuntimeMetrics.memoryUsed != nil &&
-			r.nodejsRuntimeMetrics.eventLoopTime != nil,
+		Runtime: r.goRuntimeMetrics.memoryLimit != nil ||
+			r.jvmRuntimeMetrics.memoryUsed != nil ||
+			r.nodejsRuntimeMetrics.eventLoopTime != nil ||
+			r.pythonRuntimeMetrics.collections != nil,
 	}
 }
 
@@ -251,25 +274,62 @@ func (c *goRuntimeMetricsCollector) addCounter(
 	value uint64,
 	scale float64,
 ) {
-	c.counterValuesMu.Lock()
-	defer c.counterValuesMu.Unlock()
+	c.counters.add(counter, metric, labels, value, scale)
+}
+
+func (c *runtimeCounterTracker) add(
+	counter *prometheus.CounterVec,
+	metric string,
+	labels []string,
+	value uint64,
+	scale float64,
+) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	key := runtimeMetricLabelsKey(append([]string{metric}, labels...))
-	if c.counterValues == nil {
-		c.counterValues = map[string]uint64{}
-	}
-	previous, ok := c.counterValues[key]
-	if !ok || value < previous {
+	delta, reset := c.delta(key, value)
+	if reset {
 		counter.DeleteLabelValues(labels...)
-		counter.WithLabelValues(labels...).Add(float64(value) * scale)
-		c.counterValues[key] = value
+		counter.WithLabelValues(labels...).Add(float64(delta) * scale)
 		return
 	}
-
-	if value > previous {
-		counter.WithLabelValues(labels...).Add(float64(value-previous) * scale)
+	if delta > 0 {
+		counter.WithLabelValues(labels...).Add(float64(delta) * scale)
 	}
-	c.counterValues[key] = value
+}
+
+func (c *runtimeCounterTracker) addToAggregate(
+	counter *prometheus.CounterVec,
+	metric string,
+	source string,
+	labels []string,
+	value uint64,
+	scale float64,
+) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	keyParts := append([]string{metric}, labels...)
+	key := runtimeMetricLabelsKey(append(keyParts, source))
+	delta, first := c.delta(key, value)
+	if delta > 0 || first {
+		counter.WithLabelValues(labels...).Add(float64(delta) * scale)
+	}
+}
+
+func (c *runtimeCounterTracker) delta(key string, value uint64) (uint64, bool) {
+	if c.values == nil {
+		c.values = map[string]uint64{}
+	}
+	previous, ok := c.values[key]
+	if !ok || value < previous {
+		c.values[key] = value
+		return value, true
+	}
+
+	c.values[key] = value
+	return value - previous, false
 }
 
 func (c *goRuntimeMetricsCollector) deleteGCCycles(labels []string) {
@@ -277,11 +337,44 @@ func (c *goRuntimeMetricsCollector) deleteGCCycles(labels []string) {
 }
 
 func (c *goRuntimeMetricsCollector) deleteCounter(counter *prometheus.CounterVec, metric string, labels []string) {
-	c.counterValuesMu.Lock()
-	defer c.counterValuesMu.Unlock()
+	c.counters.delete(counter, metric, labels)
+}
 
-	delete(c.counterValues, runtimeMetricLabelsKey(append([]string{metric}, labels...)))
+func (c *runtimeCounterTracker) delete(counter *prometheus.CounterVec, metric string, labels []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	delete(c.values, runtimeMetricLabelsKey(append([]string{metric}, labels...)))
 	counter.DeleteLabelValues(labels...)
+}
+
+func (c *runtimeCounterTracker) deleteAggregate(
+	counter *prometheus.CounterVec,
+	metric string,
+	labels []string,
+) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	prefix := runtimeMetricLabelsKey(append([]string{metric}, labels...))
+	for key := range c.values {
+		if strings.HasPrefix(key, prefix) {
+			delete(c.values, key)
+		}
+	}
+	counter.DeleteLabelValues(labels...)
+}
+
+func runtimeMetricLabelsKey(labels []string) string {
+	return runtimeMetricLabelTuple(labels)
+}
+
+func (c *runtimeCounterTracker) deleteAggregateSource(metric string, labels []string, source string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	keyParts := append([]string{metric}, labels...)
+	delete(c.values, runtimeMetricLabelsKey(append(keyParts, source)))
 }
 
 func (c *goRuntimeMetricsCollector) collectCPUTime(
@@ -319,39 +412,56 @@ func (c *goRuntimeMetricsCollector) deleteCPUTimeValue(labels []string, state st
 	c.deleteCounter(c.cpuTime, attributes.GoRuntimeCPUTime.Prom, cpuLabels)
 }
 
-func runtimeMetricLabelsKey(labels []string) string {
-	return strings.Join(labels, "\xff")
-}
-
 func (r *metricsReporter) deleteRuntimeMetrics(service *svc.Attrs) {
 	if service == nil {
 		return
 	}
 
 	labels := r.labelValuesTargetInfo(service)
-	if r.goRuntimeMetrics.memoryLimit == nil {
-		return
+	if r.goRuntimeMetrics.memoryLimit != nil {
+		r.goRuntimeMetrics.memoryLimit.DeleteLabelValues(labels...)
+		r.goRuntimeMetrics.memoryGCGoal.DeleteLabelValues(labels...)
+		r.goRuntimeMetrics.deleteGCCycles(labels)
+		r.goRuntimeMetrics.memoryUsed.DeleteLabelValues(append(append([]string{}, labels...), "stack")...)
+		r.goRuntimeMetrics.memoryUsed.DeleteLabelValues(append(append([]string{}, labels...), "other")...)
+		r.goRuntimeMetrics.deleteCounter(
+			r.goRuntimeMetrics.memoryAllocated,
+			attributes.GoRuntimeMemoryAllocated.Prom,
+			labels,
+		)
+		r.goRuntimeMetrics.deleteCounter(
+			r.goRuntimeMetrics.memoryAllocations,
+			attributes.GoRuntimeMemoryAllocations.Prom,
+			labels,
+		)
+		r.goRuntimeMetrics.deleteCPUTime(labels)
+		r.goRuntimeMetrics.goroutineCount.DeleteLabelValues(labels...)
+		r.goRuntimeMetrics.processorLimit.DeleteLabelValues(labels...)
+		r.goRuntimeMetrics.configGOGC.DeleteLabelValues(labels...)
 	}
 
-	r.goRuntimeMetrics.memoryLimit.DeleteLabelValues(labels...)
-	r.goRuntimeMetrics.memoryGCGoal.DeleteLabelValues(labels...)
-	r.goRuntimeMetrics.deleteGCCycles(labels)
-	r.goRuntimeMetrics.memoryUsed.DeleteLabelValues(append(append([]string{}, labels...), "stack")...)
-	r.goRuntimeMetrics.memoryUsed.DeleteLabelValues(append(append([]string{}, labels...), "other")...)
-	r.goRuntimeMetrics.deleteCounter(
-		r.goRuntimeMetrics.memoryAllocated,
-		attributes.GoRuntimeMemoryAllocated.Prom,
-		labels,
+	// Keep the shared JVM counters while any PID still belongs to this
+	// service. Delete them only when the service loses its final PID.
+	if r.jvmRuntimeMetrics.classLoaded == nil ||
+		r.pidsTracker.ServiceLive(service.UID) {
+		return
+	}
+	jvmLabels := runtimeServiceLabelValuesForService(*service)
+	r.jvmRuntimeMetrics.counters.deleteAggregate(
+		r.jvmRuntimeMetrics.classLoaded,
+		attributes.JVMClassLoaded.Prom,
+		jvmLabels,
 	)
-	r.goRuntimeMetrics.deleteCounter(
-		r.goRuntimeMetrics.memoryAllocations,
-		attributes.GoRuntimeMemoryAllocations.Prom,
-		labels,
+	r.jvmRuntimeMetrics.counters.deleteAggregate(
+		r.jvmRuntimeMetrics.classUnloaded,
+		attributes.JVMClassUnloaded.Prom,
+		jvmLabels,
 	)
-	r.goRuntimeMetrics.deleteCPUTime(labels)
-	r.goRuntimeMetrics.goroutineCount.DeleteLabelValues(labels...)
-	r.goRuntimeMetrics.processorLimit.DeleteLabelValues(labels...)
-	r.goRuntimeMetrics.configGOGC.DeleteLabelValues(labels...)
+	r.jvmRuntimeMetrics.counters.deleteAggregate(
+		r.jvmRuntimeMetrics.cpuTime,
+		attributes.JVMCPUTime.Prom,
+		jvmLabels,
+	)
 }
 
 func (r *metricsReporter) deleteRuntimeHistograms(service *svc.Attrs) {
@@ -371,10 +481,14 @@ func runtimeServiceLabels() []string {
 }
 
 func runtimeServiceLabelValues(snapshot runtimemetrics.RuntimeMetricSnapshot) []string {
+	return runtimeServiceLabelValuesForService(snapshot.Service)
+}
+
+func runtimeServiceLabelValuesForService(service svc.Attrs) []string {
 	return []string{
-		snapshot.Service.UID.Name,
-		snapshot.Service.UID.Namespace,
-		snapshot.Service.UID.Instance,
+		service.UID.Name,
+		service.UID.Namespace,
+		service.UID.Instance,
 	}
 }
 

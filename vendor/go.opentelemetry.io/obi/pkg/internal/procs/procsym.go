@@ -8,6 +8,8 @@ import "debug/elf"
 type Sym struct {
 	Name string
 	Off  uint64
-	Len  uint64
-	Prog *elf.Prog
+	// Value is the raw ELF virtual address; Off may be a translated file offset.
+	Value uint64
+	Len   uint64
+	Prog  *elf.Prog
 }

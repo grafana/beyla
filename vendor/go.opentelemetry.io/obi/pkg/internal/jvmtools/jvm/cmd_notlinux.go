@@ -6,6 +6,7 @@
 package jvm // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -21,7 +22,7 @@ func NewJAttacher(_ *slog.Logger) *JAttacher {
 
 func (*JAttacher) Init() {}
 
-func (*JAttacher) Cleanup() error {
+func (*JAttacher) Cleanup(context.Context) error {
 	return nil
 }
 

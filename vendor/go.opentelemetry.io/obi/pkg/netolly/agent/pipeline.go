@@ -54,52 +54,52 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 	// Start nodes: those generating flow records (reading them from eBPF).
 	// ebpfFlows has two senders (MapTracer and RingBufTracer), so it must only be
 	// closed after both of them have marked it closeable, hence ClosingAttempts(2).
-	ebpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "ebpfFlows", msg.ClosingAttempts(2))
+	ebpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "ebpfFlows", msg.ClosingAttempts(2))
 	swi.Add(swarm.DirectInstance(newMapTracer(f, ebpfFlows)), swarm.WithID("MapTracer"))
 	swi.Add(swarm.DirectInstance(newRingBufTracer(f, ebpfFlows)), swarm.WithID("RingBufTracer"))
 
 	// Middle nodes: transforming flow records and passing them to the next stage in the pipeline.
 	// Many of the nodes here are not mandatory. It's decision of each InstanceFunc to decide
 	// whether the node needs to be instantiated or just bypass their input/output channels.
-	protocolFilteredEbpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "protocolFilteredEbpfFlows")
+	protocolFilteredEbpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "protocolFilteredEbpfFlows")
 	swi.Add(flow.ProtocolFilterProvider(f.cfg.NetworkFlows.Protocols, f.cfg.NetworkFlows.ExcludeProtocols,
 		ebpfFlows, protocolFilteredEbpfFlows), swarm.WithID("ProtocolFilter"))
 
-	dedupedEBPFFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dedupedEBPFFlows")
+	dedupedEBPFFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dedupedEBPFFlows")
 	swi.Add(flow.DeduperProvider(&flow.Deduper{
 		Type:               f.cfg.NetworkFlows.Deduper,
 		FCTTL:              f.cfg.NetworkFlows.DeduperFCTTL,
 		CacheActiveTimeout: f.cfg.NetworkFlows.CacheActiveTimeout,
 	}, protocolFilteredEbpfFlows, dedupedEBPFFlows), swarm.WithID("FlowDeduper"))
 
-	kubeDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "kubeDecoratedFlows")
+	kubeDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "kubeDecoratedFlows")
 	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,
 		recordAttrs,
 		dedupedEBPFFlows, kubeDecoratedFlows), swarm.WithID("K8sMetadataDecorator"))
 
-	dnsDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dnsDecoratedFlows")
+	dnsDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dnsDecoratedFlows")
 	swi.Add(rdns.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, recordAttrs, &f.cfg.EBPF,
 		kubeDecoratedFlows, dnsDecoratedFlows),
 		swarm.WithID("ReverseDNS"))
 
-	geoIPDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "geoIPDecoratedFlows")
+	geoIPDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "geoIPDecoratedFlows")
 	swi.Add(geoip.GeoIPProvider(&f.cfg.NetworkFlows.GeoIP,
 		recordAttrs,
 		dnsDecoratedFlows, geoIPDecoratedFlows), swarm.WithID("GeoIPDecorator"))
 
-	cidrDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "cidrDecoratedFlows")
+	cidrDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "cidrDecoratedFlows")
 	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs,
 		recordAttrs,
 		geoIPDecoratedFlows, cidrDecoratedFlows),
 		swarm.WithID("CIDRDecorator"))
 
-	commonDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "commonDecoratedFlows")
+	commonDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "commonDecoratedFlows")
 	swi.Add(decorate.Decorate(f.agentIP,
 		recordAttrs,
 		cidrDecoratedFlows, commonDecoratedFlows),
 		swarm.WithID("CommonFlowDecorator"))
 
-	decoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "decoratedFlows")
+	decoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "decoratedFlows")
 	swi.Add(func(_ context.Context) (swarm.RunFunc, error) {
 		// If deduper is enabled, we know that interfaces are unset.
 		// As an optimization, we just pass here an empty-string interface namer
@@ -112,12 +112,12 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 		return flow.Decorate(ifaceNamer, commonDecoratedFlows, decoratedFlows), nil
 	}, swarm.WithID("FlowDecorator"))
 
-	dynamicFilteredFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dynamicFilteredFlows")
+	dynamicFilteredFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dynamicFilteredFlows")
 	var dynamicSelector selection.PIDSelector
 	if f.ctxInfo.DynamicPIDSelector != nil {
 		dynamicSelector = f.ctxInfo.DynamicPIDSelector.NetworkMetrics()
 	}
-	dynamicDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "dynamicDecoratedFlows")
+	dynamicDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dynamicDecoratedFlows")
 	swi.Add(dynamicpid.MetadataDecoratorProvider(f.ctxInfo.DynamicPIDSelector, dynamicSelector,
 		f.ctxInfo.K8sInformer, recordAttrs, decoratedFlows, dynamicDecoratedFlows),
 		swarm.WithID("DynamicPIDMetadataDecorator"))
@@ -127,7 +127,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	filteredFlows := f.ctxInfo.OverrideNetExportQueue
 	if filteredFlows == nil {
-		filteredFlows = msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, "filteredFlows")
+		filteredFlows = msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "filteredFlows")
 	}
 	swi.Add(filter.ByAttribute(
 		f.cfg.Filters.Network,

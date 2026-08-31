@@ -11,6 +11,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -210,11 +211,8 @@ func (pa *pollAccounter) forgetPIDs(pids []app.PID) {
 		delete(pa.pids, pid)
 	}
 	for pp := range pa.pidPorts {
-		for _, pid := range pids {
-			if pp.Pid == pid {
-				delete(pa.pidPorts, pp)
-				break
-			}
+		if slices.Contains(pids, pp.Pid) {
+			delete(pa.pidPorts, pp)
 		}
 	}
 }

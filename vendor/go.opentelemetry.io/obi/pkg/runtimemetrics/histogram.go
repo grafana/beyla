@@ -47,12 +47,12 @@ func runtimeHistogramBoundariesSeconds() [timeHistogramTotalBuckets + 1]float64 
 	var boundaries [timeHistogramTotalBuckets + 1]float64
 	boundaries[0] = math.Inf(-1)
 
-	for subBucket := 0; subBucket < timeHistogramNumSubBuckets; subBucket++ {
+	for subBucket := range timeHistogramNumSubBuckets {
 		bucketNanos := uint64(subBucket) << (timeHistogramMinBucketBits - 1 - timeHistogramSubBucketBits)
 		boundaries[subBucket+1] = float64(bucketNanos) / 1e9
 	}
 	for bucketBit := timeHistogramMinBucketBits; bucketBit < timeHistogramMaxBucketBits; bucketBit++ {
-		for subBucket := 0; subBucket < timeHistogramNumSubBuckets; subBucket++ {
+		for subBucket := range timeHistogramNumSubBuckets {
 			bucketNanos := uint64(1) << (bucketBit - 1)
 			bucketNanos |= uint64(subBucket) << (bucketBit - 1 - timeHistogramSubBucketBits)
 			bucketIndex := (bucketBit-timeHistogramMinBucketBits+1)*timeHistogramNumSubBuckets + subBucket + 1

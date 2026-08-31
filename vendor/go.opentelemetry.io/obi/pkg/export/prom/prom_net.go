@@ -32,7 +32,7 @@ type NetPrometheusConfig struct {
 
 // Enabled returns whether the node needs to be activated
 func (p NetPrometheusConfig) Enabled() bool {
-	return p.Config != nil && p.Config.EndpointEnabled() && (p.CommonCfg.Features.AnyNetwork())
+	return p.Config != nil && p.Config.EndpointEnabled() && p.CommonCfg.Features.AnyNetwork()
 }
 
 type netMetricsReporter struct {

@@ -235,6 +235,13 @@ func (i *Instrumenter) stop() error {
 }
 
 func (i *Instrumenter) handleAndDispatchProcessEvent(pe exec.ProcessEvent) {
+	if pe.Type == exec.ProcessEventTerminated && pe.File != nil {
+		if serviceFile := pe.ServiceFile(); serviceFile != nil {
+			if final, ok := serviceFile.TakePythonRuntimeMetricFinal(pe.File.Pid()); ok {
+				pe.FinalPythonRuntimeMetrics = append(pe.FinalPythonRuntimeMetrics, final)
+			}
+		}
+	}
 	i.processEventInput.Send(pe)
 }
 

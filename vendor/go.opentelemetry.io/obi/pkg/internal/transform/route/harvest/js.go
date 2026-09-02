@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/internal/denotools"
+	"go.opentelemetry.io/obi/pkg/internal/nodejstools"
 )
 
 // MaxJSFileScanBytes caps opportunistic JS/TS source scans to avoid spending
@@ -1576,22 +1579,6 @@ func (e *RouteExtractor) GetHarvestedRoutes() []string {
 	return result
 }
 
-func (e *RouteExtractor) FirstArg(args []string) string {
-	return FirstArg(args)
-}
-
-// FirstArg returns the first non-flag argument from a Node.js command line,
-// skipping flags (starting with '-') and the "inspect" keyword.
-func FirstArg(args []string) string {
-	for _, a := range args {
-		if a == "" || a[0] == '-' || a == "inspect" {
-			continue
-		}
-		return a
-	}
-	return ""
-}
-
 // testing
 var (
 	rootDirForPID = ebpfcommon.RootDirectoryForPID
@@ -1599,9 +1586,30 @@ var (
 	cwdForPID     = ebpfcommon.CWDForPID
 )
 
+func normalizeFileEntry(path string) string {
+	if strings.HasPrefix(path, "file:///") {
+		_, path, _ = strings.Cut(path, "file://")
+	}
+	return path
+}
+
 // FindNodeJSAppDir locates the root directory of a Node.js application by
 // reading its command line and working directory from /proc.
 func FindNodeJSAppDir(pid app.PID) (string, error) {
+	return findJSAppDir(pid, func(args []string) string {
+		entry := nodejstools.ParseNodeLaunch(args).EntryPoint
+		return normalizeFileEntry(entry)
+	})
+}
+
+func FindDenoAppDir(pid app.PID) (string, error) {
+	return findJSAppDir(pid, func(args []string) string {
+		entry := denotools.ParseDenoLaunch(args).EntryPoint
+		return normalizeFileEntry(entry)
+	})
+}
+
+func findJSAppDir(pid app.PID, parseEntryPoint func([]string) string) (string, error) {
 	rootDir := rootDirForPID(pid)
 	_, args, err := cmdlineForPID(pid)
 	if err != nil {
@@ -1612,11 +1620,11 @@ func FindNodeJSAppDir(pid app.PID) (string, error) {
 		return "", fmt.Errorf("error finding cwd: %w", err)
 	}
 
-	firstArg := FirstArg(args)
+	entryPoint := parseEntryPoint(args)
 
-	dir := FindScriptDirectory(rootDir, firstArg, workdir)
+	dir := FindScriptDirectory(rootDir, entryPoint, workdir)
 	if dir == "" {
-		return "", fmt.Errorf("failed to find script directory for pid %d, script %s, cwd %s", pid, firstArg, workdir)
+		return "", fmt.Errorf("failed to find script directory for pid %d, script %s, cwd %s", pid, entryPoint, workdir)
 	}
 	return dir, nil
 }
@@ -1625,9 +1633,7 @@ func FindNodeJSAppDir(pid app.PID) (string, error) {
 // JavaScript lives precisely in the directories the source scan skips.
 var compiledSkipDirs = func() map[string]string {
 	m := make(map[string]string, len(skipDirs))
-	for k, v := range skipDirs {
-		m[k] = v
-	}
+	maps.Copy(m, skipDirs)
 	delete(m, "dist")
 	delete(m, "build")
 	return m
@@ -1688,7 +1694,18 @@ func ExtractNodejsRoutes(pid app.PID) (*RouteHarvesterResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	return extractJSRoutes(dir)
+}
 
+func ExtractDenoRoutes(pid app.PID) (*RouteHarvesterResult, error) {
+	dir, err := FindDenoAppDir(pid)
+	if err != nil {
+		return nil, err
+	}
+	return extractJSRoutes(dir)
+}
+
+func extractJSRoutes(dir string) (*RouteHarvesterResult, error) {
 	jsExtractor := NewRouteExtractor()
 
 	if err := jsExtractor.extractNextJSRoutesFromManifest(dir); err != nil {
@@ -1697,7 +1714,7 @@ func ExtractNodejsRoutes(pid app.PID) (*RouteHarvesterResult, error) {
 			"error", err)
 	}
 
-	err = jsExtractor.ScanDirectory(dir)
+	err := jsExtractor.ScanDirectory(dir)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning directory, error %w", err)
 	}

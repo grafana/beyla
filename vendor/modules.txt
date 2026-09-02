@@ -483,7 +483,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/ohler55/ojg v1.28.4
+# github.com/ohler55/ojg v1.28.5
 ## explicit; go 1.18
 github.com/ohler55/ojg
 github.com/ohler55/ojg/alt
@@ -501,11 +501,18 @@ github.com/opencontainers/image-spec/specs-go/v1
 ## explicit; go 1.25.5
 github.com/ory/dockertest/v4
 github.com/ory/dockertest/v4/internal/client
-# github.com/oschwald/maxminddb-golang/v2 v2.2.0
-## explicit; go 1.24.0
+# github.com/oschwald/maxminddb-golang/v2 v2.5.0
+## explicit; go 1.25.0
 github.com/oschwald/maxminddb-golang/v2
 github.com/oschwald/maxminddb-golang/v2/internal/decoder
 github.com/oschwald/maxminddb-golang/v2/internal/mmdberrors
+# github.com/pelletier/go-toml/v2 v2.2.4
+## explicit; go 1.21.0
+github.com/pelletier/go-toml/v2
+github.com/pelletier/go-toml/v2/internal/characters
+github.com/pelletier/go-toml/v2/internal/danger
+github.com/pelletier/go-toml/v2/internal/tracker
+github.com/pelletier/go-toml/v2/unstable
 # github.com/pierrec/lz4/v4 v4.1.26
 ## explicit; go 1.17
 github.com/pierrec/lz4/v4
@@ -580,6 +587,9 @@ github.com/spf13/pflag
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/assert/yaml
 github.com/stretchr/testify/require
+# github.com/tidwall/jsonc v0.3.3
+## explicit; go 1.16
+github.com/tidwall/jsonc
 # github.com/tklauser/go-sysconf v0.3.16
 ## explicit; go 1.24.0
 github.com/tklauser/go-sysconf
@@ -869,6 +879,9 @@ go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
 go.opentelemetry.io/obi/pkg/health
 go.opentelemetry.io/obi/pkg/internal/avoidedsvc
+go.opentelemetry.io/obi/pkg/internal/cpython/runtime
+go.opentelemetry.io/obi/pkg/internal/denotools
+go.opentelemetry.io/obi/pkg/internal/dotnettools
 go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience
@@ -896,6 +909,7 @@ go.opentelemetry.io/obi/pkg/internal/jvmtools
 go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm
 go.opentelemetry.io/obi/pkg/internal/jvmtools/util
 go.opentelemetry.io/obi/pkg/internal/kube
+go.opentelemetry.io/obi/pkg/internal/langtools
 go.opentelemetry.io/obi/pkg/internal/largebuf
 go.opentelemetry.io/obi/pkg/internal/netns
 go.opentelemetry.io/obi/pkg/internal/netolly/ebpf
@@ -904,6 +918,7 @@ go.opentelemetry.io/obi/pkg/internal/netolly/flow
 go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport
 go.opentelemetry.io/obi/pkg/internal/netolly/ifaces
 go.opentelemetry.io/obi/pkg/internal/nodejs
+go.opentelemetry.io/obi/pkg/internal/nodejstools
 go.opentelemetry.io/obi/pkg/internal/pipe
 go.opentelemetry.io/obi/pkg/internal/pipe/cidr
 go.opentelemetry.io/obi/pkg/internal/pipe/decorate
@@ -912,6 +927,8 @@ go.opentelemetry.io/obi/pkg/internal/pipe/rdns
 go.opentelemetry.io/obi/pkg/internal/pipe/transform/dynamicpid
 go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s
 go.opentelemetry.io/obi/pkg/internal/procs
+go.opentelemetry.io/obi/pkg/internal/pythontools
+go.opentelemetry.io/obi/pkg/internal/pythontools/frameworks
 go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
 go.opentelemetry.io/obi/pkg/internal/shardedqueue
@@ -928,6 +945,7 @@ go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest/java
 go.opentelemetry.io/obi/pkg/kube
+go.opentelemetry.io/obi/pkg/kube/klogbridge
 go.opentelemetry.io/obi/pkg/kube/kubecache
 go.opentelemetry.io/obi/pkg/kube/kubecache/informer
 go.opentelemetry.io/obi/pkg/kube/kubecache/instrument

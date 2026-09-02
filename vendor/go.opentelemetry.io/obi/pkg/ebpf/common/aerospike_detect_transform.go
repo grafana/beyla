@@ -149,7 +149,7 @@ func parseAerospikeRequest(buf *largebuf.LargeBuffer) *aerospikeInfo {
 // flags and the fields decoded before the cut.
 func parseAerospikeFields(r *largebuf.LargeBufferReader, nFields int, info *aerospikeInfo) (hasDigest, hasIndex, hasUDF bool) {
 fieldLoop:
-	for i := 0; i < nFields; i++ {
+	for range nFields {
 		fsz, err := r.ReadU32BE()
 		if err != nil || fsz < 1 {
 			break
@@ -259,7 +259,7 @@ func classifyAerospikeWrite(r *largebuf.LargeBufferReader, nOps int) string {
 	allWrite := true
 	allTouch := true
 	count := 0
-	for i := 0; i < nOps; i++ {
+	for range nOps {
 		opSz, err := r.ReadU32BE()
 		if err != nil || opSz < 1 {
 			break
@@ -346,13 +346,18 @@ func TCPToAerospikeToSpan(trace *TCPRequestInfo, info *aerospikeInfo, status int
 	peer := ""
 	hostname := ""
 	hostPort := 0
+
+	spanType := request.EventTypeAerospikeClient
+	if trace.IsServer {
+		spanType = request.EventTypeAerospikeServer
+	}
+
 	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
 		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
 		hostPort = int(trace.ConnInfo.D_port)
 	}
-
 	return request.Span{
-		Type:         request.EventTypeAerospikeClient,
+		Type:         spanType,
 		Method:       info.op,
 		Path:         info.set,
 		Peer:         peer,

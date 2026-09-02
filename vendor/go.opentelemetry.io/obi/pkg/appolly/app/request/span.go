@@ -63,6 +63,7 @@ const (
 	EventTypeSunRPCClient
 	EventTypeSunRPCServer
 	EventTypeAerospikeClient
+	EventTypeAerospikeServer
 )
 
 const (
@@ -193,6 +194,8 @@ func (t EventType) String() string {
 		return "MemcachedServer"
 	case EventTypeAerospikeClient:
 		return "AerospikeClient"
+	case EventTypeAerospikeServer:
+		return "AerospikeServer"
 	default:
 		return fmt.Sprintf("UNKNOWN (%d)", t)
 	}
@@ -203,9 +206,18 @@ func (t EventType) MarshalText() ([]byte, error) {
 }
 
 const (
+	MessagingSend    = "send"
+	MessagingReceive = "receive"
 	MessagingPublish = "publish"
 	MessagingProcess = "process"
 )
+
+func MessagingOperationTypeOf(operationName string) string {
+	if operationName == MessagingPublish {
+		return MessagingSend
+	}
+	return operationName
+}
 
 type converter struct {
 	clock     func() time.Time
@@ -306,9 +318,9 @@ type GenAI struct {
 }
 
 type OpenAIInputTokensDetails struct {
-	CachedTokens        TokenCount `json:"cached_tokens,omitempty"`
-	CacheCreationTokens TokenCount `json:"cache_creation_tokens,omitempty"`
-	AudioTokens         TokenCount `json:"audio_tokens,omitempty"`
+	CachedTokens        TokenCount `json:"cached_tokens"`
+	CacheCreationTokens TokenCount `json:"cache_creation_tokens"`
+	AudioTokens         TokenCount `json:"audio_tokens"`
 }
 
 type OpenAIUsage struct {
@@ -322,10 +334,10 @@ type OpenAIUsage struct {
 }
 
 type OpenAIOutputTokensDetails struct {
-	ReasoningTokens          TokenCount `json:"reasoning_tokens,omitempty"`
-	AudioTokens              TokenCount `json:"audio_tokens,omitempty"`
-	AcceptedPredictionTokens TokenCount `json:"accepted_prediction_tokens,omitempty"`
-	RejectedPredictionTokens TokenCount `json:"rejected_prediction_tokens,omitempty"`
+	ReasoningTokens          TokenCount `json:"reasoning_tokens"`
+	AudioTokens              TokenCount `json:"audio_tokens"`
+	AcceptedPredictionTokens TokenCount `json:"accepted_prediction_tokens"`
+	RejectedPredictionTokens TokenCount `json:"rejected_prediction_tokens"`
 }
 
 type OpenAIError struct {
@@ -608,17 +620,17 @@ type AnthropicResponse struct {
 type AnthropicUsage struct {
 	InputTokens              TokenCount              `json:"input_tokens"`
 	OutputTokens             TokenCount              `json:"output_tokens"`
-	CacheCreationInputTokens TokenCount              `json:"cache_creation_input_tokens,omitempty"`
-	CacheReadInputTokens     TokenCount              `json:"cache_read_input_tokens,omitempty"`
-	ReasoningOutputTokens    TokenCount              `json:"reasoning_output_tokens,omitempty"`
+	CacheCreationInputTokens TokenCount              `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     TokenCount              `json:"cache_read_input_tokens"`
+	ReasoningOutputTokens    TokenCount              `json:"reasoning_output_tokens"`
 	CacheCreation            *AnthropicCacheCreation `json:"cache_creation,omitempty"`
 	ServiceTier              string                  `json:"service_tier"`
 	InferenceGeo             string                  `json:"inference_geo"`
 }
 
 type AnthropicCacheCreation struct {
-	Ephemeral5mInputTokens TokenCount `json:"ephemeral_5m_input_tokens,omitempty"`
-	Ephemeral1hInputTokens TokenCount `json:"ephemeral_1h_input_tokens,omitempty"`
+	Ephemeral5mInputTokens TokenCount `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1hInputTokens TokenCount `json:"ephemeral_1h_input_tokens"`
 }
 
 type AnthropicError struct {
@@ -684,9 +696,9 @@ type GeminiUsage struct {
 	PromptTokenCount           TokenCount                 `json:"promptTokenCount"`
 	CandidatesTokenCount       TokenCount                 `json:"candidatesTokenCount"`
 	TotalTokenCount            TokenCount                 `json:"totalTokenCount"`
-	ToolUsePromptTokenCount    TokenCount                 `json:"toolUsePromptTokenCount,omitempty"`
-	ThoughtsTokenCount         TokenCount                 `json:"thoughtsTokenCount,omitempty"`
-	CachedContentTokenCount    TokenCount                 `json:"cachedContentTokenCount,omitempty"`
+	ToolUsePromptTokenCount    TokenCount                 `json:"toolUsePromptTokenCount"`
+	ThoughtsTokenCount         TokenCount                 `json:"thoughtsTokenCount"`
+	CachedContentTokenCount    TokenCount                 `json:"cachedContentTokenCount"`
 	PromptTokensDetails        []GeminiModalityTokenCount `json:"promptTokensDetails,omitempty"`
 	CacheTokensDetails         []GeminiModalityTokenCount `json:"cacheTokensDetails,omitempty"`
 	CandidatesTokensDetails    []GeminiModalityTokenCount `json:"candidatesTokensDetails,omitempty"`
@@ -783,14 +795,14 @@ type BedrockResponse struct {
 	// Anthropic Claude format
 	Content    json.RawMessage `json:"content,omitempty"`
 	StopReason string          `json:"stop_reason,omitempty"`
-	Usage      BedrockUsage    `json:"usage,omitempty"`
+	Usage      BedrockUsage    `json:"usage"`
 	// Amazon Nova format
 	Output         *NovaOutput `json:"output,omitempty"`
 	StopReasonNova string      `json:"stopReason,omitempty"`
 	// Meta Llama format
 	Generation           string     `json:"generation,omitempty"`
-	PromptTokenCount     TokenCount `json:"prompt_token_count,omitempty"`
-	GenerationTokenCount TokenCount `json:"generation_token_count,omitempty"`
+	PromptTokenCount     TokenCount `json:"prompt_token_count"`
+	GenerationTokenCount TokenCount `json:"generation_token_count"`
 	// Amazon Titan format
 	Results []TitanResult `json:"results,omitempty"`
 	// Error fields appear at the top level of the Bedrock error response body
@@ -802,11 +814,11 @@ type BedrockResponse struct {
 }
 
 type BedrockUsage struct {
-	InputTokens           TokenCount              `json:"inputTokens,omitempty"`
-	OutputTokens          TokenCount              `json:"outputTokens,omitempty"`
-	TotalTokens           TokenCount              `json:"totalTokens,omitempty"`
-	CacheReadInputTokens  TokenCount              `json:"cacheReadInputTokens,omitempty"`
-	CacheWriteInputTokens TokenCount              `json:"cacheWriteInputTokens,omitempty"`
+	InputTokens           TokenCount              `json:"inputTokens"`
+	OutputTokens          TokenCount              `json:"outputTokens"`
+	TotalTokens           TokenCount              `json:"totalTokens"`
+	CacheReadInputTokens  TokenCount              `json:"cacheReadInputTokens"`
+	CacheWriteInputTokens TokenCount              `json:"cacheWriteInputTokens"`
 	CacheDetails          []BedrockCacheDetail    `json:"cacheDetails,omitempty"`
 	CacheCreation         *AnthropicCacheCreation `json:"cache_creation,omitempty"`
 }
@@ -1280,14 +1292,14 @@ func (r *RetrievalRequest) GetTopK() int {
 type RetrievalResponse struct {
 	ID    string         `json:"id,omitempty"`
 	Model string         `json:"model,omitempty"`
-	Usage RetrievalUsage `json:"usage,omitempty"`
+	Usage RetrievalUsage `json:"usage"`
 }
 
 // RetrievalUsage captures optional token usage information returned by
 // embedding-aware vector stores.
 type RetrievalUsage struct {
-	TotalTokens  TokenCount `json:"total_tokens,omitempty"`
-	PromptTokens TokenCount `json:"prompt_tokens,omitempty"`
+	TotalTokens  TokenCount `json:"total_tokens"`
+	PromptTokens TokenCount `json:"prompt_tokens"`
 }
 
 type SpanLink struct {
@@ -1305,6 +1317,7 @@ type Span struct {
 	Type           EventType      `json:"type"`
 	SpanKind       trace.SpanKind `json:"-"`
 	Flags          uint8          `json:"-"`
+	ProtoVersion   ProtoVersion   `json:"-"`
 	Method         string         `json:"-"`
 	Path           string         `json:"-"`
 	FullPath       string         `json:"-"`
@@ -1568,7 +1581,7 @@ func spanAttributes(s *Span) SpanAttributes {
 			"operation":  s.Method,
 			"table":      s.Path,
 		}
-	case EventTypeAerospikeClient:
+	case EventTypeAerospikeClient, EventTypeAerospikeServer:
 		attrs := SpanAttributes{
 			"serverAddr":      SpanHost(s),
 			"serverPort":      strconv.Itoa(s.HostPort),
@@ -1721,7 +1734,7 @@ func SpanStatusCode(span *Span) string {
 		return HTTPSpanStatusCode(span)
 	case EventTypeGRPC, EventTypeGRPCClient:
 		return GrpcSpanStatusCode(span)
-	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSunRPCClient, EventTypeSunRPCServer, EventTypeAerospikeClient:
+	case EventTypeSQLClient, EventTypeSQLServer, EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeDNS, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSunRPCClient, EventTypeSunRPCServer, EventTypeAerospikeClient, EventTypeAerospikeServer:
 		if span.Status != 0 {
 			return StatusCodeError
 		}
@@ -1749,7 +1762,7 @@ func SpanDBStatusMessage(span *Span, dbError string) string {
 
 func (s *Span) IsDBSpan() bool {
 	switch s.Type {
-	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSQLClient, EventTypeSQLServer, EventTypeAerospikeClient:
+	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeMemcachedServer, EventTypeSQLClient, EventTypeSQLServer, EventTypeAerospikeClient, EventTypeAerospikeServer:
 		return true
 	case EventTypeHTTPClient:
 		if s.SubType == HTTPSubtypeSQLPP {
@@ -1890,13 +1903,13 @@ func (s *Span) ServiceGraphKind() string {
 	}
 
 	switch s.Type {
-	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeNATSServer, EventTypeSunRPCServer, EventTypeRedisServer, EventTypeMemcachedServer, EventTypeSQLServer:
+	case EventTypeHTTP, EventTypeGRPC, EventTypeKafkaServer, EventTypeMQTTServer, EventTypeNATSServer, EventTypeSunRPCServer, EventTypeRedisServer, EventTypeMemcachedServer, EventTypeSQLServer, EventTypeAerospikeServer:
 		return "SPAN_KIND_SERVER"
-	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeSunRPCClient:
+	case EventTypeHTTPClient, EventTypeGRPCClient, EventTypeSQLClient, EventTypeRedisClient, EventTypeMongoClient, EventTypeFailedConnect, EventTypeCouchbaseClient, EventTypeMemcachedClient, EventTypeSunRPCClient, EventTypeAerospikeClient:
 		return "SPAN_KIND_CLIENT"
 	case EventTypeKafkaClient, EventTypeMQTTClient, EventTypeNATSClient, EventTypeAMQPClient:
-		switch s.Method {
-		case MessagingPublish:
+		switch MessagingOperationTypeOf(s.Method) {
+		case MessagingSend:
 			return "SPAN_KIND_PRODUCER"
 		case MessagingProcess:
 			return "SPAN_KIND_CONSUMER"
@@ -2183,7 +2196,7 @@ func (s *Span) TraceName() string {
 			return s.Method + " " + s.Path
 		}
 		return s.Method
-	case EventTypeAerospikeClient:
+	case EventTypeAerospikeClient, EventTypeAerospikeServer:
 		if s.Method == "" {
 			return "AEROSPIKE"
 		}
@@ -2221,6 +2234,16 @@ func (s *Span) isMetricsExportURL() bool {
 
 func (s *Span) IsDNSSpan() bool {
 	return s.Type == EventTypeDNS
+}
+
+// DNSAnswerList returns the addresses a DNS lookup resolved to, which the BPF
+// side accumulates into Statement as a comma-separated list.
+func (s *Span) DNSAnswerList() []string {
+	if s.Statement == "" {
+		return nil
+	}
+
+	return strings.Split(s.Statement, ",")
 }
 
 func (s *Span) isTracesExportURL() bool {

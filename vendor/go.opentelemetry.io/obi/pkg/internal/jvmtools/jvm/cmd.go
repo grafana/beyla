@@ -11,13 +11,17 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/signal"
 	"runtime"
 	"runtime/debug"
 	"sync"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"go.opentelemetry.io/obi/pkg/internal/jvmtools/util"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
 // extracted for testing
@@ -120,7 +124,7 @@ func (j *JAttacher) Terminate() error {
 	return j.restoreCredentialsLocked()
 }
 
-func (j *JAttacher) Cleanup() error {
+func (j *JAttacher) Cleanup(ctx context.Context) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
@@ -131,7 +135,7 @@ func (j *JAttacher) Cleanup() error {
 	var cleanupErr error
 
 	if j.j9attacher != nil {
-		cleanupErr = errors.Join(cleanupErr, j.j9attacher.detach())
+		cleanupErr = errors.Join(cleanupErr, j.j9attacher.detach(ctx))
 	}
 
 	// Restore credentials if we are the active attach happening on the pipeline.
@@ -148,10 +152,11 @@ func (j *JAttacher) Cleanup() error {
 	return cleanupErr
 }
 
-func (j *JAttacher) Attach(ctx context.Context, pid int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
+func (j *JAttacher) Attach(ctx context.Context, process *procs.ProcessHandle, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	pid := int(process.PID())
 
 	targetUID := j.myUID
 	targetGID := j.myGID
@@ -159,8 +164,41 @@ func (j *JAttacher) Attach(ctx context.Context, pid int, argv []string, ignoreOn
 
 	// Resolve the target's credentials and in-namespace PID from the host
 	// namespace, before we move anywhere.
-	if err := util.GetProcessInfo(pid, &targetUID, &targetGID, &nspid); err != nil {
+	if err := util.GetProcessInfo(process, &targetUID, &targetGID, &nspid); err != nil {
 		return nil, fmt.Errorf("process not found: %d: %w", pid, err)
+	}
+
+	netNS, err := process.Open("ns/net", unix.O_RDONLY)
+	if err != nil {
+		return nil, fmt.Errorf("opening target net namespace: %w", err)
+	}
+	defer netNS.Close()
+	ipcNS, err := process.Open("ns/ipc", unix.O_RDONLY)
+	if err != nil {
+		return nil, fmt.Errorf("opening target ipc namespace: %w", err)
+	}
+	defer ipcNS.Close()
+	mntNS, err := process.Open("ns/mnt", unix.O_RDONLY)
+	if err != nil {
+		return nil, fmt.Errorf("opening target mnt namespace: %w", err)
+	}
+	defer mntNS.Close()
+
+	targetCWD, err := process.Open("cwd", unix.O_PATH|unix.O_DIRECTORY)
+	if err != nil {
+		return nil, fmt.Errorf("opening target working directory: %w", err)
+	}
+	defer targetCWD.Close()
+
+	tmpPath := os.Getenv("JVM_TMP_PATH")
+	var targetTmp *os.File
+	if tmpPath == "" || len(tmpPath) >= util.MaxPath-100 {
+		targetTmp, err = process.Open("root/tmp", unix.O_PATH|unix.O_DIRECTORY)
+		if err != nil {
+			return nil, fmt.Errorf("opening target temporary directory: %w", err)
+		}
+		defer targetTmp.Close()
+		tmpPath = "."
 	}
 
 	// Entering the target's mount namespace requires setns(CLONE_NEWNS), which
@@ -197,30 +235,55 @@ func (j *JAttacher) Attach(ctx context.Context, pid int, argv []string, ignoreOn
 		// Deliberately no runtime.UnlockOSThread: this thread is tainted by the
 		// namespace switch and CLONE_FS unshare, so we let it die with the
 		// goroutine rather than return it to the pool.
-		reader, err := j.attachInNamespace(ctx, pid, nspid, targetUID, targetGID, argv, ignoreOnJ9)
+		reader, err := j.attachInNamespace(
+			ctx, process, nspid, targetUID, targetGID, argv, ignoreOnJ9,
+			netNS, ipcNS, mntNS, targetCWD, targetTmp, tmpPath,
+		)
 		resultCh <- attachResult{reader: reader, err: err}
 	}()
 
 	res := <-resultCh
-	return res.reader, res.err
+	if res.reader == nil || res.err != nil {
+		return res.reader, res.err
+	}
+
+	abort := res.reader.Close
+	if reader, ok := res.reader.(*j9Reader); ok {
+		abort = reader.abort
+	}
+	return newContextReadCloser(ctx, res.reader, abort), nil
 }
 
 // attachInNamespace performs the namespace switch, credential change and JVM
 // handshake. It MUST be called from a goroutine pinned to a dedicated,
 // never-unlocked OS thread (see Attach), because it both joins the target's
 // mount namespace and unshares CLONE_FS on the calling thread.
-func (j *JAttacher) attachInNamespace(ctx context.Context, pid, nspid, targetUID, targetGID int, argv []string, ignoreOnJ9 bool) (io.ReadCloser, error) {
+func (j *JAttacher) attachInNamespace(
+	ctx context.Context,
+	process *procs.ProcessHandle,
+	nspid, targetUID, targetGID int,
+	argv []string,
+	ignoreOnJ9 bool,
+	netNS, ipcNS, mntNS, targetCWD, targetTmp *os.File,
+	tmpPath string,
+) (io.ReadCloser, error) {
+	pid := int(process.PID())
 	// Container support: switch to the target namespaces.
 	// Network and IPC namespaces are essential for OpenJ9 connection.
-	if util.EnterNS(pid, "net") < 0 {
+	if util.EnterNS(netNS, "net") < 0 {
 		return nil, errors.New("failed to enter target net namespace")
 	}
-	if util.EnterNS(pid, "ipc") < 0 {
+	if util.EnterNS(ipcNS, "ipc") < 0 {
 		return nil, errors.New("failed to enter target ipc namespace")
 	}
-	mntChanged := util.EnterNS(pid, "mnt")
+	mntChanged := util.EnterNS(mntNS, "mnt")
 	if mntChanged < 0 {
 		return nil, errors.New("failed to enter target mnt namespace")
+	}
+	if targetTmp != nil {
+		if err := unix.Fchdir(int(targetTmp.Fd())); err != nil {
+			return nil, fmt.Errorf("changing to target temporary directory: %w", err)
+		}
 	}
 
 	// In HotSpot, dynamic attach is allowed only for the clients with the same euid/egid.
@@ -238,13 +301,14 @@ func (j *JAttacher) attachInNamespace(ctx context.Context, pid, nspid, targetUID
 		attachPid = nspid
 	}
 
-	tmpPath := util.GetTmpPath(attachPid)
-
 	// Make write() return EPIPE instead of abnormal process termination
 	signal.Ignore(syscall.SIGPIPE)
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if err := process.Alive(); err != nil {
+		return nil, fmt.Errorf("target process exited before attach: %w", err)
 	}
 
 	if isOpenJ9Process(tmpPath, attachPid) {
@@ -256,8 +320,49 @@ func (j *JAttacher) attachInNamespace(ctx context.Context, pid, nspid, targetUID
 		}
 		j9attacher := newJ9Attacher(j.logger)
 		j.j9attacher = j9attacher
-		return j.j9attacher.jattachOpenJ9(tmpPath, nspid, argv)
+		return j.j9attacher.jattachOpenJ9(ctx, process, tmpPath, nspid, argv)
 	}
 
-	return jattachHotspot(ctx, pid, nspid, attachPid, argv, tmpPath, j.logger)
+	return jattachHotspot(ctx, process, nspid, argv, targetCWD, tmpPath, j.logger)
+}
+
+type contextReadCloser struct {
+	reader   io.ReadCloser
+	stop     func() bool
+	abort    func() error
+	close    sync.Once
+	done     chan struct{}
+	closeErr error
+}
+
+func newContextReadCloser(ctx context.Context, reader io.ReadCloser, abort func() error) io.ReadCloser {
+	out := &contextReadCloser{
+		reader: reader,
+		abort:  abort,
+		done:   make(chan struct{}),
+	}
+	out.stop = context.AfterFunc(ctx, func() {
+		_ = out.closeWith(out.abort)
+	})
+	return out
+}
+
+func (r *contextReadCloser) Read(p []byte) (int, error) {
+	return r.reader.Read(p)
+}
+
+func (r *contextReadCloser) Close() error {
+	if r.stop() {
+		return r.closeWith(r.reader.Close)
+	}
+	return r.closeWith(r.abort)
+}
+
+func (r *contextReadCloser) closeWith(closeFn func() error) error {
+	r.close.Do(func() {
+		r.closeErr = closeFn()
+		close(r.done)
+	})
+	<-r.done
+	return r.closeErr
 }

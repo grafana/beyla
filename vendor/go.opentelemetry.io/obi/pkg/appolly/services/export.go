@@ -142,7 +142,7 @@ func (modes *ExportModes) UnmarshalText(text []byte) error {
 	if len(text) == 0 {
 		return nil
 	}
-	for _, part := range strings.Split(string(text), ",") {
+	for part := range strings.SplitSeq(string(text), ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

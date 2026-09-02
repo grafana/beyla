@@ -11,6 +11,8 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	nodejsruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/expire"
@@ -33,6 +35,14 @@ type nodejsRuntimeMetrics struct {
 	delayP90             instrument.Float64Gauge
 	delayP99             instrument.Float64Gauge
 
+	gcDuration  instrument.Float64Histogram
+	gcTypeAttrs map[nodejsruntime.NodejsGCType]attribute.Set
+
+	heapLimit     *runtimeCurrentUpDownCounter
+	heapUsed      *runtimeCurrentUpDownCounter
+	heapAvailable *runtimeCurrentUpDownCounter
+	heapPhysical  *runtimeCurrentUpDownCounter
+
 	// ELU counters are cumulative per event loop; deltas are tracked per PID
 	// so several node processes of the same service don't corrupt each other.
 	entries        *expire.ExpiryMap[*nodejsEventLoopEntry]
@@ -54,6 +64,7 @@ func setupNodejsRuntimeMeters(
 	m *nodejsRuntimeMetrics,
 	meter instrument.Meter,
 	ttl time.Duration,
+	buckets export.Buckets,
 ) error {
 	m.ctx = ctx
 	m.entries = expire.NewExpiryMap[*nodejsEventLoopEntry](timeNow, ttl)
@@ -90,7 +101,80 @@ func setupNodejsRuntimeMeters(
 			return fmt.Errorf("creating nodejs eventloop delay gauge %s: %w", g.name.OTEL, err)
 		}
 	}
+
+	gcHistogramOpts := []instrument.Float64HistogramOption{
+		instrument.WithUnit(attributes.V8JSGCDuration.Unit),
+	}
+	if len(buckets.V8JSGCDurationHistogram) > 0 {
+		gcHistogramOpts = append(gcHistogramOpts,
+			instrument.WithExplicitBucketBoundaries(buckets.V8JSGCDurationHistogram...))
+	}
+	if m.gcDuration, err = meter.Float64Histogram(
+		attributes.V8JSGCDuration.OTEL, gcHistogramOpts...); err != nil {
+		return fmt.Errorf("creating v8js gc duration histogram: %w", err)
+	}
+	gcType := attr.V8JSGCType.OTEL()
+	m.gcTypeAttrs = make(map[nodejsruntime.NodejsGCType]attribute.Set)
+	for _, t := range []nodejsruntime.NodejsGCType{
+		nodejsruntime.NodejsGCTypeMinor,
+		nodejsruntime.NodejsGCTypeMajor,
+		nodejsruntime.NodejsGCTypeIncremental,
+		nodejsruntime.NodejsGCTypeWeakCB,
+	} {
+		m.gcTypeAttrs[t] = attribute.NewSet(gcType.String(t.String()))
+	}
+
+	heapAttrs := v8jsHeapSpaceOTELAttributes()
+	heapCounters := []struct {
+		dst  **runtimeCurrentUpDownCounter
+		name attributes.Name
+	}{
+		{&m.heapLimit, attributes.V8JSMemoryHeapLimit},
+		{&m.heapUsed, attributes.V8JSMemoryHeapUsed},
+		{&m.heapAvailable, attributes.V8JSMemoryHeapSpaceAvailableSize},
+		{&m.heapPhysical, attributes.V8JSMemoryHeapSpacePhysicalSize},
+	}
+	for _, c := range heapCounters {
+		counter, err := meter.Int64UpDownCounter(c.name.OTEL, instrument.WithUnit(c.name.Unit))
+		if err != nil {
+			return fmt.Errorf("creating v8js heap up-down counter %s: %w", c.name.OTEL, err)
+		}
+		*c.dst = newRuntimeCurrentUpDownCounter(ctx, counter, heapAttrs, timeNow, ttl)
+	}
 	return nil
+}
+
+func v8jsHeapSpaceOTELAttributes() []attributes.Field[runtimemetrics.RuntimeMetricSnapshot, attribute.KeyValue] {
+	return []attributes.Field[runtimemetrics.RuntimeMetricSnapshot, attribute.KeyValue]{
+		{
+			ExposedName: string(attr.V8JSHeapSpaceName.OTEL()),
+			Get: func(snapshot runtimemetrics.RuntimeMetricSnapshot) attribute.KeyValue {
+				return attr.V8JSHeapSpaceName.OTEL().String(snapshot.NodejsHeapSpace.SpaceName)
+			},
+		},
+	}
+}
+
+// recordV8 handles the v8js snapshot variants: the gc duration histogram and
+// the per-space heap up-down counters (absolute sample values converted to
+// deltas by runtimeCurrentUpDownCounter, exactly like the JVM memory metrics).
+func (m *nodejsRuntimeMetrics) recordV8(snapshot runtimemetrics.RuntimeMetricSnapshot) {
+	if snapshot.NodejsGC != nil && m.gcDuration != nil {
+		attrs, ok := m.gcTypeAttrs[snapshot.NodejsGC.GCType]
+		if !ok {
+			return
+		}
+		m.gcDuration.Record(m.ctx, float64(snapshot.NodejsGC.DurationNs)/nanosPerSecond,
+			instrument.WithAttributeSet(attrs))
+	}
+
+	if snapshot.NodejsHeapSpace != nil && m.heapLimit != nil {
+		values := snapshot.NodejsHeapSpace.NodejsHeapSpaceValues
+		m.heapLimit.Record(snapshot, int64(values.SpaceSize))
+		m.heapUsed.Record(snapshot, int64(values.SpaceUsedSize))
+		m.heapAvailable.Record(snapshot, int64(values.SpaceAvailableSize))
+		m.heapPhysical.Record(snapshot, int64(values.PhysicalSpaceSize))
+	}
 }
 
 func (m *nodejsRuntimeMetrics) record(snapshot runtimemetrics.RuntimeMetricSnapshot) {

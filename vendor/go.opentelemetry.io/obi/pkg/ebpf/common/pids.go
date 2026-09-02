@@ -102,7 +102,7 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[app.PID]svc.Attrs {
 		cVal := map[app.PID]svc.Attrs{}
 		for kv, vv := range v {
 			if vv.pidTypes&t != 0 {
-				cVal[kv] = vv.fileInfo.ServiceAttrs()
+				cVal[kv] = vv.fileInfo.UnsafeServiceAttrs()
 			}
 		}
 		cp[k] = cVal
@@ -147,7 +147,8 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 			if pf.ignoreOtelSpan {
 				pf.checkIfExportsOTelSpanMetrics(info.fileInfo, span, pf.defaultOtlpGRPCPort)
 			}
-			inputSpans[i].Service = info.fileInfo.ServiceAttrs()
+			// Must use the unsafe version to avoid massive memory pressure here.
+			inputSpans[i].Service = info.fileInfo.UnsafeServiceAttrs()
 			pf.normalizeTraceContext(&inputSpans[i])
 			outputSpans = append(outputSpans, inputSpans[i])
 		}

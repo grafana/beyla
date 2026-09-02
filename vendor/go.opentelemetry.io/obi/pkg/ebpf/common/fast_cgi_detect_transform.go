@@ -143,8 +143,8 @@ func detectFastCGI(b, rb *largebuf.LargeBuffer) (string, string, int) {
 		return "", "", -1
 	}
 
-	methodPos := bytes.Index(raw, []byte(requestMethodKey))
-	if methodPos >= 0 {
+	found := bytes.Contains(raw, []byte(requestMethodKey))
+	if found {
 		kv := parseCGITable(raw)
 
 		method, ok := kv[requestMethodKey]

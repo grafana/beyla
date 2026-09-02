@@ -5,7 +5,12 @@
 
 package util // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/util"
 
-import "errors"
+import (
+	"errors"
+	"os"
+
+	"go.opentelemetry.io/obi/pkg/internal/procs"
+)
 
 const MaxPath = 4096
 
@@ -15,10 +20,10 @@ func GetTmpPath(_ int) string {
 	return ""
 }
 
-func GetProcessInfo(_ int, _ *int, _ *int, _ *int) error {
+func GetProcessInfo(_ *procs.ProcessHandle, _ *int, _ *int, _ *int) error {
 	return errUnsupported
 }
 
-func EnterNS(_ int, _ string) int {
+func EnterNS(_ *os.File, _ string) int {
 	return -1
 }

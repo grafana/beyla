@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"sync"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/config"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -50,9 +52,11 @@ type Tracer struct {
 	ingressFilters   map[ifaces.Interface]*netlink.BpfFilter
 	instrumentedLibs ebpfcommon.InstrumentedLibsT
 	libsMux          sync.Mutex
+	jvmGenerations   sync.Map
 	iters            []*ebpfcommon.Iter
 	eventCtx         *ebpfcommon.EBPFEventContext
 	jvmUSDTManager   ebpfcommon.USDTSpecManager
+	pythonRuntime    *pythonRuntimeController
 }
 
 func tlog() *slog.Logger {
@@ -60,7 +64,7 @@ func tlog() *slog.Logger {
 }
 
 func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
-	return &Tracer{
+	tracer := &Tracer{
 		log:              tlog(),
 		cfg:              cfg,
 		metrics:          metrics,
@@ -72,6 +76,8 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 		libsMux:          sync.Mutex{},
 		iters:            []*ebpfcommon.Iter{},
 	}
+	tracer.pythonRuntime = newPythonRuntimeController(tracer)
+	return tracer
 }
 
 // Keep in sync with the BPF side, which asserts the relation between both
@@ -147,7 +153,18 @@ func (p *Tracer) rebuildValidPids() error {
 }
 
 func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
-	p.pidsFilter.AllowPID(pid, ns, fi, ebpfcommon.PIDTypeKProbes)
+	if generation := ensureJVMRuntimeMetricGeneration(fi); generation != 0 {
+		p.jvmGenerations.Store(pid, generation)
+	}
+
+	serviceSource := fi
+	if source := fi.RuntimeMetricServiceSource(); source != nil {
+		serviceSource = source
+	}
+	p.pidsFilter.AllowPID(pid, ns, serviceSource, ebpfcommon.PIDTypeKProbes)
+	if p.pythonRuntime != nil {
+		p.pythonRuntime.allow(pid, ns, fi, serviceSource)
+	}
 
 	if err := p.rebuildValidPids(); err != nil {
 		p.log.Error("rebuilding the BPF PID filter", "error", err)
@@ -161,7 +178,18 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	}
 }
 
+func ensureJVMRuntimeMetricGeneration(fi *exec.FileInfo) uint64 {
+	if fi.ServiceAttrs().SDKLanguage != svc.InstrumentableJava {
+		return 0
+	}
+	if fi.RuntimeMetricGeneration(fi.Pid()) == 0 {
+		fi.SetRuntimeMetricGeneration(fi.Pid(), ebpfcommon.NewRuntimeMetricGeneration())
+	}
+	return fi.RuntimeMetricGeneration(fi.Pid())
+}
+
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
+	p.jvmGenerations.Delete(pid)
 	p.pidsFilter.BlockPID(pid, ns)
 
 	if err := p.rebuildValidPids(); err != nil {
@@ -174,6 +202,14 @@ func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 		pidU32 := uint32(pid)
 		_ = p.bpfObjects.PidCache.Delete(pidU32)
 	}
+}
+
+// BlockPIDLifecycle removes Python state only for the matching process lifecycle.
+func (p *Tracer) BlockPIDLifecycle(pid app.PID, ns uint32, lifecycle *exec.FileInfo) {
+	if p.pythonRuntime != nil {
+		p.pythonRuntime.block(pid, ns, lifecycle)
+	}
+	p.BlockPID(pid, ns)
 }
 
 func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
@@ -336,6 +372,14 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 		"udp_sendmsg": {
 			Required: true,
 			Start:    p.bpfObjects.ObiKprobeUdpSendmsg,
+			End:      p.bpfObjects.ObiKretprobeUdpSendmsg,
+		},
+		// Not required: without it the unconnected DNS state still expires on its
+		// own, so a kernel where this symbol is unavailable loses the lifetime
+		// bound rather than the whole tracer.
+		"udp_destroy_sock": {
+			Required: false,
+			Start:    p.bpfObjects.ObiKprobeUdpDestroySock,
 		},
 		"tcp_close": {
 			Required: true,
@@ -688,6 +732,9 @@ func (p *Tracer) Run(
 	eventsChan *msg.Queue[[]request.Span],
 ) {
 	p.eventCtx = ebpfEventContext
+	if p.pythonRuntime != nil {
+		defer p.pythonRuntime.close()
+	}
 
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
@@ -782,11 +829,52 @@ func (p *Tracer) handleJVMRuntimeMetricsRecord(
 		if err != nil || ignore || len(events) == 0 {
 			return true, err
 		}
-		p.eventCtx.RuntimeMetrics.SendJVMRuntimeMetrics(ctx, events)
+		p.eventCtx.RuntimeMetrics.SendJVMGCMetrics(ctx, events)
+		return true, nil
+	case ebpfcommon.EventTypeJVMRuntimeMetrics:
+		if p.eventCtx == nil || p.eventCtx.RuntimeMetrics == nil {
+			return true, nil
+		}
+		event, ignore, err := p.parseJVMRuntimeRecord(record)
+		if err != nil || ignore {
+			return true, err
+		}
+		p.eventCtx.RuntimeMetrics.SendJVMRuntimeMetrics(ctx, []jvmruntime.JVMRuntimeEvent{event})
 		return true, nil
 	default:
 		return false, nil
 	}
+}
+
+func (p *Tracer) parseJVMRuntimeRecord(record *ringbuf.Record) (jvmruntime.JVMRuntimeEvent, bool, error) {
+	raw, err := ebpfcommon.ReinterpretCast[BpfJvmRuntimeMetricsEvent](record.RawSample)
+	if err != nil {
+		return jvmruntime.JVMRuntimeEvent{}, false, err
+	}
+
+	event := jvmruntime.JVMRuntimeEvent{
+		PID:            app.PID(raw.NsPid),
+		PIDNamespaceID: raw.PidNsId,
+		Time:           timing.KernelTime(raw.Timestamp),
+		Values: jvmruntime.JVMRuntimeValues{
+			LoadedClassCount:        raw.LoadedClassCount,
+			TotalLoadedClassCount:   raw.TotalLoadedClassCount,
+			UnloadedClassCount:      raw.UnloadedClassCount,
+			ThreadCount:             raw.ThreadCount,
+			DaemonThreadCount:       raw.DaemonThreadCount,
+			AvailableProcessorCount: raw.AvailableProcessorCount,
+			ProcessCPUTimeNS:        int64(raw.ProcessCpuTimeNs),
+			RecentCPUUtilization:    math.Float64frombits(raw.RecentCpuUtilizationBits),
+		},
+	}
+	if !ebpfcommon.DecorateJVMRuntimeEvent(p.pidsFilter, &event) {
+		return jvmruntime.JVMRuntimeEvent{}, true, nil
+	}
+	if generation, ok := p.jvmGenerations.Load(app.PID(raw.GlobalPid)); ok {
+		event.Generation = generation.(uint64)
+	}
+
+	return event, false, nil
 }
 
 func (p *Tracer) runtimeMetricsSender() ebpfcommon.RuntimeMetricSender {
@@ -796,7 +884,7 @@ func (p *Tracer) runtimeMetricsSender() ebpfcommon.RuntimeMetricSender {
 	return p.eventCtx.RuntimeMetrics
 }
 
-func (p *Tracer) parseJVMMemoryPoolRecord(record *ringbuf.Record) ([]jvmruntime.JVMRuntimeEvent, bool, error) {
+func (p *Tracer) parseJVMMemoryPoolRecord(record *ringbuf.Record) ([]jvmruntime.JVMGCEvent, bool, error) {
 	raw, err := ebpfcommon.ReinterpretCast[BpfJvmMemPoolGcEvent](record.RawSample)
 	if err != nil {
 		return nil, false, err
@@ -821,7 +909,7 @@ func (p *Tracer) parseJVMMemoryPoolRecord(record *ringbuf.Record) ([]jvmruntime.
 	}
 
 	// All events are fanned out from one raw sample and share PID identity.
-	if !ebpfcommon.DecorateJVMRuntimeEvent(p.pidsFilter, &events[0]) {
+	if !ebpfcommon.DecorateJVMGCEvent(p.pidsFilter, &events[0]) {
 		return nil, true, nil
 	}
 	for i := 1; i < len(events); i++ {

@@ -1,0 +1,420 @@
+{
+  "data": {
+    "[]internal/abi.Imethod": {
+      "len": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi": {
+      "Array": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 17,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Chan": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 18,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Func": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 19,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Interface": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 20,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "KindDirectIface": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Map": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 21,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Pointer": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 22,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Slice": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 23,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Struct": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 25,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "TFlagExtraStar": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 2,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "TFlagUncommon": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 1,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.ArrayType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.ChanType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.FuncType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.ITab": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Fun": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Type": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.InterfaceType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Methods": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.Kind": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 1,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.MapType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 136,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.NameOff": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 4,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.PtrType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.SliceType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.StructType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.TFlag": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 1,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.Type": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Kind_": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 23,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Str": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "TFlag": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 20,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.UncommonType": {
+      "PkgPath": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -29,7 +29,7 @@ func InternalPrometheusExport(t *testing.T, config *TestConfig) {
 
 	// tests that internal metrics are properly exposed and updated
 	initialFlushedRecords := metricValue(t, flushesMetricName, nil)
-	for i := 0; i < 7; i++ {
+	for range 7 {
 		DoHTTPGet(t, instrumentedServiceStdURL+"/testing/some/flushes", http.StatusOK)
 	}
 	eventuallyIterations := 0

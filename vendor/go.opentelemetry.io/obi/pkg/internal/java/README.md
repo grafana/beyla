@@ -135,6 +135,20 @@ p.getInt(1 + 36)       → 1    (Buffer length at offset 37)
 p.getByte(1 + 36 + 4)  → 42   (Data byte at offset 41)
 ```
 
+### 4. Java agent compatibility
+
+A JVM cannot unload or replace a Java agent. The agent therefore publishes its version in the
+`otel.obi.java.agent.version` system property. OBI reads this property with
+`jcmd VM.system_properties` and compares it with the version in the embedded agent JAR.
+
+If the versions do not match, OBI reports an error and does not instrument the process. Restart
+the process to load the agent included with the current OBI version.
+
+The version is stored in
+`agent/src/main/resources/obi-java-agent-version.properties`. Increment it when a change breaks
+compatibility between OBI and the Java agent. Do not increment it for compatible changes, such
+as new instrumentation or bug fixes.
+
 ## 🔨 Building
 
 ### Prerequisites
@@ -209,6 +223,22 @@ Using [jattach](https://github.com/jattach/jattach).
 
 ```bash
 jattach <PID of Java program> load instrument false "/path/to/obi-java-agent.jar"
+```
+
+### Enable JVM Runtime Metrics
+
+The interval is specified in nanoseconds.
+
+```bash
+java -javaagent:/path/to/obi-java-agent.jar=runtimeMetrics=true,runtimeMetricsIntervalNanos=1000000000 \
+     -jar your-application.jar
+```
+
+For dynamic attachment:
+
+```bash
+jattach <PID> load instrument false \
+  "/path/to/obi-java-agent.jar=runtimeMetrics=true,runtimeMetricsIntervalNanos=1000000000"
 ```
 
 ### Enable Debug Mode (stdout)
@@ -301,6 +331,9 @@ gradle :agent:jmh -Pjmh.profilers=gc
 
 # Run with memory allocation profiling
 gradle :agent:jmh -Pjmh.profilers=gc,stack
+
+# Measure JVM runtime collection cost
+gradle :agent:jmh -PjmhIncludes=JVMRuntimeMetricsBenchmark -PjmhProfilers=gc -PjmhForks=5
 ```
 
 ### Benchmark Results

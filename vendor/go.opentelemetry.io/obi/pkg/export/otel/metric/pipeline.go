@@ -279,7 +279,7 @@ func (i *inserter[N]) addCallback(cback func(context.Context) error) {
 	i.pipeline.callbacks = append(i.pipeline.callbacks, cback)
 }
 
-var aggIDCount uint64
+var aggIDCount atomic.Uint64
 
 // aggVal is the cached value in an aggregators cache.
 type aggVal[N int64 | float64] struct {
@@ -371,7 +371,7 @@ func (i *inserter[N]) cachedAggregator(scope instrumentation.Scope, kind Instrum
 			unit:        stream.Unit,
 			compAgg:     out,
 		})
-		id := atomic.AddUint64(&aggIDCount, 1)
+		id := aggIDCount.Add(1)
 		return aggVal[N]{id, in, remove, err}
 	})
 	return cv.Measure, cv.Remove, cv.ID, cv.Err

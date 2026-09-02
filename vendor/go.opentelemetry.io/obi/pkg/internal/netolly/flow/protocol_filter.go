@@ -46,14 +46,14 @@ func newFilter(allowed, excluded []string, input, output *msg.Queue[[]*ebpf.Reco
 		if err != nil {
 			return nil, err
 		}
-		return &protocolFilter{isAllowed: allow, input: input.Subscribe(), output: output}, nil
+		return &protocolFilter{isAllowed: allow, input: input.Subscribe(msg.SubscriberName("flow.ProtocolFilter")), output: output}, nil
 	}
 	// if the allowed list is empty, any interface is allowed except if it matches the exclusion list
 	exclude, err := excluder(excluded)
 	if err != nil {
 		return nil, err
 	}
-	return &protocolFilter{isAllowed: exclude, input: input.Subscribe(), output: output}, nil
+	return &protocolFilter{isAllowed: exclude, input: input.Subscribe(msg.SubscriberName("flow.ProtocolFilter")), output: output}, nil
 }
 
 func (pf *protocolFilter) nodeLoop(_ context.Context) {

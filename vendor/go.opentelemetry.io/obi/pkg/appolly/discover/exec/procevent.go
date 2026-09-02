@@ -3,6 +3,8 @@
 
 package exec // import "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 
+import appruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
+
 type ProcessEventType int
 
 const (
@@ -11,6 +13,17 @@ const (
 )
 
 type ProcessEvent struct {
-	File *FileInfo
-	Type ProcessEventType
+	File                      *FileInfo
+	Type                      ProcessEventType
+	FinalPythonRuntimeMetrics []appruntime.PythonRuntimeMetricFinal
+}
+
+func (pe ProcessEvent) ServiceFile() *FileInfo {
+	if pe.File == nil {
+		return nil
+	}
+	if source := pe.File.RuntimeMetricServiceSource(); source != nil {
+		return source
+	}
+	return pe.File
 }

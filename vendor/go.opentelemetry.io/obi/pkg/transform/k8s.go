@@ -488,7 +488,7 @@ func applyKubeMetadata(store *kube.Store, s *svc.Attrs, meta *ikube.CachedObjMet
 	if s.AutoName() {
 		s.UID.Name = name
 	}
-	if s.UID.Namespace == "" {
+	if s.UID.Namespace == "" || s.AutoNamespace() {
 		s.UID.Namespace = namespace
 	}
 	// overriding the Instance here will avoid reusing the OTEL resource reporter

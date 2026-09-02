@@ -2,6 +2,7 @@ package maxminddb
 
 import (
 	"runtime"
+	"unicode/utf8"
 
 	"github.com/oschwald/maxminddb-golang/v2/internal/mmdberrors"
 )
@@ -63,6 +64,19 @@ func (v *verifier) verifyMetadata() error {
 			"non-empty string",
 			metadata.DatabaseType,
 		)
+	}
+	if !utf8.ValidString(metadata.DatabaseType) {
+		return mmdberrors.NewInvalidDatabaseError("database_type contains invalid UTF-8")
+	}
+	for language, description := range metadata.Description {
+		if !utf8.ValidString(language) || !utf8.ValidString(description) {
+			return mmdberrors.NewInvalidDatabaseError("description contains invalid UTF-8")
+		}
+	}
+	for _, language := range metadata.Languages {
+		if !utf8.ValidString(language) {
+			return mmdberrors.NewInvalidDatabaseError("languages contains invalid UTF-8")
+		}
 	}
 
 	if len(metadata.Description) == 0 {
@@ -140,13 +154,12 @@ func (v *verifier) verifyDataSectionSeparator() error {
 
 	separator := v.reader.buffer[separatorStart:separatorEnd]
 
-	for _, b := range separator {
-		if b != 0 {
-			return mmdberrors.NewInvalidDatabaseError(
-				"unexpected byte in data separator: %v",
-				separator,
-			)
-		}
+	var zeroSeparator [16]byte
+	if [16]byte(separator) != zeroSeparator {
+		return mmdberrors.NewInvalidDatabaseError(
+			"unexpected byte in data separator: %v",
+			separator,
+		)
 	}
 	return nil
 }

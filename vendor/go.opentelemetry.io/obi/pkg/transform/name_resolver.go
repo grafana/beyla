@@ -325,13 +325,16 @@ func (nr *NameResolver) resolveIP(ip string) string {
 }
 
 func (nr *NameResolver) handleRDNS(span *request.Span) {
-	if span.Statement != "" {
-		nr.logger.Debug("storing reverse DNS record in cache", "ips", span.Statement, "name", span.Path)
-		ips := strings.Split(span.Statement, ",")
-		for _, ip := range ips {
-			if isValidRDNS(ip) {
-				nr.dnsCache.StorePair(ip, span.Path)
-			}
+	ips := span.DNSAnswerList()
+	if len(ips) == 0 {
+		return
+	}
+
+	nr.logger.Debug("storing reverse DNS record in cache", "ips", ips, "name", span.Path)
+
+	for _, ip := range ips {
+		if isValidRDNS(ip) {
+			nr.dnsCache.StorePair(ip, span.Path)
 		}
 	}
 }

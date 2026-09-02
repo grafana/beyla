@@ -5,6 +5,7 @@ package procs // import "go.opentelemetry.io/obi/pkg/internal/procs"
 
 import (
 	"debug/elf"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -83,8 +84,35 @@ func FindExeLoadBias(pid app.PID) (uint64, error) {
 }
 
 func exeLoadBias(exePath string, maps []*procfs.ProcMap, progs []*elf.Prog) (uint64, error) {
+	bias, err := mappingLoadBias(maps, progs, func(mapping *procfs.ProcMap) bool {
+		return mapping.Pathname == exePath
+	})
+	if err != nil {
+		return 0, fmt.Errorf("ELF load bias for %s: %w", exePath, err)
+	}
+	return bias, nil
+}
+
+// FindMappingLoadBias returns the ELF load bias for a mapped object identified
+// by device and inode.
+func FindMappingLoadBias(
+	maps []*procfs.ProcMap,
+	progs []*elf.Prog,
+	device uint64,
+	inode uint64,
+) (uint64, error) {
+	return mappingLoadBias(maps, progs, func(mapping *procfs.ProcMap) bool {
+		return mapping.Dev == device && mapping.Inode == inode
+	})
+}
+
+func mappingLoadBias(
+	maps []*procfs.ProcMap,
+	progs []*elf.Prog,
+	matches func(*procfs.ProcMap) bool,
+) (uint64, error) {
 	for _, m := range maps {
-		if m.Pathname != exePath {
+		if !matches(m) {
 			continue
 		}
 
@@ -95,13 +123,13 @@ func exeLoadBias(exePath string, maps []*procfs.ProcMap, progs []*elf.Prog) (uin
 
 			vaddr := pageStart(prog.Vaddr)
 			if uint64(m.StartAddr) < vaddr {
-				return 0, fmt.Errorf("invalid executable mapping address for %s", exePath)
+				return 0, errors.New("invalid ELF mapping address")
 			}
 			return uint64(m.StartAddr) - vaddr, nil
 		}
 	}
 
-	return 0, fmt.Errorf("executable mapping not found for %s", exePath)
+	return 0, errors.New("ELF load bias not found")
 }
 
 func pageStart(addr uint64) uint64 {

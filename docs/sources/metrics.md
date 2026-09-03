@@ -112,6 +112,7 @@ For more information about the OpenTelemetry semantic conventions for each metri
 | `db.client.operation.duration` | `db.system.name`             | shown                                             |
 | `db.client.operation.duration` | `db.query.text`              | hidden                                            |
 | `db.client.operation.duration` | `server.address`             | shown                                             |
+| `db.client.operation.duration` | `server.port`                | shown when a valid database port is available     |
 | `db.client.operation.duration` | `error.type`                 | shown                                             |
 | `messaging.publish.duration`   | `messaging.system`           | shown                                             |
 | `messaging.publish.duration`   | `messaging.destination.name` | shown                                             |

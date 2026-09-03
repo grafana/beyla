@@ -48,6 +48,7 @@ To enable network metrics, add one of the following `features` to the
 first-level [metrics section](../../configure/export-data/#metrics-export-features):
 
 * `network` enables the `beyla_network_flow_bytes` metric: the number of bytes between two endpoints of your cluster
+* `network_flow_packets` enables the `beyla_network_flow_packets_total` metric: the number of packets between two endpoints of your cluster
 * `network_inter_zone` enables `beyla_network_inter_zone_bytes` metric: the number of bytes between different
   availability zones in your Cloud cluster
 

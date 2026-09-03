@@ -14,7 +14,7 @@ You can configure Beyla Prometheus and OpenTelemetry metrics histograms. You can
 
 ## Override histogram buckets
 
-You can override the histogram bucket boundaries for OpenTelemetry and Prometheus metrics exporters by setting the `buckets` YAML configuration option:
+You can override histogram bucket boundaries for the OpenTelemetry and Prometheus metrics exporters with `otel_metrics_export.buckets` and `prometheus_export.buckets`.
 
 YAML section: `otel_metrics_export.buckets`
 
@@ -26,9 +26,10 @@ otel_metrics_export:
     duration_histogram: [0, 1, 2]
 ```
 
-| YAML                 | Type        |
-| -------------------- | ----------- |
-| `duration_histogram` | `[]float64` |
+| YAML                     | Type        |
+| ------------------------ | ----------- |
+| `duration_histogram`     | `[]float64` |
+| `stat_tcp_rtt_histogram` | `[]float64` |
 
 Set the bucket boundaries for metrics related to request duration. Specifically:
 
@@ -71,6 +72,26 @@ If you leave the value unset, Beyla uses these default bucket boundaries:
 ```
 
 These default values are UNSTABLE and may change if Prometheus or OpenTelemetry semantic conventions recommend different bucket boundaries.
+
+### TCP round-trip time buckets
+
+The `stat_tcp_rtt_histogram` property sets the explicit bucket boundaries for `beyla.stat.tcp.rtt` (`beyla_stat_tcp_rtt_seconds` in Prometheus). Values are durations expressed in seconds.
+
+Set the property as `otel_metrics_export.buckets.stat_tcp_rtt_histogram` or `prometheus_export.buckets.stat_tcp_rtt_histogram`.
+
+If you leave the value unset, Beyla uses these boundaries:
+
+```
+0.0005, 0.001, 0.002, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0
+```
+
+For example, to set the boundaries for the OpenTelemetry exporter:
+
+```yaml
+otel_metrics_export:
+  buckets:
+    stat_tcp_rtt_histogram: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1]
+```
 
 ## Use native histograms and exponential histograms
 

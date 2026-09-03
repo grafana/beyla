@@ -81,7 +81,7 @@ otel_metrics_export:
 | `OTEL_EXPORTER_OTLP_PROTOCOL`                                                                | Similar to the shared endpoint, the protocol for metrics and traces.                                                                                                                                                                                                                                                                                           | string          | Inferred from port usage    |
 | `insecure_skip_verify`<p>`BEYLA_OTEL_INSECURE_SKIP_VERIFY`</p>                               | If `true`, Beyla skips verifying and accepts any server certificate. Only override this setting for non-production environments.                                                                                                                                                                                                                               | boolean         | `false`                     |
 | `interval`<p>`BEYLA_METRICS_INTERVAL`</p>                                                    | The duration between exports.                                                                                                                                                                                                                                                                                                                                  | Duration        | `60s`                       |
-| `features`<p>`BEYLA_OTEL_METRICS_FEATURES`</p>                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features). Accepted values `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_process`, `application_runtime`, `network` and `network_inter_zone`.                                                        | list of strings | `["application"]`           |
+| `features`<p>`BEYLA_OTEL_METRICS_FEATURES`</p>                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features).                                                                                                                                                                                                                                                                                                                        | list of strings | `["application"]`           |
 | `allow_service_graph_self_references`<p>`BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES`</p> | Controls if Beyla includes self-referencing services in service graph generation, for example a service that calls itself. Self referencing reduces service graph usefulness and increases data cardinality.                                                                                                                                                   | boolean         | `false`                     |
 | `instrumentations`<p>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`</p>                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation) section.                                                                                                                                                                                                                             | list of strings | `["*"]`                     |
 | `buckets`                                                                                    | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets](../metrics-histograms/).                                                                                                                                                                                                                              | (n/a)           | Object                      |
@@ -111,7 +111,15 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
+- `network_flow_packets`: Network packet counts. Enables `beyla.network.flow.packets` (`beyla_network_flow_packets_total` in Prometheus)
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
+- `stats`: All TCP statistics metrics, including the higher-frequency `stats_tcp_io` probes
+- `stats_tcp_failed_connections`: Failed TCP connection counts. Enables `beyla.stat.tcp.failed.connections` (`beyla_stat_tcp_failed_connections_total` in Prometheus)
+- `stats_tcp_io`: Bytes sent and received at the TCP socket layer. Enables `beyla.stat.tcp.io` (`beyla_stat_tcp_io_bytes_total` in Prometheus)
+- `stats_tcp_retransmits`: TCP retransmission counts. Enables `beyla.stat.tcp.retransmits` (`beyla_stat_tcp_retransmits_total` in Prometheus)
+- `stats_tcp_rtt`: Smoothed TCP round-trip time. Enables the `beyla.stat.tcp.rtt` histogram (`beyla_stat_tcp_rtt_seconds` in Prometheus)
+
+The `stats` feature enables every TCP statistics group. The `stats_tcp_io` probes run for every `tcp_sendmsg` and `tcp_cleanup_rbuf` call, so their overhead grows with TCP send and receive activity. If you don't need TCP I/O byte counts, select the lower-frequency TCP statistics individually instead of using `stats`.
 
 ### Application runtime metrics
 
@@ -300,7 +308,15 @@ The Prometheus metrics exporter can export the following metrics data groups:
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
+- `network_flow_packets`: Network packet counts
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
+- `stats`: All TCP statistics metrics
+- `stats_tcp_failed_connections`: Failed TCP connection counts
+- `stats_tcp_io`: Bytes sent and received at the TCP socket layer
+- `stats_tcp_retransmits`: TCP retransmission counts
+- `stats_tcp_rtt`: Smoothed TCP round-trip time
+
+The `prometheus_export.features` option is deprecated. Use the global [`metrics.features`](#global-metrics-features) option for new configurations.
 
 ### Prometheus instrumentation
 
@@ -332,13 +348,18 @@ You can set the default `features` list for all exporters at once using the glob
 
 The `metrics.features` option (environment variable: `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
 
-To enable runtime metrics globally for all processes:
+You can also override the global features for one discovered service with `discovery.instrument[].metrics.features`. The deprecated `otel_metrics_export.features` and `prometheus_export.features` options override the global list for their respective exporters. Use `metrics.features` for new configurations.
+
+To enable selected network and TCP statistics globally for all processes:
 
 ```yaml
 metrics:
   features:
     - application
-    - application_runtime
+    - network_flow_packets
+    - stats_tcp_failed_connections
+    - stats_tcp_retransmits
+    - stats_tcp_rtt
 ```
 
 To enable `application_runtime` only for a specific process, use the per-service `metrics.features` override in service discovery:

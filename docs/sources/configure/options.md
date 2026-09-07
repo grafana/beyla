@@ -113,9 +113,22 @@ This option prints any instrumented trace on the standard output using one of th
 If you set `enforce_sys_caps` to true and the required system capabilities are missing, Beyla aborts startup and logs the missing capabilities.
 If you set this option to `false`, Beyla only logs the missing capabilities.
 
-## BPF filesystem and profile correlation
+## eBPF options
 
 YAML section: `ebpf`
+
+| YAML<p>environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `stats_wakeup_data_bytes`<p>`BEYLA_STATS_WAKEUP_DATA_BYTES`</p> | Sets the minimum number of bytes that must be available in the statistics eBPF ring buffer before waking the user-space consumer. | integer | `4096` |
+
+Set `stats_wakeup_data_bytes` to `0` to wake up user space for every submitted statistics event. Higher values reduce user-space wake-up overhead under heavy traffic, but can increase metric delivery latency. Keep the value well below the amount of ring-buffer capacity available during a flush interval to reduce the risk of dropped events.
+
+```yaml
+ebpf:
+  stats_wakeup_data_bytes: 8192
+```
+
+### BPF filesystem and profile correlation
 
 Beyla pins some of its eBPF maps under an `otel` directory inside the BPF filesystem, by default `/sys/fs/bpf/otel`. The pinned maps are what lets other eBPF tools read Beyla's view of the instrumented processes, and they're what the OpenTelemetry eBPF Profiler reads to correlate CPU profiles with the traces Beyla produces.
 

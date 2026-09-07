@@ -85,7 +85,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		opt(&startConfig)
 	}
 
-	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, "tracerEvents")
+	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "tracerEvents")
 
 	logDeprecationAndConflicts(pf.cfg)
 	configCriteria := FindingCriteria(pf.cfg)
@@ -95,7 +95,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	}
 
 	swi := swarm.Instancer{}
-	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "processEvents")
+	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "processEvents")
 
 	var addedPIDsCh <-chan []app.PID
 	if appDynamicSelector != nil {
@@ -104,13 +104,13 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, addedPIDsCh)),
 		swarm.WithID("ProcessWatcher"))
 
-	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "kubeEnrichedEvents")
+	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "kubeEnrichedEvents")
 	swi.Add(WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, kubeEnrichedEvents),
 		swarm.WithID("WatcherKubeEnricher"))
 
 	enrichedProcessEvents := startConfig.enrichedProcessEvents
 	if enrichedProcessEvents == nil {
-		enrichedProcessEvents = msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "enrichedProcessEvents")
+		enrichedProcessEvents = msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "enrichedProcessEvents")
 	}
 	swi.Add(DockerDiscoveryDecoratorProvider(
 		pf.ctxInfo.K8sInformer,
@@ -119,34 +119,33 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		enrichedProcessEvents,
 	), swarm.WithID("DockerDiscoveryDecoratorProvider"))
 
-	langEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, "languageEnrichedEvents")
+	langEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "languageEnrichedEvents")
 	swi.Add(LanguageDecoratorProvider(
 		pf.cfg,
 		enrichedProcessEvents,
 		langEnrichedEvents,
 	), swarm.WithID("LanguageDecoratorProvider"))
 
-	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, "criteriaFilteredEvents")
+	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, pf.ctxInfo.Metrics, "criteriaFilteredEvents")
 	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicPIDSelector),
 		swarm.WithID("CriteriaMatcher"))
 	swi.Add(dynamicMatcherProvider(langEnrichedEvents, criteriaFilteredEvents, appDynamicSelector),
 		swarm.WithID("DynamicMatcher"))
 
-	executableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "executableTypes")
+	executableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "executableTypes")
 	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes),
 		swarm.WithID("ExecTyper"))
 
-	processContextEnrichedTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "processContextEnrichedTypes")
+	processContextEnrichedTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "processContextEnrichedTypes")
 	swi.Add(ProcessContextDecoratorProvider(pf.cfg.Discovery.ProcessContextPollInterval, executableTypes, processContextEnrichedTypes),
 		swarm.WithID("ProcessContextDecorator"))
 
 	// we could subscribe ContainerStoreUpdater directly to the executableTypes queue and not providing any output channel
 	// but forcing the output by the executableTypesReplica channel only after the Container DB has been updated
 	// prevents race conditions in later stages of the pipeline
-	storedExecutableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, "storedExecutableTypes")
+	storedExecutableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "storedExecutableTypes")
 	swi.Add(ContainerStoreUpdaterProvider(pf.ctxInfo.K8sInformer, processContextEnrichedTypes, storedExecutableTypes),
 		swarm.WithID("ContainerStoreUpdater"))
-
 	swi.Add(traceAttacherProvider(&traceAttacher{
 		Cfg:                 pf.cfg,
 		OutputTracerEvents:  tracerEvents,

@@ -4,6 +4,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 The structure and content of this file follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.28.5] - 2026-08-21
+### Fixed
+- Panic on malformed `+` string concatenation fixed thanks to @ChrisJr404.
+
 ## [1.28.4] - 2026-07-07
 ### Fixed
 - JSONPath slice for `[::2]` against an empty slice works correctly now.

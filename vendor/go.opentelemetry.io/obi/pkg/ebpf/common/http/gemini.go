@@ -209,11 +209,11 @@ func extractGeminiModel(req *http.Request) string {
 // extractGeminiModelFromPath returns the model name embedded in a Gemini URL
 // path, or "" when the path has no /models/ segment.
 func extractGeminiModelFromPath(path string) string {
-	idx := strings.Index(path, geminiModelPrefix)
-	if idx < 0 {
+	_, after, ok := strings.Cut(path, geminiModelPrefix)
+	if !ok {
 		return ""
 	}
-	model := path[idx+len(geminiModelPrefix):]
+	model := after
 	if colonIdx := strings.Index(model, ":"); colonIdx >= 0 {
 		model = model[:colonIdx]
 	}
@@ -228,11 +228,11 @@ func extractGeminiOperation(req *http.Request) string {
 		return request.DefaultGeminiOperation
 	}
 	path := req.URL.Path
-	idx := strings.Index(path, geminiModelPrefix)
-	if idx < 0 {
+	_, after0, ok := strings.Cut(path, geminiModelPrefix)
+	if !ok {
 		return request.DefaultGeminiOperation
 	}
-	after := path[idx+len(geminiModelPrefix):]
+	after := after0
 	colonIdx := strings.Index(after, ":")
 	if colonIdx < 0 || colonIdx+1 >= len(after) {
 		return request.DefaultGeminiOperation

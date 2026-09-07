@@ -42,7 +42,7 @@ type KafkaInfo struct {
 func (k Operation) String() string {
 	switch k {
 	case Produce:
-		return request.MessagingPublish
+		return request.MessagingSend
 	case Fetch:
 		return request.MessagingProcess
 	default:

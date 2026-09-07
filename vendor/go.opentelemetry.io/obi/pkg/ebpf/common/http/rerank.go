@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
@@ -46,13 +47,7 @@ func isRerankPath(req *http.Request) bool {
 		return false
 	}
 
-	for _, segment := range strings.Split(path, "/") {
-		if segment == "rerank" {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(strings.Split(path, "/"), "rerank")
 }
 
 // rerankProviderFromHost returns the provider name based on the request

@@ -23,12 +23,12 @@ func dynamicSignalPID(service *request.Span) app.PID {
 	return service.Service.ProcPID
 }
 
-func processEventSignalPID(file *exec.FileInfo) app.PID {
-	snap := file.ServiceAttrs()
+func processEventSignalPID(event exec.ProcessEvent) app.PID {
+	snap := event.ServiceFile().ServiceAttrs()
 	if snap.DynamicSelectorPID != 0 {
 		return snap.DynamicSelectorPID
 	}
-	return file.Pid()
+	return event.File.Pid()
 }
 
 func runtimeMetricSignalPID(snapshot runtimemetrics.RuntimeMetricSnapshot) app.PID {
@@ -98,7 +98,8 @@ func filterRuntimeMetricSnapshots(
 ) []runtimemetrics.RuntimeMetricSnapshot {
 	writeIdx := 0
 	for readIdx := range snapshots {
-		if selector.IncludesPID(runtimeMetricSignalPID(snapshots[readIdx])) {
+		// Tombstones bypass PID selection so exporters can remove previously exported series.
+		if snapshots[readIdx].Removed || selector.IncludesPID(runtimeMetricSignalPID(snapshots[readIdx])) {
 			snapshots[writeIdx] = snapshots[readIdx]
 			writeIdx++
 		}
@@ -174,7 +175,7 @@ func (g *dynamicSignalProcessEventGate) handleProcessEvent(pe exec.ProcessEvent)
 		if g.forwarded[pid] {
 			return
 		}
-		if g.selector.IncludesPID(processEventSignalPID(pe.File)) {
+		if g.selector.IncludesPID(processEventSignalPID(pe)) {
 			g.forwarded[pid] = true
 			g.output.Send(pe)
 		}
@@ -193,7 +194,7 @@ func (g *dynamicSignalProcessEventGate) handleSelectorAdd(added []app.PID) {
 	}
 	for _, signalPID := range added {
 		for pid, file := range g.current {
-			if g.forwarded[pid] || processEventSignalPID(file) != signalPID {
+			if g.forwarded[pid] || processEventSignalPID(exec.ProcessEvent{File: file}) != signalPID {
 				continue
 			}
 			g.forwarded[pid] = true
@@ -208,7 +209,7 @@ func (g *dynamicSignalProcessEventGate) handleSelectorRemove(removed []app.PID) 
 	}
 	for _, signalPID := range removed {
 		for pid, file := range g.current {
-			if !g.forwarded[pid] || processEventSignalPID(file) != signalPID {
+			if !g.forwarded[pid] || processEventSignalPID(exec.ProcessEvent{File: file}) != signalPID {
 				continue
 			}
 			g.forwarded[pid] = false

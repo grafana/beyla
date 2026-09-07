@@ -4,4 +4,4 @@
 package ec2
 
 // Version is the current release version of the EC2 resource detector.
-const Version = "2.5.2"
+const Version = "2.5.3"

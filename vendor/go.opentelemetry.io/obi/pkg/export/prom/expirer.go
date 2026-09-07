@@ -56,6 +56,15 @@ func (ex *Expirer[T]) WithLabelValues(lbls ...string) *MetricEntry[T] {
 	})
 }
 
+// DeleteLabelValues removes the metric for the label values immediately.
+func (ex *Expirer[T]) DeleteLabelValues(lbls ...string) bool {
+	entry, ok := ex.entries.Delete(lbls)
+	if !ok {
+		return false
+	}
+	return ex.wrapped.DeleteLabelValues(entry.LabelVals...)
+}
+
 // Describe wraps prometheus.Collector Describe method
 func (ex *Expirer[T]) Describe(descs chan<- *prometheus.Desc) {
 	ex.wrapped.Describe(descs)

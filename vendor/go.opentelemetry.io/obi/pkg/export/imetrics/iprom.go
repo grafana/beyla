@@ -25,7 +25,7 @@ var pipelineBufferLengths = []float64{0, 10, 20, 40, 80, 160, 320}
 type PrometheusEndpointConfig struct {
 	// 0 (default) means disabled
 	Port int    `yaml:"port,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT" validate:"gte=0,lte=65535"`
-	Path string `yaml:"path,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PATH"`
+	Path string `yaml:"path,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PATH" validate:"startswith=/"`
 }
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus

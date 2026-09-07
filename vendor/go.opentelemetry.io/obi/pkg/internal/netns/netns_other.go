@@ -8,3 +8,7 @@ package netns // import "go.opentelemetry.io/obi/pkg/internal/netns"
 func WithNetNS(_ int, fn func() error) error {
 	return fn()
 }
+
+func IsIsolated(_ int) (bool, error) {
+	return false, nil
+}

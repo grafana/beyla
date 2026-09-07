@@ -31,7 +31,7 @@ var rhelIDs = []string{"rhel", "centos", "rocky", "alma"}
 
 func parseOSReleaseIsRHEL(data []byte) bool {
 	content := strings.ToLower(string(data))
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		var val string
 		switch {
 		case strings.HasPrefix(line, "id_like="):

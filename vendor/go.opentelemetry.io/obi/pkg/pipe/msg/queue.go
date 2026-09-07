@@ -224,7 +224,7 @@ func (s *sink[T]) send(ctx context.Context, o T, route []string) {
 	var blocked []dst[T]
 	for _, d := range dsts {
 		// report channel len/capacity ratio metrics
-		d.gauge(d.name, float64(len(d.ch)+1)/float64(cap(d.ch)))
+		d.gauge(d.name, float64(len(d.ch))/float64(cap(d.ch)))
 		select {
 		case <-ctx.Done():
 			return
@@ -298,6 +298,9 @@ func (q *Queue[T]) Subscribe(options ...SubscribeOpt) <-chan T {
 	opts := subscribeOpts{subscriber: unnamed}
 	for _, opt := range options {
 		opt(&opts)
+	}
+	if opts.subscriber == unnamed {
+		opts.subscriber = q.cfg.name
 	}
 
 	// hold bypassMu so q.sink can't be re-pointed by a concurrent Bypass while we subscribe to it

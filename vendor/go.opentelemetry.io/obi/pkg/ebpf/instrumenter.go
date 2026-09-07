@@ -47,8 +47,8 @@ func closeAll(closers []io.Closer) {
 }
 
 func closeAllReverse(closers []io.Closer) {
-	for i := len(closers) - 1; i >= 0; i-- {
-		closers[i].Close()
+	for _, closer := range slices.Backward(closers) {
+		closer.Close()
 	}
 }
 
@@ -78,8 +78,8 @@ type processScopedGoProbeRegistration struct {
 
 func (c *reverseCloser) Close() error {
 	c.once.Do(func() {
-		for i := len(c.closers) - 1; i >= 0; i-- {
-			c.err = errors.Join(c.err, c.closers[i].Close())
+		for _, v := range slices.Backward(c.closers) {
+			c.err = errors.Join(c.err, v.Close())
 		}
 	})
 
@@ -537,8 +537,8 @@ func versionFromPath(path string) (*version.Version, bool) {
 	components := strings.Split(path, string(filepath.Separator))
 	var dotted, plain []string
 
-	for i := len(components) - 1; i >= 0; i-- {
-		for _, m := range versionRe.FindAllString(components[i], -1) {
+	for _, component := range slices.Backward(components) {
+		for _, m := range versionRe.FindAllString(component, -1) {
 			if strings.Contains(m, ".") {
 				dotted = append(dotted, m)
 			} else {

@@ -214,34 +214,22 @@ func (p Packet) ValueString() string {
 }
 
 func (p Packet) framingExtrasEnd() int {
-	end := HeaderLen + int(p.Header().FramingExtrasLen())
-	if end > len(p) {
-		end = len(p)
-	}
+	end := min(HeaderLen+int(p.Header().FramingExtrasLen()), len(p))
 	return end
 }
 
 func (p Packet) extrasEnd() int {
-	end := p.framingExtrasEnd() + int(p.Header().ExtrasLen())
-	if end > len(p) {
-		end = len(p)
-	}
+	end := min(p.framingExtrasEnd()+int(p.Header().ExtrasLen()), len(p))
 	return end
 }
 
 func (p Packet) keyEnd() int {
-	end := p.extrasEnd() + int(p.Header().KeyLen())
-	if end > len(p) {
-		end = len(p)
-	}
+	end := min(p.extrasEnd()+int(p.Header().KeyLen()), len(p))
 	return end
 }
 
 func (p Packet) valueEnd() int {
-	end := p.keyEnd() + p.Header().ValueLen()
-	if end > len(p) {
-		end = len(p)
-	}
+	end := min(p.keyEnd()+p.Header().ValueLen(), len(p))
 	return end
 }
 

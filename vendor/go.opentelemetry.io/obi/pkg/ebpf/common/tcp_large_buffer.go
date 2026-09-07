@@ -142,7 +142,7 @@ func containsTCPLargeBuffer(
 	traceID [16]uint8,
 	packetType, direction uint8,
 	connInfo BpfConnectionInfoT,
-	protocolType uint8,
+	protocolType BpfProtocolType,
 ) bool {
 	key := largeBufferKey{
 		traceID:    traceID,
@@ -154,7 +154,7 @@ func containsTCPLargeBuffer(
 	return parseCtx.largeBuffers.Contains(key)
 }
 
-func protocolToLargeBufferKind(protocolType uint8) largeBufferKind {
+func protocolToLargeBufferKind(protocolType BpfProtocolType) largeBufferKind {
 	switch protocolType {
 	case ProtocolTypeKafka, ProtocolTypeMySQL, ProtocolTypePostgres, ProtocolTypeMSSQL, ProtocolTypeHTTP, ProtocolTypeAerospike:
 		return KindLayerApp
@@ -168,7 +168,7 @@ func extractTCPLargeBuffer(
 	traceID [16]uint8,
 	packetType, direction uint8,
 	connInfo BpfConnectionInfoT,
-	protocolType uint8,
+	protocolType BpfProtocolType,
 ) (*largebuf.LargeBuffer, bool) {
 	return extractLargeBuffer(parseCtx, traceID, packetType, direction, connInfo, protocolToLargeBufferKind(protocolType))
 }

@@ -126,16 +126,16 @@ func extractBedrockModel(req *http.Request) string {
 	}
 	path := req.URL.Path
 	const prefix = "/model/"
-	idx := strings.Index(path, prefix)
-	if idx < 0 {
+	_, after, ok := strings.Cut(path, prefix)
+	if !ok {
 		return ""
 	}
-	remainder := path[idx+len(prefix):]
-	slashIdx := strings.Index(remainder, "/")
-	if slashIdx < 0 {
+	remainder := after
+	before, _, ok := strings.Cut(remainder, "/")
+	if !ok {
 		return remainder
 	}
-	return remainder[:slashIdx]
+	return before
 }
 
 // isBedrockStream detects streaming Bedrock calls by checking the URL path
@@ -157,10 +157,10 @@ func extractBedrockGuardrailID(req *http.Request, resp *http.Response) string {
 	if req != nil && req.URL != nil {
 		path := req.URL.Path
 		const prefix = "/guardrail/"
-		if idx := strings.Index(path, prefix); idx >= 0 {
-			remainder := path[idx+len(prefix):]
-			if slashIdx := strings.Index(remainder, "/"); slashIdx >= 0 {
-				return remainder[:slashIdx]
+		if _, after, ok := strings.Cut(path, prefix); ok {
+			remainder := after
+			if before, _, ok := strings.Cut(remainder, "/"); ok {
+				return before
 			}
 			return remainder
 		}

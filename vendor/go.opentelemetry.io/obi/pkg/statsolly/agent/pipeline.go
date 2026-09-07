@@ -46,38 +46,38 @@ func (s *Stats) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	swi := &swarm.Instancer{}
 	// Start nodes: those generating stats (reading them from eBPF)
-	ebpfStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "ebpfStats")
+	ebpfStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "ebpfStats")
 	swi.Add(swarm.DirectInstance(newRingBufTracer(s, ebpfStats)), swarm.WithID("RingBufTracer"))
 
 	// Middle nodes: transforming stats and passing them to the next stage in the pipeline.
 	// Many of the nodes here are not mandatory. It's decision of each InstanceFunc to decide
 	// whether the node needs to be instantiated or just bypass their input/output channels.
-	kubeDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "kubeDecoratedStats")
+	kubeDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "kubeDecoratedStats")
 	swi.Add(k8s.MetadataDecoratorProvider(ctx, &s.cfg.Attributes.Kubernetes, s.ctxInfo.K8sInformer,
 		statAttrs, ebpfStats, kubeDecoratedStats), swarm.WithID("K8sMetadataDecorator"))
 
-	dnsDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "dnsDecoratedStats")
+	dnsDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "dnsDecoratedStats")
 	swi.Add(rdns.ReverseDNSProvider(&s.cfg.Stats.ReverseDNS, statAttrs, &s.cfg.EBPF, kubeDecoratedStats, dnsDecoratedStats),
 		swarm.WithID("ReverseDNS"))
 
-	geoIPDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "geoIPDecoratedStats")
+	geoIPDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "geoIPDecoratedStats")
 	swi.Add(geoip.GeoIPProvider(&s.cfg.Stats.GeoIP, statAttrs,
 		dnsDecoratedStats, geoIPDecoratedStats), swarm.WithID("GeoIPDecorator"))
 
-	cidrDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "cidrDecoratedStats")
+	cidrDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "cidrDecoratedStats")
 	swi.Add(cidr.DecoratorProvider(s.cfg.Stats.CIDRs, statAttrs, geoIPDecoratedStats, cidrDecoratedStats),
 		swarm.WithID("CIDRDecorator"))
 
-	decoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "decoratedStats")
+	decoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "decoratedStats")
 	swi.Add(decorate.Decorate(s.agentIP, statAttrs, cidrDecoratedStats, decoratedStats),
 		swarm.WithID("StatsDecorator"))
 
-	dynamicFilteredStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "dynamicFilteredStats")
+	dynamicFilteredStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "dynamicFilteredStats")
 	var dynamicSelector selection.PIDSelector
 	if s.ctxInfo.DynamicPIDSelector != nil {
 		dynamicSelector = s.ctxInfo.DynamicPIDSelector.StatsMetrics()
 	}
-	dynamicDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "dynamicDecoratedStats")
+	dynamicDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "dynamicDecoratedStats")
 	swi.Add(dynamicpid.MetadataDecoratorProvider(s.ctxInfo.DynamicPIDSelector, dynamicSelector,
 		s.ctxInfo.K8sInformer, statAttrs, decoratedStats, dynamicDecoratedStats),
 		swarm.WithID("DynamicPIDMetadataDecorator"))
@@ -87,7 +87,7 @@ func (s *Stats) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	filteredStats := s.ctxInfo.OverrideStatsExportQueue
 	if filteredStats == nil {
-		filteredStats = msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, "filteredStats")
+		filteredStats = msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "filteredStats")
 	}
 	swi.Add(filter.ByAttribute(s.cfg.Filters.Stats, nil, selectorCfg.ExtraGroupAttributesCfg, ebpf.StatStringGetters, dynamicFilteredStats, filteredStats),
 		swarm.WithID("AttributeFilter"))

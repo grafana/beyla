@@ -66,7 +66,7 @@ func parseS3bucketKey(req *http.Request) (string, string) {
 	// Case 1: Virtual-hosted–style — bucket in the hostname.
 	// Example: my-bucket.s3.amazonaws.com /foo/bar.txt
 	if strings.Contains(req.Host, ".s3.") {
-		bucket := strings.SplitN(req.Host, ".s3.", 2)[0]
+		bucket, _, _ := strings.Cut(req.Host, ".s3.")
 		return bucket, path
 	}
 

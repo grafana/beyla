@@ -123,12 +123,30 @@ func (d *DynamicAppIPs) decrementIPsLocked(ips []string) {
 	}
 }
 
-// ResolveContainerIPs returns pod IPs for a PID when a Kubernetes store is available.
-// It registers the PID in store via AddProcess; callers that invoke it outside
-// DynamicAppIPs must call store.DeleteProcess when the PID is no longer needed.
+// processIPs lists addresses in pid's netns. Injectable for tests.
+var processIPs = func(pid app.PID) []string {
+	ips, err := container.IPsForPID(pid)
+	if err != nil {
+		selLog().Debug("can't list netns IPs for PID", "pid", pid, "error", err)
+		return nil
+	}
+	return ips
+}
+
+// ResolveContainerIPs returns the IPs associated with a dynamically selected PID.
+//
+// The two sources are mutually exclusive. With a Kubernetes store, pod IPs are the only
+// source of identity and a PID without pod metadata resolves to nothing. Without a store,
+// identity comes from the addresses of an isolated container network namespace
+// (Docker/containerd bridge); container.IPsForPID yields nothing for a process sharing
+// the host or agent namespace, whose addresses belong to the node rather than to it.
+//
+// When store is non-nil the PID is registered via AddProcess; callers that invoke
+// this outside DynamicAppIPs must call store.DeleteProcess when the PID is no
+// longer needed.
 func ResolveContainerIPs(store *kube.Store, pid app.PID) []string {
 	if store == nil {
-		return nil
+		return processIPs(pid)
 	}
 	store.AddProcess(pid)
 	info, err := container.InfoForPID(pid)

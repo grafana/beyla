@@ -4,7 +4,9 @@
 package export // import "go.opentelemetry.io/obi/pkg/export"
 
 import (
+	"cmp"
 	"fmt"
+	"math/bits"
 	"slices"
 	"strings"
 
@@ -184,6 +186,56 @@ func validFeatureNames() []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+// marshalNames returns the enabled feature names: aggregate names (e.g. "all", "stats")
+// when all of their bits are enabled, then the remaining single-bit names in declaration order.
+func (f Features) marshalNames() []string {
+	singles := make([]string, 0, len(FeatureMapper))
+	aggregates := make([]string, 0, len(FeatureMapper))
+	for name, feature := range FeatureMapper {
+		// FeatureAll is emitted under its "all" alias
+		if name == "*" {
+			continue
+		}
+		if bits.OnesCount(uint(feature)) == 1 {
+			singles = append(singles, name)
+		} else {
+			aggregates = append(aggregates, name)
+		}
+	}
+	// widest aggregate first, so "all" wins over "stats" when both apply
+	slices.SortFunc(aggregates, func(a, b string) int {
+		return bits.OnesCount(uint(FeatureMapper[b])) - bits.OnesCount(uint(FeatureMapper[a]))
+	})
+	slices.SortFunc(singles, func(a, b string) int {
+		return cmp.Compare(FeatureMapper[a], FeatureMapper[b])
+	})
+
+	names := make([]string, 0, len(singles))
+	remaining := f
+	for _, name := range slices.Concat(aggregates, singles) {
+		feature := FeatureMapper[name]
+		if remaining.has(feature) {
+			names = append(names, name)
+			remaining = Features(maps.Bits(remaining) &^ maps.Bits(feature))
+		}
+	}
+	return names
+}
+
+// MarshalYAML renders the bitmask as the list of enabled feature names, so a logged
+// configuration shows the same values that can be written in the YAML.
+func (f Features) MarshalYAML() (any, error) {
+	if f.Undefined() {
+		return nil, nil
+	}
+	// an empty sequence, in opposition of "null" in the undefined case
+	node := yaml.Node{Kind: yaml.SequenceNode}
+	for _, name := range f.marshalNames() {
+		node.Content = append(node.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: name})
+	}
+	return node, nil
 }
 
 func LoadFeatures(features []string) (Features, error) {

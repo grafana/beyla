@@ -261,8 +261,13 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	log := t.log.With("pid", execElf.Pid(), "comm", execElf.CmdExePath())
 	if ic, ok := t.instrumentableCache.Get(cacheKey{Dev: execElf.Dev(), Ino: execElf.Ino()}); ok {
 		log.Debug("new instance of existing executable", "type", ic.Type)
+		if parent, ok := t.currentPids[execElf.Ppid()]; ok && ic.Type == svc.InstrumentablePython &&
+			execElf.CmdExePath() == parent.CmdExePath() {
+			execElf.SetRuntimeMetricServiceSource(parent)
+		}
 		return ebpf.Instrumentable{Type: ic.Type, FileInfo: execElf, Offsets: ic.Offsets, InstrumentationError: ic.InstrumentationError}
 	}
+	lifecycle := execElf
 
 	log.Debug("getting instrumentable information")
 	// look for suitable Go application first
@@ -315,6 +320,13 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	// Return the instrumentable without offsets, as it is identified as a generic
 	// (or non-instrumentable Go proxy) executable
 	t.instrumentableCache.Add(cacheKey{Dev: execElf.Dev(), Ino: execElf.Ino()}, instrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
+	if detectedType == svc.InstrumentablePython {
+		lifecycle.SetRuntimeMetricServiceSource(execElf)
+		return ebpf.Instrumentable{
+			Type: detectedType, FileInfo: lifecycle, InstrumentationError: err,
+			LogEnricherEnabled: lifecycle.LogEnricherEnabled(),
+		}
+	}
 
 	return ebpf.Instrumentable{
 		Type:                 detectedType,
@@ -375,6 +387,9 @@ func (t *typer) loadAllGoFunctionNames() {
 		t.addGoFunctionName(uniqueFunctions, symbolName)
 	}
 	for _, symbolName := range gotracer.GoAutoSDKActivationProbeSymbols() {
+		t.addGoFunctionName(uniqueFunctions, symbolName)
+	}
+	for _, symbolName := range gotracer.GoH2OwnershipProbeSymbols() {
 		t.addGoFunctionName(uniqueFunctions, symbolName)
 	}
 }

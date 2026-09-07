@@ -540,8 +540,8 @@ func memcachedFirstLineFromReader(r *largebuf.LargeBufferReader) ([]byte, bool) 
 }
 
 func memcachedToken(line []byte) []byte {
-	if idx := bytes.IndexByte(line, ' '); idx >= 0 {
-		return line[:idx]
+	if before, _, ok := bytes.Cut(line, []byte{' '}); ok {
+		return before
 	}
 
 	return line

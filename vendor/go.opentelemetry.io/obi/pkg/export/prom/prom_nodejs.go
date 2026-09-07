@@ -10,7 +10,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	nodejsruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
@@ -25,6 +27,12 @@ type nodejsRuntimeMetricsCollector struct {
 	delayP50             *Expirer[prometheus.Gauge]
 	delayP90             *Expirer[prometheus.Gauge]
 	delayP99             *Expirer[prometheus.Gauge]
+
+	gcDuration    *Expirer[prometheus.Histogram]
+	heapLimit     *Expirer[prometheus.Gauge]
+	heapUsed      *Expirer[prometheus.Gauge]
+	heapAvailable *Expirer[prometheus.Gauge]
+	heapPhysical  *Expirer[prometheus.Gauge]
 
 	// cumulative ELU values tracked per Instance|PID to compute counter
 	// deltas; TTL-expired so process churn cannot grow it without bound
@@ -43,6 +51,8 @@ type nodejsPrevELU struct {
 func newNodejsRuntimeMetricsCollector(cfg *PrometheusConfig) nodejsRuntimeMetricsCollector {
 	clock := timeNow
 	stateLabels := append(runtimeServiceLabels(), "nodejs_eventloop_state")
+	gcLabels := append(runtimeServiceLabels(), attr.V8JSGCType.Prom())
+	heapLabels := append(runtimeServiceLabels(), attr.V8JSHeapSpaceName.Prom())
 	newGauge := func(name attributes.Name, help string) *Expirer[prometheus.Gauge] {
 		return newRuntimeGauge(name.Prom, help, runtimeServiceLabels(), clock, cfg.TTL)
 	}
@@ -68,6 +78,19 @@ func newNodejsRuntimeMetricsCollector(cfg *PrometheusConfig) nodejsRuntimeMetric
 			"90th percentile of the nodejs event loop delay over the last sampling interval."),
 		delayP99: newGauge(attributes.NodejsEventLoopDelayP99,
 			"99th percentile of the nodejs event loop delay over the last sampling interval."),
+		gcDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    attributes.V8JSGCDuration.Prom,
+			Help:    "Duration of V8 garbage collection cycles.",
+			Buckets: cfg.Buckets.V8JSGCDurationHistogram,
+		}, gcLabels).MetricVec, clock, cfg.TTL),
+		heapLimit: newRuntimeGauge(attributes.V8JSMemoryHeapLimit.Prom,
+			"Total V8 heap memory size pre-allocated, per heap space.", heapLabels, clock, cfg.TTL),
+		heapUsed: newRuntimeGauge(attributes.V8JSMemoryHeapUsed.Prom,
+			"V8 heap memory size allocated, per heap space.", heapLabels, clock, cfg.TTL),
+		heapAvailable: newRuntimeGauge(attributes.V8JSMemoryHeapSpaceAvailableSize.Prom,
+			"V8 heap space available size.", heapLabels, clock, cfg.TTL),
+		heapPhysical: newRuntimeGauge(attributes.V8JSMemoryHeapSpacePhysicalSize.Prom,
+			"Committed size of a V8 heap space.", heapLabels, clock, cfg.TTL),
 		prev:           expire.NewExpiryMap[*nodejsPrevELU](clock, cfg.TTL),
 		clock:          clock,
 		lastExpiration: clock(),
@@ -89,6 +112,40 @@ func (c *nodejsRuntimeMetricsCollector) collectors() []prometheus.Collector {
 		c.delayP50,
 		c.delayP90,
 		c.delayP99,
+		c.gcDuration,
+		c.heapLimit,
+		c.heapUsed,
+		c.heapAvailable,
+		c.heapPhysical,
+	}
+}
+
+// collectNodejsV8Metrics handles the v8js snapshot variants: the gc duration
+// histogram (one observation per collection cycle) and the per-space heap
+// gauges (absolute sample values, like the JVM memory gauges).
+func (r *metricsReporter) collectNodejsV8Metrics(snapshot runtimemetrics.RuntimeMetricSnapshot) {
+	c := &r.nodejsRuntimeMetrics
+	if c.gcDuration == nil ||
+		!snapshot.Service.ExportModes.CanExportMetrics() ||
+		!snapshot.Service.Features.AppRuntime() {
+		return
+	}
+
+	const nanosPerSecond = 1e9
+
+	serviceLabels := runtimeServiceLabelValues(snapshot)
+
+	if gc := snapshot.NodejsGC; gc != nil && gc.GCType != nodejsruntime.NodejsGCTypeUnknown {
+		c.gcDuration.WithLabelValues(slices.Concat(serviceLabels, []string{gc.GCType.String()})...).
+			Metric.Observe(float64(gc.DurationNs) / nanosPerSecond)
+	}
+
+	if heap := snapshot.NodejsHeapSpace; heap != nil {
+		labels := slices.Concat(serviceLabels, []string{heap.SpaceName})
+		c.heapLimit.WithLabelValues(labels...).Metric.Set(float64(heap.SpaceSize))
+		c.heapUsed.WithLabelValues(labels...).Metric.Set(float64(heap.SpaceUsedSize))
+		c.heapAvailable.WithLabelValues(labels...).Metric.Set(float64(heap.SpaceAvailableSize))
+		c.heapPhysical.WithLabelValues(labels...).Metric.Set(float64(heap.PhysicalSpaceSize))
 	}
 }
 

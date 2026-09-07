@@ -1,0 +1,132 @@
+{
+  "supported": {
+    "3.10": 20,
+    "3.11": 15,
+    "3.12": 14,
+    "3.13": 15,
+    "3.14": 7,
+    "3.9": 25
+  },
+  "data": {
+    "PyInterpreterState": {
+      "gc": {
+        "versions": {
+          "oldest": "3.9.0",
+          "newest": "3.12.14"
+        },
+        "offsets": [
+          {
+            "offset": 616,
+            "since": "3.9.0"
+          },
+          {
+            "offset": 648,
+            "since": "3.11.0"
+          },
+          {
+            "offset": 112,
+            "since": "3.12.0"
+          }
+        ]
+      }
+    },
+    "_PyRuntimeState": {
+      "_finalizing": {
+        "versions": {
+          "oldest": "3.9.0",
+          "newest": "3.12.14"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "3.9.0"
+          },
+          {
+            "offset": 24,
+            "since": "3.11.0"
+          }
+        ]
+      },
+      "interpreters.main": {
+        "versions": {
+          "oldest": "3.9.0",
+          "newest": "3.12.14"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "3.9.0"
+          },
+          {
+            "offset": 48,
+            "since": "3.11.0"
+          }
+        ]
+      }
+    },
+    "_Py_DebugOffsets": {
+      "gc": {
+        "versions": {
+          "oldest": "3.13.0",
+          "newest": "3.14.7"
+        },
+        "offsets": [
+          {
+            "offset": 568,
+            "since": "3.13.0"
+          },
+          {
+            "offset": 648,
+            "since": "3.14.0"
+          }
+        ]
+      },
+      "interpreter_state.gc": {
+        "versions": {
+          "oldest": "3.13.0",
+          "newest": "3.14.7"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "3.13.0"
+          },
+          {
+            "offset": 88,
+            "since": "3.14.0"
+          }
+        ]
+      }
+    },
+    "_gc_runtime_state": {
+      "collecting": {
+        "versions": {
+          "oldest": "3.9.0",
+          "newest": "3.12.14"
+        },
+        "offsets": [
+          {
+            "offset": 200,
+            "since": "3.9.0"
+          }
+        ]
+      },
+      "generation_stats": {
+        "versions": {
+          "oldest": "3.9.0",
+          "newest": "3.14.7"
+        },
+        "offsets": [
+          {
+            "offset": 128,
+            "since": "3.9.0"
+          },
+          {
+            "offset": 120,
+            "since": "3.14.0"
+          }
+        ]
+      }
+    }
+  }
+}

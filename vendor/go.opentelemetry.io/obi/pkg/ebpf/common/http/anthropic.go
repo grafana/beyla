@@ -216,8 +216,8 @@ func parseAnthropicStream(reader io.Reader) (*request.AnthropicResponse, []reque
 		}
 
 		// Parse event line
-		if strings.HasPrefix(line, "event:") {
-			currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		if after, ok := strings.CutPrefix(line, "event:"); ok {
+			currentEvent = strings.TrimSpace(after)
 			continue
 		}
 

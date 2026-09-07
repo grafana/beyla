@@ -36,7 +36,7 @@ func (t EventType) Instrumentation() (instrumentations.Instrumentation, bool) {
 		return instrumentations.InstrumentationMemcached, true
 	case EventTypeSunRPCClient, EventTypeSunRPCServer:
 		return instrumentations.InstrumentationSunRPC, true
-	case EventTypeAerospikeClient:
+	case EventTypeAerospikeClient, EventTypeAerospikeServer:
 		return instrumentations.InstrumentationAerospike, true
 	default:
 		return "", false

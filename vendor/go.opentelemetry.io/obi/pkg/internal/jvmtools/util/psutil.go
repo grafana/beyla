@@ -7,12 +7,15 @@ package util // import "go.opentelemetry.io/obi/pkg/internal/jvmtools/util"
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
+
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
 // Constants
@@ -42,10 +45,8 @@ func getTmpPathR(pid int, buf *string) error {
 	return err
 }
 
-func GetProcessInfo(pid int, uid *int, gid *int, nspid *int) error {
-	// Parse /proc/pid/status to find process credentials
-	path := fmt.Sprintf("/proc/%d/status", pid)
-	file, err := os.Open(path)
+func GetProcessInfo(process *procs.ProcessHandle, uid *int, gid *int, nspid *int) error {
+	file, err := process.Open("status", unix.O_RDONLY)
 	if err != nil {
 		return err
 	}
@@ -77,7 +78,7 @@ func GetProcessInfo(pid int, uid *int, gid *int, nspid *int) error {
 	}
 
 	if !nspidFound {
-		*nspid = altLookupNspid(pid)
+		return errors.New("process status has no namespace PID")
 	}
 
 	return scanner.Err()
@@ -93,62 +94,6 @@ func parseInt(s string) int {
 	return val
 }
 
-func altLookupNspid(pid int) int {
-	path := fmt.Sprintf("/proc/%d/ns/pid", pid)
-
-	// Don't bother looking for container PID if we are already in the same PID namespace
-	oldnsStat, _ := os.Stat("/proc/self/ns/pid")
-	newnsStat, _ := os.Stat(path)
-	if os.SameFile(oldnsStat, newnsStat) {
-		return pid
-	}
-
-	// Otherwise browse all PIDs in the namespace of the target process
-	// trying to find which one corresponds to the host PID
-	path = fmt.Sprintf("/proc/%d/root/proc", pid)
-	dir, err := os.Open(path)
-	if err != nil {
-		return pid
-	}
-	defer dir.Close()
-
-	entries, err := dir.Readdirnames(0)
-	if err != nil {
-		return pid
-	}
-
-	for _, entry := range entries {
-		if len(entry) > 0 && entry[0] >= '1' && entry[0] <= '9' {
-			// Check if /proc/<container-pid>/sched points back to <host-pid>
-			schedPath := fmt.Sprintf("/proc/%d/root/proc/%s/sched", pid, entry)
-			if schedGetHostPid(schedPath) == pid {
-				pid, _ = strconv.Atoi(entry)
-				break
-			}
-		}
-	}
-
-	return pid
-}
-
-func schedGetHostPid(path string) int {
-	file, err := os.Open(path)
-	if err != nil {
-		return -1
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	if scanner.Scan() {
-		line := scanner.Text()
-		if c := strings.LastIndex(line, "("); c != -1 {
-			return parseInt(line[c+1:])
-		}
-	}
-
-	return -1
-}
-
 func namespaceFlag(nsType string) (int, bool) {
 	switch nsType {
 	case "net":
@@ -162,26 +107,19 @@ func namespaceFlag(nsType string) (int, bool) {
 	}
 }
 
-func EnterNS(pid int, nsType string) int {
+func EnterNS(newns *os.File, nsType string) int {
 	nsFlag, ok := namespaceFlag(nsType)
 	if !ok {
 		return -1
 	}
 
-	path := fmt.Sprintf("/proc/%d/ns/%s", pid, nsType)
 	selfPath := "/proc/self/ns/" + nsType
 
-	oldnsStat, _ := os.Stat(selfPath)
-	newnsStat, _ := os.Stat(path)
-	if os.SameFile(oldnsStat, newnsStat) {
-		return 0
-	}
-
-	newns, err := os.Open(path)
-	if err != nil {
+	oldnsStat, oldErr := os.Stat(selfPath)
+	newnsStat, newErr := newns.Stat()
+	if oldErr != nil || newErr != nil {
 		return -1
 	}
-	defer newns.Close()
 
 	// Joining a mount namespace via setns(CLONE_NEWNS) is rejected by the
 	// kernel with EINVAL whenever the calling thread shares its filesystem
@@ -195,6 +133,10 @@ func EnterNS(pid int, nsType string) int {
 		if err := unix.Unshare(unix.CLONE_FS); err != nil {
 			return -1
 		}
+	}
+
+	if os.SameFile(oldnsStat, newnsStat) {
+		return 0
 	}
 
 	// Some ancient Linux distributions do not have setns() function

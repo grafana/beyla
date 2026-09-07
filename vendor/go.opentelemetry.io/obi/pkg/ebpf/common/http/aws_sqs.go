@@ -118,9 +118,9 @@ func parseSQSDestination(queueURL string) string {
 func inferSQSOperationType(opName string) string {
 	switch opName {
 	case "SendMessage", "SendMessageBatch":
-		return "send"
+		return request.MessagingSend
 	case "ReceiveMessage":
-		return "receive"
+		return request.MessagingReceive
 	default:
 		return ""
 	}

@@ -199,7 +199,7 @@ func resolveSymbol(f *elf.File, s elf.Symbol) Sym {
 		}
 	}
 
-	return Sym{Name: s.Name, Off: address, Len: s.Size, Prog: p}
+	return Sym{Name: s.Name, Off: address, Value: s.Value, Len: s.Size, Prog: p}
 }
 
 func exactSymbolMatch(symbolName string, names []string) (string, bool) {

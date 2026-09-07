@@ -6,12 +6,14 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 import (
 	"log/slog"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -29,10 +31,25 @@ const (
 // choose to filter traces using whether the User-space or Host-space PIDs
 var readNamespacePIDs = procs.FindNamespacedPids
 
+var pidsFilterMonoNow = timing.MonoTimeNow
+
+// Spans are filtered as soon as the ring buffer reader parses them, at most two
+// flush intervals after capture. Removed entries stay this long so those spans
+// still find their process; this only bounds memory, admission is decided by
+// comparing span timestamps against removedAt
+const pidRemovalRetention = 5 * time.Minute
+
 type PIDInfo struct {
 	fileInfo       *exec.FileInfo
 	pidTypes       PIDType
 	otherKnownPids []app.PID
+	// zero while the process lives; the CLOCK_MONOTONIC instant it was
+	// blocked at otherwise, comparable against BPF span timestamps
+	removedAt time.Duration
+	// the process that held this pid before, kept while its spans may still arrive
+	previous *PIDInfo
+	// when that previous process was removed: older spans are not this process's
+	since time.Duration
 }
 
 type ServiceFilter interface {
@@ -86,11 +103,36 @@ func (pf *PIDsFilter) ValidPID(userPID app.PID, ns uint32, pidType PIDType) bool
 
 	if ns, nsExists := pf.current[ns]; nsExists {
 		if info, pidExists := ns[userPID]; pidExists {
-			return info.pidTypes&pidType != 0
+			// any generation still draining keeps its tracer type valid, so its
+			// last events are parsed; Filter then picks the generation by time
+			for g := &info; g != nil; g = g.previous {
+				if g.pidTypes&pidType != 0 {
+					return true
+				}
+			}
 		}
 	}
 
 	return false
+}
+
+// The generation of the process that was alive when the span was captured, nil
+// when there is none: the span is newer than the last known process, or older
+// than the ones still kept
+func generationFor(info *PIDInfo, span *request.Span) *PIDInfo {
+	for g := info; g != nil; g = g.previous {
+		if g.removedAt != 0 && span.End > int64(g.removedAt) {
+			return nil
+		}
+		if g.since == 0 || span.End > int64(g.since) {
+			return g
+		}
+	}
+	return nil
+}
+
+func expired(info *PIDInfo, now time.Duration) bool {
+	return info.removedAt != 0 && now-info.removedAt > pidRemovalRetention
 }
 
 func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[app.PID]svc.Attrs {
@@ -101,8 +143,8 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[app.PID]svc.Attrs {
 	for k, v := range pf.current {
 		cVal := map[app.PID]svc.Attrs{}
 		for kv, vv := range v {
-			if vv.pidTypes&t != 0 {
-				cVal[kv] = vv.fileInfo.ServiceAttrs()
+			if vv.pidTypes&t != 0 && vv.removedAt == 0 {
+				cVal[kv] = vv.fileInfo.UnsafeServiceAttrs()
 			}
 		}
 		cp[k] = cVal
@@ -140,14 +182,19 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		// If the namespace exist, we confirm that we are tracking the user PID that OBI
 		// saw. We don't check for the host pid, because we can't be sure of the number
 		// of container layers. The Host PID is always the outer most layer.
-		if info, pidExists := ns[span.Pid.UserPID]; pidExists {
+		info, pidExists := ns[span.Pid.UserPID]
+		if !pidExists {
+			continue
+		}
+		if gen := generationFor(&info, span); gen != nil {
 			if pf.ignoreOtel {
-				pf.checkIfExportsOTel(info.fileInfo, span, pf.defaultOtlpGRPCPort)
+				pf.checkIfExportsOTel(gen.fileInfo, span, pf.defaultOtlpGRPCPort)
 			}
 			if pf.ignoreOtelSpan {
-				pf.checkIfExportsOTelSpanMetrics(info.fileInfo, span, pf.defaultOtlpGRPCPort)
+				pf.checkIfExportsOTelSpanMetrics(gen.fileInfo, span, pf.defaultOtlpGRPCPort)
 			}
-			inputSpans[i].Service = info.fileInfo.ServiceAttrs()
+			// Must use the unsafe version to avoid massive memory pressure here.
+			inputSpans[i].Service = gen.fileInfo.UnsafeServiceAttrs()
 			pf.normalizeTraceContext(&inputSpans[i])
 			outputSpans = append(outputSpans, inputSpans[i])
 		}
@@ -177,6 +224,12 @@ func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, fi *exec.FileInfo, t PIDT
 
 	for _, p := range allPids {
 		pidInfo := ns[p]
+		if pidInfo.removedAt != 0 {
+			// a reused pid starts a new generation; the old one is kept, not
+			// inherited, so its late spans still get its own attributes
+			previous := pidInfo
+			pidInfo = PIDInfo{previous: &previous, since: previous.removedAt}
+		}
 		pidInfo.fileInfo = fi
 		pidInfo.pidTypes |= t
 		pidInfo.otherKnownPids = allPids
@@ -190,15 +243,45 @@ func (pf *PIDsFilter) removePID(pid app.PID, nsid uint32) {
 		return
 	}
 
-	if pidInfo, pidExists := ns[pid]; pidExists {
-		for _, otherPid := range pidInfo.otherKnownPids {
-			delete(ns, otherPid)
+	now := pidsFilterMonoNow()
+	markAsRemoved := func(p app.PID) {
+		if info, ok := ns[p]; ok && info.removedAt == 0 {
+			info.removedAt = now
+			ns[p] = info
 		}
 	}
 
-	delete(ns, pid)
-	if len(ns) == 0 {
-		delete(pf.current, nsid)
+	if pidInfo, pidExists := ns[pid]; pidExists {
+		for _, otherPid := range pidInfo.otherKnownPids {
+			markAsRemoved(otherPid)
+		}
+	}
+	markAsRemoved(pid)
+
+	pf.pruneExpired()
+}
+
+// callers must hold the write lock
+func (pf *PIDsFilter) pruneExpired() {
+	now := pidsFilterMonoNow()
+	for nsid, ns := range pf.current {
+		for pid, info := range ns {
+			if expired(&info, now) {
+				delete(ns, pid)
+				continue
+			}
+			// older generations were removed earlier: cut the chain at the first expired one
+			for g := &info; g.previous != nil; g = g.previous {
+				if expired(g.previous, now) {
+					g.previous = nil
+					break
+				}
+			}
+			ns[pid] = info
+		}
+		if len(ns) == 0 {
+			delete(pf.current, nsid)
+		}
 	}
 }
 

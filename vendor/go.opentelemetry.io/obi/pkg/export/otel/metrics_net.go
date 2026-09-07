@@ -62,7 +62,7 @@ func getFilteredNetworkResourceAttrs(hostID string, attrSelector attributes.Sele
 
 func createFilteredNetworkResource(hostID string, attrSelector attributes.Selection) *resource.Resource {
 	attrs := getFilteredNetworkResourceAttrs(hostID, attrSelector)
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+	return resource.NewWithAttributes(attr.OBISchemaURL, attrs...)
 }
 
 func newMeterProvider(res *resource.Resource, exporter *sdkmetric.Exporter, interval time.Duration) *metric.MeterProvider {

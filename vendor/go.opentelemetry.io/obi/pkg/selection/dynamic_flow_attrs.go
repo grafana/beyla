@@ -87,7 +87,7 @@ func (d *DynamicFlowAttrs) rebuild() {
 
 	next := map[string]flowIPDecoration{}
 	storeRegisteredPIDs := map[app.PID]struct{}{}
-	if ok && d.store != nil {
+	if ok {
 		for _, pid := range pids {
 			entry, found := d.multiSel.GetPID(uint32(pid))
 			if !found {
@@ -100,7 +100,10 @@ func (d *DynamicFlowAttrs) rebuild() {
 			for _, ip := range ResolveContainerIPs(d.store, pid) {
 				next[ip] = dec
 			}
-			storeRegisteredPIDs[pid] = struct{}{}
+			// Only kube-store registrations need DeleteProcess cleanup.
+			if d.store != nil {
+				storeRegisteredPIDs[pid] = struct{}{}
+			}
 		}
 	}
 

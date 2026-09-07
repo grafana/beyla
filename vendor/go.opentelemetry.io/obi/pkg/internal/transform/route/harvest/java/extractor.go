@@ -143,7 +143,7 @@ func sortRoutes(routes []string) []string {
 }
 
 func routeHasWildcardSegment(route string) bool {
-	for _, segment := range strings.Split(route, "/") {
+	for segment := range strings.SplitSeq(route, "/") {
 		if segment == "" {
 			continue
 		}

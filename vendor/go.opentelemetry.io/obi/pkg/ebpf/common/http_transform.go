@@ -44,21 +44,22 @@ func sortConnectionInfo(info *BpfConnectionInfoT) {
 }
 
 func removeQuery(url string) string {
-	idx := strings.IndexByte(url, '?')
-	if idx >= 0 {
-		return url[:idx]
+	before, _, ok := strings.Cut(url, "?")
+	if ok {
+		return before
 	}
 	return url
 }
 
 type HTTPInfo struct {
 	BPFHTTPInfo
-	Method     string
-	URL        string
-	Host       string
-	Peer       string
-	HeaderHost string
-	Body       string
+	Method       string
+	URL          string
+	Host         string
+	Peer         string
+	HeaderHost   string
+	Body         string
+	ProtoVersion request.ProtoVersion
 }
 
 // misses serviceID
@@ -93,7 +94,8 @@ func httpInfoToSpanLegacy(info *HTTPInfo) request.Span {
 			UserPID:   app.PID(info.Pid.UserPid),
 			Namespace: info.Pid.Ns,
 		},
-		Statement: scheme + request.SchemeHostSeparator + info.HeaderHost,
+		Statement:    scheme + request.SchemeHostSeparator + info.HeaderHost,
+		ProtoVersion: info.ProtoVersion,
 	}
 }
 
@@ -135,6 +137,7 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 	httpSpan := request.Span{
 		Type:              reqType,
 		Method:            req.Method,
+		ProtoVersion:      request.HTTPProtoVersion(req.ProtoMajor, req.ProtoMinor),
 		Path:              removeQuery(req.URL.String()),
 		FullPath:          req.URL.String(),
 		Peer:              peer,
@@ -564,6 +567,7 @@ func httpRequestToSpan(event *BPFHTTPInfo, requestBuffer *largebuf.LargeBuffer) 
 	}
 	result.URL = httpURLFromBuf(raw)
 	result.Method = httpMethodFromBuf(raw)
+	result.ProtoVersion = request.HTTPProtoVersionFromRequestLine(raw)
 
 	if request.EventType(result.Type) == request.EventTypeHTTPClient && !parsedHost {
 		bufHost, _ = httpHostFromBuf(raw)

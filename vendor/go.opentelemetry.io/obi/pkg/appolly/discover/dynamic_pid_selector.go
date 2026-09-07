@@ -722,9 +722,13 @@ func (a *dynamicPIDCriteriaAdapter) GetNamespace() string { return a.attrs.servi
 func (a *dynamicPIDCriteriaAdapter) GetPath() services.StringMatcher {
 	return &emptyMatcher{}
 }
+
 func (a *dynamicPIDCriteriaAdapter) GetPathRegexp() services.StringMatcher { return &emptyMatcher{} }
-func (a *dynamicPIDCriteriaAdapter) GetOpenPorts() *services.IntEnum       { return &services.IntEnum{} }
-func (a *dynamicPIDCriteriaAdapter) GetLanguages() services.StringMatcher  { return &emptyMatcher{} }
+
+func (a *dynamicPIDCriteriaAdapter) GetOpenPorts() *services.IntEnum { return &services.IntEnum{} }
+
+func (a *dynamicPIDCriteriaAdapter) GetLanguages() services.StringMatcher { return &emptyMatcher{} }
+
 func (a *dynamicPIDCriteriaAdapter) GetPIDs() ([]app.PID, bool) {
 	if a.view != nil {
 		return a.view.GetPIDs()

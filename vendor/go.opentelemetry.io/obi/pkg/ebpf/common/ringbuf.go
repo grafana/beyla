@@ -23,6 +23,14 @@ import (
 // Max interval before reading stale available bytes from the ring buffer
 const flushInterval = 3 * time.Second
 
+// How long the reader must have gone without consuming a record before a flush
+// is issued on its behalf. This has to stay strictly below flushInterval: a
+// flush wakes the reader, so the reads it causes are timestamped just after the
+// tick that issued it. Measuring idleness over the whole interval therefore
+// lets every flush suppress the tick that should follow it, halving the flush
+// rate and leaving records pending for two intervals instead of one.
+const readerStalledAfter = flushInterval / 2
+
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper
 // dependency injection during tests
 type ringBufReader interface {
@@ -42,7 +50,7 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 // RecordParserFunc reads one ring buffer record and returns (item, ignore, err).
 type RecordParserFunc[T any] func(*ringbuf.Record) (T, bool, error)
 
-// BatchFilterFunc is an optional batch-level filter applied at flush time (nil = identity).
+// BatchFilterFunc is an optional filter applied to each parsed group before batching (nil = identity).
 type BatchFilterFunc[T any] func([]T) []T
 
 // ringBufForwarder[T] handles the common loop: read -> parse -> batch -> flush
@@ -61,9 +69,9 @@ type ringBufForwarder[T any] struct {
 	// Callers close over whatever context they need (parse ctx, filter, etc.)
 	parse RecordParserFunc[T]
 
-	// filter is optional batch-level filter applied at flush time (nil = identity)
-	// in appolly, filter the input spans, eliminating these from processes whose PID
-	// belong to a process that does not match the discovery policies
+	// filter is optional and runs on each parsed group before it enters the batch
+	// (nil = identity). In appolly it drops the spans of processes that do not match
+	// the discovery policies and decorates the rest while their process is still known
 	filter BatchFilterFunc[T]
 
 	// metrics is optional (nil = no-op)
@@ -87,7 +95,7 @@ func SharedRingbuf[T any](
 	cfg *config.EBPFTracer,
 	ringbuffer *ebpf.Map,
 	parse RecordParserFunc[T],
-	filter BatchFilterFunc[T], // nil = no batch filter
+	filter BatchFilterFunc[T], // nil = no filter
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 ) func(context.Context, []io.Closer, *msg.Queue[[]T]) {
@@ -115,7 +123,7 @@ func ForwardRingbuf[T any](
 	cfg *config.EBPFTracer,
 	ringbuffer *ebpf.Map,
 	parse RecordParserFunc[T],
-	filter BatchFilterFunc[T], // nil = no batch filter
+	filter BatchFilterFunc[T], // nil = no filter
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
@@ -174,7 +182,7 @@ func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, event
 		select {
 		case <-ticker.C:
 			available := eventsReader.AvailableBytes()
-			if available > 0 && rbf.hasPendingReadIdleSince(time.Now(), flushInterval) {
+			if available > 0 && rbf.hasPendingReadIdleSince(time.Now(), readerStalledAfter) {
 				err := eventsReader.Flush()
 				rbf.logger.Debug("flushing ringbuf", "available_bytes", available, "flush_err", err)
 			}
@@ -329,13 +337,18 @@ func (rbf *ringBufForwarder[T]) parserLoop(
 			}
 		}
 
-		if len(parsed) == 0 {
+		// filter into a separate slice so parsed keeps its capacity across iterations
+		kept := parsed
+		if rbf.filter != nil {
+			kept = rbf.filter(parsed)
+		}
+		if len(kept) == 0 {
 			continue
 		}
 
 		// Lock once to enqueue the whole batch.
 		rbf.access.Lock()
-		for _, item := range parsed {
+		for _, item := range kept {
 			rbf.items[rbf.itemsLen] = item
 			rbf.itemsLen++
 			if rbf.itemsLen == rbf.cfg.BatchLength {
@@ -367,11 +380,7 @@ func (rbf *ringBufForwarder[T]) flushEvents(ctx context.Context, out *msg.Queue[
 	if rbf.metrics != nil {
 		rbf.metrics.TracerFlush(rbf.itemsLen)
 	}
-	batch := rbf.items[:rbf.itemsLen]
-	if rbf.filter != nil {
-		batch = rbf.filter(batch)
-	}
-	out.SendCtx(ctx, batch)
+	out.SendCtx(ctx, rbf.items[:rbf.itemsLen])
 	rbf.items = make([]T, rbf.cfg.BatchLength)
 	rbf.itemsLen = 0
 }

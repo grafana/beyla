@@ -30,7 +30,7 @@ type StatsPrometheusConfig struct {
 
 // Enabled returns whether the node needs to be activated
 func (p StatsPrometheusConfig) Enabled() bool {
-	return p.Config != nil && p.Config.EndpointEnabled() && (p.CommonCfg.Features.StatMetrics())
+	return p.Config != nil && p.Config.EndpointEnabled() && p.CommonCfg.Features.StatMetrics()
 }
 
 type statMetricsReporter struct {

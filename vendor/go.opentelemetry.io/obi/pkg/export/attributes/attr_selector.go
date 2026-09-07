@@ -74,6 +74,8 @@ func NewGroupAttributes(groupAttrsCfg map[string][]attr.Name) GroupAttributes {
 
 func parseExtraAttrGroup(group string) (AttrGroups, error) {
 	switch group {
+	case "app":
+		return GroupApp, nil
 	case "k8s_app_meta":
 		return GroupAppKube, nil
 	default:
@@ -207,6 +209,15 @@ func (p *AttrSelector) For(metricName Name) []attr.Name {
 	sas := maps2.SetToSlice(matchingAttrs)
 	slices.Sort(sas)
 	return sas
+}
+
+func (p *AttrSelector) ExplicitlyIncluded(metricName Name, attrName attr.Name) bool {
+	for _, il := range p.selector.Matching(metricName) {
+		if il.includes(attrName) {
+			return true
+		}
+	}
+	return false
 }
 
 // returns if the inclusion list have contents or not

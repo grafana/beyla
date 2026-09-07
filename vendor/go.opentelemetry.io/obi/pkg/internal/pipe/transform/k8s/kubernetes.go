@@ -110,7 +110,7 @@ func (n *decorator) transform(a *pipe.CommonAttrs) bool {
 		a.Metadata = map[attr.Name]string{}
 	}
 	if n.clusterName != "" {
-		a.Metadata[(attr.K8sClusterName)] = n.clusterName
+		a.Metadata[attr.K8sClusterName] = n.clusterName
 	}
 	srcOk := n.decorate(a, attrPrefixSrc, a.SrcAddr.IP().String())
 	dstOk := n.decorate(a, attrPrefixDst, a.DstAddr.IP().String())

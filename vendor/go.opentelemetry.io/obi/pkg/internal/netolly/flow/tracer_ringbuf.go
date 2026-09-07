@@ -57,9 +57,9 @@ type ringBufReader interface {
 // stats supports atomic logging of ringBuffer metrics
 type stats struct {
 	loggingTimeout time.Duration
-	isForwarding   int32
-	forwardedFlows int32
-	mapFullErrs    int32
+	isForwarding   atomic.Int32
+	forwardedFlows atomic.Int32
+	mapFullErrs    atomic.Int32
 }
 
 type mapFlusher interface {
@@ -128,16 +128,16 @@ func (m *RingBufTracer) listenAndForwardRingBuffer(ctx context.Context, debuggin
 // logRingBufferFlows avoids flooding logs on long series of evicted flows by grouping how
 // many flows are forwarded
 func (m *stats) logRingBufferFlows(mapFullErr bool) {
-	atomic.AddInt32(&m.forwardedFlows, 1)
+	m.forwardedFlows.Add(1)
 	if mapFullErr {
-		atomic.AddInt32(&m.mapFullErrs, 1)
+		m.mapFullErrs.Add(1)
 	}
-	if atomic.CompareAndSwapInt32(&m.isForwarding, 0, 1) {
+	if m.isForwarding.CompareAndSwap(0, 1) {
 		go func() {
 			time.Sleep(m.loggingTimeout)
-			mfe := atomic.LoadInt32(&m.mapFullErrs)
+			mfe := m.mapFullErrs.Load()
 			l := rtlog().With(
-				"flows", atomic.LoadInt32(&m.forwardedFlows),
+				"flows", m.forwardedFlows.Load(),
 				"mapFullErrs", mfe,
 			)
 			if mfe == 0 {
@@ -145,9 +145,9 @@ func (m *stats) logRingBufferFlows(mapFullErr bool) {
 			} else {
 				l.Debug("received flows via ringbuffer due to Map Full. You might want to increase the OTEL_EBPF_NETWORK_CACHE_MAX_FLOWS value")
 			}
-			atomic.StoreInt32(&m.forwardedFlows, 0)
-			atomic.StoreInt32(&m.isForwarding, 0)
-			atomic.StoreInt32(&m.mapFullErrs, 0)
+			m.forwardedFlows.Store(0)
+			m.isForwarding.Store(0)
+			m.mapFullErrs.Store(0)
 		}()
 	}
 }

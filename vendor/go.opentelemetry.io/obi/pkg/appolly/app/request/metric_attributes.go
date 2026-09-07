@@ -351,8 +351,8 @@ func Instance(val string) attribute.KeyValue {
 	return attribute.Key(attr.Instance).String(val)
 }
 
-func DNSAnswers(val string) attribute.KeyValue {
-	return attribute.Key(attr.DNSAnswers).String(val)
+func DNSAnswers(vals []string) attribute.KeyValue {
+	return attribute.Key(attr.DNSAnswers).StringSlice(vals)
 }
 
 func DBResponseError(val string) attribute.KeyValue {

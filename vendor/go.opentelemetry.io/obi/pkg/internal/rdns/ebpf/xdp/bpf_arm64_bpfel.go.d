@@ -7,6 +7,8 @@ pkg/internal/rdns/ebpf/xdp/bpf_arm64_bpfel.go: \
  bpf/bpfcore/bpf_builtins.h \
  bpf/bpfcore/compiler.h \
  bpf/bpfcore/bpf_endian.h \
+ bpf/common/protocol_defs.h \
+ bpf/common/scratch_mem.h \
  bpf/logger/bpf_dbg.h \
  bpf/bpfcore/bpf_core_read.h \
  bpf/common/globals.h \
@@ -25,6 +27,10 @@ bpf/bpfcore/bpf_builtins.h:
 bpf/bpfcore/compiler.h:
 
 bpf/bpfcore/bpf_endian.h:
+
+bpf/common/protocol_defs.h:
+
+bpf/common/scratch_mem.h:
 
 bpf/logger/bpf_dbg.h:
 

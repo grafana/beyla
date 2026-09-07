@@ -19,6 +19,8 @@ type ProduceRequest struct {
 	Topics []*ProduceTopic
 }
 
+const maxProduceTopics = 100
+
 var (
 	errInvalidProduceRecordsLength = errors.New("invalid produce records length")
 	errNoTopicsInProduce           = errors.New("no Topics found in produce request")
@@ -66,6 +68,9 @@ func parseProduceTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader
 	}
 	if topicsLen <= 0 {
 		return nil, nil
+	}
+	if topicsLen > maxProduceTopics {
+		topicsLen = maxProduceTopics
 	}
 
 	var topics []*ProduceTopic

@@ -67,7 +67,7 @@ func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any
 	result := make(map[string]any)
 
 	val := reflect.ValueOf(input)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 	typ := val.Type()

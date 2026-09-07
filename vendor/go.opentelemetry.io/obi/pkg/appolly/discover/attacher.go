@@ -20,10 +20,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/denotools"
+	"go.opentelemetry.io/obi/pkg/internal/dotnettools"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	javaagent "go.opentelemetry.io/obi/pkg/internal/java"
 	"go.opentelemetry.io/obi/pkg/internal/jvmtools"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
+	"go.opentelemetry.io/obi/pkg/internal/nodejstools"
+	"go.opentelemetry.io/obi/pkg/internal/pythontools"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -125,6 +129,14 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	in := ta.InputInstrumentables.Subscribe(msg.SubscriberName("traceAttacher"))
 	return func(ctx context.Context) {
 		defer ta.OutputTracerEvents.Close()
+
+		var javaInjections *javaInjectionQueue
+		if ta.javaInjector != nil {
+			javaInjections = newJavaInjectionQueue(ta.log, ta.javaInjector.NewExecutable)
+			javaInjections.start(ctx)
+			defer javaInjections.wait()
+		}
+
 		swarms.ForEachInput(ctx, in, ta.log.Debug, func(instrumentables []Event[ebpf.Instrumentable]) {
 			for _, instr := range instrumentables {
 				ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
@@ -133,15 +145,30 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 				case EventCreated:
 					ta.resolveServiceMetadata(&instr.Obj)
 					ta.nodeInjector.NewExecutable(&instr.Obj)
-					if ta.javaInjector != nil {
-						if err := ta.javaInjector.NewExecutable(&instr.Obj); err != nil {
-							ta.log.Warn("unable to attach java agent to process, Java TLS telemetry will not work", "pid", instr.Obj.FileInfo.Pid(), "error", err)
+
+					var javaTarget *javaagent.InjectionTarget
+					if javaInjections != nil && instr.Obj.Type == svc.InstrumentableJava {
+						target, err := javaagent.InjectionTargetFrom(&instr.Obj)
+						if err != nil {
+							ta.log.Warn("unable to capture stable java injection target, Java TLS telemetry will not work",
+								"pid", instr.Obj.FileInfo.Pid(), "error", err)
+						} else {
+							javaTarget = &target
 						}
 					}
 
 					ta.processInstances.Inc(executableKey(instr.Obj.FileInfo))
 					if ok := ta.getTracer(&instr.Obj); ok {
 						ta.OutputTracerEvents.Send(Event[*ebpf.Instrumentable]{Type: EventCreated, Obj: &instr.Obj})
+					}
+
+					// Injection blocks for up to the Java attach timeout, so it is
+					// queued after the PID is allowed through the eBPF filter, and
+					// runs off the discovery loop. The target is copied out here so
+					// the injection does not share instr.Obj with the consumers it
+					// was just sent to.
+					if javaTarget != nil {
+						javaInjections.enqueue(*javaTarget)
 					}
 
 					if instr.Obj.FileInfo.ELF() != nil {
@@ -156,10 +183,31 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 }
 
 func (ta *traceAttacher) resolveServiceMetadata(ie *ebpf.Instrumentable) {
-	if ie.Type == svc.InstrumentableJava {
+	switch ie.Type {
+	case svc.InstrumentableJava:
 		err := jvmtools.ResolveServiceMetadata(ie.FileInfo)
 		if err != nil {
 			ta.log.Debug("unable to resolve Java service metadata", "pid", ie.FileInfo.Pid(), "error", err)
+		}
+	case svc.InstrumentableNodejs:
+		err := nodejstools.ResolveServiceMetadata(ie.FileInfo)
+		if err != nil {
+			ta.log.Debug("unable to resolve Node.js service metadata", "pid", ie.FileInfo.Pid(), "error", err)
+		}
+	case svc.InstrumentablePython:
+		err := pythontools.ResolveServiceMetadata(ie.FileInfo)
+		if err != nil {
+			ta.log.Debug("unable to resolve Python service metadata", "pid", ie.FileInfo.Pid(), "error", err)
+		}
+	case svc.InstrumentableDotnet:
+		err := dotnettools.ResolveServiceMetadata(ie.FileInfo)
+		if err != nil {
+			ta.log.Debug("unable to resolve .NET service metadata", "pid", ie.FileInfo.Pid(), "error", err)
+		}
+	case svc.InstrumentableDeno:
+		err := denotools.ResolveServiceMetadata(ie.FileInfo)
+		if err != nil {
+			ta.log.Debug("unable to resolve Deno service metadata", "pid", ie.FileInfo.Pid(), "error", err)
 		}
 	}
 }
@@ -412,6 +460,10 @@ func (ta *traceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf
 
 func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
 	ie.CopyToServiceAttributes()
+	serviceSource := runtimeMetricServiceSource(ie.FileInfo, ie.FileInfo)
+	if serviceSource != ie.FileInfo {
+		serviceSource.ApplyServiceDefaults(ie.Type)
+	}
 
 	if ta.DynamicPIDSelector != nil {
 		ta.registerDynamicFileInfo(ie)
@@ -453,6 +505,28 @@ func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instru
 		}
 		ta.SpanSignalsShortcut.Send(spans)
 	}
+}
+
+func runtimeMetricServiceSource(lifecycle, fallback *exec.FileInfo) *exec.FileInfo {
+	if lifecycle != nil {
+		if source := lifecycle.RuntimeMetricServiceSource(); source != nil {
+			return source
+		}
+	}
+	return fallback
+}
+
+func blockPIDLifecycle(
+	tracer ebpf.Tracer,
+	pid app.PID,
+	ns uint32,
+	lifecycle *exec.FileInfo,
+) {
+	if lifecycleTracer, ok := tracer.(ebpf.LifecyclePIDBlocker); ok {
+		lifecycleTracer.BlockPIDLifecycle(pid, ns, lifecycle)
+		return
+	}
+	tracer.BlockPID(pid, ns)
 }
 
 func (ta *traceAttacher) registerDynamicFileInfo(ie *ebpf.Instrumentable) {
@@ -499,9 +573,15 @@ func (ta *traceAttacher) notifyProcessDeletion(ie *ebpf.Instrumentable) {
 		// to avoid that a new process reusing this PID could send traces
 		// unless explicitly allowed
 		ta.Metrics.UninstrumentProcess(ie.FileInfo.ExecutableName())
-		tracer.BlockPID(ie.FileInfo.Pid(), ie.FileInfo.Ns())
+		tracer.BlockPIDLifecycle(ie.FileInfo.Pid(), ie.FileInfo.Ns(), ie.FileInfo)
+		for _, pid := range ie.ChildPids {
+			tracer.BlockPID(pid, ie.FileInfo.Ns())
+		}
 		for _, ct := range ta.commonTracers {
-			ct.BlockPID(ie.FileInfo.Pid(), ie.FileInfo.Ns())
+			blockPIDLifecycle(ct, ie.FileInfo.Pid(), ie.FileInfo.Ns(), ie.FileInfo)
+			for _, pid := range ie.ChildPids {
+				ct.BlockPID(pid, ie.FileInfo.Ns())
+			}
 		}
 
 		// if there are no more trace instances for a program, we need to notify that

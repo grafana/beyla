@@ -125,7 +125,7 @@ CPU/memory profile. Read [Beyla profiling guide](https://github.com/grafana/beyl
 Even if Beyla works at its expected performance, it might consume too many resources in highly
 overloaded scenarios. At this point, the user might want to trade off some features for performance.
 
-Take a look at [Beyla performance overhead](https://github.com/grafana/beyla/blob/main/docs/sources/performance.md) to understand the overhead of each feature. Some other things that can be done to improve performance are:
+Some other things that can be done to improve performance are:
 
 * [Sample traces to decrease traffic](https://github.com/grafana/beyla/blob/main/docs/sources/configure/sample-traces.md)
 * Set the `BEYLA_BPF_WAKEUP_LEN` variable. This will cause that the Beyla user-space process doesn't

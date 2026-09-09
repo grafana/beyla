@@ -567,6 +567,7 @@ func normalizeConfig(c *Config) {
 		c.Discovery.OverrideDefaultExcludeForSurvey()
 	}
 	c.Attributes.Select.Normalize()
+	defaultServiceNameMetricAttributes(c)
 	// backwards compatibility assumptions for the deprecated Metric feature sections in OTEL and Prom metrics config.
 	// Old, deprecated properties would take precedence over metrics > features, to avoid breaking changes.
 	if c.OTELMetrics.EndpointEnabled() && c.OTELMetrics.DeprFeatures != 0 {
@@ -586,6 +587,22 @@ func normalizeConfig(c *Config) {
 
 	// GenAI APIs are HTTP at the moment, so we only enable HTTP instrumentation for Sigil
 	c.SigilExport.Instrumentations = []instrumentations.Instrumentation{instrumentations.InstrumentationHTTP}
+}
+
+// defaultServiceNameMetricAttributes sets service.name and service.namespace as
+// default metric-level attributes (also being reported as Resource attributes),
+// which matches some Grafana Cloud metric queries.
+//
+// If the user has already configured the "app" extra_group_attributes group themselves,
+// their configuration is respected and this default is not applied.
+func defaultServiceNameMetricAttributes(c *Config) {
+	if _, userConfigured := c.Attributes.ExtraGroupAttributes["app"]; userConfigured {
+		return
+	}
+	if c.Attributes.ExtraGroupAttributes == nil {
+		c.Attributes.ExtraGroupAttributes = map[string][]attr.Name{}
+	}
+	c.Attributes.ExtraGroupAttributes["app"] = []attr.Name{attr.ServiceName, attr.ServiceNamespace}
 }
 
 func appendDefaultResourceLabels(dst []string) []string {

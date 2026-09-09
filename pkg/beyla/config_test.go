@@ -351,6 +351,7 @@ network:
 			},
 			ExtraGroupAttributes: map[string][]attr.Name{
 				"k8s_app_meta": {"k8s.app.version"},
+				"app":          {attr.ServiceName, attr.ServiceNamespace},
 			},
 			RenameUnresolvedHosts:          "unresolved",
 			RenameUnresolvedHostsOutgoing:  "outgoing",
@@ -435,6 +436,22 @@ func TestConfig_ServiceName(t *testing.T) {
 	cfg, err := LoadConfig(bytes.NewReader(nil))
 	require.NoError(t, err)
 	assert.Equal(t, "some-svc-name", cfg.ServiceName)
+}
+
+func TestConfig_DefaultServiceNameMetricAttributes(t *testing.T) {
+	cfg, err := LoadConfig(bytes.NewReader(nil))
+	require.NoError(t, err)
+	assert.Equal(t, []attr.Name{attr.ServiceName, attr.ServiceNamespace}, cfg.Attributes.ExtraGroupAttributes["app"])
+}
+
+func TestConfig_DefaultServiceNameMetricAttributes_UserOverride(t *testing.T) {
+	cfg, err := LoadConfig(bytes.NewBufferString(`
+attributes:
+  extra_group_attributes:
+    app: ["k8s.pod.uid"]
+`))
+	require.NoError(t, err)
+	assert.Equal(t, []attr.Name{"k8s.pod.uid"}, cfg.Attributes.ExtraGroupAttributes["app"])
 }
 
 func TestConfig_ShutdownTimeout(t *testing.T) {

@@ -703,6 +703,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 			name     string
 			maps     []*procfs.ProcMap
 			mapsErr  error
+			initial  bool
 			expected bool
 		}{
 			{
@@ -724,12 +725,14 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 				maps: []*procfs.ProcMap{{Pathname: "/usr/lib/libruby.so.4.0"}},
 			},
 			{
-				name: "unknown version is compatible",
-				maps: []*procfs.ProcMap{{Pathname: "/usr/lib/libruby.so"}},
+				name:    "unknown version is compatible",
+				maps:    []*procfs.ProcMap{{Pathname: "/usr/lib/libruby.so"}},
+				initial: true,
 			},
 			{
 				name:    "maps lookup failure is compatible",
 				mapsErr: errors.New("maps unavailable"),
+				initial: true,
 			},
 		}
 
@@ -745,7 +748,7 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 				}
 
 				scanner := NewInitialStateScanner()
-				info := &ProcessInfo{pid: 1, kind: svc.InstrumentableRuby}
+				info := &ProcessInfo{pid: 1, kind: svc.InstrumentableRuby, incompatible: tc.initial}
 				scanner.computeIncompatible(info)
 
 				assert.Equal(t, tc.expected, info.incompatible)

@@ -24,6 +24,7 @@ const (
 type PythonLaunch struct {
 	Target       string
 	TargetKind   TargetKind
+	AppDir       string
 	SearchPaths  []string
 	ScriptDir    string
 	FallbackName string
@@ -43,7 +44,6 @@ var genericModuleNames = map[string]struct{}{
 	"config":      {},
 	"entrypoint":  {},
 	"index":       {},
-	"main":        {},
 	"manage":      {},
 	"models":      {},
 	"project":     {},

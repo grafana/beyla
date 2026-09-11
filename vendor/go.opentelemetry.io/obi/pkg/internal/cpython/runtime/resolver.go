@@ -31,9 +31,30 @@ const (
 	GCCompletionProbePrivateReturn
 )
 
+func (k GCCompletionProbeKind) String() string {
+	switch k {
+	case GCCompletionProbeUSDT:
+		return "usdt"
+	case GCCompletionProbePrivateReturn:
+		return "private-return"
+	default:
+		return fmt.Sprintf("unknown(%d)", uint8(k))
+	}
+}
+
+// GCCompletionProbeSource identifies how the probe location was resolved.
+type GCCompletionProbeSource string
+
+const (
+	GCCompletionProbeSourceUSDT    GCCompletionProbeSource = "usdt"
+	GCCompletionProbeSourceSymbol  GCCompletionProbeSource = "symbol"
+	GCCompletionProbeSourceDerived GCCompletionProbeSource = "derived"
+)
+
 // GCCompletionProbe identifies one probe location in the mapped CPython object.
 type GCCompletionProbe struct {
 	Kind            GCCompletionProbeKind
+	Source          GCCompletionProbeSource
 	FileOffset      uint64
 	SemaphoreOffset uint64
 }

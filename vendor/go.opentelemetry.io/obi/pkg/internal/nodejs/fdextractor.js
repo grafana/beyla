@@ -186,6 +186,9 @@
     orig.gcObserver.disconnect();
     orig.gcObserver = undefined;
   }
+  if (!RT_ENABLED && orig.rtPrevResources) {
+    orig.rtPrevResources = undefined;
+  }
 
   // eventLoopUtilization needs Node 14.10+. Without this guard the interval
   // callback below would throw an uncaught TypeError, which by default
@@ -262,6 +265,30 @@
         try {
           fs.accessSync(`/dev/null/obi-v8/h${rtHex(s.space_size)}${rtHex(s.space_used_size)}${rtHex(s.space_available_size)}${rtHex(s.physical_space_size)}${s.space_name}`);
         } catch (_) {}
+      }
+      // v8js.resource.active: fold the live-resource list into per-type
+      // counts, one a-record per type. A type present on the previous tick
+      // but absent now is emitted once with count 0, or exporters would
+      // serve its stale last value until the staleness TTL.
+      // getActiveResourcesInfo needs Node 16.14+; older runtimes just skip
+      // resource metrics.
+      if (typeof process.getActiveResourcesInfo === 'function') {
+        const counts = new Map();
+        for (const type of process.getActiveResourcesInfo()) {
+          counts.set(type, (counts.get(type) || 0) + 1);
+        }
+        const present = new Set(counts.keys());
+        for (const type of orig.rtPrevResources || []) {
+          if (!counts.has(type)) {
+            counts.set(type, 0);
+          }
+        }
+        orig.rtPrevResources = present;
+        for (const [type, count] of counts) {
+          try {
+            fs.accessSync(`/dev/null/obi-v8/a${rtHex(count)}${type}`);
+          } catch (_) {}
+        }
       }
     }, RT_SAMPLING_INTERVAL_MS);
     orig.rtTimer.unref();

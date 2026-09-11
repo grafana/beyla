@@ -354,6 +354,8 @@ func languageFromToken(s string) string {
 		return svc.InstrumentableDotnet.String()
 	case strings.Contains(s, "python"):
 		return svc.InstrumentablePython.String()
+	case strings.Contains(s, "ruby"):
+		return svc.InstrumentableRuby.String()
 	case strings.Contains(s, "nodejs"):
 		return svc.InstrumentableNodejs.String()
 	case s == "node":

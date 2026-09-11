@@ -132,7 +132,7 @@ func (r *metricsReporter) collectRuntimeMetricsLocked(snapshots []runtimemetrics
 		if snapshot.Nodejs != nil {
 			r.collectNodejsRuntimeMetrics(snapshot)
 		}
-		if snapshot.NodejsGC != nil || snapshot.NodejsHeapSpace != nil {
+		if snapshot.NodejsGC != nil || snapshot.NodejsHeapSpace != nil || snapshot.NodejsResource != nil {
 			r.collectNodejsV8Metrics(snapshot)
 		}
 		if snapshot.Python != nil {

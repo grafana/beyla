@@ -280,6 +280,16 @@ func getDefinitions(
 		nil,
 	)
 
+	jvmGCAttributes := NewAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&appAttributes},
+		map[attr.Name]Default{
+			attr.JVMGCName:   true,
+			attr.JVMGCAction: true,
+		},
+		nil,
+	)
+
 	nodejsEventLoopTimeAttributes := NewAttrReportGroup(
 		false,
 		[]*AttrReportGroup{&appAttributes},
@@ -303,6 +313,15 @@ func getDefinitions(
 		[]*AttrReportGroup{&appAttributes},
 		map[attr.Name]Default{
 			attr.V8JSHeapSpaceName: true,
+		},
+		nil,
+	)
+
+	v8jsResourceAttributes := NewAttrReportGroup(
+		false,
+		[]*AttrReportGroup{&appAttributes},
+		map[attr.Name]Default{
+			attr.V8JSResourceType: true,
 		},
 		nil,
 	)
@@ -366,6 +385,7 @@ func getDefinitions(
 			attr.MessagingDestination: true,
 			attr.MessagingOpName:      true,
 			attr.ServerAddr:           true,
+			attr.ErrorType:            true,
 		},
 		extraGroupAttributes[GroupMessaging],
 	)
@@ -404,6 +424,7 @@ func getDefinitions(
 				attr.RPCMethod:             true,
 				attr.RPCSystem:             true,
 				attr.RPCResponseStatusCode: true,
+				attr.ErrorType:             true,
 			},
 		},
 		RPCServerDuration.Section: {
@@ -464,6 +485,9 @@ func getDefinitions(
 				// Conditionally Required or Recommended by OTel semconv, so emitted
 				// by default. Opt out via attributes.select.traces.exclude.
 				attr.ErrorType:              true,
+				attr.HTTPRequestMethodOrig:  true,
+				attr.DBQuerySummary:         true,
+				attr.UserAgentOriginal:      true,
 				attr.NetworkPeerAddress:     true,
 				attr.NetworkPeerPort:        true,
 				attr.NetworkProtocolVersion: true,
@@ -616,6 +640,10 @@ func getDefinitions(
 			SubGroups:  []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{},
 		},
+		JVMGCDuration.Section: {
+			SubGroups:  []*AttrReportGroup{&jvmGCAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
 		NodejsEventLoopTime.Section: {
 			SubGroups:  []*AttrReportGroup{&nodejsEventLoopTimeAttributes},
 			Attributes: map[attr.Name]Default{},
@@ -638,6 +666,10 @@ func getDefinitions(
 		},
 		V8JSMemoryHeapSpacePhysicalSize.Section: {
 			SubGroups:  []*AttrReportGroup{&v8jsHeapSpaceAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		V8JSResourceActive.Section: {
+			SubGroups:  []*AttrReportGroup{&v8jsResourceAttributes},
 			Attributes: map[attr.Name]Default{},
 		},
 		StatTCPRtt.Section: {

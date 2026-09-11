@@ -4,6 +4,7 @@
 package runtime // import "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
 
 import (
+	"slices"
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
@@ -169,5 +170,77 @@ func ParseNodejsHeapSpaceEvent(
 		Time:                  timing.KernelTime(timestamp),
 		SpaceName:             spaceName,
 		NodejsHeapSpaceValues: values,
+	}
+}
+
+// semconvResourceTypes are the well-known members of the semconv
+// v8js.resource.type enum. The enum is open, but Node reports many more
+// wrap classes (FSReqCallback, MessagePort, ...); exporting only the
+// documented members keeps the series bounded and the weaver validation
+// at zero violations.
+var semconvResourceTypes = map[string]struct{}{
+	"Immediate":     {},
+	"TCPServerWrap": {},
+	"TCPWrap":       {},
+	"Timeout":       {},
+	"TTYWrap":       {},
+}
+
+func IsSemconvResourceType(name string) bool {
+	_, ok := semconvResourceTypes[name]
+	return ok
+}
+
+// SemconvResourceTypes lists the documented enum members, sorted, for
+// exporters that pre-build per-member attribute sets.
+func SemconvResourceTypes() []string {
+	types := make([]string, 0, len(semconvResourceTypes))
+	for name := range semconvResourceTypes {
+		types = append(types, name)
+	}
+	slices.Sort(types)
+	return types
+}
+
+// nodejsResourceTypeAliases maps runtime spellings onto the semconv member
+// for the same resource: Node has reported TCP connections as
+// "TCPSocketWrap" since before getActiveResourcesInfo existed, so the
+// documented "TCPWrap" never occurs verbatim.
+var nodejsResourceTypeAliases = map[string]string{
+	"TCPSocketWrap": "TCPWrap",
+}
+
+// NodejsResourceEvent is one active-resource census entry. Count 0 marks a
+// type that vanished since the previous sampling interval, recorded so the
+// exported gauge drops instead of staying frozen at its last value.
+type NodejsResourceEvent struct {
+	PID            app.PID
+	PIDNamespaceID uint32
+	Service        svc.Attrs
+	Time           time.Time
+
+	// ResourceType is the Node-reported class name, canonicalized to its
+	// semconv member spelling when the two differ (TCPSocketWrap -> TCPWrap).
+	ResourceType string
+
+	Count uint64
+}
+
+func ParseNodejsResourceEvent(
+	timestamp uint64,
+	nsPID uint32,
+	pidNamespaceID uint32,
+	resourceType string,
+	count uint64,
+) NodejsResourceEvent {
+	if canonical, ok := nodejsResourceTypeAliases[resourceType]; ok {
+		resourceType = canonical
+	}
+	return NodejsResourceEvent{
+		PID:            app.PID(nsPID),
+		PIDNamespaceID: pidNamespaceID,
+		Time:           timing.KernelTime(timestamp),
+		ResourceType:   resourceType,
+		Count:          count,
 	}
 }

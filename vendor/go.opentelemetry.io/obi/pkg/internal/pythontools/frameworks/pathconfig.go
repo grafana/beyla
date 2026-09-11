@@ -10,7 +10,7 @@ type PythonPathConfig struct {
 
 func (config PythonPathConfig) Apply(launch PythonLaunch) PythonLaunch {
 	if launch.TargetKind == TargetNone && launch.Target == "" && launch.FallbackName == "" &&
-		!launch.FastAPIAuto && !launch.FlaskAuto && len(launch.SearchPaths) == 0 {
+		launch.AppDir == "" && !launch.FastAPIAuto && !launch.FlaskAuto && len(launch.SearchPaths) == 0 {
 		return launch
 	}
 	launch.PathConfig = config

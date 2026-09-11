@@ -31,6 +31,7 @@ type jvmRuntimeMetricsCollector struct {
 	cpuTime               *prometheus.CounterVec
 	cpuCount              *Expirer[prometheus.Gauge]
 	cpuRecentUtilization  *Expirer[prometheus.Gauge]
+	gcDuration            *Expirer[prometheus.Histogram]
 	counters              runtimeCounterTracker
 }
 
@@ -65,6 +66,11 @@ func newJVMRuntimeMetricsCollector(cfg *PrometheusConfig) jvmRuntimeMetricsColle
 			"Number of processors available to the JVM.", runtimeServiceLabels(), clock, cfg.TTL),
 		cpuRecentUtilization: newRuntimeGauge(attributes.JVMCPURecentUtilization.Prom,
 			"Recent CPU utilization of the JVM process.", runtimeServiceLabels(), clock, cfg.TTL),
+		gcDuration: NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    attributes.JVMGCDuration.Prom,
+			Help:    "Duration of JVM garbage collection actions.",
+			Buckets: cfg.Buckets.JVMGCDurationHistogram,
+		}, jvmGCLabels()).MetricVec, clock, cfg.TTL),
 	}
 }
 
@@ -84,6 +90,7 @@ func (c *jvmRuntimeMetricsCollector) collectors() []prometheus.Collector {
 		c.cpuTime,
 		c.cpuCount,
 		c.cpuRecentUtilization,
+		c.gcDuration,
 	}
 }
 
@@ -137,6 +144,12 @@ func (r *metricsReporter) collectJVMRuntimeMetrics(snapshot runtimemetrics.Runti
 		}
 		return
 	}
+	if snapshot.JVM.Kind == jvmruntime.JVMMetricGCDuration {
+		r.jvmRuntimeMetrics.gcDuration.WithLabelValues(jvmGCLabelValues(snapshot)...).Metric.Observe(
+			float64(snapshot.JVM.DurationNS) / jvmNanosPerSecond,
+		)
+		return
+	}
 
 	switch snapshot.JVM.Kind {
 	case jvmruntime.JVMMetricMemoryUsed:
@@ -172,6 +185,14 @@ func jvmMemoryLabels() []string {
 
 func jvmThreadLabels() []string {
 	return append(runtimeServiceLabels(), attr.JVMThreadDaemon.Prom())
+}
+
+func jvmGCLabels() []string {
+	return append(runtimeServiceLabels(), attr.JVMGCName.Prom(), attr.JVMGCAction.Prom())
+}
+
+func jvmGCLabelValues(snapshot runtimemetrics.RuntimeMetricSnapshot) []string {
+	return append(runtimeServiceLabelValues(snapshot), snapshot.JVM.GCName, snapshot.JVM.GCAction)
 }
 
 func jvmMemoryLabelValues(snapshot runtimemetrics.RuntimeMetricSnapshot) []string {

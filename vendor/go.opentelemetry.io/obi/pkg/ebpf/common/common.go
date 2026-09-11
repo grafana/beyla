@@ -33,6 +33,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	ebpfhttp "go.opentelemetry.io/obi/pkg/ebpf/common/http"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
 	"go.opentelemetry.io/obi/pkg/internal/largebuf"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -100,6 +101,8 @@ const (
 	EventTypeNodejsHeapSpace       = uint8(BpfEventTypeK_eventTypeNodejsHeapSpace)        // Node.js/V8 heap-space sample
 	EventTypePythonRuntimeMetric   = uint8(BpfEventTypeK_eventTypePythonRuntimeMetrics)   // Python GC counters
 	EventTypeJVMRuntimeMetrics     = uint8(BpfEventTypeK_eventTypeJvmRuntimeMetrics)      // JVM runtime metrics
+	EventTypeNodejsResource        = uint8(BpfEventTypeK_eventTypeNodejsResource)
+	EventTypeJVMGCDuration         = uint8(BpfEventTypeK_eventTypeJvmGcDuration) // JVM garbage-collection duration
 )
 
 // Kernel-side classification. These alias the bpf2go-generated constants
@@ -156,6 +159,10 @@ type ProbeDesc struct {
 	// Optional list of the offsets of every RET instruction in the symbol
 	ReturnOffsets []uint64
 
+	// UsePadStart attaches Start after WriteHeaders has spilled PadLength to
+	// its stack slot and before the value is first consumed.
+	UsePadStart bool
+
 	// SymbolMatcher controls how the map key for this probe is matched against
 	// executable symbols. The zero value preserves exact symbol matching.
 	SymbolMatcher SymbolMatcher
@@ -169,6 +176,8 @@ type GoProbe struct {
 	Symbol        string
 	Probe         *ProbeDesc
 	ProcessScoped bool
+	// CalledFrom rejects this probe unless the named group symbol calls it directly.
+	CalledFrom string
 }
 
 // GoProbeGroup is an optional set of Go probes that must be attached atomically.
@@ -515,6 +524,19 @@ func (ctx *EBPFParseContext) Close() {
 	ctx.discardPendingGoHTTPClients.Store(true)
 	if ctx.pendingGoHTTPClientRequests != nil {
 		ctx.pendingGoHTTPClientRequests.Purge()
+	}
+}
+
+// detachExtraSpans prepares sibling spans parsed out of a single batched event.
+// They all carry the ids of that one event, so each needs its own span id, and
+// when the batch has no parent request each also needs its own trace id: sharing
+// one would put several parentless spans in a trace that can have only one root.
+func detachExtraSpans(spans []request.Span) {
+	for i := range spans {
+		spans[i].SpanID = trace.SpanID{}
+		if !spans[i].ParentSpanID.IsValid() {
+			spans[i].TraceID = idgen.RandomTraceID()
+		}
 	}
 }
 

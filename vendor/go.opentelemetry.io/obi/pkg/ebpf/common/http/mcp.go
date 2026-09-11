@@ -16,7 +16,7 @@ import (
 var mcpMethods = map[string]struct{}{
 	"initialize":                         {},
 	"notifications/initialized":          {},
-	"tools/call":                         {},
+	request.MCPMethodToolsCall:           {},
 	"tools/list":                         {},
 	"resources/read":                     {},
 	"resources/list":                     {},
@@ -170,7 +170,7 @@ func parseMCPParams(rpcReq jsonRPCRequest, result *request.MCPCall) {
 	}
 
 	switch rpcReq.Method {
-	case "tools/call":
+	case request.MCPMethodToolsCall:
 		var p mcpToolCallParams
 		if json.Unmarshal(rpcReq.Params, &p) == nil {
 			result.ToolName = p.Name
@@ -239,7 +239,7 @@ func applyMCPResponse(resp jsonRPCResponse, result *request.MCPCall) {
 		}
 	}
 
-	if result.Method == "tools/call" && len(resp.Result) > 0 {
+	if result.Method == request.MCPMethodToolsCall && len(resp.Result) > 0 {
 		var toolResult mcpToolCallResult
 		if json.Unmarshal(resp.Result, &toolResult) == nil && len(toolResult.Content) > 0 {
 			result.ToolCallResult = string(toolResult.Content)

@@ -22,6 +22,42 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
     curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/python/requirements.txt" -o requirements.txt && \
     cat requirements.extra.txt >> requirements.txt
 
+FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS prepare-ruby
+WORKDIR /source
+RUN apk add --no-cache git
+COPY ruby/upstream-revision.txt .
+RUN revision=$(cat upstream-revision.txt) && \
+    git init --quiet && \
+    git remote add origin https://github.com/open-telemetry/opentelemetry-ruby-instrumentation.git && \
+    git fetch --quiet --depth 1 origin "${revision}" && \
+    test "$(git rev-parse FETCH_HEAD)" = "${revision}" && \
+    git checkout --quiet --detach FETCH_HEAD && \
+    gem build opentelemetry-auto-instrumentation.gemspec --output /opentelemetry-auto-instrumentation.gem
+
+FROM ruby:3.3.12-slim-bookworm@sha256:df209d82bb55aeb26b9b08922ee22c15f19b3458455690132dc07a5c52dc1c99 AS build-ruby-glibc
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=prepare-ruby /opentelemetry-auto-instrumentation.gem /tmp/
+COPY ruby/Gemfile.lock ruby/locked_gems.rb ruby/upstream-revision.txt /tmp/
+RUN gem install --install-dir /operator-build --no-document --ignore-dependencies \
+    $(ruby /tmp/locked_gems.rb /tmp/Gemfile.lock) /tmp/opentelemetry-auto-instrumentation.gem
+COPY ruby/opentelemetry-auto-instrumentation.rb /operator-build/
+COPY ruby/beyla /operator-build/beyla
+COPY ruby/verify_bundle.rb /tmp/
+RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
+
+FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS build-ruby-musl
+RUN apk add --no-cache build-base
+COPY --from=prepare-ruby /opentelemetry-auto-instrumentation.gem /tmp/
+COPY ruby/Gemfile.lock ruby/locked_gems.rb ruby/upstream-revision.txt /tmp/
+RUN gem install --install-dir /operator-build --no-document --ignore-dependencies \
+    $(ruby /tmp/locked_gems.rb /tmp/Gemfile.lock) /tmp/opentelemetry-auto-instrumentation.gem
+COPY ruby/opentelemetry-auto-instrumentation.rb /operator-build/
+COPY ruby/beyla /operator-build/beyla
+COPY ruby/verify_bundle.rb /tmp/
+RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
+
 # Get the Python SDK for glibc
 FROM python:3.14.6-trixie@sha256:55dd7c1ea6c2b2c45a26d797187706eb9e5e0046f8e54fd759e38647b505c36b AS build-python-glibc
 WORKDIR /operator-build
@@ -121,6 +157,8 @@ COPY --from=build-nodejs-sdk /operator-build/build/workspace/node_modules/@opent
 COPY --from=build-nodejs-sdk /operator-build/node_modules /dist/agents/node.js/node_modules
 COPY --from=build-python-glibc /operator-build/ /dist/agents/python/glibc
 COPY --from=build-python-musl /operator-build/ /dist/agents/python/musl
+COPY --from=build-ruby-glibc /operator-build/ /dist/agents/ruby/glibc
+COPY --from=build-ruby-musl /operator-build/ /dist/agents/ruby/musl
 
 WORKDIR /
 CMD ["/copy-to-volume.sh"]

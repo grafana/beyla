@@ -103,6 +103,42 @@ func ParseNodejsHeapSpaceRecord(record *ringbuf.Record) (nodejsruntime.NodejsHea
 	), nil
 }
 
+const nodejsResourceTypeMax = 32
+
+// Mirrors struct nodejs_resource_event in bpf/generictracer/types/nodejs.h;
+// keep the layouts in sync.
+type nodejsResourceRawEvent struct {
+	Type         uint8
+	NameLen      uint8
+	Pad          [6]uint8
+	Timestamp    uint64
+	GlobalPid    uint32
+	GlobalTid    uint32
+	NsPid        uint32
+	NsTid        uint32
+	PidNsID      uint32
+	Pad2         uint32
+	Count        uint64
+	ResourceType [nodejsResourceTypeMax]uint8
+}
+
+func ParseNodejsResourceRecord(record *ringbuf.Record) (nodejsruntime.NodejsResourceEvent, error) {
+	raw, err := ReinterpretCast[nodejsResourceRawEvent](record.RawSample)
+	if err != nil {
+		return nodejsruntime.NodejsResourceEvent{}, err
+	}
+	if raw.NameLen == 0 || raw.NameLen > nodejsResourceTypeMax {
+		return nodejsruntime.NodejsResourceEvent{}, fmt.Errorf("invalid resource type name length %d", raw.NameLen)
+	}
+	return nodejsruntime.ParseNodejsResourceEvent(
+		raw.Timestamp,
+		raw.NsPid,
+		raw.PidNsID,
+		string(raw.ResourceType[:raw.NameLen]),
+		raw.Count,
+	), nil
+}
+
 // nodejsServiceFor resolves the instrumented service for a
 // (pid namespace, namespaced pid) pair.
 func nodejsServiceFor(filter ServiceFilter, pidNsID uint32, pid app.PID) (svc.Attrs, bool) {
@@ -134,6 +170,14 @@ func DecorateNodejsGCEvent(filter ServiceFilter, event *nodejsruntime.NodejsGCEv
 }
 
 func DecorateNodejsHeapSpaceEvent(filter ServiceFilter, event *nodejsruntime.NodejsHeapSpaceEvent) bool {
+	service, ok := nodejsServiceFor(filter, event.PIDNamespaceID, event.PID)
+	if ok {
+		event.Service = service
+	}
+	return ok
+}
+
+func DecorateNodejsResourceEvent(filter ServiceFilter, event *nodejsruntime.NodejsResourceEvent) bool {
 	service, ok := nodejsServiceFor(filter, event.PIDNamespaceID, event.PID)
 	if ok {
 		event.Service = service

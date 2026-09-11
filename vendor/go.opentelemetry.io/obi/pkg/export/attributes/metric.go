@@ -380,6 +380,12 @@ var (
 		Unit:    "1",
 		Type:    InstrumentGauge,
 	})
+	JVMGCDuration = metric(Name{
+		Section: "jvm.gc.duration",
+		OTEL:    "jvm.gc.duration",
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
 	NodejsEventLoopTime = metric(Name{
 		Section: "nodejs.eventloop.time",
 		OTEL:    "nodejs.eventloop.time",
@@ -463,6 +469,12 @@ var (
 		OTEL:    "v8js.memory.heap.space.physical_size",
 		Unit:    "By",
 		Type:    InstrumentUpDownCounter,
+	})
+	V8JSResourceActive = metric(Name{
+		Section: "v8js.resource.active",
+		OTEL:    "v8js.resource.active",
+		Unit:    "{resource}",
+		Type:    InstrumentGauge,
 	})
 	// Resource is not an instrument: it only names the attributes.select section
 	// that selects resource attributes. It still goes through metric() so its

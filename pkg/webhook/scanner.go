@@ -83,6 +83,21 @@ func (s *LocalProcessScanner) computeIncompatiblePython(v *ProcessInfo) {
 	}
 }
 
+func (s *LocalProcessScanner) computeIncompatibleRuby(v *ProcessInfo) {
+	v.incompatible = false
+	maps, err := findLibMapsFunc(int32(v.pid))
+	if err != nil {
+		return
+	}
+
+	ver := lang.DetectRubyVersion(maps)
+	if ver == nil {
+		return
+	}
+
+	v.incompatible = ver.Major < 3 || (ver.Major == 3 && ver.Minor < 3)
+}
+
 func (s *LocalProcessScanner) computeIncompatibleNodejs(v *ProcessInfo) {
 	s.EnrichProcessInfoWithEnvironment(v)
 	if proc, err := newProcessFunc(int32(v.pid)); err == nil {
@@ -106,6 +121,8 @@ func (s *LocalProcessScanner) computeIncompatible(v *ProcessInfo) {
 		s.computeIncompatibleJava(v)
 	case svc.InstrumentablePython:
 		s.computeIncompatiblePython(v)
+	case svc.InstrumentableRuby:
+		s.computeIncompatibleRuby(v)
 	case svc.InstrumentableNodejs:
 		s.computeIncompatibleNodejs(v)
 	}

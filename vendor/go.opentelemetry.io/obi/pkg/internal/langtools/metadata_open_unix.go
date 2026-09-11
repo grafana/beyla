@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build linux
+//go:build linux || darwin
 
 package langtools // import "go.opentelemetry.io/obi/pkg/internal/langtools"
 

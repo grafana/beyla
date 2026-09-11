@@ -30,9 +30,11 @@ type RouteHarvester struct {
 	mux      *sync.Mutex
 
 	// testing related
-	javaExtractRoutes func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
-	nodeExtractRoutes func(pid app.PID) (*RouteHarvesterResult, error)
-	denoExtractRoutes func(pid app.PID) (*RouteHarvesterResult, error)
+	javaExtractRoutes   func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	nodeExtractRoutes   func(pid app.PID) (*RouteHarvesterResult, error)
+	denoExtractRoutes   func(pid app.PID) (*RouteHarvesterResult, error)
+	pythonExtractRoutes func(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	dotnetExtract       func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
 }
 
 type RouteHarvesterResultKind uint8
@@ -66,6 +68,12 @@ func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []services.
 			dMap[svc.InstrumentableNodejs] = struct{}{}
 			dMap[svc.InstrumentableDeno] = struct{}{}
 		}
+		if lang == services.RouteHarvesterLanguagePython {
+			dMap[svc.InstrumentablePython] = struct{}{}
+		}
+		if lang == services.RouteHarvesterLanguageDotnet {
+			dMap[svc.InstrumentableDotnet] = struct{}{}
+		}
 	}
 
 	h := &RouteHarvester{
@@ -80,6 +88,8 @@ func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []services.
 	h.javaExtractRoutes = h.java.ExtractRoutes
 	h.nodeExtractRoutes = ExtractNodejsRoutes
 	h.denoExtractRoutes = ExtractDenoRoutes
+	h.pythonExtractRoutes = ExtractPythonRoutes
+	h.dotnetExtract = ExtractDotnetRoutes
 
 	return h
 }
@@ -145,6 +155,30 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 				}
 				h.log.Debug("found application routes", "runtime", "deno", "routes", r.Routes)
 
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		case svc.InstrumentablePython:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.pythonExtractRoutes(fileInfo)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				h.log.Debug("found application routes", "runtime", runtime.String(), "routes", r.Routes)
+
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		case svc.InstrumentableDotnet:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.dotnetExtract(ctx, fileInfo)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
 				resultChan <- result{r: r}
 			} else {
 				resultChan <- result{r: nil}

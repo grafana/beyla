@@ -156,9 +156,11 @@
           "items": {
             "type": "string",
             "enum": [
+              "dotnet",
               "go",
               "java",
-              "nodejs"
+              "nodejs",
+              "python"
             ]
           },
           "type": "array"
@@ -272,6 +274,12 @@
           "type": "array"
         },
         "gen_ai_client_token_usage_histogram": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "jvm_gc_duration_histogram": {
           "items": {
             "type": "number"
           },
@@ -2555,6 +2563,14 @@
             "1ms"
           ],
           "x-env-var": "OTEL_EBPF_OTLP_TRACES_BATCH_TIMEOUT"
+        },
+        "compression": {
+          "type": "string",
+          "enum": [
+            "gzip",
+            "none"
+          ],
+          "x-env-var": "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION"
         },
         "endpoint": {
           "type": "string",

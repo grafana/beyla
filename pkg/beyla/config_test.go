@@ -418,6 +418,7 @@ network:
 				{InstrumentableType: svc.InstrumentableDotnet},
 				{InstrumentableType: svc.InstrumentableNodejs},
 				{InstrumentableType: svc.InstrumentablePython},
+				{InstrumentableType: svc.InstrumentableRuby},
 			},
 		},
 		SigilExport: otelcfg.TracesConfig{

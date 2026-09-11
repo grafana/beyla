@@ -4,7 +4,7 @@ A Kubernetes mutating admission webhook that automatically injects OpenTelemetry
 
 ## Features
 
-- **Automatic Instrumentation**: Injects OpenTelemetry SDK into Java, .NET, and Node.js applications
+- **Automatic Instrumentation**: Injects OpenTelemetry SDKs into Java, .NET, Node.js, Python, and Ruby applications
 - **LD_PRELOAD Injection**: Uses shared library preloading for transparent instrumentation
 - **Selective Targeting**: Match pods by namespace, labels, or annotations
 - **Auto-Restart**: Automatically restarts existing deployments when instrumentation criteria are met
@@ -312,7 +312,7 @@ When selection criteria are configured:
 2. **Container Mapping**: Processes are mapped to container IDs
 3. **Watch**: Server subscribes to Kubernetes pod events via informer
 4. **Evaluation**: For each pod event:
-   - Check if process is in a supported language (Java, .NET, Node.js)
+   - Check if process is in a supported language (Java, .NET, Node.js, Python, Ruby)
    - Check if already instrumented (via label or env var)
    - Check if matches selection criteria
    - Check if has conflicting LD_PRELOAD
@@ -632,8 +632,10 @@ The webhook currently supports automatic instrumentation for:
 - **Java**: Detected via `libjvm.so`
 - **.NET**: Detected via `libcoreclr.so` or `ASPNET`/`DOTNET` environment variables
 - **Node.js**: Detected via `node` executable
+- **Python**: Detected via the Python executable or runtime library
+- **Ruby**: Detected via the Ruby executable or runtime library
 
-Note: Ruby and Python are detected but not currently instrumented (can be extended).
+Ruby injection requires CRuby 3.3 or newer and Rails 7.1 or newer when Rails is present. It requires `http/protobuf` for each enabled OTLP signal and stands down when an existing OpenTelemetry SDK or incompatible helper gem is detected. The OpenTelemetry Ruby distribution's `DISALLOWED_LIB_PATH` setting is preserved and extended when the application provides compatible `google-protobuf` or `googleapis-common-protos-types` gems.
 
 ## Limitations
 

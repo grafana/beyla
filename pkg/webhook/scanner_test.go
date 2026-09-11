@@ -548,25 +548,20 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 
 	t.Run("unhandled kind leaves incompatible false", func(t *testing.T) {
 		defer saveMocks()()
-		// All dispatch arms are language-specific; Ruby and Generic fall
-		// through without touching incompatible or any I/O. Use mocks that
-		// would panic the test if reached, to prove no I/O happens.
 		panicked := func(_ int32) ([]*procfs.ProcMap, error) {
-			t.Fatal("findLibMapsFunc should not be called for Ruby/Generic")
+			t.Fatal("findLibMapsFunc should not be called for Generic")
 			return nil, nil
 		}
 		findLibMapsFunc = panicked
 		newProcessFunc = func(_ int32) (*process.Process, error) {
-			t.Fatal("newProcessFunc should not be called for Ruby/Generic")
+			t.Fatal("newProcessFunc should not be called for Generic")
 			return nil, nil
 		}
 
 		scanner := NewInitialStateScanner()
-		for _, kind := range []svc.InstrumentableType{svc.InstrumentableRuby, svc.InstrumentableGeneric} {
-			info := &ProcessInfo{pid: 1, kind: kind}
-			scanner.computeIncompatible(info)
-			assert.False(t, info.incompatible, "kind=%v should leave incompatible false", kind)
-		}
+		info := &ProcessInfo{pid: 1, kind: svc.InstrumentableGeneric}
+		scanner.computeIncompatible(info)
+		assert.False(t, info.incompatible)
 	})
 
 	t.Run("dotnet", func(t *testing.T) {
@@ -696,6 +691,61 @@ func TestLocalProcessScanner_computeIncompatible(t *testing.T) {
 
 				scanner := NewInitialStateScanner()
 				info := &ProcessInfo{pid: 1, kind: svc.InstrumentablePython}
+				scanner.computeIncompatible(info)
+
+				assert.Equal(t, tc.expected, info.incompatible)
+			})
+		}
+	})
+
+	t.Run("ruby", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			maps     []*procfs.ProcMap
+			mapsErr  error
+			expected bool
+		}{
+			{
+				name:     "ruby 2.7 is incompatible",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libruby-2.7.so.2.7"}},
+				expected: true,
+			},
+			{
+				name:     "ruby 3.2 is incompatible",
+				maps:     []*procfs.ProcMap{{Pathname: "/usr/lib/libruby.so.3.2"}},
+				expected: true,
+			},
+			{
+				name: "ruby 3.3 is compatible",
+				maps: []*procfs.ProcMap{{Pathname: "/usr/lib/libruby-3.3.so.3.3"}},
+			},
+			{
+				name: "ruby 4.0 is compatible",
+				maps: []*procfs.ProcMap{{Pathname: "/usr/lib/libruby.so.4.0"}},
+			},
+			{
+				name: "unknown version is compatible",
+				maps: []*procfs.ProcMap{{Pathname: "/usr/lib/libruby.so"}},
+			},
+			{
+				name:    "maps lookup failure is compatible",
+				mapsErr: errors.New("maps unavailable"),
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				defer saveMocks()()
+				findLibMapsFunc = func(_ int32) ([]*procfs.ProcMap, error) {
+					return tc.maps, tc.mapsErr
+				}
+				newProcessFunc = func(_ int32) (*process.Process, error) {
+					t.Fatal("newProcessFunc should not be called on the ruby path")
+					return nil, nil
+				}
+
+				scanner := NewInitialStateScanner()
+				info := &ProcessInfo{pid: 1, kind: svc.InstrumentableRuby}
 				scanner.computeIncompatible(info)
 
 				assert.Equal(t, tc.expected, info.incompatible)

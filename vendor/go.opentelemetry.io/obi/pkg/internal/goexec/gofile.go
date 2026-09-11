@@ -10,28 +10,26 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"regexp"
 	"runtime/debug"
 	"strings"
 
-	"golang.org/x/mod/semver"
+	"go.opentelemetry.io/obi/internal/goversion"
 )
 
-const (
+var (
 	// minGoVersion defines the minimum instrumentable Go version. If the target binary was
 	// compiled using an older Go version, it will be treated as a non-Go program.
-	minGoVersion                                    = "1.17"
-	minGoRuntimeMemoryMetricVersion                 = "1.23"
-	minGoRuntimeGCGoalArgumentVersion               = "1.19"
-	minGoRuntimeGoroutineCountIncludesSystemVersion = "1.26"
+	minGoVersion                                    = goversion.MustParse("1.17")
+	minGoRuntimeMemoryMetricVersion                 = goversion.MustParse("1.23")
+	minGoRuntimeGCGoalArgumentVersion               = goversion.MustParse("1.19")
+	minGoRuntimeGoroutineCountIncludesSystemVersion = goversion.MustParse("1.26")
+	minGoRuntimeTypeMetadataVersion                 = goversion.MustParse("1.27.0")
 )
-
-var goVersionPattern = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?`)
 
 // supportedGoVersion checks if the given Go version string is equal or greater than the
 // minimum supported version.
-func supportedGoVersion(version string) bool {
-	return goVersionAtLeast(version, minGoVersion)
+func supportedGoVersion(versionString string) bool {
+	return goVersionAtLeast(versionString, minGoVersion)
 }
 
 // SupportsGoRuntimeMemoryMetrics reports whether the target Go version is in
@@ -41,22 +39,20 @@ func SupportsGoRuntimeMemoryMetrics(elfFile *elf.File) (bool, error) {
 		return false, errors.New("missing ELF file")
 	}
 
-	goVersion, _, err := getGoDetails(elfFile)
+	versionString, _, err := getGoDetails(elfFile)
 	if err != nil {
 		return false, fmt.Errorf("getting Go version: %w", err)
 	}
 
-	return goVersionAtLeast(goVersion, minGoRuntimeMemoryMetricVersion), nil
+	return goVersionAtLeast(versionString, minGoRuntimeMemoryMetricVersion), nil
 }
 
-func goVersionAtLeast(version, minimum string) bool {
-	match := goVersionPattern.FindString(version)
-	if match == "" {
+func goVersionAtLeast(versionString string, minimumVersion goversion.Version) bool {
+	targetVersion, err := goversion.Parse(versionString)
+	if err != nil {
 		return false
 	}
-
-	// 'semver' package requires version strings to begin with a leading "v".
-	return semver.Compare("v"+match, "v"+minimum) >= 0
+	return targetVersion.Compare(minimumVersion) >= 0
 }
 
 type moduleVersions struct {
@@ -66,29 +62,30 @@ type moduleVersions struct {
 	invalid      bool
 }
 
-func runtimeMetricGoroutineCountModeVersion(version string) (includesSystem, known bool) {
-	if goVersionPattern.FindString(version) == "" {
+func runtimeMetricGoroutineCountModeVersion(versionString string) (includesSystem, known bool) {
+	targetVersion, err := goversion.Parse(versionString)
+	if err != nil {
 		return false, false
 	}
-	return goVersionAtLeast(version, minGoRuntimeGoroutineCountIncludesSystemVersion), true
+	return targetVersion.Compare(minGoRuntimeGoroutineCountIncludesSystemVersion) >= 0, true
 }
 
-func runtimeMetricGCGoalArgumentSupportedVersion(version string) bool {
-	return goVersionAtLeast(version, minGoRuntimeGCGoalArgumentVersion)
+func runtimeMetricGCGoalArgumentSupportedVersion(versionString string) bool {
+	return goVersionAtLeast(versionString, minGoRuntimeGCGoalArgumentVersion)
 }
 
 // findLibraryVersions looks for all the libraries and versions inside the elf file.
 func findLibraryVersions(elfFile *elf.File) (moduleVersions, error) {
-	goVersion, modules, err := getGoDetails(elfFile)
+	versionString, modules, err := getGoDetails(elfFile)
 	if err != nil {
 		return moduleVersions{}, fmt.Errorf("getting Go details: %w", err)
 	}
 
-	goVersion = strings.ReplaceAll(goVersion, "go", "")
-	log().Debug("Go version detected", "version", goVersion)
+	versionString = strings.ReplaceAll(versionString, "go", "")
+	log().Debug("Go version detected", "version", versionString)
 
 	mods := parseModules(modules)
-	mods.versions["go"] = goVersion
+	mods.versions["go"] = versionString
 	return mods, nil
 }
 

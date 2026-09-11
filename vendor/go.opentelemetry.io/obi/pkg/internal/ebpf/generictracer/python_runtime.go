@@ -58,7 +58,7 @@ type pythonRuntimeController struct {
 	resolver    pythonRuntimeTargetResolver
 	targetMap   pythonRuntimeMap
 	snapshotMap pythonRuntimeMap
-	attach      func(*cpythonruntime.MetricTarget, *ebpf.Program, int) (io.Closer, error)
+	attach      func(*cpythonruntime.MetricTarget, *ebpf.Program, int) (io.Closer, cpythonruntime.GCCompletionProbe, error)
 	startTime   func(app.PID) (uint64, error)
 
 	mu      sync.Mutex
@@ -198,14 +198,14 @@ func (c *pythonRuntimeController) resolveAndAttach(ctx context.Context, target *
 		return
 	}
 
-	attached, err := c.attach(
+	attached, probe, err := c.attach(
 		metricTarget, c.tracer.bpfObjects.ObiUprobePythonGcDone, int(target.pid))
 	if err != nil {
 		_ = targets.Delete(key)
 		_ = snapshots.Delete(key)
 		delete(c.targets, target.pid)
 		c.tracer.log.Warn("Python runtime metrics probe attachment failed",
-			"pid", target.pid, "probe", metricTarget.PrimaryProbe.Kind, "error", err)
+			"pid", target.pid, "probe", metricTarget.PrimaryProbe.Kind.String(), "error", err)
 		return
 	}
 	currentStartTime, err := c.startTime(target.pid)
@@ -219,31 +219,32 @@ func (c *pythonRuntimeController) resolveAndAttach(ctx context.Context, target *
 	target.link = attached
 	c.tracer.log.Debug("Python runtime metrics attached",
 		"pid", target.pid,
-		"probe", metricTarget.PrimaryProbe.Kind,
-		"offset", fmt.Sprintf("%#x", metricTarget.PrimaryProbe.FileOffset))
+		"probe", probe.Kind.String(),
+		"source", probe.Source,
+		"offset", fmt.Sprintf("%#x", probe.FileOffset))
 }
 
 // attachPythonRuntimeTarget attaches to the stable mapped object and safe fallback.
-func attachPythonRuntimeTarget(target *cpythonruntime.MetricTarget, program *ebpf.Program, pid int) (io.Closer, error) {
+func attachPythonRuntimeTarget(target *cpythonruntime.MetricTarget, program *ebpf.Program, pid int) (io.Closer, cpythonruntime.GCCompletionProbe, error) {
 	if target == nil || program == nil || target.AttachmentPath() == "" {
-		return nil, errors.New("incomplete Python runtime metric target")
+		return nil, cpythonruntime.GCCompletionProbe{}, errors.New("incomplete Python runtime metric target")
 	}
 	executable, err := link.OpenExecutable(target.AttachmentPath())
 	if err != nil {
-		return nil, err
+		return nil, cpythonruntime.GCCompletionProbe{}, err
 	}
 	attached, err := attachPythonRuntimeProbe(executable, program, pid, target.PrimaryProbe)
 	if err == nil {
-		return attached, nil
+		return attached, target.PrimaryProbe, nil
 	}
 	if target.FallbackProbe == nil {
-		return nil, err
+		return nil, cpythonruntime.GCCompletionProbe{}, err
 	}
 	fallback, fallbackErr := attachPythonRuntimeProbe(executable, program, pid, *target.FallbackProbe)
 	if fallbackErr != nil {
-		return nil, errors.Join(err, fallbackErr)
+		return nil, cpythonruntime.GCCompletionProbe{}, errors.Join(err, fallbackErr)
 	}
-	return fallback, nil
+	return fallback, *target.FallbackProbe, nil
 }
 
 // attachPythonRuntimeProbe selects an entry or return probe at a raw offset.

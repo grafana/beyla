@@ -31,6 +31,7 @@ type RuntimeMetricSender interface {
 	SendNodejsRuntimeMetrics(context.Context, []appruntime.NodejsRuntimeEvent)
 	SendNodejsGCMetrics(context.Context, []appruntime.NodejsGCEvent)
 	SendNodejsHeapSpaceMetrics(context.Context, []appruntime.NodejsHeapSpaceEvent)
+	SendNodejsResourceMetrics(context.Context, []appruntime.NodejsResourceEvent)
 }
 
 // RuntimeMetricRecordHandler lets tracers decode runtime metric records whose
@@ -68,7 +69,7 @@ func HandleRuntimeMetricsRecord(
 			return true, nil
 		}
 		return true, eventContext.RuntimeMetrics.SendPythonRuntimeMetricRecord(ctx, record, filter)
-	case EventTypeJVMMemoryPoolGC, EventTypeJVMRuntimeMetrics:
+	case EventTypeJVMMemoryPoolGC, EventTypeJVMRuntimeMetrics, EventTypeJVMGCDuration:
 		for _, handler := range handlers {
 			if handler == nil {
 				continue
@@ -132,6 +133,25 @@ func HandleRuntimeMetricsRecord(
 			return true, nil
 		}
 		eventContext.RuntimeMetrics.SendNodejsHeapSpaceMetrics(ctx, []appruntime.NodejsHeapSpaceEvent{event})
+		return true, nil
+	case EventTypeNodejsResource:
+		if eventContext == nil || eventContext.RuntimeMetrics == nil {
+			return true, nil
+		}
+		event, err := ParseNodejsResourceRecord(record)
+		if err != nil {
+			return true, err
+		}
+		if !appruntime.IsSemconvResourceType(event.ResourceType) {
+			if log != nil {
+				log.Debug("dropping nodejs resource event outside the semconv enum", "type", event.ResourceType)
+			}
+			return true, nil
+		}
+		if !DecorateNodejsResourceEvent(filter, &event) {
+			return true, nil
+		}
+		eventContext.RuntimeMetrics.SendNodejsResourceMetrics(ctx, []appruntime.NodejsResourceEvent{event})
 		return true, nil
 	default:
 		return false, nil

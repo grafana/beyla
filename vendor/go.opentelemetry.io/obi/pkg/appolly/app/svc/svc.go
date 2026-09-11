@@ -47,8 +47,13 @@ func (it InstrumentableType) String() string {
 		return semconv.TelemetrySDKLanguagePython.Value.AsString()
 	case InstrumentableRuby:
 		return semconv.TelemetrySDKLanguageRuby.Value.AsString()
-	case InstrumentableNodejs, InstrumentableDeno:
+	case InstrumentableNodejs:
 		return semconv.TelemetrySDKLanguageNodejs.Value.AsString()
+	case InstrumentableDeno:
+		// There is no stable OTEL convention for Deno runtime.
+		// However, Deno sets "deno-rust" in its own native OTEL instrumentation
+		// https://docs.deno.com/runtime/fundamentals/open_telemetry/
+		return "deno-rust"
 	case InstrumentableRust:
 		return semconv.TelemetrySDKLanguageRust.Value.AsString()
 	case InstrumentablePHP:
@@ -181,12 +186,20 @@ func (i *Attrs) setFlag(flag idFlags) {
 	i.flags |= flag
 }
 
+func (i *Attrs) clearFlag(flag idFlags) {
+	i.flags &^= flag
+}
+
 func (i *Attrs) getFlag(flag idFlags) bool {
 	return (i.flags & flag) == flag
 }
 
 func (i *Attrs) SetAutoName() {
 	i.setFlag(autoName)
+}
+
+func (i *Attrs) ClearAutoName() {
+	i.clearFlag(autoName)
 }
 
 func (i *Attrs) AutoName() bool {

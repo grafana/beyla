@@ -13,7 +13,7 @@ import (
 
 const (
 	MySQLHdrSize                  = 4
-	MySQLErrMinLen                = 8
+	MySQLErrMinLen                = 7
 	MySQLErrPacketMarker   byte   = 0xff
 	MySQLStateMarker       byte   = '#'
 	MySQLProgressReporting uint16 = 0xffff
@@ -49,6 +49,13 @@ func parseMySQLError(buf []uint8) *request.SQLError {
 		return nil // Not an error packet
 	}
 
+	// The capture may hold trailing packets or cut the message short
+	packetEnd := MySQLHdrSize + int(binary.LittleEndian.Uint32(buf)&0x00ffffff)
+	if packetEnd < MySQLErrMinLen {
+		return nil // Not an error packet
+	}
+	length = min(length, packetEnd)
+
 	if buf[offset] != MySQLErrPacketMarker {
 		return nil // Not an error packet
 	}
@@ -57,25 +64,29 @@ func parseMySQLError(buf []uint8) *request.SQLError {
 	sqlErr.Code = binary.LittleEndian.Uint16(buf[offset : offset+2])
 	offset += 2
 
-	// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
-	if sqlErr.Code < 1002 || sqlErr.Code > 4167 {
-		return nil // Invalid error code
+	if sqlErr.Code == 0 {
+		return nil
 	}
 
-	if sqlErr.Code != MySQLProgressReporting {
-		if buf[offset] == MySQLStateMarker {
-			if len(buf) < (MySQLErrMinLen + 6) {
-				return nil
-			}
-			// Skip the SQL state marker
-			offset++
-			// Read the SQL state
-			sqlErr.SQLState = string(MySQLStateMarker) + string(buf[offset:offset+5])
-			offset += 5
-		}
-		// Read the error message
-		sqlErr.Message = unix.ByteSliceToString(buf[offset:])
+	// MariaDB progress reports share the ERR marker but are not errors.
+	// Other codes may be user-defined or supplied by MySQL-compatible servers.
+	if sqlErr.Code == MySQLProgressReporting {
+		return nil
 	}
+
+	// A SQL state is only present when the declared packet has room for it
+	if offset < length && buf[offset] == MySQLStateMarker && packetEnd >= offset+1+5 {
+		if length < offset+1+5 {
+			return nil
+		}
+		// Skip the SQL state marker
+		offset++
+		// Read the SQL state
+		sqlErr.SQLState = string(MySQLStateMarker) + string(buf[offset:offset+5])
+		offset += 5
+	}
+	// Read the error message
+	sqlErr.Message = unix.ByteSliceToString(buf[offset:length])
 
 	return &sqlErr
 }

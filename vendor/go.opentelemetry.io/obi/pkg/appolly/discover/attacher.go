@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	stdmaps "maps"
 	"slices"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/denotools"
 	"go.opentelemetry.io/obi/pkg/internal/dotnettools"
@@ -28,6 +30,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
 	"go.opentelemetry.io/obi/pkg/internal/nodejstools"
 	"go.opentelemetry.io/obi/pkg/internal/pythontools"
+	"go.opentelemetry.io/obi/pkg/internal/rubytools"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -182,33 +185,72 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	}, nil
 }
 
-func (ta *traceAttacher) resolveServiceMetadata(ie *ebpf.Instrumentable) {
-	switch ie.Type {
+func (ta *traceAttacher) resolveExecutableMetadata(t svc.InstrumentableType, fi *exec.FileInfo) {
+	if fi == nil {
+		return
+	}
+	var err error
+	switch t {
 	case svc.InstrumentableJava:
-		err := jvmtools.ResolveServiceMetadata(ie.FileInfo)
-		if err != nil {
-			ta.log.Debug("unable to resolve Java service metadata", "pid", ie.FileInfo.Pid(), "error", err)
-		}
+		err = jvmtools.ResolveServiceMetadata(fi)
 	case svc.InstrumentableNodejs:
-		err := nodejstools.ResolveServiceMetadata(ie.FileInfo)
-		if err != nil {
-			ta.log.Debug("unable to resolve Node.js service metadata", "pid", ie.FileInfo.Pid(), "error", err)
-		}
+		err = nodejstools.ResolveServiceMetadata(fi)
 	case svc.InstrumentablePython:
-		err := pythontools.ResolveServiceMetadata(ie.FileInfo)
-		if err != nil {
-			ta.log.Debug("unable to resolve Python service metadata", "pid", ie.FileInfo.Pid(), "error", err)
-		}
+		err = pythontools.ResolveServiceMetadata(fi)
 	case svc.InstrumentableDotnet:
-		err := dotnettools.ResolveServiceMetadata(ie.FileInfo)
-		if err != nil {
-			ta.log.Debug("unable to resolve .NET service metadata", "pid", ie.FileInfo.Pid(), "error", err)
-		}
+		err = dotnettools.ResolveServiceMetadata(fi)
 	case svc.InstrumentableDeno:
-		err := denotools.ResolveServiceMetadata(ie.FileInfo)
-		if err != nil {
-			ta.log.Debug("unable to resolve Deno service metadata", "pid", ie.FileInfo.Pid(), "error", err)
+		err = denotools.ResolveServiceMetadata(fi)
+	case svc.InstrumentableRuby:
+		err = rubytools.ResolveServiceMetadata(fi)
+	}
+	if err != nil {
+		ta.log.Debug("unable to resolve service metadata", "type", t, "pid", fi.Pid(), "error", err)
+	}
+}
+
+func syncServiceMetadata(dst, src *exec.FileInfo) {
+	if dst == nil || src == nil || dst == src {
+		return
+	}
+	dstAttrs := dst.ServiceAttrs()
+	srcAttrs := src.ServiceAttrs()
+
+	// 1. Service UID name precedence: Explicit (non-auto) > auto-derived > empty
+	switch {
+	case srcAttrs.UID.Name != "" && !src.AutoName():
+		if dst.AutoName() || dstAttrs.UID.Name == "" {
+			dst.SetExplicitServiceName(srcAttrs.UID.Name)
 		}
+	case dstAttrs.UID.Name != "" && !dst.AutoName():
+		if src.AutoName() || srcAttrs.UID.Name == "" {
+			src.SetExplicitServiceName(dstAttrs.UID.Name)
+		}
+	case srcAttrs.UID.Name != "" && dstAttrs.UID.Name == "":
+		dst.SetAutoServiceName(srcAttrs.UID.Name)
+	case dstAttrs.UID.Name != "" && srcAttrs.UID.Name == "":
+		src.SetAutoServiceName(dstAttrs.UID.Name)
+	default:
+		// If both sides already possess distinct non-empty auto-derived names, retain each side's derivation.
+	}
+
+	// 2. Synchronize metadata attributes (e.g. service.version)
+	if len(srcAttrs.Metadata) > 0 && len(dstAttrs.Metadata) == 0 {
+		m := make(map[attr.Name]string, len(srcAttrs.Metadata))
+		stdmaps.Copy(m, srcAttrs.Metadata)
+		dst.SetMetadata(m)
+	} else if len(dstAttrs.Metadata) > 0 && len(srcAttrs.Metadata) == 0 {
+		m := make(map[attr.Name]string, len(dstAttrs.Metadata))
+		stdmaps.Copy(m, dstAttrs.Metadata)
+		src.SetMetadata(m)
+	}
+}
+
+func (ta *traceAttacher) resolveServiceMetadata(ie *ebpf.Instrumentable) {
+	ta.resolveExecutableMetadata(ie.Type, ie.FileInfo)
+	if source := ie.FileInfo.RuntimeMetricServiceSource(); source != nil && source != ie.FileInfo {
+		ta.resolveExecutableMetadata(ie.Type, source)
+		syncServiceMetadata(ie.FileInfo, source)
 	}
 }
 
@@ -417,6 +459,9 @@ func (ta *traceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executab
 }
 
 func (ta *traceAttacher) reuseTracer(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) bool {
+	ie.FileInfo.SetSDKLanguage(ie.Type)
+	ta.harvestRoutes(ie, true)
+
 	exe, ok := ta.loadExecutable(ie)
 	if !ok {
 		return false
@@ -459,11 +504,12 @@ func (ta *traceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf
 }
 
 func (ta *traceAttacher) monitorPIDs(tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
-	ie.CopyToServiceAttributes()
 	serviceSource := runtimeMetricServiceSource(ie.FileInfo, ie.FileInfo)
 	if serviceSource != ie.FileInfo {
+		syncServiceMetadata(ie.FileInfo, serviceSource)
 		serviceSource.ApplyServiceDefaults(ie.Type)
 	}
+	ie.CopyToServiceAttributes()
 
 	if ta.DynamicPIDSelector != nil {
 		ta.registerDynamicFileInfo(ie)

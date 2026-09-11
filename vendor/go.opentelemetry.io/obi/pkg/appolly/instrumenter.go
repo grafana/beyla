@@ -105,9 +105,9 @@ func newGraphBuilder(
 		kubeToContainerDecorator, containerDecoratorToNameResolver,
 	), swarm.WithID("DockerDecorator"))
 
-	nameResolverToAttrFilter := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "nameResolverToAttrFilter")
+	nameResolverToParentSettler := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "nameResolverToParentSettler")
 	swi.Add(transform.NameResolutionProvider(ctxInfo, config.NameResolver,
-		containerDecoratorToNameResolver, nameResolverToAttrFilter),
+		containerDecoratorToNameResolver, nameResolverToParentSettler),
 		swarm.WithID("NameResolution"))
 
 	// In vendored mode, the invoker might want to override the export queue for connecting their
@@ -116,6 +116,10 @@ func newGraphBuilder(
 	if exportableSpans == nil {
 		exportableSpans = msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "exportableSpans")
 	}
+	nameResolverToAttrFilter := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "nameResolverToAttrFilter")
+	swi.Add(SettleConditionalParents(config.EBPF.MaxTransactionTime,
+		nameResolverToParentSettler, nameResolverToAttrFilter),
+		swarm.WithID("SettleConditionalParents"))
 	attrFilteredSpans := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "attrFilteredSpans")
 	swi.Add(filter.ByAttribute(config.Filters.Application,
 		nil,
@@ -132,11 +136,8 @@ func newGraphBuilder(
 		attrFilteredSpans,
 		instrumentationFilteredSpans,
 	), swarm.WithID("InstrumentationFilterSpanGate"))
-	gatedSpans := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "gatedSpans")
-	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicPIDSelector, instrumentationFilteredSpans, gatedSpans),
+	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicPIDSelector, instrumentationFilteredSpans, exportableSpans),
 		swarm.WithID("DynamicSignalSpanGate"))
-	swi.Add(SettleConditionalParents(config.EBPF.MaxTransactionTime, gatedSpans, exportableSpans),
-		swarm.WithID("SettleConditionalParents"))
 
 	swi.Add(otel.TracesReceiver(
 		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,

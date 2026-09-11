@@ -7,9 +7,10 @@ import (
 	"strconv"
 
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
+	"go.opentelemetry.io/obi/pkg/internal/errtype"
 )
 
-const ErrorTypeOther = "_OTHER"
+const ErrorTypeOther = errtype.Other
 
 // SpanErrorType returns error.type for a failed span, or "" when the span did
 // not fail. It is the single source for the trace and the metric pipeline.

@@ -78,7 +78,7 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		otelMetricExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: internalNames.OTELMetricExportErrors.Prom,
 			Help: "Error count on each failed OTEL metric export",
-		}, []string{"error"}),
+		}, []string{attr.ErrorType.Prom()}),
 		otelTraceExports: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: internalNames.OTELTraceExports.Prom,
 			Help: "Length of the trace batches submitted to the remote OTEL collector",
@@ -86,23 +86,26 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		otelTraceExportErrs: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: internalNames.OTELTraceExportErrors.Prom,
 			Help: "Error count on each failed OTEL trace export",
-		}, []string{"error"}),
+		}, []string{attr.ErrorType.Prom()}),
 		prometheusRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attr.VendorPrefix + "_prometheus_http_requests_total",
 			Help: "Requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
 		instrumentedProcesses: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: internalNames.InstrumentedProcesses.Prom,
-			Help: "Total number of instrumented processes by process name",
-		}, []string{"process_name"}),
+			Help: "Total number of instrumented processes by process executable name",
+		}, []string{attr.ProcessExecutableName.Prom()}),
 		instrumentationErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: internalNames.InstrumentationErrors.Prom,
-			Help: "Total number of instrumentation errors by process name and error type",
-		}, []string{"process_name", "error_type"}),
+			Help: "Total number of instrumentation errors by process executable name and error type",
+		}, []string{attr.ProcessExecutableName.Prom(), attr.ErrorType.Prom()}),
 		buildInfo: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: internalNames.BuildInfo.Prom,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
 				"goversion, goos and goarch during build.",
+			// Not derived from the obi.* OTLP attributes on purpose: build_info is a
+			// Prometheus idiom whose labels are its interface, and these names must keep
+			// matching obi_build_info and obi_kube_cache_internal_build_info.
 			ConstLabels: map[string]string{
 				"goarch":    runtime.GOARCH,
 				"goos":      runtime.GOOS,
@@ -116,19 +119,19 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		bpfProbeExecutions: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attr.VendorPrefix + "_bpf_probe_executions_total",
 			Help: "Total number of BPF probe executions",
-		}, []string{"probe_id", "probe_type", "probe_name"}),
+		}, []string{attr.BpfProbeID.Prom(), attr.BpfProbeType.Prom(), attr.BpfProbeName.Prom()}),
 		bpfProbeLatencySum: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attr.VendorPrefix + "_bpf_probe_latency_seconds_total",
 			Help: "Total latency of the BPF probes in seconds",
-		}, []string{"probe_id", "probe_type", "probe_name"}),
+		}, []string{attr.BpfProbeID.Prom(), attr.BpfProbeType.Prom(), attr.BpfProbeName.Prom()}),
 		bpfMapEntries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: internalNames.BpfMapEntries.Prom,
-			Help: "Total number of entries in the BPF maps",
-		}, []string{"map_id", "map_name", "map_type"}),
+			Help: "Number of entries in the BPF maps",
+		}, []string{attr.BpfMapID.Prom(), attr.BpfMapName.Prom(), attr.BpfMapType.Prom()}),
 		bpfMapMaxEntries: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: internalNames.BpfMapMaxEntries.Prom,
 			Help: "Maximum number of entries in the BPF maps",
-		}, []string{"map_id", "map_name", "map_type"}),
+		}, []string{attr.BpfMapID.Prom(), attr.BpfMapName.Prom(), attr.BpfMapType.Prom()}),
 		bpfInternalMetricsScrapeInterval: cfg.BpfMetricScrapeInterval,
 		informerLag: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name: internalNames.KubeCacheForwardLag.Prom,
@@ -150,7 +153,7 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		queueCapacityRatio: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: internalNames.QueueCapacityRatio.Prom,
 			Help: "Ratio [0-1] between the unread messages of an internal Go channel and its total capacity",
-		}, []string{"subscriber"}),
+		}, []string{attr.Subscriber.Prom()}),
 	}
 	if !cfg.AvoidedServices.Disabled {
 		pr.avoidedServicesLimiter = avoidedsvc.NewLimiter(cfg.AvoidedServices.Limit)
@@ -158,9 +161,9 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			Name: internalNames.AvoidedServices.Prom,
 			Help: "Services avoided due to existing OpenTelemetry instrumentation",
 		}, []string{
-			"service_name",
-			"service_namespace",
-			"telemetry_type",
+			attr.ServiceName.Prom(),
+			attr.ServiceNamespace.Prom(),
+			attr.TelemetryType.Prom(),
 			avoidedsvc.PrometheusOverflowLabel,
 		})
 	}
@@ -211,7 +214,7 @@ func (p *PrometheusReporter) OTELMetricExport(length int) {
 }
 
 func (p *PrometheusReporter) OTELMetricExportError(err error) {
-	p.otelMetricExportErrs.WithLabelValues(err.Error()).Inc()
+	p.otelMetricExportErrs.WithLabelValues(ExportErrorType(err)).Inc()
 }
 
 func (p *PrometheusReporter) OTELTraceExport(length int) {
@@ -219,7 +222,7 @@ func (p *PrometheusReporter) OTELTraceExport(length int) {
 }
 
 func (p *PrometheusReporter) OTELTraceExportError(err error) {
-	p.otelTraceExportErrs.WithLabelValues(err.Error()).Inc()
+	p.otelTraceExportErrs.WithLabelValues(ExportErrorType(err)).Inc()
 }
 
 func (p *PrometheusReporter) PrometheusRequest(port, path string) {

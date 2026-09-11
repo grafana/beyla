@@ -54,6 +54,8 @@ type InternalMetricsReporter struct {
 	bpfIgnoredPacketCount instrument.Int64Counter
 
 	queueCapacityRatio instrument.Float64Gauge
+
+	internalAttrs attr.InternalAttributes
 }
 
 func imlog() *slog.Logger {
@@ -70,6 +72,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}
 
 	internalNames := attributes.NewInternalMetrics(attr.VendorPrefix)
+	internalAttrs := attr.NewInternalAttributes(attr.VendorPrefix)
 
 	res := newResourceInternal(&ctxInfo.NodeMeta)
 	bpfProbeLatency := newBpfProbeLatencyProducer(
@@ -228,6 +231,7 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		bpfPacketCount:                   bpfPacketCount,
 		bpfIgnoredPacketCount:            bpfIgnoredPacketCount,
 		queueCapacityRatio:               queueCapacityRatio,
+		internalAttrs:                    internalAttrs,
 	}, nil
 }
 
@@ -246,9 +250,9 @@ func newInternalMeterProvider(
 }
 
 // sanitizedAttributes is the attribute boundary for the internal metrics, which build their
-// datapoint attributes directly rather than through Expirer.recordAttributes. Values such as
-// a process basename or an error string can carry invalid UTF-8, which protobuf rejects for
-// the whole export request, so every one of them passes through here.
+// datapoint attributes directly rather than through Expirer.recordAttributes. A value such as
+// a process basename can carry invalid UTF-8, which protobuf rejects for the whole export
+// request, so every one of them passes through here.
 func sanitizedAttributes(kvs ...attribute.KeyValue) instrument.MeasurementOption {
 	sanitized := make([]attribute.KeyValue, len(kvs))
 	for i, kv := range kvs {
@@ -259,7 +263,13 @@ func sanitizedAttributes(kvs ...attribute.KeyValue) instrument.MeasurementOption
 }
 
 func (p *InternalMetricsReporter) Start(ctx context.Context) {
-	p.buildInfo.Record(ctx, 1, sanitizedAttributes(attribute.String("obi.goarch", runtime.GOARCH), attribute.String("obi.goos", runtime.GOOS), attribute.String("obi.goversion", runtime.Version()), attribute.String("obi.version", buildinfo.Version), attribute.String("obi.revision", buildinfo.Revision)))
+	p.buildInfo.Record(ctx, 1, sanitizedAttributes(
+		attribute.String(string(p.internalAttrs.Goarch), runtime.GOARCH),
+		attribute.String(string(p.internalAttrs.Goos), runtime.GOOS),
+		attribute.String(string(p.internalAttrs.Goversion), runtime.Version()),
+		attribute.String(string(p.internalAttrs.Version), buildinfo.Version),
+		attribute.String(string(p.internalAttrs.Revision), buildinfo.Revision),
+	))
 }
 
 func (p *InternalMetricsReporter) TracerFlush(length int) {
@@ -271,7 +281,7 @@ func (p *InternalMetricsReporter) OTELMetricExport(length int) {
 }
 
 func (p *InternalMetricsReporter) OTELMetricExportError(err error) {
-	p.otelMetricExportErrs.Add(p.ctx, 1, sanitizedAttributes(attribute.String("obi.error", err.Error())))
+	p.otelMetricExportErrs.Add(p.ctx, 1, sanitizedAttributes(attribute.String(string(attr.ErrorType), imetrics.ExportErrorType(err))))
 }
 
 func (p *InternalMetricsReporter) OTELTraceExport(length int) {
@@ -279,24 +289,24 @@ func (p *InternalMetricsReporter) OTELTraceExport(length int) {
 }
 
 func (p *InternalMetricsReporter) OTELTraceExportError(err error) {
-	p.otelTraceExportErrs.Add(p.ctx, 1, sanitizedAttributes(attribute.String("obi.error", err.Error())))
+	p.otelTraceExportErrs.Add(p.ctx, 1, sanitizedAttributes(attribute.String(string(attr.ErrorType), imetrics.ExportErrorType(err))))
 }
 
 func (p *InternalMetricsReporter) PrometheusRequest(_, _ string) {
 }
 
 func (p *InternalMetricsReporter) InstrumentProcess(processName string) {
-	p.instrumentedProcesses.Add(p.ctx, 1, sanitizedAttributes(attribute.String("process.executable.name", processName)))
+	p.instrumentedProcesses.Add(p.ctx, 1, sanitizedAttributes(attribute.String(string(attr.ProcessExecutableName), processName)))
 }
 
 func (p *InternalMetricsReporter) UninstrumentProcess(processName string) {
-	p.instrumentedProcesses.Add(p.ctx, -1, sanitizedAttributes(attribute.String("process.executable.name", processName)))
+	p.instrumentedProcesses.Add(p.ctx, -1, sanitizedAttributes(attribute.String(string(attr.ProcessExecutableName), processName)))
 }
 
 func (p *InternalMetricsReporter) InstrumentationError(processName, errorType string) {
 	p.instrumentationErrors.Add(p.ctx, 1, sanitizedAttributes(
-		attribute.String("process.executable.name", processName),
-		attribute.String("error.type", errorType),
+		attribute.String(string(attr.ProcessExecutableName), processName),
+		attribute.String(string(attr.ErrorType), errorType),
 	))
 }
 
@@ -334,7 +344,7 @@ func (p *InternalMetricsReporter) recordAvoidedService(serviceName, serviceNames
 		attrs = []attribute.KeyValue{
 			semconv.ServiceName(labels.ServiceName),
 			semconv.ServiceNamespace(labels.ServiceNamespace),
-			attribute.String("telemetry.type", labels.TelemetryType),
+			attribute.String(string(attr.TelemetryType), labels.TelemetryType),
 		}
 	}
 
@@ -355,18 +365,18 @@ func (p *InternalMetricsReporter) BpfProbeStats(probeID, probeType, probeName st
 
 func (p *InternalMetricsReporter) BpfMapEntries(mapID, mapName, mapType string, entriesTotal int) {
 	attrs := []attribute.KeyValue{
-		attribute.String("bpf.map.id", mapID),
-		attribute.String("bpf.map.type", mapType),
-		attribute.String("bpf.map.name", mapName),
+		attribute.String(string(attr.BpfMapID), mapID),
+		attribute.String(string(attr.BpfMapType), mapType),
+		attribute.String(string(attr.BpfMapName), mapName),
 	}
 	p.bpfMapEntries.Record(p.ctx, int64(entriesTotal), sanitizedAttributes(attrs...))
 }
 
 func (p *InternalMetricsReporter) BpfMapMaxEntries(mapID, mapName, mapType string, maxEntries int) {
 	attrs := []attribute.KeyValue{
-		attribute.String("bpf.map.id", mapID),
-		attribute.String("bpf.map.type", mapType),
-		attribute.String("bpf.map.name", mapName),
+		attribute.String(string(attr.BpfMapID), mapID),
+		attribute.String(string(attr.BpfMapType), mapType),
+		attribute.String(string(attr.BpfMapName), mapName),
 	}
 	p.bpfMapMaxEntries.Record(p.ctx, int64(maxEntries), sanitizedAttributes(attrs...))
 }
@@ -386,5 +396,5 @@ func (p *InternalMetricsReporter) BPFPacketStats(count, ignored uint64) {
 }
 
 func (p *InternalMetricsReporter) QueueBufferUtilization(subscriber string, ratio float64) {
-	p.queueCapacityRatio.Record(p.ctx, ratio, sanitizedAttributes(attribute.String("subscriber", subscriber)))
+	p.queueCapacityRatio.Record(p.ctx, ratio, sanitizedAttributes(attribute.String(string(attr.Subscriber), subscriber)))
 }

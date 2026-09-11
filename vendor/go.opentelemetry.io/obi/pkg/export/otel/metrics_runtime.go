@@ -232,7 +232,7 @@ func setupRuntimeMeters(
 	if err := setupGoRuntimeMeters(&metrics.goMetrics, meter); err != nil {
 		return err
 	}
-	if err := setupJVMRuntimeMeters(metrics.ctx, &metrics.jvmMetrics, meter, ttl); err != nil {
+	if err := setupJVMRuntimeMeters(metrics.ctx, &metrics.jvmMetrics, meter, ttl, buckets); err != nil {
 		return err
 	}
 	if err := setupNodejsRuntimeMeters(metrics.ctx, &metrics.nodejsMetrics, meter, ttl, buckets); err != nil {
@@ -459,7 +459,7 @@ func recordRuntimeMetrics(ctx context.Context, metrics *RuntimeMetrics, snapshot
 		}
 		metrics.nodejsMetrics.record(snapshot)
 	}
-	if snapshot.NodejsGC != nil || snapshot.NodejsHeapSpace != nil {
+	if snapshot.NodejsGC != nil || snapshot.NodejsHeapSpace != nil || snapshot.NodejsResource != nil {
 		if !snapshot.Service.ExportModes.CanExportMetrics() || !snapshot.Service.Features.AppRuntime() {
 			return
 		}

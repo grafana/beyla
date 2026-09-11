@@ -29,6 +29,7 @@ type InformersCache struct {
 	Config *kubecache.Config
 
 	started   atomic.Bool
+	listener  net.Listener
 	informers *meta.Informers
 	log       *slog.Logger
 
@@ -42,15 +43,21 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	ic.metrics = instrument.FromContext(ctx)
 	ic.log = slog.With("component", "server.InformersCache")
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", ic.Config.Port))
-	if err != nil {
-		return fmt.Errorf("starting TCP connection: %w", err)
+	lis := ic.listener
+	if lis == nil {
+		var err error
+		lis, err = net.Listen("tcp", fmt.Sprintf(":%d", ic.Config.Port))
+		if err != nil {
+			return fmt.Errorf("starting TCP connection: %w", err)
+		}
+		ic.listener = lis
 	}
 
-	ic.informers, err = meta.InitInformers(ctx, opts...)
+	informers, err := meta.InitInformers(ctx, opts...)
 	if err != nil {
 		return fmt.Errorf("initializing informers: %w", err)
 	}
+	ic.informers = informers
 
 	s := grpc.NewServer(
 		// TODO: configure other aspects (e.g. secure connections)

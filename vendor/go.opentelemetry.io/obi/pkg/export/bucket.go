@@ -13,6 +13,7 @@ type Buckets struct {
 	GenAIClientDurationHistogram []float64 `yaml:"gen_ai_client_operation_duration_histogram"`
 	StatTCPRttHistogram          []float64 `yaml:"stat_tcp_rtt_histogram"`
 	V8JSGCDurationHistogram      []float64 `yaml:"v8js_gc_duration_histogram"`
+	JVMGCDurationHistogram       []float64 `yaml:"jvm_gc_duration_histogram"`
 }
 
 // DefaultBuckets define the default explicit bucket boundaries. They are ignored by the OTEL exporter when
@@ -35,4 +36,7 @@ var DefaultBuckets = Buckets{
 
 	// https://opentelemetry.io/docs/specs/semconv/runtime/nodejs-metrics/#metric-v8jsgcduration
 	V8JSGCDurationHistogram: []float64{0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10},
+
+	// https://opentelemetry.io/docs/specs/semconv/runtime/jvm-metrics/#metric-jvmgcduration
+	JVMGCDurationHistogram: []float64{0.01, 0.1, 1, 10},
 }

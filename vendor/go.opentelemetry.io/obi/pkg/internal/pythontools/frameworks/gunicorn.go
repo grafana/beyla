@@ -26,11 +26,13 @@ func ParseGunicorn(args []string, env map[string]string) PythonLaunch {
 	applyGunicornSettings(fields, &settings)
 	applyGunicornSettings(args, &settings)
 
-	launch := PythonLaunch{FallbackName: CleanValue(settings.name)}
-
 	chdir := settings.chdir
 	if chdir == "" {
 		chdir = "."
+	}
+	launch := PythonLaunch{
+		AppDir:       chdir,
+		FallbackName: CleanValue(settings.name),
 	}
 
 	pythonPaths := splitList(settings.pythonPath)

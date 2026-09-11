@@ -14,8 +14,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/grafana/go-offsets-tracker/pkg/offsets"
-
+	"go.opentelemetry.io/obi/internal/goabi"
+	"go.opentelemetry.io/obi/internal/goversion"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -37,24 +37,10 @@ type relocationInfo struct {
 	relr     map[uint64]struct{} // RELR: target addresses (value is at the address on disk)
 }
 
-// moduledataOffsets holds virtual-address offsets for the runtime.moduledata fields we read.
-type moduledataOffsets struct {
-	pcHeader    uint64
-	pclntable   uint64 // offset of pclntable.data (slice header start)
-	minpc       uint64
-	maxpc       uint64
-	text        uint64
-	etext       uint64
-	types       uint64
-	typedesclen uint64
-	itaboffset  uint64
-	itabsize    uint64
-}
-
 func isSupportedGoBinary(elfF *elf.File) error {
-	goVersion, _, err := getGoDetails(elfF)
-	if err == nil && !supportedGoVersion(goVersion) {
-		return fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
+	versionString, _, err := getGoDetails(elfF)
+	if err == nil && !supportedGoVersion(versionString) {
+		return fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", versionString, minGoVersion.Release())
 	}
 	return nil
 }
@@ -153,12 +139,20 @@ func storeFunctionOffset(
 	offs FuncOffsets,
 ) {
 	offs.Returns = sortedUniqueOffsets(offs.Returns)
+	offs.CallTargets = sortedUniqueOffsets(offs.CallTargets)
 	for index, existing := range allOffsets[fName] {
 		if existing.Start != offs.Start {
 			continue
 		}
 
 		existing.Returns = sortedUniqueOffsets(append(existing.Returns, offs.Returns...))
+		existing.CallTargets = sortedUniqueOffsets(append(existing.CallTargets, offs.CallTargets...))
+		if existing.PadStart == 0 {
+			existing.PadStart = offs.PadStart
+		}
+		if existing.PadOffset == 0 {
+			existing.PadOffset = offs.PadOffset
+		}
 		if offs.Symbol == fName || (existing.Symbol != fName && offs.Symbol < existing.Symbol) {
 			existing.Symbol = offs.Symbol
 		}
@@ -200,12 +194,12 @@ func staticSymbolOffsets(fName string, allSyms map[string]procs.Sym, ilog *slog.
 			return FuncOffsets{}, false
 		}
 
-		returns, err := FindReturnOffsets(s.Off, data)
+		offs, err := analyzeFunctionOffsets(s.Off, data)
 		if err != nil {
-			ilog.Error("error finding returns for symbol", "symbol", fName, "offset", s.Off-s.Prog.Off, "size", s.Len, "error", err)
+			ilog.Error("error analyzing instructions for symbol", "symbol", fName, "offset", s.Off-s.Prog.Off, "size", s.Len, "error", err)
 			return FuncOffsets{}, false
 		}
-		return FuncOffsets{Start: s.Off, Returns: returns}, true
+		return offs, true
 	} else {
 		ilog.Debug("can't find in elf symbol table", "symbol", fName, "ok", ok, "prog", s.Prog)
 	}
@@ -237,15 +231,44 @@ func findFuncOffset(f *gosym.Func, elfF *elf.File) (FuncOffsets, bool, error) {
 				return FuncOffsets{}, false, fmt.Errorf("finding function return: %w", err)
 			}
 
-			returns, err := FindReturnOffsets(off, data)
+			offs, err := analyzeFunctionOffsets(off, data)
 			if err != nil {
-				return FuncOffsets{}, false, fmt.Errorf("finding function return: %w", err)
+				return FuncOffsets{}, false, err
 			}
-			return FuncOffsets{Start: off, Returns: returns}, true, nil
+			return offs, true, nil
 		}
 	}
 
 	return FuncOffsets{}, false, nil
+}
+
+func analyzeFunctionOffsets(baseOffset uint64, data []byte) (FuncOffsets, error) {
+	returns, err := FindReturnOffsets(baseOffset, data)
+	if err != nil {
+		return FuncOffsets{}, fmt.Errorf("finding function returns: %w", err)
+	}
+
+	callTargets, err := FindCallTargets(baseOffset, data)
+	if err != nil {
+		return FuncOffsets{}, fmt.Errorf("finding function call targets: %w", err)
+	}
+
+	padStart, padOffset, err := FindPadStartOffset(baseOffset, data)
+	if err != nil {
+		return FuncOffsets{}, fmt.Errorf("finding function stack offsets: %w", err)
+	}
+	if padStart <= baseOffset {
+		padStart = 0
+		padOffset = 0
+	}
+
+	return FuncOffsets{
+		Start:       baseOffset,
+		Returns:     returns,
+		CallTargets: callTargets,
+		PadStart:    padStart,
+		PadOffset:   padOffset,
+	}, nil
 }
 
 func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
@@ -375,64 +398,29 @@ func findRuntimeTextFromModuledata(elfF *elf.File, gopclntab *elf.Section) (uint
 	return 0, errors.New("runtime.moduledata not found")
 }
 
-func loadModuledataOffsets(elfF *elf.File) (moduledataOffsets, error) {
-	goVersion, _, err := getGoDetails(elfF)
+func loadModuledataOffsets(elfF *elf.File) (goabi.Moduledata, error) {
+	versionString, _, err := getGoDetails(elfF)
 	if err != nil {
-		return moduledataOffsets{}, fmt.Errorf("getting Go version: %w", err)
+		return goabi.Moduledata{}, fmt.Errorf("getting Go version: %w", err)
 	}
-	if !supportedGoVersion(goVersion) {
-		return moduledataOffsets{}, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", goVersion, minGoVersion)
+	targetVersion, err := goversion.Parse(versionString)
+	if err != nil || targetVersion.Compare(minGoVersion) < 0 {
+		return goabi.Moduledata{}, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", versionString, minGoVersion.Release())
 	}
 
-	goVersion = strings.ReplaceAll(goVersion, "go", "")
+	if targetVersion.Compare(minGoRuntimeTypeMetadataVersion) < 0 {
+		abi, err := loadGeneratedGoRuntimeABI(targetVersion)
+		if err != nil {
+			return goabi.Moduledata{}, err
+		}
+		return abi.Moduledata, nil
+	}
 
-	offs, err := offsets.Read(bytes.NewBufferString(prefetchedOffsets))
+	abi, err := loadGoRuntimeABI(elfF, targetVersion)
 	if err != nil {
-		return moduledataOffsets{}, fmt.Errorf("reading prefetched offsets: %w", err)
+		return goabi.Moduledata{}, err
 	}
-
-	var md moduledataOffsets
-
-	fields := []struct {
-		name string
-		dest *uint64
-	}{
-		{"pcHeader", &md.pcHeader},
-		{"pclntable", &md.pclntable},
-		{"minpc", &md.minpc},
-		{"maxpc", &md.maxpc},
-		{"text", &md.text},
-		{"etext", &md.etext},
-	}
-
-	for _, f := range fields {
-		var ok bool
-		if *f.dest, ok = offs.Find("runtime.moduledata", f.name, goVersion); !ok {
-			return moduledataOffsets{},
-				fmt.Errorf("missing runtime.moduledata.%s offset for Go %s", f.name, goVersion)
-		}
-	}
-
-	if goVersionAtLeast(goVersion, "1.27.0") {
-		fields = []struct {
-			name string
-			dest *uint64
-		}{
-			{"types", &md.types},
-			{"typedesclen", &md.typedesclen},
-			{"itaboffset", &md.itaboffset},
-			{"itabsize", &md.itabsize},
-		}
-		for _, f := range fields {
-			var ok bool
-			if *f.dest, ok = offs.Find("runtime.moduledata", f.name, goVersion); !ok {
-				return moduledataOffsets{},
-					fmt.Errorf("missing runtime.moduledata.%s offset for Go %s", f.name, goVersion)
-			}
-		}
-	}
-
-	return md, nil
+	return abi.Moduledata, nil
 }
 
 // findRuntimeTextFromPclntab reads the textStart field from the pcHeader embedded in pclntab.
@@ -465,7 +453,7 @@ func findRuntimeTextFromPclntab(pclndat []byte) (uint64, error) {
 
 // moduledataCandidates returns candidate virtual addresses for runtime.firstmoduledata using
 // four strategies: ELF symbol table, RELA entries, RELR entries, and a direct section scan.
-func moduledataCandidates(elfF *elf.File, gopclntabAddr uint64, mdoffs moduledataOffsets, relocs relocationInfo) []uint64 {
+func moduledataCandidates(elfF *elf.File, gopclntabAddr uint64, mdoffs goabi.Moduledata, relocs relocationInfo) []uint64 {
 	seen := map[uint64]struct{}{}
 	var candidates []uint64
 
@@ -480,11 +468,11 @@ func moduledataCandidates(elfF *elf.File, gopclntabAddr uint64, mdoffs moduledat
 	// that holds a pointer somewhere in .gopclntab. Both pcHeader (exact start) and
 	// pclntable.data (internal offset) point there, so each match yields two candidates.
 	tryPointerField := func(vaddr uint64) {
-		if vaddr >= mdoffs.pcHeader {
-			add(vaddr - mdoffs.pcHeader)
+		if vaddr >= mdoffs.PCHeader {
+			add(vaddr - mdoffs.PCHeader)
 		}
-		if vaddr >= mdoffs.pclntable {
-			add(vaddr - mdoffs.pclntable)
+		if vaddr >= mdoffs.PCLNTable {
+			add(vaddr - mdoffs.PCLNTable)
 		}
 	}
 
@@ -541,30 +529,30 @@ func moduledataCandidates(elfF *elf.File, gopclntabAddr uint64, mdoffs moduledat
 //  3. text is non-zero, less than etext, within [minpc, maxpc), and in an executable segment.
 //
 // Returns the text field value and true on success.
-func validateModuledata(elfF *elf.File, candidate, gopclntabAddr, gopclntabSize uint64, mdoffs moduledataOffsets, relocs relocationInfo) (uint64, bool) {
+func validateModuledata(elfF *elf.File, candidate, gopclntabAddr, gopclntabSize uint64, mdoffs goabi.Moduledata, relocs relocationInfo) (uint64, bool) {
 	// pclntable.data must be within [gopclntabAddr, gopclntabAddr+gopclntabSize).
-	pclntableData := resolveAddr(elfF, candidate+mdoffs.pclntable, relocs)
+	pclntableData := resolveAddr(elfF, candidate+mdoffs.PCLNTable, relocs)
 	if pclntableData < gopclntabAddr || pclntableData >= gopclntabAddr+gopclntabSize {
 		return 0, false
 	}
 
 	// pcHeader must point to the exact start of .gopclntab.
-	if resolveAddr(elfF, candidate+mdoffs.pcHeader, relocs) != gopclntabAddr {
+	if resolveAddr(elfF, candidate+mdoffs.PCHeader, relocs) != gopclntabAddr {
 		return 0, false
 	}
 
-	text := resolveAddr(elfF, candidate+mdoffs.text, relocs)
+	text := resolveAddr(elfF, candidate+mdoffs.Text, relocs)
 	if text == 0 {
 		return 0, false
 	}
 
-	etext := resolveAddr(elfF, candidate+mdoffs.etext, relocs)
+	etext := resolveAddr(elfF, candidate+mdoffs.EText, relocs)
 	if etext == 0 || text >= etext {
 		return 0, false
 	}
 
-	minpc := resolveAddr(elfF, candidate+mdoffs.minpc, relocs)
-	maxpc := resolveAddr(elfF, candidate+mdoffs.maxpc, relocs)
+	minpc := resolveAddr(elfF, candidate+mdoffs.MinPC, relocs)
+	maxpc := resolveAddr(elfF, candidate+mdoffs.MaxPC, relocs)
 	if text < minpc || text >= maxpc {
 		return 0, false
 	}

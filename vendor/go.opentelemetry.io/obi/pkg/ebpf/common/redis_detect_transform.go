@@ -496,10 +496,7 @@ func ReadGoRedisRequestIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Reco
 		spans = append(spans, goRedisSpan(event, cmds[i].op, cmds[i].text))
 	}
 	if len(spans) > 1 {
-		// clear SpanID on extras so tracesgen assigns fresh IDs
-		for i := 1; i < len(spans); i++ {
-			spans[i].SpanID = trace2.SpanID{}
-		}
+		detachExtraSpans(spans[1:])
 		parseCtx.emitExtraSpans(spans[1:]...)
 	}
 	return spans[0], false, nil

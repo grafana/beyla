@@ -28,11 +28,12 @@ type nodejsRuntimeMetricsCollector struct {
 	delayP90             *Expirer[prometheus.Gauge]
 	delayP99             *Expirer[prometheus.Gauge]
 
-	gcDuration    *Expirer[prometheus.Histogram]
-	heapLimit     *Expirer[prometheus.Gauge]
-	heapUsed      *Expirer[prometheus.Gauge]
-	heapAvailable *Expirer[prometheus.Gauge]
-	heapPhysical  *Expirer[prometheus.Gauge]
+	gcDuration     *Expirer[prometheus.Histogram]
+	heapLimit      *Expirer[prometheus.Gauge]
+	heapUsed       *Expirer[prometheus.Gauge]
+	heapAvailable  *Expirer[prometheus.Gauge]
+	heapPhysical   *Expirer[prometheus.Gauge]
+	resourceActive *Expirer[prometheus.Gauge]
 
 	// cumulative ELU values tracked per Instance|PID to compute counter
 	// deltas; TTL-expired so process churn cannot grow it without bound
@@ -53,6 +54,7 @@ func newNodejsRuntimeMetricsCollector(cfg *PrometheusConfig) nodejsRuntimeMetric
 	stateLabels := append(runtimeServiceLabels(), "nodejs_eventloop_state")
 	gcLabels := append(runtimeServiceLabels(), attr.V8JSGCType.Prom())
 	heapLabels := append(runtimeServiceLabels(), attr.V8JSHeapSpaceName.Prom())
+	resourceLabels := append(runtimeServiceLabels(), attr.V8JSResourceType.Prom())
 	newGauge := func(name attributes.Name, help string) *Expirer[prometheus.Gauge] {
 		return newRuntimeGauge(name.Prom, help, runtimeServiceLabels(), clock, cfg.TTL)
 	}
@@ -91,6 +93,9 @@ func newNodejsRuntimeMetricsCollector(cfg *PrometheusConfig) nodejsRuntimeMetric
 			"V8 heap space available size.", heapLabels, clock, cfg.TTL),
 		heapPhysical: newRuntimeGauge(attributes.V8JSMemoryHeapSpacePhysicalSize.Prom,
 			"Committed size of a V8 heap space.", heapLabels, clock, cfg.TTL),
+		resourceActive: newRuntimeGauge(attributes.V8JSResourceActive.Prom,
+			"Number of live resources of one type keeping the nodejs event loop active.",
+			resourceLabels, clock, cfg.TTL),
 		prev:           expire.NewExpiryMap[*nodejsPrevELU](clock, cfg.TTL),
 		clock:          clock,
 		lastExpiration: clock(),
@@ -117,12 +122,14 @@ func (c *nodejsRuntimeMetricsCollector) collectors() []prometheus.Collector {
 		c.heapUsed,
 		c.heapAvailable,
 		c.heapPhysical,
+		c.resourceActive,
 	}
 }
 
 // collectNodejsV8Metrics handles the v8js snapshot variants: the gc duration
-// histogram (one observation per collection cycle) and the per-space heap
-// gauges (absolute sample values, like the JVM memory gauges).
+// histogram (one observation per collection cycle), the per-space heap gauges
+// (absolute sample values, like the JVM memory gauges) and the per-type
+// active-resource gauge.
 func (r *metricsReporter) collectNodejsV8Metrics(snapshot runtimemetrics.RuntimeMetricSnapshot) {
 	c := &r.nodejsRuntimeMetrics
 	if c.gcDuration == nil ||
@@ -146,6 +153,13 @@ func (r *metricsReporter) collectNodejsV8Metrics(snapshot runtimemetrics.Runtime
 		c.heapUsed.WithLabelValues(labels...).Metric.Set(float64(heap.SpaceUsedSize))
 		c.heapAvailable.WithLabelValues(labels...).Metric.Set(float64(heap.SpaceAvailableSize))
 		c.heapPhysical.WithLabelValues(labels...).Metric.Set(float64(heap.PhysicalSpaceSize))
+	}
+
+	// count 0 is the vanished-type explicit zero and must overwrite the
+	// gauge: skipping it would keep serving the stale last count
+	if res := snapshot.NodejsResource; res != nil {
+		c.resourceActive.WithLabelValues(slices.Concat(serviceLabels, []string{res.ResourceType})...).
+			Metric.Set(float64(res.Count))
 	}
 }
 

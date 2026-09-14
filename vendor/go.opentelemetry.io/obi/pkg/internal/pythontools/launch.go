@@ -35,8 +35,22 @@ func isPythonInterpreter(command string) bool {
 func parsePythonLaunch(executable string, args []string, env map[string]string) frameworks.PythonLaunch {
 	command := commandName(executable)
 	if isPythonInterpreter(command) {
+		// launching something like uvicorn app.main:app --host 127.0.0.1 --port 8000, ends up
+		// looking like python3.14 uvicorn app.main:app --host 127.0.0.1 --port 8000. We check for
+		// that here.
+		if len(args) > 0 {
+			fa := args[0]
+			faComm := commandName(fa)
+			if isHandledCommand(faComm) {
+				if launch, ok := parseLauncher(faComm, args[1:], env); ok {
+					return launch
+				}
+			}
+		}
+
 		return parseInterpreterLaunch(args, env)
 	}
+
 	if launch, ok := parseLauncher(command, args, env); ok {
 		return launch
 	}
@@ -146,6 +160,28 @@ func launchForScript(script string, args []string, env map[string]string) framew
 		return frameworks.PythonLaunch{}
 	}
 	return frameworks.PythonLaunch{Target: script, TargetKind: frameworks.TargetScriptPath}
+}
+
+var handledFrameworks = map[string]struct{}{
+	"gunicorn":       {},
+	"uvicorn":        {},
+	"hypercorn":      {},
+	"daphne":         {},
+	"uwsgi":          {},
+	"waitress":       {},
+	"waitress-serve": {},
+	"waitress_serve": {},
+	"flask":          {},
+	"django":         {},
+	"django-admin":   {},
+	"django_admin":   {},
+	"celery":         {},
+}
+
+func isHandledCommand(command string) bool {
+	_, ok := handledFrameworks[command]
+
+	return ok
 }
 
 func parseLauncher(command string, args []string, env map[string]string) (frameworks.PythonLaunch, bool) {

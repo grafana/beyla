@@ -212,7 +212,27 @@ func (pt *ProcessTracer) setupOtelBPFFSPath(bundles []*common.SpecBundle) string
 }
 
 func setupBPFMapSizes(spec *ebpf.CollectionSpec, cfg *obi.Config) {
+	cookiesDeclared := trackedSockCookiesSize(spec)
+
 	ebpfconvenience.SetupMapSizes(spec, cfg.EBPF.MapsConfig.GlobalScaleFactor)
+
+	keepTrackedSockCookiesAtLeast(spec, cookiesDeclared)
+}
+
+// tracked_sock_cookies mirrors sock_dir membership and sockhashes are not
+// resizable: a shadow map smaller than the sockhash would evict cookies of
+// live sockets, silently disarming the FIONREAD compensation
+func trackedSockCookiesSize(spec *ebpf.CollectionSpec) uint32 {
+	if cookies := spec.Maps["tracked_sock_cookies"]; cookies != nil {
+		return cookies.MaxEntries
+	}
+	return 0
+}
+
+func keepTrackedSockCookiesAtLeast(spec *ebpf.CollectionSpec, declared uint32) {
+	if cookies := spec.Maps["tracked_sock_cookies"]; cookies != nil && cookies.MaxEntries < declared {
+		cookies.MaxEntries = declared
+	}
 }
 
 func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p Tracer, cfg *obi.Config, cache *btf.Cache) error {

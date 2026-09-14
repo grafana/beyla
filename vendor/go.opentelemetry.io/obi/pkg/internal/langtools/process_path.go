@@ -20,23 +20,27 @@ func ResolveProcessPath(root, cwd, path string) (string, bool) {
 	return resolved, ok
 }
 
+// AbsoluteProcessPath resolves path against the process working directory.
+func AbsoluteProcessPath(cwd, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+
+	return filepath.Clean(filepath.Join(cwd, path))
+}
+
 func resolveProcessPath(root, cwd, path string, withFileInfo bool) (string, fs.FileInfo, bool) {
 	if root == "" || path == "" {
 		return "", nil, false
 	}
 
-	var containerPath string
-	if filepath.IsAbs(path) {
-		containerPath = filepath.Clean(path)
-	} else {
-		containerPath = filepath.Clean(filepath.Join(cwd, path))
-	}
+	containerPath := AbsoluteProcessPath(cwd, path)
 	if !filepath.IsAbs(containerPath) {
 		return "", nil, false
 	}
 
 	hostPath := filepath.Join(root, strings.TrimPrefix(containerPath, string(filepath.Separator)))
-	if !pathInRoot(root, hostPath) {
+	if !PathWithinBoundary(root, hostPath) {
 		return "", nil, false
 	}
 
@@ -59,7 +63,7 @@ func resolveProcessPath(root, cwd, path string, withFileInfo bool) (string, fs.F
 	if err != nil {
 		return "", nil, false
 	}
-	if !pathInRoot(rootEval, hostEval) {
+	if !PathWithinBoundary(rootEval, hostEval) {
 		return "", nil, false
 	}
 	if !withFileInfo {
@@ -113,8 +117,9 @@ func IsProcRoot(root string) bool {
 	return true
 }
 
-func pathInRoot(root, path string) bool {
-	rel, err := filepath.Rel(root, path)
+// PathWithinBoundary reports whether path is the boundary or one of its descendants.
+func PathWithinBoundary(boundary, path string) bool {
+	rel, err := filepath.Rel(boundary, path)
 	if err != nil {
 		return false
 	}

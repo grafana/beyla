@@ -235,7 +235,7 @@ func (*Resolver) analyzeMappedELF(file *elf.File) (*elfAnalysis, error) {
 		return nil, err
 	}
 	var private *GCCompletionProbe
-	privateProbe, privateErr := findPrivateCollectorProbe(file)
+	privateProbe, privateErr := findPrivateCollectorProbe(file, versionFromHex(version))
 	if privateErr == nil {
 		private = &privateProbe
 	} else if usdt == nil {

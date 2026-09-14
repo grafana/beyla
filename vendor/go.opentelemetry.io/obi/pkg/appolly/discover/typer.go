@@ -33,6 +33,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
+// Swappable in tests so typer tests don't depend on /proc inspections.
+var findProcLanguage = procs.FindProcLanguage
+
 type cacheKey struct {
 	Dev uint64
 	Ino uint64
@@ -261,9 +264,17 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	log := t.log.With("pid", execElf.Pid(), "comm", execElf.CmdExePath())
 	if ic, ok := t.instrumentableCache.Get(cacheKey{Dev: execElf.Dev(), Ino: execElf.Ino()}); ok {
 		log.Debug("new instance of existing executable", "type", ic.Type)
-		if parent, ok := t.currentPids[execElf.Ppid()]; ok && ic.Type == svc.InstrumentablePython &&
-			execElf.CmdExePath() == parent.CmdExePath() {
-			execElf.SetRuntimeMetricServiceSource(parent)
+		if ic.Type == svc.InstrumentablePython {
+			ancestor := execElf
+			parent, ok := t.currentPids[ancestor.Ppid()]
+			for ok && ancestor.Ppid() != ancestor.Pid() &&
+				ancestor.CmdExePath() == parent.CmdExePath() {
+				ancestor = parent
+				parent, ok = t.currentPids[ancestor.Ppid()]
+			}
+			if ancestor != execElf {
+				execElf.SetRuntimeMetricServiceSource(ancestor)
+			}
 		}
 		return ebpf.Instrumentable{Type: ic.Type, FileInfo: execElf, Offsets: ic.Offsets, InstrumentationError: ic.InstrumentationError}
 	}
@@ -306,7 +317,7 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	// Typer finds the executable type again. The language decorator can skip certain type detection,
 	// for example, it will skip Linux system services. If the selection criteria brought us here on
 	// executable path, open port, we respect that choice and find the language for the pipeline.
-	detectedType := procs.FindProcLanguage(execElf.Pid())
+	detectedType := findProcLanguage(execElf.Pid())
 
 	if !t.cfg.Discovery.SkipGoSpecificTracers && detectedType == svc.InstrumentableGolang && err == nil {
 		log.Warn("ELF binary appears to be a Go program, but no offsets were found",
@@ -387,6 +398,9 @@ func (t *typer) loadAllGoFunctionNames() {
 		t.addGoFunctionName(uniqueFunctions, symbolName)
 	}
 	for _, symbolName := range gotracer.GoAutoSDKActivationProbeSymbols() {
+		t.addGoFunctionName(uniqueFunctions, symbolName)
+	}
+	for _, symbolName := range gotracer.GoHTTP2FlushProbeSymbols() {
 		t.addGoFunctionName(uniqueFunctions, symbolName)
 	}
 	for _, symbolName := range gotracer.GoH2OwnershipProbeSymbols() {

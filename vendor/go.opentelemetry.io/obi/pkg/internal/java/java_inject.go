@@ -66,7 +66,7 @@ func NewJavaInjector(cfg *obi.Config) (*JavaInjector, error) {
 	if !cfg.Java.Enabled {
 		if cfg.AppRuntimeMetricsEnabled() {
 			log.Warn("application_runtime is enabled but the Java agent is disabled " +
-				"(javaagent.enabled=false): JVM class loading, thread, and CPU metrics will not be collected")
+				"(javaagent.enabled=false): JVM GC duration, class loading, thread, and CPU metrics will not be collected")
 		}
 		return nil, nil
 	}

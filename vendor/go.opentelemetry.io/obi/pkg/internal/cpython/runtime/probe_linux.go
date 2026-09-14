@@ -26,6 +26,7 @@ func findPythonGCDoneUSDT(file *elf.File) (*GCCompletionProbe, error) {
 		target := targets[0]
 		return &GCCompletionProbe{
 			Kind:            GCCompletionProbeUSDT,
+			Source:          GCCompletionProbeSourceUSDT,
 			FileOffset:      target.FileOffset,
 			SemaphoreOffset: target.SemaphoreOffset,
 		}, nil

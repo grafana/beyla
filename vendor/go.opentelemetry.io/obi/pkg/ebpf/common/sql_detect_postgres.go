@@ -87,11 +87,93 @@ func isValidPostgresPayload(b *largebuf.LargeBuffer) (byte, bool) {
 	}
 
 	size, err := b.I32BEAt(1)
-	if err != nil || size < 0 || size > 3000 {
+	// The declared length includes the four-byte length field itself.
+	if err != nil || size < pgHeaderLen-1 || size > 3000 {
 		return 0, false
 	}
 
 	return op, true
+}
+
+type postgresBodyStatus uint8
+
+const (
+	postgresBodyInvalid postgresBodyStatus = iota
+	postgresBodyIncomplete
+	postgresBodyValid
+)
+
+// postgresSQLBodyStatus bounds validation to the first declared message, not
+// the capture boundary or any later pipelined messages.
+func postgresSQLBodyStatus(b *largebuf.LargeBuffer) postgresBodyStatus {
+	if b.Len() < pgHeaderLen {
+		return postgresBodyIncomplete
+	}
+	op, ok := isValidPostgresPayload(b)
+	if !ok || (op != kPostgresQuery && op != kPostgresCommand && op != kPostgresBind) {
+		return postgresBodyInvalid
+	}
+	size, _ := b.I32BEAt(1)
+	if int(size)+1 > b.Len() {
+		return postgresBodyIncomplete
+	}
+	r, err := msgBodyReader(b)
+	if err != nil {
+		return postgresBodyInvalid
+	}
+	if validPostgresSQLBody(op, &r) {
+		return postgresBodyValid
+	}
+	return postgresBodyInvalid
+}
+
+func validPostgresSQLBody(op byte, r *largebuf.LargeBufferReader) bool {
+	// C can be CommandComplete (a string) or frontend Close (S/P followed
+	// by a name). Both have exactly one trailing NUL and no embedded NULs.
+	if _, err := r.ReadCStr(); err != nil {
+		return false
+	}
+	if op != kPostgresBind {
+		return r.Remaining() == 0
+	}
+	if _, err := r.ReadCStr(); err != nil {
+		return false
+	}
+	formats, ok := readPostgresFormats(r)
+	if !ok {
+		return false
+	}
+	params, err := r.ReadU16BE()
+	if err != nil || (formats > 1 && formats != params) {
+		return false
+	}
+	for range int(params) {
+		length, err := r.ReadI32BE()
+		if err != nil || length < -1 {
+			return false
+		}
+		if length >= 0 {
+			if err := r.Skip(int(length)); err != nil {
+				return false
+			}
+		}
+	}
+	_, ok = readPostgresFormats(r)
+	return ok && r.Remaining() == 0
+}
+
+func readPostgresFormats(r *largebuf.LargeBufferReader) (uint16, bool) {
+	count, err := r.ReadU16BE()
+	if err != nil || int(count) > r.Remaining()/2 {
+		return 0, false
+	}
+	for range int(count) {
+		format, err := r.ReadU16BE()
+		if err != nil || format > 1 {
+			return 0, false
+		}
+	}
+	return count, true
 }
 
 // msgBody returns the raw bytes of the Postgres message body (after the 5-byte header),
@@ -142,15 +224,8 @@ func parsePostgresBindCommand(b *largebuf.LargeBuffer) (string, string, []string
 		return "", "", nil, errPGTooShortPortal
 	}
 
-	// skip format codes: Int16 count + count*Int16 entries
-	formats, err := r.ReadI16BE()
-	if err != nil {
+	if _, ok := readPostgresFormats(&r); !ok {
 		return "", "", nil, errPGTooShortFormatCodes
-	}
-	if formats > 0 {
-		if err := r.Skip(2 * int(formats)); err != nil {
-			return "", "", nil, errPGTooShortFormatCodes
-		}
 	}
 
 	// parse parameter values: Int16 count + repeated (Int32 length + bytes)

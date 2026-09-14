@@ -14,7 +14,7 @@ func WalkParentDirectories(start, boundary string, visit func(string) (stop bool
 
 	dir := filepath.Clean(start)
 	boundary = filepath.Clean(boundary)
-	if !pathInRoot(boundary, dir) {
+	if !PathWithinBoundary(boundary, dir) {
 		return nil
 	}
 

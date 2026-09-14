@@ -528,7 +528,7 @@ func newReporter(
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrHTTPClientDuration)).MetricVec, timeNow, cfg.TTL)
 		}),
-		grpcDuration: optionalHistogramProvider(is.GRPCEnabled() || is.SunRPCEnabled(), func() *Expirer[prometheus.Histogram] {
+		grpcDuration: optionalHistogramProvider(is.GRPCEnabled() || is.SunRPCEnabled() || is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.RPCServerDuration.Prom,
 				Help:                            "duration of RPC service calls from the server side, in seconds",
@@ -538,7 +538,7 @@ func newReporter(
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrGRPCDuration)).MetricVec, timeNow, cfg.TTL)
 		}),
-		grpcClientDuration: optionalHistogramProvider(is.GRPCEnabled() || is.SunRPCEnabled(), func() *Expirer[prometheus.Histogram] {
+		grpcClientDuration: optionalHistogramProvider(is.GRPCEnabled() || is.SunRPCEnabled() || is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.RPCClientDuration.Prom,
 				Help:                            "duration of RPC service calls from the client side, in seconds",
@@ -568,7 +568,7 @@ func newReporter(
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrDBServerDuration)).MetricVec, timeNow, cfg.TTL)
 		}),
-		msgPublishDuration: optionalHistogramProvider(is.MQEnabled(), func() *Expirer[prometheus.Histogram] {
+		msgPublishDuration: optionalHistogramProvider(is.MQEnabled() || is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.MessagingPublishDuration.Prom,
 				Help:                            "duration of messaging client publish operations, in seconds",
@@ -578,7 +578,7 @@ func newReporter(
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrMessagingPublishDuration)).MetricVec, timeNow, cfg.TTL)
 		}),
-		msgProcessDuration: optionalHistogramProvider(is.MQEnabled(), func() *Expirer[prometheus.Histogram] {
+		msgProcessDuration: optionalHistogramProvider(is.MQEnabled() || is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.MessagingProcessDuration.Prom,
 				Help:                            "duration of messaging client process operations, in seconds",
@@ -972,6 +972,66 @@ func (r *metricsReporter) collectMetrics(ctx context.Context) {
 	})
 }
 
+// recordedAsNonHTTPClient reports whether an HTTP client span is published under the
+// database, RPC, or GenAI instruments rather than the HTTP ones. Those families carry no
+// body-size instrument, so such a span has no size to publish. It mirrors the dispatch in
+// the duration switch.
+func (r *metricsReporter) recordedAsNonHTTPClient(span *request.Span) bool {
+	switch {
+	case r.is.DBEnabled() &&
+		(span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch):
+		return true
+	case span.SubType == request.HTTPSubtypeJSONRPC && r.is.GRPCEnabled():
+		return true
+	case r.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType):
+		return true
+	default:
+		return false
+	}
+}
+
+// observeBodySizes publishes what the exchange carried. The request size is known
+// whatever came of the response, so it is published even when the duration is not. The
+// response size is not known: a record finished without its response carries a zeroed
+// length, and publishing that would report an empty response for a call whose response
+// was never seen.
+func (r *metricsReporter) observeBodySizes(span *request.Span) {
+	if !r.is.HTTPEnabled() {
+		return
+	}
+
+	var requestSize, responseSize *Expirer[prometheus.Histogram]
+	var requestAttrs, responseAttrs []attributes.Field[*request.Span, string]
+
+	switch span.Type {
+	case request.EventTypeHTTP:
+		// JSON-RPC over HTTP is recorded as an RPC call, which has no size instrument.
+		if span.SubType == request.HTTPSubtypeJSONRPC && r.is.GRPCEnabled() {
+			return
+		}
+		requestSize, responseSize = r.httpRequestSize, r.httpResponseSize
+		requestAttrs, responseAttrs = r.attrHTTPRequestSize, r.attrHTTPResponseSize
+	case request.EventTypeHTTPClient:
+		if r.recordedAsNonHTTPClient(span) {
+			return
+		}
+		requestSize, responseSize = r.httpClientRequestSize, r.httpClientResponseSize
+		requestAttrs, responseAttrs = r.attrHTTPClientRequestSize, r.attrHTTPClientResponseSize
+	default:
+		return
+	}
+
+	r.observeHistogram(requestSize.WithLabelValues(labelValues(span, requestAttrs)...).Metric,
+		float64(span.RequestBodyLength()), span)
+
+	if request.IgnoreDurations(span) {
+		return
+	}
+
+	r.observeHistogram(responseSize.WithLabelValues(labelValues(span, responseAttrs)...).Metric,
+		float64(span.ResponseBodyLength()), span)
+}
+
 func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
 	return span.Service.Features.AppRED() && !span.Service.ExportsOTelMetrics()
 }
@@ -1010,6 +1070,18 @@ func traceExemplar(span *request.Span) prometheus.Labels {
 		"traceID": span.TraceID.String(),
 		"spanID":  span.SpanID.String(),
 	}
+}
+
+// rpcClientRecorded and msgPublishRecorded mirror the enablement conditions the
+// corresponding histograms are created under. An HTTP client subtype routed to
+// another domain's histogram must check the owning domain, not its own: with
+// none of these features enabled the histogram is nil.
+func (r *metricsReporter) rpcClientRecorded() bool {
+	return r.is.GRPCEnabled() || r.is.SunRPCEnabled() || r.is.HTTPEnabled()
+}
+
+func (r *metricsReporter) msgPublishRecorded() bool {
+	return r.is.MQEnabled() || r.is.HTTPEnabled()
 }
 
 // observeHistogram observes a value into a histogram, attaching an exemplar when applicable.
@@ -1052,6 +1124,14 @@ func (r *metricsReporter) observe(span *request.Span) {
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
 	if r.otelMetricsObserved(span) {
+		// A record finished without its response ends when something other than the
+		// response ended it, so its duration describes more than the request it names.
+		// Every instrument in the switch stands on that duration; the body sizes do
+		// not, and are recorded on their own terms.
+		r.observeBodySizes(span)
+	}
+
+	if r.otelMetricsObserved(span) && !request.IgnoreDurations(span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			// JSON-RPC over HTTP gets recorded as RPC server metrics
@@ -1059,8 +1139,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.observeHistogram(r.grpcDuration.WithLabelValues(labelValues(span, r.attrGRPCDuration)...).Metric, duration, span)
 			} else if r.is.HTTPEnabled() {
 				r.observeHistogram(r.httpDuration.WithLabelValues(labelValues(span, r.attrHTTPDuration)...).Metric, duration, span)
-				r.observeHistogram(r.httpRequestSize.WithLabelValues(labelValues(span, r.attrHTTPRequestSize)...).Metric, float64(span.RequestBodyLength()), span)
-				r.observeHistogram(r.httpResponseSize.WithLabelValues(labelValues(span, r.attrHTTPResponseSize)...).Metric, float64(span.ResponseBodyLength()), span)
 			}
 		case request.EventTypeHTTPClient:
 			// HTTP client subtypes that are database calls get recorded as db client metrics
@@ -1068,8 +1146,11 @@ func (r *metricsReporter) observe(span *request.Span) {
 			case r.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch):
 				r.observeHistogram(r.dbClientDuration.WithLabelValues(labelValues(span, r.attrDBClientDuration)...).Metric, duration, span)
 			case span.SubType == request.HTTPSubtypeJSONRPC && r.is.GRPCEnabled():
-				// JSON-RPC client calls over HTTP get recorded as RPC client metrics
 				r.observeHistogram(r.grpcClientDuration.WithLabelValues(labelValues(span, r.attrGRPCClientDuration)...).Metric, duration, span)
+			case span.SubType == request.HTTPSubtypeAWSS3 && r.rpcClientRecorded():
+				r.observeHistogram(r.grpcClientDuration.WithLabelValues(labelValues(span, r.attrGRPCClientDuration)...).Metric, duration, span)
+			case span.SubType == request.HTTPSubtypeAWSSQS && request.IsSQSMessagingClientOperation(span) && r.msgPublishRecorded():
+				r.observeHistogram(r.msgPublishDuration.WithLabelValues(labelValues(span, r.attrMsgPublishDuration)...).Metric, duration, span)
 			case r.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType):
 				r.observeHistogram(r.genAIClientDuration.WithLabelValues(labelValues(span, r.attrGenAIClientDuration)...).Metric, duration, span)
 				if tokens, reported := span.GenAIInputTokenCount(); reported {
@@ -1081,8 +1162,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 			default:
 				if r.is.HTTPEnabled() {
 					r.observeHistogram(r.httpClientDuration.WithLabelValues(labelValues(span, r.attrHTTPClientDuration)...).Metric, duration, span)
-					r.observeHistogram(r.httpClientRequestSize.WithLabelValues(labelValues(span, r.attrHTTPClientRequestSize)...).Metric, float64(span.RequestBodyLength()), span)
-					r.observeHistogram(r.httpClientResponseSize.WithLabelValues(labelValues(span, r.attrHTTPClientResponseSize)...).Metric, float64(span.ResponseBodyLength()), span)
 				}
 			}
 		case request.EventTypeGRPC:
@@ -1203,13 +1282,17 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 
 	if r.otelSpanMetricsObserved(span) {
-		if span.Service.Features.SpanMetrics() {
+		// The calls counter is separable from the latency histogram, but the two are
+		// read together, so feeding one alone makes the pair disagree.
+		durationMeasured := !request.IgnoreDurations(span)
+
+		if span.Service.Features.SpanMetrics() && durationMeasured {
 			lv := r.labelValuesSpans(span)
 			r.observeHistogram(r.spanMetricsLatency.WithLabelValues(lv...).Metric, duration, span)
 			r.addCounter(r.spanMetricsCallsTotal.WithLabelValues(lv...).Metric, 1, span)
 		}
 
-		if span.Service.Features.SpanSizes() {
+		if span.Service.Features.SpanSizes() && durationMeasured {
 			lv := r.labelValuesSpans(span)
 			r.addCounter(r.spanMetricsRequestSizeTotal.WithLabelValues(lv...).Metric, float64(span.RequestBodyLength()), span)
 			r.addCounter(r.spanMetricsResponseSizeTotal.WithLabelValues(lv...).Metric, float64(span.ResponseBodyLength()), span)
@@ -1219,8 +1302,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 			if !span.IsSelfReferenceSpan() || r.cfg.AllowServiceGraphSelfReferences {
 				lvg := labelValuesSvcGraph(span, r.attrSvcGraph, &r.pidsTracker)
 
+				// The request counter is its own instrument, so an unmeasured span
+				// still counts on its edge. Only the latency is withheld.
 				if span.IsClientSpan() {
-					r.observeHistogram(r.serviceGraphClient.WithLabelValues(lvg...).Metric, duration, span)
+					if durationMeasured {
+						r.observeHistogram(r.serviceGraphClient.WithLabelValues(lvg...).Metric, duration, span)
+					}
 					// If we managed to resolve the remote name only, we check to see
 					// we are not instrumenting the server service, then and only then,
 					// we generate client span count for service graph total
@@ -1228,9 +1315,13 @@ func (r *metricsReporter) observe(span *request.Span) {
 						r.addCounter(r.serviceGraphTotal.WithLabelValues(lvg...).Metric, 1, span)
 					}
 				} else {
-					r.observeHistogram(r.serviceGraphServer.WithLabelValues(lvg...).Metric, duration, span)
+					if durationMeasured {
+						r.observeHistogram(r.serviceGraphServer.WithLabelValues(lvg...).Metric, duration, span)
+					}
 					r.addCounter(r.serviceGraphTotal.WithLabelValues(lvg...).Metric, 1, span)
 				}
+				// An unmeasured span has status Unset, so it never counts against
+				// the edge.
 				if request.SpanStatusCode(span) == request.StatusCodeError {
 					r.addCounter(r.serviceGraphFailed.WithLabelValues(lvg...).Metric, 1, span)
 				}

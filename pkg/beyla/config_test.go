@@ -243,6 +243,7 @@ network:
 				GenAIClientDurationHistogram: export.DefaultBuckets.GenAIClientDurationHistogram,
 				StatTCPRttHistogram:          export.DefaultBuckets.StatTCPRttHistogram,
 				V8JSGCDurationHistogram:      export.DefaultBuckets.V8JSGCDurationHistogram,
+				JVMGCDurationHistogram:       export.DefaultBuckets.JVMGCDurationHistogram,
 			},
 			Instrumentations: []instrumentations.Instrumentation{
 				instrumentations.InstrumentationALL,
@@ -305,6 +306,7 @@ network:
 				GenAIClientDurationHistogram: []float64{5, 6, 7, 8},
 				StatTCPRttHistogram:          export.DefaultBuckets.StatTCPRttHistogram,
 				V8JSGCDurationHistogram:      export.DefaultBuckets.V8JSGCDurationHistogram,
+				JVMGCDurationHistogram:       export.DefaultBuckets.JVMGCDurationHistogram,
 			},
 			ExtraSpanResourceLabels: []string{
 				"cloud.availability_zone",
@@ -418,6 +420,7 @@ network:
 				{InstrumentableType: svc.InstrumentableDotnet},
 				{InstrumentableType: svc.InstrumentableNodejs},
 				{InstrumentableType: svc.InstrumentablePython},
+				{InstrumentableType: svc.InstrumentableRuby},
 			},
 		},
 		SigilExport: otelcfg.TracesConfig{

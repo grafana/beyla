@@ -74,6 +74,7 @@ func DefaultConfig() *Config {
 		{InstrumentableType: svc.InstrumentableDotnet},
 		{InstrumentableType: svc.InstrumentableNodejs},
 		{InstrumentableType: svc.InstrumentablePython},
+		{InstrumentableType: svc.InstrumentableRuby},
 	}
 
 	def.Routes.Unmatch = transform.UnmatchLowCardinality

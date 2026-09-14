@@ -82,6 +82,15 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 	return request.Span{}, true, nil // ignore if we couldn't parse it
 }
 
+func emitTCPExtraSpans(parseCtx *EBPFParseContext, event *TCPRequestInfo, spans ...request.Span) {
+	parentConditional := event.ParentStatus == parentStatusConditional
+	for i := range spans {
+		spans[i].ParentConditional = parentConditional
+	}
+
+	parseCtx.emitExtraSpans(spans...)
+}
+
 // dispatchKernelAssignedProtocol handles events where the kernel has already classified the protocol.
 // returns matched=false for ProtocolTypeUnknown or when MySQL/Postgres fall back to generic detection.
 func dispatchKernelAssignedProtocol(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) {
@@ -144,13 +153,10 @@ func kafkaSpanEmittingExtras(parseCtx *EBPFParseContext, event *TCPRequestInfo, 
 	if len(infos) > 1 {
 		extra := make([]request.Span, 0, len(infos)-1)
 		for _, info := range infos[1:] {
-			s := TCPToKafkaToSpan(event, info)
-			// Zero the SpanID so the pipeline assigns a unique one; otherwise every
-			// topic span from this request would share the event's SpanID.
-			s.SpanID = trace.SpanID{}
-			extra = append(extra, s)
+			extra = append(extra, TCPToKafkaToSpan(event, info))
 		}
-		parseCtx.emitExtraSpans(extra...)
+		detachExtraSpans(extra)
+		emitTCPExtraSpans(parseCtx, event, extra...)
 	}
 	return primary, true
 }
@@ -466,11 +472,8 @@ func matchRedis(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer
 	}
 
 	if len(spans) > 1 {
-		// clear SpanID on extras so tracesgen assigns fresh IDs
-		for i := 1; i < len(spans); i++ {
-			spans[i].SpanID = trace.SpanID{}
-		}
-		parseCtx.emitExtraSpans(spans[1:]...)
+		detachExtraSpans(spans[1:])
+		emitTCPExtraSpans(parseCtx, event, spans[1:]...)
 	}
 
 	return spans[0], false, true, nil
@@ -521,7 +524,7 @@ func matchNATS(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer,
 		extraSpan.Type = request.EventTypeNATSServer
 		extraSpan.SpanID = trace.SpanID{}
 
-		parseCtx.emitExtraSpans(extraSpan)
+		emitTCPExtraSpans(parseCtx, event, extraSpan)
 	}
 	return TCPToNATSToSpan(event, info), false, true, nil
 }
@@ -541,12 +544,8 @@ func matchAMQP(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer,
 			return request.Span{}, true, true, nil
 		}
 		if len(spans) > 1 {
-			// Clear SpanID on extras so tracesgen assigns fresh IDs; otherwise
-			// every clone exports with the captured SpanID, violating OTel.
-			for i := 1; i < len(spans); i++ {
-				spans[i].SpanID = trace.SpanID{}
-			}
-			parseCtx.emitExtraSpans(spans[1:]...)
+			detachExtraSpans(spans[1:])
+			emitTCPExtraSpans(parseCtx, event, spans[1:]...)
 		}
 		return spans[0], false, true, nil
 	}

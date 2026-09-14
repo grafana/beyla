@@ -43,6 +43,9 @@ type nodejsRuntimeMetrics struct {
 	heapAvailable *runtimeCurrentUpDownCounter
 	heapPhysical  *runtimeCurrentUpDownCounter
 
+	resourceActive    instrument.Int64Gauge
+	resourceTypeAttrs map[string]attribute.Set
+
 	// ELU counters are cumulative per event loop; deltas are tracked per PID
 	// so several node processes of the same service don't corrupt each other.
 	entries        *expire.ExpiryMap[*nodejsEventLoopEntry]
@@ -141,6 +144,17 @@ func setupNodejsRuntimeMeters(
 		}
 		*c.dst = newRuntimeCurrentUpDownCounter(ctx, counter, heapAttrs, timeNow, ttl)
 	}
+
+	if m.resourceActive, err = meter.Int64Gauge(
+		attributes.V8JSResourceActive.OTEL,
+		instrument.WithUnit(attributes.V8JSResourceActive.Unit)); err != nil {
+		return fmt.Errorf("creating v8js resource active gauge: %w", err)
+	}
+	resourceType := attr.V8JSResourceType.OTEL()
+	m.resourceTypeAttrs = make(map[string]attribute.Set)
+	for _, t := range nodejsruntime.SemconvResourceTypes() {
+		m.resourceTypeAttrs[t] = attribute.NewSet(resourceType.String(t))
+	}
 	return nil
 }
 
@@ -155,9 +169,10 @@ func v8jsHeapSpaceOTELAttributes() []attributes.Field[runtimemetrics.RuntimeMetr
 	}
 }
 
-// recordV8 handles the v8js snapshot variants: the gc duration histogram and
-// the per-space heap up-down counters (absolute sample values converted to
-// deltas by runtimeCurrentUpDownCounter, exactly like the JVM memory metrics).
+// recordV8 handles the v8js snapshot variants: the gc duration histogram, the
+// per-space heap up-down counters (absolute sample values converted to deltas
+// by runtimeCurrentUpDownCounter, exactly like the JVM memory metrics) and the
+// per-type active-resource gauge.
 func (m *nodejsRuntimeMetrics) recordV8(snapshot runtimemetrics.RuntimeMetricSnapshot) {
 	if snapshot.NodejsGC != nil && m.gcDuration != nil {
 		attrs, ok := m.gcTypeAttrs[snapshot.NodejsGC.GCType]
@@ -174,6 +189,15 @@ func (m *nodejsRuntimeMetrics) recordV8(snapshot runtimemetrics.RuntimeMetricSna
 		m.heapUsed.Record(snapshot, int64(values.SpaceUsedSize))
 		m.heapAvailable.Record(snapshot, int64(values.SpaceAvailableSize))
 		m.heapPhysical.Record(snapshot, int64(values.PhysicalSpaceSize))
+	}
+
+	// count 0 is the vanished-type explicit zero and must be recorded, or
+	// the gauge stays frozen at its last value until the TTL
+	if snapshot.NodejsResource != nil && m.resourceActive != nil {
+		if attrs, ok := m.resourceTypeAttrs[snapshot.NodejsResource.ResourceType]; ok {
+			m.resourceActive.Record(m.ctx, int64(snapshot.NodejsResource.Count),
+				instrument.WithAttributeSet(attrs))
+		}
 	}
 }
 

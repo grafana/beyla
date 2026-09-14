@@ -63,6 +63,7 @@ type ringBufForwarder[T any] struct {
 	items      []T
 	itemsLen   int
 	access     sync.Mutex
+	readerLock sync.Mutex
 	ticker     *time.Ticker
 
 	// parse reads one record and returns (item, ignore, err).
@@ -181,11 +182,21 @@ func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, event
 	for {
 		select {
 		case <-ticker.C:
+			if ctx.Err() != nil {
+				return
+			}
+
+			rbf.readerLock.Lock()
+			if ctx.Err() != nil {
+				rbf.readerLock.Unlock()
+				return
+			}
 			available := eventsReader.AvailableBytes()
 			if available > 0 && rbf.hasPendingReadIdleSince(time.Now(), readerStalledAfter) {
 				err := eventsReader.Flush()
 				rbf.logger.Debug("flushing ringbuf", "available_bytes", available, "flush_err", err)
 			}
+			rbf.readerLock.Unlock()
 		case <-ctx.Done():
 			return
 		}
@@ -193,14 +204,14 @@ func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, event
 }
 
 func (rbf *ringBufForwarder[T]) readAndForwardInner(ctx context.Context, eventsReader ringBufReader, out *msg.Queue[[]T]) {
+	rbf.items = make([]T, rbf.cfg.BatchLength)
+	rbf.itemsLen = 0
+
 	if rbf.cfg.BatchTimeout > 0 {
 		rbf.ticker = time.NewTicker(rbf.cfg.BatchTimeout)
 		go rbf.bgFlushOnTimeout(ctx, out)
 	}
 	go rbf.flushOnAvailableBytes(ctx, eventsReader)
-
-	rbf.items = make([]T, rbf.cfg.BatchLength)
-	rbf.itemsLen = 0
 
 	// 2x: one batch for the parser to work on, one for the reader to fill concurrently.
 	// Smaller would stall the reader while waiting for the parser to finish.
@@ -405,7 +416,9 @@ func (rbf *ringBufForwarder[T]) bgFlushOnTimeout(ctx context.Context, out *msg.Q
 func (rbf *ringBufForwarder[T]) bgListenContextCancelation(ctx context.Context, eventsReader ringBufReader) {
 	<-ctx.Done()
 	rbf.logger.Debug("context is cancelled. Closing events reader")
+	rbf.readerLock.Lock()
 	_ = eventsReader.Close()
+	rbf.readerLock.Unlock()
 }
 
 func (rbf *ringBufForwarder[T]) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer, eventsReader ringBufReader) {
@@ -416,7 +429,9 @@ func (rbf *ringBufForwarder[T]) bgListenSharedContextCancelation(ctx context.Con
 	// eBPF closers to finish. This trades a small window of data loss (events
 	// already in the ring buffer but not yet consumed) for a prompt shutdown.
 	rbf.logger.Debug("closing events reader")
+	rbf.readerLock.Lock()
 	_ = eventsReader.Close()
+	rbf.readerLock.Unlock()
 	wg := sync.WaitGroup{}
 	wg.Add(len(closers))
 	for i := range closers {

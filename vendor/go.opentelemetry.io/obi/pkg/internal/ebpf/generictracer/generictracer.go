@@ -841,9 +841,39 @@ func (p *Tracer) handleJVMRuntimeMetricsRecord(
 		}
 		p.eventCtx.RuntimeMetrics.SendJVMRuntimeMetrics(ctx, []jvmruntime.JVMRuntimeEvent{event})
 		return true, nil
+	case ebpfcommon.EventTypeJVMGCDuration:
+		if p.eventCtx == nil || p.eventCtx.RuntimeMetrics == nil {
+			return true, nil
+		}
+		event, ignore, err := p.parseJVMGCDurationRecord(record)
+		if err != nil || ignore {
+			return true, err
+		}
+		p.eventCtx.RuntimeMetrics.SendJVMGCMetrics(ctx, []jvmruntime.JVMGCEvent{event})
+		return true, nil
 	default:
 		return false, nil
 	}
+}
+
+func (p *Tracer) parseJVMGCDurationRecord(record *ringbuf.Record) (jvmruntime.JVMGCEvent, bool, error) {
+	raw, err := ebpfcommon.ReinterpretCast[BpfJvmGcDurationEvent](record.RawSample)
+	if err != nil {
+		return jvmruntime.JVMGCEvent{}, false, err
+	}
+
+	event := jvmruntime.ParseJVMGCDurationEvent(
+		raw.Timestamp,
+		raw.NsPid,
+		raw.PidNsId,
+		raw.DurationNs,
+		raw.CollectorName,
+		raw.Action,
+	)
+	if !ebpfcommon.DecorateJVMGCEvent(p.pidsFilter, &event) {
+		return jvmruntime.JVMGCEvent{}, true, nil
+	}
+	return event, false, nil
 }
 
 func (p *Tracer) parseJVMRuntimeRecord(record *ringbuf.Record) (jvmruntime.JVMRuntimeEvent, bool, error) {

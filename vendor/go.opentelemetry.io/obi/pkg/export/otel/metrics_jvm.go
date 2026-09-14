@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	jvmruntime "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
@@ -32,6 +33,7 @@ type jvmRuntimeMetrics struct {
 	cpuTime               instrument.Float64Counter
 	cpuCount              *runtimeCurrentUpDownCounter
 	cpuRecentUtilization  instrument.Float64Gauge
+	gcDuration            instrument.Float64Histogram
 	runtimeEntries        map[jvmRuntimeEntryKey]*jvmRuntimeEntry
 }
 
@@ -46,7 +48,13 @@ type jvmRuntimeEntry struct {
 	cpuTime       *int64
 }
 
-func setupJVMRuntimeMeters(ctx context.Context, m *jvmRuntimeMetrics, meter instrument.Meter, ttl time.Duration) error {
+func setupJVMRuntimeMeters(
+	ctx context.Context,
+	m *jvmRuntimeMetrics,
+	meter instrument.Meter,
+	ttl time.Duration,
+	buckets export.Buckets,
+) error {
 	memoryAttrs := jvmMemoryOTELAttributes()
 	var err error
 
@@ -112,11 +120,33 @@ func setupJVMRuntimeMeters(ctx context.Context, m *jvmRuntimeMetrics, meter inst
 		return fmt.Errorf("creating JVM recent CPU utilization gauge: %w", err)
 	}
 
+	gcHistogramOpts := []instrument.Float64HistogramOption{
+		instrument.WithUnit(attributes.JVMGCDuration.Unit),
+	}
+	if len(buckets.JVMGCDurationHistogram) > 0 {
+		gcHistogramOpts = append(gcHistogramOpts,
+			instrument.WithExplicitBucketBoundaries(buckets.JVMGCDurationHistogram...))
+	}
+	if m.gcDuration, err = meter.Float64Histogram(attributes.JVMGCDuration.OTEL, gcHistogramOpts...); err != nil {
+		return fmt.Errorf("creating JVM GC duration histogram: %w", err)
+	}
+
 	return nil
 }
 
 func (m *jvmRuntimeMetrics) record(snapshot runtimemetrics.RuntimeMetricSnapshot) {
 	if snapshot.JVM == nil {
+		return
+	}
+	if snapshot.JVM.Kind == jvmruntime.JVMMetricGCDuration {
+		m.gcDuration.Record(
+			m.ctx,
+			float64(snapshot.JVM.DurationNS)/float64(time.Second),
+			instrument.WithAttributes(
+				attr.JVMGCName.OTEL().String(snapshot.JVM.GCName),
+				attr.JVMGCAction.OTEL().String(snapshot.JVM.GCAction),
+			),
+		)
 		return
 	}
 	if values := snapshot.JVM.RuntimeValues; values != nil {
@@ -182,7 +212,7 @@ func recordJVMRuntimeCounter(
 	if *previous != nil && current >= **previous {
 		delta = current - **previous
 	}
-	if delta > 0 {
+	if delta > 0 || *previous == nil {
 		metric.Add(ctx, int64(delta))
 	}
 

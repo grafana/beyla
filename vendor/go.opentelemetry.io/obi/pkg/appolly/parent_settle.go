@@ -11,7 +11,6 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -22,8 +21,8 @@ import (
 // children arrive marked ParentConditional and are held here until their
 // parent span shows up carrying the request's real end timestamp. A child that
 // started before the parent ended was part of serving it and keeps the link; a
-// child that started afterwards was not, and is re-rooted so finished requests
-// stop collecting the process' later, unrelated calls.
+// child that started afterwards was not, and is detached so finished requests
+// stop parenting the process' later, unrelated calls.
 //
 // A parent that never arrives within the transaction bound leaves its children
 // unprovable, and unprovable links are refused the same way.
@@ -146,18 +145,12 @@ func settle(span request.Span, parentEnd int64) request.Span {
 		return span
 	}
 
-	return reroot(span)
+	return detachParent(span)
 }
 
-// reroot detaches a span whose claimed parent had already finished when the
-// span started: it becomes its own trace. When context propagation put the
-// original ids on the wire, downstream services keep them: their spans then
-// group under the stale trace instead of following this one, which is where
-// today's merging already leaves them. Correcting the wire would require
-// knowing the request had ended before its bytes left, which only the
-// response's content can say.
-func reroot(span request.Span) request.Span {
-	span.TraceID = idgen.RandomTraceID()
+// detachParent removes a stale parent without changing the trace identity that
+// the span may already have propagated to downstream services.
+func detachParent(span request.Span) request.Span {
 	span.ParentSpanID = [8]byte{}
 
 	return span
@@ -234,7 +227,7 @@ func (s *parentSettler) removeHeld(el *list.Element) request.Span {
 		delete(s.held, parent)
 	}
 
-	return reroot(held.span)
+	return detachParent(held.span)
 }
 
 // flush settles everything still held as unproven so no span is lost

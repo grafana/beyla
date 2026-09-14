@@ -270,7 +270,8 @@ func emitMemcachedNoreplySpans(parseCtx *EBPFParseContext, trace *TCPRequestInfo
 		spans = append(spans, memcachedNoreplySpan(trace, op.Op, op.Key))
 	}
 
-	parseCtx.emitExtraSpans(spans...)
+	detachExtraSpans(spans)
+	emitTCPExtraSpans(parseCtx, trace, spans...)
 }
 
 func parseMemcachedRequests(r *largebuf.LargeBufferReader) (memcachedParseResult, bool) {

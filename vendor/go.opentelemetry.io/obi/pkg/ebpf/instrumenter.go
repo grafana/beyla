@@ -131,7 +131,6 @@ func (c *usdtLinkCloser) Close() error {
 }
 
 func (i *instrumenter) goprobes(p Tracer) error {
-	// TODO: not running program if it does not find the required probes
 	goProbes := p.GoProbes()
 
 	i.gatherGoOffsets(goProbes)
@@ -139,6 +138,10 @@ func (i *instrumenter) goprobes(p Tracer) error {
 	closers, attachedSymbols, err := i.instrumentProbesWithResults(i.exe, goProbes)
 	if err != nil {
 		return err
+	}
+	if noGoProbeAttached(attachedSymbols) {
+		ilog().Warn("no Go probes attached to executable, it will produce no telemetry",
+			"process", i.processName, "wanted_symbols", len(attachedSymbols))
 	}
 	i.closables = append(i.closables, closers...)
 	p.AddCloser(closers...)
@@ -193,6 +196,18 @@ func (i *instrumenter) registerProcessScopedGoProbes(key ExecutableKey) {
 
 func (i *instrumenter) rollbackOptionalGoProbeGroups() {
 	closeAllReverse(i.optionalGoProbeGroupClosers)
+}
+
+func noGoProbeAttached(attachedSymbols map[string]bool) bool {
+	if len(attachedSymbols) == 0 {
+		return false
+	}
+	for _, attached := range attachedSymbols {
+		if attached {
+			return false
+		}
+	}
+	return true
 }
 
 func (i *instrumenter) instrumentProbes(exe *link.Executable, probes map[string][]*ebpfcommon.ProbeDesc) ([]io.Closer, error) {
@@ -1238,22 +1253,32 @@ func (i *instrumenter) gatherGoOffsets(goProbes map[string][]*ebpfcommon.ProbeDe
 					continue
 				}
 				probeCopy := *probe
-				probeCopy.Skip = false
-				probeCopy.StartOffset = offs.Start
-				probeCopy.ReturnOffsets = append([]uint64(nil), offs.Returns...)
+				if !applyGoProbeOffset(&probeCopy, offs) {
+					continue
+				}
 				resolved = append(resolved, &probeCopy)
 				resolvedForProbe++
 			}
 			if resolvedForProbe == 0 {
 				probeCopy := *probe
-				probeCopy.Skip = false
-				probeCopy.StartOffset = offsets[0].Start
-				probeCopy.ReturnOffsets = append([]uint64(nil), offsets[0].Returns...)
-				resolved = append(resolved, &probeCopy)
+				if applyGoProbeOffset(&probeCopy, offsets[0]) {
+					resolved = append(resolved, &probeCopy)
+				}
 			}
 		}
 		goProbes[symbolName] = resolved
 	}
+}
+
+func applyGoProbeOffset(probe *ebpfcommon.ProbeDesc, offs goexec.FuncOffsets) bool {
+	probe.Skip = false
+	probe.StartOffset = offs.Start
+	if probe.UsePadStart {
+		probe.StartOffset = offs.PadStart
+		probe.Skip = probe.StartOffset == 0 || offs.PadOffset == 0
+	}
+	probe.ReturnOffsets = append([]uint64(nil), offs.Returns...)
+	return !probe.Skip
 }
 
 func (i *instrumenter) gatherGoProbeGroupOffsets(group ebpfcommon.GoProbeGroup) []ebpfcommon.GoProbeGroup {
@@ -1262,6 +1287,10 @@ func (i *instrumenter) gatherGoProbeGroupOffsets(group ebpfcommon.GoProbeGroup) 
 	for _, candidate := range group.Probes {
 		byCopy := map[string][]goexec.FuncOffsets{}
 		for _, offs := range i.offsets.Funcs[candidate.Symbol] {
+			if candidate.Probe != nil && candidate.Probe.UsePadStart &&
+				offs.Symbol != candidate.Symbol {
+				continue
+			}
 			copyID, ok := goFunctionCopyID(candidate.Symbol, offs.Symbol)
 			if !ok {
 				continue
@@ -1287,15 +1316,22 @@ func (i *instrumenter) gatherGoProbeGroupOffsets(group ebpfcommon.GoProbeGroup) 
 		complete := true
 		for _, candidate := range group.Probes {
 			offsets := resolvedBySymbol[candidate.Symbol][copyID]
+			if candidate.CalledFrom != "" {
+				offsets = calledFunctionOffsets(
+					offsets,
+					resolvedBySymbol[candidate.CalledFrom][copyID],
+				)
+			}
 			if candidate.Probe == nil || len(offsets) == 0 {
 				complete = false
 				break
 			}
 			for _, offs := range offsets {
 				probeCopy := *candidate.Probe
-				probeCopy.Skip = false
-				probeCopy.StartOffset = offs.Start
-				probeCopy.ReturnOffsets = append([]uint64(nil), offs.Returns...)
+				if !applyGoProbeOffset(&probeCopy, offs) {
+					complete = false
+					break
+				}
 				resolved.Probes = append(resolved.Probes, ebpfcommon.GoProbe{
 					Symbol:        candidate.Symbol,
 					Probe:         &probeCopy,
@@ -1309,6 +1345,19 @@ func (i *instrumenter) gatherGoProbeGroupOffsets(group ebpfcommon.GoProbeGroup) 
 	}
 
 	return resolvedGroups
+}
+
+func calledFunctionOffsets(callees, callers []goexec.FuncOffsets) []goexec.FuncOffsets {
+	called := make([]goexec.FuncOffsets, 0, len(callees))
+	for _, callee := range callees {
+		for _, caller := range callers {
+			if slices.Contains(caller.CallTargets, callee.Start) {
+				called = append(called, callee)
+				break
+			}
+		}
+	}
+	return called
 }
 
 func goFunctionCopyID(requestedName, resolvedName string) (string, bool) {

@@ -24,6 +24,7 @@ const (
 	JVMMetricMemoryCommitted       JVMRuntimeMetricKind = "jvm.memory.committed"
 	JVMMetricMemoryLimit           JVMRuntimeMetricKind = "jvm.memory.limit"
 	JVMMetricMemoryUsedAfterLastGC JVMRuntimeMetricKind = "jvm.memory.used_after_last_gc"
+	JVMMetricGCDuration            JVMRuntimeMetricKind = "jvm.gc.duration"
 )
 
 type JVMMemoryType string
@@ -51,6 +52,28 @@ type JVMGCEvent struct {
 	MemoryType     JVMMemoryType
 	GCPhase        JVMGCPhase
 	ValueBytes     uint64
+	GCName         string
+	GCAction       string
+	DurationNS     uint64
+}
+
+func ParseJVMGCDurationEvent(
+	timestamp uint64,
+	nsPID uint32,
+	pidNamespaceID uint32,
+	durationNS uint64,
+	collectorName [JVMRawStringLen]byte,
+	action [JVMRawStringLen]byte,
+) JVMGCEvent {
+	return JVMGCEvent{
+		PID:            app.PID(nsPID),
+		PIDNamespaceID: pidNamespaceID,
+		Time:           timing.KernelTime(timestamp),
+		Kind:           JVMMetricGCDuration,
+		GCName:         DecodeJVMRawString(collectorName),
+		GCAction:       DecodeJVMRawString(action),
+		DurationNS:     durationNS,
+	}
 }
 
 type JVMRuntimeValues struct {

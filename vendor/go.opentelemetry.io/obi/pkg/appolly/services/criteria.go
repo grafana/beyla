@@ -67,6 +67,8 @@ const (
 	RouteHarvesterLanguageJava   RouteHarvesterLanguage = "java"
 	RouteHarvesterLanguageNodejs RouteHarvesterLanguage = "nodejs"
 	RouteHarvesterLanguageGo     RouteHarvesterLanguage = "go"
+	RouteHarvesterLanguageDotnet RouteHarvesterLanguage = "dotnet"
+	RouteHarvesterLanguagePython RouteHarvesterLanguage = "python"
 )
 
 // DiscoveryConfig for the discover.ProcessFinder pipeline
@@ -267,9 +269,19 @@ func (p *IntEnum) UnmarshalText(text []byte) error {
 	for entry := range strings.SplitSeq(val, ",") {
 		e := IntRange{}
 		parts := strings.Split(entry, "-")
-		e.Start, _ = strconv.Atoi(strings.TrimSpace(parts[0]))
+		var err error
+		e.Start, err = strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			return fmt.Errorf("invalid int enum %q: %w", val, err)
+		}
 		if len(parts) > 1 {
-			e.End, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
+			e.End, err = strconv.Atoi(strings.TrimSpace(parts[1]))
+			if err != nil {
+				return fmt.Errorf("invalid int enum %q: %w", val, err)
+			}
+			if e.End < e.Start {
+				return fmt.Errorf("invalid int enum %q: range end must not be less than start (%d-%d)", val, e.Start, e.End)
+			}
 		}
 		p.Ranges = append(p.Ranges, e)
 	}

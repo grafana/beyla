@@ -10,6 +10,9 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+
+	"go.opentelemetry.io/obi/internal/goabi"
+	"go.opentelemetry.io/obi/internal/goversion"
 )
 
 const (
@@ -54,12 +57,16 @@ func findInterfaceImpls(ef *elf.File) (map[string]uint64, error) {
 		}
 	}
 
-	goVersion, _, err := getGoDetails(ef)
-	if err != nil || !goVersionAtLeast(goVersion, "1.27.0") {
+	versionString, _, err := getGoDetails(ef)
+	if err != nil {
+		return implementations, nil
+	}
+	targetVersion, err := goversion.Parse(versionString)
+	if err != nil || targetVersion.Compare(minGoRuntimeTypeMetadataVersion) < 0 {
 		return implementations, nil
 	}
 
-	moduleImplementations, err := findInterfaceImplsFromModuledata(ef, goVersion)
+	moduleImplementations, err := findInterfaceImplsFromModuledata(ef, targetVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +74,7 @@ func findInterfaceImpls(ef *elf.File) (map[string]uint64, error) {
 	return implementations, nil
 }
 
-func findInterfaceImplsFromModuledata(ef *elf.File, goVersion string) (map[string]uint64, error) {
+func findInterfaceImplsFromModuledata(ef *elf.File, targetVersion goversion.Version) (map[string]uint64, error) {
 	if ef.Class != elf.ELFCLASS64 {
 		return nil, errors.New("go runtime metadata discovery only supports 64-bit ELF")
 	}
@@ -77,13 +84,14 @@ func findInterfaceImplsFromModuledata(ef *elf.File, goVersion string) (map[strin
 		return nil, errors.New("no .gopclntab section")
 	}
 
-	mdoffs, err := loadModuledataOffsets(ef)
+	runtimeABI, err := loadGoRuntimeABI(ef, targetVersion)
 	if err != nil {
 		return nil, err
 	}
-	abi, err := loadGoTypeMetadataABI(goVersion)
-	if err != nil {
-		return nil, err
+	mdoffs := runtimeABI.Moduledata
+	metadata := runtimeABI.TypeMetadata
+	if metadata == nil {
+		return nil, errors.New("go runtime type metadata ABI is unavailable")
 	}
 	relocs := buildRelocationInfo(ef)
 	for _, candidate := range moduledataCandidates(ef, gopclntab.Addr, mdoffs, relocs) {
@@ -94,7 +102,7 @@ func findInterfaceImplsFromModuledata(ef *elf.File, goVersion string) (map[strin
 			continue
 		}
 
-		return readGoInterfaceImpls(ef, candidate, mdoffs, abi, relocs)
+		return readGoInterfaceImpls(ef, candidate, mdoffs, metadata, relocs)
 	}
 
 	return nil, errors.New("runtime.moduledata not found")
@@ -103,14 +111,14 @@ func findInterfaceImplsFromModuledata(ef *elf.File, goVersion string) (map[strin
 func readGoInterfaceImpls(
 	ef *elf.File,
 	moduledata uint64,
-	mdoffs moduledataOffsets,
-	abi goTypeMetadataABI,
+	mdoffs goabi.Moduledata,
+	abi *goabi.TypeMetadata,
 	relocs relocationInfo,
 ) (map[string]uint64, error) {
-	types := resolveAddr(ef, moduledata+mdoffs.types, relocs)
-	typeDescLen := readAddr(ef, moduledata+mdoffs.typedesclen)
-	itabOffset := readAddr(ef, moduledata+mdoffs.itaboffset)
-	itabSize := readAddr(ef, moduledata+mdoffs.itabsize)
+	types := resolveAddr(ef, moduledata+mdoffs.Types, relocs)
+	typeDescLen := readAddr(ef, moduledata+mdoffs.TypeDescLen)
+	itabOffset := readAddr(ef, moduledata+mdoffs.ITabOffset)
+	itabSize := readAddr(ef, moduledata+mdoffs.ITabSize)
 	if types == 0 || typeDescLen == 0 || itabOffset < typeDescLen || itabSize == 0 {
 		return nil, errors.New("invalid Go runtime type metadata")
 	}
@@ -121,14 +129,15 @@ func readGoInterfaceImpls(
 	implementations := map[string]uint64{}
 	itabAddr := types + itabOffset
 	itabEnd := itabAddr + itabSize
+	itabFuncEntrySize := abi.ITabFuncEntrySize()
 	for itabAddr < itabEnd {
-		if itabEnd-itabAddr < abi.itabBaseSize {
+		if itabEnd-itabAddr < abi.ITabBaseSize {
 			return nil, errors.New("truncated Go itab metadata")
 		}
 
-		interfaceType := resolveAddr(ef, itabAddr, relocs)
-		concreteType := resolveAddr(ef, itabAddr+abi.itabTypeOffset, relocs)
-		firstMethod := resolveAddr(ef, itabAddr+abi.itabFunOffset, relocs)
+		interfaceType := resolveAddr(ef, itabAddr+abi.ITabInterOffset, relocs)
+		concreteType := resolveAddr(ef, itabAddr+abi.ITabTypeOffset, relocs)
+		firstMethod := resolveAddr(ef, itabAddr+abi.ITabFunOffset, relocs)
 		if interfaceType == 0 || concreteType < types || concreteType >= types+itabOffset {
 			return nil, errors.New("invalid Go itab entry")
 		}
@@ -141,14 +150,14 @@ func readGoInterfaceImpls(
 			implementations[typeName] = itabAddr
 		}
 
-		itabEntrySize := abi.itabBaseSize
+		itabEntrySize := abi.ITabBaseSize
 		if firstMethod != 0 {
-			methodCount := readAddr(ef, interfaceType+abi.interfaceLenOffset)
+			methodCount := readAddr(ef, interfaceType+abi.InterfaceMethodCountOffset())
 			if methodCount == 0 ||
-				methodCount-1 > (itabEnd-itabAddr-itabEntrySize)/abi.itabFuncSize {
+				methodCount-1 > (itabEnd-itabAddr-itabEntrySize)/itabFuncEntrySize {
 				return nil, errors.New("invalid Go itab method count")
 			}
-			itabEntrySize += (methodCount - 1) * abi.itabFuncSize
+			itabEntrySize += (methodCount - 1) * itabFuncEntrySize
 		}
 		itabAddr += itabEntrySize
 	}
@@ -156,13 +165,13 @@ func readGoInterfaceImpls(
 	return implementations, nil
 }
 
-func goTypeName(ef *elf.File, types, typeAddr uint64, abi goTypeMetadataABI) (string, error) {
-	typeHeader, err := readVirtualMemory(ef, typeAddr, abi.typeHeaderSize())
+func goTypeName(ef *elf.File, types, typeAddr uint64, abi *goabi.TypeMetadata) (string, error) {
+	typeHeader, err := readVirtualMemory(ef, typeAddr, abi.TypeHeaderSize())
 	if err != nil {
 		return "", fmt.Errorf("reading Go type descriptor: %w", err)
 	}
 
-	nameOffset := int32(ef.ByteOrder.Uint32(typeHeader[abi.typeNameOffset:]))
+	nameOffset := int32(ef.ByteOrder.Uint32(typeHeader[abi.TypeNameOffset:]))
 	if nameOffset < 0 || uint64(nameOffset) > ^uint64(0)-types {
 		return "", errors.New("invalid Go type name offset")
 	}
@@ -170,7 +179,7 @@ func goTypeName(ef *elf.File, types, typeAddr uint64, abi goTypeMetadataABI) (st
 	if err != nil {
 		return "", fmt.Errorf("reading Go type name: %w", err)
 	}
-	if typeHeader[abi.typeTFlagOffset]&byte(abi.tflagExtraStar) != 0 {
+	if typeHeader[abi.TypeTFlagOffset]&byte(abi.TFlagExtraStarMask) != 0 {
 		name = strings.TrimPrefix(name, "*")
 	}
 
@@ -197,17 +206,17 @@ func goTypePackagePath(
 	ef *elf.File,
 	types, typeAddr uint64,
 	typeHeader []byte,
-	abi goTypeMetadataABI,
+	abi *goabi.TypeMetadata,
 ) (string, error) {
-	if typeHeader[abi.typeTFlagOffset]&byte(abi.tflagUncommon) == 0 {
+	if typeHeader[abi.TypeTFlagOffset]&byte(abi.TFlagUncommonMask) == 0 {
 		return "", nil
 	}
 
-	uncommonOffset := abi.uncommonOffset(typeHeader[abi.typeKindOffset])
+	uncommonOffset := abi.UncommonTypeOffset(typeHeader[abi.TypeKindOffset])
 	pkgPathBytes, err := readVirtualMemory(
 		ef,
-		typeAddr+uncommonOffset+abi.uncommonPkgPathOffset,
-		abi.nameOffsetSize,
+		typeAddr+uncommonOffset+abi.UncommonPkgPathOffset,
+		abi.NameOffsetSize,
 	)
 	if err != nil {
 		return "", fmt.Errorf("reading Go type package path offset: %w", err)

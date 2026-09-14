@@ -353,6 +353,11 @@ func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter
 	t := span.Timings()
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
+	// The request counter is its own instrument, so a span whose duration was never
+	// measured still counts on the edge it traveled. Dropping it would erase an edge
+	// where every call goes unobserved. Only the two histograms are withheld.
+	durationMeasured := !request.IgnoreDurations(span)
+
 	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.TraceFlags)))
 
 	if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
@@ -365,8 +370,10 @@ func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter
 		}
 
 		if span.IsClientSpan() {
-			sgc, attrs := r.serviceGraphClient.ForRecord(span, connType...)
-			sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			if durationMeasured {
+				sgc, attrs := r.serviceGraphClient.ForRecord(span, connType...)
+				sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
 			// If we managed to resolve the remote name only, we check to see
 			// we are not instrumenting the server service, then and only then,
 			// we generate client span count for service graph total
@@ -375,11 +382,14 @@ func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter
 				sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 			}
 		} else {
-			sgs, attrs := r.serviceGraphServer.ForRecord(span, connType...)
-			sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			if durationMeasured {
+				sgs, attrs := r.serviceGraphServer.ForRecord(span, connType...)
+				sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
 			sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType...)
 			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
 		}
+		// An unmeasured span has status Unset, so it never counts against the edge.
 		if request.SpanStatusCode(span) == request.StatusCodeError {
 			sgf, attrs := r.serviceGraphFailed.ForRecord(span, connType...)
 			sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))

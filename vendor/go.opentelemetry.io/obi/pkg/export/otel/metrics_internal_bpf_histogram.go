@@ -15,6 +15,7 @@ import (
 	metricdata "go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 )
 
@@ -137,9 +138,9 @@ func (p *bpfProbeLatencyProducer) Produce(ctx context.Context) ([]metricdata.Sco
 
 		dataPoints = append(dataPoints, metricdata.HistogramDataPoint[float64]{
 			Attributes: attribute.NewSet(
-				attribute.String("bpf.probe.id", key.probeID),
-				attribute.String("bpf.probe.type", key.probeType),
-				attribute.String("bpf.probe.name", key.probeName),
+				attribute.String(string(attr.BpfProbeID), key.probeID),
+				attribute.String(string(attr.BpfProbeType), key.probeType),
+				attribute.String(string(attr.BpfProbeName), key.probeName),
 			),
 			StartTime:    startTime,
 			Time:         now,

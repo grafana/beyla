@@ -256,7 +256,6 @@ type ReporterPool[K uidGetter, T any] struct {
 	lastService    uidGetter
 	lastServiceUID svc.UID
 
-	// TODO: use cacheable clock for efficiency
 	clock          expire.Clock
 	ttl            time.Duration
 	lastExpiration time.Time

@@ -3,15 +3,19 @@
 
 package avoidedsvc // import "go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
 
-import "sync"
+import (
+	"sync"
+)
 
 const (
 	// DefaultLimit follows the OpenTelemetry metric cardinality limit default.
 	DefaultLimit = 2000
 	// OverflowAttribute is the OpenTelemetry metric overflow attribute.
 	OverflowAttribute = "otel.metric.overflow"
-	// PrometheusOverflowLabel is the Prometheus-safe form of OverflowAttribute.
+	// PrometheusOverflowLabel is the Prometheus form of OverflowAttribute.
+	// TestPrometheusOverflowLabelMatchesAttribute pins the two together.
 	PrometheusOverflowLabel = "otel_metric_overflow"
+
 	prometheusOverflowTrue  = "true"
 	prometheusOverflowFalse = "false"
 )

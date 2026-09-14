@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+cassandra = opentelemetry.instrumentation.cassandra:CassandraInstrumentor

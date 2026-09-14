@@ -1,0 +1,13 @@
+opentelemetry/instrumentation/mysql/__init__.py,sha256=5EKmXXwVOFYxBgbFuj3hdMsVnza1kKHYTPbknBlydr0,11390
+opentelemetry/instrumentation/mysql/__pycache__/__init__.cpython-314.pyc,,
+opentelemetry/instrumentation/mysql/__pycache__/package.cpython-314.pyc,,
+opentelemetry/instrumentation/mysql/__pycache__/version.cpython-314.pyc,,
+opentelemetry/instrumentation/mysql/package.py,sha256=OIWGJa-QhcMvb045hqO_ZhdINrM6yAvNZ5rvpdpHTMk,644
+opentelemetry/instrumentation/mysql/version.py,sha256=DBXZddKDJ7tkfnQqmsgdbfbFiSilxTopq4pdgcuFX9o,608
+opentelemetry_instrumentation_mysql-0.62b1.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+opentelemetry_instrumentation_mysql-0.62b1.dist-info/METADATA,sha256=s22CAw51_DYgVJMPj2e6crr4zjUYhzyF5P66rF_kvQs,2137
+opentelemetry_instrumentation_mysql-0.62b1.dist-info/RECORD,,
+opentelemetry_instrumentation_mysql-0.62b1.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+opentelemetry_instrumentation_mysql-0.62b1.dist-info/WHEEL,sha256=qtCwoSJWgHk21S1Kb4ihdzI2rlJ1ZKaIurTj_ngOhyQ,87
+opentelemetry_instrumentation_mysql-0.62b1.dist-info/entry_points.txt,sha256=5iCC9hhmhTfgnQjF1hxtafJdMfGqns_WICyNJN_beeU,91
+opentelemetry_instrumentation_mysql-0.62b1.dist-info/licenses/LICENSE,sha256=xx0jnfkXJvxRnG63LTGOxlggYnIysveWIZ6H3PNdCrQ,11357

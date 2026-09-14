@@ -1,0 +1,9 @@
+--no-private
+--title=OpenTelemetry Resource Detector Azure
+--markup=markdown
+--main=README.md
+./lib/opentelemetry/resource/detector/**/*.rb
+./lib/opentelemetry/resource/detector.rb
+-
+README.md
+CHANGELOG.md

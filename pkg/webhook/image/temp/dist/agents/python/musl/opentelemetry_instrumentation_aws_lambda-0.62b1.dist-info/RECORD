@@ -1,0 +1,13 @@
+opentelemetry/instrumentation/aws_lambda/__init__.py,sha256=7Iv-b4_VY7nnyndtvmrHcPn8HOf85xCXx-ACJissds0,18995
+opentelemetry/instrumentation/aws_lambda/__pycache__/__init__.cpython-314.pyc,,
+opentelemetry/instrumentation/aws_lambda/__pycache__/package.cpython-314.pyc,,
+opentelemetry/instrumentation/aws_lambda/__pycache__/version.cpython-314.pyc,,
+opentelemetry/instrumentation/aws_lambda/package.py,sha256=6OiaAJOKS-XH9e-QAAkj7AyOTw-6bTetTuXhavCCkQ0,609
+opentelemetry/instrumentation/aws_lambda/version.py,sha256=DBXZddKDJ7tkfnQqmsgdbfbFiSilxTopq4pdgcuFX9o,608
+opentelemetry_instrumentation_aws_lambda-0.62b1.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+opentelemetry_instrumentation_aws_lambda-0.62b1.dist-info/METADATA,sha256=p17BqD8bLbzN7ZxIUj0Gnlwcjo7Qoi9r87MK9ZYQstY,2492
+opentelemetry_instrumentation_aws_lambda-0.62b1.dist-info/RECORD,,
+opentelemetry_instrumentation_aws_lambda-0.62b1.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+opentelemetry_instrumentation_aws_lambda-0.62b1.dist-info/WHEEL,sha256=qtCwoSJWgHk21S1Kb4ihdzI2rlJ1ZKaIurTj_ngOhyQ,87
+opentelemetry_instrumentation_aws_lambda-0.62b1.dist-info/entry_points.txt,sha256=_zeDTk0w1a-O9oINFqA-K6fQ89uQRNdP8O03KrN-WGU,105
+opentelemetry_instrumentation_aws_lambda-0.62b1.dist-info/licenses/LICENSE,sha256=xx0jnfkXJvxRnG63LTGOxlggYnIysveWIZ6H3PNdCrQ,11357

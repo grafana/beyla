@@ -30,6 +30,8 @@ gem install bundler minitest
 
 The unit tests do not require `bundle install`. The committed `Gemfile.lock` describes the packaged distribution, not the test environment.
 
+Applications may declare a compatible `opentelemetry-api` dependency for manual spans and custom instrumentation. Other directly declared OpenTelemetry gems, including `opentelemetry-common`, cause injection to stand down.
+
 ## Run with Docker
 
 From this directory:
@@ -82,11 +84,18 @@ The distribution is pinned by Git commit rather than a manually maintained versi
          aarch64-linux-gnu \
          x86_64-linux-musl \
          aarch64-linux-musl
-       chown "$HOST_UID:$HOST_GID" Gemfile.lock
+       ruby dependency_requirements_generator.rb \
+         Gemfile.lock \
+         beyla/dependency_requirements.rb
+       chown "$HOST_UID:$HOST_GID" \
+         Gemfile.lock \
+         beyla/dependency_requirements.rb
      '
    ```
 
-3. Review the upstream Ruby requirement, Rails minimum, and the requirements for dependencies listed in `DEPENDENCY_REQUIREMENTS`.
+   The general compatibility list excludes OpenTelemetry gems, unconstrained dependencies, and `rake`. The same command separately generates the allowed `opentelemetry-api` requirements.
+
+3. Review the upstream Ruby requirement, Rails minimum, and the generated `beyla/dependency_requirements.rb` diff.
 4. Update `beyla/compatibility.rb`, scanner checks, documentation, and tests if the supported versions intentionally change.
 5. Run the unit tests and package-build validation commands from this README.
 

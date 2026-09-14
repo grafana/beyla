@@ -1,0 +1,3 @@
+[opentelemetry_instrumentor]
+aiobotocore = opentelemetry.instrumentation.botocore:AiobotocoreInstrumentor
+botocore = opentelemetry.instrumentation.botocore:BotocoreInstrumentor

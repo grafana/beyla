@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package proto.example;
+
+service ExampleAPI {
+  rpc Example(ExampleRequest) returns (ExampleResponse);
+}
+
+message ExampleRequest {
+  uint64 id = 1;
+  string name = 2;
+}
+
+message ExampleResponse {
+  string response_name = 1;
+}

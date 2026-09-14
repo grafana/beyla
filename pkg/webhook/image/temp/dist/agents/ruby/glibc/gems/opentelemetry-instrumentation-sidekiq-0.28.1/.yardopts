@@ -1,0 +1,10 @@
+--no-private
+--title=OpenTelemetry Sidekiq Instrumentation
+--markup=markdown
+--main=README.md
+--tag=instrumentation_option_default:"Default"
+./lib/opentelemetry/instrumentation/**/*.rb
+./lib/opentelemetry/instrumentation.rb
+-
+README.md
+CHANGELOG.md

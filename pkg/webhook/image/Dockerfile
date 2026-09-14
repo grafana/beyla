@@ -44,7 +44,7 @@ RUN gem install --install-dir /operator-build --no-document --ignore-dependencie
     $(ruby /tmp/locked_gems.rb /tmp/Gemfile.lock) /tmp/opentelemetry-auto-instrumentation.gem
 COPY ruby/opentelemetry-auto-instrumentation.rb /operator-build/
 COPY ruby/beyla /operator-build/beyla
-COPY ruby/verify_bundle.rb /tmp/
+COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
 RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
 
 FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS build-ruby-musl
@@ -55,7 +55,7 @@ RUN gem install --install-dir /operator-build --no-document --ignore-dependencie
     $(ruby /tmp/locked_gems.rb /tmp/Gemfile.lock) /tmp/opentelemetry-auto-instrumentation.gem
 COPY ruby/opentelemetry-auto-instrumentation.rb /operator-build/
 COPY ruby/beyla /operator-build/beyla
-COPY ruby/verify_bundle.rb /tmp/
+COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
 RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
 
 # Get the Python SDK for glibc

@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+confluent_kafka = opentelemetry.instrumentation.confluent_kafka:ConfluentKafkaInstrumentor

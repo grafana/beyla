@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+mysql = opentelemetry.instrumentation.mysql:MySQLInstrumentor

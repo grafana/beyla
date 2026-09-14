@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+pyramid = opentelemetry.instrumentation.pyramid:PyramidInstrumentor

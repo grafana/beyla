@@ -1,0 +1,13 @@
+# frozen_string_literal: true
+
+# Copyright The OpenTelemetry Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+appraise 'grpc-1.68' do
+  gem 'grpc', '~> 1.68.0'
+end
+
+appraise 'grpc-latest' do
+  gem 'grpc'
+end

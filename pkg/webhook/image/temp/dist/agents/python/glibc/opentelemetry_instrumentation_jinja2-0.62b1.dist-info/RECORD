@@ -1,0 +1,14 @@
+opentelemetry/instrumentation/jinja2/__init__.py,sha256=KIASx9Wzllv_tLVuO9k9Lp0u3PxNpimsdPlhkrB4V-8,5524
+opentelemetry/instrumentation/jinja2/__pycache__/__init__.cpython-314.pyc,,
+opentelemetry/instrumentation/jinja2/__pycache__/package.cpython-314.pyc,,
+opentelemetry/instrumentation/jinja2/__pycache__/version.cpython-314.pyc,,
+opentelemetry/instrumentation/jinja2/package.py,sha256=lOT-5MpB2fW8PWz5MsqkCczAzDil26RgSfGAS_4KIsE,627
+opentelemetry/instrumentation/jinja2/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+opentelemetry/instrumentation/jinja2/version.py,sha256=DBXZddKDJ7tkfnQqmsgdbfbFiSilxTopq4pdgcuFX9o,608
+opentelemetry_instrumentation_jinja2-0.62b1.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+opentelemetry_instrumentation_jinja2-0.62b1.dist-info/METADATA,sha256=169LbsezctT96gWi2g9ckN9EmUnQpxIo25ipFEeG2-U,1971
+opentelemetry_instrumentation_jinja2-0.62b1.dist-info/RECORD,,
+opentelemetry_instrumentation_jinja2-0.62b1.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+opentelemetry_instrumentation_jinja2-0.62b1.dist-info/WHEEL,sha256=qtCwoSJWgHk21S1Kb4ihdzI2rlJ1ZKaIurTj_ngOhyQ,87
+opentelemetry_instrumentation_jinja2-0.62b1.dist-info/entry_points.txt,sha256=_Lwwoi7fzru9ca7sXYmyUmXUfE4C94Gpg_tlmkFYow8,94
+opentelemetry_instrumentation_jinja2-0.62b1.dist-info/licenses/LICENSE,sha256=xx0jnfkXJvxRnG63LTGOxlggYnIysveWIZ6H3PNdCrQ,11357

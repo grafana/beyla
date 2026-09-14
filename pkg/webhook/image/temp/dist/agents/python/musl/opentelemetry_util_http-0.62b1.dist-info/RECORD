@@ -1,0 +1,13 @@
+opentelemetry/util/http/__init__.py,sha256=pltBKCpyKXlSRNvB_MOSUpYe86A6e1LKuUO2s-dsTHw,12290
+opentelemetry/util/http/__pycache__/__init__.cpython-314.pyc,,
+opentelemetry/util/http/__pycache__/constants.cpython-314.pyc,,
+opentelemetry/util/http/__pycache__/httplib.cpython-314.pyc,,
+opentelemetry/util/http/__pycache__/version.cpython-314.pyc,,
+opentelemetry/util/http/constants.py,sha256=oKBfoJPYbyQZK86n2m7ZORIFO6Q17K1eqcG3hs9jbHc,1123
+opentelemetry/util/http/httplib.py,sha256=ha5INUooFNrNCykeqdctXqiQSecTRmTUXsTf6HB7xAs,5640
+opentelemetry/util/http/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+opentelemetry/util/http/version.py,sha256=DBXZddKDJ7tkfnQqmsgdbfbFiSilxTopq4pdgcuFX9o,608
+opentelemetry_util_http-0.62b1.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+opentelemetry_util_http-0.62b1.dist-info/METADATA,sha256=OkVF7YLUK1-p717BYdAF4gE09BrcURVpcnDR1RGWtNc,2627
+opentelemetry_util_http-0.62b1.dist-info/RECORD,,
+opentelemetry_util_http-0.62b1.dist-info/WHEEL,sha256=qtCwoSJWgHk21S1Kb4ihdzI2rlJ1ZKaIurTj_ngOhyQ,87

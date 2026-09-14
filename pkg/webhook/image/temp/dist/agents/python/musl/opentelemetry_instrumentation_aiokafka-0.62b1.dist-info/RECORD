@@ -1,0 +1,16 @@
+opentelemetry/instrumentation/aiokafka/__init__.py,sha256=ig21afE2Jlq2W2mNW7pjBQXm7d6bDkkDOWleBdvVyCQ,6408
+opentelemetry/instrumentation/aiokafka/__pycache__/__init__.cpython-314.pyc,,
+opentelemetry/instrumentation/aiokafka/__pycache__/package.cpython-314.pyc,,
+opentelemetry/instrumentation/aiokafka/__pycache__/utils.cpython-314.pyc,,
+opentelemetry/instrumentation/aiokafka/__pycache__/version.cpython-314.pyc,,
+opentelemetry/instrumentation/aiokafka/package.py,sha256=39MwZBVF7nwUlKramP-VEnaDOKahLAU6riAMU1LVqEM,629
+opentelemetry/instrumentation/aiokafka/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+opentelemetry/instrumentation/aiokafka/utils.py,sha256=YY4Lt3nlp65J8LQfvW7Yvb1-zgAfF19WB0Ju4FkZKcI,19097
+opentelemetry/instrumentation/aiokafka/version.py,sha256=DBXZddKDJ7tkfnQqmsgdbfbFiSilxTopq4pdgcuFX9o,608
+opentelemetry_instrumentation_aiokafka-0.62b1.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+opentelemetry_instrumentation_aiokafka-0.62b1.dist-info/METADATA,sha256=rc_lZZmZEODZClOEptn6j20y_4TKi7q5OSX5KCKb7oY,2069
+opentelemetry_instrumentation_aiokafka-0.62b1.dist-info/RECORD,,
+opentelemetry_instrumentation_aiokafka-0.62b1.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+opentelemetry_instrumentation_aiokafka-0.62b1.dist-info/WHEEL,sha256=qtCwoSJWgHk21S1Kb4ihdzI2rlJ1ZKaIurTj_ngOhyQ,87
+opentelemetry_instrumentation_aiokafka-0.62b1.dist-info/entry_points.txt,sha256=0cvDMM-QpVSAo5-qjVrsuxX89gWQJKUjmS1YYKPVNcM,100
+opentelemetry_instrumentation_aiokafka-0.62b1.dist-info/licenses/LICENSE,sha256=xx0jnfkXJvxRnG63LTGOxlggYnIysveWIZ6H3PNdCrQ,11357

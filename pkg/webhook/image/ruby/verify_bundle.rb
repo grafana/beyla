@@ -2,6 +2,7 @@
 
 require 'bundler'
 require 'rubygems'
+require_relative 'dependency_requirements_generator'
 
 def installed_specs(root)
   Dir.glob(File.join(root, 'specifications', '*.gemspec')).filter_map do |path|
@@ -26,7 +27,8 @@ def verify_installed_versions(specs, parser)
 end
 
 def dependencies(spec)
-  spec.runtime_dependencies.map { |dependency| [dependency.name, dependency.requirement.to_s] }.sort
+  DependencyRequirementsGenerator.dependencies(spec)
+                                 .map { |dependency| [dependency.name, dependency.requirement.to_s] }.sort
 end
 
 def verify_upstream_dependencies(upstream, parser)
@@ -58,22 +60,17 @@ def verify_rails_policy(root, minimum)
   raise 'Rails compatibility policy is weaker than upstream' if configured < upstream_rails_version(root)
 end
 
-def normalized_requirements(requirements)
-  requirements.flat_map { |value| Gem::Requirement.new(value).requirements }
-              .map { |operator, version| "#{operator} #{version}" }.uniq.sort
-end
+def verify_dependency_requirements(specs, configured, api_requirements)
+  actual = DependencyRequirementsGenerator.generate(specs)
+  raise 'dependency compatibility policy differs from upstream' unless actual == configured
 
-def verify_helper_policies(specs, configured)
-  configured.each do |name, requirements|
-    actual = specs.flat_map(&:runtime_dependencies).select { |dependency| dependency.name == name }
-                  .flat_map { |dependency| dependency.requirement.requirements }
-                  .map { |operator, version| "#{operator} #{version}" }.uniq.sort
-    raise "#{name} compatibility policy differs from upstream" unless actual == normalized_requirements(requirements)
-  end
+  actual_api = DependencyRequirementsGenerator.opentelemetry_api_requirements(specs)
+  raise 'opentelemetry-api compatibility policy differs from upstream' unless actual_api == api_requirements
 end
 
 root, lockfile, revision_file = ARGV
 require File.join(root, 'beyla', 'compatibility')
+require File.join(root, 'beyla', 'dependency_requirements')
 
 specs = installed_specs(root)
 parser = Bundler::LockfileParser.new(File.read(lockfile))
@@ -84,4 +81,8 @@ verify_installed_versions(specs, parser)
 verify_upstream_dependencies(upstream, parser)
 verify_ruby_policy(upstream, Beyla::OpenTelemetry::Compatibility::MINIMUM_RUBY_VERSION)
 verify_rails_policy(root, Beyla::OpenTelemetry::Compatibility::MINIMUM_RAILS_VERSION)
-verify_helper_policies(specs, Beyla::OpenTelemetry::Compatibility::DEPENDENCY_REQUIREMENTS)
+verify_dependency_requirements(
+  specs,
+  Beyla::OpenTelemetry::Compatibility::DEPENDENCY_REQUIREMENTS,
+  Beyla::OpenTelemetry::Compatibility::OPENTELEMETRY_API_REQUIREMENTS
+)

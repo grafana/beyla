@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+falcon = opentelemetry.instrumentation.falcon:FalconInstrumentor

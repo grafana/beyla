@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+remoulade = opentelemetry.instrumentation.remoulade:RemouladeInstrumentor

@@ -1,0 +1,52 @@
+Metadata-Version: 2.4
+Name: opentelemetry-instrumentation-click
+Version: 0.62b1
+Summary: Click instrumentation for OpenTelemetry
+Project-URL: Homepage, https://github.com/open-telemetry/opentelemetry-python-contrib/instrumentation/opentelemetry-instrumentation-click
+Project-URL: Repository, https://github.com/open-telemetry/opentelemetry-python-contrib
+Author-email: OpenTelemetry Authors <cncf-opentelemetry-contributors@lists.cncf.io>
+License-Expression: Apache-2.0
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Python: >=3.9
+Requires-Dist: opentelemetry-api~=1.12
+Requires-Dist: opentelemetry-instrumentation==0.62b1
+Requires-Dist: opentelemetry-semantic-conventions==0.62b1
+Requires-Dist: wrapt<3.0.0,>=1.0.0
+Provides-Extra: instruments
+Requires-Dist: click<9.0.0,>=8.1.3; extra == 'instruments'
+Description-Content-Type: text/x-rst
+
+OpenTelemetry click Instrumentation
+====================================
+
+|pypi|
+
+.. |pypi| image:: https://badge.fury.io/py/opentelemetry-instrumentation-click.svg
+   :target: https://pypi.org/project/opentelemetry-instrumentation-click/
+
+This library allows tracing requests made by the click library.
+
+Installation
+------------
+
+
+::
+
+    pip install opentelemetry-instrumentation-click
+
+
+References
+----------
+
+* `OpenTelemetry click/ Tracing <https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/click/click.html>`_
+* `OpenTelemetry Project <https://opentelemetry.io/>`_

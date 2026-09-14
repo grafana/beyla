@@ -2,6 +2,7 @@
 
 require 'rubygems'
 require_relative 'compatibility'
+require_relative 'dependency_requirements'
 
 module Beyla
   module OpenTelemetry

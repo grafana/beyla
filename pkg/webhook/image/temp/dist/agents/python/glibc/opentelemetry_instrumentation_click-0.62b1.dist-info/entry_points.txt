@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+click = opentelemetry.instrumentation.click:ClickInstrumentor

@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+kafka = opentelemetry.instrumentation.kafka:KafkaInstrumentor

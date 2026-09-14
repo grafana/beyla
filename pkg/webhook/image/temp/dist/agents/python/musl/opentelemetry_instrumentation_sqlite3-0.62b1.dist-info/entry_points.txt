@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+sqlite3 = opentelemetry.instrumentation.sqlite3:SQLite3Instrumentor

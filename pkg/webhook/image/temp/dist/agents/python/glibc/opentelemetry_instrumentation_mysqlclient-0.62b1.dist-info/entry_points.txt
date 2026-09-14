@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+mysqlclient = opentelemetry.instrumentation.mysqlclient:MySQLClientInstrumentor

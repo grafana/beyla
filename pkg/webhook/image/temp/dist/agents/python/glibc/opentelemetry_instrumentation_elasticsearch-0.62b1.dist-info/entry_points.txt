@@ -1,0 +1,2 @@
+[opentelemetry_instrumentor]
+elasticsearch = opentelemetry.instrumentation.elasticsearch:ElasticsearchInstrumentor

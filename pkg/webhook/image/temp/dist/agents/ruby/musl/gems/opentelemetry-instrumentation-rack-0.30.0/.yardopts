@@ -1,9 +1,0 @@
---no-private
---title=OpenTelemetry Rack Instrumentation
---markup=markdown
---main=README.md
-./lib/opentelemetry/instrumentation/**/*.rb
-./lib/opentelemetry/instrumentation.rb
--
-README.md
-CHANGELOG.md

@@ -1,2 +1,0 @@
-[opentelemetry_instrumentor]
-pika = opentelemetry.instrumentation.pika:PikaInstrumentor

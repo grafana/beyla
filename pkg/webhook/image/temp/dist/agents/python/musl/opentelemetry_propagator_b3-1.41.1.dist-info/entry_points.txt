@@ -1,3 +1,0 @@
-[opentelemetry_propagator]
-b3 = opentelemetry.propagators.b3:B3SingleFormat
-b3multi = opentelemetry.propagators.b3:B3MultiFormat

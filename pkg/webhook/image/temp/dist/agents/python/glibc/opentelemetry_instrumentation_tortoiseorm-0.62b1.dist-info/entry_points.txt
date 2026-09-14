@@ -1,2 +1,0 @@
-[opentelemetry_instrumentor]
-tortoiseorm = opentelemetry.instrumentation.tortoiseorm:TortoiseORMInstrumentor

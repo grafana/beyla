@@ -1,9 +1,0 @@
---no-private
---title=OpenTelemetry Instrumentation All-in-one
---markup=markdown
---main=README.md
-./lib/opentelemetry/instrumentation/all/**/*.rb
-./lib/opentelemetry/instrumentation/all.rb
--
-README.md
-CHANGELOG.md

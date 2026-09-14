@@ -1,6 +1,0 @@
-inherit_from: ../../.rubocop.yml
-
-AllCops:
-  Exclude:
-    - 'test/support/proto/*.rb'
-    - 'example/proto/*.rb'

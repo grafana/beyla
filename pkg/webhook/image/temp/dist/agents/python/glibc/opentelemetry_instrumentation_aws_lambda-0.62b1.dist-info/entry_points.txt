@@ -1,2 +1,0 @@
-[opentelemetry_instrumentor]
-aws-lambda = opentelemetry.instrumentation.aws_lambda:AwsLambdaInstrumentor

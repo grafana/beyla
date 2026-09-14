@@ -1,2 +1,0 @@
-[opentelemetry_propagator]
-ottrace = opentelemetry.propagators.ot_trace:OTTracePropagator

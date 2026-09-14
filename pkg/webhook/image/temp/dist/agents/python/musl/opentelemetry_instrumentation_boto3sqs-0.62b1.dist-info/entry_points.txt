@@ -1,2 +1,0 @@
-[opentelemetry_instrumentor]
-boto3 = opentelemetry.instrumentation.boto3sqs:Boto3SQSInstrumentor

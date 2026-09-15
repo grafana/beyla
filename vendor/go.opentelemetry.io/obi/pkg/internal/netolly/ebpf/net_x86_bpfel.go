@@ -89,6 +89,33 @@ type NetPacketCountT struct {
 	Ignored uint64
 }
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	NetMapAggregatedFlows            = "aggregated_flows"
+	NetMapConnInitiators             = "conn_initiators"
+	NetMapDebugEvents                = "debug_events"
+	NetMapDirectFlows                = "direct_flows"
+	NetMapFlowDirections             = "flow_directions"
+	NetMapFlowPacketStats            = "flow_packet_stats"
+	NetProgObiEgressFlowParse        = "obi_egress_flow_parse"
+	NetProgObiIngressFlowParse       = "obi_ingress_flow_parse"
+	NetVarG_bpfDebug                 = "g_bpf_debug"
+	NetVarG_bpfHeaderPropagation     = "g_bpf_header_propagation"
+	NetVarG_bpfLoopEnabled           = "g_bpf_loop_enabled"
+	NetVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
+	NetVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
+	NetVarG_goH2WriteFailStep        = "g_go_h2_write_fail_step"
+	NetVarIp4in6                     = "ip4in6"
+	NetVarPortGuessing               = "port_guessing"
+	NetVarSampling                   = "sampling"
+	NetVarTraceMessages              = "trace_messages"
+	NetVarUnusedFlowId               = "unused_flow_id"
+	NetVarUnusedFlowMetrics          = "unused_flow_metrics"
+	NetVarUnusedFlowRecord           = "unused_flow_record"
+)
+
 // LoadNet returns the embedded CollectionSpec for Net.
 func LoadNet() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_NetBytes)
@@ -109,7 +136,7 @@ func LoadNet() (*ebpf.CollectionSpec, error) {
 //	*NetMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func LoadNetObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func LoadNetObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := LoadNet()
 	if err != nil {
 		return err

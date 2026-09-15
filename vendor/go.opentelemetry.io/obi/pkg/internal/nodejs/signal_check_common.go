@@ -10,3 +10,11 @@ const (
 	signalCheckFound                             // SIGUSR1 handler detected
 	signalCheckFailed                            // detection failed (e.g. stripped symbols)
 )
+
+type signalDisposition int
+
+const (
+	signalDispositionUnknown signalDisposition = iota // the kernel's signal mask could not be read
+	signalDispositionHandled                          // SIGUSR1 is caught or ignored, so it cannot terminate the process
+	signalDispositionFatal                            // SIGUSR1 is neither caught nor ignored: the default action terminates
+)

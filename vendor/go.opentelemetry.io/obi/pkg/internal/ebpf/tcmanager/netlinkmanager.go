@@ -295,8 +295,7 @@ func (tc *netlinkManager) onIfaceManagerError(err error) {
 func (tc *netlinkManager) installQdisc(iface *ifaces.Interface) *netlink.GenericQdisc {
 	link, err := netlink.LinkByIndex(iface.Index)
 	if err != nil {
-		var linkNotFound netlink.LinkNotFoundError
-		if errors.As(err, &linkNotFound) {
+		if _, ok := errors.AsType[netlink.LinkNotFoundError](err); ok {
 			tc.log.Warn(eNoDevMsg, "index", iface.Index, "name", iface.Name, "error", err)
 			return nil
 		}

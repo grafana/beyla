@@ -29,7 +29,7 @@ options:
 		appDir = "."
 	}
 
-	launch := PythonLaunch{SearchPaths: []string{appDir}}
+	launch := PythonLaunch{AppDir: appDir, SearchPaths: []string{appDir}}
 	if target := firstApplicationReference(positionals); target != "" {
 		launch.Target = target
 		launch.TargetKind = TargetModule

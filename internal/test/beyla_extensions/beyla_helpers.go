@@ -14,6 +14,7 @@ import (
 
 	ti "go.opentelemetry.io/obi/pkg/test/integration"
 
+	"github.com/grafana/beyla/v3/internal/testgenerated/integration/components/jaeger"
 	"github.com/grafana/beyla/v3/internal/testgenerated/integration/components/promtest"
 )
 
@@ -37,6 +38,20 @@ func testConfig() *ti.TestConfig {
 // PostgreSQL database backend.
 func waitForSQLTestComponents(t *testing.T, url, subpath string) {
 	waitForSQLTestComponentsWithDB(t, url, subpath, "postgresql")
+}
+
+func clientTraceWithServerPort(traces []jaeger.Trace, operation string, serverPort int) (jaeger.Trace, bool) {
+	for _, trace := range traces {
+		for _, span := range trace.FindByOperationName(operation, "") {
+			port, ok := jaeger.FindIn(span.Tags, "server.port")
+			value, numeric := port.Value.(float64)
+			if ok && numeric && value == float64(serverPort) {
+				return trace, true
+			}
+		}
+	}
+
+	return jaeger.Trace{}, false
 }
 
 // testPrometheusBeylaBuildInfo checks for Beyla build info metric

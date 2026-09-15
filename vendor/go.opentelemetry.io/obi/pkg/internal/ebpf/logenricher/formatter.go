@@ -42,8 +42,7 @@ func (f logFormatter) format(logLine []byte, traceID, spanID string, includeSpan
 		}
 		return append(out, '\n'), nil
 	} else {
-		var unmarshalTypeError *json.UnmarshalTypeError
-		if errors.As(err, &unmarshalTypeError) {
+		if _, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
 			return logLine, nil
 		}
 	}

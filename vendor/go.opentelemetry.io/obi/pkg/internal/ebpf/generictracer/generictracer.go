@@ -557,6 +557,14 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			}},
 		},
 		"libpython3.": {
+			"context_new_empty": {{
+				Required: false,
+				End:      p.bpfObjects.ObiUprobeNewContext,
+			}},
+			"context_new_empty.lto_priv.0": {{
+				Required: false,
+				End:      p.bpfObjects.ObiUprobeNewContext,
+			}},
 			"context_run": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiUprobeContextRun,
@@ -570,6 +578,14 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"PyContext_CopyCurrent": {{
 				Required: false,
 				End:      p.bpfObjects.ObiUprobeCopyContext,
+			}},
+			"context_tp_dealloc": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeContextDealloc,
+			}},
+			"context_tp_dealloc.lto_priv.0": {{ // LTO builds (e.g. Python 3.14) rename the symbol
+				Required: false,
+				Start:    p.bpfObjects.ObiUprobeContextDealloc,
 			}},
 			"context_new_from_vars": {{ // In Docker, PyContext_CopyCurrent has Tail Recursion Optimization, so we need this function instead
 				Required: false,
@@ -841,9 +857,39 @@ func (p *Tracer) handleJVMRuntimeMetricsRecord(
 		}
 		p.eventCtx.RuntimeMetrics.SendJVMRuntimeMetrics(ctx, []jvmruntime.JVMRuntimeEvent{event})
 		return true, nil
+	case ebpfcommon.EventTypeJVMGCDuration:
+		if p.eventCtx == nil || p.eventCtx.RuntimeMetrics == nil {
+			return true, nil
+		}
+		event, ignore, err := p.parseJVMGCDurationRecord(record)
+		if err != nil || ignore {
+			return true, err
+		}
+		p.eventCtx.RuntimeMetrics.SendJVMGCMetrics(ctx, []jvmruntime.JVMGCEvent{event})
+		return true, nil
 	default:
 		return false, nil
 	}
+}
+
+func (p *Tracer) parseJVMGCDurationRecord(record *ringbuf.Record) (jvmruntime.JVMGCEvent, bool, error) {
+	raw, err := ebpfcommon.ReinterpretCast[BpfJvmGcDurationEvent](record.RawSample)
+	if err != nil {
+		return jvmruntime.JVMGCEvent{}, false, err
+	}
+
+	event := jvmruntime.ParseJVMGCDurationEvent(
+		raw.Timestamp,
+		raw.NsPid,
+		raw.PidNsId,
+		raw.DurationNs,
+		raw.CollectorName,
+		raw.Action,
+	)
+	if !ebpfcommon.DecorateJVMGCEvent(p.pidsFilter, &event) {
+		return jvmruntime.JVMGCEvent{}, true, nil
+	}
+	return event, false, nil
 }
 
 func (p *Tracer) parseJVMRuntimeRecord(record *ringbuf.Record) (jvmruntime.JVMRuntimeEvent, bool, error) {

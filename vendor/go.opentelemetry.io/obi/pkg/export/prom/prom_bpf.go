@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/prometheus/client_golang/prometheus"
 
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
@@ -34,6 +35,7 @@ type BPFCollector struct {
 
 	probeLatencyDesc *prometheus.Desc
 	mapSizeDesc      *prometheus.Desc
+	mapMaxSizeDesc   *prometheus.Desc
 	progs            map[ebpf.ProgramID]*BPFProgram
 	programCache     map[ebpf.ProgramID]*cachedProgram
 	mapCache         map[ebpf.MapID]*cachedMap
@@ -159,13 +161,19 @@ func newCollector(ctxInfo *global.ContextInfo, cfg *PrometheusConfig, mpCfg *per
 		probeLatencyDesc: prometheus.NewDesc(
 			prometheus.BuildFQName("bpf", "probe", "latency_seconds"),
 			"Latency of the probe in seconds",
-			[]string{"probe_id", "probe_type", "probe_name"},
+			[]string{attr.BpfProbeID.Prom(), attr.BpfProbeType.Prom(), attr.BpfProbeName.Prom()},
 			nil,
 		),
 		mapSizeDesc: prometheus.NewDesc(
-			prometheus.BuildFQName("bpf", "map", "entries_total"),
+			prometheus.BuildFQName("bpf", "map", "entries"),
 			"Number of entries in the map",
-			[]string{"map_id", "map_name", "map_type", "max_entries"},
+			[]string{attr.BpfMapID.Prom(), attr.BpfMapName.Prom(), attr.BpfMapType.Prom()},
+			nil,
+		),
+		mapMaxSizeDesc: prometheus.NewDesc(
+			prometheus.BuildFQName("bpf", "map", "max_entries"),
+			"Maximum number of entries the map can hold",
+			[]string{attr.BpfMapID.Prom(), attr.BpfMapName.Prom(), attr.BpfMapType.Prom()},
 			nil,
 		),
 	}
@@ -262,6 +270,8 @@ func (bc *BPFCollector) collectInternalMetrics(ctx context.Context) {
 
 func (bc *BPFCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- bc.probeLatencyDesc
+	ch <- bc.mapSizeDesc
+	ch <- bc.mapMaxSizeDesc
 }
 
 func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
@@ -292,12 +302,19 @@ func (bc *BPFCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, metric := range mapMetrics {
 		ch <- prometheus.MustNewConstMetric(
 			bc.mapSizeDesc,
-			prometheus.CounterValue,
+			prometheus.GaugeValue,
 			float64(metric.entries),
 			metric.mapID,
 			metric.mapName,
 			metric.mapType,
-			strconv.FormatUint(uint64(metric.maxEntries), 10),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			bc.mapMaxSizeDesc,
+			prometheus.GaugeValue,
+			float64(metric.maxEntries),
+			metric.mapID,
+			metric.mapName,
+			metric.mapType,
 		)
 	}
 }

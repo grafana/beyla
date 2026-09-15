@@ -4,15 +4,8 @@
 package route // import "go.opentelemetry.io/obi/pkg/internal/transform/route"
 
 import (
-	"regexp"
 	"strings"
 )
-
-// wildcard format. By now, we will suppport wildcards in the form:
-// - /user/:userId/details (Gin)
-// - /user/{userId}/details (Gorilla)
-// More formats will be appended at some point
-var wildcard = regexp.MustCompile(`^((:\w*)|(\{\w*}))$`)
 
 type Matcher interface {
 	Find(string) string
@@ -80,7 +73,10 @@ func (w *partialPattern) matches(folder string) bool {
 func NewMatcher(routes []string) *CompleteRouteMatcher {
 	m := CompleteRouteMatcher{root: &node{Child: map[string]*node{}}}
 	for _, route := range routes {
-		appendRoute(route, tokenize(route), m.root)
+		parts := tokenize(route)
+		if validRoute(parts) {
+			appendRoute(route, parts, m.root)
+		}
 	}
 	return &m
 }
@@ -124,16 +120,13 @@ func appendRoute(fullRoute string, path []string, pathNode *node) {
 		return
 	}
 	currentName := path[0]
-	// if the current token is a full-folder wildcard (":id"/"{id}"), register it as a
-	// catch-all pattern (empty prefix)
-	if wildcard.MatchString(currentName) {
+	if tail, ok := routeParam(currentName); ok {
+		if tail {
+			pathNode.FullRoute = fullRoute
+			pathNode.AnyPath = &node{Child: map[string]*node{}}
+			return
+		}
 		appendRoute(fullRoute, path[1:], pathNode.pattern(""))
-		return
-	}
-
-	if currentName == "*" {
-		pathNode.FullRoute = fullRoute
-		pathNode.AnyPath = &node{Child: map[string]*node{}}
 		return
 	}
 

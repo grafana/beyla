@@ -10,6 +10,20 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
+const nodeSymbolNamespace = "_ZN4node"
+
+// nodeRuntimeSymbols are Node's own internals, which no other runtime carries.
+//
+// The public N-API surface is deliberately absent: Bun re-exports node::
+// symbols such as MakeCallback, so matching those would identify it as Node.
+// libuv's symbols are absent for the same reason: any runtime linking libuv
+// has them, Bun included, so they say nothing about which runtime this is.
+var nodeRuntimeSymbols = []string{
+	"_ZN4node16NodeMainInstance",
+	"_ZN4node11Environment",
+	"_ZN4node5StartE",
+}
+
 var (
 	rubyModule      = regexp.MustCompile(`^(.*/)?ruby[\d.]*$`)
 	pythonModule    = regexp.MustCompile(`^(.*/)?python[\d.]*$`)
@@ -30,14 +44,16 @@ func instrumentableFromModuleMapSharedLib(moduleName string) svc.InstrumentableT
 	if librubyModule.MatchString(moduleName) {
 		return svc.InstrumentableRuby
 	}
+	// Distribution packages link the runtime as a library and leave the
+	// executable a launcher whose node:: symbols are all undefined imports.
+	if strings.Contains(moduleName, "libnode.so") {
+		return svc.InstrumentableNodejs
+	}
 
 	return svc.InstrumentableGeneric
 }
 
 func instrumentableFromModuleMap(moduleName string) svc.InstrumentableType {
-	if strings.HasSuffix(moduleName, "/node") || moduleName == "node" {
-		return svc.InstrumentableNodejs
-	}
 	if strings.HasSuffix(moduleName, "/deno") || moduleName == "deno" {
 		return svc.InstrumentableDeno
 	}
@@ -58,8 +74,25 @@ func instrumentableFromSymbolName(symbol string) svc.InstrumentableType {
 	if strings.HasPrefix(symbol, "JVM_") || strings.HasPrefix(symbol, "graal_") {
 		return svc.InstrumentableJavaNative
 	}
+	if isNodeRuntimeSymbol(symbol) {
+		return svc.InstrumentableNodejs
+	}
 
 	return svc.InstrumentableGeneric
+}
+
+func isNodeRuntimeSymbol(symbol string) bool {
+	if !strings.HasPrefix(symbol, nodeSymbolNamespace) {
+		return false
+	}
+
+	for _, runtimeSymbol := range nodeRuntimeSymbols {
+		if strings.HasPrefix(symbol, runtimeSymbol) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func instrumentableFromPath(path string) svc.InstrumentableType {

@@ -37,7 +37,7 @@ type Info struct {
 var cgroupFormats = []*regexp.Regexp{
 	// 0::/docker/<hex...>/kubelet.slice/kubelet-kubepods.slice/kubelet-kubepods-besteffort.slice/kubelet-kubepods-besteffort-pod<hex...>.slice/cri-containerd-<hex...>.scope
 	// where the last <hex...> chain is the container ID inside its Pod
-	regexp.MustCompile(`^\d+:.*:.*/.*-([\da-fA-F]+)\.scope`),
+	regexp.MustCompile(`^\d+:.*:.*/.*-([\da-fA-F]{64})\.scope`),
 
 	// formats for other Kubernetes distributions
 	// GKE: /kubepods/burstable/pod4a163a05-439d-484b-8e53-2968bc15824f/cde6dfaf5007ed65aad2d6aed72af91b0f3d95813492f773286e29ae145d20f4

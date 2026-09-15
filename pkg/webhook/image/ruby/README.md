@@ -32,6 +32,8 @@ The unit tests do not require `bundle install`. The committed `Gemfile.lock` des
 
 Applications may declare a compatible `opentelemetry-api` dependency for manual spans and custom instrumentation. Other directly declared OpenTelemetry gems, including `opentelemetry-common`, cause injection to stand down.
 
+Injection also stands down when it detects Datadog (`datadog` or `ddtrace`), Dynatrace (`onesdk_ruby`), or New Relic (`newrelic_rpm` or `newrelic-infinite_tracing`) Ruby instrumentation.
+
 ## Run with Docker
 
 From this directory:

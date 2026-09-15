@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'bundle_lock'
+require_relative 'conflicting_instrumentation_guard'
 require_relative 'dependency_compatibility_checker'
 require_relative 'log'
 require_relative 'open_telemetry_guard'
@@ -37,6 +38,7 @@ module Beyla
 
       def rejection(snapshot)
         ProtocolGuard.rejection(ENV) ||
+          ConflictingInstrumentationGuard.rejection(snapshot, ENV['RUBYOPT']) ||
           OpenTelemetryGuard.rejection(snapshot, ENV['RUBYOPT'], @entrypoint) ||
           RailsGuard.rejection(snapshot)
       end

@@ -2,6 +2,7 @@
 
 require 'rubygems'
 require_relative 'dependency_requirements'
+require_relative 'required_features'
 
 module Beyla
   module OpenTelemetry
@@ -55,20 +56,9 @@ module Beyla
       end
 
       def preloaded?(rubyopt, entrypoint)
-        required_features(rubyopt).any? do |feature|
+        RequiredFeatures.parse(rubyopt).any? do |feature|
           feature.downcase.include?('opentelemetry') && !same_feature?(feature, entrypoint)
         end
-      end
-
-      def required_features(rubyopt)
-        tokens = rubyopt.to_s.split
-        tokens.each_with_index.filter_map do |token, index|
-          if token == '-r'
-            tokens[index + 1]
-          elsif token.start_with?('-r') && token.length > 2
-            token[2..]
-          end
-        end.compact
       end
 
       def same_feature?(feature, entrypoint)

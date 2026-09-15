@@ -199,23 +199,18 @@ SCHEMA_TRANSFORMS=(
     'metric_name: obi\.|metric_name: beyla.'
     'id: metric\.obi\.|id: metric.beyla.'
 
-    # ...but the build-info attribute keys are hardcoded "obi.version" /
-    # "obi.revision" in OBI (vendor/go.opentelemetry.io/obi/pkg/export/otel/
-    # metrics_internal.go:252) and are NOT derived from attr.VendorPrefix, so
-    # Beyla emits them unchanged. Undo the generic obi.version / obi.revision
-    # renames applied by BEHAVIORAL_TRANSFORMS, but only inside the registry:
-    # the `- ref: obi.version` / `- ref: obi.revision` refs in
-    # metric.beyla.internal.build.info would not resolve otherwise.
-    #
-    # Beyla emits BOTH spellings — metrics_net.go / metrics_stats.go build
-    # their resource attributes from attr.VendorPrefix and therefore emit
-    # beyla.version / beyla.revision. Those two keys are declared separately by
-    # the x_beyla_buildinfo.yaml injection in apply_schema_injections(); see
-    # that comment for the full emitter table. Keep the two rules below and
-    # that injection in sync — dropping either reintroduces "does not exist in
-    # the registry" violations, just from the other side.
-    'beyla\.version|obi.version'
-    'beyla\.revision|obi.revision'
+    # OBI's internal build-info attributes are all derived from
+    # attr.VendorPrefix. The behavioral transforms above already rename version
+    # and revision; complete the registry rename for the three Go runtime keys.
+    'obi\.goarch|beyla.goarch'
+    'obi\.goos|beyla.goos'
+    'obi\.goversion|beyla.goversion'
+
+    # Keep OBI's narrowed DNS declaration after the upstream declaration in
+    # weaver's deterministic group order. Renaming this id to metric.beyla.*
+    # makes it sort before metric.dns.* and restores the upstream requirement
+    # that dns.question.name is always present.
+    'id: metric\.beyla\.dns\.lookup\.duration|id: metric.obi.dns.lookup.duration'
 )
 
 # ---- Code injections (line inserted after a matching line in Go files) --------
@@ -717,8 +712,8 @@ ensure_netolly_basic_guess_ports() {
 }
 
 ensure_config_v2_v1_equivalents() {
-    # Make configs/obi-config-v2.yml produce the same *effective* configuration
-    # under Beyla's v1 loader as OBI's v2 document does under its versioned one.
+    # Make imported v2 configs produce the same *effective* configuration under
+    # Beyla's v1 loader as OBI's documents do under its versioned one.
     #
     # cmd/beyla/main.go can only call the v1 loader (see the `"version":"v2"`
     # rule in BEHAVIORAL_TRANSFORMS for why). The v1 loader is not a KnownFields
@@ -736,10 +731,11 @@ ensure_config_v2_v1_equivalents() {
     #   v2 document key                                             -> v1 key
     #   meter_provider.readers[].pull…prometheus/development.port   -> prometheus_export.{port,path}
     #   capture.instrumentation.http.routes.incoming                -> routes
+    #   correlation.log_trace_annotation.match                      -> ebpf.log_enricher.services
     #   tracer_provider…otlp_grpc.endpoint                          -> otel_traces_export.endpoint
     #   meter_provider.readers[].periodic…otlp_grpc.endpoint        -> otel_metrics_export.endpoint
     #
-    # The rest of the v2 document is already supplied by docker-compose.yml
+    # Most remaining v2 settings are already supplied by docker-compose.yml
     # (BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT, BEYLA_DISCOVERY_POLL_INTERVAL,
     # BEYLA_LOG_FORMAT) or matches the v1 defaults (K8s decoration off).
     #
@@ -753,10 +749,8 @@ ensure_config_v2_v1_equivalents() {
     # and cmd/beyla/main.go's configVersionV1 constant, the moment OBI exports a
     # versioned loader from pkg/.
     local file="$OBI_DEST/configs/obi-config-v2.yml"
-    [[ -f "$file" ]] || return 0
-    # Idempotency guard (same style as ensure_otherinstance_has_service_version).
-    grep -q '^prometheus_export:' "$file" && return 0
-    cat >>"$file" <<'EOF'
+    if [[ -f "$file" ]] && ! grep -q '^prometheus_export:' "$file"; then
+        cat >>"$file" <<'EOF'
 # --- Beyla-only: v1 equivalents of the v2 document above ---------------------
 # Beyla loads this file with the v1 loader (cmd/beyla/main.go), which ignores
 # `file_format`, `tracer_provider`, `meter_provider` and `extensions.obi`. The
@@ -779,6 +773,38 @@ routes:
     - /metrics
   ignore_mode: traces
 EOF
+    fi
+
+    file="$OBI_DEST/configs/obi-config-log-enricher-v2.yml"
+    if [[ -f "$file" ]] && ! grep -q '^ebpf:' "$file"; then
+        printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
+        cat "$OBI_DEST/configs/obi-config-log-enricher.yml" >>"$file"
+    fi
+
+    file="$OBI_DEST/configs/obi-config-log-enricher-unselected-v2.yml"
+    if [[ -f "$file" ]] && ! grep -q '^ebpf:' "$file"; then
+        printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
+        cat "$OBI_DEST/configs/obi-config-log-enricher-unselected.yml" >>"$file"
+    fi
+}
+
+ensure_client_trace_waits_for_complete_attachment() {
+    # The ping client starts before all Go HTTP/2 probes finish attaching. Keep
+    # retrying until Jaeger contains a post-attachment trace instead of locking
+    # the assertion onto the first, partially populated startup trace.
+    local file="$OBI_DEST/red_test_client.go"
+    [[ -f "$file" ]] || return 0
+
+    awk '
+        /require\.GreaterOrEqual\(ct, len\(traces\), 1\)/ {
+            print "\t\tselectedTrace, found := clientTraceWithServerPort(traces, method+\" /oss/\", 443)"
+            print "\t\trequire.True(ct, found)"
+            print "\t\ttrace = selectedTrace"
+            next
+        }
+        /^[[:space:]]*trace = traces\[0\]$/ { next }
+        { print }
+    ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
 ensure_malicious_ioctl_local_downstream() {
@@ -1284,73 +1310,6 @@ groups:
         requirement_level: opt_in
 EOF
 
-    # beyla.version / beyla.revision — the vendor-prefixed spelling of the
-    # build metadata, which Beyla emits *in addition to* obi.version /
-    # obi.revision. Both spellings really are on the wire:
-    #
-    #   emitter                                              | key emitted
-    #   -----------------------------------------------------+----------------
-    #   .../pkg/export/otel/metrics_internal.go:252          | obi.version
-    #   (build-info metric)                                  | obi.revision
-    #     → hard-coded string literals, not derived from attr.VendorPrefix
-    #   .../pkg/export/otel/metrics_net.go:52-53             | beyla.version
-    #   (network-flow *resource* attrs)                      | beyla.revision
-    #   .../pkg/export/otel/metrics_stats.go:52-53           | beyla.version
-    #   (stat-metric *resource* attrs)                       | beyla.revision
-    #     → attr.VendorPrefix + attr.Vendor{Version,Revision}Suffix, and Beyla
-    #       sets attr.VendorPrefix = "beyla" (pkg/beyla/config_obi.go)
-    #
-    # (paths relative to vendor/go.opentelemetry.io/obi/)
-    #
-    # OBI's registry only declares the obi.* pair (schemas/obi/groups/
-    # obi_internal.yaml, added by OBI 97d2dad8 #2723), and since weaver 0.25.1
-    # (OBI cd075683 #2866) an undeclared attribute is a hard violation, not
-    # noise. That is what fails every netolly + stat suite — exactly the set
-    # fed by metrics_net.go / metrics_stats.go — with both "does not exist in
-    # the registry" and "collides with existing namespace 'beyla'" (the same
-    # defect seen from weaver's other side: the `beyla` namespace exists via
-    # beyla.ip / beyla.network.*, but these two keys under it are undeclared).
-    #
-    # So this is an *addition*, not a rename: the obi.* declarations kept alive
-    # by SCHEMA_TRANSFORMS must stay for metric.beyla.internal.build.info's
-    # refs to resolve.
-    #
-    # Group id is x.beyla.buildinfo so it sorts last, consistent with x.obi.cpu
-    # and x.beyla.survey.
-    #
-    # DURABLE FIX: upstream OBI should derive the build-info metric's attribute
-    # keys from attr.VendorPrefix, the way metrics_net.go already does. Once
-    # that lands and flows back in via a submodule bump, both the
-    # SCHEMA_TRANSFORMS undo rules *and* this injection can be dropped in
-    # favour of the plain obi.* → beyla.* rename.
-    cat > "$SCHEMAS_DEST/obi/groups/x_beyla_buildinfo.yaml" <<'EOF'
-groups:
-  # Vendor-prefixed build metadata. See scripts/generate-obi-tests.sh
-  # (apply_schema_injections) for why Beyla emits both these keys and the
-  # obi.version / obi.revision pair declared in obi_internal.yaml.
-  - id: x.beyla.buildinfo
-    type: attribute_group
-    display_name: Beyla Build-Info Resource Attributes
-    brief: >
-      Vendor-prefixed build metadata that Beyla carries as *resource*
-      attributes on network-flow and stat metrics.
-    attributes:
-      - id: beyla.version
-        type: string
-        stability: development
-        brief: >
-          Beyla build version, e.g. the release tag the instrumenter was built
-          from. Carried as a resource attribute on network-flow and stat
-          metrics.
-        examples: ["v3.31.0"]
-      - id: beyla.revision
-        type: string
-        stability: development
-        brief: >
-          Git SHA of the Beyla build. Carried as a resource attribute on
-          network-flow and stat metrics.
-        examples: ["a2a9a6e2"]
-EOF
 }
 
 generate() {
@@ -1380,6 +1339,7 @@ generate() {
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports
     ensure_config_v2_v1_equivalents
+    ensure_client_trace_waits_for_complete_attachment
     ensure_malicious_ioctl_local_downstream
     ensure_weaver_tap_survives_weavercol_startup
     cleanup_and_inject_build_tags "$jobs"

@@ -1,6 +1,6 @@
 module github.com/grafana/beyla/v3/internal/tools
 
-go 1.25.10
+go 1.26.8
 
 tool (
 	github.com/cilium/ebpf/cmd/bpf2go

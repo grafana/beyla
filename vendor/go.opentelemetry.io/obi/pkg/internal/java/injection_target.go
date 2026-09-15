@@ -55,6 +55,10 @@ func InjectionTargetFrom(ie *ebpf.Instrumentable) (InjectionTarget, error) {
 	}, nil
 }
 
+func (t InjectionTarget) PID() app.PID {
+	return t.Pid
+}
+
 func (t InjectionTarget) Close() error {
 	if t.Process == nil {
 		return nil

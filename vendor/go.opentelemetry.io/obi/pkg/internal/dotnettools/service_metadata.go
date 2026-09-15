@@ -6,6 +6,7 @@ package dotnettools // import "go.opentelemetry.io/obi/pkg/internal/dotnettools"
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -35,6 +36,7 @@ type serviceMetadata struct {
 
 type metadataSource struct {
 	name     string
+	entry    string
 	depsFile string
 	cwd      string
 }
@@ -95,12 +97,38 @@ func ResolveServiceMetadata(fileInfo *exec.FileInfo) error {
 	return inspectionErr
 }
 
+func EntryAssemblyForPID(fileInfo *exec.FileInfo) (string, error) {
+	if fileInfo == nil {
+		return "", errors.New(".NET entry assembly requires process file info")
+	}
+
+	source, err := metadataSourceForProcess(fileInfo)
+	if source.entry == "" {
+		if err != nil {
+			return "", err
+		}
+		return "", fmt.Errorf("no .NET entry assembly found for pid %d", fileInfo.Pid())
+	}
+	if err != nil && !filepath.IsAbs(source.entry) {
+		return "", err
+	}
+
+	path, ok := langtools.ResolveProcessPath(
+		rootDirForPID(fileInfo.Pid()), source.cwd, source.entry,
+	)
+	if !ok {
+		return "", fmt.Errorf("no .NET entry assembly found for pid %d", fileInfo.Pid())
+	}
+	return path, nil
+}
+
 func metadataSourceForProcess(fileInfo *exec.FileInfo) (metadataSource, error) {
 	executable := fileInfo.CmdExePath()
 	if !isDotnetHost(fileInfo.ExecutableName()) {
 		base := trimExecutableSuffix(executable)
 		source := metadataSource{
 			name:     filepath.Base(base),
+			entry:    base + ".dll",
 			depsFile: base + ".deps.json",
 		}
 		if filepath.IsAbs(executable) {
@@ -125,6 +153,7 @@ func metadataSourceForProcess(fileInfo *exec.FileInfo) (metadataSource, error) {
 	base := strings.TrimSuffix(launch.EntryPoint, extension)
 	source := metadataSource{
 		name:     filepath.Base(base),
+		entry:    launch.EntryPoint,
 		depsFile: base + ".deps.json",
 	}
 	if launch.DepsFile != "" {

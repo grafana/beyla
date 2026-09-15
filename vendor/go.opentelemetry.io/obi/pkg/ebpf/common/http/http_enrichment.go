@@ -19,6 +19,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/config"
 )
 
+const userAgentHeader = "user-agent"
+
 // HTTPEnricher applies HTTP enrichment rules to extract headers and body
 // content into spans. Rules are split by type at construction time so that
 // per-request processing only iterates the relevant subset.
@@ -128,6 +130,11 @@ func (e *HTTPEnricher) processHeaders(
 	for name, values := range headers {
 		action, rule := e.resolveHeaderAction(name, scope, span)
 		if action == config.HTTPParsingActionExclude {
+			// An excluded header must not resurface through a semconv attribute
+			// derived from the same value.
+			if strings.EqualFold(name, userAgentHeader) {
+				span.UserAgent = ""
+			}
 			continue
 		}
 		if result == nil {

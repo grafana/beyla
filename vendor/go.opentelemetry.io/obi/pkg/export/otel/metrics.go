@@ -378,7 +378,7 @@ func (mr *MetricsReporter) otelMetricOptions() []metric.Option {
 		)
 	}
 
-	if mr.is.GRPCEnabled() || mr.is.SunRPCEnabled() {
+	if mr.is.GRPCEnabled() || mr.is.SunRPCEnabled() || mr.is.HTTPEnabled() {
 		opts = append(opts,
 			metric.WithView(mr.otelHistogramConfig(attributes.RPCServerDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
 			metric.WithView(mr.otelHistogramConfig(attributes.RPCClientDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
@@ -392,7 +392,7 @@ func (mr *MetricsReporter) otelMetricOptions() []metric.Option {
 		)
 	}
 
-	if mr.is.MQEnabled() {
+	if mr.is.MQEnabled() || mr.is.HTTPEnabled() {
 		opts = append(opts,
 			metric.WithView(mr.otelHistogramConfig(attributes.MessagingPublishDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
 			metric.WithView(mr.otelHistogramConfig(attributes.MessagingProcessDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
@@ -408,6 +408,18 @@ func (mr *MetricsReporter) otelMetricOptions() []metric.Option {
 	}
 
 	return opts
+}
+
+// rpcClientRecorded and msgPublishRecorded mirror the enablement conditions the
+// corresponding instruments are created under. An HTTP client subtype routed to
+// another domain's instrument must check the owning domain, not its own: with
+// none of these features enabled the instrument is nil.
+func (mr *MetricsReporter) rpcClientRecorded() bool {
+	return mr.is.GRPCEnabled() || mr.is.SunRPCEnabled() || mr.is.HTTPEnabled()
+}
+
+func (mr *MetricsReporter) msgPublishRecorded() bool {
+	return mr.is.MQEnabled() || mr.is.HTTPEnabled()
 }
 
 func (mr *MetricsReporter) usesLegacySpanNames() bool {
@@ -491,7 +503,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			m.ctx, httpClientResponseSize, mr.attrHTTPClientResponseSize, timeNow, mr.cfg.TTL)
 	}
 
-	if mr.is.GRPCEnabled() || mr.is.SunRPCEnabled() {
+	if mr.is.GRPCEnabled() || mr.is.SunRPCEnabled() || mr.is.HTTPEnabled() {
 		grpcDuration, err := meter.Float64Histogram(attributes.RPCServerDuration.OTEL, instrument.WithUnit(attributes.RPCServerDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating grpc duration histogram metric: %w", err)
@@ -523,7 +535,7 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 			m.ctx, dbServerDuration, mr.attrDBServer, timeNow, mr.cfg.TTL)
 	}
 
-	if mr.is.MQEnabled() {
+	if mr.is.MQEnabled() || mr.is.HTTPEnabled() {
 		msgPublishDuration, err := meter.Float64Histogram(attributes.MessagingPublishDuration.OTEL, instrument.WithUnit(attributes.MessagingPublishDuration.Unit))
 		if err != nil {
 			return fmt.Errorf("creating messaging client publish duration histogram metric: %w", err)
@@ -744,8 +756,7 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 
 	mlog().Debug("creating new metric set", "service", service)
 	// time units for HTTP and GRPC durations are in seconds, according to the OTEL specification:
-	// https://github.com/open-telemetry/opentelemetry-specification/tree/main/specification/metrics/semantic_conventions
-	// TODO: set ExplicitBucketBoundaries here and in prometheus from the previous specification
+	// https://opentelemetry.io/docs/specs/semconv/http/http-metrics/#metric-httpserverrequestduration
 	meter := m.provider.Meter(reporterName)
 	var err error
 
@@ -928,23 +939,41 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 
 	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.TraceFlags)))
 
+	// A record finished without its response ends when something other than the response
+	// ended it, so its duration and response size describe more than the request they
+	// name. Only HTTP marks a span this way; every instrument below still gets the
+	// duration and body sizes it always did for every other event type.
+	measured := !request.IgnoreDurations(span)
+
+	// Data point timestamps are the collection time, not the span end time: the OTel
+	// metrics API takes no per-measurement timestamp. Span-accurate timing lives in
+	// traces and in the exemplars attached through ctx.
 	if otelMetricsAccepted(span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			// JSON-RPC over HTTP gets recorded as RPC server metrics
 			if span.SubType == request.HTTPSubtypeJSONRPC && mr.is.GRPCEnabled() {
-				grpcDuration, attrs := r.grpcDuration.ForRecord(span)
-				grpcDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				if measured {
+					grpcDuration, attrs := r.grpcDuration.ForRecord(span)
+					grpcDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
 			} else if mr.is.HTTPEnabled() {
-				// TODO: for more accuracy, there must be a way to set the metric time from the actual span end time
-				httpDuration, attrs := r.httpDuration.ForRecord(span)
-				httpDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				if measured {
+					httpDuration, attrs := r.httpDuration.ForRecord(span)
+					httpDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
 
 				httpRequestSize, attrs := r.httpRequestSize.ForRecord(span)
 				httpRequestSize.Record(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
 
-				httpResponseSize, attrs := r.httpResponseSize.ForRecord(span)
-				httpResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
+				// The response size is not known: a record finished without its
+				// response carries a zeroed length, and publishing that would
+				// report an empty response for a call whose response was never
+				// seen.
+				if measured {
+					httpResponseSize, attrs := r.httpResponseSize.ForRecord(span)
+					httpResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
+				}
 			}
 		case request.EventTypeGRPC:
 			if mr.is.GRPCEnabled() {
@@ -969,30 +998,51 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		case request.EventTypeHTTPClient:
 			// HTTP client subtypes that are database calls get recorded as db client metrics
 			if mr.is.DBEnabled() && (span.SubType == request.HTTPSubtypeSQLPP || span.SubType == request.HTTPSubtypeElasticsearch) {
-				dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
-				dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			} else if span.SubType == request.HTTPSubtypeJSONRPC && mr.is.GRPCEnabled() {
-				// JSON-RPC client calls over HTTP get recorded as RPC client metrics
-				grpcClientDuration, attrs := r.grpcClientDuration.ForRecord(span)
-				grpcClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-			} else if mr.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType) {
-				genAIClientDuration, attrs := r.genAIClientDuration.ForRecord(span)
-				genAIClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
-				if tokens, reported := span.GenAIInputTokenCount(); reported {
-					genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)
-					genAIInputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+				if measured {
+					dbClientDuration, attrs := r.dbClientDuration.ForRecord(span)
+					dbClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				}
-				if tokens, reported := span.GenAIOutputTokenCount(); reported {
-					genAIOutputTokenUsage, attrs := r.genAIOutputTokenUsage.ForRecord(span)
-					genAIOutputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+			} else if span.SubType == request.HTTPSubtypeJSONRPC && mr.is.GRPCEnabled() {
+				if measured {
+					grpcClientDuration, attrs := r.grpcClientDuration.ForRecord(span)
+					grpcClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
+			} else if span.SubType == request.HTTPSubtypeAWSS3 && mr.rpcClientRecorded() {
+				if measured {
+					grpcClientDuration, attrs := r.grpcClientDuration.ForRecord(span)
+					grpcClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
+			} else if span.SubType == request.HTTPSubtypeAWSSQS && request.IsSQSMessagingClientOperation(span) && mr.msgPublishRecorded() {
+				if measured {
+					msgPublishDuration, attrs := r.msgPublishDuration.ForRecord(span)
+					msgPublishDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
+			} else if mr.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType) {
+				if measured {
+					genAIClientDuration, attrs := r.genAIClientDuration.ForRecord(span)
+					genAIClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+					if tokens, reported := span.GenAIInputTokenCount(); reported {
+						genAIInputTokenUsage, attrs := r.genAIInputTokenUsage.ForRecord(span)
+						genAIInputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+					}
+					if tokens, reported := span.GenAIOutputTokenCount(); reported {
+						genAIOutputTokenUsage, attrs := r.genAIOutputTokenUsage.ForRecord(span)
+						genAIOutputTokenUsage.Record(ctx, float64(tokens), instrument.WithAttributeSet(attrs))
+					}
 				}
 			} else if mr.is.HTTPEnabled() {
-				httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
-				httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				if measured {
+					httpClientDuration, attrs := r.httpClientDuration.ForRecord(span)
+					httpClientDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+				}
+
 				httpClientRequestSize, attrs := r.httpClientRequestSize.ForRecord(span)
 				httpClientRequestSize.Record(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
-				httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
-				httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
+
+				if measured {
+					httpClientResponseSize, attrs := r.httpClientResponseSize.ForRecord(span)
+					httpClientResponseSize.Record(ctx, float64(span.ResponseBodyLength()), instrument.WithAttributeSet(attrs))
+				}
 			}
 		case request.EventTypeRedisClient:
 			if mr.is.RedisEnabled() {
@@ -1117,7 +1167,10 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		}
 	}
 
-	if otelSpanMetricsAccepted(span) {
+	// The calls counter is separable from the latency histogram, but the two are read
+	// together, so feeding one alone makes the pair disagree. Both stay out when the
+	// duration is withheld.
+	if measured && otelSpanMetricsAccepted(span) {
 		var extraAttrs []attribute.KeyValue
 
 		for _, l := range mr.spanExtraAttrs {
@@ -1353,6 +1406,13 @@ func (mr *MetricsReporter) onSpan(spans []request.Span) {
 		if !s.Service.Features.AppOrSpan() || request.IgnoreMetrics(s) {
 			continue
 		}
+		// This gauge reports that the host is running, which the span's duration
+		// says nothing about, so it is recorded whatever came of the response.
+		if s.Service.Features.AppHost() {
+			hostInfo, attrs := mr.hostInfo.ForRecord(s)
+			hostInfo.Record(mr.ctx, 1, instrument.WithAttributeSet(attrs))
+		}
+
 		reporter, err := mr.reporters.For(&s.Service)
 		if err != nil {
 			mlog().Error("unexpected error creating OTEL resource. Ignoring metric",
@@ -1360,11 +1420,6 @@ func (mr *MetricsReporter) onSpan(spans []request.Span) {
 			continue
 		}
 		reporter.record(s, mr)
-
-		if s.Service.Features.AppHost() {
-			hostInfo, attrs := mr.hostInfo.ForRecord(s)
-			hostInfo.Record(mr.ctx, 1, instrument.WithAttributeSet(attrs))
-		}
 	}
 }
 

@@ -10,13 +10,19 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
+
+	"golang.org/x/sys/unix"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
 const (
-	sigusr1 = 10
+	// sigusr1 is the signal the gates guard and sendSIGUSR1 sends: one
+	// definition, so the mask bit cannot drift from the signal itself.
+	sigusr1 = int(unix.SIGUSR1)
 	// Offset of the signum field within the uv_signal_s struct (libuv 1.x, 64-bit).
 	// This offset is stable across all libuv 1.x versions (used by Node.js 4.x through 22.x+).
 	// Layout: UV_HANDLE_FIELDS (0x60) + uv_signal_cb (0x08) = 0x68.
@@ -31,6 +37,38 @@ const (
 	maxSignalNum = 64
 )
 
+const (
+	signalTreeSymbol = "uv__signal_tree"
+	sigusr1Mask      = uint64(1) << (sigusr1 - 1)
+)
+
+// nodeSymbols is what one walk of the executable's symbol tables yields.
+// debug/elf caches nothing, so asking twice reparses the whole table, around
+// twelve thousand symbols for a stock node.
+type nodeSymbols struct {
+	// signalTree is libuv's signal-handle tree root, when the table names it.
+	signalTree procs.Sym
+	hasTree    bool
+}
+
+// readNodeSymbols looks up libuv's signal tree. The lookup admits STT_FUNC as
+// well as STT_OBJECT: uv__signal_tree is a data object, so this only widens the
+// match to a function of that exact name, which no Node build has.
+func readNodeSymbols(elfFile *elf.File) nodeSymbols {
+	if elfFile == nil {
+		return nodeSymbols{}
+	}
+
+	exact, err := procs.FindExeSymbols(elfFile,
+		[]string{signalTreeSymbol}, elf.STT_FUNC, elf.STT_OBJECT)
+	if err != nil {
+		return nodeSymbols{}
+	}
+
+	tree, hasTree := exact[signalTreeSymbol]
+	return nodeSymbols{signalTree: tree, hasTree: hasTree}
+}
+
 // hasUserSIGUSR1Handler checks whether a Node.js process has a JavaScript-level
 // SIGUSR1 handler registered (via process.on('SIGUSR1', ...)).
 //
@@ -40,31 +78,14 @@ const (
 //
 // Returns signalCheckFound if a handler is detected, signalCheckNotFound if no handler,
 // or signalCheckFailed if the detection could not be performed (e.g. stripped symbols).
-func hasUserSIGUSR1Handler(pid int, elfFile *elf.File) signalCheckResult {
-	if elfFile.Class != elf.ELFCLASS64 {
+func hasUserSIGUSR1Handler(pid int, elfFile *elf.File, syms nodeSymbols) signalCheckResult {
+	if elfFile == nil || elfFile.Class != elf.ELFCLASS64 {
 		return signalCheckFailed
 	}
 
-	syms, err := procs.FindExeSymbols(elfFile, []string{"uv__signal_tree"}, elf.STT_OBJECT)
-	if err != nil {
-		return signalCheckFailed
-	}
-	sym, ok := syms["uv__signal_tree"]
+	runtimeAddr, ok := signalTreeRuntimeAddr(pid, elfFile, syms)
 	if !ok {
 		return signalCheckFailed
-	}
-	symVAddr := sym.Off
-
-	// For PIE executables (ET_DYN), the symbol's virtual address is relative to the
-	// load base. We need to find the actual runtime address by reading the executable's
-	// base address from /proc/<pid>/maps.
-	runtimeAddr := symVAddr
-	if elfFile.Type == elf.ET_DYN {
-		base, err := procs.FindExeBaseAddr(app.PID(pid))
-		if err != nil {
-			return signalCheckFailed
-		}
-		runtimeAddr = base + symVAddr
 	}
 
 	memPath := fmt.Sprintf("/proc/%d/mem", pid)
@@ -86,6 +107,64 @@ func hasUserSIGUSR1Handler(pid int, elfFile *elf.File) signalCheckResult {
 		return signalCheckFound
 	}
 	return signalCheckNotFound
+}
+
+func signalTreeRuntimeAddr(pid int, elfFile *elf.File, syms nodeSymbols) (uint64, bool) {
+	if !syms.hasTree {
+		return 0, false
+	}
+	sym := syms.signalTree
+
+	// For PIE executables (ET_DYN), the symbol's virtual address is relative to the
+	// load base. We need to find the actual runtime address by reading the executable's
+	// base address from /proc/<pid>/maps.
+	if elfFile.Type != elf.ET_DYN {
+		return sym.Off, true
+	}
+
+	base, err := procs.FindExeBaseAddr(app.PID(pid))
+	if err != nil {
+		return 0, false
+	}
+
+	return base + sym.Off, true
+}
+
+func sigusr1Disposition(pid int) signalDisposition {
+	status, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return signalDispositionUnknown
+	}
+
+	caught, gotCaught := signalMask(status, "SigCgt:")
+	ignored, gotIgnored := signalMask(status, "SigIgn:")
+	if !gotCaught || !gotIgnored {
+		return signalDispositionUnknown
+	}
+
+	if (caught|ignored)&sigusr1Mask != 0 {
+		return signalDispositionHandled
+	}
+
+	return signalDispositionFatal
+}
+
+func signalMask(status []byte, field string) (uint64, bool) {
+	for line := range strings.SplitSeq(string(status), "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), field)
+		if !ok {
+			continue
+		}
+
+		mask, err := strconv.ParseUint(strings.TrimSpace(rest), 16, 64)
+		if err != nil {
+			return 0, false
+		}
+
+		return mask, true
+	}
+
+	return 0, false
 }
 
 // walkTreeForSignal performs an iterative traversal of the libuv signal RB-tree
@@ -156,4 +235,12 @@ func readInt32(f *os.File, offset int64, byteOrder binary.ByteOrder) (int32, err
 		return 0, err
 	}
 	return int32(byteOrder.Uint32(buf[:])), nil
+}
+
+// sendSIGUSR1 signals through the pinned process handle, so the signal cannot
+// reach a program the kernel gave the same PID after discovery saw the target.
+// A variable so a test can assert that the gates decide whether this runs at
+// all, which is the whole point of the refusals above it.
+var sendSIGUSR1 = func(process *procs.ProcessHandle) error {
+	return process.SendSignal(unix.SIGUSR1)
 }

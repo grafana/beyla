@@ -223,6 +223,16 @@ func (fi *FileInfo) SetHostName(h string) {
 	fi.service.HostName = h
 }
 
+// SetExplicitServiceName sets a name that was explicitly configured (not
+// auto-derived), clearing any prior auto-name flag so later auto-name
+// propagation (e.g. k8s decoration) does not silently override it.
+func (fi *FileInfo) SetExplicitServiceName(name string) {
+	fi.mu.Lock()
+	defer fi.mu.Unlock()
+	fi.service.UID.Name = name
+	fi.service.ClearAutoName()
+}
+
 func (fi *FileInfo) SetAutoServiceName(name string) {
 	fi.mu.Lock()
 	defer fi.mu.Unlock()

@@ -29,8 +29,11 @@ func NewPartialRouteMatcher(routes []string) *PartialRouteMatcher {
 			continue
 		}
 		n := &node{Child: map[string]*node{}}
-		m.roots = append(m.roots, n)
-		appendRoute(route, tokenize(route), n)
+		parts := tokenize(route)
+		if validRoute(parts) {
+			m.roots = append(m.roots, n)
+			appendRoute(route, parts, n)
+		}
 	}
 	return &m
 }
@@ -88,6 +91,9 @@ func (rm *PartialRouteMatcher) findPartial(tokens []string, root *node) (string,
 }
 
 func (rm *PartialRouteMatcher) findPartialRecursive(tokens []string, node *node, consumed int) (string, int) {
+	if node.AnyPath != nil && node.FullRoute != "" {
+		return node.FullRoute, len(tokens)
+	}
 	// If we have a valid route at this point, it's a potential partial match
 	if node.FullRoute != "" {
 		// Return this match and how many tokens we consumed

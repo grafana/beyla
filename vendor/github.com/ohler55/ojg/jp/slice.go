@@ -478,6 +478,9 @@ func (f Slice) locate(pp Expr, data any, rest Expr, max int) (locs []Expr) {
 		switch rt.Kind() {
 		case reflect.Slice, reflect.Array:
 			start, end, step := f.startEndStep(rd.Len())
+			if step == 0 {
+				return
+			}
 			if 0 < step {
 				if len(rest) == 0 { // last one
 					for i := start; i <= end; i += step {

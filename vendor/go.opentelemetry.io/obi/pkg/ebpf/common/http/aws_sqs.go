@@ -121,6 +121,8 @@ func inferSQSOperationType(opName string) string {
 		return request.MessagingSend
 	case "ReceiveMessage":
 		return request.MessagingReceive
+	case "DeleteMessage", "DeleteMessageBatch":
+		return request.MessagingSettle
 	default:
 		return ""
 	}

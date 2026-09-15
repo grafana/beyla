@@ -21,9 +21,12 @@ type Offsets struct {
 }
 
 type FuncOffsets struct {
-	Symbol  string
-	Start   uint64
-	Returns []uint64
+	Symbol      string
+	Start       uint64
+	Returns     []uint64
+	CallTargets []uint64
+	PadStart    uint64
+	PadOffset   uint64
 }
 
 type FieldOffsets map[GoOffset]any

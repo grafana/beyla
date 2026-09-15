@@ -37,6 +37,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/filter"
 	"go.opentelemetry.io/obi/pkg/health"
 	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/cidr"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/klogbridge"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
@@ -501,6 +502,7 @@ func (c *Config) Unmarshal(component *confmap.Conf) error {
 		Result:           c,
 		WeaklyTypedInput: true,
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			cidrDefinitionsHookFunc(),
 			mapstructure.StringToTimeDurationHookFunc(),
 			// ComposeDecodeHookFunc feeds each hook the previous hook's output, so the
 			// slice-joining hook must run before TextUnmarshallerHookFunc, which only
@@ -515,6 +517,29 @@ func (c *Config) Unmarshal(component *confmap.Conf) error {
 	}
 
 	return dec.Decode(raw)
+}
+
+func cidrDefinitionsHookFunc() mapstructure.DecodeHookFunc {
+	return func(_ reflect.Type, to reflect.Type, data any) (any, error) {
+		if to != reflect.TypeFor[cidr.Definitions]() {
+			return data, nil
+		}
+		from := reflect.TypeOf(data)
+		if from == nil || (from.Kind() != reflect.Slice && from.Kind() != reflect.Array) {
+			return data, nil
+		}
+
+		encoded, err := yaml.Marshal(data)
+		if err != nil {
+			return nil, fmt.Errorf("encoding CIDR definitions: %w", err)
+		}
+
+		var definitions cidr.Definitions
+		if err := yaml.Unmarshal(encoded, &definitions); err != nil {
+			return nil, err
+		}
+		return definitions, nil
+	}
 }
 
 func (c *Config) Log() {
@@ -684,7 +709,8 @@ type NodeJSConfig struct {
 type JavaConfig struct {
 	// Enabled turns on the Java injector agent, used for TLS tracing, virtual thread
 	// correlation, and agent-backed runtime metrics. Setting it to false disables
-	// class, thread, and CPU runtime metrics. HotSpot memory metrics remain available.
+	// GC duration, class, thread, and CPU runtime metrics. HotSpot memory metrics
+	// remain available.
 	Enabled              bool          `yaml:"enabled" env:"OTEL_EBPF_JAVAAGENT_ENABLED"`
 	Debug                bool          `yaml:"debug" env:"OTEL_EBPF_JAVAAGENT_DEBUG"`
 	DebugInstrumentation bool          `yaml:"debug_instrumentation" env:"OTEL_EBPF_JAVAAGENT_DEBUG_INSTRUMENTATION"`

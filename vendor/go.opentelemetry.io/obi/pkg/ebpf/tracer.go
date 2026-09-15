@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
@@ -151,9 +150,6 @@ type ExecutableKey struct {
 
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
-// TODO: We need to pass the ELFInfo from this ProcessTracker to inside a Tracer
-// so that the GPU kernel event listener can find symbols names from addresses
-// in the ELF file.
 type ProcessTracer struct {
 	log                       *slog.Logger
 	metrics                   imetrics.Reporter
@@ -169,11 +165,7 @@ type ProcessTracer struct {
 }
 
 func (pt *ProcessTracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
-	logEnricherEnabled := fi.LogEnricherEnabled()
 	for i := range pt.Programs {
-		if _, ok := pt.Programs[i].(*logenricher.Tracer); ok && !logEnricherEnabled {
-			continue
-		}
 		pt.Programs[i].AllowPID(pid, ns, fi)
 	}
 }

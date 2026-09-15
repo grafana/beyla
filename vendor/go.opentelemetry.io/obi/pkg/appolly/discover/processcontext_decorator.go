@@ -4,13 +4,13 @@ package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
 	"go.opentelemetry.io/ebpf-profiler/libpf"
-	"go.opentelemetry.io/ebpf-profiler/processcontext"
+	"go.opentelemetry.io/ebpf-profiler/process/processcontext"
 	"go.opentelemetry.io/ebpf-profiler/remotememory"
+	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	execpkg "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -43,9 +43,8 @@ func ProcessContextDecoratorProvider(
 
 // processEntry holds per-process state needed for polling.
 type processEntry struct {
-	fi              *execpkg.FileInfo
-	mappingAddr     libpf.Address
-	lastPublishedAt uint64
+	fi          *execpkg.FileInfo
+	contextInfo processcontext.Info
 }
 
 // processContextDecorator enriches discovered processes with context information
@@ -115,33 +114,13 @@ func (pcd *processContextDecorator) poll() {
 	}
 }
 
-// pollEntry locates the OTEL_CTX mapping if needed and reads any new context.
+// pollEntry locates the OTEL_CTX mapping and resolves its latest resource attributes.
 func (pcd *processContextDecorator) pollEntry(pid app.PID, entry *processEntry) {
-	if entry.mappingAddr == 0 {
-		addr, ok := pcd.findOTELContextMapping(pid)
-		if !ok {
-			return
-		}
-		entry.mappingAddr = addr
-	}
-
+	mappingAddr, _ := pcd.findOTELContextMapping(pid)
 	rm := remotememory.NewProcessVirtualMemory(libpf.PID(pid))
-	info, err := processcontext.Read(entry.mappingAddr, rm, entry.lastPublishedAt, 0)
-	switch {
-	case err == nil:
-		if info.Context == nil {
-			return
-		}
-		pcd.applyContext(entry.fi, info)
-		entry.lastPublishedAt = info.PublishedAtNs
-	case errors.Is(err, processcontext.ErrNoUpdate), errors.Is(err, processcontext.ErrConcurrentUpdate):
-		// No change or transient update in progress; retry on next tick.
-	case errors.Is(err, processcontext.ErrInvalidContext):
-		// Mapping may have disappeared; re-scan on next tick.
-		entry.mappingAddr = 0
-	default:
-		pcd.log.Debug("failed to read ProcessContext", "pid", pid, "error", err)
-	}
+	entry.contextInfo = processcontext.Resolve(
+		uint64(mappingAddr), libpf.PID(pid), rm, entry.contextInfo, nil)
+	pcd.applyContext(entry.fi, entry.contextInfo)
 }
 
 func (pcd *processContextDecorator) findOTELContextMapping(pid app.PID) (libpf.Address, bool) {
@@ -160,42 +139,14 @@ func (pcd *processContextDecorator) findOTELContextMapping(pid app.PID) (libpf.A
 }
 
 func (pcd *processContextDecorator) applyContext(fi *execpkg.FileInfo, info processcontext.Info) {
-	if res := info.Context.GetResource(); res != nil {
-		for _, kv := range res.GetAttributes() {
-			if kv == nil || kv.Key == "" {
-				continue
-			}
-			av := kv.GetValue()
-			if av == nil {
-				continue
-			}
-			strVal := av.GetStringValue()
-			if strVal == "" {
-				if av.Value != nil {
-					pcd.log.Debug("attribute value is not a string type", "type", av.Value)
-				}
-				continue
-			}
-			pcd.addAttribute(fi, attr.Name(kv.Key), strVal)
-		}
-	}
-
-	for _, kv := range info.Context.GetAttributes() {
-		if kv == nil || kv.Key == "" {
+	for _, kv := range info.ResourceAttrs.ToSlice() {
+		if kv.Value.Type() != attribute.STRING {
+			pcd.log.Debug("attribute value is not a string type", "type", kv.Value.Type())
 			continue
 		}
-		av := kv.GetValue()
-		if av == nil {
-			continue
+		if value := kv.Value.AsString(); value != "" {
+			pcd.addAttribute(fi, attr.Name(kv.Key), value)
 		}
-		strVal := av.GetStringValue()
-		if strVal == "" {
-			if av.Value != nil {
-				pcd.log.Debug("attribute value is not a string type", "type", av.Value)
-			}
-			continue
-		}
-		pcd.addAttribute(fi, attr.Name(kv.Key), strVal)
 	}
 }
 

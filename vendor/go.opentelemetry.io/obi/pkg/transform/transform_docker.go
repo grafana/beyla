@@ -55,20 +55,12 @@ func (dd *dockerEnricher) decorate(ctx context.Context) {
 	swarms.ForEachInput(ctx, dd.in, dd.log.Debug, func(spans []request.Span) {
 		for i := range spans {
 			svc := &spans[i].Service
-			if ci, ok := dd.containerInfo(ctx, svc.ProcPID); ok {
+			if ci, ok := dd.docker.ContainerInfo(ctx, svc.ProcPID); ok {
 				ci.DecorateService(svc)
 			}
 		}
 		dd.out.SendCtx(ctx, spans)
 	})
-}
-
-func (dd *dockerEnricher) containerInfo(ctx context.Context, pid app.PID) (docker.ContainerMeta, bool) {
-	ci, ok := dd.docker.ContainerInfo(ctx, pid)
-	if !ok {
-		dd.log.Debug("can't find container metadata", "pid", pid)
-	}
-	return ci, ok
 }
 
 func dpelog() *slog.Logger {

@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
-	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
@@ -166,11 +165,7 @@ type ProcessTracer struct {
 }
 
 func (pt *ProcessTracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
-	logEnricherEnabled := fi.LogEnricherEnabled()
 	for i := range pt.Programs {
-		if _, ok := pt.Programs[i].(*logenricher.Tracer); ok && !logEnricherEnabled {
-			continue
-		}
 		pt.Programs[i].AllowPID(pid, ns, fi)
 	}
 }

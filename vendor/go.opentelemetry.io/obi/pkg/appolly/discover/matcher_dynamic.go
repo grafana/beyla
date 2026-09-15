@@ -148,10 +148,13 @@ func (m *DynamicMatcher) matchDynamicCriteria(obj ProcessAttrs, proc *services.P
 	m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
 		obj.metadata, "podLabels", obj.podLabels, "criteria", []services.Selector{selector})
 
+	// dynamic selection is not matched against the config criteria, so the log
+	// enricher follows the selected PIDs
 	return &ProcessMatch{
-		Criteria:           []services.Selector{selector},
-		Process:            proc,
-		DynamicSelectorPID: proc.Pid,
+		Criteria:            []services.Selector{selector},
+		LogEnricherCriteria: []services.Selector{selector},
+		Process:             proc,
+		DynamicSelectorPID:  proc.Pid,
 	}
 }
 

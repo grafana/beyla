@@ -163,10 +163,7 @@ func (m *jvmRuntimeMetrics) record(snapshot runtimemetrics.RuntimeMetricSnapshot
 		recordJVMRuntimeCounter(m.ctx, m.classUnloaded, &entry.classUnloaded, values.UnloadedClassCount)
 		m.classCount.Record(snapshot, int64(values.LoadedClassCount))
 
-		daemonThreads := values.DaemonThreadCount
-		if daemonThreads > values.ThreadCount {
-			daemonThreads = values.ThreadCount
-		}
+		daemonThreads := min(values.DaemonThreadCount, values.ThreadCount)
 		m.daemonThreadCount.Record(snapshot, int64(daemonThreads))
 		m.nonDaemonThreadCount.Record(snapshot, int64(values.ThreadCount-daemonThreads))
 

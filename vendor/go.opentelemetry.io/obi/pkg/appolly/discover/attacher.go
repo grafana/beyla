@@ -133,11 +133,23 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	return func(ctx context.Context) {
 		defer ta.OutputTracerEvents.Close()
 
-		var javaInjections *javaInjectionQueue
+		// One slot for both queues: a Java attach switches OBI's credentials
+		// process-wide, which a concurrent injection of any runtime would run
+		// under.
+		injectionSlot := newInjectionSlot()
+
+		var javaInjections *injectionQueue[javaagent.InjectionTarget]
 		if ta.javaInjector != nil {
-			javaInjections = newJavaInjectionQueue(ta.log, ta.javaInjector.NewExecutable)
+			javaInjections = newJavaInjectionQueue(ta.log, injectionSlot, ta.javaInjector.NewExecutable)
 			javaInjections.start(ctx)
 			defer javaInjections.wait()
+		}
+
+		var nodeInjections *injectionQueue[nodejs.InjectionTarget]
+		if ta.nodeInjector != nil {
+			nodeInjections = newNodeInjectionQueue(ta.log, injectionSlot, ta.nodeInjector.Inject)
+			nodeInjections.start(ctx)
+			defer nodeInjections.wait()
 		}
 
 		swarms.ForEachInput(ctx, in, ta.log.Debug, func(instrumentables []Event[ebpf.Instrumentable]) {
@@ -147,7 +159,18 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 				switch instr.Type {
 				case EventCreated:
 					ta.resolveServiceMetadata(&instr.Obj)
-					ta.nodeInjector.NewExecutable(&instr.Obj)
+
+					var nodeTarget *nodejs.InjectionTarget
+					if nodeInjections != nil && ta.nodeInjector.Accepts(&instr.Obj) {
+						target, err := nodejs.InjectionTargetFrom(&instr.Obj)
+						if err != nil {
+							ta.log.Warn("unable to capture stable node injection target, "+
+								"Node.js trace correlation and runtime metrics will not work",
+								"pid", instr.Obj.FileInfo.Pid(), "error", err)
+						} else {
+							nodeTarget = &target
+						}
+					}
 
 					var javaTarget *javaagent.InjectionTarget
 					if javaInjections != nil && instr.Obj.Type == svc.InstrumentableJava {
@@ -172,6 +195,12 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 					// was just sent to.
 					if javaTarget != nil {
 						javaInjections.enqueue(*javaTarget)
+					}
+
+					// Node injection waits on the runtime and on the
+					// application's files, so it is queued for the same reason.
+					if nodeTarget != nil {
+						nodeInjections.enqueue(*nodeTarget)
 					}
 
 					if instr.Obj.FileInfo.ELF() != nil {

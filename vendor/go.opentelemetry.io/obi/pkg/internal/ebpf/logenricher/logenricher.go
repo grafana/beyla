@@ -302,6 +302,11 @@ func (p *Tracer) removePID(key uint64) error {
 }
 
 func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	// instrumented processes the log enricher selection did not match keep their logs untouched
+	if !fi.LogEnricherEnabled() {
+		return
+	}
+
 	p.pipesMU.Lock()
 	p.trackedPids[uint32(pid)] = struct{}{}
 	p.pipesMU.Unlock()
@@ -310,9 +315,7 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	p.pidsMU.Lock()
 	defer p.pidsMU.Unlock()
 
-	if fi != nil {
-		p.pidServices[uint32(pid)] = fi
-	}
+	p.pidServices[uint32(pid)] = fi
 
 	pk := p.pidKey(ns, uint32(pid))
 	if err := p.addPID(pk); err != nil {

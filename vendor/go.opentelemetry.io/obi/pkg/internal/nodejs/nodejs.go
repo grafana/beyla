@@ -4,13 +4,14 @@
 package nodejs // import "go.opentelemetry.io/obi/pkg/internal/nodejs"
 
 import (
+	"context"
 	"debug/elf"
 	_ "embed"
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
@@ -56,77 +57,198 @@ func (i *NodeInjector) injectionTrigger() string {
 	return "runtime metrics"
 }
 
-func (i *NodeInjector) NewExecutable(ie *ebpf.Instrumentable) {
+// Accepts reports whether this instrumentable is a Node.js process the
+// injector is configured to handle. Callers that defer the injection check it
+// before taking a queue slot.
+func (i *NodeInjector) Accepts(ie *ebpf.Instrumentable) bool {
 	if !i.Enabled() {
 		i.log.Debug("Node Injector is disabled")
-		return
+		return false
 	}
 
 	if ie.Type != svc.InstrumentableNodejs {
 		i.log.Debug("not a NodeJS executable")
+		return false
+	}
+
+	return true
+}
+
+// Inject injects into an accepted target.
+//
+// The executable and the signal go through the target's pinned process handle,
+// so a PID the kernel recycled between discovery and here cannot be signaled
+// in the original's place. The rest still works from the numeric PID: the gates
+// read /proc, and the inspector conversation enters a network namespace, so a
+// replacement can be the process examined and — where an inspector is already
+// listening, which needs no signal — the one injected.
+func (i *NodeInjector) Inject(ctx context.Context, target InjectionTarget) {
+	pid := target.Pid
+	i.log.Debug("loading NodeJS instrumentation", "pid", pid, "trigger", i.injectionTrigger())
+
+	if err := target.Process.Alive(); err != nil {
+		i.log.Debug("NodeJS process is gone, skipping injection", "pid", pid, "error", err)
 		return
 	}
 
-	i.log.Info("loading NodeJS instrumentation", "pid", ie.FileInfo.Pid(), "trigger", i.injectionTrigger())
+	exe, err := target.Process.Open("exe", os.O_RDONLY)
+	if err != nil {
+		i.log.Debug("couldn't open the NodeJS executable, skipping injection", "pid", pid, "error", err)
+		return
+	}
+	defer exe.Close()
 
-	if err := i.attachAgent(int(ie.FileInfo.Pid()), ie.FileInfo.ELF()); err != nil {
-		i.log.Error("couldn't attach NodeJS injector", "pid", ie.FileInfo.Pid(), "error", err)
+	elfFile, err := elf.NewFile(exe)
+	if err != nil {
+		i.log.Debug("couldn't read the NodeJS executable, skipping injection", "pid", pid, "error", err)
+		return
+	}
+	defer elfFile.Close()
+
+	if err := i.attachAgent(ctx, target, elfFile); err != nil {
+		i.log.Error("couldn't attach NodeJS injector", "pid", pid, "error", err)
 		i.log.Error("trace-context propagation and nodejs runtime metrics will not work for NodeJS services!")
 	}
 }
 
-func (i *NodeInjector) attachAgent(pid int, elfFile *elf.File) error {
-	return netns.WithNetNS(pid, func() error {
-		return i.injectFile(pid, elfFile)
-	})
-}
+// attachAgent injects the agent through the Node.js inspector, opening it with
+// SIGUSR1 when it is not already listening.
+//
+// Only the inspector conversation runs inside the target's network namespace.
+// Deciding whether the signal is safe to send reads /proc and the application's
+// files, needs no namespace of its own, and can wait on the runtime for as long
+// as dispositionWait.
+func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, elfFile *elf.File) error {
+	pid := int(target.Pid)
 
-// injectFile attempts to connect to the Node.js inspector and inject the
-// agent. It first tries to connect directly (in case the inspector is already
-// open, e.g. via --inspect flag), validating with /json/version. If that fails,
-// it checks for a custom SIGUSR1 handler and either sends SIGUSR1 to open the
-// inspector or bails out.
-func (i *NodeInjector) injectFile(pid int, elfFile *elf.File) error {
-	conn, err := connect("127.0.0.1", 9229)
-	if err == nil {
-		// Validate this is actually a Node.js inspector, not some other
-		// service that happens to listen on port 9229.
-		if i.isNodeInspector(conn) {
-			i.log.Debug("Node.js inspector already open, injecting directly", "pid", pid)
-			return i.injectViaConn(conn)
-		}
-		conn.Close()
+	injected, err := i.injectViaOpenInspector(pid)
+	if injected || err != nil {
+		return err
 	}
 
-	if elfFile != nil {
-		switch hasUserSIGUSR1Handler(pid, elfFile) {
-		case signalCheckFound:
-			i.log.Warn("Node.js process has a custom SIGUSR1 handler, skipping agent injection. "+
-				"Node.js trace correlation will not work", "pid", pid)
-			return nil
-		case signalCheckFailed:
-			// Symbol-based detection failed (e.g. stripped binary with dynamic libuv).
-			// Fall back to scanning the application's source files for quoted SIGUSR1 references.
-			if sourceHasSIGUSR1Reference(pid) {
-				i.log.Warn("Node.js source files reference SIGUSR1, skipping agent injection. "+
-					"Node.js trace correlation will not work", "pid", pid)
-				return nil
-			}
-		case signalCheckNotFound:
-			// No handler detected, safe to proceed.
-		}
+	reason := sigusr1Refusal(ctx, pid, elfFile)
+
+	// Shutdown is not a refusal: the gates were abandoned rather than answered,
+	// so nothing was concluded about this process and nothing is reported.
+	if err := ctx.Err(); err != nil {
+		return nil
 	}
 
-	if err := syscall.Kill(pid, syscall.SIGUSR1); err != nil {
+	if reason != "" {
+		i.log.Warn("not sending SIGUSR1 to open the Node.js inspector, skipping agent injection. "+
+			"Node.js trace correlation will not work", "pid", pid, "reason", reason)
+		return nil
+	}
+
+	if err := sendSIGUSR1(target.Process); err != nil {
 		return fmt.Errorf("error enabling node inspector: %w", err)
 	}
 
-	conn, err = connectWait("127.0.0.1", 9229, 5*time.Second, 200*time.Millisecond)
-	if err != nil {
-		return fmt.Errorf("failed to connect to inspector after SIGUSR1: %w", err)
+	return netns.WithNetNS(pid, func() error {
+		conn, err := connectWait("127.0.0.1", 9229, 5*time.Second, 200*time.Millisecond)
+		if err != nil {
+			return fmt.Errorf("failed to connect to inspector after SIGUSR1: %w", err)
+		}
+
+		return i.injectViaConn(conn)
+	})
+}
+
+// injectViaOpenInspector handles the case of an inspector already listening,
+// as it is under --inspect, where no signal is needed at all. The first return
+// value reports whether the injection was carried out.
+func (i *NodeInjector) injectViaOpenInspector(pid int) (bool, error) {
+	injected := false
+
+	err := netns.WithNetNS(pid, func() error {
+		conn, err := connect("127.0.0.1", 9229)
+		if err != nil {
+			return nil
+		}
+
+		// Validate this is actually a Node.js inspector, not some other
+		// service that happens to listen on port 9229.
+		if !i.isNodeInspector(conn) {
+			conn.Close()
+			return nil
+		}
+
+		i.log.Debug("Node.js inspector already open, injecting directly", "pid", pid)
+		injected = true
+		return i.injectViaConn(conn)
+	})
+
+	return injected, err
+}
+
+const (
+	refusalSignalIsFatal           = "SIGUSR1 is neither caught nor ignored, so it would terminate the process"
+	refusalDispositionUnknown      = "the process caught and ignored signal sets could not be read"
+	refusalHandlerFound            = "process has a custom SIGUSR1 handler"
+	refusalSourceReferencesSIGUSR1 = "process source files reference SIGUSR1"
+)
+
+// dispositionWait bounds how long to wait for the runtime to install its own
+// SIGUSR1 handler. Node installs it about 11ms after exec, and until then
+// SIGUSR1 terminates the process, so a process discovered at exec time is
+// otherwise refused for a condition that clears on its own.
+const (
+	dispositionWait     = 500 * time.Millisecond
+	dispositionInterval = 10 * time.Millisecond
+)
+
+// sigusr1Refusal reports why the signal is withheld, or an empty reason when
+// it is safe to send. Discovery has already established that this is a Node.js
+// runtime; what is left is whether the signal would terminate it, and whether
+// the application has taken the signal over.
+func sigusr1Refusal(ctx context.Context, pid int, elfFile *elf.File) string {
+	syms := readNodeSymbols(elfFile)
+
+	switch awaitSignalDisposition(ctx, pid) {
+	case signalDispositionFatal:
+		return refusalSignalIsFatal
+	case signalDispositionUnknown:
+		return refusalDispositionUnknown
+	case signalDispositionHandled:
 	}
 
-	return i.injectViaConn(conn)
+	switch hasUserSIGUSR1Handler(pid, elfFile, syms) {
+	case signalCheckFound:
+		return refusalHandlerFound
+	case signalCheckFailed:
+		// The runtime carries no readable libuv signal tree, so the
+		// application's own files are the only remaining evidence.
+		if sourceHasSIGUSR1Reference(pid) {
+			return refusalSourceReferencesSIGUSR1
+		}
+	case signalCheckNotFound:
+	}
+
+	return ""
+}
+
+// awaitSignalDisposition waits out the window after exec in which a runtime
+// has not yet installed its own SIGUSR1 handler, so a process discovered at
+// exec time is not refused for a condition that clears on its own.
+//
+// Cancellation reports Unknown rather than the last reading: shutdown says
+// nothing about the target, and claiming the signal would have killed it would
+// log a conclusion never reached.
+func awaitSignalDisposition(ctx context.Context, pid int) signalDisposition {
+	deadline := time.Now().Add(dispositionWait)
+
+	for {
+		disposition := sigusr1Disposition(pid)
+		if disposition != signalDispositionFatal || time.Now().After(deadline) {
+			return disposition
+		}
+
+		select {
+		case <-ctx.Done():
+			return signalDispositionUnknown
+		case <-time.After(dispositionInterval):
+		}
+	}
 }
 
 // isNodeInspector validates that a connection to port 9229 is actually a

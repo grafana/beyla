@@ -127,8 +127,7 @@ func NewSockFlowFetcher(
 }
 
 func printVerifierErrorInfo(err error) {
-	var ve *ebpf.VerifierError
-	if errors.As(err, &ve) {
+	if ve, ok := errors.AsType[*ebpf.VerifierError](err); ok {
 		_, _ = fmt.Fprintf(os.Stderr, "Error Log:\n %v\n", strings.Join(ve.Log, "\n"))
 	}
 }

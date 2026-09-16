@@ -89,6 +89,32 @@ type NetSkPacketCountT struct {
 	Ignored uint64
 }
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	NetSkMapAggregatedFlows            = "aggregated_flows"
+	NetSkMapConnInitiators             = "conn_initiators"
+	NetSkMapDebugEvents                = "debug_events"
+	NetSkMapDirectFlows                = "direct_flows"
+	NetSkMapFlowDirections             = "flow_directions"
+	NetSkMapFlowPacketStats            = "flow_packet_stats"
+	NetSkProgObiSocketFilter           = "obi_socket__filter"
+	NetSkVarG_bpfDebug                 = "g_bpf_debug"
+	NetSkVarG_bpfHeaderPropagation     = "g_bpf_header_propagation"
+	NetSkVarG_bpfLoopEnabled           = "g_bpf_loop_enabled"
+	NetSkVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
+	NetSkVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
+	NetSkVarG_goH2WriteFailStep        = "g_go_h2_write_fail_step"
+	NetSkVarIp4in6                     = "ip4in6"
+	NetSkVarPortGuessing               = "port_guessing"
+	NetSkVarSampling                   = "sampling"
+	NetSkVarTraceMessages              = "trace_messages"
+	NetSkVarUnusedFlowId               = "unused_flow_id"
+	NetSkVarUnusedFlowMetrics          = "unused_flow_metrics"
+	NetSkVarUnusedFlowRecord           = "unused_flow_record"
+)
+
 // LoadNetSk returns the embedded CollectionSpec for NetSk.
 func LoadNetSk() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_NetSkBytes)
@@ -109,7 +135,7 @@ func LoadNetSk() (*ebpf.CollectionSpec, error) {
 //	*NetSkMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func LoadNetSkObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func LoadNetSkObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := LoadNetSk()
 	if err != nil {
 		return err

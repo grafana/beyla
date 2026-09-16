@@ -1,0 +1,32 @@
+log_level: debug
+trace_printer: text
+
+discovery:
+  instrument:
+    - open_ports: 8080,8081
+      containers_only: true
+  survey:
+    - open_ports: 8080,8081
+      containers_only: true
+
+prometheus_export:
+  port: 8999
+  path: /metrics
+
+metrics:
+  features:
+    - application
+    - application_span_otel
+    - application_service_graph
+
+attributes:
+  rename_unresolved_hosts: ""
+  rename_unresolved_hosts_outgoing: ""
+  rename_unresolved_hosts_incoming: ""
+
+name_resolver:
+  sources: [ecs]
+  ecs:
+    cluster: beyla-nonk8s-poc
+    region: us-east-2
+    refresh_interval: 30s

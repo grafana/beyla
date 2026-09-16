@@ -1,0 +1,67 @@
+#!/bin/bash
+set -euxo pipefail
+
+systemctl stop ecs || true
+
+cat <<'EOF' >> /etc/ecs/ecs.config
+ECS_CLUSTER=${cluster_name}
+ECS_INSTANCE_ATTRIBUTES={"poc.role":"${host_role}"}
+EOF
+
+dnf install -y gzip tar
+curl -fsSL \
+  "https://github.com/grafana/beyla/releases/download/${beyla_version}/beyla-linux-amd64-${beyla_version}.tar.gz" \
+  -o /tmp/beyla.tar.gz
+tar -xzf /tmp/beyla.tar.gz -C /tmp
+install -m 0755 /tmp/beyla /usr/local/bin/beyla
+
+mkdir -p /etc/beyla
+cat <<'EOF' > /etc/beyla/beyla.yaml
+log_level: debug
+trace_printer: text
+
+discovery:
+  instrument:
+    - open_ports: 8080,8081
+      containers_only: true
+  survey:
+    - open_ports: 8080,8081
+      containers_only: true
+
+prometheus_export:
+  port: 8999
+  path: /metrics
+
+metrics:
+  features:
+    - application
+    - application_span_otel
+    - application_service_graph
+
+attributes:
+  rename_unresolved_hosts: ""
+  rename_unresolved_hosts_outgoing: ""
+  rename_unresolved_hosts_incoming: ""
+EOF
+
+cat <<'EOF' > /etc/systemd/system/beyla.service
+[Unit]
+Description=Beyla eBPF auto-instrumentation
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/beyla --config=/etc/beyla/beyla.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now beyla
+systemctl enable --now --no-block ecs

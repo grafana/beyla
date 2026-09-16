@@ -1,0 +1,7 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+/tfplan
+/tfplan.txt
+terraform.tfvars

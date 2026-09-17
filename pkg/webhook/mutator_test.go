@@ -167,6 +167,7 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 					{InstrumentableType: svc.InstrumentableDotnet},
 					{InstrumentableType: svc.InstrumentableNodejs},
 					{InstrumentableType: svc.InstrumentablePython},
+					{InstrumentableType: svc.InstrumentableRuby},
 				},
 			},
 		},
@@ -203,14 +204,9 @@ func TestPodMutator_CanInstrument(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Python is supported",
-			kind:     svc.InstrumentablePython,
-			expected: true,
-		},
-		{
-			name:     "Ruby is not supported",
+			name:     "Ruby is supported",
 			kind:     svc.InstrumentableRuby,
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "Generic is not supported",
@@ -351,6 +347,9 @@ func TestDetectLanguage(t *testing.T) {
 			// Python
 			{"python:3.12", "python"},
 			{"python:3.12@sha256:abcdef1234", "python"},
+			// Ruby
+			{"ruby:3.3", "ruby"},
+			{"ruby:3.4-alpine", "ruby"},
 			// Java
 			{"openjdk:17", "java"},
 			{"eclipse-temurin:21", "java"},
@@ -394,6 +393,12 @@ func TestDetectLanguage(t *testing.T) {
 				command: []string{"node"},
 				args:    []string{"index.js"},
 				want:    "nodejs",
+			},
+			{
+				name:    "ruby_command",
+				image:   "ubuntu:22.04",
+				command: []string{"/usr/bin/ruby"},
+				want:    "ruby",
 			},
 			{
 				// node-exporter as a command must NOT match nodejs

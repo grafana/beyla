@@ -69,6 +69,7 @@ const (
 	RouteHarvesterLanguageGo     RouteHarvesterLanguage = "go"
 	RouteHarvesterLanguageDotnet RouteHarvesterLanguage = "dotnet"
 	RouteHarvesterLanguagePython RouteHarvesterLanguage = "python"
+	RouteHarvesterLanguageRuby   RouteHarvesterLanguage = "ruby"
 )
 
 // DiscoveryConfig for the discover.ProcessFinder pipeline

@@ -40,8 +40,7 @@ func ExportErrorType(err error) string {
 		return errtype.GRPCCode(int(codes.Canceled))
 	}
 
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
 		if netErr.Timeout() {
 			return errtype.GRPCCode(int(codes.DeadlineExceeded))
 		}

@@ -643,6 +643,10 @@ func httpURLFromBuf(req []byte) string {
 }
 
 func httpMethodFromBuf(req []byte) string {
+	if end := bytes.IndexByte(req, 0); end >= 0 {
+		req = req[:end]
+	}
+
 	method, _, found := bytes.Cut(req, []byte(" "))
 	if !found {
 		return ""

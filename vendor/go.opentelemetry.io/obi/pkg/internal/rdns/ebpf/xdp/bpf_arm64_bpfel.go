@@ -12,6 +12,24 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	BpfMapDataOffStorage             = "data_off_storage"
+	BpfMapDebugEvents                = "debug_events"
+	BpfMapRdnsXdpProgs               = "rdns_xdp_progs"
+	BpfMapRingBuffer                 = "ring_buffer"
+	BpfProgDnsResponseTracker        = "dns_response_tracker"
+	BpfProgParseDnsResponse          = "parse_dns_response"
+	BpfVarG_bpfDebug                 = "g_bpf_debug"
+	BpfVarG_bpfHeaderPropagation     = "g_bpf_header_propagation"
+	BpfVarG_bpfLoopEnabled           = "g_bpf_loop_enabled"
+	BpfVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
+	BpfVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
+	BpfVarG_goH2WriteFailStep        = "g_go_h2_write_fail_step"
+)
+
 // LoadBpf returns the embedded CollectionSpec for Bpf.
 func LoadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)
@@ -32,7 +50,7 @@ func LoadBpf() (*ebpf.CollectionSpec, error) {
 //	*BpfMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func LoadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func LoadBpfObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := LoadBpf()
 	if err != nil {
 		return err

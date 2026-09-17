@@ -19,7 +19,24 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/transform"
 )
+
+func TestAsOBINameResolver(t *testing.T) {
+	t.Run("minimal config does not panic", func(t *testing.T) {
+		config := &Config{}
+		assert.NotPanics(t, func() {
+			assert.Nil(t, config.AsOBI().NameResolver)
+		})
+	})
+
+	t.Run("explicit sources are preserved", func(t *testing.T) {
+		config := &Config{NameResolver: &transform.NameResolverConfig{
+			Sources: []transform.Source{transform.SourceDNS},
+		}}
+		assert.Equal(t, []transform.Source{transform.SourceDNS}, config.AsOBI().NameResolver.Sources)
+	})
+}
 
 // TestOverrideOBIGlobalConfig_MetricNames pins the Beyla-renamed metric definitions. The
 // Unit and Type must stay in sync with their OBI counterparts in

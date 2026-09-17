@@ -68,6 +68,9 @@ func DefaultConfig() *Config {
 	}
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
+	// Resolve DNS metrics through Kubernetes metadata and reverse DNS without
+	// issuing active DNS queries by default.
+	def.NameResolver.Sources = []transform.Source{transform.SourceK8s, transform.SourceRDNS}
 
 	def.Injector.EnabledSDKs = []servicesextra.InstrumentableType{
 		{InstrumentableType: svc.InstrumentableJava},

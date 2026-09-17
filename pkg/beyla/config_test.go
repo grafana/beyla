@@ -43,6 +43,13 @@ import (
 
 type envMap map[string]string
 
+func TestDefaultConfigEnablesReverseDNS(t *testing.T) {
+	assert.Equal(t,
+		[]transform.Source{transform.SourceK8s, transform.SourceRDNS},
+		DefaultConfig().NameResolver.Sources,
+	)
+}
+
 func TestConfig_Overrides(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 trace_printer: json

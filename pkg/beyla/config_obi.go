@@ -14,6 +14,7 @@ import (
 	otel2 "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/obi"
+	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/buildinfo"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
@@ -75,6 +76,8 @@ func overrideOBI(src *Config, dst *obi.Config) {
 		}
 		dst.Traces.InjectHeaders = src.Grafana.OTLP.OverrideHeaders
 	}
+	// enable the reverse DNS name resolver from DNS metrics, no calls to DNS servers.
+	src.NameResolver.Sources = []transform.Source{transform.SourceK8s, transform.SourceRDNS}
 }
 
 // OverrideOBIGlobalConfig overrides some OBI globals to adapt it to the Beyla configuration and naming conventions:

@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	servicesextra "github.com/grafana/beyla/v3/pkg/services"
@@ -385,10 +386,13 @@ func TestBuildInjectConfig(t *testing.T) {
 	}{
 		{
 			name: "exclude_instrument becomes a leading skip rule",
-			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
-				ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDaemonSetName: &test}}},
-			}},
+			cfg: beyla.Config{
+				Injector: beyla.SDKInject{
+					Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
+					ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDaemonSetName: &test}}},
+				},
+				NameResolver: &transform.NameResolverConfig{},
+			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{
@@ -404,16 +408,19 @@ func TestBuildInjectConfig(t *testing.T) {
 		},
 		{
 			name:     "empty instrument yields empty config",
-			cfg:      beyla.Config{Injector: beyla.SDKInject{}},
+			cfg:      beyla.Config{Injector: beyla.SDKInject{}, NameResolver: &transform.NameResolverConfig{}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want:     configmap.InjectConfig{},
 		},
 		{
 			name: "single selector becomes one rule with all default env vars",
-			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
-			}},
+			cfg: beyla.Config{
+				Injector: beyla.SDKInject{
+					Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
+				},
+				NameResolver: &transform.NameResolverConfig{},
+			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{
@@ -423,12 +430,15 @@ func TestBuildInjectConfig(t *testing.T) {
 		},
 		{
 			name: "multiple selectors each get the same env",
-			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument: services.GlobDefinitionCriteria{
-					{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}},
-					{Metadata: services.MetadataGlobMap{services.AttrStatefulSetName: &test}},
+			cfg: beyla.Config{
+				Injector: beyla.SDKInject{
+					Instrument: services.GlobDefinitionCriteria{
+						{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}},
+						{Metadata: services.MetadataGlobMap{services.AttrStatefulSetName: &test}},
+					},
 				},
-			}},
+				NameResolver: &transform.NameResolverConfig{},
+			},
 			endpoint: "http://otel:4318",
 			protocol: "grpc",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{
@@ -438,10 +448,13 @@ func TestBuildInjectConfig(t *testing.T) {
 		},
 		{
 			name: "ImageVersion is set at the top level",
-			cfg: beyla.Config{Injector: beyla.SDKInject{
-				ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
-				Instrument:   services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
-			}},
+			cfg: beyla.Config{
+				Injector: beyla.SDKInject{
+					ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
+					Instrument:   services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
+				},
+				NameResolver: &transform.NameResolverConfig{},
+			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{
@@ -454,10 +467,13 @@ func TestBuildInjectConfig(t *testing.T) {
 		},
 		{
 			name: "propagators written as OTEL_PROPAGATORS",
-			cfg: beyla.Config{Injector: beyla.SDKInject{
-				Instrument:  services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
-				Propagators: []string{"tracecontext", "baggage"},
-			}},
+			cfg: beyla.Config{
+				Injector: beyla.SDKInject{
+					Instrument:  services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
+					Propagators: []string{"tracecontext", "baggage"},
+				},
+				NameResolver: &transform.NameResolverConfig{},
+			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want: configmap.InjectConfig{Rules: []configmap.Rule{{

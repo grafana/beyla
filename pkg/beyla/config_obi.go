@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/prometheus/otlptranslator"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/buildinfo"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	cfgutil "github.com/grafana/beyla/v3/pkg/helpers/config"
 )
 
@@ -60,6 +62,17 @@ func (c *Config) invalidateOBICache() {
 // overrideOBI contains some extra tweaking that are required in the destination OBI configuration,
 // to override some behaviors such as letting the OTEL exporters to adopt the Grafana credentials
 func overrideOBI(src *Config, dst *obi.Config) {
+	// Preserve per-service host-info selection without letting OBI emit a second series.
+	dst.Discovery.Instrument = slices.Clone(dst.Discovery.Instrument)
+	// Disable host info features in OBI because Beyla will override the export
+	dst.Metrics.Features = bexport.HostInfoFeatures(dst.Metrics.Features)
+	for i := range dst.Discovery.Instrument {
+		dst.Discovery.Instrument[i].Metrics.Features = bexport.HostInfoFeatures(dst.Discovery.Instrument[i].Metrics.Features)
+	}
+	dst.Discovery.Services = slices.Clone(dst.Discovery.Services)
+	for i := range dst.Discovery.Services {
+		dst.Discovery.Services[i].Metrics.Features = bexport.HostInfoFeatures(dst.Discovery.Services[i].Metrics.Features)
+	}
 	// metrics && traces endpoints
 	if src.Grafana.OTLP.MetricsEnabled() {
 		dst.OTELMetrics.OTLPEndpointProvider = func() (string, bool) {

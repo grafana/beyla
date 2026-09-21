@@ -265,7 +265,6 @@ network:
 				"cloud.availability_zone",
 				"cloud.region",
 				"deployment.environment.name",
-				"grafana.host.id",
 				"k8s.cluster.name",
 				"k8s.namespace.name",
 				"k8s.node.name",
@@ -320,7 +319,6 @@ network:
 				"cloud.availability_zone",
 				"cloud.region",
 				"deployment.environment.name",
-				"grafana.host.id",
 				"k8s.cluster.name",
 				"k8s.namespace.name",
 				"k8s.node.name",
@@ -1042,32 +1040,6 @@ func unsetOBIEnv(t *testing.T) {
 	for _, env := range os.Environ() {
 		if strings.HasPrefix(env, "OTEL_EBPF_") {
 			require.NoError(t, os.Unsetenv(env[:strings.IndexByte(env, '=')]))
-		}
-	}
-}
-
-// Both exporters obtain this label from service metadata without user configuration.
-func TestConfig_GrafanaHostIDOnSpanMetrics(t *testing.T) {
-	for _, yamlConfig := range []string{"", `
-otel_metrics_export:
-  extra_span_resource_attributes: ["custom.label", "grafana.host.id"]
-prometheus_export:
-  extra_span_resource_attributes: ["custom.label", "grafana.host.id"]
-`} {
-		cfg, err := LoadConfig(strings.NewReader(yamlConfig))
-		require.NoError(t, err)
-		obiCfg := cfg.AsOBI()
-		for _, labels := range [][]string{obiCfg.OTELMetrics.ExtraSpanResourceLabels, obiCfg.Prometheus.ExtraSpanResourceLabels} {
-			count := 0
-			for _, label := range labels {
-				if label == "grafana.host.id" {
-					count++
-				}
-			}
-			assert.Equal(t, 1, count)
-			if yamlConfig != "" {
-				assert.Contains(t, labels, "custom.label")
-			}
 		}
 	}
 }

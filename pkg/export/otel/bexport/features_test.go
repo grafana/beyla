@@ -103,3 +103,17 @@ func TestLoadFeaturesRejectsUnknownNames(t *testing.T) {
 		})
 	}
 }
+
+func TestHostInfoFeatures(t *testing.T) {
+	for _, original := range []export.Features{0, export.FeatureEmpty, export.FeatureApplicationRED,
+		export.FeatureApplicationHost, export.FeatureApplicationHost | export.FeatureSpanOTel, export.FeatureAll} {
+		got := HostInfoFeatures(original)
+		assert.False(t, got.AppHost())
+		assert.Equal(t, original.AppHost() || Has(original, FeatureHostInfo), Has(got, FeatureHostInfo))
+		assert.Equal(t, original&^(export.FeatureApplicationHost|FeatureHostInfo), got&^FeatureHostInfo)
+		assert.Equal(t, got, HostInfoFeatures(got))
+	}
+	assert.False(t, HostInfoFeatures(export.FeatureApplicationHost).Undefined())
+	assert.True(t, HostInfoFeatures(export.FeatureApplicationHost).AnyAppO11yMetric())
+	assert.Zero(t, FeatureHostInfo&FeatureProcess)
+}

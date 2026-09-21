@@ -14,12 +14,17 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/transform"
+
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 )
 
 func TestAsOBINameResolver(t *testing.T) {
@@ -171,4 +176,35 @@ grafana:
 		// Basic + output of: echo -n 12345:affafafaafkd | gbase64 -w 0
 		assert.Equal(t, "Basic MTIzNDU6YWZmYWZhZmFhZmtk", *authHeader.Load())
 	}, 3*time.Second, time.Millisecond)
+}
+
+func TestAsOBIHostInfoOwnership(t *testing.T) {
+	// Given global and per-service feature selections, including inherited and empty settings.
+	cfg := DefaultConfig()
+	cfg.Metrics.Features = export.FeatureApplicationHost | export.FeatureApplicationRED
+	cfg.Discovery.Instrument = services.GlobDefinitionCriteria{
+		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureApplicationHost}},
+		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureSpanOTel}},
+		{},
+		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureEmpty}},
+	}
+	cfg.Discovery.Services = services.RegexDefinitionCriteria{
+		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureApplicationHost}},
+	}
+	// When Beyla converts the configuration for OBI.
+	converted := cfg.AsOBI()
+	// Then only host-info ownership changes; the other feature selections are preserved.
+	assert.False(t, converted.JoinMetricsConfig().Features.AppHost(), "OBI must not emit host info")
+	assert.Equal(t, bexport.FeatureHostInfo|export.FeatureApplicationRED, converted.Metrics.Features)
+	assert.Equal(t, bexport.FeatureHostInfo, converted.Discovery.Instrument[0].Metrics.Features)
+	assert.Equal(t, export.FeatureSpanOTel, converted.Discovery.Instrument[1].Metrics.Features)
+	assert.Zero(t, converted.Discovery.Instrument[2].Metrics.Features, "preserve inheritance")
+	assert.Equal(t, export.FeatureEmpty, converted.Discovery.Instrument[3].Metrics.Features)
+	assert.Equal(t, bexport.FeatureHostInfo, converted.Discovery.Services[0].Metrics.Features)
+	// And the original configuration is unchanged, with no extra labels on span metrics.
+	assert.True(t, cfg.Metrics.Features.AppHost())
+	assert.True(t, cfg.Discovery.Instrument[0].Metrics.Features.AppHost(), "conversion must not mutate source slices")
+	assert.True(t, cfg.Discovery.Services[0].Metrics.Features.AppHost())
+	assert.NotContains(t, cfg.OTELMetrics.ExtraSpanResourceLabels, "grafana.host.id")
+	assert.NotContains(t, cfg.Prometheus.ExtraSpanResourceLabels, "grafana.host.id")
 }

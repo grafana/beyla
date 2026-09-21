@@ -9,7 +9,7 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 )
 
-// GrafanaHostID links span metrics to the host in Grafana.
+// GrafanaHostID identifies the host in Grafana host-info metrics.
 const GrafanaHostID = attr.Name("grafana.host.id")
 
 // Process Metrics following OTEL 1.26 experimental conventions

@@ -33,7 +33,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/config"
-	"github.com/grafana/beyla/v3/pkg/export/extraattributes/names"
 	botel "github.com/grafana/beyla/v3/pkg/export/otel"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
 	maps2 "github.com/grafana/beyla/v3/pkg/internal/helpers/maps"
@@ -612,7 +611,6 @@ func defaultServiceNameMetricAttributes(c *Config) {
 func appendDefaultResourceLabels(dst []string) []string {
 	// appends mandatory resource labels to a slice and deduplicates it
 	return maps2.SetToSlice(maps2.SliceToSet(append(dst,
-		string(names.GrafanaHostID),
 		string(attr.K8sClusterName),
 		string(attr.K8sNamespaceName),
 		string(attr.K8sNodeName),

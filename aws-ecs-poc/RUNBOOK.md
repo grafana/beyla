@@ -1,6 +1,11 @@
 # AWS ECS service identity PoC runbook
 
-This runbook reproduces the experiment described in [README.md](./README.md).
+This runbook extends the validated ECS resolver experiment with a brownfield
+topology. It puts frontend and backend services in peered VPCs, leaves one ECS
+service outside OBI discovery, and adds a private RDS PostgreSQL instance.
+
+The deployment is prepared but has not yet been run in AWS. The results section
+in [README.md](./README.md) separates earlier observations from this test.
 
 ## Prerequisites
 
@@ -9,7 +14,8 @@ This runbook reproduces the experiment described in [README.md](./README.md).
 - AWS Session Manager plugin
 - SSH and SCP
 - A refreshed `sandbox` SSO profile
-- Permission to use EC2 Instance Connect and SSM sessions
+- Permission to use EC2, ECS, ECR, IAM, VPC, RDS, Secrets Manager, SSM, and EC2
+  Instance Connect
 
 Refresh credentials from the `deployment_tools` checkout:
 
@@ -18,33 +24,80 @@ Refresh credentials from the `deployment_tools` checkout:
 aws sts get-caller-identity --profile sandbox
 ```
 
+The stack creates one VPC. Confirm that the region has a free VPC slot before
+planning:
+
+```bash
+AWS_PROFILE=sandbox aws service-quotas get-service-quota \
+  --region us-east-2 \
+  --service-code vpc \
+  --quota-code L-F678F1CE \
+  --query 'Quota.Value'
+
+AWS_PROFILE=sandbox aws ec2 describe-vpcs \
+  --region us-east-2 \
+  --query 'length(Vpcs)'
+```
+
+If the count equals the quota, request at least one additional VPC before
+applying the stack.
+
 `scripts/tf.sh` uses a local Terraform binary when available. Otherwise, it
 runs the pinned Terraform container with host networking.
 
-## Configure
+## Topology
+
+```text
+frontend VPC                         backend/data VPC
+
+storefront :8081 -> catalog :8082 -> checkout :8080
+                                         |       |
+                                         |       +-> RDS PostgreSQL :5432
+                                         +-> legacy-api :8083
+```
+
+OBI runs on both ECS container instances and selects ports 8080 through 8082.
+It instruments `storefront`, `catalog`, and `checkout`. It does not select
+`legacy-api`, and none of the applications contain an OpenTelemetry SDK.
+
+## Configure and review
 
 ```bash
 cd aws-ecs-poc
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Set `owner` and `expires` in `terraform.tfvars`. The stack uses the first subnet
-in the default `us-east-2` VPC unless `vpc_id` and `subnet_id` are supplied.
+Set `owner` and `expires` in `terraform.tfvars`. The frontend uses the selected
+or default VPC. Terraform creates a second VPC with CIDR `10.42.0.0/16`, VPC
+peering, one public ECS-host subnet, two private RDS subnets, and their routes
+and security groups.
 
-The subnet must let the EC2 hosts reach ECS, ECR, SSM, GitHub, and the configured
-telemetry endpoints. ECS task ENIs only need private addresses.
+The current sandbox subnet inherits the frontend VPC's main route table. The
+PoC adds the backend VPC route to that table. If `subnet_id` is changed to a
+subnet with an explicit route-table association, `network.tf` must target that
+route table instead.
 
-## Deploy the base infrastructure
-
-Create the network resources, IAM roles, ECS cluster, EC2 hosts, ECR
-repositories, and released Beyla installations:
+Run the plan yourself and review all replacements and created resources:
 
 ```bash
 AWS_PROFILE=sandbox ./scripts/tf.sh init
+AWS_PROFILE=sandbox ./scripts/tf.sh plan
+```
+
+The existing checkout EC2 instance is expected to be replaced because it moves
+to the backend VPC and backend ECS cluster. The plan should also create one RDS
+instance, three backend subnets, VPC peering, and the `legacy-api` ECR
+repository.
+
+## Apply the infrastructure and build images
+
+Apply the reviewed base plan with no deployment variables:
+
+```bash
 AWS_PROFILE=sandbox ./scripts/tf.sh apply
 ```
 
-Build and push the application images:
+Build and push all four application images:
 
 ```bash
 AWS_PROFILE=sandbox ./scripts/build-images.sh
@@ -52,47 +105,64 @@ AWS_PROFILE=sandbox ./scripts/build-images.sh
 
 ## Deploy the applications
 
-Create checkout:
+Deploy `legacy-api` first. It runs as an ECS task, but its port is outside the
+OBI discovery selectors:
 
 ```bash
-AWS_PROFILE=sandbox ./scripts/tf.sh apply -var deploy_checkout=true
+AWS_PROFILE=sandbox ./scripts/tf.sh apply \
+  -var deploy_legacy=true
+
+legacy_ip=$(AWS_PROFILE=sandbox \
+  ./scripts/service-ip.sh legacy-api beyla-nonk8s-poc-backend)
+echo "$legacy_ip"
 ```
 
-Read the checkout task's ENI address:
+Deploy checkout with the literal legacy task address. Checkout also receives
+the private RDS endpoint and its RDS-managed password:
 
 ```bash
+AWS_PROFILE=sandbox ./scripts/tf.sh apply \
+  -var deploy_legacy=true \
+  -var deploy_checkout=true \
+  -var legacy_ip="$legacy_ip"
+
 checkout_ip=$(AWS_PROFILE=sandbox ./scripts/checkout-ip.sh)
 echo "$checkout_ip"
 ```
 
-Create storefront with that literal destination:
+Deploy catalog in the frontend VPC:
 
 ```bash
 AWS_PROFILE=sandbox ./scripts/tf.sh apply \
+  -var deploy_legacy=true \
   -var deploy_checkout=true \
+  -var legacy_ip="$legacy_ip" \
   -var checkout_ip="$checkout_ip"
+
+catalog_ip=$(AWS_PROFILE=sandbox ./scripts/service-ip.sh catalog)
+echo "$catalog_ip"
 ```
 
-Keep both variables set on later applies while the services should remain
-running. Do not store a live task IP in `terraform.tfvars`.
-
-## Record the baseline
-
-Open each instance through Session Manager and inspect its local metrics:
+Deploy storefront last:
 
 ```bash
-sudo systemctl status beyla --no-pager
+AWS_PROFILE=sandbox ./scripts/tf.sh apply \
+  -var deploy_legacy=true \
+  -var deploy_checkout=true \
+  -var legacy_ip="$legacy_ip" \
+  -var checkout_ip="$checkout_ip" \
+  -var catalog_ip="$catalog_ip"
 
-curl -fsS http://127.0.0.1:8999/metrics \
-  | grep -E '^(target_info|survey_info|traces_service_graph_)'
+storefront_ip=$(AWS_PROFILE=sandbox ./scripts/service-ip.sh storefront)
+echo "$storefront_ip"
 ```
 
-Before the ECS resolver is installed, service graph labels should contain the
-remote task IP or a generated ECS container name.
+Keep these variables on later applies while the services remain deployed. Do
+not store live task IPs in `terraform.tfvars`.
 
-## Build the OBI resolver
+## Deploy the custom OBI resolver directly
 
-From the OBI `ecs-service-resolution` worktree:
+Build the `ecs-service-resolution` OBI worktree:
 
 ```bash
 make generate
@@ -102,12 +172,8 @@ make check-config-schema
 make compile
 ```
 
-The resulting binary is `bin/obi`.
-
-## Deploy the OBI resolver
-
-The deployment helper defaults to the worktree path used during the original
-experiment. Set `OBI_BINARY` when the binary is elsewhere:
+Deploy that binary to both EC2 hosts. This test does not record a released-Beyla
+baseline:
 
 ```bash
 AWS_PROFILE=sandbox \
@@ -115,84 +181,88 @@ OBI_BINARY=/path/to/obi/bin/obi \
 ./scripts/deploy-obi-resolver.sh
 ```
 
-The helper:
+The helper uploads the binary and multi-cluster configuration, verifies its
+checksum, and runs it through the existing `beyla` systemd unit.
 
-1. Finds both running PoC EC2 instances by tag.
-2. Opens an SSH tunnel through SSM.
-3. Uploads the custom OBI binary and ECS resolver configuration.
-4. Verifies the binary checksum.
-5. Restarts the existing `beyla` systemd service with the OBI binary.
-6. Restores the previous service and configuration if OBI does not remain
-   active.
+## Verify application traffic
 
-The original files are stored under `/var/lib/beyla/ecs-resolver-backup` on each
-host.
-
-## Verify the resolved graph
-
-On both EC2 hosts:
+Open an SSM session to the caller host and use the storefront address printed
+above. The response should contain all four application and database results:
 
 ```bash
-sudo systemctl is-active beyla
-sudo systemctl show beyla --no-pager -p ExecStart --value
-
-curl -fsS http://127.0.0.1:8999/metrics \
-  | grep '^traces_service_graph_'
+storefront_ip=<storefront task IP>
+curl -fsS "http://${storefront_ip}:8081/"
 ```
 
-Expected edge:
+A successful response ends with:
+
+```json
+{"database":1,"legacy":"legacy-api","service":"checkout"}
+```
+
+Then inspect process and service graph metrics:
+
+```bash
+curl -fsS http://127.0.0.1:8999/metrics \
+  | grep -E '^(survey_info|target_info|traces_service_graph_request_total)'
+```
+
+Use CloudWatch logs if the request fails at any hop.
+
+## Verify the three identity cases
+
+The already validated edges should remain named across the VPC boundary:
 
 ```prometheus
-traces_service_graph_request_total{
-  client="storefront",
-  server="checkout",
-  source="obi"
-}
+traces_service_graph_request_total{client="storefront",server="catalog",source="obi"}
+traces_service_graph_request_total{client="catalog",server="checkout",source="obi"}
 ```
 
-The actual metric also contains namespace and connection type labels. The edge
-must not contain either task IP or an `ecs-...` generated container name.
+The uninstrumented ECS destination should also resolve through ECS inventory:
 
-## Test task replacement
+```prometheus
+traces_service_graph_request_total{client="checkout",server="legacy-api",source="obi"}
+```
 
-Force checkout onto a new task ENI:
+Confirm that `legacy-api` has no local process telemetry. Its name may appear as
+a remote `server` label, but it must not appear as an OBI-instrumented process:
 
 ```bash
-AWS_PROFILE=sandbox aws ecs update-service \
-  --region us-east-2 \
-  --cluster beyla-nonk8s-poc \
-  --service checkout \
-  --force-new-deployment
-
-AWS_PROFILE=sandbox aws ecs wait services-stable \
-  --region us-east-2 \
-  --cluster beyla-nonk8s-poc \
-  --services checkout
+curl -fsS http://127.0.0.1:8999/metrics \
+  | grep -E '^(survey_info|target_info)' \
+  | grep 'legacy-api'
 ```
 
-Read the replacement address and update storefront:
+The expected result is no output. Also check that there is no server-side
+`checkout -> legacy-api` observation, because OBI does not instrument port
+8083.
+
+For RDS, capture every graph series containing PostgreSQL port 5432 or the RDS
+private address:
 
 ```bash
-checkout_ip=$(AWS_PROFILE=sandbox ./scripts/checkout-ip.sh)
-
-AWS_PROFILE=sandbox ./scripts/tf.sh apply \
-  -var deploy_checkout=true \
-  -var checkout_ip="$checkout_ip"
+curl -fsS http://127.0.0.1:8999/metrics \
+  | grep '^traces_service_graph_request_total' \
+  | grep -E '5432|10\.42\.'
 ```
 
-After the next 30-second inventory refresh, verify that the graph still reports
-`server="checkout"`.
+The ECS resolver has no RDS inventory. This observation tells us whether the
+PostgreSQL span preserves a useful database endpoint or exposes only a private
+address. If it exposes an address, an RDS resolver can read DB identifiers and
+endpoint hostnames from `DescribeDBInstances`, resolve those hostnames, and
+refresh the resulting IP mapping.
 
 ## Cleanup
 
-Read the current checkout address before destroying the stack:
+Preserve every active variable while destroying the stack:
 
 ```bash
-checkout_ip=$(AWS_PROFILE=sandbox ./scripts/checkout-ip.sh)
-
 AWS_PROFILE=sandbox ./scripts/tf.sh destroy \
+  -var deploy_legacy=true \
   -var deploy_checkout=true \
-  -var checkout_ip="$checkout_ip"
+  -var legacy_ip="$legacy_ip" \
+  -var checkout_ip="$checkout_ip" \
+  -var catalog_ip="$catalog_ip"
 ```
 
 After destruction, check AWS Resource Explorer or Tag Editor for resources

@@ -3,37 +3,49 @@
 This PoC tests whether OBI can build a service graph on ECS without Kubernetes
 metadata or application-level OpenTelemetry instrumentation.
 
-The result is positive for ECS tasks that use `awsvpc` networking. OBI can use
-the ECS API to translate the task IPs observed by eBPF into ECS service names.
-The resulting service graph reports `storefront -> checkout` instead of an IP
-address and a generated container name.
+The original experiment proved that OBI can use the ECS API to translate task
+IPs observed by eBPF into ECS service names. The first extension tested two
+additional conditions:
 
-## Test topology
+- One standalone OBI instance instruments more than one service on the same
+  EC2 container instance.
+- Services communicate across two ECS clusters in the same VPC.
+
+The extended deployment was run successfully in AWS on 2026-09-21.
+
+A second extension tested an ECS destination with no Beyla or SDK, a private
+RDS dependency, and service communication across peered VPCs. It was run
+successfully in AWS on 2026-09-21.
+
+## Validated topology
 
 ```text
-EC2 host: caller                         EC2 host: checkout
-├── standalone OBI                      ├── standalone OBI
-└── storefront Go task :8081 ──────────>└── checkout Flask task :8080
-            172.31.27.44                           172.31.23.66
+ECS cluster: beyla-nonk8s-poc              ECS cluster: beyla-nonk8s-poc-backend
+EC2 host: caller                           EC2 host: checkout
+├── standalone OBI                         ├── standalone OBI
+├── storefront Go task :8081               └── checkout Flask task :8080
+└── catalog Go task :8082 ────────────────────────────────┘
+         ▲                    catalog -> checkout
+         │
+         └── storefront -> catalog
 ```
 
-Both applications are uninstrumented. They contain no OpenTelemetry SDK,
+All three applications are uninstrumented. They contain no OpenTelemetry SDK,
 agent, manual spans, or OTLP exporter. Standalone OBI discovers and instruments
 their running processes with eBPF.
 
-The services run as separate ECS services on separate EC2 container instances.
 The tasks use `awsvpc` networking and receive their own ENI addresses. The
-storefront calls the checkout task by its literal private IP. The topology does
+applications call the next service by its literal private IP. The topology does
 not use Kubernetes, Service Connect, Cloud Map, a load balancer, DNS-based
 service discovery, or propagated service metadata.
 
 ## Baseline behavior
 
-Released Beyla `v3.35.0` discovered both application processes and observed the
-request between them. It did not know which ECS service owned the remote IP.
+Released Beyla `v3.35.0` discovers the application processes and observes the
+requests. It does not know which ECS service owns a remote IP.
 
-The server-side service graph used the caller IP and a generated checkout
-container name:
+In the original two-service experiment, the server-side graph contained the
+caller IP and a generated checkout container name:
 
 ```prometheus
 traces_service_graph_request_total{
@@ -43,20 +55,19 @@ traces_service_graph_request_total{
 } 18
 ```
 
-This confirms the missing information is endpoint identity. eBPF already sees
-the call, protocol, latency, and local process. It needs a source that maps the
-observed IP to the platform service.
+This confirms that the missing information is endpoint identity. eBPF already
+sees the call, protocol, latency, and local process.
 
 ## ECS resolver
 
 The OBI PoC adds `ecs` as a name resolver source. Each OBI process:
 
-1. Calls `ListTasks` for running tasks in the configured ECS cluster.
-2. Calls `DescribeTasks` in batches of up to 100 tasks.
+1. Calls `ListTasks` for every configured ECS cluster.
+2. Calls `DescribeTasks` in batches of up to 100 tasks per cluster.
 3. Reads the ECS service name from the task group, such as
    `service:checkout`.
 4. Reads `privateIPv4Address` from the task ENI attachment.
-5. Builds an in-memory `IP -> service name` map.
+5. Builds one in-memory `IP -> service name` map across the configured clusters.
 6. Replaces the map every 30 seconds so stopped tasks disappear and replacement
    task addresses are learned.
 
@@ -70,51 +81,27 @@ The standalone configuration is:
 name_resolver:
   sources: [ecs]
   ecs:
-    cluster: beyla-nonk8s-poc
+    clusters: [beyla-nonk8s-poc, beyla-nonk8s-poc-backend]
     region: us-east-2
     refresh_interval: 30s
 ```
 
-The EC2 instance role provides AWS credentials through IMDS. The resolver itself
-needs `ecs:ListTasks` and `ecs:DescribeTasks`.
+The earlier singular `cluster:` option remains supported. The EC2 instance role
+provides AWS credentials through IMDS. The resolver needs `ecs:ListTasks` and
+`ecs:DescribeTasks` for the configured clusters.
 
-The resolver implementation currently lives in the OBI worktree and branch
-`ecs-service-resolution`. The Terraform stack, applications, configuration,
-and deployment helper live in this directory.
+## Proven result from the original experiment
 
-## Observed result
-
-The custom OBI binary was deployed to both EC2 hosts. Both hosts independently
-reported the expected edge.
-
-Caller-side metric:
+The custom OBI binary was deployed to both EC2 hosts in the original
+single-cluster topology. Both hosts independently reported:
 
 ```prometheus
 traces_service_graph_request_total{
   client="storefront",
-  client_service_namespace="",
-  connection_type="virtual_node",
   server="checkout",
-  server_service_namespace="",
   source="obi"
-} 949
+}
 ```
-
-Server-side metric:
-
-```prometheus
-traces_service_graph_request_total{
-  client="storefront",
-  client_service_namespace="",
-  connection_type="",
-  server="checkout",
-  server_service_namespace="",
-  source="obi"
-} 858
-```
-
-The counters differ because each OBI instance started and scraped at a different
-time. The client and server labels agree on the service identities.
 
 The live ECS inventory used by the resolver was:
 
@@ -123,33 +110,172 @@ The live ECS inventory used by the resolver was:
 172.31.23.66 -> checkout
 ```
 
-## What this proves
+## Observed result for the extended test
 
-- OBI can observe calls between uninstrumented services on separate ECS/EC2
-  hosts.
-- ECS control-plane metadata is sufficient to translate an observed task IP
-  into an ECS service name when tasks use `awsvpc` networking.
-- The same mapping resolves the local auto-generated service name and the
-  remote endpoint name.
-- Both sides emit a stable `storefront -> checkout` service graph edge.
-- The inventory refresh can learn replacement task addresses without restarting
-  OBI.
+The caller OBI instance reported both edges with stable ECS service names:
+
+```prometheus
+traces_service_graph_request_total{
+  client="storefront",
+  connection_type="",
+  server="catalog",
+  source="obi"
+} 2721
+
+traces_service_graph_request_total{
+  client="storefront",
+  connection_type="virtual_node",
+  server="catalog",
+  source="obi"
+} 2721
+
+traces_service_graph_request_total{
+  client="catalog",
+  connection_type="virtual_node",
+  server="checkout",
+  source="obi"
+} 2721
+```
+
+The two `storefront -> catalog` series represent the client and server
+observations made by the same OBI instance. They agree on both service names.
+The backend OBI instance independently reported:
+
+```prometheus
+traces_service_graph_request_total{
+  client="catalog",
+  connection_type="",
+  server="checkout",
+  source="obi"
+} 2883
+```
+
+The different counter values reflect the later backend snapshot while traffic
+continued. No observed service-graph edge contained a task IP or generated
+`ecs-...` container name after the resolver was installed.
+
+This proves that one OBI instance can instrument and distinguish multiple ECS
+services on the same EC2 host. It also proves that a combined inventory can
+resolve an edge across two ECS clusters in the same VPC.
+
+`target_info` remained unresolved. For example, the caller still exposed
+generated service names for both local tasks:
+
+```text
+ecs-beyla-nonk8s-poc-storefront-2-storefront-aecef8e5c7d18fd11900
+ecs-beyla-nonk8s-poc-catalog-1-catalog-babfa0d2829c97832d00
+```
+
+The current resolver decorates spans before service-graph metrics are created.
+It does not yet decorate the process metadata used to create `target_info`.
+
+## Observed result for the brownfield test
+
+```text
+frontend VPC                         backend/data VPC
+
+storefront :8081 -> catalog :8082 -> checkout :8080
+                                         |       |
+                                         |       +-> RDS PostgreSQL :5432
+                                         +-> legacy-api :8083
+```
+
+The second extension ran the custom resolver directly. OBI selected ports 8080
+through 8082, so it instruments storefront, catalog, and checkout. The
+`legacy-api` ECS task listens on port 8083 and has no SDK. It is absent from
+OBI process discovery, but its task ENI remains in ECS inventory.
+
+This separates two facts that were coupled in the earlier test:
+
+- OBI can observe the outgoing HTTP call from checkout without instrumenting
+  the destination process.
+- The ECS resolver can map the remote task IP to `legacy-api` independently of
+  process discovery.
+
+The caller OBI instance resolved the edges across the peered VPCs:
+
+```prometheus
+traces_service_graph_request_total{
+  client="catalog",
+  connection_type="virtual_node",
+  server="checkout",
+  source="obi"
+} 240
+
+traces_service_graph_request_total{
+  client="storefront",
+  connection_type="",
+  server="catalog",
+  source="obi"
+} 240
+
+traces_service_graph_request_total{
+  client="storefront",
+  connection_type="virtual_node",
+  server="catalog",
+  source="obi"
+} 240
+```
+
+The backend OBI instance resolved the remote `catalog` client and the
+uninstrumented `legacy-api` destination:
+
+```prometheus
+traces_service_graph_request_total{
+  client="catalog",
+  connection_type="",
+  server="checkout",
+  source="obi"
+} 61
+
+traces_service_graph_request_total{
+  client="checkout",
+  connection_type="virtual_node",
+  server="legacy-api",
+  source="obi"
+} 61
+```
+
+This proves that ECS inventory can identify a destination even when that
+service has no Beyla or SDK instrumentation. The observed outgoing request and
+the ECS task ENI are sufficient to produce `checkout -> legacy-api`.
+
+RDS produced a different result:
+
+```prometheus
+traces_service_graph_request_total{
+  client="checkout",
+  connection_type="database",
+  server="10.42.10.57",
+  source="obi"
+} 61
+```
+
+OBI identified the database connection, but the ECS resolver left the RDS
+server as an IP address because RDS is not part of ECS inventory. Naming this
+endpoint requires another metadata adapter, for example one that combines
+`DescribeDBInstances` endpoint metadata with DNS resolution.
+
+The two VPCs represent a common split between customer-facing services and a
+private backend/data tier. This test checks that service identity follows ECS
+inventory across a routed boundary. It also gives us a base for later tests
+with load balancers, autoscaling replacements, bridge or host networking, and
+mixed ECS and plain EC2 workloads.
 
 ## Current limitations
 
 - `target_info` is produced from process discovery before span name resolution.
-  It still contains the generated ECS container name. A process metadata
-  decorator is needed to apply the ECS identity there as well.
-- This PoC requires the ECS cluster and AWS region in the OBI configuration.
-  Automatic cluster and region detection are separate work.
-- Each OBI instance currently queries the cluster-wide task inventory. A shared
-  cache or a split local/remote lookup design may be needed for large clusters.
-- The resolver currently uses IPv4 task ENIs and ECS service tasks. Standalone
-  ECS tasks whose group is not `service:<name>` are ignored.
-- The PoC does not yet cover bridge or host networking, multiple ECS clusters,
-  IPv6, ECS Service Connect, or Fargate.
+  It can still contain a generated ECS container name.
+- ECS clusters and the AWS region must be supplied in the OBI configuration.
+- Each OBI instance queries the combined task inventory. A shared cache may be
+  needed for large deployments.
+- The resolver currently uses IPv4 task ENIs and ECS service tasks.
+- RDS endpoints remain IP addresses because the resolver only reads ECS
+  inventory.
+- The PoC does not cover bridge or host networking, IPv6, load balancers, mixed
+  ECS and plain EC2 services, ECS Service Connect, or Fargate.
 
 ## Reproduce the experiment
 
-See [RUNBOOK.md](./RUNBOOK.md) for setup, deployment, verification, replacement,
-and cleanup instructions.
+See [RUNBOOK.md](./RUNBOOK.md) for setup, deployment, verification, and cleanup
+instructions.

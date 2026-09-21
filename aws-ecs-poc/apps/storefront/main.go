@@ -10,16 +10,16 @@ import (
 )
 
 func main() {
-	checkoutURL := os.Getenv("CHECKOUT_URL")
-	if checkoutURL == "" {
-		log.Fatal("CHECKOUT_URL is required")
+	catalogURL := os.Getenv("CATALOG_URL")
+	if catalogURL == "" {
+		log.Fatal("CATALOG_URL is required")
 	}
 
-	client := &http.Client{Timeout: 2 * time.Second}
-	go generateTraffic(client, checkoutURL)
+	client := &http.Client{Timeout: 5 * time.Second}
+	go generateTraffic(client, catalogURL)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		body, err := callCheckout(client, checkoutURL)
+		body, err := callCatalog(client, catalogURL)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -31,22 +31,22 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }
 
-func generateTraffic(client *http.Client, checkoutURL string) {
+func generateTraffic(client *http.Client, catalogURL string) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		body, err := callCheckout(client, checkoutURL)
+		body, err := callCatalog(client, catalogURL)
 		if err != nil {
-			log.Printf("checkout request failed: %v", err)
+			log.Printf("catalog request failed: %v", err)
 			continue
 		}
-		log.Printf("checkout response: %s", body)
+		log.Printf("catalog response: %s", body)
 	}
 }
 
-func callCheckout(client *http.Client, checkoutURL string) (string, error) {
-	response, err := client.Get(checkoutURL)
+func callCatalog(client *http.Client, catalogURL string) (string, error) {
+	response, err := client.Get(catalogURL)
 	if err != nil {
 		return "", err
 	}
@@ -57,7 +57,7 @@ func callCheckout(client *http.Client, checkoutURL string) (string, error) {
 		return "", err
 	}
 	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("checkout returned %s: %s", response.Status, body)
+		return "", fmt.Errorf("catalog returned %s: %s", response.Status, body)
 	}
 	return string(body), nil
 }

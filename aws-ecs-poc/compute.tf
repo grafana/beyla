@@ -6,10 +6,24 @@ resource "aws_ecs_cluster" "poc" {
   name = var.name
 }
 
+resource "aws_ecs_cluster" "backend" {
+  name = "${var.name}-backend"
+}
+
 locals {
   hosts = {
-    caller   = "caller"
-    checkout = "checkout"
+    caller = {
+      role               = "caller"
+      cluster_name       = aws_ecs_cluster.poc.name
+      subnet_id          = local.subnet_id
+      security_group_ids = [aws_security_group.poc.id]
+    }
+    checkout = {
+      role               = "checkout"
+      cluster_name       = aws_ecs_cluster.backend.name
+      subnet_id          = aws_subnet.backend_host.id
+      security_group_ids = [aws_security_group.backend.id]
+    }
   }
 }
 
@@ -18,15 +32,15 @@ resource "aws_instance" "ecs" {
 
   ami                         = data.aws_ssm_parameter.ecs_ami.value
   instance_type               = var.instance_type
-  subnet_id                   = local.subnet_id
+  subnet_id                   = each.value.subnet_id
   associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.poc.id]
+  vpc_security_group_ids      = each.value.security_group_ids
   iam_instance_profile        = aws_iam_instance_profile.ecs_instance.name
 
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    cluster_name  = aws_ecs_cluster.poc.name
-    host_role     = each.value
+    cluster_name  = each.value.cluster_name
+    host_role     = each.value.role
     beyla_version = var.beyla_version
   })
 
@@ -43,7 +57,7 @@ resource "aws_instance" "ecs" {
 
   tags = {
     Name = "${var.name}-${each.key}"
-    Role = each.value
+    Role = each.value.role
   }
 
   depends_on = [

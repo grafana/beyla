@@ -43,6 +43,12 @@ variable "subnet_id" {
   default     = ""
 }
 
+variable "backend_vpc_cidr" {
+  description = "CIDR for the peered backend and database VPC. It must not overlap the frontend VPC."
+  type        = string
+  default     = "10.42.0.0/16"
+}
+
 variable "instance_type" {
   description = "EC2 instance type used for each ECS container instance."
   type        = string
@@ -61,13 +67,41 @@ variable "deploy_checkout" {
   default     = false
 }
 
+variable "deploy_legacy" {
+  description = "Create the legacy ECS service without Beyla instrumentation."
+  type        = bool
+  default     = false
+}
+
+variable "legacy_ip" {
+  description = "Private IP of the running legacy task. Checkout calls this literal address."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.legacy_ip == "" || can(cidrhost("${var.legacy_ip}/32", 0))
+    error_message = "legacy_ip must be empty or a valid IPv4 address."
+  }
+}
+
 variable "checkout_ip" {
-  description = "Private IP of the running checkout task. Setting it creates the storefront service."
+  description = "Private IP of the running checkout task. Setting it creates the catalog service."
   type        = string
   default     = ""
 
   validation {
     condition     = var.checkout_ip == "" || can(cidrhost("${var.checkout_ip}/32", 0))
     error_message = "checkout_ip must be empty or a valid IPv4 address."
+  }
+}
+
+variable "catalog_ip" {
+  description = "Private IP of the running catalog task. Setting it creates the storefront service."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.catalog_ip == "" || can(cidrhost("${var.catalog_ip}/32", 0))
+    error_message = "catalog_ip must be empty or a valid IPv4 address."
   }
 }

@@ -15,7 +15,7 @@ aws ecr get-login-password --profile "${aws_profile}" --region "${aws_region}" \
   | docker login --username AWS --password-stdin \
     "${account_id}.dkr.ecr.${aws_region}.amazonaws.com"
 
-for app in checkout storefront; do
+for app in catalog checkout legacy-api storefront; do
   repository=$(
     "${script_dir}/tf.sh" output -json ecr_repository_urls \
       | python3 -c "import json, sys; print(json.load(sys.stdin)['${app}'])"
@@ -23,7 +23,7 @@ for app in checkout storefront; do
 
   image_tag=1
   if [[ "${app}" == "checkout" ]]; then
-    image_tag=2
+    image_tag=3
   fi
 
   docker build --network host -t "${repository}:${image_tag}" "${project_dir}/apps/${app}"

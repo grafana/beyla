@@ -562,6 +562,34 @@ func getDefinitions(
 				attr.ServerAddr:         true,
 			},
 		},
+		MCPClientOperationDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.MCPMethodName:         true,
+				attr.MCPProtocolVersion:    true,
+				attr.GenAIToolName:         true,
+				attr.GenAIPromptName:       true,
+				attr.ErrorType:             true,
+				attr.RPCResponseStatusCode: true,
+				attr.ServerAddr:            true,
+				attr.ServerPort:            true,
+				// mcp.resource.uri is opt-in upstream: a resource URI is
+				// unbounded, so it stays out of the default label set.
+				attr.MCPResourceURI: false,
+			},
+		},
+		MCPServerOperationDuration.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.MCPMethodName:         true,
+				attr.MCPProtocolVersion:    true,
+				attr.GenAIToolName:         true,
+				attr.GenAIPromptName:       true,
+				attr.ErrorType:             true,
+				attr.RPCResponseStatusCode: true,
+				attr.MCPResourceURI:        false,
+			},
+		},
 		GoRuntimeMemoryGCGoal.Section: {
 			SubGroups:  []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{},
@@ -577,6 +605,12 @@ func getDefinitions(
 		GoRuntimeScheduleDuration.Section: {
 			SubGroups:  []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{},
+		},
+		DotnetGCCollections.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.DotnetGCHeapGeneration: true,
+			},
 		},
 		CPythonGCCollections.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes},
@@ -693,6 +727,12 @@ func getDefinitions(
 			SubGroups: []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.NetworkIoDirection: true,
+			},
+		},
+		StatTCPSuccessfulConnections.Section: {
+			SubGroups: []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkTCPHandshakeRole: false,
 			},
 		},
 

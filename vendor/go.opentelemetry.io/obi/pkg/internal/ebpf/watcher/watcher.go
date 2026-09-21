@@ -89,8 +89,6 @@ func (p *Watcher) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 	return nil
 }
 
-func (p *Watcher) SetupTailCalls() {}
-
 func (p *Watcher) Run(ctx context.Context) {
 	parse := func(record *ringbuf.Record) (request.Span, bool, error) {
 		return p.processWatchEvent(ctx, record)

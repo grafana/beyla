@@ -151,8 +151,6 @@ func (p *Tracer) constants() map[string]any {
 	return map[string]any{"g_bpf_debug": p.cfg.EBPF.BpfDebug}
 }
 
-func (p *Tracer) SetupTailCalls() {}
-
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}

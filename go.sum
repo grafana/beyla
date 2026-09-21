@@ -216,8 +216,8 @@ github.com/mdlayher/netlink v1.7.2 h1:/UtM3ofJap7Vl4QWCPDGXY8d3GIY2UGSDbK+QWmY8/
 github.com/mdlayher/netlink v1.7.2/go.mod h1:xraEF7uJbxLhc5fpHL4cPe221LI2bdttWlU+ZGLfQSw=
 github.com/mdlayher/socket v0.5.1 h1:VZaqt6RkGkt2OE9l3GcC6nZkqD3xKeQLyfleW/uBcos=
 github.com/mdlayher/socket v0.5.1/go.mod h1:TjPLHI1UgwEv5J1B5q0zTZq12A/6H7nKmtTanQE37IQ=
-github.com/microsoft/go-winmd v0.0.0-20260629071918-a1b3f8a32523 h1:naJaDXHQLKo3Bz8zdaOhC1jS1w8HM/k8DcszKUZyXfs=
-github.com/microsoft/go-winmd v0.0.0-20260629071918-a1b3f8a32523/go.mod h1:RlXKU0WfiinWVV3OL8++aJELUhjw3ZYPwvVBy+XeF/A=
+github.com/microsoft/go-winmd v0.0.0-20260915174104-1a466c0da91c h1:opq3lbAONBL4tsSSP8AAzInEG0J8a7fEJh/hcDTnYso=
+github.com/microsoft/go-winmd v0.0.0-20260915174104-1a466c0da91c/go.mod h1:BeB7LHV8psWkskyGi8S+mZvM+LFIH5dK0J5eSA/SsyY=
 github.com/minio/sha256-simd v1.0.1 h1:6kaan5IFmwTNynnKKpDHe6FWHohJOHhCPchzK49dzMM=
 github.com/minio/sha256-simd v1.0.1/go.mod h1:Pz6AKMiUdngCLpeTL/RJY1M9rUuPMYujV5xJjtbRSN8=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=

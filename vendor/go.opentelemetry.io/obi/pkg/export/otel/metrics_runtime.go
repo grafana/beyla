@@ -61,6 +61,17 @@ type RuntimeMetrics struct {
 	jvmMetrics    jvmRuntimeMetrics
 	nodejsMetrics nodejsRuntimeMetrics
 	pythonMetrics pythonRuntimeMetrics
+	dotnetMetrics dotnetRuntimeMetrics
+}
+
+type dotnetRuntimeMetrics struct {
+	collections instrument.Int64Counter
+	values      map[app.PID]*dotnetRuntimeMetricValues
+}
+
+type dotnetRuntimeMetricValues struct {
+	generation  uint64
+	collections [runtimemetrics.DotnetGCGenerationCount]runtimeCounterValue
 }
 
 type pythonRuntimeMetrics struct {
@@ -72,12 +83,12 @@ type pythonRuntimeMetrics struct {
 }
 
 type pythonRuntimeMetricValues struct {
-	collections          [runtimemetrics.CPythonGCGenerationCount]pythonRuntimeCounterValue
-	collectedObjects     [runtimemetrics.CPythonGCGenerationCount]pythonRuntimeCounterValue
-	uncollectableObjects [runtimemetrics.CPythonGCGenerationCount]pythonRuntimeCounterValue
+	collections          [runtimemetrics.CPythonGCGenerationCount]runtimeCounterValue
+	collectedObjects     [runtimemetrics.CPythonGCGenerationCount]runtimeCounterValue
+	uncollectableObjects [runtimemetrics.CPythonGCGenerationCount]runtimeCounterValue
 }
 
-type pythonRuntimeCounterValue struct {
+type runtimeCounterValue struct {
 	value       uint64
 	initialized bool
 }
@@ -240,6 +251,22 @@ func setupRuntimeMeters(
 	}
 	if err := setupPythonRuntimeMeters(&metrics.pythonMetrics, meter); err != nil {
 		return err
+	}
+	if err := setupDotnetRuntimeMeters(&metrics.dotnetMetrics, meter); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Meter) error {
+	var err error
+	metrics.collections, err = meter.Int64Counter(
+		attributes.DotnetGCCollections.OTEL,
+		instrument.WithUnit(attributes.DotnetGCCollections.Unit),
+		instrument.WithDescription("The number of garbage collections since the collector baseline, exclusive per generation."),
+	)
+	if err != nil {
+		return fmt.Errorf("creating .NET GC collections: %w", err)
 	}
 	return nil
 }
@@ -410,6 +437,12 @@ func (r *RuntimeMetricsReporter) reportRuntimeMetrics(snapshots []runtimemetrics
 				"pid", snapshot.PID, "service", snapshot.Service.UID)
 			continue
 		}
+		if snapshot.Removed && snapshot.Dotnet != nil {
+			if metrics, exists := r.reporters.Lookup(snapshot.Service.UID); exists {
+				recordRuntimeMetrics(r.ctx, metrics, snapshot)
+			}
+			continue
+		}
 		metrics, err := r.reporters.For(&snapshot.Service)
 		if err != nil {
 			r.log.Debug("creating runtime metric set failed", "pid", snapshot.PID, "error", err)
@@ -465,6 +498,9 @@ func recordRuntimeMetrics(ctx context.Context, metrics *RuntimeMetrics, snapshot
 		}
 		metrics.nodejsMetrics.recordV8(snapshot)
 	}
+	if snapshot.Dotnet != nil && (runtimemetrics.Enabled{Runtime: true}).ShouldReport(snapshot) {
+		recordDotnetRuntimeMetrics(ctx, &metrics.dotnetMetrics, snapshot)
+	}
 	if snapshot.Python != nil {
 		if snapshot.Service.SDKLanguage != svc.InstrumentablePython ||
 			!snapshot.Service.ExportModes.CanExportMetrics() ||
@@ -472,6 +508,35 @@ func recordRuntimeMetrics(ctx context.Context, metrics *RuntimeMetrics, snapshot
 			return
 		}
 		recordPythonRuntimeMetrics(ctx, &metrics.pythonMetrics, snapshot)
+	}
+}
+
+func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetrics, snapshot runtimemetrics.RuntimeMetricSnapshot) {
+	if metrics == nil || metrics.collections == nil || snapshot.Dotnet == nil {
+		return
+	}
+	previous := metrics.values[snapshot.PID]
+	if snapshot.Removed {
+		if previous != nil && previous.generation == snapshot.Generation {
+			delete(metrics.values, snapshot.PID)
+		}
+		return
+	}
+	if previous == nil || previous.generation != snapshot.Generation {
+		previous = &dotnetRuntimeMetricValues{generation: snapshot.Generation}
+		if metrics.values == nil {
+			metrics.values = make(map[app.PID]*dotnetRuntimeMetricValues)
+		}
+		metrics.values[snapshot.PID] = previous
+	}
+	for generation, count := range snapshot.Dotnet.GCCollections {
+		if count == nil {
+			continue
+		}
+		generationAttr := attribute.KeyValue{
+			Key: attr.DotnetGCHeapGeneration.OTEL(), Value: attribute.StringValue(fmt.Sprintf("gen%d", generation)),
+		}
+		recordRuntimeCounterWithAttributes(ctx, metrics.collections, &previous.collections[generation], *count, generationAttr)
 	}
 }
 
@@ -510,7 +575,7 @@ func recordPythonRuntimeMetrics(
 func recordRuntimeCounterWithAttributes(
 	ctx context.Context,
 	metric instrument.Int64Counter,
-	previous *pythonRuntimeCounterValue,
+	previous *runtimeCounterValue,
 	current uint64,
 	attrs ...attribute.KeyValue,
 ) {

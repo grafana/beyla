@@ -20,10 +20,28 @@ const (
 	fastCGIRequestHeaderLen = 8
 	requestMethodKey        = "REQUEST_METHOD"
 	requestURIKey           = "REQUEST_URI"
+	documentURIKey          = "DOCUMENT_URI"
+	scriptNameKey           = "SCRIPT_NAME"
 	queryStringKey          = "QUERY_STRING"
+	requestSchemeKey        = "REQUEST_SCHEME"
+	forwardedProtoKey       = "HTTP_X_FORWARDED_PROTO"
+	httpsKey                = "HTTPS"
+	httpHostKey             = "HTTP_HOST"
+	serverNameKey           = "SERVER_NAME"
 	responseError           = 7 // FCGI_STDERR
 	responseStatusKey       = "Status: "
 )
+
+// fastCGIRequest is the request metadata the params table carries. The FastCGI
+// hop itself describes none of it: the scheme, host and URI belong to the HTTP
+// request the front end received, and are only knowable from these keys.
+type fastCGIRequest struct {
+	method string
+	uri    string
+	scheme string
+	host   string
+	status int
+}
 
 const (
 	fcgiVersion1          = 1
@@ -137,10 +155,60 @@ func parseHeader(b *largebuf.LargeBuffer) ([]byte, error) {
 	}
 }
 
-func detectFastCGI(b, rb *largebuf.LargeBuffer) (string, string, int) {
+// cgiScheme reports the scheme of the original client request. Semconv asks
+// for the client's scheme, so X-Forwarded-Proto wins: behind a TLS-terminating
+// proxy REQUEST_SCHEME describes the hop into PHP-FPM and reads `http` for a
+// request the client made over TLS. REQUEST_SCHEME carries the scheme directly
+// otherwise; HTTPS is the older convention and is set to a truthy value only
+// for TLS. None present means the front end did not say, and guessing would be
+// wrong for any TLS-terminated site.
+func cgiScheme(kv map[string]string) string {
+	if scheme := forwardedProto(kv[forwardedProtoKey]); scheme != "" {
+		return scheme
+	}
+
+	if scheme := kv[requestSchemeKey]; scheme != "" {
+		return scheme
+	}
+
+	switch kv[httpsKey] {
+	case "on", "1":
+		return "https"
+	}
+
+	return ""
+}
+
+// forwardedProto reads the left-most entry of an X-Forwarded-Proto list, which
+// is the scheme the client used. The header arrives from the wire, so anything
+// outside the two schemes semconv defines is discarded rather than reported.
+func forwardedProto(header string) string {
+	proto, _, _ := strings.Cut(header, ",")
+	switch proto = strings.ToLower(strings.TrimSpace(proto)); proto {
+	case "http", "https":
+		return proto
+	}
+
+	return ""
+}
+
+// cgiRequestURI prefers the front end's original request line. DOCUMENT_URI and
+// SCRIPT_NAME are the rewritten and resolved forms, which still name the path
+// when REQUEST_URI was truncated or is not configured.
+func cgiRequestURI(kv map[string]string) string {
+	for _, key := range []string{requestURIKey, documentURIKey, scriptNameKey} {
+		if uri := kv[key]; uri != "" {
+			return uri
+		}
+	}
+
+	return ""
+}
+
+func detectFastCGI(b, rb *largebuf.LargeBuffer) (fastCGIRequest, bool) {
 	raw, err := parseHeader(b)
 	if err != nil {
-		return "", "", -1
+		return fastCGIRequest{}, false
 	}
 
 	found := bytes.Contains(raw, []byte(requestMethodKey))
@@ -149,14 +217,19 @@ func detectFastCGI(b, rb *largebuf.LargeBuffer) (string, string, int) {
 
 		method, ok := kv[requestMethodKey]
 		if !ok {
-			return "", "", -1
+			return fastCGIRequest{}, false
 		}
-		uri := kv[requestURIKey]
+		uri := cgiRequestURI(kv)
 		if qs := kv[queryStringKey]; qs != "" && strings.IndexByte(uri, '?') < 0 {
 			if uri == "" {
 				uri = "/"
 			}
 			uri = uri + "?" + qs
+		}
+
+		host := kv[httpHostKey]
+		if host == "" {
+			host = kv[serverNameKey]
 		}
 
 		// Translate the status code into HTTP, 200 OK, 500 ERR
@@ -181,12 +254,18 @@ func detectFastCGI(b, rb *largebuf.LargeBuffer) (string, string, int) {
 			}
 		}
 
-		return method, uri, status
+		return fastCGIRequest{
+			method: method,
+			uri:    uri,
+			scheme: cgiScheme(kv),
+			host:   host,
+			status: status,
+		}, true
 	}
-	return "", "", -1
+	return fastCGIRequest{}, false
 }
 
-func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) request.Span {
+func TCPToFastCGIToSpan(trace *TCPRequestInfo, req fastCGIRequest) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
@@ -201,11 +280,17 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		reqType = request.EventTypeHTTP
 	}
 
+	schemeHost := ""
+	if req.scheme != "" || req.host != "" {
+		schemeHost = req.scheme + request.SchemeHostSeparator + req.host
+	}
+
 	return request.Span{
 		Type:          reqType,
-		Method:        op,
-		Path:          removeQuery(uri),
-		FullPath:      uri,
+		Method:        req.method,
+		Path:          removeQuery(req.uri),
+		FullPath:      req.uri,
+		Statement:     schemeHost,
 		Peer:          peer,
 		PeerPort:      int(trace.ConnInfo.S_port),
 		Host:          hostname,
@@ -214,7 +299,7 @@ func TCPToFastCGIToSpan(trace *TCPRequestInfo, op, uri string, status int) reque
 		RequestStart:  int64(trace.StartMonotimeNs),
 		Start:         int64(trace.StartMonotimeNs),
 		End:           int64(trace.EndMonotimeNs),
-		Status:        status,
+		Status:        req.status,
 		TraceID:       trace.Tp.TraceId,
 		SpanID:        trace.Tp.SpanId,
 		ParentSpanID:  trace.Tp.ParentId,

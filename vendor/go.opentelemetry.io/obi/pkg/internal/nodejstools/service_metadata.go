@@ -6,7 +6,6 @@ package nodejstools // import "go.opentelemetry.io/obi/pkg/internal/nodejstools"
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -138,15 +137,9 @@ func packageSearchStart(root, cwd, entryPoint string) (string, bool) {
 }
 
 func readPackageJSON(path string) (packageMetadata, bool) {
-	file, found := langtools.OpenMetadataFile(path, maxPackageJSONBytes)
-	if file == nil {
+	data, found, err := langtools.ReadMetadataFile(path, maxPackageJSONBytes)
+	if err != nil || data == nil {
 		return packageMetadata{}, found
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(io.LimitReader(file, maxPackageJSONBytes+1))
-	if err != nil || int64(len(data)) > maxPackageJSONBytes {
-		return packageMetadata{}, true
 	}
 
 	var fields struct {

@@ -36,17 +36,19 @@ func (p StatsPrometheusConfig) Enabled() bool {
 type statMetricsReporter struct {
 	cfg *PrometheusConfig
 
-	tcpRtt               *Expirer[prometheus.Histogram]
-	tcpFailedConnections *Expirer[prometheus.Counter]
-	tcpRetransmits       *Expirer[prometheus.Counter]
-	tcpIo                *Expirer[prometheus.Counter]
+	tcpRtt                   *Expirer[prometheus.Histogram]
+	tcpFailedConnections     *Expirer[prometheus.Counter]
+	tcpRetransmits           *Expirer[prometheus.Counter]
+	tcpIo                    *Expirer[prometheus.Counter]
+	tcpSuccessfulConnections *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
-	tcpRttAttrs               []attributes.Field[*ebpf.Stat, string]
-	tcpFailedConnectionsAttrs []attributes.Field[*ebpf.Stat, string]
-	tcpRetransmitsAttrs       []attributes.Field[*ebpf.Stat, string]
-	tcpIoAttrs                []attributes.Field[*ebpf.Stat, string]
+	tcpRttAttrs                   []attributes.Field[*ebpf.Stat, string]
+	tcpFailedConnectionsAttrs     []attributes.Field[*ebpf.Stat, string]
+	tcpRetransmitsAttrs           []attributes.Field[*ebpf.Stat, string]
+	tcpIoAttrs                    []attributes.Field[*ebpf.Stat, string]
+	tcpSuccessfulConnectionsAttrs []attributes.Field[*ebpf.Stat, string]
 
 	input <-chan []*ebpf.Stat
 }
@@ -159,6 +161,21 @@ func newStatsReporter(
 		register = append(register, mr.tcpFailedConnections)
 	}
 
+	if cfg.CommonCfg.Features.StatsTCPSuccessfulConnections() {
+		log.Debug("registering stat tcp successful connections metric")
+
+		mr.tcpSuccessfulConnectionsAttrs = attributes.PrometheusGetters(
+			ebpf.StatStringGetters,
+			provider.For(attributes.StatTCPSuccessfulConnections))
+
+		mr.tcpSuccessfulConnections = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.StatTCPSuccessfulConnections.Prom,
+			Help: "counts the TCP successful connections between 2 endpoints",
+		}, labelNames(mr.tcpSuccessfulConnectionsAttrs)).MetricVec, timeNow, cfg.Config.TTL)
+
+		register = append(register, mr.tcpSuccessfulConnections)
+	}
+
 	if cfg.Config.Registry != nil {
 		cfg.Config.Registry.MustRegister(register...)
 	} else {
@@ -179,6 +196,7 @@ func (r *statMetricsReporter) collectMetrics(_ context.Context) {
 		for _, stat := range stats {
 			r.observeTCPRtt(stat)
 			r.observeTCPFailedConnections(stat)
+			r.observeTCPSuccessfulConnections(stat)
 			r.observeTCPRetransmits(stat)
 			r.observeTCPIo(stat)
 		}
@@ -198,6 +216,14 @@ func (r *statMetricsReporter) observeTCPFailedConnections(stat *ebpf.Stat) {
 		return
 	}
 	r.tcpFailedConnections.WithLabelValues(labelValues(stat, r.tcpFailedConnectionsAttrs)...).
+		Metric.Add(1)
+}
+
+func (r *statMetricsReporter) observeTCPSuccessfulConnections(stat *ebpf.Stat) {
+	if r.tcpSuccessfulConnections == nil || stat.TCPSuccessfulConnection == nil {
+		return
+	}
+	r.tcpSuccessfulConnections.WithLabelValues(labelValues(stat, r.tcpSuccessfulConnectionsAttrs)...).
 		Metric.Add(1)
 }
 

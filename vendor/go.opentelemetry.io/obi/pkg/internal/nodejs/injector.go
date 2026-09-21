@@ -277,8 +277,19 @@ func sendMessageWithTimeout(wsConn *websocket.Conn, data []byte, timeout time.Du
 	return nil
 }
 
-func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn, payload []byte) error {
+// injectFileWS evaluates the agent over an established inspector session.
+//
+// closeInspector says whether this injection is what opened the debugger port.
+// When it is, the port is closed again on the way out; when the application was
+// already listening — it was started with --inspect — the port is left as the
+// operator configured it. Closing it would drop any attached debugger and leave
+// no way to reattach short of restarting the process.
+func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn, payload []byte, closeInspector bool) error {
 	defer func() {
+		if !closeInspector {
+			return
+		}
+
 		_ = sendEvaluate(wsConn, "process._debugEnd();", 2)
 	}()
 
@@ -291,7 +302,7 @@ func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn, payload []byte) erro
 	return nil
 }
 
-func (i *NodeInjector) injectViaConn(conn net.Conn) error {
+func (i *NodeInjector) injectViaConn(conn net.Conn, closeInspector bool) error {
 	wsURL, err := i.requestDebuggerURL(conn)
 	if err != nil {
 		conn.Close()
@@ -313,5 +324,5 @@ func (i *NodeInjector) injectViaConn(conn net.Conn) error {
 		return fmt.Errorf("failed to connect to inspector WebSocket: %w", err)
 	}
 
-	return i.injectFileWS(wsConn, payload)
+	return i.injectFileWS(wsConn, payload, closeInspector)
 }

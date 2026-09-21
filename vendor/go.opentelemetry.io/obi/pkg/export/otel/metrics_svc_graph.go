@@ -36,13 +36,6 @@ func sglog() *slog.Logger {
 	return slog.With("component", "otel.SvcGraphMetricsReporter")
 }
 
-const (
-	ServiceGraphClient = "traces_service_graph_request_client"
-	ServiceGraphServer = "traces_service_graph_request_server"
-	ServiceGraphFailed = "traces_service_graph_request_failed_total"
-	ServiceGraphTotal  = "traces_service_graph_request_total"
-)
-
 // SvcGraphMetricsReporter implements the graph node that receives request.Span
 // instances and forwards them as OTEL metrics.
 type SvcGraphMetricsReporter struct {
@@ -165,8 +158,8 @@ func newSvcGraphMetricsReporter(
 
 func (mr *SvcGraphMetricsReporter) graphMetricOptions() []metric.Option {
 	return []metric.Option{
-		metric.WithView(mr.otelHistogramConfig(ServiceGraphClient, mr.cfg.Buckets.DurationHistogram)),
-		metric.WithView(mr.otelHistogramConfig(ServiceGraphServer, mr.cfg.Buckets.DurationHistogram)),
+		metric.WithView(mr.otelHistogramConfig(attributes.ServiceGraphClient.OTEL, mr.cfg.Buckets.DurationHistogram)),
+		metric.WithView(mr.otelHistogramConfig(attributes.ServiceGraphServer.OTEL, mr.cfg.Buckets.DurationHistogram)),
 	}
 }
 
@@ -215,28 +208,30 @@ func (mr *SvcGraphMetricsReporter) otelHistogramConfig(metricName string, bucket
 func (mr *SvcGraphMetricsReporter) setupGraphMeters(m *SvcGraphMetrics, meter instrument.Meter) error {
 	var err error
 
-	serviceGraphClient, err := meter.Float64Histogram(ServiceGraphClient, instrument.WithUnit("s"))
+	client := attributes.ServiceGraphClient
+	serviceGraphClient, err := meter.Float64Histogram(client.OTEL, instrument.WithUnit(client.Unit))
 	if err != nil {
 		return fmt.Errorf("creating service graph client histogram: %w", err)
 	}
 	m.serviceGraphClient = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 		m.ctx, serviceGraphClient, mr.metricAttributes, timeNow, mr.cfg.TTL)
 
-	serviceGraphServer, err := meter.Float64Histogram(ServiceGraphServer, instrument.WithUnit("s"))
+	server := attributes.ServiceGraphServer
+	serviceGraphServer, err := meter.Float64Histogram(server.OTEL, instrument.WithUnit(server.Unit))
 	if err != nil {
 		return fmt.Errorf("creating service graph server histogram: %w", err)
 	}
 	m.serviceGraphServer = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 		m.ctx, serviceGraphServer, mr.metricAttributes, timeNow, mr.cfg.TTL)
 
-	serviceGraphFailed, err := meter.Int64Counter(ServiceGraphFailed)
+	serviceGraphFailed, err := meter.Int64Counter(attributes.ServiceGraphFailed.OTEL)
 	if err != nil {
 		return fmt.Errorf("creating service graph failed total: %w", err)
 	}
 	m.serviceGraphFailed = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, serviceGraphFailed, mr.metricAttributes, timeNow, mr.cfg.TTL)
 
-	serviceGraphTotal, err := meter.Int64Counter(ServiceGraphTotal)
+	serviceGraphTotal, err := meter.Int64Counter(attributes.ServiceGraphTotal.OTEL)
 	if err != nil {
 		return fmt.Errorf("creating service graph total: %w", err)
 	}
@@ -312,7 +307,7 @@ func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) 
 		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
 		semconv.TelemetrySDKVersion(attr.VendorSDKVersion),
 		semconv.TelemetryDistroName(attr.TelemetryDistroName),
-		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion),
+		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion()),
 		request.SourceMetric(attr.VendorPrefix),
 		semconv.OSTypeKey.String("linux"),
 	}

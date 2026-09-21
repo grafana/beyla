@@ -44,6 +44,7 @@ type RuntimeMetricSnapshot struct {
 	NodejsHeapSpace *NodejsHeapSpaceSnapshot
 	NodejsResource  *NodejsResourceSnapshot
 	Python          *PythonRuntimeMetricSnapshot
+	Dotnet          *DotnetRuntimeMetricSnapshot
 
 	Histogram *GoRuntimeHistogramSnapshot
 }
@@ -77,6 +78,14 @@ type PythonGCGenerationMetrics struct {
 	Collections          uint64
 	CollectedObjects     uint64
 	UncollectableObjects uint64
+}
+
+const DotnetGCGenerationCount = 3
+
+type DotnetRuntimeMetricSnapshot struct {
+	// GCCollections contains exclusive cumulative counts since the collector baseline.
+	// A nil entry means the count is unavailable.
+	GCCollections [DotnetGCGenerationCount]*uint64
 }
 
 type GoRuntimeMetricSnapshot struct {

@@ -6,6 +6,7 @@ package procs // import "go.opentelemetry.io/obi/pkg/internal/procs"
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strconv"
@@ -60,7 +61,12 @@ func FindNamespacedPids(pid app.PID) ([]app.PID, error) {
 	}
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
+	return readNamespacedPids(f)
+}
+
+// readNamespacedPids reads PIDs from the outermost to the innermost namespace.
+func readNamespacedPids(status io.Reader) ([]app.PID, error) {
+	scanner := bufio.NewScanner(status)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "NSpid:") {
@@ -85,5 +91,5 @@ func FindNamespacedPids(pid app.PID) ([]app.PID, error) {
 		}
 	}
 
-	return nil, nil
+	return nil, scanner.Err()
 }

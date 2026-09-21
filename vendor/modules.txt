@@ -430,8 +430,8 @@ github.com/lufia/plan9stats
 ## explicit; go 1.12
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jwriter
-# github.com/microsoft/go-winmd v0.0.0-20260629071918-a1b3f8a32523
-## explicit; go 1.25.0
+# github.com/microsoft/go-winmd v0.0.0-20260915174104-1a466c0da91c
+## explicit; go 1.26
 github.com/microsoft/go-winmd/winmd
 # github.com/minio/sha256-simd v1.0.1
 ## explicit; go 1.17
@@ -890,6 +890,7 @@ go.opentelemetry.io/obi/pkg/health
 go.opentelemetry.io/obi/pkg/internal/avoidedsvc
 go.opentelemetry.io/obi/pkg/internal/cpython/runtime
 go.opentelemetry.io/obi/pkg/internal/denotools
+go.opentelemetry.io/obi/pkg/internal/dotnet
 go.opentelemetry.io/obi/pkg/internal/dotnettools
 go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
@@ -904,6 +905,7 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/logger
 go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector
+go.opentelemetry.io/obi/pkg/internal/ebpf/uprobe
 go.opentelemetry.io/obi/pkg/internal/ebpf/watcher
 go.opentelemetry.io/obi/pkg/internal/errtype
 go.opentelemetry.io/obi/pkg/internal/fastelf
@@ -929,6 +931,7 @@ go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport
 go.opentelemetry.io/obi/pkg/internal/netolly/ifaces
 go.opentelemetry.io/obi/pkg/internal/nodejs
 go.opentelemetry.io/obi/pkg/internal/nodejstools
+go.opentelemetry.io/obi/pkg/internal/phptools
 go.opentelemetry.io/obi/pkg/internal/pipe
 go.opentelemetry.io/obi/pkg/internal/pipe/cidr
 go.opentelemetry.io/obi/pkg/internal/pipe/decorate
@@ -955,6 +958,7 @@ go.opentelemetry.io/obi/pkg/internal/transform/route
 go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest
 go.opentelemetry.io/obi/pkg/internal/transform/route/harvest/java
+go.opentelemetry.io/obi/pkg/internal/transform/route/harvest/php
 go.opentelemetry.io/obi/pkg/kube
 go.opentelemetry.io/obi/pkg/kube/klogbridge
 go.opentelemetry.io/obi/pkg/kube/kubecache

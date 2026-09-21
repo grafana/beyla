@@ -234,7 +234,7 @@ network:
 		NetworkFlows: nc,
 		Stats:        obi.DefaultStatsConfig,
 		Metrics: perapp.GlobalMetricsConfig{
-			Features: export.FeatureApplicationRED | export.FeatureNetwork,
+			Features: export.FeatureApplicationRED | export.FeatureApplicationSizes | export.FeatureNetwork,
 		},
 		OTELMetrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
@@ -421,6 +421,10 @@ network:
 		NodeJS:            obi.NodeJSConfig{Enabled: true},
 		Java:              obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
 		JVMRuntimeMetrics: obi.JVMRuntimeMetricsConfig{SamplingInterval: time.Second},
+		DotnetRuntimeMetrics: obi.DotnetRuntimeMetricsConfig{
+			SamplingInterval: time.Second,
+			Timeout:          10 * time.Second,
+		},
 		Injector: SDKInject{
 			EnabledSDKs: []servicesextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},

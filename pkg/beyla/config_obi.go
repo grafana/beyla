@@ -11,7 +11,6 @@ import (
 	obibuildinfo "go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	otel2 "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/obi"
 
@@ -94,7 +93,9 @@ func OverrideOBIGlobalConfig() {
 	// Override global metric naming options
 	obibuildinfo.Version = buildinfo.Version
 	obibuildinfo.Revision = buildinfo.Revision
-	otel2.CloudHostIDKey = "grafana_host_id"
+	// Only the Prometheus exporter exposes a host-id label name to override: OBI removed the
+	// cloud.host.id data point attribute from the OTLP span metrics (the value stays on the
+	// resource / target_info). Keeping this override preserves traces_host_info{grafana_host_id=...}.
 	prom.CloudHostIDKey = "grafana_host_id"
 
 	attr.VendorPrefix = "beyla"

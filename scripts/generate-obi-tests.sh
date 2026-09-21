@@ -1310,6 +1310,140 @@ groups:
         requirement_level: opt_in
 EOF
 
+    # process.* metrics and their resource attributes.
+    #
+    # OBI reworked schemas/obi/groups/ into a per-namespace tree that declares
+    # locally everything OBI emits, and — as part of that — dropped
+    # `--include-unreferenced` from the weaver `registry live-check` invocation
+    # (components/weaver/service.yml, k8s manifests 08-weaver*.yml). That flag
+    # was what pulled *unreferenced* groups of the upstream semconv dependency
+    # (.deps/upstream-*/model/) into the resolved registry. OBI can drop it
+    # because no OBI weaver suite emits anything upstream-only; Beyla cannot,
+    # because the Beyla-only generation step
+    # ensure_daemonset_process_metrics_enabled turns process metrics ON in the
+    # daemonset/owners manifests, and those `process.*` metrics and resource
+    # attributes were resolving purely as unreferenced upstream groups. Without
+    # a local declaration weaver reports them as "Metric/Attribute does not
+    # exist in the registry" (plus a knock-on "collides with existing namespace
+    # 'process'" advisory) and fails the k8s daemonset and owners suites.
+    #
+    # Restoring the flag is not an option here: the docker-compose weaver
+    # service is consumed straight from .obi-src (adjust_docker_compose_paths
+    # only rewrites the component path), which we must not edit. Declaring what
+    # we emit also follows OBI's new intention.
+    #
+    # The six metric groups below transcribe
+    # .deps/upstream-*/model/process/metrics.yaml verbatim (metric_name,
+    # instrument, unit, attribute refs) — these are the very definitions the
+    # suites validated against on main via --include-unreferenced, so reusing
+    # them cannot change the verdict. Ids are re-prefixed x.beyla.* so they sort
+    # last (weaver's last-id-wins resolution) and never clash with the upstream
+    # group ids should those ever be resolved. `cpu.mode` keeps resolving
+    # through the x_obi_cpu.yaml injection above, which is still required for
+    # its `wait` enum member. The `ref: disk.io.direction` /
+    # `ref: network.io.direction` refs are what re-register those two attributes.
+    #
+    # DURABLE FIX for the metric groups: OBI emits process metrics too, so the
+    # declaration belongs in OBI's own schemas/obi/groups/process/metrics.yaml;
+    # once it lands upstream and a submodule bump brings it in, drop them here.
+    # The x.beyla.process.resource attribute group is likely to stay for as long
+    # as Beyla is the only side enabling process metrics in weaver-validated
+    # suites.
+    cat > "$SCHEMAS_DEST/obi/groups/x_beyla_process.yaml" <<'EOF'
+groups:
+  # process.* metrics and resource attributes emitted by Beyla when process
+  # metrics are enabled (k8s daemonset / owners suites). Transcribed from
+  # .deps/upstream-*/model/process/{metrics,registry}.yaml, which are no longer
+  # pulled in automatically since OBI dropped --include-unreferenced from the
+  # weaver live-check. See scripts/generate-obi-tests.sh
+  # (apply_schema_injections) for the full rationale.
+  - id: x.beyla.metric.process.cpu.time
+    type: metric
+    metric_name: process.cpu.time
+    instrument: counter
+    unit: "s"
+    stability: development
+    brief: "Total CPU seconds broken down by different CPU modes."
+    attributes:
+      - ref: cpu.mode
+        requirement_level: required
+  - id: x.beyla.metric.process.cpu.utilization
+    type: metric
+    metric_name: process.cpu.utilization
+    instrument: gauge
+    unit: "1"
+    stability: development
+    brief: >
+      Difference in process.cpu.time since the last measurement, divided by the
+      elapsed time and number of CPUs available to the process.
+    attributes:
+      - ref: cpu.mode
+        requirement_level: required
+  - id: x.beyla.metric.process.memory.usage
+    type: metric
+    metric_name: process.memory.usage
+    instrument: updowncounter
+    unit: "By"
+    stability: development
+    brief: "The amount of physical memory in use."
+    attributes: []
+  - id: x.beyla.metric.process.memory.virtual
+    type: metric
+    metric_name: process.memory.virtual
+    instrument: updowncounter
+    unit: "By"
+    stability: development
+    brief: "The amount of committed virtual memory."
+    attributes: []
+  - id: x.beyla.metric.process.disk.io
+    type: metric
+    metric_name: process.disk.io
+    instrument: counter
+    unit: "By"
+    stability: development
+    brief: "Disk bytes transferred."
+    attributes:
+      - ref: disk.io.direction
+        requirement_level: required
+  - id: x.beyla.metric.process.network.io
+    type: metric
+    metric_name: process.network.io
+    instrument: counter
+    unit: "By"
+    stability: development
+    brief: "Network bytes transferred."
+    attributes:
+      - ref: network.io.direction
+        requirement_level: required
+  # Resource-level attributes attached to the process metrics above (they reach
+  # weaver with an empty signal set). Declared as opt_in refs, mirroring how
+  # x_beyla_survey declares service.name / service.namespace.
+  - id: x.beyla.process.resource
+    type: attribute_group
+    display_name: Beyla Process Resource Attributes
+    stability: development
+    brief: >
+      Resource attributes Beyla attaches to the `process.*` metrics it emits
+      when process metrics are enabled.
+    attributes:
+      - ref: process.command
+        requirement_level: opt_in
+      - ref: process.command_args
+        requirement_level: opt_in
+      - ref: process.command_line
+        requirement_level: opt_in
+      - ref: process.creation.time
+        requirement_level: opt_in
+      - ref: process.executable.path
+        requirement_level: opt_in
+      - ref: process.owner
+        requirement_level: opt_in
+      - ref: process.parent_pid
+        requirement_level: opt_in
+      - ref: process.pid
+        requirement_level: opt_in
+EOF
+
 }
 
 generate() {

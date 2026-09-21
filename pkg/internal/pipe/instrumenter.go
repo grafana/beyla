@@ -34,8 +34,10 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	// 1. OBI's actual appolly.Build swarm
 	// 2. the process metrics swarm pipeline, connected to the output of (1)
 	swi := &swarm.Instancer{}
+	hostDecorated := msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "hostDecoratedSpans")
+	swi.Add(traces.DecorateHostID(ctxInfo.NodeMeta.HostID, tracesCh, hostDecorated))
 	swi.Add(func(ctx context.Context) (swarm.RunFunc, error) {
-		obiSwarm, err := appolly.Build(ctx, config.AsOBI(), ctxInfo, tracesCh, processEventsCh, runtimeMetrics)
+		obiSwarm, err := appolly.Build(ctx, config.AsOBI(), ctxInfo, hostDecorated, processEventsCh, runtimeMetrics)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OBI app pipeline: %w", err)
 		}

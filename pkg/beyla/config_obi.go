@@ -11,8 +11,6 @@ import (
 	obibuildinfo "go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	otel2 "go.opentelemetry.io/obi/pkg/export/otel"
-	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/obi"
 
 	"github.com/grafana/beyla/v3/pkg/buildinfo"
@@ -94,8 +92,6 @@ func OverrideOBIGlobalConfig() {
 	// Override global metric naming options
 	obibuildinfo.Version = buildinfo.Version
 	obibuildinfo.Revision = buildinfo.Revision
-	otel2.CloudHostIDKey = "grafana_host_id"
-	prom.CloudHostIDKey = "grafana_host_id"
 
 	attr.VendorPrefix = "beyla"
 	attr.VendorSDKName = "beyla"

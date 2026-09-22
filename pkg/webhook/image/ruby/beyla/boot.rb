@@ -7,6 +7,7 @@ require_relative 'log'
 require_relative 'open_telemetry_guard'
 require_relative 'protocol_guard'
 require_relative 'rails_guard'
+require_relative 'rails_resource_detector'
 require_relative 'upstream_loader'
 
 module Beyla
@@ -30,6 +31,7 @@ module Beyla
         return Log.warning(deps.rejection) if deps.rejection
 
         UpstreamLoader.new(@bundle_root).call(deps)
+        RailsResourceDetector.install
       rescue StandardError, ScriptError => e
         Log.warning("initialization failed: #{e.message}")
       end

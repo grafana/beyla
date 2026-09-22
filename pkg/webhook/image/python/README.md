@@ -34,9 +34,17 @@ The local `sitecustomize.py` may print a warning about the default gRPC export p
 ```sh
 python3 -m pytest test_beyla_metadata.py -v
 python3 -m pytest test_beyla_launch.py -v
+python3 -m pytest test_frameworks/test_gunicorn.py -v
 python3 -m pytest test_beyla_resource.py -v
 python3 -m pytest test_sitecustomize.py -v
 python3 -m pytest test_deps_analyser.py -v
+```
+
+Each framework parser has a matching file under `test_frameworks`. Run all
+framework parser tests with:
+
+```sh
+python3 -m pytest test_frameworks -v
 ```
 
 ## Run one test
@@ -56,4 +64,3 @@ The suite also uses the standard-library test runner:
 ```sh
 python3 -m unittest discover -v
 ```
-

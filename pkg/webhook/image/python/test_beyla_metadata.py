@@ -130,6 +130,17 @@ class TestServiceMetadata(unittest.TestCase):
         self.assertEqual("python-travel-agent", metadata.name)
         self.assertEqual("application directory", metadata.name_source)
 
+    def test_framework_named_scripts_use_project_metadata(self):
+        self.project.write(
+            "pyproject.toml",
+            "[project]\nname = 'travel-agent'\nversion = '1.2.3'\n",
+        )
+        for filename in ("celery.py", "flask.py", "django.py"):
+            self.project.write(filename)
+            with self.subTest(filename=filename):
+                metadata = self.detect("python", [filename])
+                self.assertEqual(("travel-agent", "1.2.3"), (metadata.name, metadata.version))
+
     def test_application_directory_does_not_walk_above_cwd(self):
         application = self.project.root / "app"
         self.project.write("app/server.py")

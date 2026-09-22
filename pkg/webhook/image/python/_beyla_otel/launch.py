@@ -18,16 +18,27 @@ def command_name(path):
     return os.path.splitext(os.path.basename(path or ""))[0].lower()
 
 
+def _framework_launcher(path):
+    """Recognize extensionless framework launchers without mistaking script files for them."""
+    extension = os.path.splitext(os.path.basename(path or ""))[1].lower()
+    if extension:
+        return ""
+    command = command_name(path)
+    return command if command in PARSERS else ""
+
+
 def parse_python_launch(executable, args, env):
     """Parse a Python process launch using OBI precedence."""
     env = env or {}
     command = command_name(executable)
     if _is_interpreter(command):
-        if args and command_name(args[0]) in DIRECT_LAUNCHERS:
-            return _parse_launcher(command_name(args[0]), args[1:], env)
+        launcher = _framework_launcher(args[0]) if args else ""
+        if launcher in DIRECT_LAUNCHERS:
+            return _parse_launcher(launcher, args[1:], env)
         return _parse_interpreter(args, env)
-    if command in PARSERS:
-        return _parse_launcher(command, args, env)
+    launcher = _framework_launcher(executable)
+    if launcher:
+        return _parse_launcher(launcher, args, env)
     return Launch()
 
 
@@ -113,9 +124,10 @@ def _module_launch(module, args, env):
 
 def _script_launch(script, args, env):
     """Build a launch from a Python script path."""
+    launcher = _framework_launcher(script)
+    if launcher:
+        return _parse_launcher(launcher, args, env)
     command = command_name(script)
-    if command in PARSERS:
-        return _parse_launcher(command, args, env)
     if command == "manage":
         launch = parse_django(args, env)
         launch.source = "django manage.py"

@@ -31,6 +31,25 @@ class TestPythonLaunch(unittest.TestCase):
         self.assertEqual(("/srv/orders.py", "script"), (script.target, script.target_kind))
         self.assertEqual(("company.orders", "runnable_module"), (module.target, module.target_kind))
 
+    def test_framework_named_python_files_remain_scripts(self):
+        for filename in ("celery.py", "flask.py", "django.py"):
+            script = "/srv/" + filename
+            for args in ([script], ["-I", script], ["--", script]):
+                with self.subTest(args=args):
+                    launch = parse_python_launch("python", args, {})
+                    self.assertEqual((script, "script"), (launch.target, launch.target_kind))
+                    self.assertEqual("python script", launch.source)
+
+    def test_extensionless_framework_console_script_uses_framework_parser(self):
+        launch = parse_python_launch(
+            "python",
+            ["/venv/bin/gunicorn", "-w", "4", "orders.wsgi:application"],
+            {},
+        )
+
+        self.assertEqual(("orders.wsgi:application", "module"), (launch.target, launch.target_kind))
+        self.assertEqual("gunicorn", launch.source)
+
     def test_framework_environment(self):
         uvicorn = parse_python_launch(
             "uvicorn", [], {"UVICORN_APP": "orders.api:app", "UVICORN_APP_DIR": "/srv"}
@@ -85,4 +104,3 @@ class TestPythonLaunch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

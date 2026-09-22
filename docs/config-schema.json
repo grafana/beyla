@@ -413,6 +413,31 @@
       "type": "array",
       "description": "A list of CIDRs to be set as the \"src.cidr\" and \"dst.cidr\" attribute as a function of the source and destination IP addresses. Each entry can be a plain CIDR string or an object with \"cidr\" and \"name\" fields."
     },
+    "DotnetRuntimeMetricsConfig": {
+      "properties": {
+        "sampling_interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OBI_DOTNET_RUNTIME_METRICS_SAMPLING_INTERVAL"
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OBI_DOTNET_RUNTIME_METRICS_TIMEOUT"
+        }
+      },
+      "type": "object"
+    },
     "EBPFBufferSizes": {
       "properties": {
         "aerospike": {
@@ -2687,6 +2712,9 @@
     "discovery": {
       "$ref": "#/$defs/BeylaDiscoveryConfig",
       "description": "Discovery configuration"
+    },
+    "dotnet_runtime_metrics": {
+      "$ref": "#/$defs/DotnetRuntimeMetricsConfig"
     },
     "ebpf": {
       "$ref": "#/$defs/EBPFTracer"

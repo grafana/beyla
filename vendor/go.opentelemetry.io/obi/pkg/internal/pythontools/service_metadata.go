@@ -6,7 +6,6 @@ package pythontools // import "go.opentelemetry.io/obi/pkg/internal/pythontools"
 import (
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -413,7 +412,7 @@ func processPath(root, hostPath string) string {
 }
 
 func readPyproject(path string) (pyprojectData, bool, error) {
-	data, found, err := readProjectFile(path)
+	data, found, err := langtools.ReadMetadataFile(path, maxProjectFileBytes)
 	if err != nil || !found {
 		return pyprojectData{}, found, err
 	}
@@ -457,7 +456,7 @@ func readPyproject(path string) (pyprojectData, bool, error) {
 }
 
 func readSetupConfig(path string) (pyprojectData, bool, error) {
-	data, found, err := readProjectFile(path)
+	data, found, err := langtools.ReadMetadataFile(path, maxProjectFileBytes)
 	if err != nil || !found {
 		return pyprojectData{}, found, err
 	}
@@ -499,23 +498,6 @@ func readSetupConfig(path string) (pyprojectData, bool, error) {
 		}
 	}
 	return result, true, nil
-}
-
-func readProjectFile(path string) ([]byte, bool, error) {
-	file, found := langtools.OpenMetadataFile(path, maxProjectFileBytes)
-	if file == nil {
-		return nil, found, nil
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(io.LimitReader(file, maxProjectFileBytes+1))
-	if err != nil {
-		return nil, true, err
-	}
-	if int64(len(data)) > maxProjectFileBytes {
-		return nil, true, fmt.Errorf("project metadata file %s exceeds %d bytes", path, maxProjectFileBytes)
-	}
-	return data, true, nil
 }
 
 func cleanProjectName(value string) string {

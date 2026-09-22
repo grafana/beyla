@@ -29,10 +29,16 @@ const (
 	FeatureNetworkFlowPackets
 	FeatureStatsTCPRtt
 	FeatureStatsTCPFailedConnections
+	FeatureStatsTCPSuccessfulConnections
 	FeatureStatsTCPRetransmits
 	FeatureStatsTCPIo
 	FeatureNetworkInterZone
 	FeatureApplicationRED
+	// FeatureApplicationSizes emits the HTTP request and response body size histograms.
+	// The semantic conventions mark them Opt-In while the RED duration histograms are
+	// Recommended, so they are a bit of their own. The "application" name keeps enabling
+	// both, and "application_red" selects the RED metrics without them.
+	FeatureApplicationSizes
 	// FeatureSpanLegacy emits span metrics under the Grafana-convention
 	// traces_spanmetrics_* names.
 	//
@@ -58,29 +64,32 @@ const (
 // Note: FeatureStatsTCPIo fires on every tcp_sendmsg and tcp_cleanup_rbuf call — significantly
 // higher event volume than the other stat metrics (which fire on close, failure, or retransmit).
 // If overhead is a concern, enable the lower-frequency metrics individually and opt into stats_tcp_io explicitly.
-const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections | FeatureStatsTCPRetransmits | FeatureStatsTCPIo
+const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections | FeatureStatsTCPRetransmits | FeatureStatsTCPIo | FeatureStatsTCPSuccessfulConnections
 
 // FeatureMapper stays public so any extension package can add and remove feature
 // definitions before loading them.
 var FeatureMapper = map[string]Features{
-	"stats":                        FeatureStats,
-	"stats_tcp_rtt":                FeatureStatsTCPRtt,
-	"stats_tcp_failed_connections": FeatureStatsTCPFailedConnections,
-	"stats_tcp_retransmits":        FeatureStatsTCPRetransmits,
-	"stats_tcp_io":                 FeatureStatsTCPIo,
-	"network":                      FeatureNetwork,
-	"network_inter_zone":           FeatureNetworkInterZone,
-	"network_flow_packets":         FeatureNetworkFlowPackets,
-	"application":                  FeatureApplicationRED,
-	"application_span":             FeatureSpanLegacy,
-	"application_span_otel":        FeatureSpanOTel,
-	"application_span_sizes":       FeatureSpanSizes,
-	"application_service_graph":    FeatureGraph,
-	"application_host":             FeatureApplicationHost,
-	"application_runtime":          FeatureApplicationRuntime,
-	"ebpf":                         FeatureEBPF,
-	"all":                          FeatureAll,
-	"*":                            FeatureAll,
+	"stats":                            FeatureStats,
+	"stats_tcp_rtt":                    FeatureStatsTCPRtt,
+	"stats_tcp_failed_connections":     FeatureStatsTCPFailedConnections,
+	"stats_tcp_retransmits":            FeatureStatsTCPRetransmits,
+	"stats_tcp_io":                     FeatureStatsTCPIo,
+	"stats_tcp_successful_connections": FeatureStatsTCPSuccessfulConnections,
+	"network":                          FeatureNetwork,
+	"network_inter_zone":               FeatureNetworkInterZone,
+	"network_flow_packets":             FeatureNetworkFlowPackets,
+	"application":                      FeatureApplicationRED | FeatureApplicationSizes,
+	"application_red":                  FeatureApplicationRED,
+	"application_sizes":                FeatureApplicationSizes,
+	"application_span":                 FeatureSpanLegacy,
+	"application_span_otel":            FeatureSpanOTel,
+	"application_span_sizes":           FeatureSpanSizes,
+	"application_service_graph":        FeatureGraph,
+	"application_host":                 FeatureApplicationHost,
+	"application_runtime":              FeatureApplicationRuntime,
+	"ebpf":                             FeatureEBPF,
+	"all":                              FeatureAll,
+	"*":                                FeatureAll,
 }
 
 // deprecatedFeatures maps each deprecated feature name to the feature that supersedes it.
@@ -170,6 +179,7 @@ func (Features) JSONSchema() *jsonschema.Schema {
 // AppO11yFeatures is a bitmask of all metrics that are enabled by default for Application RED
 // It can be overridden by extension packages
 var AppO11yFeatures = FeatureApplicationRED |
+	FeatureApplicationSizes |
 	FeatureSpanLegacy |
 	FeatureSpanOTel |
 	FeatureSpanSizes |
@@ -322,6 +332,7 @@ func (f Features) AnyNetwork() bool {
 
 func (f Features) AppOrSpan() bool {
 	return f.any(FeatureApplicationRED |
+		FeatureApplicationSizes |
 		FeatureSpanSizes |
 		FeatureApplicationHost |
 		FeatureApplicationRuntime |
@@ -353,6 +364,12 @@ func (f Features) AppRED() bool {
 	return f.any(FeatureApplicationRED)
 }
 
+// AppSizes reports whether the HTTP body size histograms are enabled. They are emitted
+// from the HTTP application metrics pipeline, so AppRED must be enabled as well.
+func (f Features) AppSizes() bool {
+	return f.any(FeatureApplicationSizes)
+}
+
 func (f Features) SpanSizes() bool {
 	return f.any(FeatureSpanSizes)
 }
@@ -375,6 +392,10 @@ func (f Features) StatsTCPRtt() bool {
 
 func (f Features) StatsTCPFailedConnections() bool {
 	return f.any(FeatureStatsTCPFailedConnections)
+}
+
+func (f Features) StatsTCPSuccessfulConnections() bool {
+	return f.any(FeatureStatsTCPSuccessfulConnections)
 }
 
 func (f Features) StatsTCPRetransmits() bool {

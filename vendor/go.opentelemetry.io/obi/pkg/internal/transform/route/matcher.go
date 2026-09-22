@@ -74,9 +74,7 @@ func NewMatcher(routes []string) *CompleteRouteMatcher {
 	m := CompleteRouteMatcher{root: &node{Child: map[string]*node{}}}
 	for _, route := range routes {
 		parts := tokenize(route)
-		if validRoute(parts) {
-			appendRoute(route, parts, m.root)
-		}
+		appendRoute(route, parts, m.root)
 	}
 	return &m
 }
@@ -91,12 +89,20 @@ func find(path []string, pathNode *node) string {
 	// if we walked all the path tokens and this node resolves to a full route, it matched a path
 	// (if FullRoute is empty, it means it didn't match)
 	if len(path) == 0 {
+		if pathNode.FullRoute == "" && pathNode.AnyPath != nil {
+			return pathNode.AnyPath.FullRoute
+		}
 		return pathNode.FullRoute
 	}
 	// if the current path resolved to an explicit path folder, keep searching through the
 	// child node
 	if child, ok := pathNode.Child[path[0]]; ok {
-		return find(path[1:], child)
+		if fullRoute := find(path[1:], child); fullRoute != "" {
+			return fullRoute
+		}
+		if pathNode.AnyPath == nil {
+			return ""
+		}
 	}
 	// otherwise, try the pattern children in definition order; the first match wins,
 	// so more specific patterns (e.g. "@:username") must be declared before a catch-all
@@ -108,7 +114,15 @@ func find(path []string, pathNode *node) string {
 		}
 	}
 	if pathNode.AnyPath != nil {
-		return pathNode.FullRoute
+		// For /<path:parameter>/suffix, try the longest non-empty parameter
+		// value first and check whether the remaining segments match the suffix.
+		// Use the terminal catch-all only if no suffix matches.
+		for consumed := len(path) - 1; consumed >= 1; consumed-- {
+			if fullRoute := find(path[consumed:], pathNode.AnyPath); fullRoute != "" {
+				return fullRoute
+			}
+		}
+		return pathNode.AnyPath.FullRoute
 	}
 	return ""
 }
@@ -122,8 +136,10 @@ func appendRoute(fullRoute string, path []string, pathNode *node) {
 	currentName := path[0]
 	if tail, ok := routeParam(currentName); ok {
 		if tail {
-			pathNode.FullRoute = fullRoute
-			pathNode.AnyPath = &node{Child: map[string]*node{}}
+			if pathNode.AnyPath == nil {
+				pathNode.AnyPath = &node{Child: map[string]*node{}}
+			}
+			appendRoute(fullRoute, path[1:], pathNode.AnyPath)
 			return
 		}
 		appendRoute(fullRoute, path[1:], pathNode.pattern(""))

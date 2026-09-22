@@ -35,6 +35,7 @@ type RouteHarvester struct {
 	denoExtractRoutes   func(pid app.PID) (*RouteHarvesterResult, error)
 	pythonExtractRoutes func(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
 	dotnetExtract       func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	phpExtractRoutes    func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
 	rubyExtractRoutes   func(ctx context.Context, pid app.PID) (*RouteHarvesterResult, error)
 }
 
@@ -78,6 +79,9 @@ func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []services.
 		if lang == services.RouteHarvesterLanguageDotnet {
 			dMap[svc.InstrumentableDotnet] = struct{}{}
 		}
+		if lang == services.RouteHarvesterLanguagePHP {
+			dMap[svc.InstrumentablePHP] = struct{}{}
+		}
 	}
 
 	h := &RouteHarvester{
@@ -95,6 +99,7 @@ func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []services.
 	h.rubyExtractRoutes = ExtractRubyRoutes
 	h.pythonExtractRoutes = ExtractPythonRoutes
 	h.dotnetExtract = ExtractDotnetRoutes
+	h.phpExtractRoutes = ExtractPHPRoutes
 
 	return h
 }
@@ -195,6 +200,18 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			} else {
 				resultChan <- result{r: nil}
 			}
+		case svc.InstrumentablePHP:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.phpExtractRoutes(ctx, fileInfo)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				h.log.Debug("found application routes", "runtime", runtime.String(), "routes", routeValues(r))
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
 		default:
 			resultChan <- result{r: nil}
 		}
@@ -212,6 +229,13 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 		h.log.Warn("route harvesting timed out", "timeout", h.timeout, "pid", fileInfo.Pid())
 		return nil, &HarvestError{Message: "route harvesting timed out"}
 	}
+}
+
+func routeValues(result *RouteHarvesterResult) []string {
+	if result == nil {
+		return nil
+	}
+	return result.Routes
 }
 
 func RouteMatcherFromResult(r RouteHarvesterResult) route.Matcher {

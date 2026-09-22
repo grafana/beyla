@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -56,6 +57,8 @@ type Tracer struct {
 	seenNetns               *expirable.LRU[uint64, struct{}]
 	netnsAttempts           *expirable.LRU[uint64, int]
 	backfillDisabled        bool
+	closerMu                sync.Mutex
+	detached                bool
 }
 
 const (
@@ -242,14 +245,46 @@ func (p *Tracer) iterConstants() map[string]any {
 	}
 }
 
-func (p *Tracer) SetupTailCalls() {}
-
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo) {}
 
 func (p *Tracer) AddCloser(c ...io.Closer) {
+	p.closerMu.Lock()
+	defer p.closerMu.Unlock()
+
+	if p.detached {
+		p.closeAllReverse(c)
+		return
+	}
+
 	p.closers = append(p.closers, c...)
+}
+
+func (p *Tracer) closeAllReverse(closers []io.Closer) {
+	for _, c := range slices.Backward(closers) {
+		if err := c.Close(); err != nil {
+			p.log.Warn("error detaching tpinjector resource", "error", err)
+		}
+	}
+}
+
+func (p *Tracer) detach() {
+	p.iterMu.Lock()
+	defer p.iterMu.Unlock()
+	p.backfillDisabled = true
+
+	p.closerMu.Lock()
+	closers := p.closers
+	p.closers = nil
+	p.detached = true
+	p.closerMu.Unlock()
+
+	p.closeAllReverse(closers)
+
+	p.bpfObjects.Close()
+	p.bpfIterObjects.Close()
+	p.bpfFionreadFixupObjects.Close()
 }
 
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
@@ -370,9 +405,7 @@ func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg
 
 	<-ctx.Done()
 
-	p.bpfObjects.Close()
-	p.bpfIterObjects.Close()
-	p.bpfFionreadFixupObjects.Close()
+	p.detach()
 
 	p.log.Debug("tpinjector terminated")
 }

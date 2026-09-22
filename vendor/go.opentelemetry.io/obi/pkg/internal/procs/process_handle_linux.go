@@ -29,10 +29,11 @@ var (
 // directory descriptor is also a pidfd on supported kernels, and all proc
 // resources are opened relative to it so a recycled numeric PID is never used.
 type ProcessHandle struct {
-	pid      app.PID
-	procDir  *os.File
-	close    sync.Once
-	closeErr error
+	pid        app.PID
+	startTicks uint64
+	procDir    *os.File
+	close      sync.Once
+	closeErr   error
 }
 
 // OpenProcessHandle opens the process seen during inspection and validates its
@@ -50,8 +51,9 @@ func OpenProcessHandle(pid app.PID, expectedStartTime uint64) (*ProcessHandle, e
 	}
 
 	handle := &ProcessHandle{
-		pid:     pid,
-		procDir: os.NewFile(uintptr(fd), path),
+		pid:        pid,
+		startTicks: expectedStartTime,
+		procDir:    os.NewFile(uintptr(fd), path),
 	}
 	cleanup := true
 	defer func() {
@@ -77,6 +79,22 @@ func OpenProcessHandle(pid app.PID, expectedStartTime uint64) (*ProcessHandle, e
 
 func (p *ProcessHandle) PID() app.PID {
 	return p.pid
+}
+
+func (p *ProcessHandle) StartTime() uint64 {
+	return p.startTicks
+}
+
+// NamespacedPids reads the namespace PIDs of this process, ordered
+// from the outermost to the innermost namespace.
+func (p *ProcessHandle) NamespacedPids() ([]app.PID, error) {
+	status, err := p.Open("status", unix.O_RDONLY)
+	if err != nil {
+		return nil, fmt.Errorf("opening process status: %w", err)
+	}
+	defer status.Close()
+
+	return readNamespacedPids(status)
 }
 
 // Open opens a proc resource relative to the stable process directory.

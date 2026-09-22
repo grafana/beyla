@@ -150,13 +150,16 @@ func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, 
 			return fmt.Errorf("failed to connect to inspector after SIGUSR1: %w", err)
 		}
 
-		return i.injectViaConn(conn)
+		// SIGUSR1 opened this port, so this injection closes it again.
+		return i.injectViaConn(conn, true)
 	})
 }
 
 // injectViaOpenInspector handles the case of an inspector already listening,
 // as it is under --inspect, where no signal is needed at all. The first return
 // value reports whether the injection was carried out.
+//
+// The port was the application's before OBI connected, so it is left open.
 func (i *NodeInjector) injectViaOpenInspector(pid int) (bool, error) {
 	injected := false
 
@@ -175,7 +178,7 @@ func (i *NodeInjector) injectViaOpenInspector(pid int) (bool, error) {
 
 		i.log.Debug("Node.js inspector already open, injecting directly", "pid", pid)
 		injected = true
-		return i.injectViaConn(conn)
+		return i.injectViaConn(conn, false)
 	})
 
 	return injected, err

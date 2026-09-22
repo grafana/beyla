@@ -298,9 +298,8 @@ func matchSQL(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, event *TCPRequ
 
 func matchFastCGI(event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
 	if maybeFastCGI(requestBuffer) {
-		op, uri, status := detectFastCGI(requestBuffer, responseBuffer)
-		if status >= 0 {
-			return TCPToFastCGIToSpan(event, op, uri, status), false, true, nil
+		if req, ok := detectFastCGI(requestBuffer, responseBuffer); ok {
+			return TCPToFastCGIToSpan(event, req), false, true, nil
 		}
 	}
 	return request.Span{}, false, false, nil
@@ -614,10 +613,10 @@ func getBuffers(parseCtx *EBPFParseContext, event *TCPRequestInfo) (req *largebu
 	resp = largebuf.NewLargeBufferFrom(event.Rbuf[:l])
 
 	if event.HasLargeBuffers == 1 {
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeRequest, directionByPacketType(packetTypeRequest, !event.IsServer), event.ConnInfo, event.ProtocolType); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeRequest, directionByPacketType(packetTypeRequest, !event.IsServer), event.ConnInfo, event.ProtocolType); ok {
 			req = b
 		}
-		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeResponse, directionByPacketType(packetTypeResponse, !event.IsServer), event.ConnInfo, event.ProtocolType); ok {
+		if b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeResponse, directionByPacketType(packetTypeResponse, !event.IsServer), event.ConnInfo, event.ProtocolType); ok {
 			resp = b
 		}
 	}

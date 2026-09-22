@@ -11,11 +11,14 @@ import (
 
 type StatType uint8
 
+// These alias the bpf2go-generated constants derived from enum stat_type in
+// bpf/statsolly/types.h, so kernel and userspace values cannot drift.
 const (
-	StatTypeTCPRtt StatType = iota + 1
-	StatTypeTCPFailedConnection
-	StatTypeTCPRetransmit
-	StatTypeTCPIo
+	StatTypeTCPRtt                  = StatType(StatsStatTypeK_statTypeTcpRtt)
+	StatTypeTCPFailedConnection     = StatType(StatsStatTypeK_statTypeTcpFailedConnection)
+	StatTypeTCPRetransmit           = StatType(StatsStatTypeK_statTypeTcpRetransmit)
+	StatTypeTCPIo                   = StatType(StatsStatTypeK_statTypeTcpIo)
+	StatTypeTCPSuccessfulConnection = StatType(StatsStatTypeK_statTypeTcpSuccessfulConnection)
 )
 
 type TCPFailReasonType string
@@ -30,17 +33,18 @@ const (
 	Other             TCPFailReasonType = "other"
 )
 
-// TCPFailReasonTypeCode mirrors enum tcp_fail_reason in bpf/statsolly/types.h
+// TCPFailReasonTypeCode aliases the bpf2go-generated constants derived from
+// enum tcp_fail_reason in bpf/statsolly/types.h.
 type TCPFailReasonTypeCode uint8
 
 const (
-	CodeUnknown           TCPFailReasonTypeCode = 0
-	CodeConnectionRefused TCPFailReasonTypeCode = 1
-	CodeConnectionReset   TCPFailReasonTypeCode = 2
-	CodeTimedOut          TCPFailReasonTypeCode = 3
-	CodeHostUnreachable   TCPFailReasonTypeCode = 4
-	CodeNetUnreachable    TCPFailReasonTypeCode = 5
-	CodeOther             TCPFailReasonTypeCode = 255
+	CodeUnknown           = TCPFailReasonTypeCode(StatsTcpFailReasonReasonUnknown)
+	CodeConnectionRefused = TCPFailReasonTypeCode(StatsTcpFailReasonReasonConnectionRefused)
+	CodeConnectionReset   = TCPFailReasonTypeCode(StatsTcpFailReasonReasonConnectionReset)
+	CodeTimedOut          = TCPFailReasonTypeCode(StatsTcpFailReasonReasonTimedOut)
+	CodeHostUnreachable   = TCPFailReasonTypeCode(StatsTcpFailReasonReasonHostUnreachable)
+	CodeNetUnreachable    = TCPFailReasonTypeCode(StatsTcpFailReasonReasonNetUnreachable)
+	CodeOther             = TCPFailReasonTypeCode(StatsTcpFailReasonReasonOther)
 )
 
 type NetworkTCPHandshakeRoleType string
@@ -51,13 +55,14 @@ const (
 	RoleServer  NetworkTCPHandshakeRoleType = "server"
 )
 
-// NetworkTCPHandshakeRoleCode mirrors enum tcp_handshake_role in bpf/statsolly/types.h.
+// NetworkTCPHandshakeRoleCode aliases the bpf2go-generated constants derived
+// from enum tcp_handshake_role in bpf/statsolly/types.h.
 type NetworkTCPHandshakeRoleCode uint8
 
 const (
-	CodeRoleUnknown NetworkTCPHandshakeRoleCode = 0
-	CodeRoleClient  NetworkTCPHandshakeRoleCode = 1
-	CodeRoleServer  NetworkTCPHandshakeRoleCode = 2
+	CodeRoleUnknown = NetworkTCPHandshakeRoleCode(StatsTcpHandshakeRoleRoleUnknown)
+	CodeRoleClient  = NetworkTCPHandshakeRoleCode(StatsTcpHandshakeRoleRoleClient)
+	CodeRoleServer  = NetworkTCPHandshakeRoleCode(StatsTcpHandshakeRoleRoleServer)
 )
 
 type NetworkIoDirectionType string
@@ -67,12 +72,13 @@ const (
 	DirectionTransmit NetworkIoDirectionType = "transmit"
 )
 
-// NetworkIoDirectionCode mirrors enum network_io_direction in bpf/statsolly/types.h.
+// NetworkIoDirectionCode aliases the bpf2go-generated constants derived from
+// enum network_io_direction in bpf/statsolly/types.h.
 type NetworkIoDirectionCode uint8
 
 const (
-	CodeDirectionReceive  NetworkIoDirectionCode = 1
-	CodeDirectionTransmit NetworkIoDirectionCode = 2
+	CodeDirectionReceive  = NetworkIoDirectionCode(StatsNetworkIoDirectionDirectionReceive)
+	CodeDirectionTransmit = NetworkIoDirectionCode(StatsNetworkIoDirectionDirectionTransmit)
 )
 
 // Stat contains accumulated metrics from a stat, with extra metadata
@@ -81,11 +87,12 @@ const (
 // in pkg/internal/statsolly/ebpf/stat_getters.go and getDefinitions in
 // pkg/export/attributes/attr_defs.go
 type Stat struct {
-	Type                StatType             `json:"type"`
-	TCPRtt              *TCPRtt              `json:"-"`
-	TCPFailedConnection *TCPFailedConnection `json:"-"`
-	TCPRetransmit       bool                 `json:"-"`
-	TCPIo               *TCPIo               `json:"-"`
+	Type                    StatType                 `json:"type"`
+	TCPRtt                  *TCPRtt                  `json:"-"`
+	TCPFailedConnection     *TCPFailedConnection     `json:"-"`
+	TCPSuccessfulConnection *TCPSuccessfulConnection `json:"-"`
+	TCPRetransmit           bool                     `json:"-"`
+	TCPIo                   *TCPIo                   `json:"-"`
 
 	// Attrs of the flow record: source/destination, OBI IP, etc...
 	CommonAttrs pipe.CommonAttrs
@@ -99,6 +106,10 @@ type TCPRtt struct {
 type TCPFailedConnection struct {
 	Reason uint8 `json:"reason"`
 	Role   uint8 `json:"role"`
+}
+
+type TCPSuccessfulConnection struct {
+	Role uint8 `json:"role"`
 }
 
 type TCPIo struct {
@@ -130,6 +141,14 @@ type StatsTCPFailedConnection struct {
 	Reason uint8
 	Role   uint8
 	Pad    [1]uint8
+	Conn
+}
+
+type StatsTCPSuccessfulConnection struct {
+	_     structs.HostLayout
+	Flags uint8
+	Role  uint8
+	Pad   [2]uint8
 	Conn
 }
 

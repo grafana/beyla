@@ -154,8 +154,6 @@ func (p *Tracer) USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc {
 	return nil
 }
 
-func (p *Tracer) SetupTailCalls() {}
-
 func (p *Tracer) SocketFilters() []*ebpf.Program { return nil }
 
 func (p *Tracer) SockMsgs() []ebpfcommon.SockMsg { return nil }

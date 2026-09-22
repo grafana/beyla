@@ -178,7 +178,8 @@ type OpenAICompatibleGateway struct {
 	Host string `yaml:"host" validate:"required"`
 	// Destination port; when 0 or omitted, matches any port
 	Port int `yaml:"port" validate:"gte=0,lte=65535"`
-	// Provider name reported in the gen_ai.system span attribute
+	// Provider name reported in the gen_ai.provider.name span attribute. A name
+	// the attribute's enum has no member for is reported as `custom`.
 	Provider string `yaml:"provider"`
 }
 

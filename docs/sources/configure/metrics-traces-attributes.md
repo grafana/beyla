@@ -375,6 +375,12 @@ Since Beyla instruments at the protocol level, it doesn't have access to program
 | `rename_unresolved_hosts_outgoing`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_OUTGOING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "outgoing" |
 | `rename_unresolved_hosts_incoming`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_INCOMING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "incoming" |
 
+### Host identity metrics
+
+When `application_host` is enabled, Beyla exports `traces.host.info` with the `grafana.host.id` attribute over OTLP, and `traces_host_info` with the `grafana_host_id` label over Prometheus. The value is Beyla's resolved host ID, including any `BEYLA_HOST_ID` override. No attribute selection configuration is required.
+
+The gauge has value `1` while eligible instrumented processes are active. It expires according to each exporter's metric TTL and is removed when the last active process terminates. This attribute is specific to host-info metrics; Beyla does not add it to span calls, duration, or size metrics.
+
 ### Metric span name limit
 
 `metric_span_names_limit` works `per service` and only relates to span metrics (metrics option `application_span`).

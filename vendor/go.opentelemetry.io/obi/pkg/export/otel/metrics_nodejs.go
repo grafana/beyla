@@ -161,7 +161,6 @@ func setupNodejsRuntimeMeters(
 func v8jsHeapSpaceOTELAttributes() []attributes.Field[runtimemetrics.RuntimeMetricSnapshot, attribute.KeyValue] {
 	return []attributes.Field[runtimemetrics.RuntimeMetricSnapshot, attribute.KeyValue]{
 		{
-			ExposedName: string(attr.V8JSHeapSpaceName.OTEL()),
 			Get: func(snapshot runtimemetrics.RuntimeMetricSnapshot) attribute.KeyValue {
 				return attr.V8JSHeapSpaceName.OTEL().String(snapshot.NodejsHeapSpace.SpaceName)
 			},

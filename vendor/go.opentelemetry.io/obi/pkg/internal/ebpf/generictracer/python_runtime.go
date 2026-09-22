@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	cpythonruntime "go.opentelemetry.io/obi/pkg/internal/cpython/runtime"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/uprobe"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -233,14 +234,14 @@ func attachPythonRuntimeTarget(target *cpythonruntime.MetricTarget, program *ebp
 	if err != nil {
 		return nil, cpythonruntime.GCCompletionProbe{}, err
 	}
-	attached, err := attachPythonRuntimeProbe(executable, program, pid, target.PrimaryProbe)
+	attached, err := attachPythonRuntimeProbe(executable, target.AttachmentPath(), program, pid, target.PrimaryProbe)
 	if err == nil {
 		return attached, target.PrimaryProbe, nil
 	}
 	if target.FallbackProbe == nil {
 		return nil, cpythonruntime.GCCompletionProbe{}, err
 	}
-	fallback, fallbackErr := attachPythonRuntimeProbe(executable, program, pid, *target.FallbackProbe)
+	fallback, fallbackErr := attachPythonRuntimeProbe(executable, target.AttachmentPath(), program, pid, *target.FallbackProbe)
 	if fallbackErr != nil {
 		return nil, cpythonruntime.GCCompletionProbe{}, errors.Join(err, fallbackErr)
 	}
@@ -250,34 +251,33 @@ func attachPythonRuntimeTarget(target *cpythonruntime.MetricTarget, program *ebp
 // attachPythonRuntimeProbe selects an entry or return probe at a raw offset.
 func attachPythonRuntimeProbe(
 	executable *link.Executable,
+	executablePath string,
 	program *ebpf.Program,
 	pid int,
 	probe cpythonruntime.GCCompletionProbe,
-) (link.Link, error) {
-	options, returnProbe, err := pythonRuntimeUprobeOptions(pid, probe)
+) (io.Closer, error) {
+	options, err := pythonRuntimeUprobeOptions(pid, probe)
 	if err != nil {
 		return nil, err
 	}
-	if !returnProbe {
-		return executable.Uprobe("", program, options)
-	}
-	return executable.Uretprobe("", program, options)
+	return uprobe.Attach(executable, executablePath, program, options)
 }
 
-// pythonRuntimeUprobeOptions converts a resolved GC completion probe into link options.
+// pythonRuntimeUprobeOptions converts a resolved GC completion probe into attach options.
 func pythonRuntimeUprobeOptions(
 	pid int,
 	probe cpythonruntime.GCCompletionProbe,
-) (*link.UprobeOptions, bool, error) {
-	options := &link.UprobeOptions{Address: probe.FileOffset, PID: pid}
+) (uprobe.Options, error) {
+	options := uprobe.Options{Addresses: []uint64{probe.FileOffset}, PID: uint32(pid)}
 	switch probe.Kind {
 	case cpythonruntime.GCCompletionProbeUSDT:
 		options.RefCtrOffset = probe.SemaphoreOffset
-		return options, false, nil
+		return options, nil
 	case cpythonruntime.GCCompletionProbePrivateReturn:
-		return options, true, nil
+		options.Return = true
+		return options, nil
 	default:
-		return nil, false, errors.New("unknown Python runtime GC completion probe")
+		return uprobe.Options{}, errors.New("unknown Python runtime GC completion probe")
 	}
 }
 

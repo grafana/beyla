@@ -31,6 +31,19 @@ func TestProcessMetrics(t *testing.T) {
 }
 
 func testAllInstances(t *testing.T, exported string) {
+	t.Run("host-info metric", func(t *testing.T) {
+		// Both the direct scrape and OTLP-to-Prometheus path must preserve the Grafana host label.
+		pq := promtest.Client{HostPort: prometheusHostPort}
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`traces_host_info{exported="` + exported + `"}`)
+			require.NoError(t, err)
+			// Query without a host-label filter so a missing label or an extra OBI series fails the test.
+			require.Len(t, results, 1)
+			assert.Equal(t, "integration-test-host", results[0].Metric["grafana_host_id"])
+			assert.Equal(t, "1", results[0].Value[1])
+		}, testTimeout, time.Millisecond)
+	})
+
 	t.Run("Pingclient process-level metrics", testProcesses(
 		`{exported="`+exported+`",container_name=~".*client.*",container_id!=""}`,
 		map[string]string{

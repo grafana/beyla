@@ -122,7 +122,7 @@ func readMetadataDirectory(pefile *pe.File, pe64 bool) (pe.DataDirectory, error)
 		return pe.DataDirectory{}, fmt.Errorf("failure to seek to the COM descriptor data directory root: %v", err)
 	}
 
-	read := func(data interface{}) bool {
+	read := func(data any) bool {
 		err = binary.Read(r, binary.LittleEndian, data)
 		return err == nil
 	}
@@ -166,7 +166,7 @@ func readMetadata(pefile *pe.File, rva uint32) (string, []*heap, error) {
 		return "", nil, fmt.Errorf("failure to seek to the metadata root: %v", err)
 	}
 
-	read := func(data interface{}) bool {
+	read := func(data any) bool {
 		err = binary.Read(r, binary.LittleEndian, data)
 		return err == nil
 	}
@@ -248,7 +248,7 @@ func readMetadata(pefile *pe.File, rva uint32) (string, []*heap, error) {
 	// common case is to have just 5.
 	streams := make([]*heap, 0, 5)
 	streamNames := make(map[string]struct{}, 5)
-	for i := 0; i < int(streamsCount); i++ {
+	for i := range int(streamsCount) {
 		// the stream header is defined in §II.24.2.2.
 		var s struct {
 			Offset uint32

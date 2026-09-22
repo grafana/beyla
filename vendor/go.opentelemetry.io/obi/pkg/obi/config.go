@@ -230,7 +230,7 @@ var DefaultConfig = Config{
 		CacheTTL: 5 * time.Minute,
 	},
 	Metrics: perapp.GlobalMetricsConfig{
-		Features: export.FeatureApplicationRED,
+		Features: export.FeatureApplicationRED | export.FeatureApplicationSizes,
 	},
 	OTELMetrics: otelcfg.MetricsConfig{
 		Protocol:        otelcfg.ProtocolUnset,
@@ -357,6 +357,10 @@ var DefaultConfig = Config{
 	JVMRuntimeMetrics: JVMRuntimeMetricsConfig{
 		SamplingInterval: time.Second,
 	},
+	DotnetRuntimeMetrics: DotnetRuntimeMetricsConfig{
+		SamplingInterval: time.Second,
+		Timeout:          10 * time.Second,
+	},
 	HealthCheck: HealthCheckConfig{
 		Port:          0,
 		ListenAddress: health.DefaultListenAddress,
@@ -451,7 +455,8 @@ type Config struct {
 	NodeJS NodeJSConfig `yaml:"nodejs"`
 	Java   JavaConfig   `yaml:"javaagent"`
 
-	JVMRuntimeMetrics JVMRuntimeMetricsConfig `yaml:"jvm_runtime_metrics"`
+	JVMRuntimeMetrics    JVMRuntimeMetricsConfig    `yaml:"jvm_runtime_metrics"`
+	DotnetRuntimeMetrics DotnetRuntimeMetricsConfig `yaml:"dotnet_runtime_metrics"`
 
 	HealthCheck HealthCheckConfig `yaml:"health_check"`
 }
@@ -723,6 +728,14 @@ type JVMRuntimeMetricsConfig struct {
 	SamplingInterval time.Duration `yaml:"sampling_interval" env:"OBI_JVM_RUNTIME_METRICS_SAMPLING_INTERVAL"`
 }
 
+type DotnetRuntimeMetricsConfig struct {
+	// SamplingInterval sets the collection interval requested from System.Runtime EventCounters.
+	// It also sets the delay before reconnecting after a collection session ends.
+	SamplingInterval time.Duration `yaml:"sampling_interval" env:"OBI_DOTNET_RUNTIME_METRICS_SAMPLING_INTERVAL"`
+	// Timeout bounds diagnostic IPC setup and EventPipe session shutdown.
+	Timeout time.Duration `yaml:"timeout" env:"OBI_DOTNET_RUNTIME_METRICS_TIMEOUT"`
+}
+
 type ConfigError string
 
 func (e ConfigError) Error() string {
@@ -785,6 +798,12 @@ func (c *Config) validate(context validationContext) error {
 
 	if c.JVMRuntimeMetrics.SamplingInterval <= 0 {
 		return ConfigError("jvm_runtime_metrics.sampling_interval must be greater than 0")
+	}
+	if c.DotnetRuntimeMetrics.SamplingInterval <= 0 {
+		return ConfigError("dotnet_runtime_metrics.sampling_interval must be greater than 0")
+	}
+	if c.DotnetRuntimeMetrics.Timeout <= 0 {
+		return ConfigError("dotnet_runtime_metrics.timeout must be greater than 0")
 	}
 	if err := c.Discovery.Validate(); err != nil {
 		return ConfigError(err.Error())
@@ -856,6 +875,9 @@ func (c *Config) validate(context validationContext) error {
 		if err := c.resolveSpanMetricsFormats(); err != nil {
 			return err
 		}
+		if err := c.validateAppSizeMetrics(); err != nil {
+			return err
+		}
 		// Per-service sections can enable features the top-level list does not, and they
 		// drive the exporters through JoinMetricsConfig, so report against the same set.
 		c.warnDeprecatedMetricsFeatures()
@@ -871,10 +893,30 @@ func (c *Config) validate(context validationContext) error {
 	return nil
 }
 
-// spanMetricsFeatureMasks returns every feature list that feeds the span-metrics exporters:
-// the top-level one plus each per-service one. JoinMetricsConfig ORs them together, so a
-// format conflict left unresolved in any of them decides the naming for all services.
-func (c *Config) spanMetricsFeatureMasks() []*export.Features {
+// validateAppSizeMetrics rejects application_sizes without the application RED metrics.
+// The body size histograms are emitted from the HTTP application metric pipeline, so on
+// their own they would produce no telemetry at all.
+//
+// Every list is checked on its own: a defined per-service list replaces the global one
+// rather than extending it, so both features have to appear in the same list to have any
+// effect on the services that list applies to.
+func (c *Config) validateAppSizeMetrics() error {
+	for _, features := range c.metricsFeatureMasks() {
+		if features.Undefined() {
+			continue
+		}
+		if features.AppSizes() && !features.AppRED() {
+			return ConfigError("application_sizes needs the application RED metrics enabled in the" +
+				" same features list: use 'application', or add 'application_red' next to" +
+				" 'application_sizes'")
+		}
+	}
+	return nil
+}
+
+// metricsFeatureMasks returns every feature list that reaches the exporters: the top-level
+// one plus each per-service one.
+func (c *Config) metricsFeatureMasks() []*export.Features {
 	masks := make([]*export.Features, 0, 1+len(c.Discovery.Instrument)+len(c.Discovery.Services))
 	masks = append(masks, &c.Metrics.Features)
 	for i := range c.Discovery.Instrument {
@@ -894,7 +936,9 @@ func (c *Config) resolveSpanMetricsFormats() error {
 	resolved := false
 	legacyEnabled := false
 	otelEnabled := false
-	for _, features := range c.spanMetricsFeatureMasks() {
+	// JoinMetricsConfig ORs the lists together, so a format conflict left unresolved in any
+	// of them decides the naming for all services.
+	for _, features := range c.metricsFeatureMasks() {
 		if features.InvalidSpanMetricsConfig() {
 			return ConfigError("you can only enable one format of span metrics," +
 				" application_span or application_span_otel")

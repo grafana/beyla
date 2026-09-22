@@ -36,10 +36,7 @@ func readData(r io.Reader, n uint64) ([]byte, error) {
 	var buf []byte
 	buf1 := make([]byte, chunk)
 	for n > 0 {
-		next := n
-		if next > chunk {
-			next = chunk
-		}
+		next := min(n, chunk)
 		_, err := io.ReadFull(r, buf1[:next])
 		if err != nil {
 			if len(buf) > 0 && err == io.EOF {

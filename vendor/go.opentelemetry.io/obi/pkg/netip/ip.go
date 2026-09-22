@@ -111,6 +111,8 @@ func fromExternal(ipType string) (net.IP, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't establish an external connection %w", err)
 	}
+	defer conn.Close()
+
 	if addr, ok := conn.LocalAddr().(*net.UDPAddr); !ok {
 		return nil, fmt.Errorf("unexpected local address type %T for external connection",
 			conn.LocalAddr())

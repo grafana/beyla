@@ -32,18 +32,18 @@ func generateLayout(heapSizes uint8, tableRowCounts [tableMax]uint32) *layout {
 	la.stringSize, la.guidSize, la.blobSize = heapIndexSize(heapSizes)
 
 	// Simple index column sizes only depend on the number of rows of the referenced table.
-	for e := table(0); e < tableMax; e++ {
+	for e := range tableMax {
 		la.simpleSizes[e] = simpleIndexSize(e, tableRowCounts)
 	}
 
 	// Coded index column sizes depend on the maximum number of rows in the set of allowed tables to reference.
-	for e := codedKind(0); e < codedMax; e++ {
+	for e := range codedMax {
 		la.codedSizes[e] = codedIndexSize(e, tableRowCounts)
 	}
 
 	// We now have all the static and dynamic information to calculate the size of each table column.
 	var offset int
-	for t := table(0); t < tableMax; t++ {
+	for t := range tableMax {
 		rowCount := tableRowCounts[t]
 		if rowCount == 0 {
 			continue
@@ -272,7 +272,7 @@ func (r *sigReader) methodDefSig() (v SigMethodDef) {
 	if r.err != nil {
 		return
 	}
-	for i := uint32(0); i < paramCount; i++ {
+	for range paramCount {
 		v.Param = append(v.Param, r.param())
 		if r.err != nil {
 			return
@@ -418,14 +418,14 @@ func (r *sigReader) array() (a SigArray) {
 		return
 	}
 	a.Sizes = make([]uint32, r.compressedUint32())
-	for i := 0; i < len(a.Sizes); i++ {
+	for i := range a.Sizes {
 		a.Sizes[i] = r.compressedUint32()
 	}
 	if r.err != nil {
 		return
 	}
 	a.LowerBounds = make([]int32, r.compressedUint32())
-	for i := 0; i < len(a.LowerBounds); i++ {
+	for i := range a.LowerBounds {
 		a.LowerBounds[i] = r.compressedInt32()
 	}
 	return

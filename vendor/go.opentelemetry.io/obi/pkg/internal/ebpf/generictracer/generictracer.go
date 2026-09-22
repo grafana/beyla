@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/vishvananda/netlink"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
@@ -54,6 +55,8 @@ type Tracer struct {
 	libsMux          sync.Mutex
 	jvmGenerations   sync.Map
 	iters            []*ebpfcommon.Iter
+	iterMu           sync.Mutex
+	seenNetns        *expirable.LRU[uint64, struct{}]
 	eventCtx         *ebpfcommon.EBPFEventContext
 	jvmUSDTManager   ebpfcommon.USDTSpecManager
 	pythonRuntime    *pythonRuntimeController
@@ -62,6 +65,21 @@ type Tracer struct {
 func tlog() *slog.Logger {
 	return slog.With("component", "generic.Tracer")
 }
+
+// Keep in sync with the BPF side, which asserts the relation between both
+// constants at compile time (bpf/pid/pid.h).
+const (
+	seenNetnsCacheLen = 1024
+	seenNetnsTTL      = 5 * time.Minute
+
+	// mirrors k_max_concurrent_pids (bpf/pid/maps/map_sizing.h): estimate of
+	// 1000 concurrent processes (including children) * 3 namespaces per pid
+	maxConcurrentPids = 3001
+	// mirrors k_prime_hash (bpf/pid/pid.h): closest prime below
+	// maxConcurrentPids * 64; modulo by a prime distributes the hash evenly
+	// across the segment bit array
+	primeHash = 192053
+)
 
 func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	tracer := &Tracer{
@@ -75,22 +93,11 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 		instrumentedLibs: make(ebpfcommon.InstrumentedLibsT),
 		libsMux:          sync.Mutex{},
 		iters:            []*ebpfcommon.Iter{},
+		seenNetns:        expirable.NewLRU[uint64, struct{}](seenNetnsCacheLen, nil, seenNetnsTTL),
 	}
 	tracer.pythonRuntime = newPythonRuntimeController(tracer)
 	return tracer
 }
-
-// Keep in sync with the BPF side, which asserts the relation between both
-// constants at compile time (bpf/pid/pid.h).
-const (
-	// mirrors k_max_concurrent_pids (bpf/pid/maps/map_sizing.h): estimate of
-	// 1000 concurrent processes (including children) * 3 namespaces per pid
-	maxConcurrentPids = 3001
-	// mirrors k_prime_hash (bpf/pid/pid.h): closest prime below
-	// maxConcurrentPids * 64; modulo by a prime distributes the hash evenly
-	// across the segment bit array
-	primeHash = 192053
-)
 
 func pidSegmentBit(k uint64) (uint32, uint32) {
 	h := uint32(k % primeHash)
@@ -176,6 +183,8 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 		pidU32 := uint32(pid)
 		_ = p.bpfObjects.PidCache.Put(pidU32, pidU32)
 	}
+
+	p.runItersForPID(pid)
 }
 
 func ensureJVMRuntimeMetricGeneration(fi *exec.FileInfo) uint64 {
@@ -226,42 +235,6 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 	ebpfcommon.FixupSpec(spec, p.cfg.EBPF.OverrideBPFLoopEnabled)
 
 	return []*ebpfcommon.SpecBundle{{Spec: spec, Objects: &p.bpfObjects, Constants: p.constants()}}, nil
-}
-
-func (p *Tracer) SetupTailCalls() {
-	// Order must match the k_tail_* enum in bpf/generictracer/k_tracer_tailcall.h
-	for i, prog := range []*ebpf.Program{
-		// HTTP/1
-		p.bpfObjects.ObiProtocolHttp,           // 0  k_tail_protocol_http
-		p.bpfObjects.ObiContinueProtocolHttp,   // 1  k_tail_continue_protocol_http
-		p.bpfObjects.ObiContinue2ProtocolHttp,  // 2  k_tail_continue2_protocol_http
-		p.bpfObjects.ObiContinueProtocolHttpTp, // 3  k_tail_continue_protocol_http_tp
-		// TCP
-		p.bpfObjects.ObiProtocolTcp, // 4  k_tail_protocol_tcp
-		// generic
-		p.bpfObjects.ObiHandleBufWithArgs, // 5  k_tail_handle_buf_with_args
-		nil,                               // 6  k_tail_continue_netfd_read (gotracer-only)
-		// HTTP/2 + gRPC
-		p.bpfObjects.ObiProtocolHttp2,                                   // 7
-		p.bpfObjects.ObiProtocolHttp2GrpcFrames,                         // 8
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame,               // 9
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,                 // 10
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
-		// Large buffer multi-batch emission
-		p.bpfObjects.ObiLargeBufEmitContinue,                            // 13  k_tail_large_buf_emit_continue
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit,   // 14
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffman,  // 15
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffscan, // 16
-	} {
-		if prog == nil {
-			continue
-		}
-		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
-		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
-			p.log.Error("error loading info tail call jump table", "error", err)
-		}
-	}
 }
 
 func (p *Tracer) constants() map[string]any {
@@ -546,7 +519,11 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Start:    p.bpfObjects.ObiUvFsAccess,
 			}},
 		},
-		"libruby": {
+		// Puma request-to-worker correlation. Both symbols are hot in any Ruby
+		// process, so attach only where the correlation can work: Ruby 4.0
+		// stopped routing Class#new through rb_obj_call_init_kw, and outside
+		// Puma it never fires at all (see uprobeLibraryPrerequisites).
+		"libruby[< 4.0]": {
 			"rb_ary_shift": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiRbAryShift,
@@ -664,40 +641,50 @@ func (p *Tracer) Iters() []*ebpfcommon.Iter {
 }
 
 func (p *Tracer) runItersForPids() {
-	iters := p.Iters()
-	if len(iters) == 0 {
+	for _, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
+		for pid := range pids {
+			p.runItersForPID(pid)
+		}
+	}
+}
+
+func (p *Tracer) runItersForPID(pid app.PID) {
+	if len(p.iters) == 0 {
 		return
 	}
 
-	seen := make(map[uint64]struct{})
+	info, err := os.Stat(fmt.Sprintf("/proc/%d/ns/net", pid))
+	if err != nil {
+		p.log.Debug("netns stat failed", "pid", pid, "error", err)
+		return
+	}
 
-	for _, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
-		for pid := range pids {
-			info, err := os.Stat(fmt.Sprintf("/proc/%d/ns/net", pid))
-			if err != nil {
-				p.log.Debug("netns stat failed", "pid", pid, "error", err)
-				continue
-			}
+	inode := info.Sys().(*syscall.Stat_t).Ino
 
-			inode := info.Sys().(*syscall.Stat_t).Ino
-			if _, ok := seen[inode]; ok {
-				continue
-			}
-			seen[inode] = struct{}{}
+	p.iterMu.Lock()
+	defer p.iterMu.Unlock()
 
-			for _, it := range iters {
-				if err := netns.WithNetNS(int(pid), func() error {
-					return it.Run(p.log)
-				}); err != nil {
-					if errors.Is(err, os.ErrNotExist) {
-						p.log.Debug("process gone before iterating its netns", "pid", pid)
-						break
-					}
-					p.log.Error("error running iterator in netns", "pid", pid, "error", err)
-				}
+	if p.seenNetns == nil {
+		p.seenNetns = expirable.NewLRU[uint64, struct{}](seenNetnsCacheLen, nil, seenNetnsTTL)
+	}
+	if p.seenNetns.Contains(inode) {
+		return
+	}
+
+	for _, it := range p.iters {
+		if err := netns.WithNetNS(int(pid), func() error {
+			return it.Run(p.log)
+		}); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				p.log.Debug("process gone before iterating its netns", "pid", pid)
+				return
 			}
+			p.log.Error("error running iterator in netns", "pid", pid, "error", err)
+			return
 		}
 	}
+
+	p.seenNetns.Add(inode, struct{}{})
 }
 
 func (p *Tracer) Tracing() []*ebpfcommon.Tracing { return nil }

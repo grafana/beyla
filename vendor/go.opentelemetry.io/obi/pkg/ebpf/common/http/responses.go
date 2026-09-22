@@ -131,6 +131,15 @@ func decompressBody(encoding string, b []byte) ([]byte, error) {
 	return readBodyWithLimit(reader, maxDecompressedResponseBodyBytes)
 }
 
+// readAndRestoreBodyWithLimit preserves both consumed and unread bytes for later detectors.
+func readAndRestoreBodyWithLimit(body *io.ReadCloser, limit int64) ([]byte, error) {
+	var consumed bytes.Buffer
+	original := *body
+	data, err := readBodyWithLimit(io.TeeReader(original, &consumed), limit)
+	*body = io.NopCloser(io.MultiReader(&consumed, original))
+	return data, err
+}
+
 func readBodyWithLimit(reader io.Reader, limit int64) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {

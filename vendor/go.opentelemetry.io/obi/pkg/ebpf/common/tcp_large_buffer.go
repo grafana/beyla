@@ -22,6 +22,7 @@ const (
 
 type largeBufferKey struct {
 	traceID               [16]uint8
+	spanID                [8]uint8
 	packetType, direction uint8
 	connInfo              BpfConnectionInfoT
 	kind                  largeBufferKind
@@ -50,6 +51,7 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 
 	key := largeBufferKey{
 		traceID:    event.Tp.TraceId,
+		spanID:     event.Tp.SpanId,
 		packetType: event.PacketType,
 		direction:  event.Direction,
 		connInfo:   event.ConnInfo,
@@ -57,8 +59,8 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 	}
 
 	if parseCtx.protocolDebug {
-		fmt.Printf(">>> LargeBufferAppend: (packet=%d direction=%d action=%d size=%d kind=%d traceId=%v)\nconnection info %v\n%s\n",
-			event.PacketType, event.Direction, event.Action, event.Len, event.Kind, key.traceID, key.connInfo,
+		fmt.Printf(">>> LargeBufferAppend: (packet=%d direction=%d action=%d size=%d kind=%d traceId=%v spanId=%v)\nconnection info %v\n%s\n",
+			event.PacketType, event.Direction, event.Action, event.Len, event.Kind, key.traceID, key.spanID, key.connInfo,
 			string(record.RawSample[hdrSize:hdrSize+event.Len]))
 	}
 
@@ -90,7 +92,7 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 	// This achieves the same thing as the delayed HTTP requests in kprobes, except it's done in
 	// userspace.
 	if event.Source == largeBufferSourceGo && event.PacketType == packetTypeResponse {
-		parseCtx.refreshPendingGoHTTPClientRequest(event.ConnInfo, event.Tp.TraceId)
+		parseCtx.refreshPendingGoHTTPClientRequest(event.ConnInfo, event.Tp.TraceId, event.Tp.SpanId)
 	}
 
 	return request.Span{}, true, nil
@@ -99,6 +101,7 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 func extractLargeBuffer(
 	parseCtx *EBPFParseContext,
 	traceID [16]uint8,
+	spanID [8]uint8,
 	packetType, direction uint8,
 	connInfo BpfConnectionInfoT,
 	kind largeBufferKind,
@@ -111,6 +114,7 @@ func extractLargeBuffer(
 	// the generic TCP protocol
 	key := largeBufferKey{
 		traceID:    traceID,
+		spanID:     spanID,
 		packetType: packetType,
 		direction:  direction,
 		connInfo:   connInfo,
@@ -120,14 +124,14 @@ func extractLargeBuffer(
 	lb, ok := parseCtx.largeBuffers.Get(key)
 	if !ok {
 		if parseCtx.protocolDebug {
-			fmt.Printf("<<< LargeBufferExtract: not found! (packet=%d direction=%d kind=%d traceId=%v)\nconnection info %v\n", key.packetType, key.direction, int(key.kind), key.traceID, key.connInfo)
+			fmt.Printf("<<< LargeBufferExtract: not found! (packet=%d direction=%d kind=%d traceId=%v spanId=%v)\nconnection info %v\n", key.packetType, key.direction, int(key.kind), key.traceID, key.spanID, key.connInfo)
 		}
 		return nil, false
 	}
 
 	if parseCtx.protocolDebug {
-		fmt.Printf("<<< LargeBufferExtract: (packet=%d direction=%d kind=%d len=%d)\nconnection info %v\n%s\n",
-			key.packetType, key.direction, int(key.kind), lb.Len(), key.connInfo, lb.UnsafeView())
+		fmt.Printf("<<< LargeBufferExtract: (packet=%d direction=%d kind=%d traceId=%v spanId=%v len=%d)\nconnection info %v\n%s\n",
+			key.packetType, key.direction, int(key.kind), key.traceID, key.spanID, lb.Len(), key.connInfo, lb.UnsafeView())
 	}
 
 	parseCtx.largeBuffers.Remove(key)
@@ -140,12 +144,14 @@ func extractLargeBuffer(
 func containsTCPLargeBuffer(
 	parseCtx *EBPFParseContext,
 	traceID [16]uint8,
+	spanID [8]uint8,
 	packetType, direction uint8,
 	connInfo BpfConnectionInfoT,
 	protocolType BpfProtocolType,
 ) bool {
 	key := largeBufferKey{
 		traceID:    traceID,
+		spanID:     spanID,
 		packetType: packetType,
 		direction:  direction,
 		connInfo:   connInfo,
@@ -166,9 +172,10 @@ func protocolToLargeBufferKind(protocolType BpfProtocolType) largeBufferKind {
 func extractTCPLargeBuffer(
 	parseCtx *EBPFParseContext,
 	traceID [16]uint8,
+	spanID [8]uint8,
 	packetType, direction uint8,
 	connInfo BpfConnectionInfoT,
 	protocolType BpfProtocolType,
 ) (*largebuf.LargeBuffer, bool) {
-	return extractLargeBuffer(parseCtx, traceID, packetType, direction, connInfo, protocolToLargeBufferKind(protocolType))
+	return extractLargeBuffer(parseCtx, traceID, spanID, packetType, direction, connInfo, protocolToLargeBufferKind(protocolType))
 }

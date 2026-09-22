@@ -6,7 +6,6 @@ package denotools // import "go.opentelemetry.io/obi/pkg/internal/denotools"
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/url"
 	"os"
 	pathpkg "path"
@@ -312,28 +311,22 @@ func metadataMatches(metadata serviceMetadata, requireName bool) bool {
 }
 
 func readMetadataFile(path string, jsonWithComments bool) (serviceMetadata, bool) {
-	file, found := langtools.OpenMetadataFile(path, maxServiceMetadataBytes)
-	if file == nil {
+	data, found, err := langtools.ReadMetadataFile(path, maxServiceMetadataBytes)
+	if err != nil || data == nil {
 		return serviceMetadata{}, found
 	}
-	defer file.Close()
-	return decodeMetadataFile(file, jsonWithComments), true
+	return decodeMetadataFile(data, jsonWithComments), true
 }
 
 func readRegularMetadataFile(path string, jsonWithComments bool) (serviceMetadata, bool) {
-	file, _ := langtools.OpenMetadataFile(path, maxServiceMetadataBytes)
-	if file == nil {
+	data, _, err := langtools.ReadMetadataFile(path, maxServiceMetadataBytes)
+	if err != nil || data == nil {
 		return serviceMetadata{}, false
 	}
-	defer file.Close()
-	return decodeMetadataFile(file, jsonWithComments), true
+	return decodeMetadataFile(data, jsonWithComments), true
 }
 
-func decodeMetadataFile(file io.Reader, jsonWithComments bool) serviceMetadata {
-	data, err := io.ReadAll(io.LimitReader(file, maxServiceMetadataBytes+1))
-	if err != nil || int64(len(data)) > maxServiceMetadataBytes {
-		return serviceMetadata{}
-	}
+func decodeMetadataFile(data []byte, jsonWithComments bool) serviceMetadata {
 	if jsonWithComments {
 		data = jsonc.ToJSON(data)
 	}

@@ -79,7 +79,8 @@ func capturedUserAgent(span *request.Span) string {
 }
 
 // httpMethodAttributes clamps a method outside the semconv enum to _OTHER,
-// keeping the wire value on http.request.method_original.
+// keeping the wire value on http.request.method_original. A method the parser
+// could not read is not known to the instrumentation, so it clamps too.
 func httpMethodAttributes(method string, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	if request.IsKnownHTTPMethod(method) {
 		return []attribute.KeyValue{request.HTTPRequestMethod(method)}
@@ -88,8 +89,9 @@ func httpMethodAttributes(method string, optionalAttrs map[attr.Name]struct{}) [
 	attrs := []attribute.KeyValue{semconv.HTTPRequestMethodOther}
 
 	// Conditionally required only when it differs from http.request.method, so a
-	// wire method of literally _OTHER reports nothing extra.
-	if _, ok := optionalAttrs[attr.HTTPRequestMethodOrig]; ok && method != request.HTTPMethodOther {
+	// wire method of literally _OTHER reports nothing extra. An unparsed method
+	// has no original to report either.
+	if _, ok := optionalAttrs[attr.HTTPRequestMethodOrig]; ok && method != "" && method != request.HTTPMethodOther {
 		attrs = append(attrs, semconv.HTTPRequestMethodOriginal(method))
 	}
 
@@ -498,10 +500,10 @@ var (
 // Tool call arguments and results are gated behind their own optionalAttrs
 // because they may be large or contain sensitive data.
 func mcpAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
-	if span.SubType != request.HTTPSubtypeMCP || span.GenAI == nil || span.GenAI.MCP == nil {
+	mcp := span.MCP()
+	if mcp == nil {
 		return nil
 	}
-	mcp := span.GenAI.MCP
 	attrs := []attribute.KeyValue{
 		attribute.String(string(attr.MCPMethodName), mcp.Method),
 	}
@@ -656,9 +658,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			request.HTTPResponseBodySize(span.ResponseBodyLength()),
 		}
 		attrs = appendHTTPResponseStatus(attrs, span)
-		if span.Method != "" {
-			attrs = append(attrs, httpMethodAttributes(span.Method, optionalAttrs)...)
-		}
+		attrs = append(attrs, httpMethodAttributes(span.Method, optionalAttrs)...)
 		if span.Path != "" {
 			attrs = append(attrs, request.HTTPUrlPath(span.Path))
 		}
@@ -762,9 +762,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 
 		if transport != httpTransportNone {
 			attrs = append(attrs, request.HTTPUrlFull(url))
-			if span.Method != "" {
-				attrs = append(attrs, httpMethodAttributes(span.Method, optionalAttrs)...)
-			}
+			attrs = append(attrs, httpMethodAttributes(span.Method, optionalAttrs)...)
 		}
 
 		if transport == httpTransportAll {
@@ -829,6 +827,32 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = append(attrs, semconv.AWSRequestID(sqs.Meta.RequestID))
 			attrs = append(attrs, request.AWSExtendedRequestID(sqs.Meta.ExtendedRequestID))
 			attrs = append(attrs, request.AWSSQSQueueURL(sqs.QueueURL))
+		}
+
+		if span.SubType == request.HTTPSubtypeAWSSNS && span.AWS != nil {
+			sns := span.AWS.SNS
+			attrs = append(attrs,
+				request.RPCSystem("aws-api"),
+				semconv.RPCMethod("SNS/"+sns.OperationName),
+				semconv.MessagingSystemAWSSNS,
+				request.MessagingOperationName(sns.OperationName),
+			)
+			if sns.OperationType != "" {
+				attrs = append(attrs, request.MessagingOperationType(sns.OperationType))
+			}
+			if sns.TopicARN != "" {
+				attrs = append(attrs, semconv.AWSSNSTopicARN(sns.TopicARN), request.MessagingDestinationName(sns.Destination))
+			}
+			if sns.MessageID != "" {
+				attrs = append(attrs, request.MessagingMessageID(sns.MessageID))
+			}
+			if sns.OperationName == "PublishBatch" && sns.BatchCount > 0 {
+				attrs = append(attrs, semconv.MessagingBatchMessageCount(sns.BatchCount))
+			}
+			if sns.Meta.RequestID != "" {
+				attrs = append(attrs, semconv.AWSRequestID(sns.Meta.RequestID))
+			}
+			attrs = append(attrs, semconv.CloudRegion(sns.Meta.Region))
 		}
 
 		if span.SubType == request.HTTPSubtypeOpenAI && span.GenAI != nil && span.GenAI.OpenAI != nil {
@@ -1074,7 +1098,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			if ai.OperationName != "" {
 				// gen_ai.operation.name must not be emitted as an empty
 				// string: omit it when the operation could not be derived
-				// (re-typed to string in schemas/obi/groups/gen_ai.yaml).
+				// (re-typed to string in schemas/obi/groups/gen_ai/registry.yaml).
 				attrs = append(attrs, semconv.GenAIOperationNameKey.String(ai.OperationName))
 			}
 			attrs = append(attrs, semconv.GenAIResponseID(ai.ID))

@@ -41,6 +41,7 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/uprobe"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -487,39 +488,6 @@ func (p *Tracer) constants() map[string]any {
 	m["max_transaction_time"] = uint64(p.cfg.MaxTransactionTime.Nanoseconds())
 
 	return m
-}
-
-func (p *Tracer) SetupTailCalls() {
-	// Order must match the k_tail_* enum in bpf/generictracer/k_tracer_tailcall.h
-	for i, prog := range []*ebpf.Program{
-		// HTTP/1
-		p.bpfObjects.ObiProtocolHttp,           // 0  k_tail_protocol_http
-		p.bpfObjects.ObiContinueProtocolHttp,   // 1  k_tail_continue_protocol_http
-		p.bpfObjects.ObiContinue2ProtocolHttp,  // 2  k_tail_continue2_protocol_http
-		p.bpfObjects.ObiContinueProtocolHttpTp, // 3  k_tail_continue_protocol_http_tp
-		// TCP
-		p.bpfObjects.ObiProtocolTcp, // 4  k_tail_protocol_tcp
-		// Generic
-		p.bpfObjects.ObiHandleBufWithArgs, // 5  k_tail_handle_buf_with_args
-		p.bpfObjects.ObiContinueNetfdRead, // 6  k_tail_continue_netfd_read
-		// HTTP/2 + gRPC
-		p.bpfObjects.ObiProtocolHttp2,                                   // 7
-		p.bpfObjects.ObiProtocolHttp2GrpcFrames,                         // 8
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrame,               // 9
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleEndFrame,                 // 10
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServer,         // 11
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerFinalize, // 12
-		// Large buffer multi-batch emission
-		p.bpfObjects.ObiLargeBufEmitContinue,                            // 13  k_tail_large_buf_emit_continue
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerCommit,   // 14
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffman,  // 15
-		p.bpfObjects.ObiProtocolHttp2GrpcHandleStartFrameServerHuffscan, // 16
-	} {
-		p.log.Debug("loading program into tail call jump table", "index", i, "program", prog.String())
-		if err := p.bpfObjects.JumpTable.Update(uint32(i), uint32(prog.FD()), ebpf.UpdateAny); err != nil {
-			p.log.Error("error loading info tail call jump table", "error", err)
-		}
-	}
 }
 
 func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offsets) {
@@ -1032,13 +1000,15 @@ func attachGoAutoSDKActivationProbe(
 		return nil, err
 	}
 
-	executable, err := link.OpenExecutable(fmt.Sprintf("/proc/self/fd/%d", target.Fd()))
+	targetPath := fmt.Sprintf("/proc/self/fd/%d", target.Fd())
+	executable, err := link.OpenExecutable(targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening target executable: %w", err)
 	}
 
-	activationLink, err := executable.Uprobe(
-		"",
+	activationLink, err := uprobe.Attach(
+		executable,
+		targetPath,
 		probe.program,
 		goAutoSDKActivationUprobeOptions(probe, pid),
 	)
@@ -1070,10 +1040,10 @@ func validateGoAutoSDKProcessStartTime(pid app.PID, expected uint64) error {
 func goAutoSDKActivationUprobeOptions(
 	probe goAutoSDKActivationProbe,
 	pid app.PID,
-) *link.UprobeOptions {
-	return &link.UprobeOptions{
-		Address: probe.offset,
-		PID:     int(pid),
+) uprobe.Options {
+	return uprobe.Options{
+		Addresses: []uint64{probe.offset},
+		PID:       uint32(pid),
 	}
 }
 
@@ -1619,6 +1589,7 @@ var goH2OwnershipProbeSymbols = []string{
 	"net/http.(*http2ClientConn).writeHeader",
 	"net/http/internal/http2.(*clientStream).encodeAndWriteHeaders",
 	"net/http/internal/http2.(*ClientConn).writeHeader",
+	"google.golang.org/grpc/internal/transport.(*loopyWriter).clientHeaderHandler",
 }
 
 // GoChannelLinkProbeSymbols returns the Go runtime symbols used to correlate direct channel handoffs.
@@ -2122,8 +2093,8 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 		groups = append(groups, p.goH2OwnershipProbeGroups()...)
 		groups = append(groups,
 			ebpfcommon.GoProbeGroup{
-				Name:          "go_http2_xnet_preflush",
-				Prerequisites: []string{goHTTP2FlushProbeSymbols[0]},
+				Name:        "go_http2_xnet_preflush",
+				RequiresAll: []string{goHTTP2FlushProbeSymbols[0]},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[0],
@@ -2142,8 +2113,8 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 				},
 			},
 			ebpfcommon.GoProbeGroup{
-				Name:          "go_http2_stdlib_preflush",
-				Prerequisites: []string{goHTTP2FlushProbeSymbols[2]},
+				Name:        "go_http2_stdlib_preflush",
+				RequiresAll: []string{goHTTP2FlushProbeSymbols[2]},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[2],
@@ -2162,8 +2133,8 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 				},
 			},
 			ebpfcommon.GoProbeGroup{
-				Name:          "go_http2_internal_preflush",
-				Prerequisites: []string{goHTTP2FlushProbeSymbols[4]},
+				Name:        "go_http2_internal_preflush",
+				RequiresAll: []string{goHTTP2FlushProbeSymbols[4]},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[4],
@@ -2186,8 +2157,8 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 
 	if p.goAutoSDKActivationProbesEnabled() {
 		groups = append(groups, ebpfcommon.GoProbeGroup{
-			Name:          "go_auto_sdk_activation",
-			Prerequisites: append([]string(nil), goAutoSDKActivationPrerequisiteSymbols...),
+			Name:        "go_auto_sdk_activation",
+			RequiresAll: append([]string(nil), goAutoSDKActivationPrerequisiteSymbols...),
 			Probes: []ebpfcommon.GoProbe{
 				{
 					Symbol: goAutoSDKActivationProbeSymbols[0],
@@ -2224,8 +2195,8 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 	return []ebpfcommon.GoProbeGroup{
 		{
-			Name:          "go_http2_xnet_current_ownership",
-			Prerequisites: []string{"golang.org/x/net/http2.(*ClientConn).writeHeaders"},
+			Name:        "go_http2_xnet_current_ownership",
+			RequiresAll: []string{"golang.org/x/net/http2.(*ClientConn).writeHeaders"},
 			Probes: []ebpfcommon.GoProbe{
 				{
 					Symbol: goH2OwnershipProbeSymbols[0],
@@ -2243,8 +2214,8 @@ func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 			},
 		},
 		{
-			Name:          "go_http2_stdlib_current_ownership",
-			Prerequisites: []string{"net/http.(*http2ClientConn).writeHeaders"},
+			Name:        "go_http2_stdlib_current_ownership",
+			RequiresAll: []string{"net/http.(*http2ClientConn).writeHeaders"},
 			Probes: []ebpfcommon.GoProbe{
 				{
 					Symbol: goH2OwnershipProbeSymbols[2],
@@ -2262,8 +2233,8 @@ func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 			},
 		},
 		{
-			Name:          "go_http2_stdlib_go127_ownership",
-			Prerequisites: []string{"net/http/internal/http2.(*ClientConn).writeHeaders"},
+			Name:        "go_http2_stdlib_go127_ownership",
+			RequiresAll: []string{"net/http/internal/http2.(*ClientConn).writeHeaders"},
 			Probes: []ebpfcommon.GoProbe{
 				{
 					Symbol: goH2OwnershipProbeSymbols[4],
@@ -2276,6 +2247,23 @@ func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 					Symbol: goH2OwnershipProbeSymbols[5],
 					Probe: &ebpfcommon.ProbeDesc{
 						Start: p.bpfObjects.ObiUprobeHttp2ClientConnWriteHeader,
+					},
+				},
+			},
+		},
+		{
+			Name: "go_grpc_current_ownership",
+			RequiresAll: []string{
+				"google.golang.org/grpc/internal/transport.(*http2Client).NewStream",
+				"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut",
+				"golang.org/x/net/http2.(*Framer).WriteHeaders",
+			},
+			Probes: []ebpfcommon.GoProbe{
+				{
+					Symbol: goH2OwnershipProbeSymbols[6],
+					Probe: &ebpfcommon.ProbeDesc{
+						Start: p.bpfObjects.ObiUprobeGrpcLoopyWriterClientHeaderHandler,
+						End:   p.bpfObjects.ObiUprobeGrpcLoopyWriterClientHeaderHandlerReturns,
 					},
 				},
 			},

@@ -1396,6 +1396,20 @@
         ]
       }
     },
+    "internal/poll.FD": {
+      "Sysfd": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
     "net.TCPAddr": {
       "IP": {
         "versions": {
@@ -1459,6 +1473,18 @@
         "offsets": [
           {
             "offset": 96,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "pfd": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
             "since": "1.17.0"
           }
         ]

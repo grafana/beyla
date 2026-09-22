@@ -107,3 +107,26 @@ func NewInternalMetrics(prefix string) InternalMetrics {
 		}),
 	}
 }
+
+// The target.info family: Prometheus/OpenMetrics-shaped meta-metrics carrying a service's resource
+// attributes as data point attributes. Declared alongside the internal metrics because they
+// describe the target rather than its traffic, which is how the schema registry groups them too
+// (schemas/obi/groups/obi_internal.yaml).
+//
+// Unlike the metrics above they take no vendor prefix, so they are plain package variables. Both
+// exporters emit them, and the dot notation is what the derivation needs to reproduce the
+// target_info / traces_target_info / traces_host_info names.
+var (
+	TargetInfo = metric(Name{
+		OTEL: "target.info",
+		Type: InstrumentUpDownCounter,
+	})
+	TracesTargetInfo = metric(Name{
+		OTEL: "traces.target.info",
+		Type: InstrumentUpDownCounter,
+	})
+	TracesHostInfo = metric(Name{
+		OTEL: "traces.host.info",
+		Type: InstrumentGauge,
+	})
+)

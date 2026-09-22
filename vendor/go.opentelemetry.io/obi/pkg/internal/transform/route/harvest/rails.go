@@ -18,18 +18,34 @@ import (
 )
 
 const (
-	maxRailsRoutesBytes int64 = 2 * 1024 * 1024
-	maxRailsRouteFiles        = 256
+	maxRailsFileBytes  int64 = 2 * 1024 * 1024
+	maxRailsRouteFiles       = 256
 )
 
 var (
 	railsDraw          = regexp.MustCompile(`^draw\b\s*\(?\s*(.*)$`)
 	railsDeclaration   = regexp.MustCompile(`^(get|post|put|patch|delete|head|options|match|resources|resource|namespace|scope)\b\s*\(?\s*(.*)$`)
 	railsLiteral       = regexp.MustCompile(`^(?:'([^'\\]*)'|"([^"\\#]*)"|:([A-Za-z_][A-Za-z_0-9]*))(\s*(?:,|\)|=>|do\b|$))`)
-	railsPathOption    = regexp.MustCompile(`(?:^|,\s*)path:\s*(.*)$`)
-	railsActionsOption = regexp.MustCompile(`(?:^|,\s*)(only|except):\s*(\[[^\]]*\]|%i\[[^\]]*\]|[^,)]*)`)
-	railsParamOption   = regexp.MustCompile(`(?:^|,\s*)param:\s*(.*)$`)
+	railsAPIOnly       = regexp.MustCompile(`^config\.api_only\s*=\s*(true|false)\s*$`)
+	railsPathOption    = regexp.MustCompile(`(?:^|,\s*)(?:path:|:path\s*=>)\s*(.*)$`)
+	railsActionsOption = regexp.MustCompile(`(?:^|,\s*)(?:(only|except):|:(only|except)\s*=>)\s*(\[[^\]]*\]|%i\[[^\]]*\]|[^,)]*)`)
+	railsParamOption   = regexp.MustCompile(`(?:^|,\s*)(?:param:|:param\s*=>)\s*(.*)$`)
+
+	railsDefaultResourceActions = [...]string{"index", "create", "show", "update", "destroy", "new", "edit"}
+	railsAPIOnlyResourceActions = [...]string{"index", "create", "show", "update", "destroy"}
 )
+
+type railsRouteScanner struct {
+	resourceActions []string
+}
+
+func newRailsRouteScanner() railsRouteScanner {
+	return railsRouteScanner{resourceActions: railsDefaultResourceActions[:]}
+}
+
+func newRailsAPIRouteScanner() railsRouteScanner {
+	return railsRouteScanner{resourceActions: railsAPIOnlyResourceActions[:]}
+}
 
 // ExtractRubyRoutes reads Rails route declarations without executing application
 // code. Fragments preserve useful paths even when Ruby's dynamic DSL prevents
@@ -74,6 +90,14 @@ func extractRailsRoutes(ctx context.Context, root, cwd string) (*RouteHarvesterR
 // Rails resolves every draw relative to config/routes, including nested draws.
 // Follow references only: other files in that directory may not be loaded by Rails.
 func scanRailsRouteFiles(ctx context.Context, root, mainPath string) ([]string, error) {
+	apiOnly, err := readRailsAPIOnly(ctx, filepath.Join(filepath.Dir(mainPath), "application.rb"))
+	if err != nil {
+		return nil, err
+	}
+	scanner := newRailsRouteScanner()
+	if apiOnly {
+		scanner = newRailsAPIRouteScanner()
+	}
 	routesDir := filepath.Join(filepath.Dir(mainPath), "routes")
 	pending := []string{mainPath}
 	seen := map[string]struct{}{mainPath: {}}
@@ -82,7 +106,7 @@ func scanRailsRouteFiles(ctx context.Context, root, mainPath string) ([]string, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		fragments, draws, err := readRailsRouteFile(ctx, pending[index])
+		fragments, draws, err := scanner.readRouteFile(ctx, pending[index])
 		if err != nil {
 			return nil, err
 		}
@@ -126,21 +150,58 @@ func scanRailsRouteFiles(ctx context.Context, root, mainPath string) ([]string, 
 	return routes, nil
 }
 
-func readRailsRouteFile(ctx context.Context, path string) ([]string, []string, error) {
-	file, _ := langtools.OpenMetadataFile(path, maxRailsRoutesBytes)
+func readRailsAPIOnly(ctx context.Context, path string) (bool, error) {
+	file, _ := langtools.OpenMetadataFile(path, maxRailsFileBytes)
+	if file == nil {
+		return false, nil
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(io.LimitReader(file, maxRailsFileBytes))
+	scanner.Buffer(nil, int(maxRailsFileBytes))
+	inComment := false
+	apiOnly := false
+	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "=begin") {
+			inComment = true
+		}
+		if inComment {
+			if strings.HasPrefix(line, "=end") {
+				inComment = false
+			}
+			continue
+		}
+		if match := railsAPIOnly.FindStringSubmatch(stripRailsComment(line)); match != nil {
+			apiOnly = match[1] == "true"
+		}
+	}
+	return apiOnly, scanner.Err()
+}
+
+func (s railsRouteScanner) readRouteFile(ctx context.Context, path string) ([]string, []string, error) {
+	file, _ := langtools.OpenMetadataFile(path, maxRailsFileBytes)
 	if file == nil {
 		return nil, nil, nil
 	}
 	defer file.Close()
-	return scanRailsRoutes(ctx, io.LimitReader(file, maxRailsRoutesBytes))
+	return s.scanRoutes(ctx, io.LimitReader(file, maxRailsFileBytes))
 }
 
 func scanRailsRoutes(ctx context.Context, reader io.Reader) ([]string, []string, error) {
+	scanner := newRailsRouteScanner()
+	return scanner.scanRoutes(ctx, reader)
+}
+
+func (s railsRouteScanner) scanRoutes(ctx context.Context, reader io.Reader) ([]string, []string, error) {
 	var routes, draws []string
 	scanner := bufio.NewScanner(reader)
 	// bufio.Scanner defaults to a 64KiB token limit; match it to the read budget
 	// above so a single long line doesn't abort the scan with ErrTooLong.
-	scanner.Buffer(nil, int(maxRailsRoutesBytes))
+	scanner.Buffer(nil, int(maxRailsFileBytes))
 	inComment := false
 	var pending string
 	for scanner.Scan() {
@@ -185,32 +246,40 @@ func scanRailsRoutes(ctx context.Context, reader io.Reader) ([]string, []string,
 			continue
 		}
 		kind, args := declaration[1], declaration[2]
-		path, ok := railsLiteralValue(args)
+		paths, ok := railsLiteralValues(args)
 		if override := railsPathOption.FindStringSubmatch(args); override != nil {
-			path, ok = railsLiteralValue(override[1])
+			path, valid := railsLiteralValue(override[1])
+			paths, ok = []string{path}, valid
 		}
-		if !ok || path == "" {
-			continue
-		}
-		path = ensureLeadingSlash(strings.Trim(path, "/"))
-		// Optional segments and globs need matcher semantics beyond literal fragments.
-		if strings.ContainsAny(path, "()*") {
-			continue
-		}
-		// Scope prefixes stay separate; the partial matcher combines them with child routes.
-		if kind != "resources" && kind != "resource" {
-			routes = append(routes, path)
+		if !ok {
 			continue
 		}
 		param := "id"
-		if option := railsParamOption.FindStringSubmatch(args); option != nil {
-			var ok bool
-			param, ok = railsLiteralValue(option[1])
-			if !ok || !validRailsParam(param) {
-				continue
+		if kind == "resources" || kind == "resource" {
+			if option := railsParamOption.FindStringSubmatch(args); option != nil {
+				var ok bool
+				param, ok = railsLiteralValue(option[1])
+				if !ok || !validRailsParam(param) {
+					continue
+				}
 			}
 		}
-		routes = append(routes, railsResourceRoutes(kind, path, param, args)...)
+		for _, path := range paths {
+			if path == "" {
+				continue
+			}
+			path = ensureLeadingSlash(strings.Trim(path, "/"))
+			// Optional segments and globs need matcher semantics beyond literal fragments.
+			if strings.ContainsAny(path, "()*") {
+				continue
+			}
+			// Scope prefixes stay separate; the partial matcher combines them with child routes.
+			if kind != "resources" && kind != "resource" {
+				routes = append(routes, path)
+				break
+			}
+			routes = append(routes, s.resourceRoutes(kind, path, param, args)...)
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, nil, err
@@ -222,23 +291,31 @@ func scanRailsRoutes(ctx context.Context, reader io.Reader) ([]string, []string,
 }
 
 // REST actions can share a path. Singular resources have no collection index or ID segment.
-func railsResourceRoutes(kind, path, param, args string) []string {
-	actions := []string{"index", "create", "show", "update", "destroy", "new", "edit"}
+func (s railsRouteScanner) resourceRoutes(kind, path, param, args string) []string {
+	var selectedActions []string
+	var selectionKind string
 	if option := railsActionsOption.FindStringSubmatch(args); option != nil {
-		selected, ok := railsActions(strings.TrimSpace(option[2]))
+		var ok bool
+		selectedActions, ok = railsActions(strings.TrimSpace(option[3]))
 		if !ok {
 			return nil
 		}
-		actions = slices.DeleteFunc(actions, func(action string) bool {
-			included := slices.Contains(selected, action)
-			if option[1] == "only" {
-				return !included
-			}
-			return included
-		})
+		selectionKind = option[1]
+		if selectionKind == "" {
+			selectionKind = option[2]
+		}
 	}
 	var routes []string
-	for _, action := range actions {
+	for _, action := range s.resourceActions {
+		if selectionKind != "" {
+			included := slices.Contains(selectedActions, action)
+			if selectionKind == "only" && !included {
+				continue
+			}
+			if selectionKind == "except" && included {
+				continue
+			}
+		}
 		switch action {
 		case "index", "create":
 			if action != "index" || kind == "resources" {
@@ -291,6 +368,28 @@ func railsLiteralValue(value string) (string, bool) {
 		return "", false
 	}
 	return match[1] + match[2] + match[3], true
+}
+
+func railsLiteralValues(value string) ([]string, bool) {
+	var values []string
+	for {
+		value = strings.TrimSpace(value)
+		match := railsLiteral.FindStringSubmatch(value)
+		if match == nil {
+			break
+		}
+		// Hash-rocket keys are options (`:only => :show`), not resource names.
+		delimiter := strings.TrimSpace(match[4])
+		if delimiter == "=>" {
+			break
+		}
+		values = append(values, match[1]+match[2]+match[3])
+		if delimiter != "," {
+			break
+		}
+		value = value[len(match[0]):]
+	}
+	return values, len(values) > 0
 }
 
 func validRailsParam(param string) bool {

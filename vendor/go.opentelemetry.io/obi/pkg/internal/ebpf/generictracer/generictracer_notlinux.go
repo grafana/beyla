@@ -50,7 +50,6 @@ func (p *Tracer) Run(
 	_ *msg.Queue[[]request.Span],
 ) {
 }
-func (p *Tracer) SetupTailCalls()                                     {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                      {}
 func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext)      {}

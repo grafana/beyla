@@ -45,7 +45,6 @@ func (p *Tracer) UnlinkInstrumentedLib(_ uint64)                         {}
 func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool                   { return false }
 func (p *Tracer) Run(_ context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 }
-func (p *Tracer) SetupTailCalls()                                     {}
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
 func (p *Tracer) ProcessBinary(_ *exec.FileInfo)                      {}
 func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext)      {}

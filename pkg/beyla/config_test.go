@@ -43,6 +43,13 @@ import (
 
 type envMap map[string]string
 
+func TestDefaultConfigEnablesReverseDNS(t *testing.T) {
+	assert.Equal(t,
+		[]transform.Source{transform.SourceK8s, transform.SourceRDNS},
+		DefaultConfig().NameResolver.Sources,
+	)
+}
+
 func TestConfig_Overrides(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 trace_printer: json
@@ -227,7 +234,7 @@ network:
 		NetworkFlows: nc,
 		Stats:        obi.DefaultStatsConfig,
 		Metrics: perapp.GlobalMetricsConfig{
-			Features: export.FeatureApplicationRED | export.FeatureNetwork,
+			Features: export.FeatureApplicationRED | export.FeatureApplicationSizes | export.FeatureNetwork,
 		},
 		OTELMetrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
@@ -423,6 +430,7 @@ network:
 				{InstrumentableType: svc.InstrumentableRuby},
 			},
 		},
+		DotnetRuntimeMetrics: obi.DefaultConfig.DotnetRuntimeMetrics,
 		SigilExport: otelcfg.TracesConfig{
 			Instrumentations: []instrumentations.Instrumentation{instrumentations.InstrumentationHTTP},
 		},

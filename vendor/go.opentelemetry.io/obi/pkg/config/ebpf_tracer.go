@@ -155,6 +155,9 @@ type EBPFTracer struct {
 
 	// eBPF map configurations
 	MapsConfig MapsConfig `yaml:"maps_config"`
+
+	// Disables uprobe_multi support for testing. This option is intentionally environment-only.
+	DisableUprobeMulti bool `yaml:"-" json:"-" env:"OTEL_EBPF_DEBUG_DISABLE_UPROBE_MULTI"`
 }
 
 var nvidiaSMIExistsFunc = nvidiaSMIExists

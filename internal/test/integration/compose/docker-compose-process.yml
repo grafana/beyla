@@ -47,6 +47,7 @@ services:
       BEYLA_BPF_DEBUG: "TRUE"
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
+      BEYLA_HOST_ID: "integration-test-host"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

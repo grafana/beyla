@@ -40,5 +40,11 @@ func (e Enabled) ShouldReport(snapshot RuntimeMetricSnapshot) bool {
 			snapshot.Service.ExportModes.CanExportMetrics() &&
 			snapshot.Service.Features.AppRuntime()
 	}
+	if snapshot.Dotnet != nil {
+		return e.Runtime &&
+			snapshot.Service.SDKLanguage == svc.InstrumentableDotnet &&
+			snapshot.Service.ExportModes.CanExportMetrics() &&
+			snapshot.Service.Features.AppRuntime()
+	}
 	return false
 }

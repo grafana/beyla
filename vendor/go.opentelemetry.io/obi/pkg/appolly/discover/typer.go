@@ -333,6 +333,8 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 	t.instrumentableCache.Add(cacheKey{Dev: execElf.Dev(), Ino: execElf.Ino()}, instrumentedExecutable{Type: detectedType, Offsets: nil, InstrumentationError: err})
 	if detectedType == svc.InstrumentablePython {
 		lifecycle.SetRuntimeMetricServiceSource(execElf)
+	}
+	if detectedType == svc.InstrumentablePython || detectedType == svc.InstrumentableDotnet {
 		return ebpf.Instrumentable{
 			Type: detectedType, FileInfo: lifecycle, InstrumentationError: err,
 			LogEnricherEnabled: lifecycle.LogEnricherEnabled(),

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"slices"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"go.opentelemetry.io/obi/pkg/appolly"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -17,7 +19,9 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/export/alloy"
+	"github.com/grafana/beyla/v3/pkg/export/hostinfo"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
 	"github.com/grafana/beyla/v3/pkg/internal/appolly/traces"
 	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
@@ -50,6 +54,8 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 		}, nil
 	})
 
+	overrideOBIHostInfoMetrics(config, swi, ctxInfo, processEventsCh)
+
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
@@ -64,6 +70,41 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	swi.Add(ProcessMetricsSwarmInstancer(ctxInfo, config, ctxInfo.OverrideAppExportQueue))
 
 	return swi.Instance(ctx)
+}
+
+func overrideOBIHostInfoMetrics(
+	config *beyla.Config,
+	swi *swarm.Instancer,
+	ctxInfo *global.ContextInfo,
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+) {
+	// Beyla owns host-info emission so both exporters use the Grafana host attribute.
+	// AsOBI disables OBI's host-info feature to avoid duplicate series.
+	if bexport.Has(config.AsOBI().JoinMetricsConfig().Features, bexport.FeatureHostInfo) {
+		swi.Add(hostinfo.OTELExport(hostinfo.OTELConfig{
+			HostID:   ctxInfo.NodeMeta.HostID,
+			Enabled:  config.AsOBI().OTELMetrics.EndpointEnabled(),
+			Interval: config.OTELMetrics.GetInterval(),
+			TTL:      config.OTELMetrics.TTL,
+			Exporter: ctxInfo.OTELMetricsExporter.Instantiate,
+		}, ctxInfo.OverrideAppExportQueue, processEventsCh))
+		promCfg := hostinfo.PromConfig{
+			HostID:  ctxInfo.NodeMeta.HostID,
+			Enabled: config.Prometheus.EndpointEnabled(),
+			TTL:     config.Prometheus.TTL,
+			Register: func(c prometheus.Collector) error {
+				if config.Prometheus.Registry != nil {
+					return config.Prometheus.Registry.Register(c)
+				}
+				ctxInfo.Prometheus.Register(config.Prometheus.Port, config.Prometheus.Path, c)
+				return nil
+			},
+		}
+		if config.Prometheus.Registry == nil {
+			promCfg.StartHTTP = ctxInfo.Prometheus.StartHTTP
+		}
+		swi.Add(hostinfo.PromExport(promCfg, ctxInfo.OverrideAppExportQueue, processEventsCh))
+	}
 }
 
 func unresolvedNames(cfg *beyla.Config) request.UnresolvedNames {

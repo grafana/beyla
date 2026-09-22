@@ -82,7 +82,7 @@
       }
 
       try {
-        fs.accessSync(`/dev/null/obi/${pad4(incomingFd)}${pad4(outFd)}`)
+        fs.existsSync(`/dev/null/obi/${pad4(incomingFd)}${pad4(outFd)}`)
       } catch (err) {
       }
     }
@@ -125,7 +125,7 @@
 
     // Signal the BPF layer before each async callback so it can restore the correct
     // trace context for this request into traces_ctx_v1.
-    // fs.accessSync is safe inside async_hooks callbacks: synchronous fs operations
+    // fs.existsSync is safe inside async_hooks callbacks: synchronous fs operations
     // do not create AsyncWrap objects and therefore do not re-trigger this hook.
     //
     // When a callback fires OUTSIDE any request (e.g. a background timer, or a
@@ -143,14 +143,14 @@
         if (store && store.incomingFd != null && store.incomingFd >= 0) {
           ctxActive = true;
           try {
-            fs.accessSync(`/dev/null/obi-ctx/${pad4(store.incomingFd)}`);
+            fs.existsSync(`/dev/null/obi-ctx/${pad4(store.incomingFd)}`);
           } catch (_) {}
         } else if (ctxActive) {
           ctxActive = false;
           try {
             // Explicit "no request context" signal: obi_uv_fs_access deletes the
             // traces_ctx_v1 entry so later spans are not parented into a stale trace.
-            fs.accessSync('/dev/null/obi-noreqctx');
+            fs.existsSync('/dev/null/obi-noreqctx');
           } catch (_) {}
         }
       },
@@ -160,7 +160,7 @@
 
   // Runtime metrics (nodejs.eventloop.*): sample eventLoopUtilization and
   // monitorEventLoopDelay and pass them to the eBPF layer through the same
-  // fs.access side channel; the payload format is documented at the decoder
+  // fs.existsSync side channel; the payload format is documented at the decoder
   // (bpf/generictracer/nodejs.c). The interval is fixed: this script is
   // embedded verbatim, so making it configurable means templating it.
   const RT_SAMPLING_INTERVAL_MS = 1000;
@@ -229,7 +229,7 @@
           }
           try {
             // entry.duration is milliseconds; the wire carries nanoseconds
-            fs.accessSync(`/dev/null/obi-v8/g${kind}${rtHex(entry.duration * 1e6)}`);
+            fs.existsSync(`/dev/null/obi-v8/g${kind}${rtHex(entry.duration * 1e6)}`);
           } catch (_) {}
         }
       });
@@ -257,13 +257,13 @@
       ];
       h.reset();
       try {
-        fs.accessSync(`/dev/null/obi-rt/${fields.map(rtHex).join('')}`);
+        fs.existsSync(`/dev/null/obi-rt/${fields.map(rtHex).join('')}`);
       } catch (_) {}
       // v8js heap metrics: one h-record per heap space, numbers at fixed
       // offsets, the engine-defined space name last (the path NUL ends it)
       for (const s of v8.getHeapSpaceStatistics()) {
         try {
-          fs.accessSync(`/dev/null/obi-v8/h${rtHex(s.space_size)}${rtHex(s.space_used_size)}${rtHex(s.space_available_size)}${rtHex(s.physical_space_size)}${s.space_name}`);
+          fs.existsSync(`/dev/null/obi-v8/h${rtHex(s.space_size)}${rtHex(s.space_used_size)}${rtHex(s.space_available_size)}${rtHex(s.physical_space_size)}${s.space_name}`);
         } catch (_) {}
       }
       // v8js.resource.active: fold the live-resource list into per-type
@@ -286,7 +286,7 @@
         orig.rtPrevResources = present;
         for (const [type, count] of counts) {
           try {
-            fs.accessSync(`/dev/null/obi-v8/a${rtHex(count)}${type}`);
+            fs.existsSync(`/dev/null/obi-v8/a${rtHex(count)}${type}`);
           } catch (_) {}
         }
       }

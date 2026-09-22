@@ -69,6 +69,7 @@ const (
 	RouteHarvesterLanguageGo     RouteHarvesterLanguage = "go"
 	RouteHarvesterLanguageDotnet RouteHarvesterLanguage = "dotnet"
 	RouteHarvesterLanguagePython RouteHarvesterLanguage = "python"
+	RouteHarvesterLanguagePHP    RouteHarvesterLanguage = "php"
 	RouteHarvesterLanguageRuby   RouteHarvesterLanguage = "ruby"
 )
 

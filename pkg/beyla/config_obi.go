@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/prometheus/otlptranslator"
@@ -11,12 +12,11 @@ import (
 	obibuildinfo "go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	otel2 "go.opentelemetry.io/obi/pkg/export/otel"
-	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/obi"
 
 	"github.com/grafana/beyla/v3/pkg/buildinfo"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	cfgutil "github.com/grafana/beyla/v3/pkg/helpers/config"
 )
 
@@ -62,6 +62,17 @@ func (c *Config) invalidateOBICache() {
 // overrideOBI contains some extra tweaking that are required in the destination OBI configuration,
 // to override some behaviors such as letting the OTEL exporters to adopt the Grafana credentials
 func overrideOBI(src *Config, dst *obi.Config) {
+	// Preserve per-service host-info selection without letting OBI emit a second series.
+	dst.Discovery.Instrument = slices.Clone(dst.Discovery.Instrument)
+	// Disable host info features in OBI because Beyla will override the export
+	dst.Metrics.Features = bexport.HostInfoFeatures(dst.Metrics.Features)
+	for i := range dst.Discovery.Instrument {
+		dst.Discovery.Instrument[i].Metrics.Features = bexport.HostInfoFeatures(dst.Discovery.Instrument[i].Metrics.Features)
+	}
+	dst.Discovery.Services = slices.Clone(dst.Discovery.Services)
+	for i := range dst.Discovery.Services {
+		dst.Discovery.Services[i].Metrics.Features = bexport.HostInfoFeatures(dst.Discovery.Services[i].Metrics.Features)
+	}
 	// metrics && traces endpoints
 	if src.Grafana.OTLP.MetricsEnabled() {
 		dst.OTELMetrics.OTLPEndpointProvider = func() (string, bool) {
@@ -94,8 +105,6 @@ func OverrideOBIGlobalConfig() {
 	// Override global metric naming options
 	obibuildinfo.Version = buildinfo.Version
 	obibuildinfo.Revision = buildinfo.Revision
-	otel2.CloudHostIDKey = "grafana_host_id"
-	prom.CloudHostIDKey = "grafana_host_id"
 
 	attr.VendorPrefix = "beyla"
 	attr.VendorSDKName = "beyla"
@@ -127,6 +136,11 @@ func OverrideOBIGlobalConfig() {
 	attributes.StatTCPFailedConnections = beylaMetric(attributes.Name{
 		Section: "beyla.stat.tcp.failed.connections",
 		OTEL:    "beyla.stat.tcp.failed.connections",
+		Type:    attributes.InstrumentCounter,
+	})
+	attributes.StatTCPSuccessfulConnections = beylaMetric(attributes.Name{
+		Section: "beyla.stat.tcp.successful.connections",
+		OTEL:    "beyla.stat.tcp.successful.connections",
 		Type:    attributes.InstrumentCounter,
 	})
 	attributes.StatTCPRetransmits = beylaMetric(attributes.Name{

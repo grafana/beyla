@@ -318,7 +318,7 @@ func newResourceInternal(nodeMeta *meta.NodeMeta) *resource.Resource {
 		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
 		semconv.TelemetrySDKVersion(attr.VendorSDKVersion),
 		semconv.TelemetryDistroName(attr.TelemetryDistroName),
-		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion),
+		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion()),
 		semconv.HostID(nodeMeta.HostID),
 	}
 

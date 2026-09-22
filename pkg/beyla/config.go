@@ -68,6 +68,9 @@ func DefaultConfig() *Config {
 	}
 	def.Discovery.DefaultExcludeServices = servicesextra.DefaultExcludeServices
 	def.Discovery.DefaultExcludeInstrument = servicesextra.DefaultExcludeInstrument
+	// Resolve DNS metrics through Kubernetes metadata and reverse DNS without
+	// issuing active DNS queries by default.
+	def.NameResolver.Sources = []transform.Source{transform.SourceK8s, transform.SourceRDNS}
 
 	def.Injector.EnabledSDKs = []servicesextra.InstrumentableType{
 		{InstrumentableType: svc.InstrumentableJava},
@@ -190,7 +193,8 @@ type Config struct {
 
 	HealthCheck obi.HealthCheckConfig `yaml:"health_check"`
 
-	JVMRuntimeMetrics obi.JVMRuntimeMetricsConfig `yaml:"jvm_runtime_metrics"`
+	JVMRuntimeMetrics    obi.JVMRuntimeMetricsConfig    `yaml:"jvm_runtime_metrics"`
+	DotnetRuntimeMetrics obi.DotnetRuntimeMetricsConfig `yaml:"dotnet_runtime_metrics"`
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`

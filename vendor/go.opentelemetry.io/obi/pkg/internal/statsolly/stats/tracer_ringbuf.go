@@ -66,6 +66,8 @@ func handleStatEvent(record *ringbuf.Record) (ebpf.Stat, error) {
 		return readTCPRttIntoStat(record)
 	case ebpf.StatTypeTCPFailedConnection:
 		return readTCPFailedConnectionsIntoStat(record)
+	case ebpf.StatTypeTCPSuccessfulConnection:
+		return readTCPSuccessfulConnectionsIntoStat(record)
 	case ebpf.StatTypeTCPRetransmit:
 		return readTCPRetransmitIntoStat(record)
 	case ebpf.StatTypeTCPIo:
@@ -112,6 +114,20 @@ func readTCPFailedConnectionsIntoStat(record *ringbuf.Record) (ebpf.Stat, error)
 		TCPFailedConnection: &ebpf.TCPFailedConnection{
 			Reason: event.Reason,
 			Role:   event.Role,
+		},
+		CommonAttrs: connToCommonAttrs(event.Conn),
+	}, nil
+}
+
+func readTCPSuccessfulConnectionsIntoStat(record *ringbuf.Record) (ebpf.Stat, error) {
+	event, err := ebpfcommon.ReinterpretCast[ebpf.StatsTCPSuccessfulConnection](record.RawSample)
+	if err != nil {
+		return ebpf.Stat{}, err
+	}
+	return ebpf.Stat{
+		Type: ebpf.StatTypeTCPSuccessfulConnection,
+		TCPSuccessfulConnection: &ebpf.TCPSuccessfulConnection{
+			Role: event.Role,
 		},
 		CommonAttrs: connToCommonAttrs(event.Conn),
 	}, nil

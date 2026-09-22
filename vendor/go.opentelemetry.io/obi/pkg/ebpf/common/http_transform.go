@@ -212,7 +212,12 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 
 func postProcessHTTPSpan(parseCtx *EBPFParseContext, httpSpan *request.Span, req *http.Request, resp *http.Response) request.Span {
 	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
-		span, ok := ebpfhttp.AWSS3Span(httpSpan, req, resp)
+		span, ok := ebpfhttp.AWSSNSSpan(httpSpan, req, resp)
+		if ok {
+			return span
+		}
+
+		span, ok = ebpfhttp.AWSS3Span(httpSpan, req, resp)
 		if ok {
 			return span
 		}
@@ -371,7 +376,7 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 	slog.Debug("Event", "traceID", event.Tp.TraceId, "conn", event.ConnInfo, "buf", event.Buf[:])
 
 	if event.HasLargeBuffers == 1 {
-		b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeRequest, directionByPacketType(packetTypeRequest, isClient), event.ConnInfo, ProtocolTypeHTTP)
+		b, ok := extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeRequest, directionByPacketType(packetTypeRequest, isClient), event.ConnInfo, ProtocolTypeHTTP)
 		if ok {
 			requestBuffer = b
 		} else {
@@ -379,7 +384,7 @@ func HTTPInfoEventToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo) (reques
 			requestBuffer = largebuf.NewLargeBufferFrom(event.Buf[:])
 		}
 
-		b, ok = extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, packetTypeResponse, directionByPacketType(packetTypeResponse, isClient), event.ConnInfo, ProtocolTypeHTTP)
+		b, ok = extractTCPLargeBuffer(parseCtx, event.Tp.TraceId, event.Tp.SpanId, packetTypeResponse, directionByPacketType(packetTypeResponse, isClient), event.ConnInfo, ProtocolTypeHTTP)
 		if ok {
 			responseBuffer = b
 			hasResponse = true

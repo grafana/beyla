@@ -92,6 +92,8 @@ const (
 	ConnFdPos GoOffset = iota + 1 // start at 1, must match what's in go_offsets.h
 	FdLaddrPos
 	FdRaddrPos
+	NetFdPfdPos
+	PollFdSysfdPos
 	TCPAddrPortPtrPos
 	TCPAddrIPPtrPos
 	// http
@@ -475,6 +477,13 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"laddr": FdLaddrPos,
 			"raddr": FdRaddrPos,
+			"pfd":   NetFdPfdPos,
+		},
+	},
+	"internal/poll.FD": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"Sysfd": PollFdSysfdPos,
 		},
 	},
 	"net/http.persistConn": {

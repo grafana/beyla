@@ -38,9 +38,14 @@ func TestMergingFeatures(t *testing.T) {
 		expect  export.Features
 		hasProc bool
 	}
+	// "application" includes body-size metrics; "application_red" selects RED metrics alone.
 	for _, tc := range []testCase{{
+		names:   []string{"application_red", "application_process"},
+		expect:  export.FeatureApplicationRED | FeatureProcess,
+		hasProc: true,
+	}, {
 		names:   []string{"application", "application_span", "application_service_graph"},
-		expect:  export.FeatureApplicationRED | export.FeatureSpanLegacy | export.FeatureGraph,
+		expect:  export.FeatureApplicationRED | export.FeatureApplicationSizes | export.FeatureSpanLegacy | export.FeatureGraph,
 		hasProc: false,
 	}, {
 		names:   []string{"application_process"},
@@ -48,7 +53,7 @@ func TestMergingFeatures(t *testing.T) {
 		hasProc: true,
 	}, {
 		names:   []string{"application", "application_span", "application_service_graph", "application_process"},
-		expect:  export.FeatureApplicationRED | export.FeatureSpanLegacy | export.FeatureGraph | FeatureProcess,
+		expect:  export.FeatureApplicationRED | export.FeatureApplicationSizes | export.FeatureSpanLegacy | export.FeatureGraph | FeatureProcess,
 		hasProc: true,
 	}} {
 		t.Run(strings.Join(tc.names, ","), func(t *testing.T) {
@@ -81,7 +86,7 @@ func TestLoadFeaturesRejectsUnknownNames(t *testing.T) {
 		// empty entries (trailing commas in env values) are not an error
 		name:   "empty entry is ignored",
 		names:  []string{"application", ""},
-		expect: export.FeatureApplicationRED,
+		expect: export.FeatureApplicationRED | export.FeatureApplicationSizes,
 	}, {
 		// the error names the valid features so a typo is self-diagnosing
 		name:        "error lists the valid features",

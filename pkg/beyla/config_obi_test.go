@@ -67,6 +67,8 @@ func TestOverrideOBIGlobalConfig_MetricNames(t *testing.T) {
 			"beyla_stat_tcp_rtt_seconds", attributes.InstrumentHistogram},
 		{attributes.StatTCPFailedConnections, "beyla.stat.tcp.failed.connections", "beyla.stat.tcp.failed.connections", "",
 			"beyla_stat_tcp_failed_connections_total", attributes.InstrumentCounter},
+		{attributes.StatTCPSuccessfulConnections, "beyla.stat.tcp.successful.connections", "beyla.stat.tcp.successful.connections", "",
+			"beyla_stat_tcp_successful_connections_total", attributes.InstrumentCounter},
 		{attributes.StatTCPRetransmits, "beyla.stat.tcp.retransmits", "beyla.stat.tcp.retransmits", "",
 			"beyla_stat_tcp_retransmits_total", attributes.InstrumentCounter},
 		{attributes.StatTCPIo, "beyla.stat.tcp.io", "beyla.stat.tcp.io", "By",

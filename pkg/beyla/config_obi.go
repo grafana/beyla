@@ -138,6 +138,11 @@ func OverrideOBIGlobalConfig() {
 		OTEL:    "beyla.stat.tcp.failed.connections",
 		Type:    attributes.InstrumentCounter,
 	})
+	attributes.StatTCPSuccessfulConnections = beylaMetric(attributes.Name{
+		Section: "beyla.stat.tcp.successful.connections",
+		OTEL:    "beyla.stat.tcp.successful.connections",
+		Type:    attributes.InstrumentCounter,
+	})
 	attributes.StatTCPRetransmits = beylaMetric(attributes.Name{
 		Section: "beyla.stat.tcp.retransmits",
 		OTEL:    "beyla.stat.tcp.retransmits",

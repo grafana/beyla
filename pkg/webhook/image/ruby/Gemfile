@@ -1,0 +1,7 @@
+source 'https://rubygems.org'
+
+revision = File.read(File.expand_path('upstream-revision.txt', __dir__)).strip
+
+gem 'opentelemetry-auto-instrumentation',
+    git: 'https://github.com/open-telemetry/opentelemetry-ruby-instrumentation.git',
+    ref: revision

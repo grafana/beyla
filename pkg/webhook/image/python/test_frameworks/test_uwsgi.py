@@ -72,6 +72,32 @@ class TestUwsgiParsing(unittest.TestCase):
 
         self.assertEqual(("", ["/srv/orders", "."]), (launch.target, launch.search_paths))
 
+    def test_option_value_is_not_reparsed_as_a_module_option(self):
+        launch = parse_uwsgi(["--http", "--module", "orders.wsgi:application"], {})
+
+        self.assertEqual("", launch.target)
+
+    def test_parsing_resumes_after_an_option_value(self):
+        launch = parse_uwsgi(
+            ["--http", "--module", "--module", "orders.wsgi:application"],
+            {},
+        )
+
+        self.assertEqual("orders.wsgi:application", launch.target)
+
+    def test_unknown_option_before_module_fails_closed(self):
+        launch = parse_uwsgi(
+            ["--plugin-option", "--module", "orders.wsgi:application"],
+            {},
+        )
+
+        self.assertEqual("", launch.target)
+
+    def test_flag_does_not_hide_following_module_option(self):
+        launch = parse_uwsgi(["--master", "--module", "orders.wsgi:application"], {})
+
+        self.assertEqual("orders.wsgi:application", launch.target)
+
 
 if __name__ == "__main__":
     unittest.main()

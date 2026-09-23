@@ -93,6 +93,39 @@ class TestGunicornParsing(unittest.TestCase):
             with self.subTest(args=args):
                 self.assertEqual(expected, parse_gunicorn(args, {}).fallback_name)
 
+    def test_option_value_is_not_reparsed_as_a_name_option(self):
+        launch = parse_gunicorn(
+            ["--env", "--name", "orders.wsgi:application"],
+            {},
+        )
+
+        self.assertEqual("orders.wsgi:application", launch.target)
+        self.assertEqual("", launch.fallback_name)
+
+    def test_short_option_value_is_not_reparsed_as_a_name_option(self):
+        launch = parse_gunicorn(
+            ["-e", "-n", "orders.wsgi:application"],
+            {},
+        )
+
+        self.assertEqual("orders.wsgi:application", launch.target)
+        self.assertEqual("", launch.fallback_name)
+
+    def test_setting_parsing_resumes_after_an_option_value(self):
+        launch = parse_gunicorn(
+            [
+                "--env",
+                "--name",
+                "--name",
+                "orders-service",
+                "orders.wsgi:application",
+            ],
+            {},
+        )
+
+        self.assertEqual("orders.wsgi:application", launch.target)
+        self.assertEqual("orders-service", launch.fallback_name)
+
     def test_recognized_option_forms(self):
         cases = [
             ["--bind", ":8000", "orders.wsgi:application"],

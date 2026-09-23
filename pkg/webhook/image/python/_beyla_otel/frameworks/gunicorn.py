@@ -67,19 +67,34 @@ def _apply_gunicorn_settings(args, settings):
         arg = args[index]
         if arg == "--":
             return
+        matched = False
         for option, key in (("--chdir", "chdir"), ("--pythonpath", "pythonpath"), ("--name", "name"), ("-n", "name")):
             if arg == option and index + 1 < len(args):
                 index += 1
                 settings[key] = args[index]
+                matched = True
                 break
             if option.startswith("--") and arg.startswith(option + "="):
                 settings[key] = arg[len(option) + 1:]
+                matched = True
                 break
-        else:
+        if not matched:
             attached = _gunicorn_attached_name(arg)
             if attached is not None:
                 settings["name"] = attached
+            elif _gunicorn_consumes_next(arg):
+                index += 1
         index += 1
+
+
+def _gunicorn_consumes_next(arg):
+    """Check whether a Gunicorn option consumes the next token."""
+    if arg.startswith("--"):
+        name, separator, _ = arg.partition("=")
+        return not separator and name in GUNICORN_WITH_VALUES
+    if arg.startswith("-") and arg != "-":
+        return short_option(arg, GUNICORN_WITH_VALUES, GUNICORN_WITHOUT_VALUES)[0]
+    return False
 
 
 def _gunicorn_attached_name(arg):
@@ -172,4 +187,3 @@ def _split_shell_fields(value):
 def _split_list(value):
     """Split a comma-separated Gunicorn option."""
     return [item.strip() for item in (value or "").split(",") if item.strip()]
-

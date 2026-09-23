@@ -39,7 +39,15 @@ func ilog() *slog.Logger {
 	return slog.With("component", "ebpf.Instrumenter")
 }
 
-var findNamespacedPids = procs.FindNamespacedPids
+var (
+	findNamespacedPids = procs.FindNamespacedPids
+	attachKprobe       = func(symbol string, program *ebpf.Program, opts *link.KprobeOptions) (io.Closer, error) {
+		return link.Kprobe(symbol, program, opts)
+	}
+	attachKretprobe = func(symbol string, program *ebpf.Program, opts *link.KprobeOptions) (io.Closer, error) {
+		return link.Kretprobe(symbol, program, opts)
+	}
+)
 
 func closeAll(closers []io.Closer) {
 	for i := range closers {
@@ -425,7 +433,7 @@ func (i *instrumenter) kprobes(p KprobesTracer) error {
 
 func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) error {
 	if programs.Start != nil {
-		kp, err := link.Kprobe(funcName, programs.Start, nil)
+		kp, err := attachKprobe(funcName, programs.Start, nil)
 		if err != nil {
 			if i.metrics != nil {
 				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingKprobe)
@@ -438,7 +446,7 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) er
 	if programs.End != nil {
 		// The commented code doesn't work on certain kernels. We need to invesigate more to see if it's possible
 		// to productize it. Failure says: "neither debugfs nor tracefs are mounted".
-		kp, err := link.Kretprobe(funcName, programs.End, nil /*&link.KprobeOptions{RetprobeMaxActive: 1024}*/)
+		kp, err := attachKretprobe(funcName, programs.End, nil /*&link.KprobeOptions{RetprobeMaxActive: 1024}*/)
 		if err != nil {
 			if i.metrics != nil {
 				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingKprobe)

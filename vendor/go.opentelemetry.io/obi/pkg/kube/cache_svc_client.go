@@ -144,7 +144,8 @@ func (sc *cacheSvcClient) Subscribe(observer meta.Observer) {
 	case <-sc.ctx.Done():
 		sc.log.Debug("context done. Nothing to do")
 	case <-time.After(sc.syncTimeout):
-		sc.log.Warn("timed out while waiting for K8s metadata synchronization. Some metadata might be temporarily missing." +
+		sc.log.Warn("timed out while waiting for K8s metadata synchronization." +
+			" Processes running in containers are not instrumented until their Pod is known." +
 			" If this is expected due to the size of your cluster, you might want to increase the timeout via" +
 			" the OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT configuration option")
 	}

@@ -253,15 +253,27 @@ func goTypeMetadataName(ef *elf.File, types uint64, nameOffset int32) (string, e
 }
 
 func readVirtualMemory(ef *elf.File, addr, size uint64) ([]byte, error) {
+	return readVirtualMemoryWithFlags(ef, addr, size, 0)
+}
+
+// readVirtualMemoryWithFlags reads file-backed bytes from a load segment that
+// includes all required permissions.
+func readVirtualMemoryWithFlags(ef *elf.File, addr, size uint64, flags elf.ProgFlag) ([]byte, error) {
 	if size > uint64(^uint(0)>>1) || addr > ^uint64(0)-size {
 		return nil, errors.New("invalid virtual memory range")
 	}
 	for _, prog := range ef.Progs {
-		if prog.Type != elf.PT_LOAD || addr < prog.Vaddr || addr+size > prog.Vaddr+prog.Filesz {
+		if prog.Type != elf.PT_LOAD || prog.Flags&flags != flags || addr < prog.Vaddr {
+			continue
+		}
+		// Check the remaining file bytes without adding potentially overflowing
+		// range ends. ReadAt also requires the offset to fit in a signed int64.
+		offset := addr - prog.Vaddr
+		if offset > prog.Filesz || size > prog.Filesz-offset || offset > uint64(1<<63-1) {
 			continue
 		}
 		data := make([]byte, int(size))
-		if _, err := prog.ReadAt(data, int64(addr-prog.Vaddr)); err != nil {
+		if _, err := prog.ReadAt(data, int64(offset)); err != nil {
 			return nil, err
 		}
 		return data, nil

@@ -7,6 +7,10 @@ module Beyla
     module Log
       module_function
 
+      def info(message)
+        Kernel.warn "#{PREFIX} #{message}"
+      end
+
       def warning(message)
         Kernel.warn "#{PREFIX} #{message}"
       end

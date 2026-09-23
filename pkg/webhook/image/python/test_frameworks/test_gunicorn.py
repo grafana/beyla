@@ -55,7 +55,13 @@ class TestGunicornParsing(unittest.TestCase):
                 self.assertEqual("orders.wsgi:application", launch.target)
 
     def test_application_forms(self):
-        for target in ("orders.wsgi", "orders.wsgi:application", "orders.wsgi:create()"):
+        targets = (
+            "orders.wsgi",
+            "orders.wsgi:application",
+            "orders.wsgi:create()",
+            "orders.wsgi:create('redis://cache:6379/0')",
+        )
+        for target in targets:
             with self.subTest(target=target):
                 launch = parse_gunicorn([target], {})
                 self.assertEqual((target, "module"), (launch.target, launch.target_kind))

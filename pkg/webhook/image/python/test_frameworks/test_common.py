@@ -85,8 +85,19 @@ class TestCommonParsing(unittest.TestCase):
             "app:main.attr",
             "app:create()",
             "app:create(a=1,b=2)",
+            "app:create('redis://cache:6379/0')",
         ]
-        rejected = ["", "app", "app:", ":app", "1app:main", "app:1main", "app:create (a=1)"]
+        rejected = [
+            "",
+            "app",
+            "app:",
+            ":app",
+            "app:main:extra",
+            "app::main",
+            "1app:main",
+            "app:1main",
+            "app:create (a=1)",
+        ]
 
         for value in accepted:
             with self.subTest(value=value):
@@ -98,6 +109,9 @@ class TestCommonParsing(unittest.TestCase):
     def test_strict_application_reference_rejects_factory_calls(self):
         self.assertTrue(application_reference("app:create", strict=True))
         self.assertFalse(application_reference("app:create()", strict=True))
+        self.assertFalse(
+            application_reference("app:create('redis://cache:6379/0')", strict=True)
+        )
 
     def test_first_application_reference(self):
         values = ["orders", "app:", "orders.api:app", "inventory.wsgi:application"]
@@ -124,4 +138,3 @@ class TestCommonParsing(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -42,9 +42,9 @@ def valid_module(value):
 
 def application_reference(value, strict=False):
     """Recognize a module and application object reference."""
-    if value.count(":") != 1:
+    module, separator, obj = value.partition(":")
+    if not separator:
         return False
-    module, obj = value.split(":", 1)
     if not strict and "(" in obj:
         obj = obj.split("(", 1)[0]
     return valid_module(module) and valid_module(obj)
@@ -97,4 +97,3 @@ def _specific_name(value):
     if value in {"", ".", "..", "-", "__init__", "__main__"}:
         return ""
     return "" if value.lower() in GENERIC_MODULE_NAMES else value
-

@@ -130,6 +130,64 @@ class TestServiceMetadata(unittest.TestCase):
         self.assertEqual("python-travel-agent", metadata.name)
         self.assertEqual("application directory", metadata.name_source)
 
+    def test_generic_framework_target_uses_application_directory(self):
+        application = self.project.root / "python-travel-agent"
+        self.project.write("python-travel-agent/server.py")
+
+        metadata = self.detect("uvicorn", ["server:app"], cwd=application)
+
+        self.assertEqual("python-travel-agent", metadata.name)
+        self.assertEqual("application directory", metadata.name_source)
+
+    def test_generic_framework_target_in_src_uses_application_root(self):
+        application = self.project.root / "python-travel-agent"
+        self.project.write("python-travel-agent/src/server.py")
+
+        metadata = self.detect("uvicorn", ["src.server:app"], cwd=application)
+
+        self.assertEqual("python-travel-agent", metadata.name)
+
+    def test_framework_application_directory_precedes_working_directory(self):
+        workspace = self.project.root / "workspace"
+        self.project.write("workspace/services/orders/server.py")
+
+        metadata = self.detect(
+            "uvicorn",
+            ["--app-dir=services/orders", "server:app"],
+            cwd=workspace,
+        )
+
+        self.assertEqual("orders", metadata.name)
+
+    def test_application_root_precedes_target_file_directory(self):
+        application = self.project.root / "python-travel-agent"
+        self.project.write("python-travel-agent/backend/server.py")
+
+        metadata = self.detect("python", ["backend/server.py"], cwd=application)
+
+        self.assertEqual("python-travel-agent", metadata.name)
+
+    def test_fastapi_parent_config_supplies_application_directory(self):
+        application = self.project.root / "workspace/orders"
+        self.project.write("workspace/orders/server.py")
+        self.project.write("workspace/orders/subdir/.keep")
+        self.project.write(
+            "workspace/orders/pyproject.toml",
+            "[tool.fastapi]\nentrypoint = 'server.py'\n",
+        )
+
+        metadata = self.detect("fastapi", ["run"], cwd=application / "subdir")
+
+        self.assertEqual("orders", metadata.name)
+
+    def test_low_quality_application_directory_remains_unnamed(self):
+        application = self.project.root / "unknown"
+        self.project.write("unknown/server.py")
+
+        metadata = self.detect("python", ["server.py"], cwd=application)
+
+        self.assertEqual("", metadata.name)
+
     def test_framework_named_scripts_use_project_metadata(self):
         self.project.write(
             "pyproject.toml",
@@ -180,7 +238,14 @@ class TestServiceMetadata(unittest.TestCase):
         self.assertEqual(("flask-orders", "1.0"), (metadata.name, metadata.version))
 
     def test_gunicorn_name_is_the_final_fallback(self):
-        metadata = self.detect("gunicorn", ["--name", "orders-worker", "-b", ":8080"])
+        application = self.project.root / "python-travel-agent"
+        self.project.write("python-travel-agent/server.py")
+
+        metadata = self.detect(
+            "gunicorn",
+            ["--name", "orders-worker", "server:app"],
+            cwd=application,
+        )
 
         self.assertEqual("orders-worker", metadata.name)
 

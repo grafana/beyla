@@ -25,6 +25,7 @@ class TestCommonParsing(unittest.TestCase):
             "app.main:app": "main",
             "main.py": "main",
             "config.settings": "",
+            "unknown": "",
             "src/orders/__init__.py": "",
             "company.inventory.application:create()": "inventory",
         }

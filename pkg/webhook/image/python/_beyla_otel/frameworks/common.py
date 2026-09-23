@@ -10,7 +10,7 @@ GENERIC_MODULE_NAMES = {
     "api", "app", "application", "asgi", "celery", "cli", "conf", "config",
     "entrypoint", "index", "manage", "models", "project", "routes", "run",
     "runserver", "server", "service", "settings", "src", "start", "tasks",
-    "urls", "views", "web", "worker", "wsgi",
+    "unknown", "urls", "views", "web", "worker", "wsgi",
 }
 
 

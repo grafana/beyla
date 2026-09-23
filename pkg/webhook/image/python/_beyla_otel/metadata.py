@@ -40,8 +40,8 @@ def detect_service_metadata(cmdline=None, cwd=None, env=None):
         metadata.name = clean_value(launch.fallback_name)
         if metadata.name:
             metadata.name_source = "{} fallback".format(launch.source or "python launch")
-    if not metadata.name and launch.target_kind == TARGET_SCRIPT:
-        metadata.name = _application_directory_name(target_path, cwd)
+    if not metadata.name and target_path:
+        metadata.name = _application_directory_name(target_path, cwd, launch)
         if metadata.name:
             metadata.name_source = "application directory"
     return metadata
@@ -55,6 +55,7 @@ def _resolve_fastapi_entrypoint(cwd, launch):
     if entrypoint:
         launch.target = entrypoint
         launch.target_kind = classify_target(entrypoint)
+        launch.app_dir = config_dir
         launch.search_paths.insert(0, config_dir)
 
 
@@ -71,17 +72,26 @@ def _metadata_for_launch(cwd, launch, env):
     return ProjectMetadata(), ""
 
 
-def _application_directory_name(target_path, cwd):
-    """Find a non-generic script directory without walking above the working directory."""
+def _application_directory_name(target_path, cwd, launch):
+    """Find a non-generic application directory in launch precedence order."""
     if not target_path:
         return ""
-    directory = os.path.dirname(os.path.realpath(target_path))
-    boundary = os.path.realpath(cwd)
-    try:
-        if os.path.commonpath((directory, boundary)) != boundary:
-            return ""
-    except ValueError:
+
+    target_directory = os.path.dirname(os.path.realpath(target_path))
+    roots = _application_roots(cwd, launch)
+    for directory in roots:
+        name = target_name(os.path.basename(directory))
+        if name:
+            return name
+
+    boundaries = [root for root in roots if _path_within(target_directory, root)]
+    if not boundaries and launch.target_kind in {TARGET_FILE, TARGET_SCRIPT}:
+        boundaries.append(target_directory)
+    if not boundaries:
         return ""
+
+    boundary = min(boundaries, key=len)
+    directory = target_directory
     while True:
         name = target_name(os.path.basename(directory))
         if name:
@@ -89,6 +99,27 @@ def _application_directory_name(target_path, cwd):
         if directory == boundary:
             return ""
         directory = os.path.dirname(directory)
+
+
+def _application_roots(cwd, launch):
+    """Resolve distinct framework, script, and working directories."""
+    roots = []
+    for path in (launch.app_dir, launch.script_dir, cwd):
+        if not path:
+            continue
+        directory = path if os.path.isabs(path) else os.path.join(cwd, path)
+        directory = os.path.realpath(directory)
+        if os.path.isdir(directory) and directory not in roots:
+            roots.append(directory)
+    return roots
+
+
+def _path_within(path, boundary):
+    """Check whether a path is within a directory boundary."""
+    try:
+        return os.path.commonpath((path, boundary)) == boundary
+    except ValueError:
+        return False
 
 
 def read_commandline():

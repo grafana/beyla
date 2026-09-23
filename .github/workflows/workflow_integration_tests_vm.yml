@@ -71,41 +71,40 @@ jobs:
     steps:
       - name: Free up disk space
         run: |
-          # Remove Java (JDKs)
-          sudo rm -rf /usr/lib/jvm
+          # Docker's reclaimed-space total excludes the toolchains removed below.
+          # Report each operation separately to identify expensive cleanup work.
+          free_kib() {
+            df -Pk / | awk 'NR == 2 {print $4}'
+          }
 
-          # Remove .NET SDKs
-          sudo rm -rf /usr/share/dotnet
+          cleanup() {
+            local label="$1"
+            shift
+            local started=$SECONDS before after status=0
+            before=$(free_kib)
+            echo "::group::${label}"
+            "$@" || status=$?
+            after=$(free_kib)
+            echo "${label}: $((SECONDS - started))s, $(((after - before) / 1024)) MiB reclaimed, $((after / 1024)) MiB available (exit ${status})"
+            echo "::endgroup::"
+            return "$status"
+          }
 
-          # Remove Swift toolchain
-          sudo rm -rf /usr/share/swift
-
-          # Remove Haskell (GHC)
-          sudo rm -rf /usr/local/.ghcup
-
-          # Remove Julia
-          sudo rm -rf /usr/local/julia*
-
-          # Remove Android SDKs
-          sudo rm -rf /usr/local/lib/android
-
-          # Remove Chromium (optional if not using for browser tests)
-          sudo rm -rf /usr/local/share/chromium
-
-          # Remove Microsoft/Edge and Google Chrome builds
-          sudo rm -rf /opt/microsoft /opt/google
-
-          # Remove Azure CLI
-          sudo rm -rf /opt/az
-
-          # Remove PowerShell
-          sudo rm -rf /usr/local/share/powershell
-
-          # Remove CodeQL (but keep hostedtoolcache for Go)
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-
-          docker system prune -af || true
-          docker builder prune -af || true
+          df -h /
+          cleanup "Remove Java" sudo rm -rf /usr/lib/jvm
+          cleanup "Remove .NET" sudo rm -rf /usr/share/dotnet
+          cleanup "Remove Swift" sudo rm -rf /usr/share/swift
+          cleanup "Remove Haskell" sudo rm -rf /usr/local/.ghcup
+          cleanup "Remove Julia" sudo rm -rf /usr/local/julia*
+          cleanup "Remove Android SDKs" sudo rm -rf /usr/local/lib/android
+          cleanup "Remove Chromium" sudo rm -rf /usr/local/share/chromium
+          cleanup "Remove Edge and Chrome" sudo rm -rf /opt/microsoft /opt/google
+          cleanup "Remove Azure CLI" sudo rm -rf /opt/az
+          cleanup "Remove PowerShell" sudo rm -rf /usr/local/share/powershell
+          # Keep the rest of hostedtoolcache for Go.
+          cleanup "Remove CodeQL" sudo rm -rf /opt/hostedtoolcache/CodeQL
+          cleanup "Prune Docker" docker system prune -af || true
+          cleanup "Prune Docker builder" docker builder prune -af || true
           df -h
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -248,19 +247,38 @@ jobs:
     steps:
       - name: Free up disk space
         run: |
-          # Free disk space without pruning docker — we will load cached
-          # images from the prep artifact.
-          sudo rm -rf /usr/lib/jvm
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/share/swift
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf /usr/local/julia*
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/local/share/chromium
-          sudo rm -rf /opt/microsoft /opt/google
-          sudo rm -rf /opt/az
-          sudo rm -rf /usr/local/share/powershell
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          # Keep Docker images for loading the cached prep artifact.
+          # Report each operation separately to identify expensive cleanup work.
+          free_kib() {
+            df -Pk / | awk 'NR == 2 {print $4}'
+          }
+
+          cleanup() {
+            local label="$1"
+            shift
+            local started=$SECONDS before after status=0
+            before=$(free_kib)
+            echo "::group::${label}"
+            "$@" || status=$?
+            after=$(free_kib)
+            echo "${label}: $((SECONDS - started))s, $(((after - before) / 1024)) MiB reclaimed, $((after / 1024)) MiB available (exit ${status})"
+            echo "::endgroup::"
+            return "$status"
+          }
+
+          df -h /
+          cleanup "Remove Java" sudo rm -rf /usr/lib/jvm
+          cleanup "Remove .NET" sudo rm -rf /usr/share/dotnet
+          cleanup "Remove Swift" sudo rm -rf /usr/share/swift
+          cleanup "Remove Haskell" sudo rm -rf /usr/local/.ghcup
+          cleanup "Remove Julia" sudo rm -rf /usr/local/julia*
+          cleanup "Remove Android SDKs" sudo rm -rf /usr/local/lib/android
+          cleanup "Remove Chromium" sudo rm -rf /usr/local/share/chromium
+          cleanup "Remove Edge and Chrome" sudo rm -rf /opt/microsoft /opt/google
+          cleanup "Remove Azure CLI" sudo rm -rf /opt/az
+          cleanup "Remove PowerShell" sudo rm -rf /usr/local/share/powershell
+          # Keep the rest of hostedtoolcache for Go.
+          cleanup "Remove CodeQL" sudo rm -rf /opt/hostedtoolcache/CodeQL
           df -h
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

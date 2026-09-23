@@ -121,6 +121,8 @@ type Tracer interface {
 	SetEventContext(*ebpfcommon.EBPFEventContext)
 	Required() bool
 	Capabilities() ebpfcommon.TracerCapability
+	// Close releases resources when a loaded tracer cannot be started.
+	Close() error
 	// Run will do the action of listening for eBPF traces and forward them
 	// periodically to the output channel.
 	Run(context.Context, *ebpfcommon.EBPFEventContext, *msg.Queue[[]request.Span])
@@ -157,6 +159,8 @@ type ProcessTracer struct {
 	// attachment against shutdown
 	instrumentablesMu         sync.Mutex
 	stopped                   bool
+	closeOnce                 sync.Once
+	closeErr                  error
 	nextExecutableGeneration  uint64
 	instrumentableGenerations map[ExecutableKey]uint64
 

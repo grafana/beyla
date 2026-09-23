@@ -126,28 +126,33 @@ func maybeFastCGI(b *largebuf.LargeBuffer) bool {
 	return bytes.Contains(b.UnsafeView(), []byte(requestMethodKey))
 }
 
-func parseHeader(b *largebuf.LargeBuffer) ([]byte, error) {
+// parseHeader returns the PARAMS payload and reports whether all of it was
+// captured. The capture buffer is 256 bytes by default, so a PARAMS record
+// longer than that arrives cut off and the parameters past the cut are not
+// merely absent, they are unknown.
+func parseHeader(b *largebuf.LargeBuffer) ([]byte, bool, error) {
 	r := b.NewReader()
 	for {
 		if r.Remaining() < fastCGIRequestHeaderLen {
-			return nil, errFastCGIPayloadTooShort
+			return nil, false, errFastCGIPayloadTooShort
 		}
 		hdrBytes, err := r.ReadN(fastCGIRequestHeaderLen)
 		if err != nil {
-			return nil, errFastCGIPayloadTooShort
+			return nil, false, errFastCGIPayloadTooShort
 		}
 		hdr := readFastCGIHeader(hdrBytes)
 
 		if hdr.Type == fcgiFrameTypeParams {
 			if r.Remaining() == 0 {
-				return nil, errFastCGIPayloadTooShort
+				return nil, false, errFastCGIPayloadTooShort
 			}
+			complete := r.Remaining() >= int(hdr.ContentLength)
 			rest, _ := r.ReadN(r.Remaining())
-			return rest, nil
+			return rest, complete, nil
 		}
 		payloadOffset := int(hdr.ContentLength) + int(hdr.PaddingLength)
 		if err := r.Skip(payloadOffset); err != nil {
-			return nil, errFastCGIPayloadTooShort
+			return nil, false, errFastCGIPayloadTooShort
 		}
 	}
 }
@@ -157,9 +162,14 @@ func parseHeader(b *largebuf.LargeBuffer) ([]byte, error) {
 // proxy REQUEST_SCHEME describes the hop into PHP-FPM and reads `http` for a
 // request the client made over TLS. REQUEST_SCHEME carries the scheme directly
 // otherwise; HTTPS is the older convention and is set to a truthy value only
-// for TLS. None present means the front end did not say, and guessing would be
-// wrong for any TLS-terminated site.
-func cgiScheme(kv map[string]string) string {
+// for TLS.
+//
+// With none of them present semconv asks for the scheme of the immediate peer
+// request, which is the plain connection into PHP-FPM. That fallback only holds
+// when the whole params table was captured: in a truncated one a scheme key may
+// sit past the cut, and reporting `http` for a request the client made over TLS
+// is worse than reporting no scheme at all.
+func cgiScheme(kv map[string]string, paramsComplete bool) string {
 	if scheme := forwardedProto(kv[forwardedProtoKey]); scheme != "" {
 		return scheme
 	}
@@ -173,7 +183,11 @@ func cgiScheme(kv map[string]string) string {
 		return "https"
 	}
 
-	return ""
+	if !paramsComplete {
+		return ""
+	}
+
+	return "http"
 }
 
 // forwardedProto reads the left-most entry of an X-Forwarded-Proto list, which
@@ -203,7 +217,7 @@ func cgiRequestURI(kv map[string]string) string {
 }
 
 func detectFastCGI(b, rb *largebuf.LargeBuffer) (fastCGIRequest, bool) {
-	raw, err := parseHeader(b)
+	raw, paramsComplete, err := parseHeader(b)
 	if err != nil {
 		return fastCGIRequest{}, false
 	}
@@ -249,7 +263,7 @@ func detectFastCGI(b, rb *largebuf.LargeBuffer) (fastCGIRequest, bool) {
 		return fastCGIRequest{
 			method: method,
 			uri:    uri,
-			scheme: cgiScheme(kv),
+			scheme: cgiScheme(kv, paramsComplete),
 			status: status,
 		}, true
 	}

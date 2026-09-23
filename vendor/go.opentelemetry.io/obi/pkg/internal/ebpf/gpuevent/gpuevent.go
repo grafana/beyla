@@ -116,6 +116,10 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
+func (p *Tracer) Close() error {
+	return ebpfcommon.CloseResources(append(p.closers, &p.bpfObjects)...)
+}
+
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	return nil
 }

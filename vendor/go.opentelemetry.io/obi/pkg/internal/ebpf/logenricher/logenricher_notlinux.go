@@ -27,6 +27,7 @@ func (p *Tracer) AllowPID(_ app.PID, _ uint32, _ *exec.FileInfo)         {}
 func (p *Tracer) BlockPID(_ app.PID, _ uint32)                           {}
 func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error)           { return nil, nil }
 func (p *Tracer) AddCloser(_ ...io.Closer)                               {}
+func (p *Tracer) Close() error                                           { return nil }
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc           { return nil }
 func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc               { return nil }
 func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc { return nil }

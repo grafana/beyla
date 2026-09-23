@@ -1041,6 +1041,37 @@ type JSONRPC struct {
 	RequestID    string `json:"requestId"`
 	ErrorCode    int    `json:"errorCode,omitempty"`
 	ErrorMessage string `json:"errorMessage,omitempty"`
+	// ServiceQualified marks a method read out of a header that names a
+	// service, which only the Go net/rpc uprobe observes. It survives payload
+	// extraction, which overwrites everything else it parses off the wire.
+	ServiceQualified bool `json:"-"`
+}
+
+// JSONRPCVersionV1 is the version Go's net/rpc/jsonrpc speaks, and the only
+// one the Go uprobes report.
+const JSONRPCVersionV1 = "1.0"
+
+// QualifiedMethod returns the method in the shape `rpc.method` is defined as:
+// the fully-qualified name from the RPC interface perspective, whose semconv
+// examples separate the service from the method with a slash
+// ('EchoService/Echo').
+//
+// Only net/rpc names a service, and it does so with a dot, so the last dot
+// becomes the separator there. JSON-RPC itself assigns the dot no meaning and
+// takes arbitrary method names, so a method nothing qualified is returned as
+// it came off the wire: splitting 'inventory.lookup.v2' would claim a service
+// boundary nothing observed.
+func (j *JSONRPC) QualifiedMethod() string {
+	if !j.ServiceQualified {
+		return j.Method
+	}
+
+	i := strings.LastIndexByte(j.Method, '.')
+	if i <= 0 || i == len(j.Method)-1 {
+		return j.Method
+	}
+
+	return j.Method[:i] + "/" + j.Method[i+1:]
 }
 
 // Generic embedding provider types (Voyage AI, Cohere, Jina AI)
@@ -2259,7 +2290,7 @@ func (s *Span) TraceName() string {
 
 		if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
 			if s.JSONRPC.Method != "" {
-				return s.JSONRPC.Method
+				return s.JSONRPC.QualifiedMethod()
 			}
 			return "jsonrpc"
 		}

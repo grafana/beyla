@@ -34,9 +34,13 @@ type watcherKubeEnricher struct {
 	log *slog.Logger
 
 	// cached system objects
-	mt                 sync.RWMutex
-	containerByPID     map[app.PID]container.Info
+	mt             sync.RWMutex
+	containerByPID map[app.PID]container.Info
+	// also the processes of containers whose Pod is not known yet, which are only
+	// forwarded once it is, so criteria never run without the metadata they depend on
 	processByContainer map[string][]ProcessAttrs
+	// PIDs already reported for running in an unrecognized kubelet cgroup format
+	unknownCgroupWarned map[app.PID]struct{}
 
 	podsInfoCh chan Event[*informer.ObjectMeta]
 	output     *msg.Queue[[]Event[ProcessAttrs]]
@@ -62,16 +66,25 @@ func WatcherKubeEnricherProvider(
 		if err != nil {
 			return nil, fmt.Errorf("instantiating WatcherKubeEnricher: %w", err)
 		}
-		wk := watcherKubeEnricher{
-			log:                slog.With("component", "discover.watcherKubeEnricher"),
-			store:              store,
-			containerByPID:     map[app.PID]container.Info{},
-			processByContainer: map[string][]ProcessAttrs{},
-			podsInfoCh:         make(chan Event[*informer.ObjectMeta], 10),
-			input:              input.Subscribe(msg.SubscriberName("WatcherKubeEnricher")),
-			output:             output,
-		}
+		wk := newWatcherKubeEnricher(store, input.Subscribe(msg.SubscriberName("WatcherKubeEnricher")), output)
 		return wk.enrich, nil
+	}
+}
+
+func newWatcherKubeEnricher(
+	store *kube.Store,
+	input <-chan []Event[ProcessAttrs],
+	output *msg.Queue[[]Event[ProcessAttrs]],
+) *watcherKubeEnricher {
+	return &watcherKubeEnricher{
+		log:                 slog.With("component", "discover.watcherKubeEnricher"),
+		store:               store,
+		containerByPID:      map[app.PID]container.Info{},
+		processByContainer:  map[string][]ProcessAttrs{},
+		unknownCgroupWarned: map[app.PID]struct{}{},
+		podsInfoCh:          make(chan Event[*informer.ObjectMeta], 10),
+		input:               input,
+		output:              output,
 	}
 }
 
@@ -173,11 +186,15 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo ProcessAttrs) (ProcessAttrs
 	wk.mt.Lock()
 	defer wk.mt.Unlock()
 	// 1. get container owning the process and cache it
-	// 2. if there is already a pod registered for that container, decorate processAttrs with pod attributes
+	// 2. forward the process only once its pod is known, decorated with the pod attributes
 	containerInfo, err := wk.getContainerInfo(procInfo.pid)
 	if err != nil {
 		// it is expected for any process not running inside a container
 		wk.log.Debug("can't get container info for PID", "pid", procInfo.pid, "error", err)
+		if errors.Is(err, container.ErrUnknownKubeletCgroup) {
+			wk.warnUnknownKubeletCgroup(procInfo.pid)
+			return procInfo, true
+		}
 		if errors.Is(err, container.ErrContainerNotFound) {
 			return procInfo, true
 		}
@@ -186,13 +203,38 @@ func (wk *watcherKubeEnricher) onNewProcess(procInfo ProcessAttrs) (ProcessAttrs
 
 	wk.log.Debug("found container info for process", "pid", procInfo.pid, "container", containerInfo.ContainerID)
 
-	wk.processByContainer[containerInfo.ContainerID] = append(wk.processByContainer[containerInfo.ContainerID], procInfo)
+	wk.processByContainer[containerInfo.ContainerID] = upsertProcess(wk.processByContainer[containerInfo.ContainerID], procInfo)
 
-	if pod := wk.store.PodByContainerID(containerInfo.ContainerID); pod != nil {
-		wk.log.Debug("matched process with running container", "pid", procInfo.pid, "container", containerInfo.ContainerID)
-		procInfo = withMetadata(procInfo, pod.Meta, containerInfo.ContainerID)
+	pod := wk.store.PodByContainerID(containerInfo.ContainerID)
+	if pod == nil {
+		// onNewPod forwards it once a Pod lists the container. A Pod sandbox never is, so it stays here
+		wk.log.Debug("pod not yet known for container. Holding process", "pid", procInfo.pid, "container", containerInfo.ContainerID)
+		return ProcessAttrs{}, false
 	}
-	return procInfo, true
+
+	wk.log.Debug("matched process with running container", "pid", procInfo.pid, "container", containerInfo.ContainerID)
+	return withMetadata(procInfo, pod.Meta, containerInfo.ContainerID), true
+}
+
+// upsertProcess keeps a single, most recent copy of each process of a container
+func upsertProcess(procs []ProcessAttrs, procInfo ProcessAttrs) []ProcessAttrs {
+	for i := range procs {
+		if procs[i].pid == procInfo.pid {
+			procs[i] = procInfo
+			return procs
+		}
+	}
+	return append(procs, procInfo)
+}
+
+func (wk *watcherKubeEnricher) warnUnknownKubeletCgroup(pid app.PID) {
+	if _, done := wk.unknownCgroupWarned[pid]; done {
+		return
+	}
+	wk.unknownCgroupWarned[pid] = struct{}{}
+	wk.log.Warn("process runs in a kubelet-managed cgroup with an unrecognized container ID format. "+
+		"It is treated as a host process, so Kubernetes metadata and namespace-based exclusions won't apply to it. "+
+		"Please report the contents of its /proc/<pid>/cgroup file", "pid", pid)
 }
 
 func (wk *watcherKubeEnricher) onProcessTerminate(procInfo ProcessAttrs) {
@@ -218,12 +260,13 @@ func (wk *watcherKubeEnricher) onProcessTerminate(procInfo ProcessAttrs) {
 		}
 	}
 	delete(wk.containerByPID, procInfo.pid)
+	delete(wk.unknownCgroupWarned, procInfo.pid)
 	wk.store.DeleteProcess(procInfo.pid)
 }
 
 func (wk *watcherKubeEnricher) onNewPod(pod *informer.ObjectMeta) []Event[ProcessAttrs] {
-	wk.mt.RLock()
-	defer wk.mt.RUnlock()
+	wk.mt.Lock()
+	defer wk.mt.Unlock()
 	var events []Event[ProcessAttrs]
 	for _, cnt := range pod.Pod.Containers {
 		wk.log.Debug("looking up running process for pod container", "container", cnt.Id)

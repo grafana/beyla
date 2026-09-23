@@ -93,6 +93,9 @@ func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any
 	return result
 }
 
+// GetAppResourceAttrs returns the resource attributes of an instrumented target, except
+// the ones the target declares in its own OTEL_RESOURCE_ATTRIBUTES: those rank above
+// everything returned here, so callers must append them through ResourceAttrsFromEnv.
 func GetAppResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs, attrSelector ...attributes.Selection) []attribute.KeyValue {
 	attrs := resourceAttrs(nodeMeta, service)
 	attrs = append(attrs, semconv.ServiceInstanceID(service.UID.Instance))
@@ -136,8 +139,19 @@ func GetResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs, attrSelector 
 	return FilterResourceAttrs(resourceAttrs(nodeMeta, service), attrSelector...)
 }
 
+// resourceAttrs builds the resource attributes of an instrumented target, from the
+// lowest to the highest precedence:
+//
+//  1. OBI's own OTEL_RESOURCE_ATTRIBUTES: deployment-wide defaults that fill only the
+//     keys nobody else declares.
+//  2. The metadata OBI resolved for that target: Kubernetes annotations, labels and
+//     object metadata, plus host and cloud metadata.
+//
+// The target's own OTEL_RESOURCE_ATTRIBUTES ranks above both and is not added here.
 func resourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.KeyValue {
-	attrs := []attribute.KeyValue{
+	attrs := processResourceAttrsFromEnv()
+
+	attrs = append(attrs,
 		semconv.ServiceName(service.UID.Name),
 		// SpanMetrics requires an extra attribute besides service name
 		// to generate the traces.target.info / traces_target_info metric,
@@ -151,7 +165,7 @@ func resourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.KeyV
 		semconv.HostName(service.HostName),
 		semconv.HostID(nodeMeta.HostID),
 		semconv.OSTypeLinux,
-	}
+	)
 
 	if service.UID.Namespace != "" {
 		attrs = append(attrs, semconv.ServiceNamespace(service.UID.Namespace))
@@ -533,7 +547,7 @@ func HeadersFromEnv(varName string) map[string]string {
 		headers[k] = v
 	}
 
-	parseOTELEnvVar(nil, varName, addToMap)
+	parseProcessOTELEnvVar(varName, addToMap)
 
 	return headers
 }
@@ -543,34 +557,62 @@ func HeadersFromEnv(varName string) map[string]string {
 // OTEL_RESOURCE_ATTRIBUTES, i.e. a comma-separated list of
 // key=values. For example: api-key=key,other-config-value=value
 // The values are passed as parameters to the handler function
-func parseOTELEnvVar(svc *svc.Attrs, varName string, handler attributes.VarHandler) {
-	var envVar string
-	ok := false
-
-	if svc != nil && svc.EnvVars != nil {
-		envVar, ok = svc.EnvVars[varName]
-	}
-
-	if !ok {
-		envVar, ok = os.LookupEnv(varName)
-	}
-
-	if !ok {
-		return
-	}
-
+func parseOTELEnvVar(envVar string, handler attributes.VarHandler) {
 	expandedValue := string(config.ReplaceEnv([]byte(envVar)))
 	attributes.ParseOTELResourceVariable(expandedValue, handler)
 }
 
+// parseProcessOTELEnvVar parses varName from the environment of the OBI process itself.
+// Whatever it yields applies to every instrumented target alike.
+func parseProcessOTELEnvVar(varName string, handler attributes.VarHandler) {
+	envVar, ok := os.LookupEnv(varName)
+	if !ok {
+		return
+	}
+
+	parseOTELEnvVar(envVar, handler)
+}
+
+// parseServiceOTELEnvVar parses varName from the environment of a single instrumented
+// process, which is the target's own declaration of it.
+func parseServiceOTELEnvVar(service *svc.Attrs, varName string, handler attributes.VarHandler) {
+	if service == nil || service.EnvVars == nil {
+		return
+	}
+
+	envVar, ok := service.EnvVars[varName]
+	if !ok {
+		return
+	}
+
+	parseOTELEnvVar(envVar, handler)
+}
+
+// ResourceAttrsFromEnv returns the resource attributes the instrumented target declares
+// in its own OTEL_RESOURCE_ATTRIBUTES. They are the top of the precedence order, so
+// callers must append them after the attributes from GetAppResourceAttrs.
 func ResourceAttrsFromEnv(svc *svc.Attrs, attrSelector ...attributes.Selection) []attribute.KeyValue {
 	var otelResourceAttrs []attribute.KeyValue
 	apply := func(k string, v string) {
 		otelResourceAttrs = append(otelResourceAttrs, attribute.String(k, v))
 	}
 
-	parseOTELEnvVar(svc, envResourceAttrs, apply)
+	parseServiceOTELEnvVar(svc, envResourceAttrs, apply)
 	return FilterResourceAttrs(otelResourceAttrs, attrSelector...)
+}
+
+// processResourceAttrsFromEnv returns the resource attributes declared in OBI's own
+// OTEL_RESOURCE_ATTRIBUTES. They are deployment-wide defaults, so they rank at the
+// bottom of the precedence order: anything OBI resolves for a given target, and
+// anything that target declares itself, overrides them.
+func processResourceAttrsFromEnv() []attribute.KeyValue {
+	var otelResourceAttrs []attribute.KeyValue
+	apply := func(k string, v string) {
+		otelResourceAttrs = append(otelResourceAttrs, attribute.String(k, v))
+	}
+
+	parseProcessOTELEnvVar(envResourceAttrs, apply)
+	return otelResourceAttrs
 }
 
 func ResolveOTLPEndpoint(endpoint, common string) (string, bool) {

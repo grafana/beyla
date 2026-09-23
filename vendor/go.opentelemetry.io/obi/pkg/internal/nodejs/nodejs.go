@@ -74,6 +74,9 @@ func (i *NodeInjector) Accepts(ie *ebpf.Instrumentable) bool {
 	return true
 }
 
+const skippingInjection = "skipping Node.js agent injection. Trace-context propagation and " +
+	"Node.js runtime metrics will not work"
+
 // Inject injects into an accepted target.
 //
 // The executable and the signal go through the target's pinned process handle,
@@ -105,6 +108,11 @@ func (i *NodeInjector) Inject(ctx context.Context, target InjectionTarget) {
 	}
 	defer elfFile.Close()
 
+	if reason := i.runtimeRefusal(target, elfFile); reason != "" {
+		i.log.Warn(skippingInjection, "pid", pid, "reason", reason)
+		return
+	}
+
 	if err := i.attachAgent(ctx, target, elfFile); err != nil {
 		i.log.Error("couldn't attach NodeJS injector", "pid", pid, "error", err)
 		i.log.Error("trace-context propagation and nodejs runtime metrics will not work for NodeJS services!")
@@ -135,8 +143,7 @@ func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, 
 	}
 
 	if reason != "" {
-		i.log.Warn("not sending SIGUSR1 to open the Node.js inspector, skipping agent injection. "+
-			"Node.js trace correlation will not work", "pid", pid, "reason", reason)
+		i.log.Warn(skippingInjection, "pid", pid, "reason", reason)
 		return nil
 	}
 
@@ -184,12 +191,49 @@ func (i *NodeInjector) injectViaOpenInspector(pid int) (bool, error) {
 	return injected, err
 }
 
+// Every reason an injection is skipped, in the order they are decided: what the
+// executable says first, then what the process says about SIGUSR1.
 const (
+	refusalVersionUnknown      = "the Node.js version could not be read from the executable"
+	refusalNoAsyncLocalStorage = "Node.js %s does not provide AsyncLocalStorage, " +
+		"which the injected agent requires: it was added in %s and backported to %s"
+	// Refusing the whole injection rather than dropping the bridge alone: the
+	// two scripts are evaluated as one expression, and manual spans are opt-in,
+	// so silently not delivering them would be worse than saying so.
+	refusalManualSpansTooOld = "nodejs.manual_spans needs Node.js %s or newer for the span " +
+		"bridge to parse, and this process runs %s"
+
 	refusalSignalIsFatal           = "SIGUSR1 is neither caught nor ignored, so it would terminate the process"
-	refusalDispositionUnknown      = "the process caught and ignored signal sets could not be read"
+	refusalDispositionUnknown      = "SIGUSR1 handling is unknown: the process caught and ignored signal sets could not be read"
 	refusalHandlerFound            = "process has a custom SIGUSR1 handler"
 	refusalSourceReferencesSIGUSR1 = "process source files reference SIGUSR1"
 )
+
+// runtimeRefusal reports why this executable must not be injected, or "" when it
+// may be. It decides before touching the process, so a runtime the agent cannot
+// run on is never signaled and its debugger port is never opened — which also keeps
+// OBI off Node.js 9.3.0, where closing the inspector again segfaults the process.
+//
+// A version that cannot be read is a refusal rather than a pass: it is the only
+// evidence the agent can run there.
+func (i *NodeInjector) runtimeRefusal(target InjectionTarget, elfFile *elf.File) string {
+	nodeVersion, ok := nodeVersionFromProcess(target, elfFile)
+	if !ok {
+		return refusalVersionUnknown
+	}
+
+	if !supportsAsyncLocalStorage(nodeVersion) {
+		return fmt.Sprintf(refusalNoAsyncLocalStorage, nodeVersion.Original(),
+			node13Backport.Original(), minInjectableVersion.Original())
+	}
+
+	if i.cfg.NodeJS.ManualSpans && !supportsManualSpans(nodeVersion) {
+		return fmt.Sprintf(refusalManualSpansTooOld,
+			minManualSpansVersion.Original(), nodeVersion.Original())
+	}
+
+	return ""
+}
 
 // dispositionWait bounds how long to wait for the runtime to install its own
 // SIGUSR1 handler. Node installs it about 11ms after exec, and until then

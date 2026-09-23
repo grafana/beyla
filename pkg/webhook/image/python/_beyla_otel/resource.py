@@ -115,7 +115,7 @@ class _ResourceFallback:
         if missing_name and metadata.name:
             updates[SERVICE_NAME] = metadata.name
             if not self.logged_selected_name:
-                info("service.name detected from {}: {}; using it".format(metadata.name_source, metadata.name))
+                info("service.name detected from {}: {}".format(metadata.name_source, metadata.name))
                 self.logged_selected_name = True
         elif missing_name and not self.logged_missing_result:
             info("service.name was not found in Python application metadata; keeping the SDK default")
@@ -123,7 +123,7 @@ class _ResourceFallback:
         if missing_version and metadata.version:
             updates[SERVICE_VERSION] = metadata.version
             if not self.logged_selected_version:
-                info("service.version detected from {}: {}; using it".format(metadata.version_source, metadata.version))
+                info("service.version detected from {}: {}".format(metadata.version_source, metadata.version))
                 self.logged_selected_version = True
         return updates
 

@@ -175,7 +175,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Run Claude Code – Triage
-        uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1.0.201
+        uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de # v1.0.231
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
@@ -263,7 +263,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Run Claude Code – Plan
-        uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1.0.201
+        uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de # v1.0.231
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
@@ -355,7 +355,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Run Claude Code – Implement
-        uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1.0.201
+        uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de # v1.0.231
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}

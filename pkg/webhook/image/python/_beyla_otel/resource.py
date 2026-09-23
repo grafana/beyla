@@ -7,6 +7,7 @@ from .model import ProjectMetadata
 
 SERVICE_NAME = "service.name"
 SERVICE_VERSION = "service.version"
+_UNRESOLVED = object()
 
 
 def initialize_with_resource_detection(initialize, resource_class=None, resolver=None):
@@ -72,7 +73,7 @@ class _ResourceFallback:
         """Create a lazy resource fallback."""
         self.resource_class = resource_class
         self.resolver = resolver
-        self.metadata = None
+        self.metadata = _UNRESOLVED
         self.logged_existing_name = False
         self.logged_missing_name = False
         self.logged_missing_result = False
@@ -98,10 +99,11 @@ class _ResourceFallback:
 
     def _resolve(self):
         """Run application metadata detection once."""
-        if self.metadata is not None:
+        if self.metadata is not _UNRESOLVED:
             return self.metadata
         try:
-            self.metadata = self.resolver()
+            metadata = self.resolver()
+            self.metadata = metadata if metadata is not None else ProjectMetadata()
         except Exception as error:
             warning("service metadata detection failed: {}".format(error))
             self.metadata = ProjectMetadata()

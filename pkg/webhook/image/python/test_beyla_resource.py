@@ -1,6 +1,7 @@
 """Tests for applying detected metadata to SDK resources."""
 
 import unittest
+from unittest.mock import patch
 
 from _beyla_otel.model import ProjectMetadata
 from _beyla_otel.resource import initialize_with_resource_detection
@@ -116,10 +117,32 @@ class TestResourceDetection(unittest.TestCase):
 
         self.assertEqual("unknown_service:python", resource.attributes["service.name"])
 
-    def test_enrichment_failure_does_not_block_initialization(self):
+    def test_none_detector_result_does_not_block_initialization(self):
         resource = self.initialize(lambda: None)
 
         self.assertEqual("unknown_service:python", resource.attributes["service.name"])
+
+    def test_none_detector_result_is_cached(self):
+        calls = []
+        resources = []
+
+        def resolver():
+            calls.append(True)
+            return None
+
+        def sdk_initialize():
+            resources.append(FakeResource.create())
+            resources.append(FakeResource.create())
+
+        with patch("_beyla_otel.resource.warning") as warning:
+            initialize_with_resource_detection(sdk_initialize, FakeResource, resolver)
+
+        self.assertEqual(1, len(calls))
+        self.assertEqual(
+            ["unknown_service:python", "unknown_service:python"],
+            [resource.attributes["service.name"] for resource in resources],
+        )
+        warning.assert_not_called()
 
     def test_unsupported_resource_class_uses_normal_initialization(self):
         initialized = []

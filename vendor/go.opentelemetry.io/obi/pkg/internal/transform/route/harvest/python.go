@@ -144,6 +144,7 @@ func (e *pythonExtractor) scanFile(path string) error {
 	defer file.Close()
 
 	var djangoRoutes []djangoRoute
+	djangoLists := map[string]*djangoList{}
 	djangoAliases := map[string]string{}
 	hasDjangoPath := false
 	scanStmt := func(text string) {
@@ -158,6 +159,12 @@ func (e *pythonExtractor) scanFile(path string) error {
 			hasDjangoPath = true
 		}
 		if hasDjangoPath {
+			if assignment, ok := djangoListAssignment(text); ok {
+				applyDjangoAssignment(djangoLists, assignment, djangoAliases)
+				// Subsequent includes resolve this name through its tracked list.
+				delete(djangoAliases, assignment.name)
+				return
+			}
 			djangoRoutes = append(djangoRoutes, scanDjango(text, djangoAliases)...)
 		}
 	}
@@ -175,7 +182,8 @@ func (e *pythonExtractor) scanFile(path string) error {
 			depth = parenDelta(line)
 			startsStmt := startsFastAPI(line) || startsFlask(line) ||
 				djangoImportStart.MatchString(line) ||
-				hasDjangoPath && (djangoPathStart.MatchString(line) || djangoI18nStart.MatchString(line))
+				hasDjangoPath && (djangoPathStart.MatchString(line) || djangoI18nStart.MatchString(line) ||
+					djangoListAssignmentPattern.MatchString(line))
 			if !startsStmt || depth <= 0 {
 				scanStmt(line)
 				continue
@@ -196,6 +204,12 @@ func (e *pythonExtractor) scanFile(path string) error {
 	if err := scan.Err(); err != nil {
 		return err
 	}
+	for name, list := range djangoLists {
+		for _, declaration := range list.routes {
+			declaration.listName = name
+			djangoRoutes = append(djangoRoutes, declaration)
+		}
+	}
 	e.djangoRoutes[path] = djangoRoutes
 	return nil
 }
@@ -205,8 +219,33 @@ func scanPythonStmt(stmt string, routes map[string]struct{}) {
 	scanFlask(stmt, routes)
 }
 
+// parenDelta returns opening minus closing parentheses and square brackets on a
+// line, ignoring quoted text and comments.
 func parenDelta(line string) int {
-	return strings.Count(line, "(") - strings.Count(line, ")")
+	depth := 0
+	var quote byte
+	for i := 0; i < len(line); i++ {
+		if quote != 0 {
+			switch line[i] {
+			case '\\':
+				i++
+			case quote:
+				quote = 0
+			}
+			continue
+		}
+		switch line[i] {
+		case '\'', '"':
+			quote = line[i]
+		case '#':
+			return depth
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		}
+	}
+	return depth
 }
 
 func addPyMatch(routes map[string]struct{}, re *regexp.Regexp, line string) {

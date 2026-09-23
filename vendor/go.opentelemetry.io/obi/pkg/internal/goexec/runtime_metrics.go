@@ -55,14 +55,14 @@ func ResolveRuntimeMetricSymbols(file *exec.FileInfo, pid app.PID) (RuntimeMetri
 	return symbols, nil
 }
 
-func resolveRuntimeMetricSymbols(f *elf.File, loadBias uint64) (RuntimeMetricSymbols, error) {
-	const (
-		memstatsSymbol     = "runtime.memstats"
-		gcControllerSymbol = "runtime.gcController"
-		gomaxprocsSymbol   = "runtime.gomaxprocs"
-		workSymbol         = "runtime.work"
-	)
+const (
+	memstatsSymbol     = "runtime.memstats"
+	gcControllerSymbol = "runtime.gcController"
+	gomaxprocsSymbol   = "runtime.gomaxprocs"
+	workSymbol         = "runtime.work"
+)
 
+func resolveRuntimeMetricSymbols(f *elf.File, loadBias uint64) (RuntimeMetricSymbols, error) {
 	symbols, err := procs.FindExeSymbols(f, []string{
 		memstatsSymbol,
 		gcControllerSymbol,
@@ -76,6 +76,9 @@ func resolveRuntimeMetricSymbols(f *elf.File, loadBias uint64) (RuntimeMetricSym
 	}, elf.STT_OBJECT)
 	if err != nil {
 		return RuntimeMetricSymbols{}, err
+	}
+	if len(symbols) == 0 {
+		return resolveRuntimeMetricSymbolsFromCode(f, loadBias)
 	}
 
 	memstats, ok := symbols[memstatsSymbol]

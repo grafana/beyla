@@ -578,17 +578,11 @@ func relativeInstructionTarget(decoded decodedInstruction) (uint64, error) {
 
 // addRelative applies a signed displacement without allowing address wraparound.
 func addRelative(base uint64, delta int64) (uint64, error) {
-	if delta < 0 {
-		amount := uint64(-delta)
-		if amount > base {
-			return 0, errUnsupportedLayout
-		}
-		return base - amount, nil
-	}
-	if uint64(delta) > math.MaxUint64-base {
+	address, ok := procs.AddSignedOffset(base, delta)
+	if !ok {
 		return 0, errUnsupportedLayout
 	}
-	return base + uint64(delta), nil
+	return address, nil
 }
 
 // decodePythonInstruction reads at most the x86 15-byte instruction limit without crossing

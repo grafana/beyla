@@ -405,18 +405,23 @@ func (ta *traceAttacher) getTracer(ctx context.Context, ie *ebpf.Instrumentable)
 
 	if err := tracer.Init(ta.EbpfEventContext, ta.Cfg); err != nil {
 		ta.log.Error("couldn't trace process. Stopping process tracer", "error", err)
+		if closeErr := tracer.Close(); closeErr != nil {
+			ta.log.Debug("closing process tracer after failed initialization", "error", closeErr)
+		}
 		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorInspectionFailed)
 		return false
 	}
 
-	ta.dropUnloadedTracers(tracer.Programs)
-
-	ie.Tracer = tracer
-
 	if err := tracer.NewExecutable(exe, ie); err != nil {
+		if closeErr := tracer.Close(); closeErr != nil {
+			ta.log.Debug("closing process tracer after failed executable attachment", "error", closeErr)
+		}
 		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorAttachingUprobe)
 		return false
 	}
+
+	ta.dropUnloadedTracers(tracer.Programs)
+	ie.Tracer = tracer
 
 	ta.log.Debug("new executable for discovered process",
 		"pid", ie.FileInfo.Pid(),

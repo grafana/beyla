@@ -46,6 +46,13 @@ func (pt *ProcessTracer) Init(_ *ebpfcommon.EBPFEventContext, _ *obi.Config) err
 	return nil
 }
 
+func (pt *ProcessTracer) Close() error {
+	pt.closeOnce.Do(func() {
+		pt.closeErr = nil
+	})
+	return pt.closeErr
+}
+
 func (pt *ProcessTracer) NewExecutable(_ *link.Executable, _ *Instrumentable) error {
 	return nil
 }

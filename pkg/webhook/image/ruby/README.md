@@ -148,3 +148,14 @@ docker run --rm \
 ```
 
 The Docker packaging stages already run this verifier automatically. A verification failure exits non-zero and stops the image build.
+
+## Run the tests with Docker
+
+```sh
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --volume "$PWD:/work" \
+  --workdir /work \
+  ruby:3.3.12-slim-bookworm \
+  ruby -I. -Itest -e 'Dir["test/test_*.rb"].sort.each { |file| require_relative file }'
+```

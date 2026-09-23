@@ -35,8 +35,6 @@ type jsonRPCError struct {
 }
 
 const (
-	// JSONRPCVersionV1 Golang net.rpc.jsonrpc only supports V1
-	JSONRPCVersionV1   = "1.0"
 	jsonRPCVersionV2   = "2.0"
 	jsonRPCContentType = "application/json-rpc"
 )
@@ -95,6 +93,12 @@ func JSONRPCSpanFromParsed(baseSpan *request.Span, resp *http.Response, parsed *
 	result := &request.JSONRPC{
 		Method:  rpcReq.Method,
 		Version: version,
+	}
+
+	// The body names no service, so qualification can only come from what the
+	// uprobe already read off the request header.
+	if baseSpan.JSONRPC != nil {
+		result.ServiceQualified = baseSpan.JSONRPC.ServiceQualified
 	}
 
 	if len(rpcReq.ID) > 0 && string(rpcReq.ID) != "null" {

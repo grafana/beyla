@@ -85,7 +85,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return semconv.RPCMethod(s.Method)
 			}
 			if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
-				return semconv.RPCMethod(s.JSONRPC.Method)
+				return semconv.RPCMethod(s.JSONRPC.QualifiedMethod())
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
 				return semconv.RPCMethod(S3RPCMethod(s.AWS.S3.Method))

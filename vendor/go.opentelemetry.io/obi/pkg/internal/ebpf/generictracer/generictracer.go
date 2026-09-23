@@ -306,6 +306,10 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
+func (p *Tracer) Close() error {
+	return ebpfcommon.CloseResources(append(p.closers, &p.bpfObjects)...)
+}
+
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	return nil
 }
@@ -531,6 +535,16 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"rb_obj_call_init_kw": {{
 				Required: false,
 				Start:    p.bpfObjects.ObiRbObjCallInitKw,
+			}},
+		},
+		"libruby[>= 4.0]": {
+			"rb_ary_shift": {{
+				Required: false,
+				Start:    p.bpfObjects.ObiRbAryShift,
+			}},
+			"rb_obj_alloc": {{
+				Required: false,
+				End:      p.bpfObjects.ObiRbObjAllocRet,
 			}},
 		},
 		"libpython3.": {

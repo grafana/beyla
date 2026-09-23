@@ -261,6 +261,11 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 	p.closers = append(p.closers, c...)
 }
 
+func (p *Tracer) Close() error {
+	p.detach()
+	return nil
+}
+
 func (p *Tracer) closeAllReverse(closers []io.Closer) {
 	for _, c := range slices.Backward(closers) {
 		if err := c.Close(); err != nil {

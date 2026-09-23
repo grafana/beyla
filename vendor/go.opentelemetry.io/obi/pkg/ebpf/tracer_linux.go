@@ -267,9 +267,20 @@ func (pt *ProcessTracer) loadAndAssign(eventContext *common.EBPFEventContext, p 
 	return nil
 }
 
-func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tracer, log *slog.Logger, cfg *obi.Config, cache *btf.Cache) error {
+func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tracer, log *slog.Logger, cfg *obi.Config, cache *btf.Cache) (retErr error) {
 	plog := log.With("program", reflect.TypeOf(p))
 	plog.Debug("loading eBPF program", "type", pt.Type)
+
+	i := instrumenter{} // dummy instrumenter to setup the kprobes, socket filters and tracepoint probes
+
+	defer func() {
+		if retErr == nil {
+			return
+		}
+
+		closeAll(i.closables)
+		retErr = errors.Join(retErr, p.Close())
+	}()
 
 	err := pt.loadAndAssign(eventContext, p, cfg, cache)
 
@@ -290,8 +301,6 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 		return fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
 
-	i := instrumenter{} // dummy instrumenter to setup the kprobes, socket filters and tracepoint probes
-
 	// Kprobes to be used for native instrumentation points
 	if err := i.kprobes(p); err != nil {
 		printVerifierErrorInfo(err)
@@ -304,6 +313,7 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 		return err
 	}
 	p.AddCloser(i.closables...)
+	i.closables = nil
 
 	// Sock filters support
 	if err := i.sockfilters(p); err != nil {
@@ -346,10 +356,11 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext, cfg 
 
 	cache := btf.NewCache()
 
-	for _, p := range pt.Programs {
+	for idx, p := range pt.Programs {
 		if err := pt.loadTracer(eventContext, p, log, cfg, cache); err != nil {
 			log.Warn("couldn't load tracer", "error", err, "required", p.Required())
 			if p.Required() {
+				pt.Programs = append(loadedPrograms, pt.Programs[idx+1:]...)
 				return err
 			}
 		} else {
@@ -365,6 +376,17 @@ func (pt *ProcessTracer) loadTracers(eventContext *common.EBPFEventContext, cfg 
 
 func (pt *ProcessTracer) Init(eventContext *common.EBPFEventContext, cfg *obi.Config) error {
 	return pt.loadTracers(eventContext, cfg)
+}
+
+// Close releases a loaded process tracer that will not be started.
+func (pt *ProcessTracer) Close() error {
+	pt.closeOnce.Do(func() {
+		pt.closeInstrumenters()
+		for _, program := range pt.Programs {
+			pt.closeErr = errors.Join(pt.closeErr, program.Close())
+		}
+	})
+	return pt.closeErr
 }
 
 func (pt *ProcessTracer) NewExecutableInstance(ie *Instrumentable) error {

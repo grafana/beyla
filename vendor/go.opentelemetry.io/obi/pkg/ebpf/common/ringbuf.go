@@ -444,10 +444,28 @@ func (rbf *ringBufForwarder[T]) closeAllResources() {
 // and there is no time to serialize hundreds of them within the shutdown grace period
 func closeAll(logger *slog.Logger, closers []io.Closer) {
 	logger.Debug("closing eBPF resources", "len", len(closers))
+	_ = CloseResources(closers...)
+	logger.Debug("the eBPF resources are closed")
+}
+
+// CloseResources closes eBPF resources in parallel so each resource does not
+// wait for a separate RCU grace period.
+func CloseResources(closers ...io.Closer) error {
+	errs := make(chan error, len(closers))
 	var wg sync.WaitGroup
 	for _, c := range closers {
-		wg.Go(func() { _ = c.Close() })
+		wg.Go(func() {
+			if err := c.Close(); err != nil {
+				errs <- err
+			}
+		})
 	}
 	wg.Wait()
-	logger.Debug("the eBPF resources are closed")
+	close(errs)
+
+	var result error
+	for err := range errs {
+		result = errors.Join(result, err)
+	}
+	return result
 }

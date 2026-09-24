@@ -121,15 +121,3 @@ func TestHostInfoFeatureRegistration(t *testing.T) {
 		assert.True(t, Has(mustLoadFeatures(t, name), FeatureHostInfo))
 	}
 }
-
-func TestHostInfoFeaturesCompatibility(t *testing.T) {
-	// With older OBI versions, wildcard selection must not activate both exporters.
-	for _, original := range []export.Features{0, export.FeatureEmpty, export.FeatureApplicationRED,
-		FeatureHostInfo, FeatureHostInfo | export.FeatureSpanOTel, export.FeatureAll} {
-		got := HostInfoFeatures(original)
-		assert.Zero(t, got&legacyOBIHostFeature)
-		assert.Equal(t, Has(original, FeatureHostInfo), Has(got, FeatureHostInfo))
-		assert.Equal(t, original&^(legacyOBIHostFeature|FeatureHostInfo), got&^FeatureHostInfo)
-		assert.Equal(t, got, HostInfoFeatures(got))
-	}
-}

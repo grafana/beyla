@@ -13,10 +13,6 @@ const (
 	FeatureHostInfo
 )
 
-// Older OBI versions still own a host-info bit, also enabled by "all"/"*".
-// TODO: This is zero once OBI PR #3556 removes the upstream feature.
-var legacyOBIHostFeature = export.FeatureMapper["application_host"]
-
 func init() {
 	export.AppO11yFeatures |= FeatureProcess | FeatureHostInfo
 	export.FeatureMapper["application_process"] = FeatureProcess
@@ -35,14 +31,4 @@ func Has(src, checkingFlags export.Features) bool {
 // method but it's private.
 func Any(src, checkingFlags export.Features) bool {
 	return src&checkingFlags != 0
-}
-
-// HostInfoFeatures disables the old OBI exporter when using a pre-#3556 dependency.
-// Named application_host selections already use Beyla's bit; this also handles all/*.
-// todo: Remove this compatibility guard after updating OBI past PR #3556.
-func HostInfoFeatures(f export.Features) export.Features {
-	if f&legacyOBIHostFeature != 0 {
-		return (f &^ legacyOBIHostFeature) | FeatureHostInfo
-	}
-	return f
 }

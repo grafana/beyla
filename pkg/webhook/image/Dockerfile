@@ -136,10 +136,10 @@ COPY --from=prepare-nodejs-deps /build/package.json .
 COPY node.js/tsconfig.json .
 
 RUN npm install
-COPY node.js/register.js .
+COPY node.js/*.js .
 RUN cp build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js \
     build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/otel-register.js && \
-    cp register.js build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
+    cp ./*.js build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/
 RUN ls -al *
 
 # build the final instrumentation image

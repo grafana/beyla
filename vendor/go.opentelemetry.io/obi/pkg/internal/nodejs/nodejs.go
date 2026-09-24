@@ -326,6 +326,9 @@ const (
 	rtEnabledOn              = "= true; /*OBI_RT_ENABLED*/"
 	tracesEnabledPlaceholder = "= false; /*OBI_TRACES_ENABLED*/"
 	tracesEnabledOn          = "= true; /*OBI_TRACES_ENABLED*/"
+
+	ctxHookEnabledPlaceholder = "= false; /*OBI_CTX_HOOK_ENABLED*/"
+	ctxHookEnabledOn          = "= true; /*OBI_CTX_HOOK_ENABLED*/"
 )
 
 // agentCode returns the extractor script with the RT gate substituted from
@@ -341,6 +344,9 @@ func (i *NodeInjector) agentCode() string {
 	}
 	if i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() {
 		code = strings.Replace(code, tracesEnabledPlaceholder, tracesEnabledOn, 1)
+	}
+	if i.cfg.PopulateTraceContext() {
+		code = strings.Replace(code, ctxHookEnabledPlaceholder, ctxHookEnabledOn, 1)
 	}
 	if i.cfg.NodeJS.ManualSpans {
 		code += ";\n" + _spanBridgeCode

@@ -106,6 +106,7 @@ const (
 	NetSkVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
 	NetSkVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
 	NetSkVarG_goH2WriteFailStep        = "g_go_h2_write_fail_step"
+	NetSkVarG_tracesCtxV1Enabled       = "g_traces_ctx_v1_enabled"
 	NetSkVarIp4in6                     = "ip4in6"
 	NetSkVarPortGuessing               = "port_guessing"
 	NetSkVarSampling                   = "sampling"
@@ -182,6 +183,7 @@ type NetSkVariableSpecs struct {
 	G_bpfProbeWriteUserEnabled *ebpf.VariableSpec `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
 	G_goH2WriteFailStep        *ebpf.VariableSpec `ebpf:"g_go_h2_write_fail_step"`
+	G_tracesCtxV1Enabled       *ebpf.VariableSpec `ebpf:"g_traces_ctx_v1_enabled"`
 	Ip4in6                     *ebpf.VariableSpec `ebpf:"ip4in6"`
 	PortGuessing               *ebpf.VariableSpec `ebpf:"port_guessing"`
 	Sampling                   *ebpf.VariableSpec `ebpf:"sampling"`
@@ -240,6 +242,7 @@ type NetSkVariables struct {
 	G_bpfProbeWriteUserEnabled *ebpf.Variable `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`
 	G_goH2WriteFailStep        *ebpf.Variable `ebpf:"g_go_h2_write_fail_step"`
+	G_tracesCtxV1Enabled       *ebpf.Variable `ebpf:"g_traces_ctx_v1_enabled"`
 	Ip4in6                     *ebpf.Variable `ebpf:"ip4in6"`
 	PortGuessing               *ebpf.Variable `ebpf:"port_guessing"`
 	Sampling                   *ebpf.Variable `ebpf:"sampling"`

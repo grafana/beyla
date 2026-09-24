@@ -143,6 +143,25 @@ type EBPFTracer struct {
 	// Log trace-context enricher config
 	LogEnricher LogEnricherConfig `yaml:"log_enricher"`
 
+	// PopulateTraceContext keeps the pinned `traces_ctx_v1` map -- the trace and span
+	// ID of the request each OS thread is currently serving -- populated for readers
+	// outside OBI, such as a profiler correlating samples with spans, or another eBPF
+	// program reading the pin directly.
+	//
+	// Keeping the map aligned with the active request is not free: runtimes that
+	// decouple I/O from processing need a refresh on every context switch, which on
+	// Node.js means an `async_hooks` before hook running on every callback. OBI
+	// therefore only populates the map when something reads it. Its own readers -- the
+	// log enricher and the Node.js manual span bridge -- turn population on regardless
+	// of this setting; a reader outside OBI has no way to announce itself, so it opts
+	// in here.
+	//
+	// Go channel span links may be affected: the handoff correlation falls back
+	// to this map when it cannot resolve the sending goroutine from the protocol
+	// maps, so links that relied on that fallback are lost while population is
+	// off.
+	PopulateTraceContext bool `yaml:"populate_trace_context" env:"OTEL_EBPF_BPF_POPULATE_TRACE_CONTEXT" validate:"boolean"`
+
 	CouchbaseDBCacheSize int `yaml:"couchbase_db_cache_size" env:"OTEL_EBPF_COUCHBASE_DB_CACHE_SIZE" validate:"gt=0"`
 
 	// BPF path used to pin eBPF maps

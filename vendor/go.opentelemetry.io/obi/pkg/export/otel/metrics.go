@@ -46,7 +46,6 @@ var (
 	SpanMetricsResponseSizes = attributes.SpanMetricsResponseSize.OTEL
 	TracesTargetInfo         = attributes.TracesTargetInfo.OTEL
 	TargetInfo               = attributes.TargetInfo.OTEL
-	TracesHostInfo           = attributes.TracesHostInfo.OTEL
 )
 
 // MetricTypes contains all the supported metric type prefixes used for filtering attributes
@@ -67,7 +66,6 @@ type MetricsReporter struct {
 	attributes       *attributes.AttrSelector
 	exporter         sdkmetric.Exporter
 	reporters        otelcfg.ReporterPool[*svc.Attrs, *Metrics]
-	hostInfo         *Expirer[*request.Span, instrument.Int64Gauge, int64]
 	targetInfo       instrument.Int64UpDownCounter
 	tracesTargetInfo instrument.Int64UpDownCounter
 	pidTracker       PidServiceTracker
@@ -341,10 +339,6 @@ func newMetricsReporter(
 
 	systemMetrics := mr.newMetricsInstance(nil)
 	systemMeter := systemMetrics.provider.Meter(reporterName)
-
-	if err := mr.setupHostInfoMeter(systemMeter); err != nil {
-		return nil, fmt.Errorf("setting up host metrics: %w", err)
-	}
 
 	if err := mr.setupTargetInfo(systemMeter); err != nil {
 		return nil, fmt.Errorf("setting up target info: %w", err)
@@ -729,25 +723,6 @@ func (mr *MetricsReporter) setupSpanMeters(m *Metrics, meter instrument.Meter) e
 	}
 	m.spanMetricsCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 		m.ctx, spanMetricsCallsTotal, spanMetricAttrs, timeNow, mr.cfg.TTL)
-
-	return nil
-}
-
-func (mr *MetricsReporter) setupHostInfoMeter(meter instrument.Meter) error {
-	tracesHostInfo, err := meter.Int64Gauge(TracesHostInfo)
-	if err != nil {
-		return fmt.Errorf("creating span metric traces host info: %w", err)
-	}
-	// No ExposedName: only the Prometheus exporter reads it, to name a label whose getter
-	// returns a bare value. Here Get returns the key with the value.
-	attr := attributes.Field[*request.Span, attribute.KeyValue]{
-		Get: func(_ *request.Span) attribute.KeyValue {
-			return semconv.HostID(mr.nodeMeta.HostID)
-		},
-	}
-
-	mr.hostInfo = NewExpirer[*request.Span, instrument.Int64Gauge, int64](
-		mr.ctx, tracesHostInfo, []attributes.Field[*request.Span, attribute.KeyValue]{attr}, timeNow, mr.cfg.TTL)
 
 	return nil
 }
@@ -1423,11 +1398,6 @@ func (mr *MetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
 			mlog().Debug("deleting infos for", "pid", pid, "attrs", origUID)
 
 			mr.deleteTargetMetrics(&origUID)
-
-			if mr.hostInfo != nil && mr.pidTracker.Count() == 0 {
-				mlog().Debug("No more PIDs tracked, expiring host info metric")
-				mr.hostInfo.RemoveAllMetrics(mr.ctx)
-			}
 		}
 	}
 }
@@ -1444,12 +1414,6 @@ func (mr *MetricsReporter) onSpan(spans []request.Span) {
 		// If we are ignoring this span because of route patterns or disabled features, don't do anything
 		if !s.Service.Features.AppOrSpan() || request.IgnoreMetrics(s) {
 			continue
-		}
-		// This gauge reports that the host is running, which the span's duration
-		// says nothing about, so it is recorded whatever came of the response.
-		if s.Service.Features.AppHost() {
-			hostInfo, attrs := mr.hostInfo.ForRecord(s)
-			hostInfo.Record(mr.ctx, 1, instrument.WithAttributeSet(attrs))
 		}
 
 		reporter, err := mr.reporters.For(&s.Service)

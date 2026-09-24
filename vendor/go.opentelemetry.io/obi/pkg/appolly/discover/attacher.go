@@ -22,18 +22,12 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
-	"go.opentelemetry.io/obi/pkg/internal/denotools"
 	"go.opentelemetry.io/obi/pkg/internal/dotnet"
-	"go.opentelemetry.io/obi/pkg/internal/dotnettools"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	javaagent "go.opentelemetry.io/obi/pkg/internal/java"
-	"go.opentelemetry.io/obi/pkg/internal/jvmtools"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
-	"go.opentelemetry.io/obi/pkg/internal/nodejstools"
-	"go.opentelemetry.io/obi/pkg/internal/phptools"
-	"go.opentelemetry.io/obi/pkg/internal/pythontools"
-	"go.opentelemetry.io/obi/pkg/internal/rubytools"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -93,6 +87,10 @@ type traceAttacher struct {
 	processAgeFunc func(app.PID) time.Duration
 
 	DynamicPIDSelector *DynamicPIDSelector
+
+	// processResourceDetector finds resources like the service.name, service.namespace and service.version,
+	// from the process binary or the process deployment directory.
+	processResourceDetector *metadata.ProcessResourceDetector
 }
 
 type executableTracer struct {
@@ -125,6 +123,7 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	}
 	ta.routeHarvester = harvest.NewRouteHarvester(&ta.Cfg.Discovery.RouteHarvestConfig, ta.Cfg.Discovery.DisabledRouteHarvesters, ta.Cfg.Discovery.RouteHarvesterTimeout)
 	ta.processAgeFunc = ProcessAgeFunc()
+	ta.processResourceDetector = metadata.NewProcessResourceDetector()
 
 	if err := ta.init(); err != nil {
 		ta.log.Error("cant start process tracer. Stopping it", "error", err)
@@ -232,32 +231,6 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	}, nil
 }
 
-func (ta *traceAttacher) resolveExecutableMetadata(t svc.InstrumentableType, fi *exec.FileInfo) {
-	if fi == nil {
-		return
-	}
-	var err error
-	switch t {
-	case svc.InstrumentableJava:
-		err = jvmtools.ResolveServiceMetadata(fi)
-	case svc.InstrumentableNodejs:
-		err = nodejstools.ResolveServiceMetadata(fi)
-	case svc.InstrumentablePython:
-		err = pythontools.ResolveServiceMetadata(fi)
-	case svc.InstrumentableDotnet:
-		err = dotnettools.ResolveServiceMetadata(fi)
-	case svc.InstrumentableDeno:
-		err = denotools.ResolveServiceMetadata(fi)
-	case svc.InstrumentableRuby:
-		err = rubytools.ResolveServiceMetadata(fi)
-	case svc.InstrumentablePHP:
-		err = phptools.ResolveServiceMetadata(fi)
-	}
-	if err != nil {
-		ta.log.Debug("unable to resolve service metadata", "type", t, "pid", fi.Pid(), "error", err)
-	}
-}
-
 func syncServiceMetadata(dst, src *exec.FileInfo) {
 	if dst == nil || src == nil || dst == src {
 		return
@@ -296,9 +269,9 @@ func syncServiceMetadata(dst, src *exec.FileInfo) {
 }
 
 func (ta *traceAttacher) resolveServiceMetadata(ie *ebpf.Instrumentable) {
-	ta.resolveExecutableMetadata(ie.Type, ie.FileInfo)
+	ta.processResourceDetector.ResolveMetadata(ie.Type, ie.FileInfo)
 	if source := ie.FileInfo.RuntimeMetricServiceSource(); source != nil && source != ie.FileInfo {
-		ta.resolveExecutableMetadata(ie.Type, source)
+		ta.processResourceDetector.ResolveMetadata(ie.Type, source)
 		syncServiceMetadata(ie.FileInfo, source)
 	}
 }

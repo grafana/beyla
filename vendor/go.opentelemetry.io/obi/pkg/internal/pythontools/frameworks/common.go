@@ -56,6 +56,7 @@ var genericModuleNames = map[string]struct{}{
 	"src":         {},
 	"start":       {},
 	"tasks":       {},
+	"unknown":     {},
 	"urls":        {},
 	"views":       {},
 	"web":         {},

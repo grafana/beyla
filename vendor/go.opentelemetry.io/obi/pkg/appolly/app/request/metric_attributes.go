@@ -189,6 +189,14 @@ func S3RPCMethod(method string) string {
 	return "S3/" + method
 }
 
+// SNSRPCMethod returns the fully-qualified rpc.method value for AWS SNS operations.
+func SNSRPCMethod(method string) string {
+	if method == "" {
+		return ""
+	}
+	return "SNS/" + method
+}
+
 func AWSRequestID(val string) attribute.KeyValue {
 	return attribute.Key(attr.AWSRequestID).String(val)
 }

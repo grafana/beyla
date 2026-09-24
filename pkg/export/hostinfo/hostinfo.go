@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -14,31 +15,49 @@ import (
 	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 )
 
-// state tracks process activity for one exporter and its asynchronous collector.
+// state contains only discovered processes that are still selected for metrics.
+// Spans refresh activity but cannot recreate a process after its removal.
 type state struct {
 	sync.Mutex
-	active     map[uint32]time.Time
-	terminated map[uint32]bool
+	processes map[app.PID]processActivity
 }
 
-func newState() *state { return &state{active: map[uint32]time.Time{}, terminated: map[uint32]bool{}} }
+type processActivity struct {
+	startTime uint64
+	lastSeen  time.Time
+}
 
-func (s *state) observe(pid uint32, now time.Time) {
+func newState() *state { return &state{processes: map[app.PID]processActivity{}} }
+
+func (s *state) observe(pid app.PID, now time.Time) {
 	s.Lock()
 	defer s.Unlock()
-	if !s.terminated[pid] {
-		s.active[pid] = now
+	if activity, exists := s.processes[pid]; exists {
+		activity.lastSeen = now
+		s.processes[pid] = activity
 	}
 }
 
-func (s *state) process(pid uint32, created bool) {
+func (s *state) process(event exec.ProcessEvent) {
+	if event.File == nil {
+		return
+	}
 	s.Lock()
 	defer s.Unlock()
-	if created {
-		delete(s.terminated, pid)
-	} else {
-		delete(s.active, pid)
-		s.terminated[pid] = true
+	pid, startTime := event.File.Pid(), event.File.StartTime()
+	activity, exists := s.processes[pid]
+	switch event.Type {
+	case exec.ProcessEventCreated:
+		// A repeated discovery event updates metadata without clearing activity.
+		// A reused PID starts with no activity from its previous process instance.
+		if !exists || activity.startTime != startTime {
+			s.processes[pid] = processActivity{startTime: startTime}
+		}
+	case exec.ProcessEventTerminated:
+		// A delayed termination for an older instance must not remove a reused PID.
+		if exists && activity.startTime == startTime {
+			delete(s.processes, pid)
+		}
 	}
 }
 
@@ -46,8 +65,8 @@ func (s *state) process(pid uint32, created bool) {
 func (s *state) hasActiveProcesses(now time.Time, ttl time.Duration) bool {
 	s.Lock()
 	defer s.Unlock()
-	for _, seen := range s.active {
-		if now.Sub(seen) < ttl {
+	for _, activity := range s.processes {
+		if !activity.lastSeen.IsZero() && now.Sub(activity.lastSeen) < ttl {
 			return true
 		}
 	}
@@ -77,7 +96,8 @@ func (s *state) watchActivity(input *msg.Queue[[]request.Span], events *msg.Queu
 				now := time.Now()
 				for i := range batch {
 					if shouldReportHostInfo(&batch[i]) {
-						s.observe(uint32(batch[i].Pid.HostPID), now)
+						// Match discovery events even when Beyla runs in a PID namespace.
+						s.observe(batch[i].Service.ProcPID, now)
 					}
 				}
 			case event, ok := <-processes:
@@ -85,9 +105,7 @@ func (s *state) watchActivity(input *msg.Queue[[]request.Span], events *msg.Queu
 					processes = nil
 					continue
 				}
-				if event.File != nil {
-					s.process(uint32(event.File.Pid()), event.Type == exec.ProcessEventCreated)
-				}
+				s.process(event)
 			}
 		}
 	}

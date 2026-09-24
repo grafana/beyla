@@ -115,7 +115,7 @@ func NewInternalMetrics(prefix string) InternalMetrics {
 //
 // Unlike the metrics above they take no vendor prefix, so they are plain package variables. Both
 // exporters emit them, and the dot notation is what the derivation needs to reproduce the
-// target_info / traces_target_info / traces_host_info names.
+// target_info / traces_target_info names.
 var (
 	TargetInfo = metric(Name{
 		OTEL: "target.info",
@@ -124,9 +124,5 @@ var (
 	TracesTargetInfo = metric(Name{
 		OTEL: "traces.target.info",
 		Type: InstrumentUpDownCounter,
-	})
-	TracesHostInfo = metric(Name{
-		OTEL: "traces.host.info",
-		Type: InstrumentGauge,
 	})
 )

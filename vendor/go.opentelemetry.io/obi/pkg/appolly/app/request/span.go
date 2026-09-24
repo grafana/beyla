@@ -1078,14 +1078,18 @@ func (j *JSONRPC) QualifiedMethod() string {
 
 // GenAI operation name constants aligned with OTel semantic conventions.
 const (
-	ChatOperationName         = "chat"
-	CompletionOperationName   = "text_completion"
-	GenerationOperationName   = "generation"
-	InvokeModelOperationName  = "invoke_model"
-	EmbeddingOperationName    = "embeddings"
-	ResponseOperationName     = "response"
-	ConversationOperationName = "conversation"
-	ExecuteToolOperationName  = "execute_tool"
+	ChatOperationName           = "chat"
+	CompletionOperationName     = "text_completion"
+	GenerationOperationName     = "generation"
+	InvokeModelOperationName    = "invoke_model"
+	EmbeddingOperationName      = "embeddings"
+	ResponseOperationName       = "response"
+	ConversationOperationName   = "conversation"
+	ExecuteToolOperationName    = "execute_tool"
+	MessageOperationName        = "message"
+	ChatKitSessionOperationName = "chatkit.session"
+	ChatKitThreadOperationName  = "chatkit.thread"
+	OtherOperationName          = "_OTHER"
 )
 
 // VendorEmbedding represents a generic embedding API provider such as

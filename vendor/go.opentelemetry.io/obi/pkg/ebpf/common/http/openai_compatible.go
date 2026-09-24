@@ -77,23 +77,10 @@ func OpenAICompatibleSpan(baseSpan *request.Span, req *http.Request, resp *http.
 	parsedResponse.Request = parsedRequest
 	parsedResponse.ToolCalls = toolCalls
 
-	// Use strings.Contains instead of exact path matching to support
-	// gateways mounted under a path prefix (e.g. /litellm/v1/chat/completions).
-	if req.URL != nil {
-		switch {
-		case strings.Contains(req.URL.Path, "/v1/chat/completions"):
-			parsedResponse.OperationName = request.ChatOperationName
-			parsedResponse.APIType = "chat_completions"
-		case strings.Contains(req.URL.Path, "/v1/completions"):
-			parsedResponse.OperationName = request.CompletionOperationName
-			parsedResponse.APIType = "text_completions"
-		case strings.Contains(req.URL.Path, "/v1/embeddings"):
-			parsedResponse.OperationName = request.EmbeddingOperationName
-			parsedResponse.APIType = "embeddings"
-		case strings.Contains(req.URL.Path, "/v1/responses"):
-			parsedResponse.APIType = "responses"
-		}
-	}
+	// Classified by the same path reader as the OpenAI parser: a gateway serves
+	// the same endpoints, mounted under a prefix of its own
+	// (e.g. /litellm/v1/chat/completions).
+	parsedResponse.OperationName, parsedResponse.APIType = openAIOperation(requestPath(req))
 
 	parsedResponse.ProviderName = matchedGateway.Provider
 	baseSpan.SubType = request.HTTPSubtypeOpenAICompatible

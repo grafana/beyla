@@ -70,6 +70,7 @@ RUN ./build_dep_tree.sh
 RUN python ./deps_analyser.py
 RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
+COPY python/_beyla_otel ./_beyla_otel
 
 # Get the Python SDK for musl
 FROM python:3.14.6-alpine3.23@sha256:b165067c5afc37fa5608a3c05609cc3d51aafd808a30fbfd822ee594fef55ad4 AS build-python-musl
@@ -83,6 +84,7 @@ RUN ./build_dep_tree.sh
 RUN python ./deps_analyser.py
 RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
+COPY python/_beyla_otel ./_beyla_otel
 
 # Get the OTel Java SDK
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS download-java-sdk

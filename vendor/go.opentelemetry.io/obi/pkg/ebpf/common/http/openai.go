@@ -135,22 +135,7 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	// responses don't): the operation name feeds required metric attributes
 	// (gen_ai.client.operation.duration / token.usage), so failed calls must
 	// carry it too.
-	if req.URL != nil {
-		path := strings.TrimSuffix(req.URL.Path, "/")
-		switch path {
-		case "/v1/chat/completions":
-			parsedResponse.OperationName = request.ChatOperationName
-			parsedResponse.APIType = "chat_completions"
-		case "/v1/embeddings":
-			parsedResponse.OperationName = request.EmbeddingOperationName
-			parsedResponse.APIType = "embeddings"
-		case "/v1/responses":
-			parsedResponse.OperationName = request.ResponseOperationName
-			parsedResponse.APIType = "responses"
-		case "/v1/conversations":
-			parsedResponse.OperationName = request.ConversationOperationName
-		}
-	}
+	parsedResponse.OperationName, parsedResponse.APIType = openAIOperation(requestPath(req))
 
 	baseSpan.SubType = request.HTTPSubtypeOpenAI
 	baseSpan.GenAI = &request.GenAI{
@@ -158,4 +143,59 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	}
 
 	return *baseSpan, true
+}
+
+// API types OBI derives from an OpenAI request path, mirroring the
+// `openai.api.type` enum declared in schemas/obi/groups/openai/registry.yaml.
+// Adding one here requires a member there too; a test asserts the two agree.
+const (
+	openAIAPITypeChatCompletions = "chat_completions"
+	openAIAPITypeTextCompletions = "text_completions"
+	openAIAPITypeEmbeddings      = "embeddings"
+	openAIAPITypeResponses       = "responses"
+)
+
+var openAIAPITypes = map[string]struct{}{
+	openAIAPITypeChatCompletions: {},
+	openAIAPITypeTextCompletions: {},
+	openAIAPITypeEmbeddings:      {},
+	openAIAPITypeResponses:       {},
+}
+
+// Endpoints that name a GenAI operation, matched in order so that
+// /chat/completions is not read as the legacy /completions.
+var openAIEndpoints = []struct {
+	suffix    string
+	operation string
+	apiType   string
+}{
+	{"/chat/completions", request.ChatOperationName, openAIAPITypeChatCompletions},
+	{"/completions", request.CompletionOperationName, openAIAPITypeTextCompletions},
+	{"/embeddings", request.EmbeddingOperationName, openAIAPITypeEmbeddings},
+	{"/responses", request.ResponseOperationName, openAIAPITypeResponses},
+	{"/conversations", request.ConversationOperationName, ""},
+	{"/chatkit/sessions", request.ChatKitSessionOperationName, ""},
+	{"/chatkit/threads", request.ChatKitThreadOperationName, ""},
+}
+
+// openAIOperation names the operation and the API type an OpenAI request path
+// addresses. The path is read instead of the response body because it names the
+// endpoint on an error and on a truncated capture too.
+//
+// The endpoint is matched as a path suffix, so a deployment mounted under a
+// prefix (/openai/deployments/{id}/chat/completions on Azure, a gateway) still
+// resolves while a path addressing a single resource (GET /v1/responses/{id})
+// does not: it returns a stored object rather than generating one, and naming
+// it after the endpoint would record an inference duration for a call that ran
+// no model. Detection is header- or host-driven, so an endpoint OBI has no
+// operation for reports `_OTHER` rather than nothing.
+func openAIOperation(path string) (string, string) {
+	path = strings.TrimSuffix(path, "/")
+	for _, endpoint := range openAIEndpoints {
+		if strings.HasSuffix(path, endpoint.suffix) {
+			return endpoint.operation, endpoint.apiType
+		}
+	}
+
+	return request.OtherOperationName, ""
 }

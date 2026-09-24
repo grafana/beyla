@@ -173,6 +173,16 @@ def safe_remove_from_path(p):
     except ValueError:
         pass
 
+def initialize_auto_instrumentation(auto_instrumentation):
+    """Initialize OpenTelemetry with optional Beyla service metadata detection."""
+    try:
+        from _beyla_otel.resource import initialize_with_resource_detection
+    except Exception as e:
+        print("Error loading Python service metadata detector: {}".format(e), file=sys.stderr)
+        auto_instrumentation.initialize()
+        return
+    initialize_with_resource_detection(auto_instrumentation.initialize)
+
 def verify_and_load():
     """Function to check dependency conflicts."""
     current_pkg_dir = os.path.dirname(__file__)
@@ -259,7 +269,7 @@ def verify_and_load():
         try:
             print("Importing and initializing OpenTelemetry Python auto-instrumentation")
             from opentelemetry.instrumentation import auto_instrumentation
-            auto_instrumentation.initialize()
+            initialize_auto_instrumentation(auto_instrumentation)
         except Exception as e:
             print("Error installing OpenTelemetry auto-instrumentation: {}".format(e), file=sys.stderr)
             safe_remove_from_path(current_pkg_dir)

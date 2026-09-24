@@ -12,22 +12,36 @@ import (
 )
 
 func envStrsToMap(varsStr []string) map[string]string {
-	vars := make(map[string]string, len(varsStr))
+	vars := make(map[string]string, validEnvCount(varsStr))
 
 	for _, s := range varsStr {
-		keyVal := strings.SplitN(s, "=", 2)
-		if len(keyVal) < 2 {
-			continue
-		}
-		key := strings.TrimSpace(keyVal[0])
-		val := strings.TrimSpace(keyVal[1])
-
-		if key != "" && val != "" {
+		if key, val, ok := parseEnvVar(s); ok {
 			vars[key] = val
 		}
 	}
 
 	return vars
+}
+
+func validEnvCount(varsStr []string) int {
+	count := 0
+	for _, s := range varsStr {
+		if _, _, ok := parseEnvVar(s); ok {
+			count++
+		}
+	}
+	return count
+}
+
+func parseEnvVar(s string) (string, string, bool) {
+	key, val, found := strings.Cut(s, "=")
+	if !found {
+		return "", "", false
+	}
+
+	key = strings.TrimSpace(key)
+	val = strings.TrimSpace(val)
+	return key, val, key != "" && val != ""
 }
 
 func EnvVars(pid app.PID) (map[string]string, error) {

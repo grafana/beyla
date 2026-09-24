@@ -20,7 +20,7 @@ func mustLoadFeatures(t *testing.T, names ...string) export.Features {
 func TestNoBitRangeCollision(t *testing.T) {
 	// checks that any of the Beyla feature flags do not collide with OBI's features
 	assert.False(t,
-		Any(FeatureProcess,
+		Any(FeatureProcess|FeatureHostInfo,
 			export.FeatureNetwork|
 				export.FeatureNetworkInterZone|
 				export.FeatureApplicationRED|
@@ -28,7 +28,6 @@ func TestNoBitRangeCollision(t *testing.T) {
 				export.FeatureSpanOTel|
 				export.FeatureSpanSizes|
 				export.FeatureGraph|
-				export.FeatureApplicationHost|
 				export.FeatureEBPF))
 }
 
@@ -109,16 +108,16 @@ func TestLoadFeaturesRejectsUnknownNames(t *testing.T) {
 	}
 }
 
-func TestHostInfoFeatures(t *testing.T) {
-	for _, original := range []export.Features{0, export.FeatureEmpty, export.FeatureApplicationRED,
-		export.FeatureApplicationHost, export.FeatureApplicationHost | export.FeatureSpanOTel, export.FeatureAll} {
-		got := HostInfoFeatures(original)
-		assert.False(t, got.AppHost())
-		assert.Equal(t, original.AppHost() || Has(original, FeatureHostInfo), Has(got, FeatureHostInfo))
-		assert.Equal(t, original&^(export.FeatureApplicationHost|FeatureHostInfo), got&^FeatureHostInfo)
-		assert.Equal(t, got, HostInfoFeatures(got))
-	}
-	assert.False(t, HostInfoFeatures(export.FeatureApplicationHost).Undefined())
-	assert.True(t, HostInfoFeatures(export.FeatureApplicationHost).AnyAppO11yMetric())
+func TestHostInfoFeatureRegistration(t *testing.T) {
+	// Named selections use Beyla's bit directly, including host-only service rules.
+	f := mustLoadFeatures(t, "application_host")
+	assert.Equal(t, FeatureHostInfo, f)
+	assert.False(t, f.Undefined())
+	assert.True(t, f.AnyAppO11yMetric())
 	assert.Zero(t, FeatureHostInfo&FeatureProcess)
+	assert.Equal(t, FeatureHostInfo|export.FeatureApplicationRED,
+		mustLoadFeatures(t, "application_host", "application_red"))
+	for _, name := range []string{"all", "*"} {
+		assert.True(t, Has(mustLoadFeatures(t, name), FeatureHostInfo))
+	}
 }

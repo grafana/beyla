@@ -39,10 +39,6 @@ import (
 // injectable function reference for testing
 var timeNow = time.Now
 
-// CloudHostIDKey names the host id on traces_host_info. It is a variable so that a component
-// vendoring OBI can label the host with its own key.
-var CloudHostIDKey = attr.HostID.Prom()
-
 // Span metric, service graph and info metric names in Prometheus convention, derived from the
 // OTLP definitions the OTEL exporter instruments, declared in pkg/export/attributes.
 var (
@@ -53,7 +49,6 @@ var (
 	SpanMetricsRequestSizes  = attributes.SpanMetricsRequestSize.Prom
 	SpanMetricsResponseSizes = attributes.SpanMetricsResponseSize.Prom
 	TracesTargetInfo         = attributes.TracesTargetInfo.Prom
-	TracesHostInfo           = attributes.TracesHostInfo.Prom
 	TargetInfo               = attributes.TargetInfo.Prom
 
 	ServiceGraphClient = attributes.ServiceGraphClient.Prom
@@ -216,7 +211,6 @@ type metricsReporter struct {
 	spanMetricsCallsTotal        *Expirer[prometheus.Counter]
 	spanMetricsRequestSizeTotal  *Expirer[prometheus.Counter]
 	spanMetricsResponseSizeTotal *Expirer[prometheus.Counter]
-	tracesHostInfo               *Expirer[prometheus.Gauge]
 	tracesTargetInfo             *prometheus.GaugeVec
 
 	// trace service graph
@@ -677,12 +671,6 @@ func newReporter(
 				Help: "target service information in trace span metric format",
 			}, labelNamesTargetInfo(kubeEnabled, dockerEnabled, &ctxInfo.NodeMeta, extraMetadataLabels, selectorCfg.SelectionCfg))
 		}),
-		tracesHostInfo: optionalGaugeProvider(jointMetricsConfig.Features.AppHost(), func() *Expirer[prometheus.Gauge] {
-			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
-				Name: TracesHostInfo,
-				Help: "A metric with a constant '1' value labeled by the host id ",
-			}, []string{CloudHostIDKey}).MetricVec, timeNow, cfg.TTL)
-		}),
 		serviceGraphClient: optionalHistogramProvider(jointMetricsConfig.Features.ServiceGraph(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            ServiceGraphClient,
@@ -924,10 +912,6 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics, mr.tracesTargetInfo)
 	}
 
-	if jointMetricsConfig.Features.AppHost() {
-		registeredMetrics = append(registeredMetrics, mr.tracesHostInfo)
-	}
-
 	if runtimeMetricsEnabled.Runtime {
 		registeredMetrics = append(registeredMetrics, mr.goRuntimeMetrics.collectors()...)
 		registeredMetrics = append(registeredMetrics, mr.goRuntimeHistograms)
@@ -976,14 +960,6 @@ func optionalHistogramProvider(enable bool, provider func() *Expirer[prometheus.
 }
 
 func optionalCounterProvider(enable bool, provider func() *Expirer[prometheus.Counter]) *Expirer[prometheus.Counter] {
-	if !enable {
-		return nil
-	}
-
-	return provider()
-}
-
-func optionalGaugeProvider(enable bool, provider func() *Expirer[prometheus.Gauge]) *Expirer[prometheus.Gauge] {
 	if !enable {
 		return nil
 	}
@@ -1168,9 +1144,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 	}
 	t := span.Timings()
 	r.obiInfo.WithLabelValues(span.Service.SDKLanguage.String()).Metric.Set(1.0)
-	if span.Service.Features.AppHost() {
-		r.tracesHostInfo.WithLabelValues(r.nodeMeta.HostID).Metric.Set(1.0)
-	}
 	duration := t.End.Sub(t.RequestStart).Seconds()
 
 	if r.otelMetricsObserved(span) {
@@ -1734,10 +1707,6 @@ func (r *metricsReporter) handleProcessEvent(pe exec.ProcessEvent, log *slog.Log
 		if deleted, origUID := r.disassociatePIDFromService(pid); deleted {
 			mlog().Debug("deleting infos for", "pid", pid, "attrs", uid)
 			r.deleteTargetInfos(origUID, &snap)
-			if r.tracesHostInfo != nil && r.pidsTracker.Count() == 0 {
-				mlog().Debug("No more PIDs tracked, expiring host info metric")
-				r.tracesHostInfo.entries.DeleteAll()
-			}
 			delete(r.serviceMap, origUID)
 		}
 	}

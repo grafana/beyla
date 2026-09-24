@@ -28,6 +28,7 @@ const (
 	BpfVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
 	BpfVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
 	BpfVarG_goH2WriteFailStep        = "g_go_h2_write_fail_step"
+	BpfVarG_tracesCtxV1Enabled       = "g_traces_ctx_v1_enabled"
 )
 
 // LoadBpf returns the embedded CollectionSpec for Bpf.
@@ -96,6 +97,7 @@ type BpfVariableSpecs struct {
 	G_bpfProbeWriteUserEnabled *ebpf.VariableSpec `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
 	G_goH2WriteFailStep        *ebpf.VariableSpec `ebpf:"g_go_h2_write_fail_step"`
+	G_tracesCtxV1Enabled       *ebpf.VariableSpec `ebpf:"g_traces_ctx_v1_enabled"`
 }
 
 // BpfObjects contains all objects after they have been loaded into the kernel.
@@ -143,6 +145,7 @@ type BpfVariables struct {
 	G_bpfProbeWriteUserEnabled *ebpf.Variable `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`
 	G_goH2WriteFailStep        *ebpf.Variable `ebpf:"g_go_h2_write_fail_step"`
+	G_tracesCtxV1Enabled       *ebpf.Variable `ebpf:"g_traces_ctx_v1_enabled"`
 }
 
 // BpfPrograms contains all programs after they have been loaded into the kernel.

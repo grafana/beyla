@@ -126,33 +126,60 @@ func maybeFastCGI(b *largebuf.LargeBuffer) bool {
 	return bytes.Contains(b.UnsafeView(), []byte(requestMethodKey))
 }
 
-// parseHeader returns the PARAMS payload and reports whether all of it was
-// captured. The capture buffer is 256 bytes by default, so a PARAMS record
-// longer than that arrives cut off and the parameters past the cut are not
-// merely absent, they are unknown.
+// parseHeader reconstructs the PARAMS stream and reports whether its terminating
+// empty record was captured. The capture buffer is 256 bytes by default, so the
+// parameters past a cut are not merely absent, they are unknown.
 func parseHeader(b *largebuf.LargeBuffer) ([]byte, bool, error) {
 	r := b.NewReader()
+	var params []byte
+	var requestID uint16
+	paramsFound := false
+
 	for {
 		if r.Remaining() < fastCGIRequestHeaderLen {
+			if paramsFound {
+				return params, false, nil
+			}
 			return nil, false, errFastCGIPayloadTooShort
 		}
 		hdrBytes, err := r.ReadN(fastCGIRequestHeaderLen)
 		if err != nil {
+			if paramsFound {
+				return params, false, nil
+			}
 			return nil, false, errFastCGIPayloadTooShort
 		}
 		hdr := readFastCGIHeader(hdrBytes)
 
-		if hdr.Type == fcgiFrameTypeParams {
-			if r.Remaining() == 0 {
+		if hdr.Type != fcgiFrameTypeParams || (paramsFound && hdr.RequestID != requestID) {
+			payloadLength := int(hdr.ContentLength) + int(hdr.PaddingLength)
+			if err := r.Skip(payloadLength); err != nil {
+				if paramsFound {
+					return params, false, nil
+				}
 				return nil, false, errFastCGIPayloadTooShort
 			}
-			complete := r.Remaining() >= int(hdr.ContentLength)
-			rest, _ := r.ReadN(r.Remaining())
-			return rest, complete, nil
+			continue
 		}
-		payloadOffset := int(hdr.ContentLength) + int(hdr.PaddingLength)
-		if err := r.Skip(payloadOffset); err != nil {
-			return nil, false, errFastCGIPayloadTooShort
+
+		if !paramsFound {
+			requestID = hdr.RequestID
+			paramsFound = true
+		}
+		if hdr.ContentLength == 0 {
+			return params, true, nil
+		}
+
+		contentLength := int(hdr.ContentLength)
+		if r.Remaining() < contentLength {
+			content, _ := r.ReadN(r.Remaining())
+			return append(params, content...), false, nil
+		}
+		content, _ := r.ReadN(contentLength)
+		params = append(params, content...)
+
+		if err := r.Skip(int(hdr.PaddingLength)); err != nil {
+			return params, false, nil
 		}
 	}
 }

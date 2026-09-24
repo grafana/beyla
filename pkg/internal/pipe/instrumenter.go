@@ -54,7 +54,7 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 		}, nil
 	})
 
-	overrideOBIHostInfoMetrics(config, swi, ctxInfo, processEventsCh)
+	addHostInfoExporters(config, swi, ctxInfo, processEventsCh)
 
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
@@ -72,14 +72,13 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	return swi.Instance(ctx)
 }
 
-func overrideOBIHostInfoMetrics(
+func addHostInfoExporters(
 	config *beyla.Config,
 	swi *swarm.Instancer,
 	ctxInfo *global.ContextInfo,
 	processEventsCh *msg.Queue[exec.ProcessEvent],
 ) {
 	// Beyla owns host-info emission so both exporters use the Grafana host attribute.
-	// AsOBI disables OBI's host-info feature to avoid duplicate series.
 	if bexport.Has(config.AsOBI().JoinMetricsConfig().Features, bexport.FeatureHostInfo) {
 		swi.Add(hostinfo.OTELExport(hostinfo.OTELConfig{
 			HostID:   ctxInfo.NodeMeta.HostID,

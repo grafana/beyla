@@ -32,6 +32,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/netns"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
@@ -42,24 +43,25 @@ import (
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
 
 type Tracer struct {
-	pidsFilter       ebpfcommon.ServiceFilter
-	cfg              *obi.Config
-	metrics          imetrics.Reporter
-	bpfObjects       BpfObjects
-	closers          []io.Closer
-	log              *slog.Logger
-	qdiscs           map[ifaces.Interface]*netlink.GenericQdisc
-	egressFilters    map[ifaces.Interface]*netlink.BpfFilter
-	ingressFilters   map[ifaces.Interface]*netlink.BpfFilter
-	instrumentedLibs ebpfcommon.InstrumentedLibsT
-	libsMux          sync.Mutex
-	jvmGenerations   sync.Map
-	iters            []*ebpfcommon.Iter
-	iterMu           sync.Mutex
-	seenNetns        *expirable.LRU[uint64, struct{}]
-	eventCtx         *ebpfcommon.EBPFEventContext
-	jvmUSDTManager   ebpfcommon.USDTSpecManager
-	pythonRuntime    *pythonRuntimeController
+	pidsFilter         ebpfcommon.ServiceFilter
+	cfg                *obi.Config
+	metrics            imetrics.Reporter
+	traceCtxMapEnabled bool
+	bpfObjects         BpfObjects
+	closers            []io.Closer
+	log                *slog.Logger
+	qdiscs             map[ifaces.Interface]*netlink.GenericQdisc
+	egressFilters      map[ifaces.Interface]*netlink.BpfFilter
+	ingressFilters     map[ifaces.Interface]*netlink.BpfFilter
+	instrumentedLibs   ebpfcommon.InstrumentedLibsT
+	libsMux            sync.Mutex
+	jvmGenerations     sync.Map
+	iters              []*ebpfcommon.Iter
+	iterMu             sync.Mutex
+	seenNetns          *expirable.LRU[uint64, struct{}]
+	eventCtx           *ebpfcommon.EBPFEventContext
+	jvmUSDTManager     ebpfcommon.USDTSpecManager
+	pythonRuntime      *pythonRuntimeController
 }
 
 func tlog() *slog.Logger {
@@ -83,17 +85,18 @@ const (
 
 func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	tracer := &Tracer{
-		log:              tlog(),
-		cfg:              cfg,
-		metrics:          metrics,
-		pidsFilter:       pidFilter,
-		qdiscs:           map[ifaces.Interface]*netlink.GenericQdisc{},
-		egressFilters:    map[ifaces.Interface]*netlink.BpfFilter{},
-		ingressFilters:   map[ifaces.Interface]*netlink.BpfFilter{},
-		instrumentedLibs: make(ebpfcommon.InstrumentedLibsT),
-		libsMux:          sync.Mutex{},
-		iters:            []*ebpfcommon.Iter{},
-		seenNetns:        expirable.NewLRU[uint64, struct{}](seenNetnsCacheLen, nil, seenNetnsTTL),
+		log:                tlog(),
+		cfg:                cfg,
+		traceCtxMapEnabled: cfg.PopulateTraceContext(),
+		metrics:            metrics,
+		pidsFilter:         pidFilter,
+		qdiscs:             map[ifaces.Interface]*netlink.GenericQdisc{},
+		egressFilters:      map[ifaces.Interface]*netlink.BpfFilter{},
+		ingressFilters:     map[ifaces.Interface]*netlink.BpfFilter{},
+		instrumentedLibs:   make(ebpfcommon.InstrumentedLibsT),
+		libsMux:            sync.Mutex{},
+		iters:              []*ebpfcommon.Iter{},
+		seenNetns:          expirable.NewLRU[uint64, struct{}](seenNetnsCacheLen, nil, seenNetnsTTL),
 	}
 	tracer.pythonRuntime = newPythonRuntimeController(tracer)
 	return tracer
@@ -294,6 +297,8 @@ func (p *Tracer) constants() map[string]any {
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["nodejs_runtime_metrics_enabled"] = uint64(1)
 	}
+
+	m["g_traces_ctx_v1_enabled"] = p.traceCtxMapEnabled
 
 	return m
 }
@@ -764,6 +769,10 @@ func (p *Tracer) Run(
 		}
 	} else {
 		p.log.Error("BPF Pids map is not created yet, this is a bug.")
+	}
+
+	if !p.traceCtxMapEnabled {
+		ebpfconvenience.DrainTraceContextMap[BpfObiCtxInfoT](p.log, p.bpfObjects.TracesCtxV1)
 	}
 
 	timeoutTicker := time.NewTicker(2 * time.Second)

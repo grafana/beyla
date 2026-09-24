@@ -548,10 +548,12 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if op := s.GenAIOperationName(); op != "" {
 				return semconv.GenAIOperationNameKey.String(op)
 			}
-			// Omit gen_ai.operation.name rather than emitting an empty value
-			// (required on the gen_ai client metrics when present, and an
-			// empty string carries no information).
-			return attribute.KeyValue{}
+
+			if s.GenAI == nil {
+				return attribute.KeyValue{}
+			}
+
+			return semconv.GenAIOperationNameKey.String(OtherOperationName)
 		}
 	case attr.GenAIProviderName:
 		getter = func(s *Span) attribute.KeyValue {

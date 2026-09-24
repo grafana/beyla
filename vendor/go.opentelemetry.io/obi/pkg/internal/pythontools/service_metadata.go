@@ -69,6 +69,7 @@ func ResolveServiceMetadata(fileInfo *exec.FileInfo) error {
 		launch.Target, configDir, resolutionErr = findFastAPIEntryPoint(root, cwd)
 		if launch.Target != "" {
 			launch.TargetKind = frameworks.ClassifyTarget(launch.Target)
+			launch.AppDir = configDir
 			launch.SearchPaths = append([]string{configDir}, launch.SearchPaths...)
 		}
 	}
@@ -96,6 +97,9 @@ func ResolveServiceMetadata(fileInfo *exec.FileInfo) error {
 		}
 		if name == "" {
 			name = frameworks.CleanValue(launch.FallbackName)
+		}
+		if name == "" && targetFound {
+			name = serviceNameFromAppDirectory(root, cwd, launch)
 		}
 		if name != "" {
 			fileInfo.SetAutoServiceName(name)
@@ -409,6 +413,23 @@ func processPath(root, hostPath string) string {
 		return "/"
 	}
 	return string(filepath.Separator) + rel
+}
+
+func serviceNameFromAppDirectory(root, cwd string, launch frameworks.PythonLaunch) string {
+	dir, err := appDir(root, cwd, launch)
+	if err != nil {
+		return ""
+	}
+
+	boundary, ok := langtools.ResolveProcessPath(root, "/", "/")
+	if !ok {
+		return ""
+	}
+
+	if dir == boundary || !langtools.PathWithinBoundary(boundary, dir) {
+		return ""
+	}
+	return frameworks.TargetName(filepath.Base(dir))
 }
 
 func readPyproject(path string) (pyprojectData, bool, error) {

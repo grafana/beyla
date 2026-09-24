@@ -38,7 +38,6 @@ func TestSuiteClientPromScrape_Beyla(t *testing.T) {
 	require.NoError(t, compose.Up())
 	t.Run("Client RED metrics", testREDMetricsForClientHTTPLibraryNoTraces)
 	t.Run("Testing Beyla Build Info metric", testPrometheusBeylaBuildInfo)
-	t.Run("Testing Host Info metric", testHostInfo)
 
 	require.NoError(t, compose.Close())
 }

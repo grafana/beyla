@@ -48,6 +48,8 @@ services:
       BEYLA_PROCESSES_INTERVAL: "100ms"
       BEYLA_HOSTNAME: "beyla"
       BEYLA_HOST_ID: "integration-test-host"
+      # Exercise Beyla-owned host info through both OTLP and direct Prometheus export.
+      BEYLA_METRICS_FEATURES: "application,application_process,application_host"
     ports:
       - "8999:8999" # Prometheus scrape port, if enabled via config
 

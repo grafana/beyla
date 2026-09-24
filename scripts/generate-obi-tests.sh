@@ -1167,29 +1167,31 @@ apply_schema_transforms() {
 apply_schema_injections() {
     echo "  Applying schema injections..."
 
-    # Beyla replaces OBI's host-info exporter and always emits grafana.host.id.
-    # Adapt only this metric: target.info and resource attributes still use host.id.
-    # Declare the custom attribute inline so live-check retains its definition.
+    # Beyla owns this metric, including its schema after OBI PR #3556 removes it.
+    # Drop the inherited definition while generating from older OBI revisions.
     local host_info_schema="$SCHEMAS_DEST/obi/groups/obi_internal/metrics.yaml"
     awk '
         /^  - id:/ { host_info = ($0 == "  - id: metric.beyla.traces.host.info") }
-        /# collector-contrib analogue\. Carries the upstream `host.id` attribute\./ {
-            sub(/upstream `host.id`/, "Beyla `grafana.host.id`")
-        }
-        host_info && /- ref: host.id$/ {
-            print "      - id: grafana.host.id"
-            print "        type: string"
-            print "        brief: Host identifier used by Grafana to correlate telemetry."
-            print "        stability: development"
-            print "        examples: [\"integration-test-host\"]"
-            next
-        }
-        host_info && /requirement_level: opt_in/ {
-            sub(/opt_in/, "required")
-        }
-        { print }
+        !host_info { print }
     ' "$host_info_schema" > "$host_info_schema.tmp"
     mv "$host_info_schema.tmp" "$host_info_schema"
+    cat > "$SCHEMAS_DEST/obi/groups/beyla_host_info.yaml" <<'EOF'
+groups:
+  - id: metric.beyla.traces.host.info
+    type: metric
+    metric_name: traces.host.info
+    instrument: gauge
+    unit: ""
+    stability: development
+    brief: Host identity for correlating telemetry from instrumented applications.
+    attributes:
+      - id: grafana.host.id
+        type: string
+        brief: Host identifier used by Grafana to correlate telemetry.
+        stability: development
+        examples: ["integration-test-host"]
+        requirement_level: required
+EOF
 
     # cpu.mode=wait (process.cpu.time / process.cpu.utilization).
     #

@@ -54,7 +54,6 @@ const (
 	// closest replacement, but they are HTTP-specific and not keyed by span.
 	FeatureSpanSizes
 	FeatureGraph
-	FeatureApplicationHost
 	FeatureApplicationRuntime
 	FeatureEBPF
 	FeatureAll = Features(^uint(0)) // all bits to 1
@@ -85,7 +84,6 @@ var FeatureMapper = map[string]Features{
 	"application_span_otel":            FeatureSpanOTel,
 	"application_span_sizes":           FeatureSpanSizes,
 	"application_service_graph":        FeatureGraph,
-	"application_host":                 FeatureApplicationHost,
 	"application_runtime":              FeatureApplicationRuntime,
 	"ebpf":                             FeatureEBPF,
 	"all":                              FeatureAll,
@@ -183,8 +181,7 @@ var AppO11yFeatures = FeatureApplicationRED |
 	FeatureSpanLegacy |
 	FeatureSpanOTel |
 	FeatureSpanSizes |
-	FeatureGraph |
-	FeatureApplicationHost
+	FeatureGraph
 
 func validFeatureNames() []string {
 	names := make([]string, 0, len(FeatureMapper))
@@ -334,7 +331,6 @@ func (f Features) AppOrSpan() bool {
 	return f.any(FeatureApplicationRED |
 		FeatureApplicationSizes |
 		FeatureSpanSizes |
-		FeatureApplicationHost |
 		FeatureApplicationRuntime |
 		FeatureSpanLegacy |
 		FeatureSpanOTel)
@@ -350,10 +346,6 @@ func (f Features) LegacySpanMetrics() bool {
 
 func (f Features) ServiceGraph() bool {
 	return f.any(FeatureGraph)
-}
-
-func (f Features) AppHost() bool {
-	return f.any(FeatureApplicationHost)
 }
 
 func (f Features) AppRuntime() bool {

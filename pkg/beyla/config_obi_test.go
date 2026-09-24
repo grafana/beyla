@@ -183,20 +183,20 @@ grafana:
 func TestAsOBIHostInfoOwnership(t *testing.T) {
 	// Given global and per-service feature selections, including inherited and empty settings.
 	cfg := DefaultConfig()
-	cfg.Metrics.Features = export.FeatureApplicationHost | export.FeatureApplicationRED
+	cfg.Metrics.Features = bexport.FeatureHostInfo | export.FeatureApplicationRED
 	cfg.Discovery.Instrument = services.GlobDefinitionCriteria{
-		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureApplicationHost}},
+		{Metrics: perapp.SvcMetricsConfig{Features: bexport.FeatureHostInfo}},
 		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureSpanOTel}},
 		{},
 		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureEmpty}},
 	}
 	cfg.Discovery.Services = services.RegexDefinitionCriteria{
-		{Metrics: perapp.SvcMetricsConfig{Features: export.FeatureApplicationHost}},
+		{Metrics: perapp.SvcMetricsConfig{Features: bexport.FeatureHostInfo}},
 	}
 	// When Beyla converts the configuration for OBI.
 	converted := cfg.AsOBI()
-	// Then only host-info ownership changes; the other feature selections are preserved.
-	assert.False(t, converted.JoinMetricsConfig().Features.AppHost(), "OBI must not emit host info")
+	// Then Beyla's own host-info bit and the other selections pass through unchanged.
+	assert.True(t, bexport.Has(converted.JoinMetricsConfig().Features, bexport.FeatureHostInfo))
 	assert.Equal(t, bexport.FeatureHostInfo|export.FeatureApplicationRED, converted.Metrics.Features)
 	assert.Equal(t, bexport.FeatureHostInfo, converted.Discovery.Instrument[0].Metrics.Features)
 	assert.Equal(t, export.FeatureSpanOTel, converted.Discovery.Instrument[1].Metrics.Features)
@@ -204,9 +204,9 @@ func TestAsOBIHostInfoOwnership(t *testing.T) {
 	assert.Equal(t, export.FeatureEmpty, converted.Discovery.Instrument[3].Metrics.Features)
 	assert.Equal(t, bexport.FeatureHostInfo, converted.Discovery.Services[0].Metrics.Features)
 	// And the original configuration is unchanged, with no extra labels on span metrics.
-	assert.True(t, cfg.Metrics.Features.AppHost())
-	assert.True(t, cfg.Discovery.Instrument[0].Metrics.Features.AppHost(), "conversion must not mutate source slices")
-	assert.True(t, cfg.Discovery.Services[0].Metrics.Features.AppHost())
+	assert.True(t, bexport.Has(cfg.Metrics.Features, bexport.FeatureHostInfo))
+	assert.True(t, bexport.Has(cfg.Discovery.Instrument[0].Metrics.Features, bexport.FeatureHostInfo), "conversion must not mutate source slices")
+	assert.True(t, bexport.Has(cfg.Discovery.Services[0].Metrics.Features, bexport.FeatureHostInfo))
 	assert.NotContains(t, cfg.OTELMetrics.ExtraSpanResourceLabels, "grafana.host.id")
 	assert.NotContains(t, cfg.Prometheus.ExtraSpanResourceLabels, "grafana.host.id")
 }

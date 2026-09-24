@@ -600,6 +600,10 @@
         "payload_extraction": {
           "$ref": "#/$defs/PayloadExtraction"
         },
+        "populate_trace_context": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_BPF_POPULATE_TRACE_CONTEXT"
+        },
         "postgres_prepared_statements_cache_size": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_POSTGRES_PREPARED_STATEMENTS_CACHE_SIZE"

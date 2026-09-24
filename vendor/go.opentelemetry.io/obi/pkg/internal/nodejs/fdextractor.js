@@ -38,6 +38,14 @@
   // metrics-only injections.
   const TRACES_ENABLED = false; /*OBI_TRACES_ENABLED*/
 
+  // Substituted by the injector from the same predicate that sets the
+  // g_traces_ctx_v1_enabled BPF constant (Config.PopulateTraceContext).
+  // The before hook below runs on EVERY async callback, so it is installed
+  // only when something reads traces_ctx_v1: the log enricher, the manual
+  // span bridge, or an external reader. Client spans are parented from the
+  // fd-pair map instead, so they do not depend on it.
+  const CTX_HOOK_ENABLED = false; /*OBI_CTX_HOOK_ENABLED*/
+
   if (debug_enabled) {
     console.log('OpenTelemetry eBPF Instrumentation has injected instrumentation via the NodeJS debugger');
     console.log('The debugger will be deactivated again and closed');
@@ -136,26 +144,28 @@
     // request scope. To avoid a synchronous syscall on every non-request callback
     // (there can be very many), we only clear on the request -> no-request
     // transition, tracked by `ctxActive`; a subsequent request callback re-sets it.
-    let ctxActive = false;
-    orig.ctxHook = createHook({
-      before() {
-        const store = als.getStore();
-        if (store && store.incomingFd != null && store.incomingFd >= 0) {
-          ctxActive = true;
-          try {
-            fs.existsSync(`/dev/null/obi-ctx/${pad4(store.incomingFd)}`);
-          } catch (_) {}
-        } else if (ctxActive) {
-          ctxActive = false;
-          try {
-            // Explicit "no request context" signal: obi_uv_fs_access deletes the
-            // traces_ctx_v1 entry so later spans are not parented into a stale trace.
-            fs.existsSync('/dev/null/obi-noreqctx');
-          } catch (_) {}
-        }
-      },
-    });
-    orig.ctxHook.enable();
+    if (CTX_HOOK_ENABLED) {
+      let ctxActive = false;
+      orig.ctxHook = createHook({
+        before() {
+          const store = als.getStore();
+          if (store && store.incomingFd != null && store.incomingFd >= 0) {
+            ctxActive = true;
+            try {
+              fs.existsSync(`/dev/null/obi-ctx/${pad4(store.incomingFd)}`);
+            } catch (_) {}
+          } else if (ctxActive) {
+            ctxActive = false;
+            try {
+              // Explicit "no request context" signal: obi_uv_fs_access deletes the
+              // traces_ctx_v1 entry so later spans are not parented into a stale trace.
+              fs.existsSync('/dev/null/obi-noreqctx');
+            } catch (_) {}
+          }
+        },
+      });
+      orig.ctxHook.enable();
+    }
   }
 
   // Runtime metrics (nodejs.eventloop.*): sample eventLoopUtilization and

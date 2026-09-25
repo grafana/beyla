@@ -6,7 +6,6 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 import (
 	"fmt"
 	"io"
-	"log/slog"
 )
 
 type LibModule struct {
@@ -45,28 +44,26 @@ func (libs InstrumentedLibsT) AddRef(id uint64) *LibModule {
 	return module
 }
 
-func (libs InstrumentedLibsT) RemoveRef(id uint64) (*LibModule, error) {
+// RemoveRef reports whether it removed the last reference. The module is then forgotten and
+// closing its Closers is left to the caller, so it can happen outside the caller's lock
+func (libs InstrumentedLibsT) RemoveRef(id uint64) (*LibModule, bool, error) {
 	module := libs.Find(id)
 
 	if module == nil {
-		return nil, fmt.Errorf("attempt to remove reference of unknown module: %d", id)
+		return nil, false, fmt.Errorf("attempt to remove reference of unknown module: %d", id)
 	}
 
 	if module.References == 0 {
-		return module, fmt.Errorf("attempt to remove reference of unreferenced module: %d", id)
+		return module, false, fmt.Errorf("attempt to remove reference of unreferenced module: %d", id)
 	}
 
 	module.References--
 
-	if module.References == 0 {
-		for _, closer := range module.Closers {
-			if err := closer.Close(); err != nil {
-				slog.Debug("failed to close resource", "closer", closer, "error", err)
-			}
-		}
-
-		delete(libs, id)
+	if module.References > 0 {
+		return module, false, nil
 	}
 
-	return module, nil
+	delete(libs, id)
+
+	return module, true, nil
 }

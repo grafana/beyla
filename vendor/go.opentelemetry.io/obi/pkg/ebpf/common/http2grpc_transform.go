@@ -546,7 +546,8 @@ func truncateCapturedFrame(buf []byte) []byte {
 	return truncated
 }
 
-func readResponseMeta(parseContext *EBPFParseContext, connID uint64, event *BPFHTTP2Info) h2ResponseMeta {
+// When streamID is set, HEADERS of other streams are skipped: a capture that starts at a DATA frame can contain them.
+func readResponseMeta(parseContext *EBPFParseContext, connID uint64, event *BPFHTTP2Info, streamID uint32) h2ResponseMeta {
 	bLen := len(event.RetData)
 	if event.Flags == EventTypeKHTTP2ResponseHeaders && event.Len >= 0 && event.Len < int32(bLen) {
 		bLen = int(event.Len)
@@ -558,7 +559,7 @@ func readResponseMeta(parseContext *EBPFParseContext, connID uint64, event *BPFH
 			return h2ResponseMeta{}
 		}
 
-		if headers, ok := frame.(*http2.HeadersFrame); ok {
+		if headers, ok := frame.(*http2.HeadersFrame); ok && (streamID == 0 || headers.StreamID == streamID) {
 			status, grpc, parsed := readRetMetaFrame(parseContext, connID, retFramer, headers)
 			return h2ResponseMeta{status: status, grpc: grpc, ok: parsed}
 		}
@@ -735,7 +736,7 @@ func readHTTP2HeaderEvent(parseContext *EBPFParseContext, event *BPFHTTP2Info) e
 		}
 	case EventTypeKHTTP2ResponseHeaders:
 		stream.responseSeen = true
-		response := readResponseMeta(parseContext, connID, event)
+		response := readResponseMeta(parseContext, connID, event, 0)
 		if response.ok {
 			stream.response = response
 		}
@@ -761,7 +762,7 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 	if event.StreamId == 0 {
 		return http2EventToSpan(parseContext, &pendingH2Event{
 			event:    *event,
-			response: readResponseMeta(parseContext, connID, event),
+			response: readResponseMeta(parseContext, connID, event, 0),
 		})
 	}
 	stream := h2c.streams[event.StreamId]
@@ -781,7 +782,7 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 		response = stream.response
 	} else {
 		h2c.hdecRet.MarkUnreliable()
-		response = readResponseMeta(parseContext, connID, event)
+		response = readResponseMeta(parseContext, connID, event, event.StreamId)
 	}
 
 	if stream == nil || !stream.requestSeen {

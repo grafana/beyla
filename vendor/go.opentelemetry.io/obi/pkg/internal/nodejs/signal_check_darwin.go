@@ -23,11 +23,6 @@ var sendSIGUSR1 = func(_ *procs.ProcessHandle) error {
 	return errors.New("signaling a pinned process is only supported on Linux")
 }
 
-// sigusr1Disposition is a no-op on non-Linux platforms.
-func sigusr1Disposition(_ int) signalDisposition {
-	return signalDispositionHandled
-}
-
 // hasUserSIGUSR1Handler is a no-op on non-Linux platforms.
 func hasUserSIGUSR1Handler(_ int, _ *elf.File, _ nodeSymbols) signalCheckResult {
 	return signalCheckNotFound

@@ -10,8 +10,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"golang.org/x/sys/unix"
 
@@ -37,10 +35,7 @@ const (
 	maxSignalNum = 64
 )
 
-const (
-	signalTreeSymbol = "uv__signal_tree"
-	sigusr1Mask      = uint64(1) << (sigusr1 - 1)
-)
+const signalTreeSymbol = "uv__signal_tree"
 
 // nodeSymbols is what one walk of the executable's symbol tables yields.
 // debug/elf caches nothing, so asking twice reparses the whole table, around
@@ -128,43 +123,6 @@ func signalTreeRuntimeAddr(pid int, elfFile *elf.File, syms nodeSymbols) (uint64
 	}
 
 	return base + sym.Off, true
-}
-
-func sigusr1Disposition(pid int) signalDisposition {
-	status, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
-	if err != nil {
-		return signalDispositionUnknown
-	}
-
-	caught, gotCaught := signalMask(status, "SigCgt:")
-	ignored, gotIgnored := signalMask(status, "SigIgn:")
-	if !gotCaught || !gotIgnored {
-		return signalDispositionUnknown
-	}
-
-	if (caught|ignored)&sigusr1Mask != 0 {
-		return signalDispositionHandled
-	}
-
-	return signalDispositionFatal
-}
-
-func signalMask(status []byte, field string) (uint64, bool) {
-	for line := range strings.SplitSeq(string(status), "\n") {
-		rest, ok := strings.CutPrefix(strings.TrimSpace(line), field)
-		if !ok {
-			continue
-		}
-
-		mask, err := strconv.ParseUint(strings.TrimSpace(rest), 16, 64)
-		if err != nil {
-			return 0, false
-		}
-
-		return mask, true
-	}
-
-	return 0, false
 }
 
 // walkTreeForSignal performs an iterative traversal of the libuv signal RB-tree

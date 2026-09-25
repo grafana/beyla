@@ -87,12 +87,16 @@ Besides metric names, the `select` subsection accepts the special key `traces`, 
 
 Keys are matched as globs against the section name, and spans use the section name `traces`. A key like `http_*` therefore never reaches these attributes, while a catch-all `*` does match them along with every metric.
 
-Most of these attributes carry request payloads, so they're opt-in: they're only exported when listed in `include`. The exceptions are `dns.question.name` and `url.query`, which are exported by default and can be turned off with `exclude`.
+Most of these attributes carry request payloads, so they're opt-in: they're only exported when listed in `include`. The exceptions below are exported by default and can be turned off with `exclude`.
 
 | Attribute | Exported by default |
 | --------- | ------------------- |
 | `dns.question.name` | yes |
 | `url.query` | yes |
+| `error.type` | yes |
+| `network.peer.address` | yes |
+| `network.peer.port` | yes |
+| `network.protocol.version` | yes |
 | `db.query.text` | no |
 | `db.response.error` | no |
 | `graphql.document` | no |
@@ -105,6 +109,8 @@ Most of these attributes carry request payloads, so they're opt-in: they're only
 | `gen_ai.tool.call.result` | no |
 | `gen_ai.response.error` | no |
 
+The default-enabled error and network attributes are added when their values are available from a span. `error.type` is present on failed spans; peer address, peer port, and protocol version depend on the details observed for each request.
+
 Example:
 
 ```yaml
@@ -115,9 +121,13 @@ attributes:
       include:
         - db.query.text
         - graphql.document
-      # stop exporting the query string
+      # remove these attributes from the defaults and opt-in set
       exclude:
         - url.query
+        - error.type
+        - network.peer.address
+        - network.peer.port
+        - network.protocol.version
 ```
 
 Values of known-sensitive query parameters are redacted inside `url.query` before export. The other attributes in this table are exported as captured, so enable them only when the payloads they carry are safe to store.

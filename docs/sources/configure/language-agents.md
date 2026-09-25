@@ -19,8 +19,19 @@ YAML section: `nodejs`
 | YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
 | `enabled`<p>`BEYLA_NODEJS_ENABLED`</p>                    | Enable dynamic injection of the `NodeJS` agent.                 | boolean | (true)  |
+| `manual_spans`<p>`BEYLA_NODEJS_MANUAL_SPANS`</p>          | Capture spans that the application creates through the OpenTelemetry API. | boolean | (false) |
 
 The `NodeJS` agent is used only for context propagation, since NodeJS uses `libssl` for TLS encryption and decryption. This agent is injected via the debugger interface. You should disable the `NodeJS` agent support if your program has a handler attached on `SIGUSR1`.
+
+`manual_spans` requires `enabled` to also be `true`: the span bridge that captures manual spans is delivered as part of the same `NodeJS` agent injection, so it has no effect on its own. It also requires Node.js 14.0.0 or newer.
+
+When enabled, and as long as no OpenTelemetry SDK has registered a tracer provider yet, the agent installs a minimal tracer provider that captures spans your application creates through the `@opentelemetry/api` package, and reports them alongside the spans Beyla generates automatically. If your application later registers its own OpenTelemetry SDK, the agent steps aside: it stops capturing spans and lets your SDK take over, so telemetry isn't duplicated between the two.
+
+```yaml
+nodejs:
+  enabled: true
+  manual_spans: true
+```
 
 YAML section: `javaagent`
 

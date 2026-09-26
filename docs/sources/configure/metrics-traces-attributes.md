@@ -39,7 +39,43 @@ attributes:
       exclude: ["k8s.pod.*"]
 ```
 
-### Select database client metric attributes
+### Select database metric attributes
+
+Use `db_client_operation_duration` to select attributes for database client
+operation metrics and `db_server_operation_duration` for database server
+operation metrics. Both selectors accept the following attribute names in
+their `include` and `exclude` lists:
+
+| Attribute | Prometheus-style name | Default |
+| --- | --- | --- |
+| `db.namespace` | `db_namespace` | Included when available |
+| `db.response.status_code` | `db_response_status_code` | Included when available |
+
+The `db.namespace` attribute identifies the database namespace, such as a
+database or bucket. Whether Beyla can report it depends on the database
+protocol and the information available to its protocol detector. Beyla omits
+the attribute when it cannot determine a value. The `db.response.status_code`
+attribute is reported when a database error code is available. For
+Elasticsearch, Beyla reports the HTTP response status code when it receives a
+response.
+
+Each distinct attribute value can create additional time series. In
+particular, many database namespaces can increase cardinality, and response
+status codes add a series for each distinct code. Exclude an attribute when
+that dimension is not useful for your monitoring:
+
+```yaml
+attributes:
+  select:
+    db_client_operation_duration:
+      exclude: ["db_namespace", "db_response_status_code"]
+    db_server_operation_duration:
+      exclude: ["db_namespace", "db_response_status_code"]
+```
+
+If you set an `include` list, add either spelling of an attribute to that
+list to keep it; an explicit `include` list replaces the default attribute
+set.
 
 The `db.client.operation.duration` (`db_client_operation_duration_seconds` in
 Prometheus) metric includes `server.port` by default when Beyla detects a valid

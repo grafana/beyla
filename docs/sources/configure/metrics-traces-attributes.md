@@ -267,10 +267,10 @@ Beyla allows you to enhance your metrics with custom attributes using the `extra
 
 To use this feature, specify the group name and the list of attributes you want to include in that group.
 
-The following groups are supported:
+The following groups are supported. Each group value is a list of attribute names:
 
 - `k8s_app_meta`: Kubernetes-specific metadata such as Pod name, namespace, container name, Pod UID, and more.
-- `app`: application-level attributes shared by most application metrics, such as `service.name` and `service.namespace`.
+- `app`: attributes shared by application metrics, including HTTP, RPC, database, messaging, DNS, generative AI, MCP, language runtime, and GPU metrics. This group doesn't apply to network-flow or process metrics.
 
 Example configuration:
 
@@ -287,7 +287,29 @@ In this example:
 - Adding `k8s.app.version` to the `extra_group_attributes > k8s_app_meta` block causes the `k8s.app.version` label to appear in the metrics.
 - You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests, these annotations are automatically included in the metrics.
 
-By default, Beyla sets `extra_group_attributes > app` to `["service.name", "service.namespace"]`, so these two attributes are reported both as OTEL resource attributes and as metric-level attributes. If you set `extra_group_attributes > app` yourself, your list replaces this default entirely.
+`service.name` and `service.namespace` are OpenTelemetry resource attributes. They are also available as application metric-level attributes so that backends can identify a service without joining the metric to its resource. In `attributes.select`, you can use either the OpenTelemetry names or their Prometheus-style spellings, `service_name` and `service_namespace`.
+
+By default, `extra_group_attributes > app` is `["service.name", "service.namespace"]`, so both attributes are included at the metric level. Setting `extra_group_attributes > app` replaces this default entirely. For example, the following configuration keeps `service.name` on application metrics but leaves `service.namespace` only on the OpenTelemetry resource:
+
+```yaml
+attributes:
+  extra_group_attributes:
+    app:
+      - service.name
+```
+
+You can further control these attributes for individual metrics with `attributes.select.<metric>.include` and `exclude`. For example, this configuration removes both metric-level service identity attributes from the HTTP server duration metric while leaving the other default attributes unchanged:
+
+```yaml
+attributes:
+  select:
+    http_server_request_duration:
+      exclude:
+        - service_name
+        - service_namespace
+```
+
+The two examples only affect metric-level attributes. They don't remove `service.name` or `service.namespace` from the OpenTelemetry resource.
 
 The following table describes the default group attributes.
 

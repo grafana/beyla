@@ -967,3 +967,15 @@ func TestProtocolEndpoit_Error(t *testing.T) {
 	_, _, err := protoEndpoint(&beyla.Config{Prometheus: prom.PrometheusConfig{Port: 9090}})
 	assert.Error(t, err)
 }
+
+func TestProtocolEndpointDoesNotUseDisabledMetrics(t *testing.T) {
+	falseVal := false
+	_, _, err := protoEndpoint(&beyla.Config{
+		Injector: beyla.SDKInject{ExportedSignals: configmap.SDKExportedSignals{
+			Traces:  &falseVal,
+			Metrics: &falseVal,
+		}},
+		OTELMetrics: otelcfg.MetricsConfig{MetricsEndpoint: "http://metrics:4318/v1/metrics"},
+	})
+	assert.Error(t, err)
+}

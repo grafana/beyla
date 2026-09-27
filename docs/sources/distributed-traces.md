@@ -17,6 +17,8 @@ aliases:
 
 Beyla supports distributed traces for applications with some limitations and kernel version restrictions.
 
+HTTP header-based context propagation requires Linux Kernel 5.17 or higher. Beyla uses the `bpf_loop` helper to parse incoming HTTP headers, and that helper isn't available in earlier kernels. This is a stricter requirement than Beyla's general Linux Kernel 5.8 minimum.
+
 The distributed tracing is implemented through the propagation of the [W3C `traceparent`](https://www.w3.org/TR/trace-context/) header value. `traceparent` context propagation is automatic and it doesn't require any action or configuration.
 
 Beyla reads any incoming trace context header values, tracks the program execution flow and propagates the trace context by automatically adding the `traceparent` field in outgoing HTTP/gRPC requests. If an application has already added the `traceparent` field in outgoing requests, Beyla uses that value for tracing instead its own generated trace context. If Beyla cannot find an incoming `traceparent` context value, it generates one according to the W3C specification.

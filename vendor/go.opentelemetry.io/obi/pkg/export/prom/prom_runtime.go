@@ -111,6 +111,7 @@ func (r *metricsReporter) collectRuntimeMetrics(snapshots []runtimemetrics.Runti
 }
 
 func (r *metricsReporter) collectRuntimeMetricsLocked(snapshots []runtimemetrics.RuntimeMetricSnapshot) {
+	r.dotnetRuntimeMetrics.expireCurrentMetrics()
 	enabled := r.runtimeMetricsEnabled()
 	for _, snapshot := range snapshots {
 		if !enabled.ShouldReport(snapshot) {

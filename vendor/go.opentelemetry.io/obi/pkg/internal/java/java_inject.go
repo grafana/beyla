@@ -39,10 +39,17 @@ var embeddedJavaAgentBytes []byte
 
 type JavaInjectError struct {
 	Message string
+	Cause   error
 }
 
 func (e *JavaInjectError) Error() string {
 	return e.Message
+}
+
+// Unwrap keeps a wrapped cause reachable through errors.Is, so a caller can
+// still tell a withheld signal from a failure to reach the JVM.
+func (e *JavaInjectError) Unwrap() error {
+	return e.Cause
 }
 
 type JavaInjector struct {
@@ -242,14 +249,17 @@ func (i *JavaInjector) NewExecutable(ctx context.Context, target InjectionTarget
 			}
 		}()
 
-		ok, jdk8 := i.verifyJVMVersion(ctx, attacher, target.Process, target.Pid)
+		ok, jdk8, err := i.verifyJVMVersion(ctx, attacher, target.Process, target.Pid)
+		if errors.Is(err, jvm.ErrSignalWithheld) {
+			resultChan <- result{err: &JavaInjectError{Message: err.Error(), Cause: err}}
+			return
+		}
 		if !ok {
 			resultChan <- result{err: &JavaInjectError{Message: "unsupported Java version for OpenTelemetry eBPF instrumentation"}}
 			return
 		}
 
 		var loaded bool
-		var err error
 		if jdk8 {
 			loaded, err = i.jdkAgentAlreadyLoadedHotspot8(ctx, attacher, target.Process, target.Pid)
 		} else {
@@ -638,7 +648,7 @@ func (i *JavaInjector) verifyJVMVersion(
 	attacher jvmAttacher,
 	process *procs.ProcessHandle,
 	pid app.PID,
-) (bool, bool) {
+) (bool, bool, error) {
 	attacher.Init()
 
 	defer func() {
@@ -649,12 +659,17 @@ func (i *JavaInjector) verifyJVMVersion(
 	// OpenJ9 doesn't support VM.version command
 	out, err := attacher.Attach(ctx, process, []string{"jcmd", "VM.version"}, true)
 	if err != nil {
-		i.log.Error("error executing command for the JVM", "pid", pid, "error", err)
-		return false, false
+		// A withheld signal is a decision, not a failure to reach the JVM, and
+		// the caller reports it on its own.
+		if !errors.Is(err, jvm.ErrSignalWithheld) {
+			i.log.Error("error executing command for the JVM", "pid", pid, "error", err)
+		}
+
+		return false, false, err
 	}
 
 	if out == nil {
-		return true, false
+		return true, false, nil
 	}
 	defer out.Close()
 
@@ -664,12 +679,12 @@ func (i *JavaInjector) verifyJVMVersion(
 		if strings.HasPrefix(line, "JDK ") {
 			// JDK 8 is special, failing to properly detect it can cause errors in applications if they are
 			// loaded more than once
-			return !strings.HasPrefix(line, "JDK 28"), strings.HasPrefix(line, "JDK 8")
+			return !strings.HasPrefix(line, "JDK 28"), strings.HasPrefix(line, "JDK 8"), nil
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		i.log.Error("error reading from scanner", "error", err)
 	}
 
-	return false, false
+	return false, false, nil
 }

@@ -154,6 +154,9 @@ func detectSQL(buf []byte) (string, []string, string) {
 		i := asciiIndexFold(scan, q)
 		if i >= 0 && (minIdx < 0 || i < minIdx) {
 			minIdx = i
+			if minIdx == 0 {
+				break
+			}
 		}
 	}
 

@@ -187,14 +187,20 @@ func (p *Tracer) AddInstrumentedLibRef(id uint64) {
 
 func (p *Tracer) UnlinkInstrumentedLib(id uint64) {
 	p.libsMux.Lock()
-	defer p.libsMux.Unlock()
-
-	module, err := p.instrumentedLibs.RemoveRef(id)
-
+	module, released, err := p.instrumentedLibs.RemoveRef(id)
 	p.log.Debug("Unlinking instrumented lib - before state", "ino", id, "module", module)
+	p.libsMux.Unlock()
 
 	if err != nil {
 		p.log.Debug("Error unlinking instrumented lib", "ino", id, "error", err)
+		return
+	}
+
+	// unlocked: every probe waits for kernel grace periods, other libraries must not queue behind it
+	if released {
+		if err := ebpfcommon.CloseResources(module.Closers...); err != nil {
+			p.log.Debug("failed to close instrumented lib", "ino", id, "error", err)
+		}
 	}
 }
 

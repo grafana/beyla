@@ -51,6 +51,8 @@ func getFilteredStatsResourceAttrs(hostID string, attrSelector attributes.Select
 	baseAttrs := []attribute.KeyValue{
 		attribute.String(attr.VendorPrefix+string(attr.VendorVersionSuffix), buildinfo.Version),
 		attribute.String(attr.VendorPrefix+string(attr.VendorRevisionSuffix), buildinfo.Revision),
+		semconv.TelemetryDistroName(attr.TelemetryDistroName),
+		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion()),
 	}
 
 	extraAttrs := []attribute.KeyValue{

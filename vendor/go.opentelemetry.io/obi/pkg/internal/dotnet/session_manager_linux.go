@@ -146,7 +146,7 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 		if err == nil {
 			log.Debug("started EventPipe GC collection", "session", session.id)
 			base := totals
-			err = c.readSession(ctx, session, target.info.PID, func(snapshot *runtimemetrics.DotnetRuntimeMetricSnapshot) error {
+			err = c.readSession(ctx, session, target.info.PID, func(publishCtx context.Context, snapshot *runtimemetrics.DotnetRuntimeMetricSnapshot) error {
 				for gcGeneration, count := range snapshot.GCCollections {
 					if *count > math.MaxInt64-base[gcGeneration] {
 						return errors.New(".NET GC collections exceed exporter integer range")
@@ -156,7 +156,7 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 				for gcGeneration, count := range snapshot.GCCollections {
 					totals[gcGeneration] = *count
 				}
-				c.queue.SendCtx(ctx, []runtimemetrics.RuntimeMetricSnapshot{{
+				c.queue.SendCtx(publishCtx, []runtimemetrics.RuntimeMetricSnapshot{{
 					Service: file.ServiceAttrs(), PID: process.PID(), Generation: generation,
 					Time: time.Now(), Dotnet: snapshot,
 				}})
@@ -190,18 +190,26 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 
 // readSession drains concurrently with StopTracing. A deadline bounds both
 // control IPC and the final stream drain when the process stops responding.
-func (c *SessionManager) readSession(ctx context.Context, session *eventPipeSession, pid uint64, publish func(*runtimemetrics.DotnetRuntimeMetricSnapshot) error) error {
+func (c *SessionManager) readSession(ctx context.Context, session *eventPipeSession, pid uint64, publish func(context.Context, *runtimemetrics.DotnetRuntimeMetricSnapshot) error) error {
 	defer session.stream.Close()
+	publishCtx, cancelPublish := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelPublish()
 	done := make(chan error, 1)
 	go func() {
-		var round gcRound
-		done <- readRuntimeCounters(session.stream, pid, func(counter runtimeCounter) error {
-			snapshot, err := round.observe(counter)
+		var collection runtimeCollection
+		err := readRuntimeCounters(session.stream, pid, func(counter runtimeCounter) error {
+			snapshot, err := collection.observe(counter)
 			if err != nil || snapshot == nil {
 				return err
 			}
-			return publish(snapshot)
+			return publish(publishCtx, snapshot)
 		})
+		if err == nil {
+			if snapshot := collection.finish(); snapshot != nil {
+				err = publish(publishCtx, snapshot)
+			}
+		}
+		done <- err
 	}()
 	var readErr error
 	readFinished := false
@@ -212,6 +220,9 @@ func (c *SessionManager) readSession(ctx context.Context, session *eventPipeSess
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.timeout)
 	defer cancel()
+	// Queue delivery and stream draining share the same cleanup deadline.
+	stopPublishCancellation := context.AfterFunc(cleanupCtx, cancelPublish)
+	defer stopPublishCancellation()
 	deadline, _ := cleanupCtx.Deadline()
 	_ = session.stream.SetReadDeadline(deadline)
 	stopErr := stopEventPipe(cleanupCtx, session)

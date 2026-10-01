@@ -7,11 +7,6 @@
   postUpdateOptions: [
     'gomodMassage',
   ],
-  // CI installs tools with GOTOOLCHAIN=local and the Go version from the root
-  // go.mod. A newer toolchain here rewrites internal/tools/go.mod past that.
-  constraints: {
-    go: '1.26.8',
-  },
   'git-submodules': {
     enabled: false,
   },

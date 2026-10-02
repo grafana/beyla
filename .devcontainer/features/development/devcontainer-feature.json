@@ -1,0 +1,6 @@
+{
+  "id": "development",
+  "version": "1.0.0",
+  "name": "Beyla development tools",
+  "description": "Go editor tools and IDE runtime dependencies for the Alpine OBI generator."
+}

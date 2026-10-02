@@ -63,11 +63,5 @@ func surveyCriteria(cfg *beyla.Config) []services.Selector {
 }
 
 func surveyExcludingCriteria(cfg *beyla.Config) []services.Selector {
-	// deprecated options: supporting them only if the user neither defines
-	// the instrument nor exclude_instrument sections
-	obiCfg := cfg.AsOBI()
-	if obiDiscover.OnlyDefinesDeprecatedServiceSelection(obiCfg) {
-		return obiDiscover.RegexAsSelector(cfg.Discovery.DefaultExcludeServices)
-	}
-	return obiDiscover.GlobsAsSelector(cfg.Discovery.DefaultExcludeInstrument)
+	return obiDiscover.ExcludingCriteria(cfg.AsOBI())
 }

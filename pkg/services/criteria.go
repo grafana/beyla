@@ -20,24 +20,24 @@ const (
 )
 
 const (
-	linuxSystem       = ",/sbin/*,/lib/systemd/*,/usr/lib/systemd/*,/lib/udev/*,/usr/lib/udev/*"
+	linuxSystem       = ",/sbin/*,/lib/systemd/*,/usr/lib/systemd/*,/lib/udev/*,/usr/lib/udev/*,*fusermount3,*ibus-daemon"
 	linuxSystemDebian = ",/usr/lib/polkit-1/*,/usr/lib/policykit-1/*,/usr/lib/NetworkManager/*,/usr/lib/apt/*,/usr/lib/dpkg/*"
 	linuxSystemRedhat = ",/usr/lib/rpm/*,/usr/libexec/sssd/*,/usr/libexec/udisks2/*,/usr/libexec/bluetooth/*,/usr/libexec/packagekitd*,/usr/libexec/accounts-daemon*,/usr/libexec/upowerd*,/usr/libexec/nm-*"
 	linuxSystemSuse   = ",/usr/lib/wicked/*,/usr/lib/zypp/*,/usr/sbin/wickedd*,/usr/sbin/wickedd-nanny/*"
-	linuxGUI          = ",/usr/libexec/gsd-*,/usr/libexec/gvfs*,/usr/libexec/gnome-*,/usr/libexec/ibus-*,/usr/libexec/xdg-{desktop-portal*,document-portal,permission-store},/usr/libexec/evolution-*,/usr/libexec/goa-*,/usr/libexec/at-spi*,/usr/libexec/{gdm-*,mutter-*}"
+	linuxGUI          = ",/usr/libexec/gsd-*,/usr/libexec/gvfs*,/usr/libexec/gnome-*,/usr/libexec/ibus-*,/usr/libexec/xdg-{desktop-portal*,document-portal,permission-store},/usr/libexec/evolution-*,/usr/libexec/goa-*,/usr/libexec/at-spi*,/usr/libexec/{gdm-*,mutter-*},/usr/bin/update-notifier,/usr/lib/speech-dispatcher-modules*,/usr/libexec/xdg-*,*user-session-helper,*/gdm3,*/gcr-ssh-agent,*/switcheroo*,*/gnome-keyring-daemon,*/gjs,*/gjs-console"
 	linuxPrint        = ",/usr/sbin/{cupsd,cups-browsed},/usr/lib/cups/*,/snap/cups/*"
-	linuxCommon       = ",*/{sshd,sshd-session,sshd-auth,ssh-agent},*/{cron,crond,anacron,atd},*/{chronyd,ntpd},*/{dbus-daemon,dbus-broker,dbus-broker-launch},*/{NetworkManager,ModemManager,wpa_supplicant,dhclient,dhcpcd},*/avahi-daemon,*/{polkitd,auditd},*/{packagekitd,snapd},*/{udisksd,upowerd},*/qemu-ga"
+	linuxCommon       = ",*/{sshd,udevadm,sshd-session,sshd-auth,ssh-agent},*/{cron,crond,anacron,atd},*/{chronyd,ntpd},*/{dbus-daemon,dbus-broker,dbus-broker-launch},*/{NetworkManager,ModemManager,wpa_supplicant,dhclient,dhcpcd},*/avahi-daemon,*/{polkitd,auditd},*/{packagekitd,snapd},*/{udisksd,upowerd},*/qemu-ga"
 	linuxLogging      = ",*/{rsyslogd,syslog-ng,journald,systemd-journald}"
 	linuxTimeSync     = ",*/{systemd-timesyncd,timesyncd}"
 	linuxDNS          = ",*/{dnsmasq,systemd-resolved,named,unbound}"
 	linuxFirewall     = ",*/{firewalld,nftables,iptables,ip6tables}"
 	linuxVPN          = ",*/{openvpn,wireguard,tailscaled,wg-quick}"
 	linuxMonitoring   = ",*/{node_exporter,cadvisor,fluentd,fluent-bit,vector,telegraf,datadog-agent,newrelic-infra}"
-	linuxContainer    = ",*/{containerd,dockerd,crio,kubelet,kube-proxy}"
+	linuxContainer    = ",*/{containerd,dockerd,crio,kubelet,kube-proxy,buildkitd,docker-compose,docker-proxy,docker}"
 	linuxVirt         = ",*/{libvirtd,virtlogd,virtqemud,virtxend}"
 	linuxSecurity     = ",*/{fail2ban,aide,tripwire}"
-	linuxHardware     = ",*/{smartd,mdadm,multipathd,thermald,irqbalance}"
-	linuxShell        = ",*/{bash,zsh,fish,tmux,screen,agetty,login}"
+	linuxHardware     = ",*/{smartd,mdadm,multipathd,thermald,irqbalance,fwupd}"
+	linuxShell        = ",*/{bash,zsh,dash,fish,tmux,screen,agetty,login,sudo,su,runuser,gnome-shell}"
 	linuxCloudAWS     = ",/usr/bin/amazon-ssm-agent*,/usr/bin/ssm-agent-worker*,*/{ec2-instance-connect,amazon-cloudwatch-agent,aws-cfn-bootstrap,awslogs,aws-codedeploy-agent}"
 	linuxCloudAzure   = ",/usr/sbin/waagent*,*/{azure-vm-agent,omsagent,mdsd,azuremonitoragent,azure-mdsd}"
 	linuxCloudGCP     = ",*/{google-guest-agent,google-osconfig-agent,google-fluentd,ops-agent,google-cloud-ops-agent}"
@@ -48,16 +48,26 @@ const (
 	linuxCompliance   = ",*/{osqueryd,falco,crowdsec,crowdsec-agent}"
 	linuxPkgMgmt      = ",*/{unattended-upgrades,dnf-automatic,yum-cron,apt-daily,apt-daily-upgrade}"
 	linuxMail         = ",*/{postfix,sendmail,exim,exim4,master,qmgr,pickup}"
-	linuxAudio        = ",*/{wireplumber,pipewire,pipewire-pulse,pulseaudio}"
-	linuxDesktop      = ",*/{tracker-miner-fs-3,tracker-miner-fs,tracker-store,dconf-service,gnome-calendar,gnome-shell,gnome-software}"
+	linuxAudio        = ",*/{wireplumber,pipewire,pipewire-pulse,pulseaudio,rtkit-daemon}"
+	linuxDesktop      = ",*/{dconf,tracker-miner-fs-3,tracker-extract-*,tracker-miner-fs,tracker-store,dconf-service,gnome-calendar,gnome-shell,gnome-software,colord}"
 	linuxPower        = ",*/{power-profiles-daemon,thermald,upowerd}"
 	linuxSnap         = ",*/{snapd-desktop-integration,snapd,snap-confine}"
-	linuxUbuntu       = ",*/{ubuntu-advantage-desktop-daemon,ubuntu-advantage-tools,ua}"
+	linuxUbuntu       = ",*/{ubuntu-advantage-desktop-daemon,ubuntu-advantage-tools,ua,firmware-notifier}"
 	linuxCrash        = ",*/{crashhelper,apport,whoopsie,kerneloops}"
 	linuxSpeech       = ",*/{sd_openjtalk,speech-dispatcher,espeak,espeak-ng}"
-	linuxVPNClient    = ",*/{nordvpnd,nordvpn,expressvpn,protonvpn,mullvad}"
+	linuxVPNClient    = ",*/{nordvpnd,nordvpn,expressvpn,protonvpn,mullvad,norduserd}"
 	linuxContainerd   = ",*/containerd-shim-*,*/containerd-shim-runc-*"
-	linuxDisplay      = ",*/{Xwayland,Xorg,X,weston,sway,wayfire,labwc,river,hyprland}"
+	linuxDisplay      = ",*/{Xwayland,Xorg,X,weston,sway,wayfire,labwc,river,hyprland,nautilus,seahorse}"
+	linuxUtils        = ",*/{cat,sleep,snap,ls,cp,mv,rm,mkdir,rmdir,touch,chmod,chown,ln,dd,df,du,mount,umount,ps,kill,killall,top,htop,free,uptime,w,who,whoami,id,groups,su,sudo,passwd,chsh,chfn}"
+	linuxDeleted      = ",*(deleted)"
+	linuxMisc         = ",*/gopls,*/clangd,*/boltd"
+	linuxKDE          = ",*/{plasmashell,kwin_x11,kwin_wayland,kded5,kded6,ksmserver,ksplashqml,plasma-discover,plasma-systemmonitor,kglobalaccel5,kglobalaccel6,kactivitymanagerd,kscreenlocker_greet,polkit-kde-authentication-agent-1,xdg-desktop-portal-kde,kdeconnectd,kdeconnect-indicator,korgac,akonadi_*}"
+	linuxXFCE         = ",*/{xfce4-session,xfwm4,xfdesktop,xfce4-panel,xfce4-settings-helper,xfce4-power-manager,xfce4-notifyd,xfce4-screensaver,thunar,thunar-volman}"
+	linuxLXQt         = ",*/{lxqt-session,lxqt-panel,lxqt-runner,lxqt-about,lxqt-policykit-agent,lxqt-notificationd,lxqt-powermanagement,lxqt-config,lxqt-config-appearance}"
+	linuxLXDE         = ",*/{lxsession,lxpanel,pcmanfm,lxterminal,lxappearance,openbox}"
+	linuxMATE         = ",*/{mate-session,mate-panel,mate-settings-daemon,mate-screensaver,mate-power-manager,caja,marco}"
+	linuxCinnamon     = ",*/{cinnamon-session,cinnamon,cinnamon-settings-daemon,cinnamon-screensaver,nemo,muffin}"
+	linuxPodman       = ",*/{podman,podman-compose,buildah,skopeo,crun,conmon,containers-common}"
 )
 
 var K8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
@@ -102,7 +112,9 @@ var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 			linuxCommon + linuxLogging + linuxTimeSync + linuxDNS + linuxFirewall + linuxVPN + linuxMonitoring + linuxContainer + linuxVirt +
 			linuxSecurity + linuxHardware + linuxShell + linuxCloudGCP + linuxCloudOther + linuxCloudInit +
 			linuxConfigMgmt + linuxBackup + linuxCompliance + linuxPkgMgmt + linuxMail + linuxAudio + linuxDesktop + linuxPower +
-			linuxSnap + linuxUbuntu + linuxCrash + linuxSpeech + linuxVPNClient + linuxContainerd + linuxDisplay +
+			linuxSnap + linuxUbuntu + linuxCrash + linuxSpeech + linuxVPNClient + linuxContainerd + linuxDisplay + linuxUtils + linuxDeleted +
+			linuxKDE + linuxXFCE + linuxLXQt + linuxLXDE + linuxMATE + linuxCinnamon + linuxPodman +
+			linuxMisc +
 			"}"),
 	},
 	services.GlobAttributes{

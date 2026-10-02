@@ -76,6 +76,13 @@ github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
 github.com/aws/aws-sdk-go-v2/internal/v4a
 github.com/aws/aws-sdk-go-v2/internal/v4a/internal/crypto
 github.com/aws/aws-sdk-go-v2/internal/v4a/internal/v4
+# github.com/aws/aws-sdk-go-v2/service/ecs v1.95.0
+## explicit; go 1.24
+github.com/aws/aws-sdk-go-v2/service/ecs
+github.com/aws/aws-sdk-go-v2/service/ecs/document
+github.com/aws/aws-sdk-go-v2/service/ecs/internal/document
+github.com/aws/aws-sdk-go-v2/service/ecs/internal/endpoints
+github.com/aws/aws-sdk-go-v2/service/ecs/types
 # github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.19
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
@@ -109,6 +116,8 @@ github.com/aws/smithy-go/auth
 github.com/aws/smithy-go/auth/bearer
 github.com/aws/smithy-go/context
 github.com/aws/smithy-go/document
+github.com/aws/smithy-go/document/internal/serde
+github.com/aws/smithy-go/document/json
 github.com/aws/smithy-go/encoding
 github.com/aws/smithy-go/encoding/httpbinding
 github.com/aws/smithy-go/encoding/json
@@ -131,6 +140,7 @@ github.com/aws/smithy-go/tracing
 github.com/aws/smithy-go/traits
 github.com/aws/smithy-go/transport/http
 github.com/aws/smithy-go/transport/http/internal/io
+github.com/aws/smithy-go/waiter
 # github.com/bahlo/generic-list-go v0.2.0
 ## explicit; go 1.18
 github.com/bahlo/generic-list-go
@@ -140,6 +150,9 @@ github.com/beorn7/perks/quantile
 # github.com/blang/semver/v4 v4.0.0
 ## explicit; go 1.14
 github.com/blang/semver/v4
+# github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd
+## explicit; go 1.14
+github.com/brunoscheufler/aws-ecs-metadata-go
 # github.com/buger/jsonparser v1.1.2
 ## explicit; go 1.13
 github.com/buger/jsonparser
@@ -810,6 +823,9 @@ go.opentelemetry.io/collector/pipeline/xpipeline
 # go.opentelemetry.io/contrib/detectors/aws/ec2/v2 v2.5.3
 ## explicit; go 1.25.0
 go.opentelemetry.io/contrib/detectors/aws/ec2/v2
+# go.opentelemetry.io/contrib/detectors/aws/ecs v1.46.0
+## explicit; go 1.25.0
+go.opentelemetry.io/contrib/detectors/aws/ecs
 # go.opentelemetry.io/contrib/detectors/aws/eks v1.46.0
 ## explicit; go 1.25.0
 go.opentelemetry.io/contrib/detectors/aws/eks
@@ -840,7 +856,7 @@ go.opentelemetry.io/ebpf-profiler/process/processcontext
 go.opentelemetry.io/ebpf-profiler/remotememory
 go.opentelemetry.io/ebpf-profiler/stringutil
 go.opentelemetry.io/ebpf-profiler/support
-# go.opentelemetry.io/obi v0.13.0 => ./.obi-src
+# go.opentelemetry.io/obi v0.14.0 => ./.obi-src
 ## explicit; go 1.26.0
 go.opentelemetry.io/obi/internal/goabi
 go.opentelemetry.io/obi/internal/goversion
@@ -851,7 +867,6 @@ go.opentelemetry.io/obi/pkg/appolly/app/runtime
 go.opentelemetry.io/obi/pkg/appolly/app/svc
 go.opentelemetry.io/obi/pkg/appolly/discover
 go.opentelemetry.io/obi/pkg/appolly/discover/exec
-go.opentelemetry.io/obi/pkg/appolly/meta
 go.opentelemetry.io/obi/pkg/appolly/services
 go.opentelemetry.io/obi/pkg/appolly/traces
 go.opentelemetry.io/obi/pkg/buildinfo
@@ -872,6 +887,7 @@ go.opentelemetry.io/obi/pkg/export/debug
 go.opentelemetry.io/obi/pkg/export/expire
 go.opentelemetry.io/obi/pkg/export/imetrics
 go.opentelemetry.io/obi/pkg/export/instrumentations
+go.opentelemetry.io/obi/pkg/export/mcpsession
 go.opentelemetry.io/obi/pkg/export/otel
 go.opentelemetry.io/obi/pkg/export/otel/idgen
 go.opentelemetry.io/obi/pkg/export/otel/metric
@@ -900,13 +916,16 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent
 go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser
+go.opentelemetry.io/obi/pkg/internal/ebpf/kprobe
 go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher
 go.opentelemetry.io/obi/pkg/internal/ebpf/logger
 go.opentelemetry.io/obi/pkg/internal/ebpf/mqttparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager
 go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector
+go.opentelemetry.io/obi/pkg/internal/ebpf/tracefs
 go.opentelemetry.io/obi/pkg/internal/ebpf/uprobe
 go.opentelemetry.io/obi/pkg/internal/ebpf/watcher
+go.opentelemetry.io/obi/pkg/internal/ecs
 go.opentelemetry.io/obi/pkg/internal/errtype
 go.opentelemetry.io/obi/pkg/internal/fastelf
 go.opentelemetry.io/obi/pkg/internal/goexec

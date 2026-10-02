@@ -86,6 +86,21 @@ type DotnetRuntimeMetricSnapshot struct {
 	// GCCollections contains exclusive cumulative counts since the collector baseline.
 	// A nil entry means the count is unavailable.
 	GCCollections [DotnetGCGenerationCount]*uint64
+
+	ProcessMemoryWorkingSet *int64
+	GCCommittedMemory       *int64
+	ThreadPoolThreadCount   *int64
+	ThreadPoolQueueLength   *int64
+	TimerCount              *int64
+	AssemblyCount           *int64
+
+	GCHeapTotalAllocated    *uint64
+	GCPauseTime             *float64
+	JITCompiledILSize       *uint64
+	JITCompiledMethods      *uint64
+	JITCompilationTime      *float64
+	ThreadPoolWorkItemCount *uint64
+	MonitorLockContentions  *uint64
 }
 
 type GoRuntimeMetricSnapshot struct {

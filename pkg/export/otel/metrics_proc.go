@@ -12,13 +12,13 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	metric2 "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -61,7 +61,7 @@ type procMetricsExporter struct {
 	ctx context.Context
 	cfg *ProcMetricsConfig
 
-	nodeMeta *meta.NodeMeta
+	nodeMeta *metadata.NodeMeta
 
 	exporter  sdkmetric.Exporter
 	reporters otelcfg.ReporterPool[*process.ID, *procMetrics]
@@ -212,7 +212,7 @@ func newProcMetricsExporter(
 
 // getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
 // for process metrics.
-func getFilteredProcessResourceAttrs(nodeMeta *meta.NodeMeta, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
+func getFilteredProcessResourceAttrs(nodeMeta *metadata.NodeMeta, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
 	baseAttrs := otelcfg.GetResourceAttrs(nodeMeta, procID.Service)
 	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),

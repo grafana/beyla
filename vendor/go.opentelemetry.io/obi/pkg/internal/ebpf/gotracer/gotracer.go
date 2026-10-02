@@ -1727,6 +1727,15 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"net/http/internal/http2.(*serverConn).processHeaders": {{
 			Start: p.bpfObjects.ObiUprobeHttp2ServerProcessHeaders,
 		}},
+		"golang.org/x/net/http2.(*serverConn).newWriterAndRequest": {{
+			End: p.bpfObjects.ObiUprobeHttp2serverConnNewWriterAndRequestReturns, // hands the traceparent to the stream
+		}},
+		"net/http.(*http2serverConn).newWriterAndRequest": {{
+			End: p.bpfObjects.ObiUprobeHttp2serverConnNewWriterAndRequestReturns,
+		}},
+		"net/http/internal/http2.(*serverConn).newWriterAndRequest": {{
+			End: p.bpfObjects.ObiUprobeHttp2serverConnNewWriterAndRequestReturns,
+		}},
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": {{ // http server
 			Start: p.bpfObjects.ObiUprobeConnServe,

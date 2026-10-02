@@ -7,15 +7,16 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/docker"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/internal/ecs"
 	netebpf "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	statsebpf "go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/selection"
 )
@@ -25,7 +26,7 @@ import (
 type ContextInfo struct {
 	// NodeMeta of the node (physical, VM, cloud instance...) running OBI.
 	// Including the HostID and other host metadata Attributes
-	NodeMeta meta.NodeMeta
+	NodeMeta metadata.NodeMeta
 
 	// AppO11y stores context information that is only required for application observability.
 	// Its values must be initialized by the App O11y code and shouldn't be accessed from the
@@ -42,6 +43,9 @@ type ContextInfo struct {
 	K8sInformer *kube.MetadataProvider
 	// DockerMetadata stores per-PID information of docker containers
 	DockerMetadata *docker.ContainerStore
+	// ECSInventory is shared by endpoint resolution and process metadata enrichment.
+	// TODO: add ECS name resolution features to network metrics
+	ECSInventory *ecs.Inventory
 
 	// OverrideAppExportQueue allows overriding the output queue of the application exporter
 	// to connect your own application exporters outside the OBI code base. If left unset, OBI will
@@ -67,9 +71,9 @@ type ContextInfo struct {
 	// OTELMetricsExporter allows sharing the same OTEL exporter through diverse metrics export nodes (Application, Network...)
 	OTELMetricsExporter *otelcfg.MetricsExporterInstancer
 
-	// DynamicPIDSelector, when set, restricts App O11y, NetO11y, and StatsO11y signals to
-	// the runtime-selected PIDs for each signal view. Pass via instrumenter.WithDynamicPIDSelector.
-	DynamicPIDSelector selection.MultiSignalPIDSelector
+	// DynamicSelector, when set, restricts App O11y, NetO11y, and StatsO11y signals to
+	// the runtime-selected targets for each signal view. Pass via instrumenter.WithDynamicSelector.
+	DynamicSelector selection.MultiSignalPIDSelector
 }
 
 // AppO11y stores context information that is only required for application observability.

@@ -223,10 +223,7 @@ func recordJVMRuntimeFloatCounter(
 	previous **int64,
 	current int64,
 ) {
-	delta := current
-	if *previous != nil && current >= **previous {
-		delta = current - **previous
-	}
+	delta := runtimemetrics.CounterDelta(*previous, current)
 	if delta > 0 {
 		metric.Add(ctx, float64(delta)/float64(time.Second))
 	}

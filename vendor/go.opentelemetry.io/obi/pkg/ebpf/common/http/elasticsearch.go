@@ -63,6 +63,7 @@ func ElasticsearchSpan(baseSpan *request.Span, req *http.Request, resp *http.Res
 	}
 
 	baseSpan.SubType = request.HTTPSubtypeElasticsearch
+	baseSpan.DBNamespace = resp.Header.Get("X-Found-Handling-Cluster")
 	baseSpan.Elasticsearch = &request.Elasticsearch{
 		NodeName:         op.NodeName,
 		DBOperationName:  operationName,

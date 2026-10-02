@@ -16,12 +16,12 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -57,7 +57,7 @@ func SigilExport(
 type sigilExport struct {
 	log            *slog.Logger
 	cfg            *otelcfg.TracesConfig
-	nodeMeta       *meta.NodeMeta
+	nodeMeta       *metadata.NodeMeta
 	is             instrumentations.InstrumentationSelection
 	input          <-chan []request.Span
 	traceAttrs     map[attr.Name]struct{}

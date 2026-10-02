@@ -72,6 +72,7 @@ func newGraphBuilder(
 	}
 
 	// Second, we register instancers for each pipe node, as well as communication queues between them
+	swi.Add(transform.ECSInventoryProvider(ctxInfo, config.NameResolver, config.CloudMetadata), swarm.WithID("ECSInventory"))
 	// TODO: consider moving the queues to a public structure so when OBI is used as library, other components can
 	// listen to the messages and expanding the Pipeline
 	tracesReaderToRouter := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "tracesReaderToRouter")
@@ -136,7 +137,7 @@ func newGraphBuilder(
 		attrFilteredSpans,
 		instrumentationFilteredSpans,
 	), swarm.WithID("InstrumentationFilterSpanGate"))
-	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicPIDSelector, instrumentationFilteredSpans, exportableSpans),
+	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicSelector, instrumentationFilteredSpans, exportableSpans),
 		swarm.WithID("DynamicSignalSpanGate"))
 
 	swi.Add(otel.TracesReceiver(
@@ -176,7 +177,7 @@ func setupMetricsSubPipeline(
 	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
 ) {
 	metricsProcessEvents := msg2.QueueFromConfig[exec.ProcessEvent](config, ctxInfo.Metrics, "metricsProcessEvents")
-	swi.Add(DynamicSignalProcessEventGate(ctxInfo.DynamicPIDSelector, processEventsCh, metricsProcessEvents),
+	swi.Add(DynamicSignalProcessEventGate(ctxInfo.DynamicSelector, processEventsCh, metricsProcessEvents),
 		swarm.WithID("DynamicSignalProcessEventGate"))
 
 	unresolvedCfg := request.UnresolvedNames{
@@ -222,7 +223,7 @@ func setupMetricsSubPipeline(
 	runtimeMetricsInput := runtimeMetrics
 	if runtimeMetrics != nil {
 		gatedRuntimeMetrics := msg2.QueueFromConfig[[]runtimemetrics.RuntimeMetricSnapshot](config, ctxInfo.Metrics, "gatedRuntimeMetrics")
-		swi.Add(DynamicSignalRuntimeMetricsGate(ctxInfo.DynamicPIDSelector, runtimeMetrics, gatedRuntimeMetrics),
+		swi.Add(DynamicSignalRuntimeMetricsGate(ctxInfo.DynamicSelector, runtimeMetrics, gatedRuntimeMetrics),
 			swarm.WithID("DynamicSignalRuntimeMetricsGate"))
 		runtimeMetricsInput = gatedRuntimeMetrics
 	}

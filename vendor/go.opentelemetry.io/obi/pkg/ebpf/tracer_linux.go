@@ -27,6 +27,7 @@ import (
 	common "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/tracefs"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/uprobe"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -160,7 +161,7 @@ func (pt *ProcessTracer) Run(
 	for {
 		select {
 		// notifying before OBI times out on finish
-		case <-time.After(3 * uprobe.EffectiveShutdownTimeout(pt.shutdownTimeout) / 4):
+		case <-time.After(3 * tracefs.EffectiveShutdownTimeout(pt.shutdownTimeout) / 4):
 			pt.log.Warn("some process tracers did not finish",
 				"tracers", unfinishedTracerTypes(runningTracers), "probes_released", probesReleased.Load())
 			hasWarned = true

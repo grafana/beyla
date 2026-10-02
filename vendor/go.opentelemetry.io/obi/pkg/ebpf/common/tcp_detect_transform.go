@@ -118,7 +118,7 @@ func dispatchKernelAssignedProtocol(parseCtx *EBPFParseContext, event *TCPReques
 // matchKafkaFallback. On a parse failure it returns the raw error; the caller decides whether
 // to surface it (classified packet) or swallow it as "not Kafka" (fallback path).
 func handleKafkaEvent(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer, kafkaTopicUUIDToName *simplelru.LRU[kafkaparser.UUID, string]) (request.Span, bool, bool, error) {
-	infos, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, kafkaTopicUUIDToName)
+	infos, ignore, err := ProcessPossibleKafkaEvent(event, requestBuffer, responseBuffer, kafkaTopicUUIDToName, parseCtx.kafkaConsumerGroups)
 
 	if ignore && err == nil {
 		return request.Span{}, true, true, nil // parsed kafka event, but we don't want to create a span for it

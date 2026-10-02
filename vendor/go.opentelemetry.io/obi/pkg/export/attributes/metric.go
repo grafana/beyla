@@ -200,6 +200,54 @@ var (
 		Unit:    "By",
 		Type:    InstrumentHistogram,
 	})
+	GPUCudaMemoryFreeBytes = metric(Name{
+		Section: "gpu.cuda.memory.free.bytes",
+		OTEL:    "gpu.cuda.memory.free.bytes",
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaMemsetBytes = metric(Name{
+		Section: "gpu.cuda.memset.bytes",
+		OTEL:    "gpu.cuda.memset.bytes",
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaStreamCreateCalls = metric(Name{
+		Section: "gpu.cuda.stream.create.calls",
+		OTEL:    "gpu.cuda.stream.create.calls",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaStreamDestroyCalls = metric(Name{
+		Section: "gpu.cuda.stream.destroy.calls",
+		OTEL:    "gpu.cuda.stream.destroy.calls",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaEventRecordCalls = metric(Name{
+		Section: "gpu.cuda.event.record.calls",
+		OTEL:    "gpu.cuda.event.record.calls",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaEventSynchronizeCalls = metric(Name{
+		Section: "gpu.cuda.event.synchronize.calls",
+		OTEL:    "gpu.cuda.event.synchronize.calls",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaStreamSynchronizeCalls = metric(Name{
+		Section: "gpu.cuda.stream.synchronize.calls",
+		OTEL:    "gpu.cuda.stream.synchronize.calls",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaDeviceSynchronizeCalls = metric(Name{
+		Section: "gpu.cuda.device.synchronize.calls",
+		OTEL:    "gpu.cuda.device.synchronize.calls",
+		Type:    InstrumentCounter,
+	})
+	GPUCudaHostRegisterBytes = metric(Name{
+		Section: "gpu.cuda.host.register.bytes",
+		OTEL:    "gpu.cuda.host.register.bytes",
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
 	DNSLookupDuration = metric(Name{
 		Section: "dns.lookup.duration",
 		OTEL:    "dns.lookup.duration",
@@ -233,6 +281,18 @@ var (
 	MCPServerOperationDuration = metric(Name{
 		Section: "mcp.server.operation.duration",
 		OTEL:    "mcp.server.operation.duration",
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	MCPClientSessionDuration = metric(Name{
+		Section: "mcp.client.session.duration",
+		OTEL:    "mcp.client.session.duration",
+		Unit:    "s",
+		Type:    InstrumentHistogram,
+	})
+	MCPServerSessionDuration = metric(Name{
+		Section: "mcp.server.session.duration",
+		OTEL:    "mcp.server.session.duration",
 		Unit:    "s",
 		Type:    InstrumentHistogram,
 	})
@@ -308,11 +368,89 @@ var (
 		Unit:    "s",
 		Type:    InstrumentHistogram,
 	})
+	DotnetProcessMemoryWorkingSet = metric(Name{
+		Section: "dotnet.process.memory.working_set",
+		OTEL:    "dotnet.process.memory.working_set",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
 	DotnetGCCollections = metric(Name{
 		Section: "dotnet.gc.collections",
 		OTEL:    "dotnet.gc.collections",
 		Unit:    "{collection}",
 		Type:    InstrumentCounter,
+	})
+	DotnetGCHeapTotalAllocated = metric(Name{
+		Section: "dotnet.gc.heap.total_allocated",
+		OTEL:    "dotnet.gc.heap.total_allocated",
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
+	DotnetGCCommittedMemory = metric(Name{
+		Section: "dotnet.gc.last_collection.memory.committed_size",
+		OTEL:    "dotnet.gc.last_collection.memory.committed_size",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetGCPauseTime = metric(Name{
+		Section: "dotnet.gc.pause.time",
+		OTEL:    "dotnet.gc.pause.time",
+		Unit:    "s",
+		Type:    InstrumentCounter,
+	})
+	DotnetJITCompiledILSize = metric(Name{
+		Section: "dotnet.jit.compiled_il.size",
+		OTEL:    "dotnet.jit.compiled_il.size",
+		Unit:    "By",
+		Type:    InstrumentCounter,
+	})
+	DotnetJITCompiledMethods = metric(Name{
+		Section: "dotnet.jit.compiled_methods",
+		OTEL:    "dotnet.jit.compiled_methods",
+		Unit:    "{method}",
+		Type:    InstrumentCounter,
+	})
+	DotnetJITCompilationTime = metric(Name{
+		Section: "dotnet.jit.compilation.time",
+		OTEL:    "dotnet.jit.compilation.time",
+		Unit:    "s",
+		Type:    InstrumentCounter,
+	})
+	DotnetThreadPoolThreadCount = metric(Name{
+		Section: "dotnet.thread_pool.thread.count",
+		OTEL:    "dotnet.thread_pool.thread.count",
+		Unit:    "{thread}",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetThreadPoolWorkItemCount = metric(Name{
+		Section: "dotnet.thread_pool.work_item.count",
+		OTEL:    "dotnet.thread_pool.work_item.count",
+		Unit:    "{work_item}",
+		Type:    InstrumentCounter,
+	})
+	DotnetThreadPoolQueueLength = metric(Name{
+		Section: "dotnet.thread_pool.queue.length",
+		OTEL:    "dotnet.thread_pool.queue.length",
+		Unit:    "{work_item}",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetMonitorLockContentions = metric(Name{
+		Section: "dotnet.monitor.lock_contentions",
+		OTEL:    "dotnet.monitor.lock_contentions",
+		Unit:    "{contention}",
+		Type:    InstrumentCounter,
+	})
+	DotnetTimerCount = metric(Name{
+		Section: "dotnet.timer.count",
+		OTEL:    "dotnet.timer.count",
+		Unit:    "{timer}",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetAssemblyCount = metric(Name{
+		Section: "dotnet.assembly.count",
+		OTEL:    "dotnet.assembly.count",
+		Unit:    "{assembly}",
+		Type:    InstrumentUpDownCounter,
 	})
 	CPythonGCCollections = metric(Name{
 		Section: "cpython.gc.collections",

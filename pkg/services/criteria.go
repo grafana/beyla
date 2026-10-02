@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
@@ -64,6 +66,50 @@ var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 	},
 }
 
+type SurveyDefinitionCriteria []SurveySelector
+
+// SurveySelector extends OBI's glob selection with additional survey specific criteria.
+type SurveySelector struct {
+	services.GlobAttributes `yaml:",inline"`
+
+	// SocketApps requires observed socket activity for this survey selector.
+	// Other matching survey selectors can admit the process without sockets.
+	SocketApps bool `yaml:"socket_apps"`
+}
+
+// yaml.v3 doesn't propagate an inline map through an embedded inline struct.
+// Expose the metadata map at the outer level so Kubernetes criteria survive
+// both decoding and encoding the survey extension.
+type surveySelectorFields SurveySelector
+
+type surveySelectorYAML struct {
+	Selector surveySelectorFields     `yaml:",inline"`
+	Metadata services.MetadataGlobMap `yaml:",inline"`
+}
+
+func (s *SurveySelector) UnmarshalYAML(node *yaml.Node) error {
+	var decoded surveySelectorYAML
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	*s = SurveySelector(decoded.Selector)
+	s.Metadata = decoded.Metadata
+	return nil
+}
+
+func (s SurveySelector) MarshalYAML() (any, error) {
+	return surveySelectorYAML{Selector: surveySelectorFields(s), Metadata: s.Metadata}, nil
+}
+
+func (s SurveyDefinitionCriteria) SocketAppsEnabled() bool {
+	for i := range s {
+		if s[i].SocketApps {
+			return true
+		}
+	}
+	return false
+}
+
 // DiscoveryConfig for the discover.ProcessFinder pipeline
 type BeylaDiscoveryConfig struct {
 	// Services selection. If the user defined the BEYLA_EXECUTABLE_NAME or BEYLA_OPEN_PORT variables, they will be automatically
@@ -73,7 +119,7 @@ type BeylaDiscoveryConfig struct {
 	Services services.RegexDefinitionCriteria `yaml:"services"`
 
 	// Survey selection. Same as services selection, however, it generates only the target info (survey_info) instead of instrumenting the services
-	Survey services.GlobDefinitionCriteria `yaml:"survey"`
+	Survey SurveyDefinitionCriteria `yaml:"survey"`
 
 	// ExcludeServices works analogously to Services, but the applications matching this section won't be instrumented
 	// even if they match the Services selection.

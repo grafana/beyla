@@ -254,7 +254,7 @@
           "x-env-var": "BEYLA_SKIP_GO_SPECIFIC_TRACERS"
         },
         "survey": {
-          "$ref": "#/$defs/GlobDefinitionCriteria",
+          "$ref": "#/$defs/SurveyDefinitionCriteria",
           "description": "Survey selection. Same as services selection, however, it generates only the target info (survey_info) instead of instrumenting the services"
         }
       },
@@ -2528,6 +2528,108 @@
         }
       },
       "type": "object"
+    },
+    "SurveyDefinitionCriteria": {
+      "items": {
+        "$ref": "#/$defs/SurveySelector"
+      },
+      "type": "array",
+      "description": "SurveyDefinitionCriteria selects processes to survey without instrumenting them."
+    },
+    "SurveySelector": {
+      "properties": {
+        "cmd_args": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "container_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "containers_only": {
+          "type": "boolean"
+        },
+        "exe_path": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "exports": {
+          "$ref": "#/$defs/ExportModes"
+        },
+        "k8s_container_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_cronjob_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_daemonset_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_deployment_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_job_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_namespace": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_owner_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_pod_annotations": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object"
+        },
+        "k8s_pod_labels": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GlobAttr"
+          },
+          "type": "object"
+        },
+        "k8s_pod_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_replicaset_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_statefulset_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "languages": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "metrics": {
+          "$ref": "#/$defs/SvcMetricsConfig"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "open_ports": {
+          "$ref": "#/$defs/IntEnum"
+        },
+        "routes": {
+          "$ref": "#/$defs/CustomRoutesConfig"
+        },
+        "sampler": {
+          "$ref": "#/$defs/SamplerConfig"
+        },
+        "socket_apps": {
+          "type": "boolean",
+          "description": "SocketApps requires observed socket activity for this survey selector. Other matching survey selectors can admit the process without sockets."
+        },
+        "target_pids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array",
+          "x-env-var": "BEYLA_TARGET_PID"
+        }
+      },
+      "type": "object",
+      "description": "SurveySelector extends OBI's glob selection with survey-only criteria."
     },
     "SvcMetricsConfig": {
       "properties": {

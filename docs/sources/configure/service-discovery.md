@@ -321,6 +321,37 @@ Beyla writes the discovered information from survey mode to a metric called `sur
 
 Configure the `survey` section exactly like the `instrument` section. For more details, see the [discovery services section](#discovery-services) of this document.
 
+### Survey only applications with sockets
+
+Set `socket_apps: true` on a `discovery.survey` entry to hold back matching
+survey candidates until Beyla observes socket activity. It defaults to `false` per
+entry and it doesn't affect instrumentation selection, including when instrumentation
+and survey are enabled together.
+
+```yaml
+discovery:
+  survey:
+    - exe_path: "*"
+      socket_apps: true
+    - exe_path: "/opt/batch/*"
+```
+
+Criteria within an entry are combined with AND, while entries are combined with OR.
+In this example, processes under `/opt/batch/` qualify without socket activity, while
+all other processes must use sockets. You can also use `socket_apps: true` alone
+in an entry to select any process with socket activity. The socket watcher starts
+only if at least one survey entry enables it.
+
+A Beyla-specific eBPF watcher observes `connect` and `listen` attempts on valid
+sockets, including failed or nonblocking connections and Unix sockets. A listening
+port isn't required, meaning, client-only applications qualify too. At startup, a kernel
+task/file iterator also records processes already holding sockets, including
+inherited listeners and established keepalive connections across network namespaces.
+
+Previously held candidates are promoted automatically to `survey_info`. 
+Once admitted, a process stays admitted until it exits, even if it closes
+all sockets. PID reuse doesn't inherit admission.
+
 ## Exclude services from instrumentation
 
 The `exclude_instrument` section lets you specify selection criteria for excluding services from being instrumented. It follows the same definition format as described in the [discovery services](#discovery-services) section of this document.

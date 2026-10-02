@@ -149,7 +149,9 @@ install-hooks:
 		echo "Pre-commit hook installed."; \
 	fi
 
-$(BPF2GO): $(TOOLS_MOD)
+# An explicitly supplied bpf2go (for example the generator image's binary) is
+# managed by its caller. Don't try to overwrite it when local manifests are newer.
+$(BPF2GO): $(if $(filter $(TOOLS_DIR)/bpf2go,$(BPF2GO)),$(TOOLS_MOD))
 	$(call go-install-tool,$@,github.com/cilium/ebpf/cmd/bpf2go)
 
 $(GOLANGCI_LINT): $(TOOLS_MOD)
@@ -218,11 +220,26 @@ lint: prereqs checkfmt
 generate: obi-submodule
 	@echo "### Generating files..."
 	@cd $(OBI_MODULE) && make generate
+	@$(MAKE) generate-beyla
+
+# Beyla-owned BPF programs use OBI's headers, but never write into OBI or vendor.
+.PHONY: generate-beyla
+generate-beyla: export BPF_CLANG := $(CLANG)
+generate-beyla: export BPF_CFLAGS := $(CFLAGS)
+generate-beyla: export BPF2GO := $(BPF2GO)
+generate-beyla: export OBI_BPF_INCLUDE := $(abspath $(OBI_MODULE))/bpf
+generate-beyla: $(BPF2GO)
+	GOOS=linux go generate ./pkg/internal/ebpf/surveywatcher
 
 .PHONY: docker-generate
 docker-generate: obi-submodule
 	@echo "### Generating files (submodule:  $(OBI_MODULE))"
 	@cd $(OBI_MODULE) && make docker-generate
+	$(OCI_BIN) run --rm -u "$$(id -u):$$(id -g)" \
+		-v "$(PROJECT_DIR):/src:z" -w /src -e GOCACHE=/tmp/go-build \
+		--entrypoint /bin/sh $(GEN_IMG) -c \
+		'for llvm_bin in /usr/lib/llvm*/bin; do PATH="$$llvm_bin:$$PATH"; done; \
+		export PATH; make generate-beyla BPF2GO=/go/bin/bpf2go'
 
 .PHONY: copy-obi-vendor
 copy-obi-vendor: vendor-obi-tests

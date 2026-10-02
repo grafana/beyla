@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 )
 
 var namespaceFetcherFunc = ebpfcommon.FindNetworkNamespace
@@ -38,8 +39,27 @@ func SurveyCriteriaMatcherProvider(
 }
 
 func surveyCriteria(cfg *beyla.Config) []services.Selector {
-	finderCriteria := cfg.Discovery.Survey
-	return obiDiscover.NormalizeGlobCriteria(finderCriteria)
+	survey := cfg.Discovery.Survey
+	globs := make(services.GlobDefinitionCriteria, len(survey))
+
+	for i := range survey {
+		globs[i] = survey[i].GlobAttributes
+		// Socket activity can also be the only selection criterion.
+		if survey[i].SocketApps && !globs[i].Path.IsSet() {
+			globs[i].Path = services.NewGlob("*")
+		}
+	}
+
+	criteria := obiDiscover.NormalizeGlobCriteria(globs)
+	for i := range criteria {
+		// Keep the survey extension on the selectors carried in ProcessMatch,
+		// including matches inherited from a parent process.
+		criteria[i] = &servicesextra.SurveySelector{
+			GlobAttributes: globs[i], SocketApps: survey[i].SocketApps,
+		}
+	}
+
+	return criteria
 }
 
 func surveyExcludingCriteria(cfg *beyla.Config) []services.Selector {

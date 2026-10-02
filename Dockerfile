@@ -73,6 +73,8 @@ RUN apk add make git bash
 COPY .git/ .git/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
+COPY bpf/ bpf/
+COPY internal/tools/ internal/tools/
 COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum

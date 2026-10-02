@@ -56,7 +56,7 @@ func ConnectionSpansReceiver(
 }
 
 type connectionSpansReceiver struct {
-	nodeMeta         *meta.NodeMeta
+	nodeMeta         *metadata.NodeMeta
 	input            <-chan []request.Span
 	traceConsumers   []beyla.Consumer
 	attributeGetters []attributes.Getter[*request.Span, attribute.KeyValue]

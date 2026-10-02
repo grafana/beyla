@@ -365,7 +365,7 @@ network:
 			RenameUnresolvedHosts:          "unresolved",
 			RenameUnresolvedHostsOutgoing:  "outgoing",
 			RenameUnresolvedHostsIncoming:  "incoming",
-			MetadataRetry:                  meta.DefaultRetryConfig,
+			MetadataRetry:                  metadata.DefaultRetryConfig,
 			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{

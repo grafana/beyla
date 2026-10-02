@@ -34,7 +34,7 @@ type SurveyMetricsReporter struct {
 
 	surveyInfo instrument.Int64UpDownCounter
 
-	nodeMeta      *meta.NodeMeta
+	nodeMeta      *metadata.NodeMeta
 	processEvents <-chan exec.ProcessEvent
 	exporter      sdkmetric.Exporter
 	pidTracker    otel.PidServiceTracker

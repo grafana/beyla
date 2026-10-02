@@ -19,6 +19,37 @@ const (
 	k8sAKSDefaultNamespacesGlob  = ",gatekeeper-system"
 )
 
+const (
+	linuxSystem       = ",/sbin/*,/lib/systemd/*,/usr/lib/systemd/*,/lib/udev/*,/usr/lib/udev/*"
+	linuxSystemDebian = ",/usr/lib/polkit-1/*,/usr/lib/policykit-1/*,/usr/lib/NetworkManager/*,/usr/lib/apt/*,/usr/lib/dpkg/*"
+	linuxSystemRedhat = ",/usr/lib/rpm/*,/usr/libexec/sssd/*,/usr/libexec/udisks2/*,/usr/libexec/bluetooth/*,/usr/libexec/packagekitd*,/usr/libexec/accounts-daemon*,/usr/libexec/upowerd*,/usr/libexec/nm-*"
+	linuxSystemSuse   = ",/usr/lib/wicked/*,/usr/lib/zypp/*,/usr/sbin/wickedd*,/usr/sbin/wickedd-nanny/*"
+	linuxGUI          = ",/usr/libexec/gsd-*,/usr/libexec/gvfs*,/usr/libexec/gnome-*,/usr/libexec/ibus-*,/usr/libexec/xdg-{desktop-portal*,document-portal,permission-store},/usr/libexec/evolution-*,/usr/libexec/goa-*,/usr/libexec/at-spi*,/usr/libexec/{gdm-*,mutter-*}"
+	linuxPrint        = ",/usr/sbin/{cupsd,cups-browsed},/usr/lib/cups/*,/snap/cups/*"
+	linuxCommon       = ",*/{sshd,sshd-session,sshd-auth,ssh-agent},*/{cron,crond,anacron,atd},*/{chronyd,ntpd},*/{dbus-daemon,dbus-broker,dbus-broker-launch},*/{NetworkManager,ModemManager,wpa_supplicant,dhclient,dhcpcd},*/avahi-daemon,*/{polkitd,auditd},*/{packagekitd,snapd},*/{udisksd,upowerd},*/qemu-ga"
+	linuxLogging      = ",*/{rsyslogd,syslog-ng,journald,systemd-journald}"
+	linuxTimeSync     = ",*/{systemd-timesyncd,timesyncd}"
+	linuxDNS          = ",*/{dnsmasq,systemd-resolved,named,unbound}"
+	linuxFirewall     = ",*/{firewalld,nftables,iptables,ip6tables}"
+	linuxVPN          = ",*/{openvpn,wireguard,tailscaled,wg-quick}"
+	linuxMonitoring   = ",*/{node_exporter,cadvisor,fluentd,fluent-bit,vector,telegraf,datadog-agent,newrelic-infra}"
+	linuxContainer    = ",*/{containerd,dockerd,crio,kubelet,kube-proxy}"
+	linuxVirt         = ",*/{libvirtd,virtlogd,virtqemud,virtxend}"
+	linuxSecurity     = ",*/{fail2ban,aide,tripwire}"
+	linuxHardware     = ",*/{smartd,mdadm,multipathd,thermald,irqbalance}"
+	linuxShell        = ",*/{bash,zsh,fish,tmux,screen,agetty,login}"
+	linuxCloudAWS     = ",/usr/bin/amazon-ssm-agent*,/usr/bin/ssm-agent-worker*,*/{ec2-instance-connect,amazon-cloudwatch-agent,aws-cfn-bootstrap,awslogs,aws-codedeploy-agent}"
+	linuxCloudAzure   = ",/usr/sbin/waagent*,*/{azure-vm-agent,omsagent,mdsd,azuremonitoragent,azure-mdsd}"
+	linuxCloudGCP     = ",*/{google-guest-agent,google-osconfig-agent,google-fluentd,ops-agent,google-cloud-ops-agent}"
+	linuxCloudOther   = ",*/{oracle-cloud-agent,oci-utils,aliyun-service,ibm-cloud-agent,do-agent,droplet-agent}"
+	linuxCloudInit    = ",*/{cloud-init,cloud-init-local,cloud-config,cloud-final}"
+	linuxConfigMgmt   = ",*/{puppet,chef-client,salt-minion,salt-call,ansible,ansible-playbook}"
+	linuxBackup       = ",*/{veeam,duplicity,bacula-fd,restic,borg}"
+	linuxCompliance   = ",*/{osqueryd,falco,crowdsec,crowdsec-agent}"
+	linuxPkgMgmt      = ",*/{unattended-upgrades,dnf-automatic,yum-cron,apt-daily,apt-daily-upgrade}"
+	linuxMail         = ",*/{postfix,sendmail,exim,exim4,master,qmgr,pickup}"
+)
+
 var K8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
 var K8sDefaultNamespacesGlob = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,grafana-alloy,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
 
@@ -56,7 +87,12 @@ var DefaultExcludeInstrument = services.GlobDefinitionCriteria{
 }
 var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 	services.GlobAttributes{
-		Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*obi,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
+		Path: services.NewGlob("{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*obi,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*" +
+			linuxSystem + linuxSystemDebian + linuxSystemRedhat + linuxSystemSuse + linuxCloudAWS + linuxCloudAzure + linuxGUI + linuxPrint +
+			linuxCommon + linuxLogging + linuxTimeSync + linuxDNS + linuxFirewall + linuxVPN + linuxMonitoring + linuxContainer + linuxVirt +
+			linuxSecurity + linuxHardware + linuxShell + linuxCloudGCP + linuxCloudOther + linuxCloudInit +
+			linuxConfigMgmt + linuxBackup + linuxCompliance + linuxPkgMgmt + linuxMail +
+			"}"),
 	},
 	services.GlobAttributes{
 		Metadata: map[string]*services.GlobAttr{"k8s_namespace": &K8sDefaultNamespacesWithSurveyGlob},

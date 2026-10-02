@@ -27,7 +27,7 @@ func TestConnection_Spans(t *testing.T) {
 
 	input := msg.NewQueue[[]request.Span](msg.ChannelBufferLen(10))
 	cse, err := ConnectionSpansExport(
-		&global.ContextInfo{NodeMeta: meta.NodeMeta{HostID: "the-host"}},
+		&global.ContextInfo{NodeMeta: metadata.NodeMeta{HostID: "the-host"}},
 		&otelcfg.TracesConfig{
 			TracesEndpoint: otlp.ServerEndpoint + "/v1/traces",
 			TracesProtocol: otelcfg.ProtocolHTTPJSON,

@@ -281,7 +281,7 @@ func TestHandleProcessEventCreated(t *testing.T) {
 			// Create a minimal metricsReporter with mocks
 			reporter := &SurveyMetricsReporter{
 				cfg:                &otelcfg.MetricsConfig{},
-				nodeMeta:           &meta.NodeMeta{},
+				nodeMeta:           &metadata.NodeMeta{},
 				log:                slog.Default(),
 				serviceMap:         make(map[svc.UID][]attribute.KeyValue),
 				pidTracker:         obiotel.NewPidServiceTracker(),
@@ -326,7 +326,7 @@ func TestHandleProcessEventCreated_EdgeCases(t *testing.T) {
 
 		reporter := &SurveyMetricsReporter{
 			cfg:                &otelcfg.MetricsConfig{},
-			nodeMeta:           &meta.NodeMeta{},
+			nodeMeta:           &metadata.NodeMeta{},
 			log:                slog.Default(),
 			serviceMap:         make(map[svc.UID][]attribute.KeyValue),
 			pidTracker:         obiotel.NewPidServiceTracker(),
@@ -362,7 +362,7 @@ func TestHandleProcessEventCreated_EdgeCases(t *testing.T) {
 
 		reporter := &SurveyMetricsReporter{
 			cfg:                &otelcfg.MetricsConfig{},
-			nodeMeta:           &meta.NodeMeta{},
+			nodeMeta:           &metadata.NodeMeta{},
 			log:                slog.Default(),
 			serviceMap:         make(map[svc.UID][]attribute.KeyValue),
 			pidTracker:         obiotel.NewPidServiceTracker(),

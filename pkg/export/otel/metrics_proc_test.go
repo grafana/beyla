@@ -133,7 +133,7 @@ func TestProcMetrics_Disaggregated(t *testing.T) {
 }
 
 func TestGetFilteredProcessResourceAttrs(t *testing.T) {
-	nodeMeta := &meta.NodeMeta{HostID: "test-host-id"}
+	nodeMeta := &metadata.NodeMeta{HostID: "test-host-id"}
 
 	service := &svc.Attrs{
 		UID: svc.UID{

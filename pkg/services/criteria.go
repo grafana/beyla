@@ -48,6 +48,16 @@ const (
 	linuxCompliance   = ",*/{osqueryd,falco,crowdsec,crowdsec-agent}"
 	linuxPkgMgmt      = ",*/{unattended-upgrades,dnf-automatic,yum-cron,apt-daily,apt-daily-upgrade}"
 	linuxMail         = ",*/{postfix,sendmail,exim,exim4,master,qmgr,pickup}"
+	linuxAudio        = ",*/{wireplumber,pipewire,pipewire-pulse,pulseaudio}"
+	linuxDesktop      = ",*/{tracker-miner-fs-3,tracker-miner-fs,tracker-store,dconf-service,gnome-calendar,gnome-shell,gnome-software}"
+	linuxPower        = ",*/{power-profiles-daemon,thermald,upowerd}"
+	linuxSnap         = ",*/{snapd-desktop-integration,snapd,snap-confine}"
+	linuxUbuntu       = ",*/{ubuntu-advantage-desktop-daemon,ubuntu-advantage-tools,ua}"
+	linuxCrash        = ",*/{crashhelper,apport,whoopsie,kerneloops}"
+	linuxSpeech       = ",*/{sd_openjtalk,speech-dispatcher,espeak,espeak-ng}"
+	linuxVPNClient    = ",*/{nordvpnd,nordvpn,expressvpn,protonvpn,mullvad}"
+	linuxContainerd   = ",*/containerd-shim-*,*/containerd-shim-runc-*"
+	linuxDisplay      = ",*/{Xwayland,Xorg,X,weston,sway,wayfire,labwc,river,hyprland}"
 )
 
 var K8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^grafana-alloy$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
@@ -91,7 +101,8 @@ var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 			linuxSystem + linuxSystemDebian + linuxSystemRedhat + linuxSystemSuse + linuxCloudAWS + linuxCloudAzure + linuxGUI + linuxPrint +
 			linuxCommon + linuxLogging + linuxTimeSync + linuxDNS + linuxFirewall + linuxVPN + linuxMonitoring + linuxContainer + linuxVirt +
 			linuxSecurity + linuxHardware + linuxShell + linuxCloudGCP + linuxCloudOther + linuxCloudInit +
-			linuxConfigMgmt + linuxBackup + linuxCompliance + linuxPkgMgmt + linuxMail +
+			linuxConfigMgmt + linuxBackup + linuxCompliance + linuxPkgMgmt + linuxMail + linuxAudio + linuxDesktop + linuxPower +
+			linuxSnap + linuxUbuntu + linuxCrash + linuxSpeech + linuxVPNClient + linuxContainerd + linuxDisplay +
 			"}"),
 	},
 	services.GlobAttributes{

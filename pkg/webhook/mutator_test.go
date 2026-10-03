@@ -21,6 +21,9 @@ import (
 )
 
 func TestNewPodMutator(t *testing.T) {
+	tracesDisabled := false
+	metricsEnabled := true
+
 	tests := []struct {
 		name             string
 		cfg              *beyla.Config
@@ -79,6 +82,21 @@ func TestNewPodMutator(t *testing.T) {
 			},
 			expectedEndpoint: "http://otel-collector:4317",
 			expectedProtocol: "grpc",
+		},
+		{
+			name: "uses metrics endpoint for metrics-only injection",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{ExportedSignals: configmap.SDKExportedSignals{
+					Traces:  &tracesDisabled,
+					Metrics: &metricsEnabled,
+				}},
+				OTELMetrics: otelcfg.MetricsConfig{
+					MetricsEndpoint: "http://otel-collector:4318/v1/metrics",
+					Protocol:        otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4318",
+			expectedProtocol: "http/protobuf",
 		},
 		{
 			// An explicit (non-common) traces endpoint keeps its path, but the

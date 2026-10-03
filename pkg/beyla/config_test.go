@@ -1013,7 +1013,7 @@ otel_traces_export:
 	require.Error(t, cfg.Validate())
 }
 
-func TestConfigRunsWithJustInjectorButNotWithoutTraces(t *testing.T) {
+func TestConfigRunsWithJustInjectorButNotWithoutOTLPEndpoint(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
@@ -1026,6 +1026,23 @@ injector:
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)
 	require.Error(t, cfg.Validate())
+}
+
+func TestConfigRunsWithInjectorAndMetricsWithoutTraces(t *testing.T) {
+	userConfig := bytes.NewBufferString(`
+injector:
+  webhook:
+    external_deployment_name: foo/bar
+  image_version: v1.0.0
+  otel_exported_signals:
+    traces: false
+    metrics: true
+otel_metrics_export:
+  endpoint: http://localhost:4318/v1/metrics
+`)
+	cfg, err := LoadConfig(userConfig)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

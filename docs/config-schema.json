@@ -2538,6 +2538,18 @@
       },
       "type": "object"
     },
+    "SocketAppSelector": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "non_root": {
+          "type": "boolean",
+          "description": "NonRoot excludes all services that have been started with user:0 (root) except those that bind ports < 1024"
+        }
+      },
+      "type": "object"
+    },
     "StatsConfig": {
       "properties": {
         "agent_ip": {
@@ -2579,8 +2591,7 @@
       "items": {
         "$ref": "#/$defs/SurveySelector"
       },
-      "type": "array",
-      "description": "SurveyDefinitionCriteria selects processes to survey without instrumenting them."
+      "type": "array"
     },
     "SurveySelector": {
       "properties": {
@@ -2663,7 +2674,7 @@
           "$ref": "#/$defs/SamplerConfig"
         },
         "socket_apps": {
-          "type": "boolean",
+          "$ref": "#/$defs/SocketAppSelector",
           "description": "SocketApps requires observed socket activity for this survey selector. Other matching survey selectors can admit the process without sockets."
         },
         "target_pids": {
@@ -2675,7 +2686,7 @@
         }
       },
       "type": "object",
-      "description": "SurveySelector extends OBI's glob selection with survey-only criteria."
+      "description": "SurveySelector extends OBI's glob selection with additional survey specific criteria."
     },
     "SvcMetricsConfig": {
       "properties": {

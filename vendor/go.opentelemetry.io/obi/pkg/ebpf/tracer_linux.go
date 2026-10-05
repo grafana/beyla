@@ -628,12 +628,12 @@ func (pt *ProcessTracer) unlinkInstrumenter(i *instrumenter) {
 			}
 		})
 	}
-	wg.Wait()
 	for ino := range i.modules {
 		for _, p := range pt.Programs {
-			p.UnlinkInstrumentedLib(ino)
+			wg.Go(func() { p.UnlinkInstrumentedLib(ino) })
 		}
 	}
+	wg.Wait()
 }
 
 // probes still open at exit are released one by one by the kernel. Waits for an

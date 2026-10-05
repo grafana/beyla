@@ -308,11 +308,47 @@ var (
 		Unit:    "s",
 		Type:    InstrumentHistogram,
 	})
+	DotnetProcessMemoryWorkingSet = metric(Name{
+		Section: "dotnet.process.memory.working_set",
+		OTEL:    "dotnet.process.memory.working_set",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
 	DotnetGCCollections = metric(Name{
 		Section: "dotnet.gc.collections",
 		OTEL:    "dotnet.gc.collections",
 		Unit:    "{collection}",
 		Type:    InstrumentCounter,
+	})
+	DotnetGCCommittedMemory = metric(Name{
+		Section: "dotnet.gc.last_collection.memory.committed_size",
+		OTEL:    "dotnet.gc.last_collection.memory.committed_size",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetThreadPoolThreadCount = metric(Name{
+		Section: "dotnet.thread_pool.thread.count",
+		OTEL:    "dotnet.thread_pool.thread.count",
+		Unit:    "{thread}",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetThreadPoolQueueLength = metric(Name{
+		Section: "dotnet.thread_pool.queue.length",
+		OTEL:    "dotnet.thread_pool.queue.length",
+		Unit:    "{work_item}",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetTimerCount = metric(Name{
+		Section: "dotnet.timer.count",
+		OTEL:    "dotnet.timer.count",
+		Unit:    "{timer}",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetAssemblyCount = metric(Name{
+		Section: "dotnet.assembly.count",
+		OTEL:    "dotnet.assembly.count",
+		Unit:    "{assembly}",
+		Type:    InstrumentUpDownCounter,
 	})
 	CPythonGCCollections = metric(Name{
 		Section: "cpython.gc.collections",

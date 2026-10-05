@@ -3,6 +3,7 @@
 const semver = require("semver");
 const fs = require("fs");
 const path = require("path");
+const { loadWithLinuxProcessDetector } = require("./resource-detector-registration");
 
 const upstreamRegisterFile = "./otel-register";
 const autoInstrumentationPackageJson =
@@ -148,7 +149,7 @@ function init() {
       return;
     }
 
-    require(upstreamRegisterFile);
+    loadWithLinuxProcessDetector(() => require(upstreamRegisterFile));
   } catch (e) {
     const details = e && e.stack ? e.stack : e;
     logError(`Initialization failed: ${details}`);

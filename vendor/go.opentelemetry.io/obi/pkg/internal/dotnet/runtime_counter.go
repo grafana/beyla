@@ -18,7 +18,7 @@ type runtimeCounter struct {
 
 // decodeRuntimeCounter extracts a .NET System.Runtime/EventCounters sample
 // from its nested payload. Increment values are counts, not rates per second.
-// Counters outside the supported GC generations return an empty result.
+// Unsupported counters return an empty result.
 func decodeRuntimeCounter(values map[string]any) (runtimeCounter, error) {
 	// EventCounters wraps Payload in an unnamed outer object.
 	outer, ok := values[""].(map[string]any)
@@ -33,8 +33,13 @@ func decodeRuntimeCounter(values map[string]any) (runtimeCounter, error) {
 	if !ok || name == "" {
 		return runtimeCounter{}, errors.New("invalid runtime counter name")
 	}
-	if _, ok := gcGeneration(name); !ok {
-		return runtimeCounter{}, nil
+	switch name {
+	case "working-set", "gc-committed", "threadpool-thread-count",
+		"threadpool-queue-length", "active-timer-count", "assembly-count":
+	default:
+		if _, ok := gcGeneration(name); !ok {
+			return runtimeCounter{}, nil
+		}
 	}
 	// IntervalSec is a NetTrace Single; Mean and Increment are Doubles.
 	interval, ok := payload["IntervalSec"].(float32)

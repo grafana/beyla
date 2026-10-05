@@ -84,6 +84,14 @@ func startAttachMechanism(
 		return err
 	}
 
+	if reason := attachRefusal(ctx, process); reason != "" {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		return fmt.Errorf("%w: process %d: %s", ErrSignalWithheld, process.PID(), reason)
+	}
+
 	removeAttachFile, err := createAttachFile(targetCWD, nspid, tmpPath)
 	if err != nil {
 		return err

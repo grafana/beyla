@@ -14,9 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/netns"
+	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
@@ -79,12 +82,13 @@ const skippingInjection = "skipping Node.js agent injection. Trace-context propa
 
 // Inject injects into an accepted target.
 //
-// The executable and the signal go through the target's pinned process handle,
-// so a PID the kernel recycled between discovery and here cannot be signaled
-// in the original's place. The rest still works from the numeric PID: the gates
-// read /proc, and the inspector conversation enters a network namespace, so a
-// replacement can be the process examined and — where an inspector is already
-// listening, which needs no signal — the one injected.
+// The executable, the signal and its disposition all go through the target's
+// pinned process handle, so a PID the kernel recycled between discovery and
+// here cannot be signaled in the original's place. The rest still works from
+// the numeric PID: the handler gate reads the process memory and the inspector
+// conversation enters a network namespace, so a replacement can be the process
+// examined and — where an inspector is already listening, which needs no
+// signal — the one injected.
 func (i *NodeInjector) Inject(ctx context.Context, target InjectionTarget) {
 	pid := target.Pid
 	i.log.Debug("loading NodeJS instrumentation", "pid", pid, "trigger", i.injectionTrigger())
@@ -134,7 +138,7 @@ func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, 
 		return err
 	}
 
-	reason := sigusr1Refusal(ctx, pid, elfFile)
+	reason := sigusr1Refusal(ctx, target.Process, elfFile)
 
 	// Shutdown is not a refusal: the gates were abandoned rather than answered,
 	// so nothing was concluded about this process and nothing is reported.
@@ -239,24 +243,22 @@ func (i *NodeInjector) runtimeRefusal(target InjectionTarget, elfFile *elf.File)
 // SIGUSR1 handler. Node installs it about 11ms after exec, and until then
 // SIGUSR1 terminates the process, so a process discovered at exec time is
 // otherwise refused for a condition that clears on its own.
-const (
-	dispositionWait     = 500 * time.Millisecond
-	dispositionInterval = 10 * time.Millisecond
-)
+const dispositionWait = 500 * time.Millisecond
 
 // sigusr1Refusal reports why the signal is withheld, or an empty reason when
 // it is safe to send. Discovery has already established that this is a Node.js
 // runtime; what is left is whether the signal would terminate it, and whether
 // the application has taken the signal over.
-func sigusr1Refusal(ctx context.Context, pid int, elfFile *elf.File) string {
+func sigusr1Refusal(ctx context.Context, process *procs.ProcessHandle, elfFile *elf.File) string {
+	pid := int(process.PID())
 	syms := readNodeSymbols(elfFile)
 
-	switch awaitSignalDisposition(ctx, pid) {
-	case signalDispositionFatal:
+	switch process.AwaitSignalDisposition(ctx, unix.SIGUSR1, dispositionWait) {
+	case procs.SignalDispositionFatal:
 		return refusalSignalIsFatal
-	case signalDispositionUnknown:
+	case procs.SignalDispositionUnknown:
 		return refusalDispositionUnknown
-	case signalDispositionHandled:
+	case procs.SignalDispositionHandled:
 	}
 
 	switch hasUserSIGUSR1Handler(pid, elfFile, syms) {
@@ -272,30 +274,6 @@ func sigusr1Refusal(ctx context.Context, pid int, elfFile *elf.File) string {
 	}
 
 	return ""
-}
-
-// awaitSignalDisposition waits out the window after exec in which a runtime
-// has not yet installed its own SIGUSR1 handler, so a process discovered at
-// exec time is not refused for a condition that clears on its own.
-//
-// Cancellation reports Unknown rather than the last reading: shutdown says
-// nothing about the target, and claiming the signal would have killed it would
-// log a conclusion never reached.
-func awaitSignalDisposition(ctx context.Context, pid int) signalDisposition {
-	deadline := time.Now().Add(dispositionWait)
-
-	for {
-		disposition := sigusr1Disposition(pid)
-		if disposition != signalDispositionFatal || time.Now().After(deadline) {
-			return disposition
-		}
-
-		select {
-		case <-ctx.Done():
-			return signalDispositionUnknown
-		case <-time.After(dispositionInterval):
-		}
-	}
 }
 
 // isNodeInspector validates that a connection to port 9229 is actually a

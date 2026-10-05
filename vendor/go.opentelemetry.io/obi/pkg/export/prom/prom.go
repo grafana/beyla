@@ -918,7 +918,15 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics, mr.jvmRuntimeMetrics.collectors()...)
 		registeredMetrics = append(registeredMetrics, mr.nodejsRuntimeMetrics.collectors()...)
 		registeredMetrics = append(registeredMetrics, mr.pythonRuntimeMetrics.collectors()...)
-		registeredMetrics = append(registeredMetrics, mr.dotnetRuntimeMetrics.collections)
+		registeredMetrics = append(registeredMetrics,
+			mr.dotnetRuntimeMetrics.collections,
+			mr.dotnetRuntimeMetrics.processMemoryWorkingSet,
+			mr.dotnetRuntimeMetrics.gcCommittedMemory,
+			mr.dotnetRuntimeMetrics.threadPoolThreadCount,
+			mr.dotnetRuntimeMetrics.threadPoolQueueLength,
+			mr.dotnetRuntimeMetrics.timerCount,
+			mr.dotnetRuntimeMetrics.assemblyCount,
+		)
 	}
 
 	if is.GPUEnabled() {

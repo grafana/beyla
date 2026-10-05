@@ -118,6 +118,10 @@ type Attrs struct {
 	// UserPID and HostPID fields of the request.PidInfo struct.
 	ProcPID app.PID
 
+	// RuntimeContainerID is the full container ID used for local identity lookup.
+	// Exported container attributes are stored separately in Metadata.
+	RuntimeContainerID string
+
 	// DynamicSelectorPID is the PID whose dynamic signal selection controls this process.
 	// It usually matches ProcPID, but children discovered through a selected parent can inherit
 	// the parent's runtime signal selection.

@@ -5,9 +5,9 @@ package selection // import "go.opentelemetry.io/obi/pkg/selection"
 
 import "go.opentelemetry.io/obi/pkg/appolly/app"
 
-// DynamicPIDOptions holds optional service identity and resource attributes when adding
-// a PID to a signal view. Attributes are shared across all signals for the same PID.
-type DynamicPIDOptions struct {
+// DynamicOptions holds optional service identity and resource attributes when adding
+// a PID or workload to a signal view. Attributes are shared across all signals for the same PID.
+type DynamicOptions struct {
 	ServiceName        string
 	ServiceNamespace   string
 	ResourceAttributes map[string]string

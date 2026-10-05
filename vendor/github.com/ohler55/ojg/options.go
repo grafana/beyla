@@ -109,6 +109,7 @@ var (
 		FullTypePath: false,
 		OmitNil:      false,
 		OmitEmpty:    false,
+		Strict:       true,
 		UseTags:      true,
 		KeyExact:     true,
 		NestEmbed:    false,
@@ -152,6 +153,12 @@ type Options struct {
 	// values although maps with all empty members will not be skipped on
 	// writing but will be with alt.Decompose and alter.
 	OmitEmpty bool
+
+	// Strict if true causes errors on attempts to write non-marshallable
+	// values such as a chan or function.  In addition, go marshal treats a
+	// nil slice as a special case different from an empty slice. If true that
+	// behavior is followed.
+	Strict bool
 
 	// InitSize is the initial buffer size.
 	InitSize int

@@ -435,7 +435,12 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 }
 
 func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
-	return nil
+	return map[string]ebpfcommon.ProbeDesc{
+		"sched/sched_process_exit": {
+			Required: false,
+			Start:    p.bpfObjects.ObiTpSchedProcessExit,
+		},
+	}
 }
 
 func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {

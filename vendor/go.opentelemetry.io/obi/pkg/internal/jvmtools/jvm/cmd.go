@@ -28,11 +28,30 @@ import (
 var (
 	getEUID = syscall.Geteuid
 	getEGID = syscall.Getegid
-	setEUID = syscall.Seteuid
-	setEGID = syscall.Setegid
+	setEUID = setThreadEUID
+	setEGID = setThreadEGID
 )
 
 var errTerminated = errors.New("attach terminated")
+
+// syscall.Seteuid and syscall.Setegid switch every thread, which would leave the
+// whole agent without capabilities for as long as it attaches to a non-root JVM
+func setThreadEUID(euid int) error {
+	return setThreadEffectiveID(unix.SYS_SETRESUID, euid)
+}
+
+func setThreadEGID(egid int) error {
+	return setThreadEffectiveID(unix.SYS_SETRESGID, egid)
+}
+
+// changes the effective id of the calling thread only, keeping its real and saved ids
+func setThreadEffectiveID(trap uintptr, id int) error {
+	const unchanged = ^uintptr(0)
+	if _, _, errno := unix.RawSyscall(trap, unchanged, uintptr(id), unchanged); errno != 0 {
+		return errno
+	}
+	return nil
+}
 
 type JAttacher struct {
 	logger             *slog.Logger
@@ -92,11 +111,9 @@ func (j *JAttacher) Init() {
 
 func (j *JAttacher) restoreCredentialsLocked() error {
 	var restoreErr error
-	// Credentials (euid/egid) are switched process-wide during Attach, so they
-	// must be restored here. Namespaces are NOT restored: the namespace switch
-	// happens only on the dedicated sacrificial thread spawned by Attach, which
-	// is destroyed once attach completes — the runtime's pool threads never
-	// leave their original namespaces, so there is nothing to roll back.
+	// Credentials and namespaces are only switched on the dedicated sacrificial
+	// thread spawned by Attach, which is destroyed once attach completes, so this
+	// only resets the calling thread and leaves the pool threads as they are.
 	if err := setEUID(j.myUID); err != nil {
 		restoreErr = errors.Join(restoreErr, err)
 	}
@@ -217,9 +234,9 @@ func (j *JAttacher) Attach(ctx context.Context, process *procs.ProcessHandle, ar
 		reader io.ReadCloser
 		err    error
 	}
-	resultCh := make(chan attachResult, 1)
+	var res attachResult
 
-	go func() {
+	runOnDisposableThread(func() {
 		// This goroutine runs independently of the caller's goroutine, so a
 		// panic here would escape the callers' own recover take down the whole process.
 		// Convert it into an attach error instead.
@@ -227,22 +244,16 @@ func (j *JAttacher) Attach(ctx context.Context, process *procs.ProcessHandle, ar
 			if r := recover(); r != nil {
 				j.logger.Error("recovered from panic during JVM attach",
 					"pid", pid, "panic", r, "stack", string(debug.Stack()))
-				resultCh <- attachResult{err: fmt.Errorf("panic during JVM attach: %v", r)}
+				res = attachResult{err: fmt.Errorf("panic during JVM attach: %v", r)}
 			}
 		}()
 
-		runtime.LockOSThread()
-		// Deliberately no runtime.UnlockOSThread: this thread is tainted by the
-		// namespace switch and CLONE_FS unshare, so we let it die with the
-		// goroutine rather than return it to the pool.
-		reader, err := j.attachInNamespace(
+		res.reader, res.err = j.attachInNamespace(
 			ctx, process, nspid, targetUID, targetGID, argv, ignoreOnJ9,
 			netNS, ipcNS, mntNS, targetCWD, targetTmp, tmpPath,
 		)
-		resultCh <- attachResult{reader: reader, err: err}
-	}()
+	})
 
-	res := <-resultCh
 	if res.reader == nil || res.err != nil {
 		return res.reader, res.err
 	}
@@ -252,6 +263,33 @@ func (j *JAttacher) Attach(ctx context.Context, process *procs.ProcessHandle, ar
 		abort = reader.abort
 	}
 	return newContextReadCloser(ctx, res.reader, abort), nil
+}
+
+// runOnDisposableThread runs fn on a locked OS thread that the runtime destroys
+// once fn returns, so whatever fn changes on that thread reaches no other goroutine
+func runOnDisposableThread(fn func()) {
+	done := make(chan struct{})
+
+	go func() {
+		runtime.LockOSThread()
+
+		// the main thread is parked instead of destroyed, so keep it untouched
+		// and occupied while fn runs on a thread that can be destroyed
+		if unix.Gettid() == unix.Getpid() {
+			runOnDisposableThread(fn)
+			runtime.UnlockOSThread()
+			close(done)
+			return
+		}
+
+		// Deliberately no runtime.UnlockOSThread: this thread is tainted by the
+		// namespace switch and CLONE_FS unshare, so we let it die with the
+		// goroutine rather than return it to the pool.
+		defer close(done)
+		fn()
+	}()
+
+	<-done
 }
 
 // attachInNamespace performs the namespace switch, credential change and JVM

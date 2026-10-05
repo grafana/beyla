@@ -62,6 +62,7 @@ const (
 	MessagingMessageID     = Name(semconv.MessagingMessageIDKey)
 	MessagingSystem        = Name(semconv.MessagingSystemKey)
 	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
+	MessagingConsumerGroup = Name(semconv.MessagingConsumerGroupNameKey)
 	GraphQLDocument        = Name(semconv.GraphQLDocumentKey)
 	GraphQLOperationName   = Name(semconv.GraphQLOperationNameKey)
 	GraphQLOperationType   = Name(semconv.GraphQLOperationTypeKey)
@@ -331,7 +332,10 @@ const (
 // OBI specific GPU events
 const (
 	// GPU/Cuda related attributes
-	CudaMemcpyKind = Name("cuda.memcpy.kind")
+	CudaMemcpyKind  = Name("cuda.memcpy.kind")
+	CudaDeviceIndex = Name("cuda.device.index")
+	CudaDeviceUUID  = Name("cuda.device.uuid")
+	CudaDeviceModel = Name("cuda.device.model")
 )
 
 // JSON-RPC attributes (current semconv, replacing deprecated rpc.jsonrpc.* attributes)

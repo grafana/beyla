@@ -253,6 +253,12 @@ func (fi *FileInfo) SetUID(uid svc.UID) {
 	fi.service.UID = uid
 }
 
+func (fi *FileInfo) SetRuntimeContainerID(id string) {
+	fi.mu.Lock()
+	defer fi.mu.Unlock()
+	fi.service.RuntimeContainerID = id
+}
+
 func (fi *FileInfo) AutoName() bool {
 	fi.mu.RLock()
 	defer fi.mu.RUnlock()

@@ -17,13 +17,13 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 )
 
@@ -310,7 +310,7 @@ func (p *InternalMetricsReporter) InstrumentationError(processName, errorType st
 	))
 }
 
-func newResourceInternal(nodeMeta *meta.NodeMeta) *resource.Resource {
+func newResourceInternal(nodeMeta *metadata.NodeMeta) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(attr.TelemetryDistroName),
 		semconv.ServiceInstanceID(uuid.New().String()),

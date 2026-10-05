@@ -121,6 +121,26 @@
       allowedVersions: '!/^v?0\\.21\\.0$/',
     },
     {
+      description: 'jsonschema v0.14 switched Schema.Properties to pb33f/ordered-map; OBI JSONSchema helpers still build wk8/go-ordered-map values',
+      matchManagers: [
+        'gomod',
+      ],
+      matchPackageNames: [
+        'github.com/invopop/jsonschema',
+      ],
+      allowedVersions: '<0.14.0',
+    },
+    {
+      description: 'predeclared v0.3 removed IgnoreFlag/QualifiedFlag, which golangci-lint v2.14 still calls',
+      matchManagers: [
+        'gomod',
+      ],
+      matchPackageNames: [
+        'github.com/nishanths/predeclared',
+      ],
+      allowedVersions: '<0.3.0',
+    },
+    {
       groupName: 'Go',
       matchManagers: [
         'gomod',

@@ -1057,10 +1057,10 @@ rewrite_oats_go_mod() {
             "$modfile"
 
         # Keep the compiled Ginkgo version in lockstep with the CLI installed
-        # from internal/tools/go.mod (v2.30.0). The upstream OATS modules pin
-        # v2.28.1, which triggers a "Ginkgo detected a version mismatch"
+        # from internal/tools/go.mod (v2.33.0). The upstream OATS modules pin
+        # v2.32.0, which triggers a "Ginkgo detected a version mismatch"
         # failure against the newer CLI. Update this if that pin changes.
-        sed_i -e "s|github.com/onsi/ginkgo/v2 v2.28.1|github.com/onsi/ginkgo/v2 v2.30.0|g" "$modfile"
+        sed_i -e "s|github.com/onsi/ginkgo/v2 v2.32.0|github.com/onsi/ginkgo/v2 v2.33.0|g" "$modfile"
     done
 }
 

@@ -16,9 +16,12 @@ func TestSurveyCriteriaPreservesSocketSelection(t *testing.T) {
 discovery:
   survey:
     - exe_path: "/opt/apps/*"
-      socket_apps: true
+      socket_apps:
+        enabled: true
+        non_root: true
     - k8s_namespace: "prod-*"
-    - socket_apps: true
+    - socket_apps:
+        enabled: true
 `))
 	require.NoError(t, err)
 	criteria := surveyCriteria(cfg)
@@ -26,7 +29,8 @@ discovery:
 	for i, wantsSocket := range []bool{true, false, true} {
 		selector, ok := criteria[i].(*servicesextra.SurveySelector)
 		require.True(t, ok, "normalized selectors must retain the survey extension")
-		assert.Equal(t, wantsSocket, selector.SocketApps)
+		assert.Equal(t, wantsSocket, selector.SocketApps.Enabled)
+		assert.Equal(t, i == 0, selector.SocketApps.NonRoot)
 	}
 	assert.True(t, criteria[0].GetPath().MatchString("/opt/apps/worker"))
 	assert.False(t, criteria[0].GetPath().MatchString("/usr/bin/system-service"))

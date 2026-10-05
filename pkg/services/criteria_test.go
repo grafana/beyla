@@ -11,7 +11,9 @@ import (
 func TestSurveySelectorYAMLRoundTrip(t *testing.T) {
 	const config = `
 - exe_path: "/opt/apps/*"
-  socket_apps: true
+  socket_apps:
+    enabled: true
+    non_root: true
   k8s_namespace: "prod-*"
   k8s_pod_labels:
     app: "worker-*"
@@ -23,7 +25,9 @@ func TestSurveySelectorYAMLRoundTrip(t *testing.T) {
 		require.Len(t, criteria, 2)
 		assert.True(t, criteria.SocketAppsEnabled())
 		assert.True(t, criteria[0].SocketApps.Enabled)
+		assert.True(t, criteria[0].SocketApps.NonRoot)
 		assert.False(t, criteria[1].SocketApps.Enabled)
+		assert.False(t, criteria[1].SocketApps.NonRoot)
 		assert.True(t, criteria[0].Path.MatchString("/opt/apps/worker"))
 		assert.False(t, criteria[0].Path.MatchString("/usr/bin/worker"))
 		require.Contains(t, criteria[0].Metadata, "k8s_namespace")

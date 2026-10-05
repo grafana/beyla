@@ -29,7 +29,6 @@ type watcher struct {
 	state   *State
 	ready   chan error
 	log     *slog.Logger
-	errors  uint64
 }
 
 var _ ebpf.UtilityTracer = (*watcher)(nil)

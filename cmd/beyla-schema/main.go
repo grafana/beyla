@@ -469,6 +469,8 @@ func callJSONSchemaMethod(t reflect.Type) *jsonschema.Schema {
 }
 
 // processInlineFields merges properties from inline field types into their parent schemas.
+//
+//nolint:cyclop
 func (g *SchemaGenerator) processInlineFields(schema *jsonschema.Schema) {
 	if schema == nil {
 		return

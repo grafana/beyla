@@ -13,7 +13,8 @@ import (
 const ErrorTypeOther = errtype.Other
 
 // SpanErrorType returns error.type for a failed span, or "" when the span did
-// not fail. It is the single source for the trace and the metric pipeline.
+// not fail. It is the single source for the trace and the metric pipeline,
+// except the HTTP metrics, which take theirs from the HTTP status alone.
 func SpanErrorType(span *Span) string {
 	if errType := parsedErrorType(span); errType != "" {
 		return errType
@@ -39,6 +40,20 @@ func SpanErrorType(span *Span) string {
 	}
 
 	return ErrorTypeOther
+}
+
+func HTTPErrorType(span *Span) string {
+	if span.ResponseObservation != ResponseParsed {
+		return ""
+	}
+	if span.Status == 0 {
+		return ErrorTypeOther
+	}
+	if !httpStatusFailed(span) {
+		return ""
+	}
+
+	return strconv.Itoa(span.Status)
 }
 
 // parsedErrorType reports the error a protocol parser extracted from the

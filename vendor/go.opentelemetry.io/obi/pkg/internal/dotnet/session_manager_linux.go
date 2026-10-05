@@ -121,6 +121,7 @@ func (c *SessionManager) Close() {
 func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, file *exec.FileInfo) {
 	log := slog.With("component", "dotnet.SessionManager", "pid", process.PID())
 	var totals [runtimemetrics.DotnetGCGenerationCount]uint64
+	var cumulativeTotals cumulativeSessionTotals
 	warned := false
 	generation := file.RuntimeMetricGeneration(process.PID())
 	defer func() {
@@ -146,12 +147,16 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 		if err == nil {
 			log.Debug("started EventPipe GC collection", "session", session.id)
 			base := totals
+			cumulativeBase := cumulativeTotals
 			err = c.readSession(ctx, session, target.info.PID, func(publishCtx context.Context, snapshot *runtimemetrics.DotnetRuntimeMetricSnapshot) error {
 				for gcGeneration, count := range snapshot.GCCollections {
 					if *count > math.MaxInt64-base[gcGeneration] {
 						return errors.New(".NET GC collections exceed exporter integer range")
 					}
 					*count += base[gcGeneration]
+				}
+				if err := cumulativeTotals.merge(cumulativeBase, snapshot); err != nil {
+					return err
 				}
 				for gcGeneration, count := range snapshot.GCCollections {
 					totals[gcGeneration] = *count

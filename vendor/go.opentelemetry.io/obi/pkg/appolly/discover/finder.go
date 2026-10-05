@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -52,7 +51,7 @@ func NewProcessFinder(
 
 type processFinderStartConfig struct {
 	enrichedProcessEvents *msg.Queue[[]Event[ProcessAttrs]]
-	dynamicPIDSelector    *DynamicPIDSelector
+	dynamicSelector       *DynamicSelector
 }
 
 // ProcessFinderStartOpt allows overriding some internal behavior of ProcessFinder.Start method.
@@ -68,12 +67,12 @@ func WithEnrichedProcessEvents(enrichedProcessEvents *msg.Queue[[]Event[ProcessA
 	}
 }
 
-// WithDynamicPIDSelector supplies the OBI dynamic PID set. Caller can pass discover.NewDynamicPIDSelector()
-// and add PIDs via the selector. When non-nil, the finder wires it to the matcher and removed-PID
-// notifications are used for synthetic deletes.
-func WithDynamicPIDSelector(selector *DynamicPIDSelector) ProcessFinderStartOpt {
+// WithDynamicSelector supplies the OBI dynamic selection set. Caller can pass discover.NewDynamicSelector()
+// and later mutate it with AddPID/AddPIDs/AddK8sWorkload/RemovePIDs. When non-nil, the finder wires
+// it to the matcher and removed-PID notifications are used for synthetic deletes.
+func WithDynamicSelector(selector *DynamicSelector) ProcessFinderStartOpt {
 	return func(cfg *processFinderStartConfig) {
-		cfg.dynamicPIDSelector = selector
+		cfg.dynamicSelector = selector
 	}
 }
 
@@ -90,18 +89,21 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	logDeprecationAndConflicts(pf.cfg)
 	configCriteria := FindingCriteria(pf.cfg)
 	var appDynamicSelector *dynamicPIDSignalView
-	if startConfig.dynamicPIDSelector != nil {
-		appDynamicSelector = startConfig.dynamicPIDSelector.appSignals()
+	if startConfig.dynamicSelector != nil {
+		appDynamicSelector = startConfig.dynamicSelector.appSignals()
 	}
 
 	swi := swarm.Instancer{}
 	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "processEvents")
 
-	var addedPIDsCh <-chan []app.PID
+	var rescan ProcessWatcherRescan
 	if appDynamicSelector != nil {
-		addedPIDsCh = appDynamicSelector.AddedPIDsNotifyContext(ctx)
+		rescan = ProcessWatcherRescan{
+			AddedPIDs:      appDynamicSelector.AddedPIDsNotifyContext(ctx),
+			TargetsChanged: startConfig.dynamicSelector.TargetsChangedNotifyContext(ctx),
+		}
 	}
-	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, addedPIDsCh)),
+	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, rescan)),
 		swarm.WithID("ProcessWatcher"))
 
 	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "kubeEnrichedEvents")
@@ -127,7 +129,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	), swarm.WithID("LanguageDecoratorProvider"))
 
 	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, pf.ctxInfo.Metrics, "criteriaFilteredEvents")
-	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicPIDSelector),
+	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicSelector),
 		swarm.WithID("CriteriaMatcher"))
 	swi.Add(dynamicMatcherProvider(langEnrichedEvents, criteriaFilteredEvents, appDynamicSelector),
 		swarm.WithID("DynamicMatcher"))
@@ -152,7 +154,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		Metrics:             pf.ctxInfo.Metrics,
 		SpanSignalsShortcut: pf.tracesInput,
 		RuntimeMetrics:      pf.runtimeMetrics,
-		DynamicPIDSelector:  startConfig.dynamicPIDSelector,
+		DynamicSelector:     startConfig.dynamicSelector,
 
 		InputInstrumentables: storedExecutableTypes,
 		EbpfEventContext:     pf.ebpfEventContext,

@@ -28,11 +28,11 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/expire"
+	"go.opentelemetry.io/obi/pkg/metadata"
 )
 
 // Protocol values for the OTEL_EXPORTER_OTLP_PROTOCOL, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL and
@@ -96,7 +96,7 @@ func omitFieldsForYAML(input any, omitFields map[string]struct{}) map[string]any
 // GetAppResourceAttrs returns the resource attributes of an instrumented target, except
 // the ones the target declares in its own OTEL_RESOURCE_ATTRIBUTES: those rank above
 // everything returned here, so callers must append them through ResourceAttrsFromEnv.
-func GetAppResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs, attrSelector ...attributes.Selection) []attribute.KeyValue {
+func GetAppResourceAttrs(nodeMeta *metadata.NodeMeta, service *svc.Attrs, attrSelector ...attributes.Selection) []attribute.KeyValue {
 	attrs := resourceAttrs(nodeMeta, service)
 	attrs = append(attrs, semconv.ServiceInstanceID(service.UID.Instance))
 	return FilterResourceAttrs(attrs, attrSelector...)
@@ -135,7 +135,7 @@ func FilterResourceAttrs(attrs []attribute.KeyValue, attrSelector ...attributes.
 	return filterAttributes(attrs, patterns)
 }
 
-func GetResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs, attrSelector ...attributes.Selection) []attribute.KeyValue {
+func GetResourceAttrs(nodeMeta *metadata.NodeMeta, service *svc.Attrs, attrSelector ...attributes.Selection) []attribute.KeyValue {
 	return FilterResourceAttrs(resourceAttrs(nodeMeta, service), attrSelector...)
 }
 
@@ -148,7 +148,7 @@ func GetResourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs, attrSelector 
 //     object metadata, plus host and cloud metadata.
 //
 // The target's own OTEL_RESOURCE_ATTRIBUTES ranks above both and is not added here.
-func resourceAttrs(nodeMeta *meta.NodeMeta, service *svc.Attrs) []attribute.KeyValue {
+func resourceAttrs(nodeMeta *metadata.NodeMeta, service *svc.Attrs) []attribute.KeyValue {
 	attrs := processResourceAttrsFromEnv()
 
 	attrs = append(attrs,
@@ -360,6 +360,16 @@ func (rp *ReporterPool[K, T]) Remove(uid svc.UID) bool {
 		rp.lastServiceUID = emptyUID
 	}
 	return removed
+}
+
+// ForEach calls fn for every reporter currently in the pool. It does not
+// modify access order or expire entries.
+func (rp *ReporterPool[K, T]) ForEach(fn func(svc.UID, T)) {
+	for _, key := range rp.pool.Keys() {
+		if e, ok := rp.pool.Peek(key); ok {
+			fn(key, e.value)
+		}
+	}
 }
 
 // expireOldReporters will remove the metrics reporters that haven't been accessed

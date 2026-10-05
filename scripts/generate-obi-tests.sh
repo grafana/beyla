@@ -459,15 +459,16 @@ copy_weavercheck() {
         echo "  Copying weavercheck package..."
         rm -rf "$dest"
         mkdir -p "$dest"
-        # Copy only the source (not weavercheck_test.go — avoid adding an
-        # untagged standalone unit test to the Beyla module).
-        cp "$src/weavercheck.go" "$dest/"
-        # Strip the canonical-import-path comment so the package can be
-        # imported via the Beyla path. Do NOT add a //go:build integration tag:
-        # the OATS harness is built by Ginkgo without that tag and must still
-        # see the package (matches OBI, where the file has no build tag).
-        sed_i -e "s|// import \"${OBI_MODULE}/internal/test/weavercheck\"||g" \
-            "$dest/weavercheck.go"
+        # Copy all runtime helpers for integration and OATS consumers.
+        # Keep them untagged so the OATS harness can import the package.
+        local file
+        for file in "$src"/*.go; do
+            [[ "$file" == *_test.go ]] && continue
+            cp "$file" "$dest/"
+            file="$dest/$(basename "$file")"
+            apply_go_import_path_transforms "$file"
+            sed_i -e "s|// import \"${OBI_MODULE}/internal/test/weavercheck\"||g" "$file"
+        done
     fi
 }
 

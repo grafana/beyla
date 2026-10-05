@@ -123,7 +123,13 @@ func dirOK(root, dir string) bool {
 	}
 
 	info, err := os.Stat(fullDir)
-	return err == nil && info.IsDir()
+	if err != nil || !info.IsDir() {
+		return false
+	}
+
+	// X_OK on directory doesn't mean execute, it means search/traverse, which the JVM will do when
+	// loading the agent.
+	return unix.Faccessat(unix.AT_FDCWD, fullDir, unix.R_OK|unix.W_OK|unix.X_OK, unix.AT_EACCESS) == nil
 }
 
 func (i *JavaInjector) findTempDir(root, tempDirEnv string) (string, error) {

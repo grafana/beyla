@@ -24,7 +24,11 @@ func (t EventType) Instrumentation() (instrumentations.Instrumentation, bool) {
 		return instrumentations.InstrumentationNATS, true
 	case EventTypeAMQPClient:
 		return instrumentations.InstrumentationAMQP, true
-	case EventTypeGPUCudaKernelLaunch, EventTypeGPUCudaGraphLaunch, EventTypeGPUCudaMalloc, EventTypeGPUCudaMemcpy:
+	case EventTypeGPUCudaKernelLaunch, EventTypeGPUCudaGraphLaunch, EventTypeGPUCudaMalloc,
+		EventTypeGPUCudaMemcpy, EventTypeGPUCudaFree, EventTypeGPUCudaMemset,
+		EventTypeGPUCudaStreamCreate, EventTypeGPUCudaStreamDestroy, EventTypeGPUCudaEventRecord,
+		EventTypeGPUCudaEventSynchronize, EventTypeGPUCudaStreamSynchronize,
+		EventTypeGPUCudaDeviceSynchronize, EventTypeGPUCudaHostRegister:
 		return instrumentations.InstrumentationGPU, true
 	case EventTypeMongoClient:
 		return instrumentations.InstrumentationMongo, true

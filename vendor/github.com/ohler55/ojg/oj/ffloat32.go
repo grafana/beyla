@@ -3,6 +3,7 @@
 package oj
 
 import (
+	"math"
 	"reflect"
 	"strconv"
 	"unsafe"
@@ -20,9 +21,15 @@ var float32AppendFuncs = [8]appendFunc{
 }
 
 func appendFloat32(fi *finfo, buf []byte, rv reflect.Value, addr uintptr, safe bool) ([]byte, any, appendStatus) {
+	v := float64(*(*float32)(unsafe.Pointer(addr + fi.offset)))
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, float64(*(*float32)(unsafe.Pointer(addr + fi.offset))), 'g', -1, 32)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+	}
 	return buf, nil, aWrote
 }
 
@@ -36,18 +43,23 @@ func appendFloat32AsString(fi *finfo, buf []byte, rv reflect.Value, addr uintptr
 }
 
 func appendFloat32NotEmpty(fi *finfo, buf []byte, rv reflect.Value, addr uintptr, safe bool) ([]byte, any, appendStatus) {
-	v := *(*float32)(unsafe.Pointer(addr + fi.offset))
+	v := float64(*(*float32)(unsafe.Pointer(addr + fi.offset)))
 	if v == 0.0 {
 		return buf, nil, aSkip
 	}
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, float64(v), 'g', -1, 32)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+	}
 	return buf, nil, aWrote
 }
 
 func appendFloat32NotEmptyAsString(fi *finfo, buf []byte, rv reflect.Value, addr uintptr, safe bool) ([]byte, any, appendStatus) {
-	v := *(*float32)(unsafe.Pointer(addr + fi.offset))
+	v := float64(*(*float32)(unsafe.Pointer(addr + fi.offset)))
 	if v == 0.0 {
 		return buf, nil, aSkip
 	}
@@ -60,9 +72,15 @@ func appendFloat32NotEmptyAsString(fi *finfo, buf []byte, rv reflect.Value, addr
 }
 
 func iappendFloat32(fi *finfo, buf []byte, rv reflect.Value, addr uintptr, safe bool) ([]byte, any, appendStatus) {
+	v := float64(rv.FieldByIndex(fi.index).Interface().(float32))
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, float64(rv.FieldByIndex(fi.index).Interface().(float32)), 'g', -1, 32)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+	}
 	return buf, nil, aWrote
 }
 
@@ -76,13 +94,18 @@ func iappendFloat32AsString(fi *finfo, buf []byte, rv reflect.Value, addr uintpt
 }
 
 func iappendFloat32NotEmpty(fi *finfo, buf []byte, rv reflect.Value, addr uintptr, safe bool) ([]byte, any, appendStatus) {
-	v := rv.FieldByIndex(fi.index).Interface().(float32)
+	v := float64(rv.FieldByIndex(fi.index).Interface().(float32))
 	if v == 0.0 {
 		return buf, nil, aSkip
 	}
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, float64(v), 'g', -1, 32)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 32)
+	}
 	return buf, nil, aWrote
 }
 

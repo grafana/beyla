@@ -20,13 +20,14 @@ const (
 	kafkaGoAPIProduce
 )
 
-func ReadGoSaramaRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+func ReadGoSaramaRequestIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record) (request.Span, bool, error) {
 	event, err := ReinterpretCast[GoSaramaClientInfo](record.RawSample)
 	if err != nil {
 		return request.Span{}, true, err
 	}
 
-	infos, ignore, err := ProcessKafkaRequest(largebuf.NewLargeBufferFrom(event.Buf[:]), nil)
+	proc := KafkaProcess{Ns: event.Pid.Ns, Pid: event.Pid.UserPid}
+	infos, ignore, err := ProcessKafkaEvent(largebuf.NewLargeBufferFrom(event.Buf[:]), nil, nil, parseCtx.kafkaConsumerGroups, proc, event.Conn)
 
 	// The Go Sarama uprobe captures one operation at a time, so a single topic is
 	// expected; use the first parsed topic.
@@ -65,6 +66,7 @@ func GoKafkaSaramaToSpan(event *GoSaramaClientInfo, data *KafkaInfo) request.Spa
 			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
+		MessagingInfo: kafkaMessagingInfo(data),
 	}
 }
 

@@ -48,7 +48,7 @@ func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDisc
 
 	obiCfg := pf.cfg.AsOBI()
 
-	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents, obiDiscover.FindingCriteria(obiCfg), nil)),
+	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents, obiDiscover.FindingCriteria(obiCfg), obiDiscover.ProcessWatcherRescan{})),
 		swarm.WithID("ProcessWatcher"))
 
 	enrichedProcessEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](

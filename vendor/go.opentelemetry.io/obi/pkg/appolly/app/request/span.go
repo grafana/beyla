@@ -52,6 +52,15 @@ const (
 	EventTypeGPUCudaGraphLaunch
 	EventTypeGPUCudaMalloc
 	EventTypeGPUCudaMemcpy
+	EventTypeGPUCudaFree
+	EventTypeGPUCudaMemset
+	EventTypeGPUCudaStreamCreate
+	EventTypeGPUCudaStreamDestroy
+	EventTypeGPUCudaEventRecord
+	EventTypeGPUCudaEventSynchronize
+	EventTypeGPUCudaStreamSynchronize
+	EventTypeGPUCudaDeviceSynchronize
+	EventTypeGPUCudaHostRegister
 	EventTypeFailedConnect
 	EventTypeDNS
 	EventTypeCouchbaseClient
@@ -184,6 +193,24 @@ func (t EventType) String() string {
 		return "CUDAMalloc"
 	case EventTypeGPUCudaMemcpy:
 		return "CUDAMemcpy"
+	case EventTypeGPUCudaFree:
+		return "CUDAFree"
+	case EventTypeGPUCudaMemset:
+		return "CUDAMemset"
+	case EventTypeGPUCudaStreamCreate:
+		return "CUDAStreamCreate"
+	case EventTypeGPUCudaStreamDestroy:
+		return "CUDAStreamDestroy"
+	case EventTypeGPUCudaEventRecord:
+		return "CUDAEventRecord"
+	case EventTypeGPUCudaEventSynchronize:
+		return "CUDAEventSynchronize"
+	case EventTypeGPUCudaStreamSynchronize:
+		return "CUDAStreamSynchronize"
+	case EventTypeGPUCudaDeviceSynchronize:
+		return "CUDADeviceSynchronize"
+	case EventTypeGPUCudaHostRegister:
+		return "CUDAHostRegister"
 	case EventTypeMongoClient:
 		return "MongoClient"
 	case EventTypeManualSpan:
@@ -324,6 +351,10 @@ func (e *SQLError) ResponseStatusCode() string {
 type MessagingInfo struct {
 	Offset    int64 `json:"offset"`
 	Partition int   `json:"partition"`
+	// HasPartition reports whether Partition and Offset were read from the wire. The
+	// consumer group can be known while the partition list was cut by the kernel buffer.
+	HasPartition  bool   `json:"hasPartition"`
+	ConsumerGroup string `json:"consumerGroup"`
 }
 
 type GraphQL struct {
@@ -1557,6 +1588,15 @@ type Span struct {
 
 	// ManualOTelJSON stores OTLP JSON emitted by the Go Auto SDK bridge.
 	ManualOTelJSON []byte `json:"-"`
+
+	// CudaDevice* name the GPU a CUDA call ran on, as reported by the CUDA
+	// introspection APIs the process itself calls. CudaDeviceKnown is set only
+	// when the calling thread's current device was actually observed; when it is
+	// false the index, UUID and model are not meaningful and must be omitted.
+	CudaDeviceKnown bool   `json:"-"`
+	CudaDeviceIndex uint32 `json:"-"`
+	CudaDeviceUUID  string `json:"-"`
+	CudaDeviceModel string `json:"-"`
 }
 
 func (s *Span) Inside(parent *Span) bool {
@@ -1614,6 +1654,7 @@ func spanAttributes(s *Span) SpanAttributes {
 		if s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
 			attrs["dbCollectionName"] = s.Elasticsearch.DBCollectionName
 			attrs["nodeName"] = s.Elasticsearch.NodeName
+			attrs["dbNamespace"] = s.DBNamespace
 			attrs["dbOperationName"] = s.Elasticsearch.DBOperationName
 			attrs["dbQueryText"] = s.Elasticsearch.DBQueryText
 			attrs["dbSystemName"] = s.Elasticsearch.DBSystemName
@@ -1630,7 +1671,6 @@ func spanAttributes(s *Span) SpanAttributes {
 		if s.SubType == HTTPSubtypeAWSSQS && s.AWS != nil {
 			sqs := s.AWS.SQS
 			attrs["awsRequestID"] = sqs.Meta.RequestID
-			attrs["awsExtendedRequestID"] = sqs.Meta.ExtendedRequestID
 			attrs["awsRegion"] = sqs.Meta.Region
 			attrs["awsSQSOperationName"] = sqs.OperationName
 			attrs["awsSQSOperationType"] = sqs.OperationType
@@ -1723,9 +1763,14 @@ func spanAttributes(s *Span) SpanAttributes {
 			"topic":      s.Path,
 		}
 		if s.MessagingInfo != nil {
-			attrs["partition"] = strconv.FormatUint(uint64(s.MessagingInfo.Partition), 10)
-			if s.Method == MessagingProcess {
-				attrs["offset"] = strconv.FormatUint(uint64(s.MessagingInfo.Offset), 10)
+			if s.MessagingInfo.HasPartition {
+				attrs["partition"] = strconv.FormatUint(uint64(s.MessagingInfo.Partition), 10)
+				if s.Method == MessagingProcess {
+					attrs["offset"] = strconv.FormatUint(uint64(s.MessagingInfo.Offset), 10)
+				}
+			}
+			if s.MessagingInfo.ConsumerGroup != "" {
+				attrs["consumerGroup"] = s.MessagingInfo.ConsumerGroup
 			}
 		}
 		return attrs
@@ -1767,6 +1812,14 @@ func spanAttributes(s *Span) SpanAttributes {
 			"size": strconv.FormatInt(s.ContentLength, 10),
 			"kind": CudaMemcpyName(s.SubType),
 		}
+	case EventTypeGPUCudaFree, EventTypeGPUCudaMemset, EventTypeGPUCudaHostRegister:
+		return SpanAttributes{
+			"size": strconv.FormatInt(s.ContentLength, 10),
+		}
+	case EventTypeGPUCudaStreamCreate, EventTypeGPUCudaStreamDestroy,
+		EventTypeGPUCudaEventRecord, EventTypeGPUCudaEventSynchronize,
+		EventTypeGPUCudaStreamSynchronize, EventTypeGPUCudaDeviceSynchronize:
+		return SpanAttributes{}
 	case EventTypeMongoClient:
 		return SpanAttributes{
 			"serverAddr": SpanHost(s),
@@ -2013,21 +2066,24 @@ func HTTPSpanStatusCode(span *Span) string {
 		return StatusCodeError
 	}
 
-	if span.Type == EventTypeHTTPClient {
-		if span.Status < 400 {
-			// A provider can report a failure inside a 2xx response, per the OTel
-			// GenAI spec: https://opentelemetry.io/docs/specs/semconv/gen-ai/openai/
-			if span.GenAIFailed() {
-				return StatusCodeError
-			}
-
-			return StatusCodeUnset
-		}
-	} else if span.Status < 500 {
-		return StatusCodeUnset
+	if httpStatusFailed(span) {
+		return StatusCodeError
 	}
 
-	return StatusCodeError
+	// A provider can report a failure inside a 2xx response, per the OTel
+	// GenAI spec: https://opentelemetry.io/docs/specs/semconv/gen-ai/openai/
+	if span.Type == EventTypeHTTPClient && span.GenAIFailed() {
+		return StatusCodeError
+	}
+
+	return StatusCodeUnset
+}
+
+func httpStatusFailed(span *Span) bool {
+	if span.Type == EventTypeHTTPClient {
+		return span.Status >= 400
+	}
+	return span.Status >= 500
 }
 
 var (

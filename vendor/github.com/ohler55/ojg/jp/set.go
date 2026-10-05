@@ -116,6 +116,10 @@ func (x Expr) set(data, value any, fun string, one bool) error {
 			var has bool
 			switch tv := prev.(type) {
 			case map[string]any:
+				// A nil map can not be written to, but deleting from one is a no-op.
+				if tv == nil && value != delFlag {
+					return fmt.Errorf("can not %s into a nil %T at '%s'", fun, tv, x[:fi+1])
+				}
 				if int(fi) == len(x)-1 { // last one
 					if value == delFlag {
 						delete(tv, string(tf))
@@ -210,6 +214,10 @@ func (x Expr) set(data, value any, fun string, one bool) error {
 					}
 				}
 			case gen.Object:
+				// A nil map can not be written to, but deleting from one is a no-op.
+				if tv == nil && value != delFlag {
+					return fmt.Errorf("can not %s into a nil %T at '%s'", fun, tv, x[:fi+1])
+				}
 				if int(fi) == len(x)-1 { // last one
 					if value == delFlag {
 						delete(tv, string(tf))
@@ -770,6 +778,10 @@ func (x Expr) set(data, value any, fun string, one bool) error {
 					var has bool
 					switch tv := prev.(type) {
 					case map[string]any:
+						// A nil map can not be written to, but deleting from one is a no-op.
+						if tv == nil && value != delFlag {
+							return fmt.Errorf("can not %s into a nil %T at '%s'", fun, tv, x[:fi+1])
+						}
 						if int(fi) == len(x)-1 { // last one
 							if value == delFlag {
 								delete(tv, tu)
@@ -826,6 +838,10 @@ func (x Expr) set(data, value any, fun string, one bool) error {
 							}
 						}
 					case gen.Object:
+						// A nil map can not be written to, but deleting from one is a no-op.
+						if tv == nil && value != delFlag {
+							return fmt.Errorf("can not %s into a nil %T at '%s'", fun, tv, x[:fi+1])
+						}
 						if int(fi) == len(x)-1 { // last one
 							if value == delFlag {
 								delete(tv, tu)

@@ -44,6 +44,7 @@ var (
 	errKafkaReqUnsupportedFetchVersion      = errors.New("invalid Kafka request header: unsupported API key version for Fetch")
 	errKafkaReqUnsupportedProduceVersion    = errors.New("invalid Kafka request header: unsupported API key version for Produce")
 	errKafkaReqUnsupportedMetadataVersion   = errors.New("invalid Kafka request header: unsupported API key version for Metadata")
+	errKafkaReqUnsupportedGroupVersion      = errors.New("invalid Kafka request header: unsupported API key version for group request")
 	errKafkaReqUnsupportedAPIKey            = errors.New("invalid Kafka request header: unsupported API key")
 	errKafkaReqCorrelationIDNegative        = errors.New("invalid Kafka request header: correlation ID is negative")
 	errKafkaRespSizeTooSmall                = errors.New("invalid Kafka response header: size too small")
@@ -55,16 +56,27 @@ var (
 	errKafkaInvalidCharactersInString       = errors.New("invalid characters in string")
 	errKafkaPacketTooShortForStringLength   = errors.New("packet too short for string length")
 	errKafkaInvalidStringSize               = errors.New("invalid string size")
+	errKafkaDataTooShortForInt16            = errors.New("data too short for int16")
 	errKafkaDataTooShortForInt32            = errors.New("data too short for int32")
 	errKafkaDataTooShortForInt64            = errors.New("data too short for int64")
 )
 
 type KafkaAPIKey int8
 
+// https://kafka.apache.org/protocol#protocol_api_keys
 const (
-	APIKeyProduce  KafkaAPIKey = 0
-	APIKeyFetch    KafkaAPIKey = 1
-	APIKeyMetadata KafkaAPIKey = 3
+	APIKeyProduce      KafkaAPIKey = 0
+	APIKeyFetch        KafkaAPIKey = 1
+	APIKeyMetadata     KafkaAPIKey = 3
+	APIKeyOffsetCommit KafkaAPIKey = 8
+	APIKeyOffsetFetch  KafkaAPIKey = 9
+	APIKeyJoinGroup    KafkaAPIKey = 11
+	APIKeyHeartbeat    KafkaAPIKey = 12
+	APIKeyLeaveGroup   KafkaAPIKey = 13
+	APIKeySyncGroup    KafkaAPIKey = 14
+	// KIP-848 consumer group protocol (preview since Kafka 3.7, GA in 4.0; client opts in
+	// with group.protocol=consumer).
+	APIKeyConsumerGroupHeartbeat KafkaAPIKey = 68
 )
 
 type UUID [UUIDLen]byte
@@ -287,6 +299,35 @@ func (h KafkaRequestHeader) validate() error {
 		if h.APIVersion() < 10 || h.APIVersion() > 13 { // latest: Metadata Request (Version: 13), only versions 10-13 contain topic_id which we are interested in
 			return errKafkaReqUnsupportedMetadataVersion
 		}
+	// Group-coordination and offset APIs (parsed by ParseGroupRequest); latest versions from
+	// the upstream *Request.json schemas. FindCoordinator (10) is left out on purpose: its
+	// key is a group id only when KeyType == 0 (1 = transaction, 2 = share group), and the
+	// JoinGroup/Heartbeat that follow carry the group id anyway.
+	case APIKeyOffsetCommit:
+		// validVersions 2-10: v0/v1 lack generation_id/member_id and would misparse
+		if h.APIVersion() < 2 || h.APIVersion() > 10 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyOffsetFetch:
+		if h.APIVersion() < 1 || h.APIVersion() > 10 { // validVersions 1-10
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyJoinGroup:
+		if h.APIVersion() > 9 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyLeaveGroup, APIKeySyncGroup:
+		if h.APIVersion() > 5 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyHeartbeat:
+		if h.APIVersion() > 4 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyConsumerGroupHeartbeat:
+		if h.APIVersion() > 1 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
 	default:
 		return errKafkaReqUnsupportedAPIKey
 	}
@@ -328,6 +369,15 @@ func isFlexible(header KafkaRequestHeader) bool {
 	// https://github.com/apache/kafka/blob/9983331d917fe8f57c37c88f0749b757e5af0c87/clients/src/main/resources/common/message/MetadataRequest.json#L22
 	case APIKeyMetadata:
 		return ver >= 9
+	// flexibleVersions from the *Request.json schemas of each group API
+	case APIKeyOffsetCommit:
+		return ver >= 8
+	case APIKeyOffsetFetch, APIKeyJoinGroup:
+		return ver >= 6
+	case APIKeyHeartbeat, APIKeyLeaveGroup, APIKeySyncGroup:
+		return ver >= 4
+	case APIKeyConsumerGroupHeartbeat:
+		return true
 	default:
 		return false
 	}
@@ -450,12 +500,20 @@ func readUnsignedVarint(r *largebuf.LargeBufferReader) (int, error) {
 	}
 }
 
+func readInt16(r *largebuf.LargeBufferReader) (int, error) {
+	b, err := r.ReadN(Int16Len)
+	if err != nil {
+		return 0, errKafkaDataTooShortForInt16
+	}
+	return int(int16(binary.BigEndian.Uint16(b))), nil
+}
+
 func readInt32(r *largebuf.LargeBufferReader) (int, error) {
 	b, err := r.ReadN(Int32Len)
 	if err != nil {
 		return 0, errKafkaDataTooShortForInt32
 	}
-	return int(binary.BigEndian.Uint32(b)), nil
+	return int(int32(binary.BigEndian.Uint32(b))), nil
 }
 
 func readInt64(r *largebuf.LargeBufferReader) (int64, error) {

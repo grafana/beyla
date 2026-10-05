@@ -3,11 +3,11 @@
 package alt
 
 import (
-	"fmt"
 	"reflect"
 	"time"
 	"unsafe"
 
+	"github.com/ohler55/ojg"
 	"github.com/ohler55/ojg/gen"
 )
 
@@ -255,15 +255,10 @@ func reflectGenMap(rv reflect.Value, opt *Options) gen.Node {
 	obj := gen.Object{}
 	it := rv.MapRange()
 	for it.Next() {
-		k := it.Key().Interface()
 		g := Generify(it.Value().Interface(), opt)
 		// TBD OmitEmpty
 		if g != nil || !opt.OmitNil {
-			if ks, ok := k.(string); ok {
-				obj[ks] = g
-			} else {
-				obj[fmt.Sprint(k)] = g
-			}
+			obj[ojg.KeyString(it.Key())] = g
 		}
 	}
 	return obj

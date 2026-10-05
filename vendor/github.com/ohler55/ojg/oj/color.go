@@ -57,12 +57,9 @@ func (wr *Writer) colorJSON(data any, depth int) {
 		wr.buf = append(wr.buf, wr.NumberColor...)
 		wr.buf = append(wr.buf, []byte(strconv.FormatInt(int64(td), 10))...)
 
-	case float32:
+	case float32, float64:
 		wr.buf = append(wr.buf, wr.NumberColor...)
-		wr.buf = append(wr.buf, []byte(strconv.FormatFloat(float64(td), 'g', -1, 32))...)
-	case float64:
-		wr.buf = append(wr.buf, wr.NumberColor...)
-		wr.buf = append(wr.buf, []byte(strconv.FormatFloat(td, 'g', -1, 64))...)
+		wr.appendJSON(td, 0)
 
 	case string:
 		wr.buf = append(wr.buf, wr.StringColor...)

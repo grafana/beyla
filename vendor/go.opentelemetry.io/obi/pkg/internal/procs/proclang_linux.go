@@ -219,6 +219,8 @@ func substringSymbolMatch(symbolName string, substrings []string) (string, bool)
 }
 
 func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
+	isRust := false
+
 	for _, sec := range ctx.Sections {
 		if sec == nil {
 			continue
@@ -259,9 +261,17 @@ func matchExeSymbols(ctx *fastelf.ElfContext) svc.InstrumentableType {
 			t := instrumentableFromSymbolName(name)
 
 			if t != svc.InstrumentableGeneric {
-				return t
+				if t == svc.InstrumentableRust {
+					isRust = true
+				} else {
+					return t
+				}
 			}
 		}
+	}
+
+	if isRust {
+		return svc.InstrumentableRust
 	}
 
 	return svc.InstrumentableGeneric

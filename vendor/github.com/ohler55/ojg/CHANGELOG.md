@@ -4,6 +4,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 The structure and content of this file follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.28.7] - 2026-09-28
+### Fixed
+- Fixed handling of NaN and Inf writing.
+- Moved strict option to Options to match documentation.
+- oj.Unmarshal and sen.Unmarshal correctly use a provided alternative recomposer.
+- Filter/script evaluation of nil data now returns nil and does not panic.
+- jp.Locate and jp.Walk no longer panic on nil pointers in structs.
+- ojg.KeyString is now used consistently with alt.Recompose.
+
 ## [1.28.6] - 2026-09-10
 ### Fixed
 - Fixed hang and panic on an empty slice range in Locate (#228)

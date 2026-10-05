@@ -188,6 +188,8 @@ network:
 			MSSQLPreparedStatementsCacheSize:    1024,
 			MongoRequestsCacheSize:              1024,
 			KafkaTopicUUIDCacheSize:             1024,
+			KafkaConsumerGroupCacheSize:         4096,
+			KafkaConsumerGroupTTL:               2 * time.Minute,
 			CouchbaseDBCacheSize:                1024,
 			PayloadExtraction: obiconfig.PayloadExtraction{
 				HTTP: obiconfig.HTTPConfig{
@@ -377,6 +379,7 @@ network:
 			Sources:  []transform.Source{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
+			ECS:      transform.ECSNameResolverConfig{RefreshInterval: 30 * time.Second},
 		},
 		Processes: process.CollectConfig{
 			RunMode:  process.RunModePrivileged,

@@ -28,6 +28,18 @@ import (
 	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 )
 
+func TestCloudMetadataConfig(t *testing.T) {
+	cfg, err := LoadConfig(strings.NewReader(`
+cloud_metadata:
+  cluster_name: test-cluster
+  region: eu-west-1
+`))
+	require.NoError(t, err)
+	want := transform.CloudMetadataConfig{ClusterName: "test-cluster", Region: "eu-west-1"}
+	assert.Equal(t, want, cfg.AsOBI().CloudMetadata)
+	assert.Equal(t, want, FromOBI(cfg.AsOBI()).CloudMetadata)
+}
+
 func TestAsOBINameResolver(t *testing.T) {
 	t.Run("minimal config does not panic", func(t *testing.T) {
 		config := &Config{}

@@ -18,7 +18,7 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	obiotel "go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
-	"go.opentelemetry.io/obi/pkg/metadata"
+	meta "go.opentelemetry.io/obi/pkg/metadata"
 )
 
 type mockEventMetrics struct {

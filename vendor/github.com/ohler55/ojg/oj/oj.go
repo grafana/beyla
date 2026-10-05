@@ -34,7 +34,7 @@ var (
 	}
 	marshalPool = sync.Pool{
 		New: func() any {
-			return &Writer{Options: goOptions, buf: make([]byte, 0, 1024), strict: true}
+			return &Writer{Options: goOptions, buf: make([]byte, 0, 1024)}
 		},
 	}
 	parserPool = sync.Pool{
@@ -188,7 +188,7 @@ func Marshal(data any, args ...any) (out []byte, err error) {
 		wr, _ = marshalPool.Get().(*Writer)
 		defer marshalPool.Put(wr)
 	} else {
-		wr.strict = true
+		wr.Strict = true
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -225,15 +225,15 @@ func pickWriter(arg any, strict bool) (wr *Writer) {
 		wr = &Writer{
 			Options: ojg.GoOptions,
 			buf:     make([]byte, 0, 1024),
-			strict:  strict,
 		}
 		wr.Indent = ta
+		wr.Strict = strict
 	case *ojg.Options:
 		wr = &Writer{
 			Options: *ta,
 			buf:     make([]byte, 0, 1024),
-			strict:  strict,
 		}
+		wr.Strict = strict || wr.Strict
 	case *Writer:
 		wr = ta
 	}

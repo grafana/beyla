@@ -344,7 +344,9 @@ func (f Union) locate(pp Expr, data any, rest Expr, max int) (locs []Expr) {
 					has = true
 				}
 			default:
-				v, has = reflectGetNth(td, i)
+				if v, has = reflectGetNth(td, i); has && i < 0 {
+					i += reflect.Indirect(reflect.ValueOf(td)).Len()
+				}
 			}
 			lf = Nth(i)
 		}

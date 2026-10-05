@@ -393,7 +393,7 @@ func (r *Recomposer) recomp(v any, rv reflect.Value, typeName string) {
 			vm = map[string]any{}
 			iter := vv.MapRange()
 			for iter.Next() {
-				k := iter.Key().Interface().(string)
+				k := ojg.KeyString(iter.Key())
 				vm[k] = iter.Value().Interface()
 			}
 		}
@@ -448,7 +448,7 @@ func (r *Recomposer) recomp(v any, rv reflect.Value, typeName string) {
 			vm = map[string]any{}
 			iter := vv.MapRange()
 			for iter.Next() {
-				k := iter.Key().Interface().(string)
+				k := ojg.KeyString(iter.Key())
 				vm[k] = iter.Value().Interface()
 			}
 		}

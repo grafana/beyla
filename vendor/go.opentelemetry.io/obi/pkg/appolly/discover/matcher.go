@@ -37,7 +37,7 @@ func criteriaMatcherProvider(
 	input *msg.Queue[[]Event[ProcessAttrs]],
 	output *msg.Queue[[]Event[ProcessMatch]],
 	configCriteria []services.Selector,
-	dynamicSelector *DynamicPIDSelector,
+	dynamicSelector *DynamicSelector,
 ) swarm.InstanceFunc {
 	instrumenterNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	if dynamicSelector != nil {

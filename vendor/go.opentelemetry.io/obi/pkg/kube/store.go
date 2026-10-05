@@ -646,6 +646,67 @@ func ownerID(namespace, name string) string {
 	return namespace + "." + name
 }
 
+// WorkloadOwner identifies a Kubernetes workload for pod IP lookup.
+type WorkloadOwner struct {
+	Namespace string
+	Kind      string
+	Name      string
+}
+
+// PodIPsForWorkloads returns pod IPs for each requested workload in a single metadata scan.
+// Workloads with no matching pod IPs are omitted from the result.
+func (s *Store) PodIPsForWorkloads(owners []WorkloadOwner) map[WorkloadOwner][]string {
+	if len(owners) == 0 {
+		return nil
+	}
+
+	wanted := make(map[WorkloadOwner]struct{}, len(owners))
+	for _, o := range owners {
+		wanted[o] = struct{}{}
+	}
+
+	s.access.RLock()
+	defer s.access.RUnlock()
+
+	seen := map[WorkloadOwner]map[string]struct{}{}
+	out := map[WorkloadOwner][]string{}
+	addIP := func(owner WorkloadOwner, ip string) {
+		ipSeen := seen[owner]
+		if ipSeen == nil {
+			ipSeen = map[string]struct{}{}
+			seen[owner] = ipSeen
+		}
+		if _, ok := ipSeen[ip]; ok {
+			return
+		}
+		ipSeen[ip] = struct{}{}
+		out[owner] = append(out[owner], ip)
+	}
+
+	for _, cmeta := range s.objectMetaByQName {
+		meta := cmeta.Meta
+		if meta == nil || meta.Pod == nil {
+			continue
+		}
+		podOwner := WorkloadOwner{Namespace: meta.Namespace, Kind: "Pod", Name: meta.Name}
+		if _, ok := wanted[podOwner]; ok {
+			for _, ip := range meta.Ips {
+				addIP(podOwner, ip)
+			}
+		}
+		for _, owner := range meta.Pod.Owners {
+			key := WorkloadOwner{Namespace: meta.Namespace, Kind: owner.Kind, Name: owner.Name}
+			if _, ok := wanted[key]; !ok {
+				continue
+			}
+			for _, ip := range meta.Ips {
+				addIP(key, ip)
+			}
+		}
+	}
+	return out
+}
+
 func (s *Store) namespaceMeta(om *informer.ObjectMeta) *informer.ObjectMeta {
 	if om == nil || om.Pod != nil {
 		return om

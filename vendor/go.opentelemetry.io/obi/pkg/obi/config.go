@@ -21,7 +21,6 @@ import (
 
 	"go.opentelemetry.io/collector/confmap"
 
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
@@ -41,6 +40,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/klogbridge"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
 
@@ -153,6 +153,8 @@ var DefaultConfig = Config{
 		MSSQLPreparedStatementsCacheSize:    1024,
 		MongoRequestsCacheSize:              1024,
 		KafkaTopicUUIDCacheSize:             1024,
+		KafkaConsumerGroupCacheSize:         4096,
+		KafkaConsumerGroupTTL:               2 * time.Minute,
 		CouchbaseDBCacheSize:                1024,
 		OverrideBPFLoopEnabled:              false,
 		PayloadExtraction: config.PayloadExtraction{
@@ -225,9 +227,15 @@ var DefaultConfig = Config{
 		InstrumentCuda: config.CudaModeAuto,
 	},
 	NameResolver: &transform.NameResolverConfig{
-		Sources:  []transform.Source{transform.SourceK8s},
+		Sources: []transform.Source{
+			transform.SourceK8s,
+			transform.SourceECS,
+		},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
+		ECS: transform.ECSNameResolverConfig{
+			RefreshInterval: 30 * time.Second,
+		},
 	},
 	Metrics: perapp.GlobalMetricsConfig{
 		Features: export.FeatureApplicationRED | export.FeatureApplicationSizes,
@@ -307,7 +315,7 @@ var DefaultConfig = Config{
 			ResourceLabels:           kube.DefaultResourceLabels,
 		},
 		HostID:                         HostIDConfig{},
-		MetadataRetry:                  meta.DefaultRetryConfig,
+		MetadataRetry:                  metadata.DefaultRetryConfig,
 		RenameUnresolvedHosts:          "unresolved",
 		RenameUnresolvedHostsOutgoing:  "outgoing",
 		RenameUnresolvedHostsIncoming:  "incoming",
@@ -376,7 +384,8 @@ type Config struct {
 
 	Filters filter.AttributesConfig `yaml:"filter"`
 
-	Attributes Attributes `yaml:"attributes"`
+	Attributes    Attributes                    `yaml:"attributes"`
+	CloudMetadata transform.CloudMetadataConfig `yaml:"cloud_metadata"`
 	// Routes configures URL path grouping. If not set, data will be directly forwarded to exporters.
 	Routes       *transform.RoutesConfig       `yaml:"routes"`
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
@@ -485,16 +494,14 @@ func (c *Config) AppRuntimeMetricsEnabled() bool {
 }
 
 // PopulateTraceContext reports whether the pinned traces_ctx_v1 map must be kept
-// populated, which is the case when anything reads it: OBI's own log enricher or
-// Node.js manual span bridge, or a reader outside OBI opted in through
-// ebpf.populate_trace_context.
+// populated, which is the case when anything reads it: OBI's own log enricher, or
+// a reader outside OBI opted in through ebpf.populate_trace_context.
 //
 // Population costs a refresh on every async context switch of the instrumented
 // runtime, so with no reader it is skipped entirely.
 func (c *Config) PopulateTraceContext() bool {
 	return c != nil && (c.EBPF.PopulateTraceContext ||
-		c.EBPF.LogEnricher.Enabled() ||
-		(c.NodeJS.Enabled && c.NodeJS.ManualSpans))
+		c.EBPF.LogEnricher.Enabled())
 }
 
 type HealthCheckConfig struct {
@@ -690,7 +697,7 @@ type Attributes struct {
 	Select               attributes.Selection          `yaml:"select"`
 	HostID               HostIDConfig                  `yaml:"host_id"`
 	ExtraGroupAttributes ExtraGroupAttributesMap       `yaml:"extra_group_attributes"`
-	MetadataRetry        meta.RetryConfig              `yaml:"metadata_retry"`
+	MetadataRetry        metadata.RetryConfig          `yaml:"metadata_retry"`
 
 	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
 	// unresolved IP addresses to reduce cardinality.

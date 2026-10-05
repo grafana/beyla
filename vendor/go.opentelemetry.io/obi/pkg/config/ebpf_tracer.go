@@ -126,6 +126,20 @@ type EBPFTracer struct {
 	// Kafka Topic UUID to Name cache size.
 	KafkaTopicUUIDCacheSize int `yaml:"kafka_topic_uuid_cache_size" env:"OTEL_KAFKA_TOPIC_UUID_CACHE_SIZE" validate:"gt=0"`
 
+	// Kafka consumer groups cache size: number of processes whose consumer group membership,
+	// learned from group-coordination requests, is remembered and reported on consumer spans.
+	KafkaConsumerGroupCacheSize int `yaml:"kafka_consumer_group_cache_size" env:"OTEL_KAFKA_CONSUMER_GROUP_CACHE_SIZE" validate:"gt=0"`
+
+	// Kafka consumer group membership lifetime: how long a consumer is remembered after its last
+	// group request, and how long a process is observed before its Fetches are attributed to a
+	// group. Keep it above both the heartbeat interval and the longest rebalance of classic
+	// consumers (bounded by max.poll.interval.ms, 5m by default), or their Fetches can be reported
+	// with another group of their process; a larger value delays the attribute for newly seen
+	// processes. The 2m default trades rebalances longer than that for a shorter warm-up; raise it
+	// above max.poll.interval.ms when cooperative classic consumers (Kafka Streams) share a process
+	// with another group.
+	KafkaConsumerGroupTTL time.Duration `yaml:"kafka_consumer_group_ttl" env:"OTEL_EBPF_BPF_KAFKA_CONSUMER_GROUP_TTL" validate:"gt=0"`
+
 	// MongoDB requests cache size.
 	MongoRequestsCacheSize int `yaml:"mongo_requests_cache_size" env:"OTEL_EBPF_BPF_MONGO_REQUESTS_CACHE_SIZE" validate:"gt=0"`
 
@@ -151,10 +165,9 @@ type EBPFTracer struct {
 	// Keeping the map aligned with the active request is not free: runtimes that
 	// decouple I/O from processing need a refresh on every context switch, which on
 	// Node.js means an `async_hooks` before hook running on every callback. OBI
-	// therefore only populates the map when something reads it. Its own readers -- the
-	// log enricher and the Node.js manual span bridge -- turn population on regardless
-	// of this setting; a reader outside OBI has no way to announce itself, so it opts
-	// in here.
+	// therefore only populates the map when something reads it. Its own reader -- the
+	// log enricher -- turns population on regardless of this setting; a reader outside
+	// OBI has no way to announce itself, so it opts in here.
 	//
 	// Go channel span links may be affected: the handoff correlation falls back
 	// to this map when it cannot resolve the sending goroutine from the protocol

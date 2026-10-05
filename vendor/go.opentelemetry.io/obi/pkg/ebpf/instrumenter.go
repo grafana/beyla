@@ -30,6 +30,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/kprobe"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/uprobe"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -41,11 +42,11 @@ func ilog() *slog.Logger {
 
 var (
 	findNamespacedPids = procs.FindNamespacedPids
-	attachKprobe       = func(symbol string, program *ebpf.Program, opts *link.KprobeOptions) (io.Closer, error) {
-		return link.Kprobe(symbol, program, opts)
+	attachKprobe       = func(symbol string, program *ebpf.Program) (io.Closer, error) {
+		return kprobe.Attach(symbol, program, false)
 	}
-	attachKretprobe = func(symbol string, program *ebpf.Program, opts *link.KprobeOptions) (io.Closer, error) {
-		return link.Kretprobe(symbol, program, opts)
+	attachKretprobe = func(symbol string, program *ebpf.Program) (io.Closer, error) {
+		return kprobe.Attach(symbol, program, true)
 	}
 )
 
@@ -433,7 +434,7 @@ func (i *instrumenter) kprobes(p KprobesTracer) error {
 
 func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) error {
 	if programs.Start != nil {
-		kp, err := attachKprobe(funcName, programs.Start, nil)
+		kp, err := attachKprobe(funcName, programs.Start)
 		if err != nil {
 			if i.metrics != nil {
 				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingKprobe)
@@ -444,9 +445,7 @@ func (i *instrumenter) kprobe(funcName string, programs ebpfcommon.ProbeDesc) er
 	}
 
 	if programs.End != nil {
-		// The commented code doesn't work on certain kernels. We need to invesigate more to see if it's possible
-		// to productize it. Failure says: "neither debugfs nor tracefs are mounted".
-		kp, err := attachKretprobe(funcName, programs.End, nil /*&link.KprobeOptions{RetprobeMaxActive: 1024}*/)
+		kp, err := attachKretprobe(funcName, programs.End)
 		if err != nil {
 			if i.metrics != nil {
 				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingKprobe)

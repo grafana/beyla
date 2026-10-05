@@ -19,6 +19,13 @@ import (
 
 type dotnetRuntimeMetricsCollector struct {
 	collections             *Expirer[prometheus.Counter]
+	gcHeapTotalAllocated    *Expirer[prometheus.Counter]
+	gcPauseTime             *Expirer[prometheus.Counter]
+	jitCompiledILSize       *Expirer[prometheus.Counter]
+	jitCompiledMethods      *Expirer[prometheus.Counter]
+	jitCompilationTime      *Expirer[prometheus.Counter]
+	threadPoolWorkItemCount *Expirer[prometheus.Counter]
+	monitorLockContentions  *Expirer[prometheus.Counter]
 	processMemoryWorkingSet *Expirer[prometheus.Gauge]
 	gcCommittedMemory       *Expirer[prometheus.Gauge]
 	threadPoolThreadCount   *Expirer[prometheus.Gauge]
@@ -28,6 +35,7 @@ type dotnetRuntimeMetricsCollector struct {
 	baseLabelIndexes        []int
 	valuesMu                sync.Mutex
 	values                  map[dotnetRuntimeCounterKey]uint64
+	durationValues          map[dotnetRuntimeCounterKey]float64
 	currentValues           map[app.PID]dotnetRuntimeCurrentValues
 	currentAggregates       map[string]*dotnetRuntimeCurrentAggregate
 	clock                   expire.Clock
@@ -60,6 +68,7 @@ type dotnetRuntimeCurrentAggregate struct {
 type dotnetRuntimeCounterKey struct {
 	pid        app.PID
 	generation uint64
+	metric     string
 	labels     string
 	baseLabels string
 }
@@ -75,6 +84,17 @@ func (c *dotnetRuntimeMetricsCollector) delete(values []string) {
 		labels = append(labels, values[index])
 	}
 	baseLabels := runtimeMetricLabelTuple(labels)
+	for _, counter := range []*Expirer[prometheus.Counter]{
+		c.gcHeapTotalAllocated,
+		c.gcPauseTime,
+		c.jitCompiledILSize,
+		c.jitCompiledMethods,
+		c.jitCompilationTime,
+		c.threadPoolWorkItemCount,
+		c.monitorLockContentions,
+	} {
+		counter.DeleteLabelValues(labels...)
+	}
 	labels = append(labels, "")
 	for generation := range runtimemetrics.DotnetGCGenerationCount {
 		labels[len(labels)-1] = fmt.Sprintf("gen%d", generation)
@@ -83,6 +103,11 @@ func (c *dotnetRuntimeMetricsCollector) delete(values []string) {
 	for key := range c.values {
 		if key.baseLabels == baseLabels {
 			delete(c.values, key)
+		}
+	}
+	for key := range c.durationValues {
+		if key.baseLabels == baseLabels {
+			delete(c.durationValues, key)
 		}
 	}
 	for pid, current := range c.currentValues {
@@ -110,6 +135,11 @@ func (r *metricsReporter) collectDotnetRuntimeMetrics(snapshot runtimemetrics.Ru
 				delete(c.values, key)
 			}
 		}
+		for key := range c.durationValues {
+			if key.pid == snapshot.PID && key.generation == snapshot.Generation {
+				delete(c.durationValues, key)
+			}
+		}
 		return
 	}
 	if c.values == nil {
@@ -118,6 +148,11 @@ func (r *metricsReporter) collectDotnetRuntimeMetrics(snapshot runtimemetrics.Ru
 	for key := range c.values {
 		if key.pid == snapshot.PID && key.generation != snapshot.Generation {
 			delete(c.values, key)
+		}
+	}
+	for key := range c.durationValues {
+		if key.pid == snapshot.PID && key.generation != snapshot.Generation {
+			delete(c.durationValues, key)
 		}
 	}
 	base := r.labelValuesTargetInfo(&snapshot.Service)
@@ -148,6 +183,58 @@ func (r *metricsReporter) collectDotnetRuntimeMetrics(snapshot runtimemetrics.Ru
 	replacement := current
 	replacement.values = oldValues
 	c.updateCurrentMetrics(replacement, &current.values)
+	for _, counter := range []struct {
+		name   string
+		metric *Expirer[prometheus.Counter]
+		value  *uint64
+	}{
+		{attributes.DotnetGCHeapTotalAllocated.Prom, c.gcHeapTotalAllocated, snapshot.Dotnet.GCHeapTotalAllocated},
+		{attributes.DotnetJITCompiledILSize.Prom, c.jitCompiledILSize, snapshot.Dotnet.JITCompiledILSize},
+		{attributes.DotnetJITCompiledMethods.Prom, c.jitCompiledMethods, snapshot.Dotnet.JITCompiledMethods},
+		{attributes.DotnetThreadPoolWorkItemCount.Prom, c.threadPoolWorkItemCount, snapshot.Dotnet.ThreadPoolWorkItemCount},
+		{attributes.DotnetMonitorLockContentions.Prom, c.monitorLockContentions, snapshot.Dotnet.MonitorLockContentions},
+	} {
+		if counter.value == nil {
+			continue
+		}
+		key := dotnetRuntimeCounterKey{
+			pid: snapshot.PID, generation: snapshot.Generation, metric: counter.name,
+			labels: current.labelTuple, baseLabels: current.labelTuple,
+		}
+		var baseline *uint64
+		if previous, exists := c.values[key]; exists {
+			baseline = &previous
+		}
+		delta := runtimemetrics.CounterDelta(baseline, *counter.value)
+		counter.metric.WithLabelValues(labels...).Metric.Add(float64(delta))
+		c.values[key] = *counter.value
+	}
+	if c.durationValues == nil {
+		c.durationValues = make(map[dotnetRuntimeCounterKey]float64)
+	}
+	for _, counter := range []struct {
+		name   string
+		metric *Expirer[prometheus.Counter]
+		value  *float64
+	}{
+		{attributes.DotnetGCPauseTime.Prom, c.gcPauseTime, snapshot.Dotnet.GCPauseTime},
+		{attributes.DotnetJITCompilationTime.Prom, c.jitCompilationTime, snapshot.Dotnet.JITCompilationTime},
+	} {
+		if counter.value == nil {
+			continue
+		}
+		key := dotnetRuntimeCounterKey{
+			pid: snapshot.PID, generation: snapshot.Generation, metric: counter.name,
+			labels: current.labelTuple, baseLabels: current.labelTuple,
+		}
+		var baseline *float64
+		if previous, exists := c.durationValues[key]; exists {
+			baseline = &previous
+		}
+		delta := runtimemetrics.CounterDelta(baseline, *counter.value)
+		counter.metric.WithLabelValues(labels...).Metric.Add(delta)
+		c.durationValues[key] = *counter.value
+	}
 	labels = append(labels, "")
 	for generation, value := range snapshot.Dotnet.GCCollections {
 		if value == nil {
@@ -257,6 +344,34 @@ func newDotnetRuntimeMetricsCollector(runtimeLabelNames []string, clock expire.C
 			Name: attributes.DotnetGCCollections.Prom,
 			Help: "The number of garbage collections since the collector baseline, exclusive per generation.",
 		}, labels).MetricVec, clock, ttl),
+		gcHeapTotalAllocated: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetGCHeapTotalAllocated.Prom,
+			Help: "Total bytes allocated on the .NET managed heap since the collector baseline.",
+		}, baseLabels).MetricVec, clock, ttl),
+		gcPauseTime: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetGCPauseTime.Prom,
+			Help: "Total .NET GC pause time in seconds since the collector baseline.",
+		}, baseLabels).MetricVec, clock, ttl),
+		jitCompiledILSize: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetJITCompiledILSize.Prom,
+			Help: "Total bytes of intermediate language compiled by the .NET JIT compiler.",
+		}, baseLabels).MetricVec, clock, ttl),
+		jitCompiledMethods: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetJITCompiledMethods.Prom,
+			Help: "Total methods compiled by the .NET JIT compiler.",
+		}, baseLabels).MetricVec, clock, ttl),
+		jitCompilationTime: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetJITCompilationTime.Prom,
+			Help: "Total .NET JIT compilation time in seconds since the collector baseline.",
+		}, baseLabels).MetricVec, clock, ttl),
+		threadPoolWorkItemCount: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetThreadPoolWorkItemCount.Prom,
+			Help: "Total completed .NET thread-pool work items since the collector baseline.",
+		}, baseLabels).MetricVec, clock, ttl),
+		monitorLockContentions: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetMonitorLockContentions.Prom,
+			Help: "Total .NET monitor lock contentions since the collector baseline.",
+		}, baseLabels).MetricVec, clock, ttl),
 		processMemoryWorkingSet: newRuntimeGauge(attributes.DotnetProcessMemoryWorkingSet.Prom,
 			"Current physical memory mapped to the .NET process in bytes.", baseLabels, clock, ttl),
 		gcCommittedMemory: newRuntimeGauge(attributes.DotnetGCCommittedMemory.Prom,

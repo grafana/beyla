@@ -4,7 +4,6 @@ package alt
 
 import (
 	"encoding/base64"
-	"fmt"
 	"math"
 	"reflect"
 	"time"
@@ -276,20 +275,12 @@ func reflectMap(rv reflect.Value, opt *Options) any {
 	obj := map[string]any{}
 	it := rv.MapRange()
 	for it.Next() {
-		k := it.Key().Interface()
 		var g any
 		vv := it.Value()
 		if !isNil(vv) {
 			g = decompose(vv.Interface(), opt)
 		}
-		var (
-			ks string
-			ok bool
-		)
-		if ks, ok = k.(string); !ok {
-			ks = fmt.Sprint(k)
-		}
-		condMapSet(obj, ks, g, opt)
+		condMapSet(obj, ojg.KeyString(it.Key()), g, opt)
 	}
 	return obj
 }

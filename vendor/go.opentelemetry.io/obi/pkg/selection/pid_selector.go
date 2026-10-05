@@ -47,12 +47,12 @@ func RemovedNotifyContext(ctx context.Context, selector PIDSelector) <-chan []ap
 type MutablePIDSelector interface {
 	PIDSelector
 	AddPIDs(...uint32)
-	AddPID(pid uint32, opts DynamicPIDOptions)
+	AddPID(pid uint32, opts DynamicOptions)
 	RemovePIDs(...uint32)
 }
 
 // MultiSignalPIDSelector exposes one root selector with subviews for each supported signal.
-// *discover.DynamicPIDSelector implements this interface.
+// *discover.DynamicSelector implements this interface.
 type MultiSignalPIDSelector interface {
 	MutablePIDSelector
 	Traces() MutablePIDSelector

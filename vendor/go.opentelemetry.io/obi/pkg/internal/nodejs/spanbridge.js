@@ -19,8 +19,9 @@
 // build) is neither captured nor blocked. Finished spans are serialized to
 // JSON and signalled to the eBPF layer through the same channel fdextractor.js
 // uses: a sentinel uv_fs_access() path read by the obi_uv_fs_access uprobe
-// (bpf/generictracer/nodejs.c). The BPF side attaches the current request's
-// trace context (traces_ctx_v1), so manual spans parent under OBI's automatic
+// (bpf/generictracer/nodejs.c). The sentinel carries the incoming fd of the
+// request the span ended in, and the BPF side resolves that fd to the
+// request's trace context, so manual spans parent under OBI's automatic
 // server spans.
 //
 // If the application registers its own SDK, this bridge stays inert: spans
@@ -33,6 +34,14 @@
   // Same Symbol.for key the api uses internally (createContextKey).
   const SPAN_KEY = Symbol.for('OpenTelemetry Context Key SPAN');
   const SENTINEL_PREFIX = '/dev/null/obi-span/';
+  const SENTINEL_PREFIX_FD = '/dev/null/obi-spanfd/';
+  const MAX_SENTINEL_FD = 9999;
+  const SENTINEL_FD_DIGITS = String(MAX_SENTINEL_FD).length;
+  const FDEXTRACTOR_STORE = Symbol.for('otel-ebpf-instrumentation.fdextractor');
+  const ID_POOL_BYTES = 4096;
+  // Manual-span context override / pop sentinel; payload format documented at
+  // the decoder (bpf/generictracer/nodejs.c handle_manual_ctx).
+  const MSPAN_PREFIX = '/dev/null/obi-mspan/';
   // Field size budgets. Attribute key/value budgets must match the fixed
   // BPF/Go otel_attribute_t buffers on the reader side (key[32], value[128]),
   // minus one byte for the NUL terminator the decoder relies on — otherwise
@@ -45,12 +54,23 @@
   const MAX_STATUS_MSG_LEN = 128;
 
   const g = globalThis;
-  if (g.__obiSpanBridgeLoaded) return;
+  if (g.__obiSpanBridgeLoaded) {
+    // async_hooks fire in enable order. A re-injected fdextractor re-enables
+    // its '-ctx' hook (moving it last), which would then overwrite this
+    // bridge's per-callback override; move our hook back after it.
+    try {
+      const loaded = g.__obiSpanBridge;
+      if (loaded && typeof loaded.rehook === 'function') loaded.rehook();
+    } catch (_) {
+      // never let re-injection throw into the app
+    }
+    return;
+  }
   g.__obiSpanBridgeLoaded = true;
 
   const fs = require('fs');
   const crypto = require('crypto');
-  const { AsyncLocalStorage } = require('async_hooks');
+  const { AsyncLocalStorage, createHook } = require('async_hooks');
 
   // Diagnostics are OFF by default: this code runs inside the customer's
   // process, so it must never write to their stdout/stderr in normal
@@ -67,13 +87,15 @@
     }
   };
 
+  const fitsUtf8 = (s, maxBytes) => s.length * 3 <= maxBytes || Buffer.byteLength(s, 'utf8') <= maxBytes;
+
   // Truncate a string to a UTF-8 BYTE budget, never splitting a multi-byte
   // sequence. The BPF/Go side copies keys/values into fixed byte arrays, so a
   // UTF-16 code-unit budget (String#length) is wrong twice over: a multi-byte
   // character can blow the byte budget while passing the unit check, and a cut
   // inside a sequence would export invalid UTF-8.
   const truncateUtf8 = (s, maxBytes) => {
-    if (Buffer.byteLength(s, 'utf8') <= maxBytes) return s;
+    if (fitsUtf8(s, maxBytes)) return s;
     const buf = Buffer.from(s, 'utf8');
     let end = maxBytes;
     // Find the start of the sequence containing the cut point; drop the
@@ -130,11 +152,20 @@
   let yielded = false;
   const yieldToApp = (why) => {
     if (yielded) return;
+    // Drop any live override BEFORE yielding: every emitter bails once yielded
+    // is set, so a pop left to the unwind would never be sent and the kernel
+    // map would keep pointing at a bridge span nobody exports.
+    emitPop();
     yielded = true;
     debug('yielded to application-registered SDK: ' + why);
   };
 
   // --- transport -----------------------------------------------------------
+
+  const requestFd = () => {
+    const store = g[FDEXTRACTOR_STORE];
+    return store && typeof store.requestFd === 'function' ? store.requestFd() : -1;
+  };
 
   // The span payload is smuggled to the eBPF layer as the argument of a
   // uv_fs_access() call that cannot succeed: the obi_uv_fs_access uprobe reads
@@ -154,9 +185,40 @@
     // provider straight into the global registry (detectRegistryHandoff).
     if (yielded || detectRegistryHandoff()) return;
     try {
-      fs.existsSync(SENTINEL_PREFIX + payload);
+      const fd = requestFd();
+      if (fd >= 0 && fd <= MAX_SENTINEL_FD) {
+        fs.existsSync(SENTINEL_PREFIX_FD + String(fd).padStart(SENTINEL_FD_DIGITS, '0') + payload);
+      } else {
+        fs.existsSync(SENTINEL_PREFIX + payload);
+      }
     } catch (err) {
       debug('unexpected error emitting span', err);
+    }
+  };
+
+  // Once the app's SDK owns telemetry — via a wrapped setter (yielded) or a
+  // registration through an unwrapped copy (detectRegistryHandoff, which yields
+  // on the spot) — the bridge must stop pointing the kernel context map at its
+  // own spans, or stale overrides would point eBPF client spans at bridge span
+  // ids that are no longer exported. yieldToApp pops the live override as it
+  // yields, so there is nothing left to clear here.
+  const emitOverride = (span) => {
+    if (yielded || detectRegistryHandoff()) return;
+    const sc = span._spanContext;
+    const fd = requestFd();
+    const fdPart = fd >= 0 && fd <= MAX_SENTINEL_FD ? String(fd).padStart(SENTINEL_FD_DIGITS, '0') : '';
+    try {
+      fs.existsSync(MSPAN_PREFIX + fdPart + sc.traceId + sc.spanId);
+    } catch (err) {
+      debug('unexpected error emitting manual-span override', err);
+    }
+  };
+  const emitPop = () => {
+    if (yielded) return;
+    try {
+      fs.existsSync(MSPAN_PREFIX + '-');
+    } catch (err) {
+      debug('unexpected error emitting manual-span pop', err);
     }
   };
 
@@ -181,15 +243,54 @@
     }
   }
 
+  let idPool = null;
+  let idPoolOffset = 0;
+  const randomHex = (bytes) => {
+    if (idPool === null || idPoolOffset + bytes > ID_POOL_BYTES) {
+      idPool = crypto.randomBytes(ID_POOL_BYTES);
+      idPoolOffset = 0;
+    }
+    const hex = idPool.toString('hex', idPoolOffset, idPoolOffset + bytes);
+    idPoolOffset += bytes;
+    return hex;
+  };
+
   const ROOT_CONTEXT = new Context();
   const als = new AsyncLocalStorage();
+
+  // Only bridge-owned spans drive the -mspan/ override; spans from another
+  // provider are ignored.
+  const activeBridgeSpan = (ctx) => {
+    if (!ctx || typeof ctx.getValue !== 'function') return undefined;
+    const s = ctx.getValue(SPAN_KEY);
+    return s instanceof Span ? s : undefined;
+  };
 
   const contextManager = {
     active() {
       return als.getStore() ?? ROOT_CONTEXT;
     },
     with(context, fn, thisArg, ...args) {
-      return als.run(context ?? ROOT_CONTEXT, () => fn.call(thisArg, ...args));
+      const ctx = context ?? ROOT_CONTEXT;
+      const outer = als.getStore() ?? ROOT_CONTEXT;
+      // Only touch the -mspan/ sentinel when this scope actually establishes a
+      // manual-span override (zero cost when no manual span is involved).
+      const innerSpan = activeBridgeSpan(ctx);
+      return als.run(ctx, () => {
+        if (innerSpan) emitOverride(innerSpan);
+        try {
+          return fn.call(thisArg, ...args);
+        } finally {
+          // Synchronous exit: restore the outer active manual span, or pop if
+          // there is none. The async-continuation case (a callback that runs
+          // after this returns) is re-applied by the before-hook below.
+          if (innerSpan) {
+            const outerSpan = activeBridgeSpan(outer);
+            if (outerSpan) emitOverride(outerSpan);
+            else emitPop();
+          }
+        }
+      });
     },
     bind(context, target) {
       if (typeof target === 'function') {
@@ -273,8 +374,8 @@
       this._spanContext = {
         traceId: parentSpanContext
           ? parentSpanContext.traceId
-          : crypto.randomBytes(16).toString('hex'),
-        spanId: crypto.randomBytes(8).toString('hex'),
+          : randomHex(16),
+        spanId: randomHex(8),
         traceFlags: 1,
         traceState: undefined,
       };
@@ -380,11 +481,11 @@
       // Measure UTF-8 bytes, not String#length (UTF-16 code units): the BPF
       // side reads the sentinel path as bytes into a fixed buffer, so a
       // multi-byte payload that looks short by .length could still overflow.
-      if (Buffer.byteLength(payload, 'utf8') > MAX_PAYLOAD) {
+      if (!fitsUtf8(payload, MAX_PAYLOAD)) {
         rec.attrs = {};
         payload = JSON.stringify(rec);
       }
-      if (Buffer.byteLength(payload, 'utf8') > MAX_PAYLOAD) {
+      if (!fitsUtf8(payload, MAX_PAYLOAD)) {
         debug('dropping span: core payload exceeds transport limit');
         return;
       }
@@ -483,6 +584,83 @@
     },
   };
 
+  // --- keep the active manual span reflected across async callbacks ---------
+
+  // fdextractor.js resets traces_ctx_v1 to the request's SERVER context before
+  // every JS callback (its '-ctx/' / '-noreqctx' sentinels, which also clear the
+  // BPF override shadow). This hook runs right after — spanbridge.js is
+  // evaluated second, so per callback its 'before' fires after fdextractor's —
+  // and re-applies the innermost active manual span's override if one is active
+  // in the current async context. Nothing is emitted when no manual span is
+  // active (zero cost outside manual spans). fs.existsSync is safe here:
+  // synchronous fs ops create no AsyncWrap and cannot re-enter async_hooks.
+  // 'after' drops the override again: a callback that starts no further
+  // callbacks (a timer in an idle process, any work outside a request) would
+  // otherwise leave the manual span latched in traces_ctx_v1 long after it
+  // ended, and every later eBPF client span and enriched log line would carry
+  // it. Only the outermost callback pops, so a nested one does not strip the
+  // override the outer callback is still running under.
+  //
+  // A hook callback that throws has no working view of the active span, so it
+  // can neither refresh nor retire the override: leaving it enabled would keep
+  // charging every callback for a hook that can only latch a stale context.
+  // The first exception therefore retires the hook for good — it pops whatever
+  // override is live, stops both callbacks, and makes a later rehook() a no-op
+  // rather than re-arming a broken hook.
+  let mspanHook;
+  let hookDepth = 0;
+  let overrideEmitted = false;
+  let hookFailed = false;
+  const failHook = (err) => {
+    hookFailed = true;
+    hookDepth = 0;
+    if (overrideEmitted) {
+      overrideEmitted = false;
+      emitPop();
+    }
+    try {
+      if (mspanHook) mspanHook.disable();
+    } catch (_) {
+      // the hookFailed guard has already neutered both callbacks
+    }
+    debug('manual-span context hook failed; disabling it', err);
+  };
+  try {
+    mspanHook = createHook({
+      before() {
+        if (hookFailed) return;
+        hookDepth++;
+        try {
+          const span = activeBridgeSpan(als.getStore());
+          if (span) {
+            emitOverride(span);
+            overrideEmitted = true;
+          }
+        } catch (err) {
+          // never let the hook throw into the app
+          failHook(err);
+        }
+      },
+      after() {
+        if (hookFailed) return;
+        if (hookDepth > 0) hookDepth--;
+        try {
+          if (hookDepth === 0 && overrideEmitted) {
+            emitPop();
+            overrideEmitted = false;
+          }
+        } catch (err) {
+          // never let the hook throw into the app
+          failHook(err);
+        }
+      },
+    });
+    mspanHook.enable();
+  } catch (err) {
+    hookFailed = true;
+    debug('failed to install manual-span context hook', err);
+  }
+
   // --- register into the shared api global registry -------------------------
 
   // Wrap a global setter on an api namespace so that, if the application ever
@@ -575,6 +753,13 @@
     debug('failed to install module-load hook', err);
   }
 
-  g.__obiSpanBridge = { version: 1 };
+  g.__obiSpanBridge = {
+    version: 2,
+    rehook() {
+      if (!mspanHook || hookFailed) return;
+      mspanHook.disable();
+      mspanHook.enable();
+    },
+  };
   debug('span bridge activated (pid ' + process.pid + ')');
 })();

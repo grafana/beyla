@@ -3,6 +3,7 @@
 package oj
 
 import (
+	"math"
 	"reflect"
 	"strconv"
 	"unsafe"
@@ -20,9 +21,15 @@ var float64AppendFuncs = [8]appendFunc{
 }
 
 func appendFloat64(fi *finfo, buf []byte, rv reflect.Value, addr uintptr, safe bool) ([]byte, any, appendStatus) {
+	v := *(*float64)(unsafe.Pointer(addr + fi.offset))
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, *(*float64)(unsafe.Pointer(addr + fi.offset)), 'g', -1, 64)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+	}
 	return buf, nil, aWrote
 }
 
@@ -41,8 +48,13 @@ func appendFloat64NotEmpty(fi *finfo, buf []byte, rv reflect.Value, addr uintptr
 		return buf, nil, aSkip
 	}
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+	}
 	return buf, nil, aWrote
 }
 
@@ -60,9 +72,15 @@ func appendFloat64NotEmptyAsString(fi *finfo, buf []byte, rv reflect.Value, addr
 }
 
 func iappendFloat64(fi *finfo, buf []byte, rv reflect.Value, addr uintptr, safe bool) ([]byte, any, appendStatus) {
+	v := rv.FieldByIndex(fi.index).Interface().(float64)
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, rv.FieldByIndex(fi.index).Interface().(float64), 'g', -1, 64)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+	}
 	return buf, nil, aWrote
 }
 
@@ -81,8 +99,13 @@ func iappendFloat64NotEmpty(fi *finfo, buf []byte, rv reflect.Value, addr uintpt
 		return buf, nil, aSkip
 	}
 	buf = append(buf, fi.jkey...)
-	buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
-
+	if v != v || math.IsInf(v, 0) {
+		buf = append(buf, '"')
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+		buf = append(buf, '"')
+	} else {
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+	}
 	return buf, nil, aWrote
 }
 

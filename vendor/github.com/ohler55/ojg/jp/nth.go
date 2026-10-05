@@ -127,7 +127,9 @@ func (f Nth) locate(pp Expr, data any, rest Expr, max int) (locs []Expr) {
 			has = true
 		}
 	default:
-		v, has = reflectGetNth(td, i)
+		if v, has = reflectGetNth(td, i); has && i < 0 {
+			i += reflect.Indirect(reflect.ValueOf(td)).Len()
+		}
 	}
 	if has {
 		locs = locateNthChildHas(pp, Nth(i), v, rest, max)

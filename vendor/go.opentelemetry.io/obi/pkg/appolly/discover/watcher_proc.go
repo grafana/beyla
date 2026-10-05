@@ -75,12 +75,32 @@ func wplog() *slog.Logger {
 	return slog.With("component", "discover.ProcessWatcher")
 }
 
+// ProcessWatcherRescan connects the process watcher to dynamic selector changes.
+// Nil channels are ignored.
+type ProcessWatcherRescan struct {
+	// AddedPIDs forgets the given PIDs so they are re-emitted on the next poll
+	// (e.g. after an explicit AddPID of an already-seen process).
+	AddedPIDs <-chan []app.PID
+	// TargetsChanged forgets all tracked PIDs so already-running processes are
+	// re-evaluated (e.g. after AddK8sWorkload).
+	TargetsChanged <-chan struct{}
+}
+
+func (r ProcessWatcherRescan) enabled() bool {
+	return r.AddedPIDs != nil || r.TargetsChanged != nil
+}
+
 // ProcessWatcherFunc polls every PollInterval for new processes and forwards either new or deleted process PIDs
 // as well as PIDs from processes that setup a new connection.
-// When addedPIDsNotify is non-nil, the watcher receives PIDs that were added to the dynamic selector and
-// forgets them from its tracked state so they are re-emitted as new on the next poll (supporting adding
-// an already-seen process).
-func ProcessWatcherFunc(cfg *obi.Config, ebpfContext *ebpfcommon.EBPFEventContext, output *msg.Queue[[]Event[ProcessAttrs]], findingCriteria []services.Selector, addedPIDsNotify <-chan []app.PID) swarm.RunFunc {
+// When rescan is enabled, the watcher forgets tracked processes so they can be re-emitted and rematched
+// after dynamic selector changes.
+func ProcessWatcherFunc(
+	cfg *obi.Config,
+	ebpfContext *ebpfcommon.EBPFEventContext,
+	output *msg.Queue[[]Event[ProcessAttrs]],
+	findingCriteria []services.Selector,
+	rescan ProcessWatcherRescan,
+) swarm.RunFunc {
 	acc := pollAccounter{
 		cfg:               cfg,
 		output:            output,
@@ -96,7 +116,7 @@ func ProcessWatcherFunc(cfg *obi.Config, ebpfContext *ebpfcommon.EBPFEventContex
 		stateMux:          sync.Mutex{},
 		findingCriteria:   findingCriteria,
 		ebpfContext:       ebpfContext,
-		addedPIDsNotify:   addedPIDsNotify,
+		rescan:            rescan,
 	}
 	if acc.interval == 0 {
 		acc.interval = defaultPollInterval
@@ -134,9 +154,8 @@ type pollAccounter struct {
 	findingCriteria   []services.Selector
 	output            *msg.Queue[[]Event[ProcessAttrs]]
 	ebpfContext       *ebpfcommon.EBPFEventContext
-	// when non-nil, PIDs received here are removed from pids/pidPorts so they are re-emitted as new on next poll
-	addedPIDsNotify <-chan []app.PID
-	// pidsMu protects pids and pidPorts so the addedPIDsNotify goroutine can call forgetPIDs while snapshot runs
+	rescan            ProcessWatcherRescan
+	// pidsMu protects pids and pidPorts so the rescan goroutine can forget while snapshot runs
 	pidsMu sync.Mutex
 }
 
@@ -161,8 +180,8 @@ func (pa *pollAccounter) run(ctx context.Context) {
 
 	go pa.watchForProcessEvents(ctx, log, bpfWatchEvents)
 
-	if pa.addedPIDsNotify != nil {
-		go pa.runAddedPIDsNotify(ctx, log)
+	if pa.rescan.enabled() {
+		go pa.runRescanNotify(ctx, log)
 	}
 
 	for {
@@ -185,25 +204,32 @@ func (pa *pollAccounter) run(ctx context.Context) {
 	}
 }
 
-// runAddedPIDsNotify runs in a goroutine; it receives PIDs added to the dynamic selector
-// and calls forgetPIDs so they are re-emitted as new on the next poll.
-func (pa *pollAccounter) runAddedPIDsNotify(ctx context.Context, log *slog.Logger) {
+// runRescanNotify forgets tracked processes when the dynamic selector changes so they are
+// re-emitted on the next poll. AddedPIDs is targeted; TargetsChanged clears everything.
+// Nil channels are inert in the select.
+func (pa *pollAccounter) runRescanNotify(ctx context.Context, log *slog.Logger) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case pids, ok := <-pa.addedPIDsNotify:
+		case pids, ok := <-pa.rescan.AddedPIDs:
 			if !ok {
 				return
 			}
 			pa.forgetPIDs(pids)
 			log.Debug("forgot PIDs so they can be re-emitted as new", "pids", pids)
+		case _, ok := <-pa.rescan.TargetsChanged:
+			if !ok {
+				return
+			}
+			pa.forgetAll()
+			log.Debug("forgot all PIDs after dynamic selection targets changed")
 		}
 	}
 }
 
 // forgetPIDs removes the given PIDs from the watcher's tracked state so they will be
-// reported as new on the next poll (e.g. when added to the dynamic PID selector).
+// reported as new on the next poll (e.g. when added to the dynamic selector).
 func (pa *pollAccounter) forgetPIDs(pids []app.PID) {
 	pa.pidsMu.Lock()
 	defer pa.pidsMu.Unlock()
@@ -215,6 +241,14 @@ func (pa *pollAccounter) forgetPIDs(pids []app.PID) {
 			delete(pa.pidPorts, pp)
 		}
 	}
+}
+
+// forgetAll clears all tracked process state so the next poll re-emits every process.
+func (pa *pollAccounter) forgetAll() {
+	pa.pidsMu.Lock()
+	defer pa.pidsMu.Unlock()
+	clear(pa.pids)
+	clear(pa.pidPorts)
 }
 
 func (pa *pollAccounter) bpfWatcherIsReady() {

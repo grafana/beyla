@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
@@ -19,15 +20,16 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
+	"go.opentelemetry.io/obi/pkg/export/mcpsession"
 	"go.opentelemetry.io/obi/pkg/export/otel/metric"
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -62,7 +64,7 @@ type MetricsReporter struct {
 	ctx              context.Context
 	cfg              *otelcfg.MetricsConfig
 	jointMetricsCfg  *perapp.GlobalMetricsConfig
-	nodeMeta         meta.NodeMeta
+	nodeMeta         metadata.NodeMeta
 	attributes       *attributes.AttrSelector
 	exporter         sdkmetric.Exporter
 	reporters        otelcfg.ReporterPool[*svc.Attrs, *Metrics]
@@ -75,30 +77,41 @@ type MetricsReporter struct {
 	spanExtraAttrs   []attr.Name
 
 	// user-selected fields for each of the reported metrics
-	attrHTTPDuration           []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientDuration     []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCServer             []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGRPCClient             []attributes.Field[*request.Span, attribute.KeyValue]
-	attrDBClient               []attributes.Field[*request.Span, attribute.KeyValue]
-	attrDBServer               []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingPublish       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMessagingProcess       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPRequestSize        []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPResponseSize       []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientRequestSize  []attributes.Field[*request.Span, attribute.KeyValue]
-	attrHTTPClientResponseSize []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelCalls         []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUGraphCalls          []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelGridSize      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUKernelBlockSize     []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUMemoryAllocations   []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGPUMemoryCopies        []attributes.Field[*request.Span, attribute.KeyValue]
-	attrDNSLookupDuration      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGenAIInputTokenUsage   []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGenAIOutputTokenUsage  []attributes.Field[*request.Span, attribute.KeyValue]
-	attrGenAIClientDuration    []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMCPClientDuration      []attributes.Field[*request.Span, attribute.KeyValue]
-	attrMCPServerDuration      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPDuration              []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientDuration        []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGRPCServer                []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGRPCClient                []attributes.Field[*request.Span, attribute.KeyValue]
+	attrDBClient                  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrDBServer                  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingPublish          []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMessagingProcess          []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPRequestSize           []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPResponseSize          []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientRequestSize     []attributes.Field[*request.Span, attribute.KeyValue]
+	attrHTTPClientResponseSize    []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelCalls            []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUGraphCalls             []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelGridSize         []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUKernelBlockSize        []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUMemoryAllocations      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUMemoryCopies           []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUMemoryFreeBytes        []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUMemsetBytes            []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUStreamCreateCalls      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUStreamDestroyCalls     []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUEventRecordCalls       []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUEventSynchronizeCalls  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUStreamSynchronizeCalls []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUDeviceSynchronizeCalls []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGPUHostRegisterBytes      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrDNSLookupDuration         []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGenAIInputTokenUsage      []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGenAIOutputTokenUsage     []attributes.Field[*request.Span, attribute.KeyValue]
+	attrGenAIClientDuration       []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMCPClientDuration         []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMCPServerDuration         []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMCPClientSessionDuration  []attributes.Field[*request.Span, attribute.KeyValue]
+	attrMCPServerSessionDuration  []attributes.Field[*request.Span, attribute.KeyValue]
 
 	userAttribSelection attributes.Selection
 	input               <-chan []request.Span
@@ -115,6 +128,7 @@ type MetricsReporter struct {
 // There is a Metrics instance for each service/process instrumented by OBI.
 type Metrics struct {
 	ctx      context.Context
+	cancel   context.CancelFunc
 	service  *svc.Attrs
 	provider *metric.MeterProvider
 
@@ -137,12 +151,21 @@ type Metrics struct {
 	spanMetricsRequestSizeTotal  *Expirer[*request.Span, instrument.Float64Counter, float64]
 	spanMetricsResponseSizeTotal *Expirer[*request.Span, instrument.Float64Counter, float64]
 	// cuda/gpu
-	gpuKernelCallsTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuGraphCallsTotal   *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuMemoryAllocsTotal *Expirer[*request.Span, instrument.Int64Counter, int64]
-	gpuKernelGridSize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	gpuKernelBlockSize   *Expirer[*request.Span, instrument.Float64Histogram, float64]
-	gpuMemoryCopySize    *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuKernelCallsTotal            *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuGraphCallsTotal             *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuMemoryAllocsTotal           *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuMemoryFreeBytesTotal        *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuMemsetBytesTotal            *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuStreamCreateCallsTotal      *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuStreamDestroyCallsTotal     *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuEventRecordCallsTotal       *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuEventSynchronizeCallsTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuStreamSynchronizeCallsTotal *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuDeviceSynchronizeCallsTotal *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuHostRegisterBytesTotal      *Expirer[*request.Span, instrument.Int64Counter, int64]
+	gpuKernelGridSize              *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuKernelBlockSize             *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	gpuMemoryCopySize              *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	// dns
 	dnsLookupDuration *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	// genai
@@ -153,6 +176,11 @@ type Metrics struct {
 	// mcp
 	mcpClientOperationDuration *Expirer[*request.Span, instrument.Float64Histogram, float64]
 	mcpServerOperationDuration *Expirer[*request.Span, instrument.Float64Histogram, float64]
+
+	mcpClientSessionDuration *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	mcpServerSessionDuration *Expirer[*request.Span, instrument.Float64Histogram, float64]
+
+	mcpSessions *mcpsession.Store
 }
 
 type TargetMetrics struct {
@@ -237,18 +265,19 @@ func newMetricsReporter(
 
 	// initialize attribute getters
 	if is.HTTPEnabled() {
+		httpGetters := request.SpanOTELGettersForHTTP(unresolved)
 		mr.attrHTTPDuration = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.HTTPServerDuration))
+			httpGetters, mr.attributes.For(attributes.HTTPServerDuration))
 		mr.attrHTTPClientDuration = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.HTTPClientDuration))
+			httpGetters, mr.attributes.For(attributes.HTTPClientDuration))
 		mr.attrHTTPRequestSize = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.HTTPServerRequestSize))
+			httpGetters, mr.attributes.For(attributes.HTTPServerRequestSize))
 		mr.attrHTTPResponseSize = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.HTTPServerResponseSize))
+			httpGetters, mr.attributes.For(attributes.HTTPServerResponseSize))
 		mr.attrHTTPClientRequestSize = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.HTTPClientRequestSize))
+			httpGetters, mr.attributes.For(attributes.HTTPClientRequestSize))
 		mr.attrHTTPClientResponseSize = attributes.OpenTelemetryGetters(
-			mr.attrGetters, mr.attributes.For(attributes.HTTPClientResponseSize))
+			httpGetters, mr.attributes.For(attributes.HTTPClientResponseSize))
 	}
 
 	if is.GRPCEnabled() || is.SunRPCEnabled() {
@@ -289,6 +318,24 @@ func newMetricsReporter(
 			mr.attrGetters, mr.attributes.For(attributes.GPUCudaKernelBlockSize))
 		mr.attrGPUMemoryCopies = attributes.OpenTelemetryGetters(
 			mr.attrGetters, mr.attributes.For(attributes.GPUCudaMemoryCopies))
+		mr.attrGPUMemoryFreeBytes = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaMemoryFreeBytes))
+		mr.attrGPUMemsetBytes = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaMemsetBytes))
+		mr.attrGPUStreamCreateCalls = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaStreamCreateCalls))
+		mr.attrGPUStreamDestroyCalls = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaStreamDestroyCalls))
+		mr.attrGPUEventRecordCalls = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaEventRecordCalls))
+		mr.attrGPUEventSynchronizeCalls = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaEventSynchronizeCalls))
+		mr.attrGPUStreamSynchronizeCalls = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaStreamSynchronizeCalls))
+		mr.attrGPUDeviceSynchronizeCalls = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaDeviceSynchronizeCalls))
+		mr.attrGPUHostRegisterBytes = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.GPUCudaHostRegisterBytes))
 	}
 
 	if is.DNSEnabled() {
@@ -307,6 +354,10 @@ func newMetricsReporter(
 			mr.attrGetters, mr.attributes.For(attributes.MCPClientOperationDuration))
 		mr.attrMCPServerDuration = attributes.OpenTelemetryGetters(
 			mr.attrGetters, mr.attributes.For(attributes.MCPServerOperationDuration))
+		mr.attrMCPClientSessionDuration = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.MCPClientSessionDuration))
+		mr.attrMCPServerSessionDuration = attributes.OpenTelemetryGetters(
+			mr.attrGetters, mr.attributes.For(attributes.MCPServerSessionDuration))
 	}
 
 	mr.reporters, err = otelcfg.NewReporterPool[*svc.Attrs, *Metrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
@@ -400,6 +451,8 @@ func (mr *MetricsReporter) otelMetricOptions() []metric.Option {
 			metric.WithView(mr.otelHistogramConfig(attributes.GenAIClientInputTokenUsage.OTEL, mr.cfg.Buckets.GenAITokenUsageHistogram)),
 			metric.WithView(mr.otelHistogramConfig(attributes.MCPClientOperationDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
 			metric.WithView(mr.otelHistogramConfig(attributes.MCPServerOperationDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(mr.otelHistogramConfig(attributes.MCPClientSessionDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
+			metric.WithView(mr.otelHistogramConfig(attributes.MCPServerSessionDuration.OTEL, mr.cfg.Buckets.DurationHistogram)),
 		)
 	}
 
@@ -586,6 +639,69 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		m.gpuMemoryAllocsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
 			m.ctx, gpuMemoryAllocationsTotal, mr.attrGPUMemoryAllocations, timeNow, mr.cfg.TTL)
 
+		gpuMemoryFreeBytesTotal, err := meter.Int64Counter(attributes.GPUCudaMemoryFreeBytes.OTEL, instrument.WithUnit(attributes.GPUCudaMemoryFreeBytes.Unit))
+		if err != nil {
+			return fmt.Errorf("creating gpu memory free bytes total: %w", err)
+		}
+		m.gpuMemoryFreeBytesTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuMemoryFreeBytesTotal, mr.attrGPUMemoryFreeBytes, timeNow, mr.cfg.TTL)
+
+		gpuMemsetBytesTotal, err := meter.Int64Counter(attributes.GPUCudaMemsetBytes.OTEL, instrument.WithUnit(attributes.GPUCudaMemsetBytes.Unit))
+		if err != nil {
+			return fmt.Errorf("creating gpu memset bytes total: %w", err)
+		}
+		m.gpuMemsetBytesTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuMemsetBytesTotal, mr.attrGPUMemsetBytes, timeNow, mr.cfg.TTL)
+
+		gpuStreamCreateCallsTotal, err := meter.Int64Counter(attributes.GPUCudaStreamCreateCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu stream create calls total: %w", err)
+		}
+		m.gpuStreamCreateCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuStreamCreateCallsTotal, mr.attrGPUStreamCreateCalls, timeNow, mr.cfg.TTL)
+
+		gpuStreamDestroyCallsTotal, err := meter.Int64Counter(attributes.GPUCudaStreamDestroyCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu stream destroy calls total: %w", err)
+		}
+		m.gpuStreamDestroyCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuStreamDestroyCallsTotal, mr.attrGPUStreamDestroyCalls, timeNow, mr.cfg.TTL)
+
+		gpuEventRecordCallsTotal, err := meter.Int64Counter(attributes.GPUCudaEventRecordCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu event record calls total: %w", err)
+		}
+		m.gpuEventRecordCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuEventRecordCallsTotal, mr.attrGPUEventRecordCalls, timeNow, mr.cfg.TTL)
+
+		gpuEventSynchronizeCallsTotal, err := meter.Int64Counter(attributes.GPUCudaEventSynchronizeCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu event synchronize calls total: %w", err)
+		}
+		m.gpuEventSynchronizeCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuEventSynchronizeCallsTotal, mr.attrGPUEventSynchronizeCalls, timeNow, mr.cfg.TTL)
+
+		gpuStreamSynchronizeCallsTotal, err := meter.Int64Counter(attributes.GPUCudaStreamSynchronizeCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu stream synchronize calls total: %w", err)
+		}
+		m.gpuStreamSynchronizeCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuStreamSynchronizeCallsTotal, mr.attrGPUStreamSynchronizeCalls, timeNow, mr.cfg.TTL)
+
+		gpuDeviceSynchronizeCallsTotal, err := meter.Int64Counter(attributes.GPUCudaDeviceSynchronizeCalls.OTEL)
+		if err != nil {
+			return fmt.Errorf("creating gpu device synchronize calls total: %w", err)
+		}
+		m.gpuDeviceSynchronizeCallsTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuDeviceSynchronizeCallsTotal, mr.attrGPUDeviceSynchronizeCalls, timeNow, mr.cfg.TTL)
+
+		gpuHostRegisterBytesTotal, err := meter.Int64Counter(attributes.GPUCudaHostRegisterBytes.OTEL, instrument.WithUnit(attributes.GPUCudaHostRegisterBytes.Unit))
+		if err != nil {
+			return fmt.Errorf("creating gpu host register bytes total: %w", err)
+		}
+		m.gpuHostRegisterBytesTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+			m.ctx, gpuHostRegisterBytesTotal, mr.attrGPUHostRegisterBytes, timeNow, mr.cfg.TTL)
+
 		gpuKernelGridSize, err := meter.Float64Histogram(attributes.GPUCudaKernelGridSize.OTEL, instrument.WithUnit(attributes.GPUCudaKernelGridSize.Unit))
 		if err != nil {
 			return fmt.Errorf("creating gpu kernel grid size histogram: %w", err)
@@ -649,6 +765,20 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 		}
 		m.mcpServerOperationDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
 			m.ctx, mcpServerOperationDuration, mr.attrMCPServerDuration, timeNow, mr.cfg.TTL)
+
+		mcpClientSessionDuration, err := meter.Float64Histogram(attributes.MCPClientSessionDuration.OTEL, instrument.WithUnit(attributes.MCPClientSessionDuration.Unit))
+		if err != nil {
+			return fmt.Errorf("creating mcp client session duration histogram: %w", err)
+		}
+		m.mcpClientSessionDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, mcpClientSessionDuration, mr.attrMCPClientSessionDuration, timeNow, mr.cfg.TTL)
+
+		mcpServerSessionDuration, err := meter.Float64Histogram(attributes.MCPServerSessionDuration.OTEL, instrument.WithUnit(attributes.MCPServerSessionDuration.Unit))
+		if err != nil {
+			return fmt.Errorf("creating mcp server session duration histogram: %w", err)
+		}
+		m.mcpServerSessionDuration = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+			m.ctx, mcpServerSessionDuration, mr.attrMCPServerSessionDuration, timeNow, mr.cfg.TTL)
 	}
 
 	return nil
@@ -747,9 +877,13 @@ func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 	opts = append(opts, mr.otelMetricOptions()...)
 	opts = append(opts, mr.spanMetricOptions()...)
 
+	mctx, cancel := context.WithCancel(mr.ctx)
+
 	return Metrics{
-		ctx:     mr.ctx,
-		service: service,
+		ctx:         mctx,
+		cancel:      cancel,
+		service:     service,
+		mcpSessions: mcpsession.NewStore(),
 		provider: metric.NewMeterProvider(
 			opts...,
 		),
@@ -769,6 +903,11 @@ func (mr *MetricsReporter) newMetricSet(service *svc.Attrs) (*Metrics, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Sessions are expired in the background: idle ones must be closed and
+	// their duration histogram recorded even when no further MCP traffic
+	// arrives for the service.
+	go m.mcpSessions.Start(m.ctx, mr.cfg.TTL, m.closeMCPSession)
 
 	return &m, nil
 }
@@ -804,9 +943,38 @@ func (mr *MetricsReporter) isExponentialAggregation() bool {
 	return false
 }
 
+// shutdownTimeout bounds the final collection/export. It matches the default
+// export timeout the SDK PeriodicReader applies when the caller sets no deadline.
+const shutdownTimeout = 30 * time.Second
+
+// shutdownContext returns a context for the reporter's final collection/export.
+// On the normal shutdown path ctx.Done() is what exits reportMetrics, so mr.ctx is
+// already canceled and would abort the flush; the returned context is detached from
+// it and bounded instead.
+func (mr *MetricsReporter) shutdownContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(mr.ctx), shutdownTimeout)
+}
+
 func (mr *MetricsReporter) close() {
+	// Drain every per-service metric set before shutting down the shared exporter.
+	// provider.Shutdown performs a final collection/export, so sessions and other
+	// pending observations are flushed even when the process stops before TTL eviction.
+	shutdownCtx, cancel := mr.shutdownContext()
+	defer cancel()
+	mr.reporters.ForEach(func(id svc.UID, m *Metrics) {
+		llog := mlog().With("service", id)
+		llog.Debug("shutting down metrics reporter")
+		m.cleanupAllMetricsInstances()
+		if err := m.provider.Shutdown(shutdownCtx); err != nil {
+			llog.Warn("error shutting down metrics provider", "error", err)
+		}
+	})
+
 	go func() {
-		if err := mr.exporter.Shutdown(mr.ctx); err != nil {
+		// The context above is canceled when close returns, so bound this one separately.
+		exportCtx, cancel := mr.shutdownContext()
+		defer cancel()
+		if err := mr.exporter.Shutdown(exportCtx); err != nil {
 			mlog().Warn("closing metrics provider", "error", err)
 			return
 		}
@@ -962,6 +1130,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 					mcpServerOperationDuration, attrs := r.mcpServerOperationDuration.ForRecord(span)
 					mcpServerOperationDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				}
+				r.recordMCPSession(span, t)
 			} else if mr.is.HTTPEnabled() {
 				if measured {
 					httpDuration, attrs := r.httpDuration.ForRecord(span)
@@ -1029,6 +1198,7 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 					mcpClientOperationDuration, attrs := r.mcpClientOperationDuration.ForRecord(span)
 					mcpClientOperationDuration.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 				}
+				r.recordMCPSession(span, t)
 			} else if mr.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType) {
 				if measured {
 					genAIClientDuration, attrs := r.genAIClientDuration.ForRecord(span)
@@ -1172,6 +1342,51 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 			if mr.is.GPUEnabled() {
 				gmem, attrs := r.gpuMemoryCopySize.ForRecord(span)
 				gmem.Record(r.ctx, float64(span.ContentLength), instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaFree:
+			if mr.is.GPUEnabled() {
+				gmem, attrs := r.gpuMemoryFreeBytesTotal.ForRecord(span)
+				gmem.Add(ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaMemset:
+			if mr.is.GPUEnabled() {
+				gmem, attrs := r.gpuMemsetBytesTotal.ForRecord(span)
+				gmem.Add(ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaStreamCreate:
+			if mr.is.GPUEnabled() {
+				gcalls, attrs := r.gpuStreamCreateCallsTotal.ForRecord(span)
+				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaStreamDestroy:
+			if mr.is.GPUEnabled() {
+				gcalls, attrs := r.gpuStreamDestroyCallsTotal.ForRecord(span)
+				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaEventRecord:
+			if mr.is.GPUEnabled() {
+				gcalls, attrs := r.gpuEventRecordCallsTotal.ForRecord(span)
+				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaEventSynchronize:
+			if mr.is.GPUEnabled() {
+				gcalls, attrs := r.gpuEventSynchronizeCallsTotal.ForRecord(span)
+				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaStreamSynchronize:
+			if mr.is.GPUEnabled() {
+				gcalls, attrs := r.gpuStreamSynchronizeCallsTotal.ForRecord(span)
+				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaDeviceSynchronize:
+			if mr.is.GPUEnabled() {
+				gcalls, attrs := r.gpuDeviceSynchronizeCallsTotal.ForRecord(span)
+				gcalls.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		case request.EventTypeGPUCudaHostRegister:
+			if mr.is.GPUEnabled() {
+				gmem, attrs := r.gpuHostRegisterBytesTotal.ForRecord(span)
+				gmem.Add(ctx, span.ContentLength, instrument.WithAttributeSet(attrs))
 			}
 		case request.EventTypeDNS:
 			if mr.is.DNSEnabled() {
@@ -1444,7 +1659,43 @@ func cleanupFloatCounterMetrics(ctx context.Context, m *Expirer[*request.Span, i
 	}
 }
 
+func (r *Metrics) recordMCPSession(span *request.Span, t request.Timings) {
+	if r.mcpSessions == nil {
+		return
+	}
+	mcp := span.MCP()
+	if mcp == nil || mcp.SessionID == "" {
+		return
+	}
+
+	isClient := span.Type == request.EventTypeHTTPClient
+	r.mcpSessions.Record(mcp.SessionID, isClient, span, t)
+}
+
+func (r *Metrics) closeMCPSession(sess *mcpsession.Session, client bool) {
+	synth := sess.SyntheticSpan()
+	if client {
+		hist, attrs := r.mcpClientSessionDuration.ForRecord(synth)
+		hist.Record(r.ctx, sess.Duration().Seconds(), instrument.WithAttributeSet(attrs))
+		return
+	}
+	hist, attrs := r.mcpServerSessionDuration.ForRecord(synth)
+	hist.Record(r.ctx, sess.Duration().Seconds(), instrument.WithAttributeSet(attrs))
+}
+
+func (r *Metrics) closeAllMCPSessions() {
+	if r.mcpSessions == nil {
+		return
+	}
+	r.mcpSessions.CloseAll(r.closeMCPSession)
+}
+
 func (r *Metrics) cleanupAllMetricsInstances() {
+	r.closeAllMCPSessions()
+	if r.cancel != nil {
+		// stops the background MCP session expiry of this metric set
+		r.cancel()
+	}
 	cleanupMetrics(r.ctx, r.httpDuration)
 	cleanupMetrics(r.ctx, r.httpClientDuration)
 	cleanupMetrics(r.ctx, r.grpcDuration)
@@ -1464,6 +1715,15 @@ func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupCounterMetrics(r.ctx, r.gpuKernelCallsTotal)
 	cleanupCounterMetrics(r.ctx, r.gpuGraphCallsTotal)
 	cleanupCounterMetrics(r.ctx, r.gpuMemoryAllocsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuMemoryFreeBytesTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuMemsetBytesTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuStreamCreateCallsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuStreamDestroyCallsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuEventRecordCallsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuEventSynchronizeCallsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuStreamSynchronizeCallsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuDeviceSynchronizeCallsTotal)
+	cleanupCounterMetrics(r.ctx, r.gpuHostRegisterBytesTotal)
 	cleanupMetrics(r.ctx, r.gpuKernelGridSize)
 	cleanupMetrics(r.ctx, r.gpuKernelBlockSize)
 	cleanupMetrics(r.ctx, r.gpuMemoryCopySize)
@@ -1473,4 +1733,5 @@ func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.genAIOutputTokenUsage)
 	cleanupMetrics(r.ctx, r.mcpClientOperationDuration)
 	cleanupMetrics(r.ctx, r.mcpServerOperationDuration)
+	// Provider shutdown performs the final collection of sessions closed above.
 }

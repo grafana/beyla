@@ -89,3 +89,28 @@ func SpanPromGettersForDBClient(unresolved UnresolvedNames, explicitPort bool) a
 		return base(name)
 	}
 }
+
+func SpanOTELGettersForHTTP(unresolved UnresolvedNames) attributes.NamedGetters[*Span, attribute.KeyValue] {
+	base := SpanOTELGetters(unresolved)
+	return func(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
+		if name == attr.ErrorType {
+			return func(span *Span) attribute.KeyValue {
+				if errType := HTTPErrorType(span); errType != "" {
+					return ErrorType(errType)
+				}
+				return attribute.KeyValue{}
+			}, true
+		}
+		return base(name)
+	}
+}
+
+func SpanPromGettersForHTTP(unresolved UnresolvedNames) attributes.NamedGetters[*Span, string] {
+	base := SpanPromGetters(unresolved)
+	return func(name attr.Name) (attributes.Getter[*Span, string], bool) {
+		if name == attr.ErrorType {
+			return HTTPErrorType, true
+		}
+		return base(name)
+	}
+}

@@ -10,6 +10,7 @@ github.com/aws/aws-sdk-go-v2/internal/configsources,https://github.com/grafana/b
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/endpoints/v2/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/internal/sync/singleflight,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/sync/singleflight/LICENSE,BSD-3-Clause
 github.com/aws/aws-sdk-go-v2/internal/v4a,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/internal/v4a/LICENSE.txt,Apache-2.0
+github.com/aws/aws-sdk-go-v2/service/ecs,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/ecs/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/internal/presigned-url/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/service/signin,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/service/signin/LICENSE.txt,Apache-2.0
@@ -21,6 +22,7 @@ github.com/aws/smithy-go/internal/sync/singleflight,https://github.com/grafana/b
 github.com/bahlo/generic-list-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/bahlo/generic-list-go/LICENSE,BSD-3-Clause
 github.com/beorn7/perks/quantile,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/beorn7/perks/LICENSE,MIT
 github.com/blang/semver/v4,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/blang/semver/v4/LICENSE,MIT
+github.com/brunoscheufler/aws-ecs-metadata-go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/brunoscheufler/aws-ecs-metadata-go/LICENSE,MIT
 github.com/buger/jsonparser,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/buger/jsonparser/LICENSE,MIT
 github.com/caarlos0/env/v11,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/caarlos0/env/v11/LICENSE.md,MIT
 github.com/caarlos0/env/v9,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/caarlos0/env/v9/LICENSE.md,MIT

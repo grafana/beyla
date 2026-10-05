@@ -3,6 +3,8 @@
 package ojg
 
 import (
+	"fmt"
+	"reflect"
 	"unicode/utf8"
 )
 
@@ -201,4 +203,14 @@ func AppendSENString(buf []byte, s string, htmlSafe bool) []byte {
 	copy(buf[b0:], buf[b0+1:])
 
 	return buf[:len(buf)-1]
+}
+
+// KeyString returns the string form of a reflect map key. Keys that are not
+// strings are formatted with the fmt package the same way alt.reflectMap
+// formats them.
+func KeyString(kv reflect.Value) string {
+	if kv.Kind() == reflect.String {
+		return kv.String()
+	}
+	return fmt.Sprint(kv.Interface())
 }

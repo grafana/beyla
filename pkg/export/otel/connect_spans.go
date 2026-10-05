@@ -174,7 +174,7 @@ func GroupConnectionSpans(
 }
 
 func GenerateConnectSpans(
-	nodeMeta *metadata.NodeMeta,
+	nodeMeta *meta.NodeMeta,
 	span *request.Span,
 	spans []tracesgen.TraceSpanAndAttributes,
 ) ptrace.Traces {

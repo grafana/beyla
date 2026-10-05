@@ -56,8 +56,16 @@ func (r *fakeSurveyPIDRegistry) CurrentPIDs(ebpfcommon.PIDType) map[uint32]map[a
 func socketMatch(pid app.PID, kind obiDiscover.WatchEventType) surveyMatch {
 	return surveyMatch{Type: kind, Obj: obiDiscover.ProcessMatch{
 		Process:  &services.ProcessInfo{Pid: pid, ExePath: "/app"},
-		Criteria: []services.Selector{&servicesextra.SurveySelector{SocketApps: true}},
+		Criteria: []services.Selector{&servicesextra.SurveySelector{SocketApps: servicesextra.SocketAppSelector{Enabled: true}}},
 	}}
+}
+
+func nonRootSocketMatch(pid app.PID, kind obiDiscover.WatchEventType) surveyMatch {
+	match := socketMatch(pid, kind)
+	match.Obj.Criteria = []services.Selector{&servicesextra.SurveySelector{
+		SocketApps: servicesextra.SocketAppSelector{Enabled: true, NonRoot: true},
+	}}
+	return match
 }
 
 func newTestSocketFilter() (*surveySocketFilter, *fakeSocketProcesses, map[app.PID]uint64) {
@@ -67,6 +75,7 @@ func newTestSocketFilter() (*surveySocketFilter, *fakeSocketProcesses, map[app.P
 		sockets: sockets, processes: map[app.PID]socketCandidate{},
 		pids:      &fakeSurveyPIDRegistry{aliases: map[app.PID][]app.PID{}, current: map[uint32]map[app.PID]svc.Attrs{}},
 		namespace: func(app.PID) (uint32, error) { return 0, nil },
+		realUID:   func(app.PID) (uint32, error) { return 1000, nil },
 		startTime: func(pid app.PID) (uint64, error) {
 			start, ok := lifetimes[pid]
 			if !ok {
@@ -189,6 +198,75 @@ func TestSurveySocketFilterProcessGoneBeforeDiscovery(t *testing.T) {
 	delete(lifetimes, 10)
 	assert.Empty(t, f.filter([]surveyMatch{socketMatch(10, obiDiscover.EventCreated)}))
 	assert.Empty(t, f.processes)
+}
+
+func TestRequiresNonRoot(t *testing.T) {
+	assert.False(t, requiresNonRoot(socketMatch(10, obiDiscover.EventCreated)))
+	assert.True(t, requiresNonRoot(nonRootSocketMatch(10, obiDiscover.EventCreated)))
+
+	// A plain socket selector alongside a non-root one admits root processes.
+	mixed := nonRootSocketMatch(10, obiDiscover.EventCreated)
+	mixed.Obj.Criteria = append(mixed.Obj.Criteria,
+		&servicesextra.SurveySelector{SocketApps: servicesextra.SocketAppSelector{Enabled: true}})
+	assert.False(t, requiresNonRoot(mixed))
+}
+
+func TestSurveySocketFilterNonRoot(t *testing.T) {
+	t.Run("real uid matches euid", func(t *testing.T) {
+		uid, err := processRealUID(app.PID(os.Getpid()))
+		require.NoError(t, err)
+		assert.Equal(t, uint32(os.Getuid()), uid)
+	})
+
+	t.Run("privileged flag admits root", func(t *testing.T) {
+		f, sockets, _ := newTestSocketFilter()
+		f.realUID = func(app.PID) (uint32, error) { return 0, nil }
+		created := nonRootSocketMatch(10, obiDiscover.EventCreated)
+		require.Empty(t, f.filter([]surveyMatch{created}))
+		require.True(t, f.processes[10].rootOnly)
+		sockets.snapshot[surveywatcher.Process{PID: 10, StartTime: 100, Flags: surveywatcher.FlagAny | surveywatcher.FlagPrivileged}] = struct{}{}
+		assert.Equal(t, []surveyMatch{created}, f.promote())
+	})
+
+	t.Run("unprivileged listener holds root", func(t *testing.T) {
+		f, sockets, _ := newTestSocketFilter()
+		f.realUID = func(app.PID) (uint32, error) { return 0, nil }
+		created := nonRootSocketMatch(10, obiDiscover.EventCreated)
+		require.Empty(t, f.filter([]surveyMatch{created}))
+		sockets.snapshot[surveywatcher.Process{PID: 10, StartTime: 100, Flags: surveywatcher.FlagAny | surveywatcher.FlagNonPrivileged}] = struct{}{}
+		assert.Empty(t, f.promote(), "root process with only high-port listeners must stay held")
+		assert.False(t, f.processes[10].admitted)
+	})
+
+	t.Run("unprivileged listener admits non-root", func(t *testing.T) {
+		f, sockets, _ := newTestSocketFilter()
+		f.realUID = func(app.PID) (uint32, error) { return 1000, nil }
+		created := nonRootSocketMatch(10, obiDiscover.EventCreated)
+		require.Empty(t, f.filter([]surveyMatch{created}))
+		require.False(t, f.processes[10].rootOnly)
+		sockets.snapshot[surveywatcher.Process{PID: 10, StartTime: 100, Flags: surveywatcher.FlagAny | surveywatcher.FlagNonPrivileged}] = struct{}{}
+		assert.Equal(t, []surveyMatch{created}, f.promote())
+	})
+
+	t.Run("uid read failure admits", func(t *testing.T) {
+		f, sockets, _ := newTestSocketFilter()
+		f.realUID = func(app.PID) (uint32, error) { return 0, os.ErrNotExist }
+		created := nonRootSocketMatch(10, obiDiscover.EventCreated)
+		require.Empty(t, f.filter([]surveyMatch{created}))
+		require.False(t, f.processes[10].rootOnly, "unknown uid must not hold the candidate")
+		sockets.snapshot[surveywatcher.Process{PID: 10, StartTime: 100, Flags: surveywatcher.FlagAny | surveywatcher.FlagNonPrivileged}] = struct{}{}
+		assert.Equal(t, []surveyMatch{created}, f.promote())
+	})
+
+	t.Run("root admitted without non-root selector", func(t *testing.T) {
+		f, sockets, _ := newTestSocketFilter()
+		f.realUID = func(app.PID) (uint32, error) { return 0, nil }
+		created := socketMatch(10, obiDiscover.EventCreated)
+		require.Empty(t, f.filter([]surveyMatch{created}))
+		require.False(t, f.processes[10].rootOnly, "plain socket selector never restricts root")
+		sockets.snapshot[surveywatcher.Process{PID: 10, StartTime: 100, Flags: surveywatcher.FlagAny | surveywatcher.FlagNonPrivileged}] = struct{}{}
+		assert.Equal(t, []surveyMatch{created}, f.promote())
+	})
 }
 
 func TestSurveyProcessStartTime(t *testing.T) {

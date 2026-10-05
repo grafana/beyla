@@ -54,7 +54,7 @@ func TracesReceiver(
 
 type tracesReceiver struct {
 	cfg                *beyla.TracesReceiverConfig
-	nodeMeta           *metadata.NodeMeta
+	nodeMeta           *meta.NodeMeta
 	spanMetricsEnabled bool
 	is                 instrumentations.InstrumentationSelection
 	input              <-chan []request.Span

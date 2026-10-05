@@ -22,8 +22,8 @@ func TestSurveySelectorYAMLRoundTrip(t *testing.T) {
 	check := func(criteria SurveyDefinitionCriteria) {
 		require.Len(t, criteria, 2)
 		assert.True(t, criteria.SocketAppsEnabled())
-		assert.True(t, criteria[0].SocketApps)
-		assert.False(t, criteria[1].SocketApps)
+		assert.True(t, criteria[0].SocketApps.Enabled)
+		assert.False(t, criteria[1].SocketApps.Enabled)
 		assert.True(t, criteria[0].Path.MatchString("/opt/apps/worker"))
 		assert.False(t, criteria[0].Path.MatchString("/usr/bin/worker"))
 		require.Contains(t, criteria[0].Metadata, "k8s_namespace")

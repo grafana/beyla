@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/prometheus/procfs"
+	"github.com/shirou/gopsutil/v3/process"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
@@ -34,6 +35,7 @@ type socketCandidate struct {
 	namespace uint32
 	event     surveyMatch
 	admitted  bool
+	rootOnly  bool
 }
 
 func (c socketCandidate) same(start uint64, ns uint32) bool {
@@ -56,6 +58,7 @@ type surveySocketFilter struct {
 	processes map[app.PID]socketCandidate
 	startTime func(app.PID) (uint64, error)
 	namespace func(app.PID) (uint32, error)
+	realUID   func(app.PID) (uint32, error)
 }
 
 func processStartTime(pid app.PID) (uint64, error) {
@@ -75,6 +78,21 @@ func processNamespace(pid app.PID) (uint32, error) {
 	return uint32(info.Sys().(*syscall.Stat_t).Ino), nil
 }
 
+func processRealUID(pid app.PID) (uint32, error) {
+	proc, err := process.NewProcess(int32(pid))
+	if err != nil {
+		return 0, err
+	}
+	uids, err := proc.Uids()
+	if err != nil {
+		return 0, err
+	}
+	if len(uids) == 0 {
+		return 0, fmt.Errorf("no uids for pid %d", pid)
+	}
+	return uint32(uids[0]), nil
+}
+
 func surveySocketFilterProvider(cfg *obi.Config, events *ebpfcommon.EBPFEventContext, input, output *msg.Queue[[]surveyMatch]) swarm.InstanceFunc {
 	// Subscribe while wiring the graph, before the mixed OBI pipeline can start.
 	in := input.Subscribe()
@@ -89,7 +107,7 @@ func surveySocketFilterProvider(cfg *obi.Config, events *ebpfcommon.EBPFEventCon
 
 		filter := &surveySocketFilter{
 			sockets: sockets, processes: map[app.PID]socketCandidate{},
-			startTime: processStartTime, namespace: processNamespace,
+			startTime: processStartTime, namespace: processNamespace, realUID: processRealUID,
 			// Register even held candidates: OBI supplies their namespace PID aliases
 			// without enabling instrumentation or sharing its instrumentation allowlist.
 			pids: ebpfcommon.NewPIDsFilter(&cfg.Discovery, slog.With("component", "survey.SocketFilter"), nil),
@@ -123,7 +141,9 @@ func (f *surveySocketFilter) filter(events []surveyMatch) []surveyMatch {
 	var out []surveyMatch
 
 	for _, event := range events {
-		if !requiresSurveySocket(event.Obj) {
+		// if we don't need any additional sockets criteria
+		// just let the event go through
+		if !requiresAdditionalCriteria(event.Obj) {
 			out = append(out, event)
 			continue
 		}
@@ -145,10 +165,10 @@ func (f *surveySocketFilter) filter(events []surveyMatch) []surveyMatch {
 	return append(out, f.promote()...)
 }
 
-func requiresSurveySocket(match obiDiscover.ProcessMatch) bool {
+func requiresAdditionalCriteria(match obiDiscover.ProcessMatch) bool {
 	for _, criterion := range match.Criteria {
 		selector, ok := criterion.(*servicesextra.SurveySelector)
-		if !ok || !selector.SocketApps {
+		if !ok || !selector.SocketApps.Enabled {
 			// Survey entries are alternatives: one unrestricted match is enough.
 			return false
 		}
@@ -194,7 +214,21 @@ func (f *surveySocketFilter) track(event surveyMatch) []surveyMatch {
 	}
 
 	f.remove(pid)
-	f.processes[pid] = socketCandidate{startTime: start, namespace: ns, event: event}
+	candidate := socketCandidate{startTime: start, namespace: ns, event: event}
+
+	// A root process matched by a non-root selector only qualifies through a
+	// privileged listener. Root-ness is fixed for the process lifetime, so
+	// resolve it once here instead of on every promote cycle.
+	if requiresNonRoot(event) {
+		uid, err := f.realUID(pid)
+		if err != nil {
+			slog.Debug("cannot read survey candidate uid", "pid", pid, "error", err)
+		} else {
+			candidate.rootOnly = (uid == 0)
+		}
+	}
+
+	f.processes[pid] = candidate
 
 	// we reuse here the OBI pid filter, kprobes type is misleading, I just picked one.
 	f.pids.AllowPID(pid, ns, exec.New(exec.Init{
@@ -233,9 +267,29 @@ func (f *surveySocketFilter) promote() []surveyMatch {
 			continue
 		}
 
+		if candidate.rootOnly && (identity.Flags&surveywatcher.FlagPrivileged == 0) {
+			continue
+		}
+
 		candidate.admitted = true
 		f.processes[pid] = candidate
 		out = append(out, candidate.event)
 	}
 	return out
+}
+
+func requiresNonRoot(sm surveyMatch) bool {
+	nonRoot := false
+	for _, criterion := range sm.Obj.Criteria {
+		selector, ok := criterion.(*servicesextra.SurveySelector)
+		if ok {
+			if selector.SocketApps.NonRoot {
+				nonRoot = true
+			} else if selector.SocketApps.Enabled {
+				return false
+			}
+		}
+	}
+
+	return nonRoot
 }

@@ -57,7 +57,7 @@ func SigilExport(
 type sigilExport struct {
 	log            *slog.Logger
 	cfg            *otelcfg.TracesConfig
-	nodeMeta       *metadata.NodeMeta
+	nodeMeta       *meta.NodeMeta
 	is             instrumentations.InstrumentationSelection
 	input          <-chan []request.Span
 	traceAttrs     map[attr.Name]struct{}

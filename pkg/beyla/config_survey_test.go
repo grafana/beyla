@@ -34,9 +34,9 @@ discovery:
 		require.NoError(t, err)
 		require.Len(t, cfg.Discovery.Survey, 3)
 		assert.True(t, cfg.Discovery.Survey.SocketAppsEnabled())
-		assert.True(t, cfg.Discovery.Survey[0].SocketApps)
-		assert.False(t, cfg.Discovery.Survey[1].SocketApps)
-		assert.False(t, cfg.Discovery.Survey[2].SocketApps)
+		assert.True(t, cfg.Discovery.Survey[0].SocketApps.Enabled)
+		assert.False(t, cfg.Discovery.Survey[1].SocketApps.Enabled)
+		assert.False(t, cfg.Discovery.Survey[2].SocketApps.Enabled)
 		assert.True(t, cfg.Discovery.Survey[0].Path.MatchString("/app"))
 		assert.True(t, cfg.Discovery.Survey[1].Path.MatchString("/opt/batch/job"))
 		assert.NotContains(t, cfg.Discovery.Survey[0].Metadata, "socket_apps")
@@ -73,7 +73,7 @@ discovery:
 	t.Run("OBI conversion", func(t *testing.T) {
 		cfg := FromOBI(&obi.DefaultConfig)
 		assert.Empty(t, cfg.Discovery.Survey)
-		cfg.Discovery.Survey = servicesextra.SurveyDefinitionCriteria{{SocketApps: true}}
+		cfg.Discovery.Survey = servicesextra.SurveyDefinitionCriteria{{SocketApps: servicesextra.SocketAppSelector{Enabled: true}}}
 		assert.NotPanics(t, func() { cfg.AsOBI() })
 	})
 }

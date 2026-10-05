@@ -46,6 +46,8 @@ func TestSurveyWatcherKernel(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = unixListener.Close() })
 
+	privileged := startSocketHelper(t)
+
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	state, err := Start(ctx, &obi.DefaultConfig, &ebpfcommon.EBPFEventContext{})
@@ -68,6 +70,28 @@ func TestSurveyWatcherKernel(t *testing.T) {
 		_, unixConnected := state.Snapshot()[unixClient.identity]
 		return listening && unixConnected
 	}, 3*time.Second, 10*time.Millisecond)
+
+	// Port flags: the seeded helper listened on an ephemeral port, the kprobe
+	// observed listener too. A privileged bind requires CAP_NET_BIND_SERVICE.
+	require.Eventually(t, func() bool {
+		snapshot := state.Snapshot()
+		for process := range snapshot {
+			if process.PID == server.identity.PID && process.Namespace == server.identity.Namespace {
+				return process.Flags&FlagNonPrivileged != 0 && process.Flags&FlagPrivileged == 0
+			}
+		}
+		return false
+	}, 3*time.Second, 10*time.Millisecond, "seeded ephemeral listener must be flagged unprivileged")
+	require.NotEmpty(t, privileged.command(t, "listen_privileged"))
+	require.Eventually(t, func() bool {
+		snapshot := state.Snapshot()
+		for process := range snapshot {
+			if process.PID == privileged.identity.PID && process.Namespace == privileged.identity.Namespace {
+				return process.Flags&FlagPrivileged != 0
+			}
+		}
+		return false
+	}, 3*time.Second, 10*time.Millisecond, "kprobe must flag a privileged listener")
 
 	client.stop(t)
 	require.Eventually(t, func() bool {
@@ -158,9 +182,16 @@ func TestSurveySocketHelper(t *testing.T) {
 	}()
 	for commands.Scan() {
 		fields := strings.Fields(commands.Text())
-		if fields[0] == "listen" {
-			listener, err := net.Listen("tcp4", "127.0.0.1:0")
-			require.NoError(t, err)
+		if fields[0] == "listen" || fields[0] == "listen_privileged" {
+			address := "127.0.0.1:0"
+			if fields[0] == "listen_privileged" {
+				address = "127.0.0.1:1"
+			}
+			listener, err := net.Listen("tcp4", address)
+			if err != nil {
+				fmt.Println("error:", err)
+				continue
+			}
 			sockets = append(sockets, listener)
 			fmt.Println(listener.Addr())
 			continue

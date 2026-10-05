@@ -112,10 +112,10 @@ func (w *watcher) refresh() error {
 	entries := w.objects.SurveySocketPids.Iterate()
 
 	var key BpfSurveyProcess
-	var present uint8
+	var flags uint8
 
-	for entries.Next(&key, &present) {
-		snapshot[Process{PID: key.Id.Pid, Namespace: key.Id.Ns, StartTime: key.StartTime}] = struct{}{}
+	for entries.Next(&key, &flags) {
+		snapshot[Process{PID: key.Id.Pid, Namespace: key.Id.Ns, StartTime: key.StartTime, Flags: flags}] = struct{}{}
 	}
 
 	if err := entries.Err(); err != nil {

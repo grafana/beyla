@@ -45,7 +45,7 @@ func surveyCriteria(cfg *beyla.Config) []services.Selector {
 	for i := range survey {
 		globs[i] = survey[i].GlobAttributes
 		// Socket activity can also be the only selection criterion.
-		if survey[i].SocketApps && !globs[i].Path.IsSet() {
+		if survey[i].SocketApps.Enabled && !globs[i].Path.IsSet() {
 			globs[i].Path = services.NewGlob("*")
 		}
 	}

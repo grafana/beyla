@@ -6,12 +6,21 @@ import (
 	"time"
 )
 
+// Socket evidence flags recorded by the BPF watcher. They mirror the
+// SURVEY_SOCK_* defines in bpf/survey_watcher/survey_watcher.c.
+const (
+	FlagAny uint8 = 1 << iota
+	FlagPrivileged
+	FlagNonPrivileged
+)
+
 // Process identifies one lifetime using OBI's namespace PID identity.
 // StartTime is /proc/PID/stat's start time in clock ticks since boot.
 type Process struct {
 	PID       uint32
 	Namespace uint32
 	StartTime uint64
+	Flags     uint8
 }
 
 type Snapshot map[Process]struct{}

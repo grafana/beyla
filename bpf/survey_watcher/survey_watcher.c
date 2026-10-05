@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
+// important to be first:
+#include <bpfcore/vmlinux.h>
 
+// others
 #include <bpfcore/bpf_core_read.h>
 #include <bpfcore/bpf_helpers.h>
-#include <bpfcore/vmlinux.h>
+
 #include <pid/types/pid_data.h>
 
 #define S_IFMT 0xF000   // File type mask.
 #define S_IFSOCK 0xC000 // Socket file type.
+
+#define SURVEY_SOCK_ANY (1 << 0)     // any socket use
+#define SURVEY_SOCK_PRIV (1 << 1)    // listens on a privileged port (< 1024)
+#define SURVEY_SOCK_NONPRIV (1 << 2) // listens on an unprivileged port
 
 char LICENSE[] SEC("license") = "Dual MIT/GPL";
 
@@ -17,7 +24,7 @@ struct survey_process {
 
 // This is evidence of having used a socket, not a count of currently open
 // sockets. We never evict live processes, closing a short-lived connection must
-// not revoke admission.
+// not revoke admission. The value is a SURVEY_SOCK_* bitmask.
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 65536);
@@ -48,19 +55,30 @@ process_key(struct task_struct *task) {
   return key;
 }
 
-static __always_inline void remember_socket(struct task_struct *task,
+static __always_inline void remember_socket(struct task_struct *task, u8 flags,
                                             bool notify) {
   if (!task || BPF_CORE_READ(task, signal, live.counter) == 0) {
     return;
   }
 
   struct survey_process key = process_key(task);
-  if (!key.id.pid || bpf_map_lookup_elem(&survey_socket_pids, &key)) {
+  if (!key.id.pid) {
     return;
   }
 
-  u8 present = 1;
-  bpf_map_update_elem(&survey_socket_pids, &key, &present, BPF_NOEXIST);
+  u8 *existing = bpf_map_lookup_elem(&survey_socket_pids, &key);
+  if (existing) {
+    u8 merged = *existing | flags;
+    if (merged != *existing) {
+      bpf_map_update_elem(&survey_socket_pids, &key, &merged, BPF_EXIST);
+      if (notify) {
+        bpf_ringbuf_output(&survey_socket_events, &key, sizeof(key), 0);
+      }
+    }
+    return;
+  }
+
+  bpf_map_update_elem(&survey_socket_pids, &key, &flags, BPF_NOEXIST);
 
   // An iterator can race the last thread's exit. Don't leave its evidence
   // behind.
@@ -75,18 +93,32 @@ static __always_inline void remember_socket(struct task_struct *task,
   }
 }
 
+// Classifies a bound port as privileged or not. Port 0 means unbound.
+static __always_inline u8 port_flags(u16 port) {
+  if (port == 0) {
+    return 0;
+  }
+
+  return port < 1024 ? SURVEY_SOCK_PRIV : SURVEY_SOCK_NONPRIV;
+}
+
 // These hooks receive validated sockets and also cover nonblocking/failed
 // attempts, Unix sockets, and io_uring operations. There is deliberately no OBI
 // PID filter.
 SEC("kprobe/security_socket_connect")
 int survey_watch_connect(void *ctx) {
-  remember_socket((struct task_struct *)bpf_get_current_task(), true);
+  remember_socket((struct task_struct *)bpf_get_current_task(), SURVEY_SOCK_ANY,
+                  true);
   return 0;
 }
 
 SEC("kprobe/security_socket_listen")
-int survey_watch_listen(void *ctx) {
-  remember_socket((struct task_struct *)bpf_get_current_task(), true);
+int survey_watch_listen(struct socket *sock, int backlog) {
+  struct sock *sk = BPF_CORE_READ(sock, sk);
+  u16 port = BPF_CORE_READ(sk, __sk_common.skc_num);
+
+  remember_socket((struct task_struct *)bpf_get_current_task(),
+                  SURVEY_SOCK_ANY | port_flags(port), true);
   return 0;
 }
 
@@ -111,7 +143,22 @@ int survey_seed_sockets(struct bpf_iter__task_file *ctx) {
   if (file && (BPF_CORE_READ(file, f_inode, i_mode) & S_IFMT) == S_IFSOCK) {
     // Task/file iteration preserves ownership across network namespaces and
     // includes inherited listeners, accepted connections, and keepalives.
-    remember_socket(ctx->task, false);
+    u8 flags = SURVEY_SOCK_ANY;
+    struct socket *sock = (struct socket *)BPF_CORE_READ(file, private_data);
+    if (sock) {
+      struct sock *sk = BPF_CORE_READ(sock, sk);
+      if (sk) {
+        u16 port = BPF_CORE_READ(sk, __sk_common.skc_num);
+        u8 state = BPF_CORE_READ(sk, __sk_common.skc_state);
+        // UDP sockets have no listen state. Their bound port is recorded as
+        // evidence of serving.
+        if (state == TCP_LISTEN || BPF_CORE_READ(sk, sk_type) == SOCK_DGRAM) {
+          flags |= port_flags(port);
+        }
+      }
+    }
+
+    remember_socket(ctx->task, flags, false);
   }
 
   return 0;

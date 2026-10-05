@@ -61,7 +61,7 @@ type procMetricsExporter struct {
 	ctx context.Context
 	cfg *ProcMetricsConfig
 
-	nodeMeta *metadata.NodeMeta
+	nodeMeta *meta.NodeMeta
 
 	exporter  sdkmetric.Exporter
 	reporters otelcfg.ReporterPool[*process.ID, *procMetrics]
@@ -212,7 +212,7 @@ func newProcMetricsExporter(
 
 // getFilteredProcessResourceAttrs returns resource attributes filtered based on the attribute selector
 // for process metrics.
-func getFilteredProcessResourceAttrs(nodeMeta *metadata.NodeMeta, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
+func getFilteredProcessResourceAttrs(nodeMeta *meta.NodeMeta, procID *process.ID, attrSelector attributes.Selection) []attribute.KeyValue {
 	baseAttrs := otelcfg.GetResourceAttrs(nodeMeta, procID.Service)
 	procAttrs := []attribute.KeyValue{
 		semconv.ServiceInstanceID(procID.UID.Instance),

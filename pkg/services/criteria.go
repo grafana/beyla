@@ -127,13 +127,20 @@ var DefaultExcludeInstrumentWithSurvey = services.GlobDefinitionCriteria{
 
 type SurveyDefinitionCriteria []SurveySelector
 
+type SocketAppSelector struct {
+	Enabled bool `yaml:"enabled"`
+	// NonRoot excludes all services that have been started with user:0 (root)
+	// except those that bind ports < 1024
+	NonRoot bool `yaml:"non_root"`
+}
+
 // SurveySelector extends OBI's glob selection with additional survey specific criteria.
 type SurveySelector struct {
 	services.GlobAttributes `yaml:",inline"`
 
 	// SocketApps requires observed socket activity for this survey selector.
 	// Other matching survey selectors can admit the process without sockets.
-	SocketApps bool `yaml:"socket_apps"`
+	SocketApps SocketAppSelector `yaml:"socket_apps"`
 }
 
 // yaml.v3 doesn't propagate an inline map through an embedded inline struct.
@@ -162,7 +169,7 @@ func (s SurveySelector) MarshalYAML() (any, error) {
 
 func (s SurveyDefinitionCriteria) SocketAppsEnabled() bool {
 	for i := range s {
-		if s[i].SocketApps {
+		if s[i].SocketApps.Enabled {
 			return true
 		}
 	}

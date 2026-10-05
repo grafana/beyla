@@ -347,6 +347,7 @@ clean() {
     echo "Cleaning generated OBI tests..."
     rm -rf "internal/testgenerated"
     rm -rf "$SCHEMAS_DEST"
+    rm -f dependencies.Dockerfile
     echo "Done."
 }
 
@@ -1473,6 +1474,8 @@ generate() {
     copy_discovered_go_subpackages
     copy_test_tools
     copy_geoip_fixtures
+    # Weaver helpers read dependency image pins from the project root.
+    cp .obi-src/dependencies.Dockerfile dependencies.Dockerfile
     copy_weavercheck
     copy_beyla_extensions
     transform_go_imports_and_paths "$jobs"

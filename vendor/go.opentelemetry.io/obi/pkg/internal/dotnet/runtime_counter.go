@@ -35,10 +35,7 @@ func decodeRuntimeCounter(values map[string]any) (runtimeCounter, error) {
 	}
 	switch name {
 	case "working-set", "gc-committed", "threadpool-thread-count",
-		"threadpool-queue-length", "active-timer-count", "assembly-count",
-		"alloc-rate", "total-pause-time-by-gc", "il-bytes-jitted",
-		"methods-jitted-count", "time-in-jit", "threadpool-completed-items-count",
-		"monitor-lock-contention-count":
+		"threadpool-queue-length", "active-timer-count", "assembly-count":
 	default:
 		if _, ok := gcGeneration(name); !ok {
 			return runtimeCounter{}, nil

@@ -6,9 +6,8 @@ package dotnet // import "go.opentelemetry.io/obi/pkg/internal/dotnet"
 import "go.opentelemetry.io/obi/pkg/runtimemetrics"
 
 type runtimeCollection struct {
-	gc         gcRound
-	cumulative cumulativeCounters
-	polling    runtimemetrics.DotnetRuntimeMetricSnapshot
+	gc      gcRound
+	polling runtimemetrics.DotnetRuntimeMetricSnapshot
 }
 
 func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.DotnetRuntimeMetricSnapshot, error) {
@@ -27,9 +26,6 @@ func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.Dot
 	if err := observePollingCounter(&c.polling, counter); err != nil {
 		return nil, err
 	}
-	if err := c.cumulative.observe(&c.polling, counter); err != nil {
-		return nil, err
-	}
 	gcSnapshot, err := c.gc.observe(counter)
 	if err != nil {
 		return nil, err
@@ -41,8 +37,8 @@ func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.Dot
 }
 
 func (c *runtimeCollection) finish() *runtimemetrics.DotnetRuntimeMetricSnapshot {
-	// time-in-jit is the last supported counter in the runtime's polling order.
-	if c.polling.JITCompilationTime == nil || c.polling.GCCollections[0] == nil {
+	// assembly-count is the last supported counter in the runtime's polling order.
+	if c.polling.AssemblyCount == nil || c.polling.GCCollections[0] == nil {
 		return nil
 	}
 	snapshot := c.polling

@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/buildinfo"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export"
@@ -25,11 +26,9 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
-	"go.opentelemetry.io/obi/pkg/export/mcpsession"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
-	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -181,42 +180,31 @@ type metricsReporter struct {
 	targetInfo             *prometheus.GaugeVec
 
 	// user-selected attributes for the application-level metrics
-	attrHTTPDuration               []attributes.Field[*request.Span, string]
-	attrHTTPClientDuration         []attributes.Field[*request.Span, string]
-	attrGRPCDuration               []attributes.Field[*request.Span, string]
-	attrGRPCClientDuration         []attributes.Field[*request.Span, string]
-	attrDBClientDuration           []attributes.Field[*request.Span, string]
-	attrDBServerDuration           []attributes.Field[*request.Span, string]
-	attrMsgPublishDuration         []attributes.Field[*request.Span, string]
-	attrMsgProcessDuration         []attributes.Field[*request.Span, string]
-	attrHTTPRequestSize            []attributes.Field[*request.Span, string]
-	attrHTTPResponseSize           []attributes.Field[*request.Span, string]
-	attrHTTPClientRequestSize      []attributes.Field[*request.Span, string]
-	attrHTTPClientResponseSize     []attributes.Field[*request.Span, string]
-	attrCudaKernelCalls            []attributes.Field[*request.Span, string]
-	attrCudaGraphCalls             []attributes.Field[*request.Span, string]
-	attrCudaMemoryAllocs           []attributes.Field[*request.Span, string]
-	attrCudaMemoryFreeBytes        []attributes.Field[*request.Span, string]
-	attrCudaMemsetBytes            []attributes.Field[*request.Span, string]
-	attrCudaStreamCreateCalls      []attributes.Field[*request.Span, string]
-	attrCudaStreamDestroyCalls     []attributes.Field[*request.Span, string]
-	attrCudaEventRecordCalls       []attributes.Field[*request.Span, string]
-	attrCudaEventSynchronizeCalls  []attributes.Field[*request.Span, string]
-	attrCudaStreamSynchronizeCalls []attributes.Field[*request.Span, string]
-	attrCudaDeviceSynchronizeCalls []attributes.Field[*request.Span, string]
-	attrCudaHostRegisterBytes      []attributes.Field[*request.Span, string]
-	attrCudaKernelGridSize         []attributes.Field[*request.Span, string]
-	attrCudaKernelBlockSize        []attributes.Field[*request.Span, string]
-	attrCudaMemoryCopies           []attributes.Field[*request.Span, string]
-	attrSvcGraph                   []attributes.Field[*request.Span, string]
-	attrDNSLookupDuration          []attributes.Field[*request.Span, string]
-	attrGenAIClientDuration        []attributes.Field[*request.Span, string]
-	attrGenAIInputTokenUsage       []attributes.Field[*request.Span, string]
-	attrGenAIOutputTokenUsage      []attributes.Field[*request.Span, string]
-	attrMCPClientDuration          []attributes.Field[*request.Span, string]
-	attrMCPServerDuration          []attributes.Field[*request.Span, string]
-	attrMCPClientSessionDuration   []attributes.Field[*request.Span, string]
-	attrMCPServerSessionDuration   []attributes.Field[*request.Span, string]
+	attrHTTPDuration           []attributes.Field[*request.Span, string]
+	attrHTTPClientDuration     []attributes.Field[*request.Span, string]
+	attrGRPCDuration           []attributes.Field[*request.Span, string]
+	attrGRPCClientDuration     []attributes.Field[*request.Span, string]
+	attrDBClientDuration       []attributes.Field[*request.Span, string]
+	attrDBServerDuration       []attributes.Field[*request.Span, string]
+	attrMsgPublishDuration     []attributes.Field[*request.Span, string]
+	attrMsgProcessDuration     []attributes.Field[*request.Span, string]
+	attrHTTPRequestSize        []attributes.Field[*request.Span, string]
+	attrHTTPResponseSize       []attributes.Field[*request.Span, string]
+	attrHTTPClientRequestSize  []attributes.Field[*request.Span, string]
+	attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
+	attrCudaKernelCalls        []attributes.Field[*request.Span, string]
+	attrCudaGraphCalls         []attributes.Field[*request.Span, string]
+	attrCudaMemoryAllocs       []attributes.Field[*request.Span, string]
+	attrCudaKernelGridSize     []attributes.Field[*request.Span, string]
+	attrCudaKernelBlockSize    []attributes.Field[*request.Span, string]
+	attrCudaMemoryCopies       []attributes.Field[*request.Span, string]
+	attrSvcGraph               []attributes.Field[*request.Span, string]
+	attrDNSLookupDuration      []attributes.Field[*request.Span, string]
+	attrGenAIClientDuration    []attributes.Field[*request.Span, string]
+	attrGenAIInputTokenUsage   []attributes.Field[*request.Span, string]
+	attrGenAIOutputTokenUsage  []attributes.Field[*request.Span, string]
+	attrMCPClientDuration      []attributes.Field[*request.Span, string]
+	attrMCPServerDuration      []attributes.Field[*request.Span, string]
 
 	// trace span metrics
 	spanMetricsLatency           *Expirer[prometheus.Histogram]
@@ -232,21 +220,12 @@ type metricsReporter struct {
 	serviceGraphTotal  *Expirer[prometheus.Counter]
 
 	// gpu related metrics
-	cudaKernelCallsTotal            *Expirer[prometheus.Counter]
-	cudaGraphCallsTotal             *Expirer[prometheus.Counter]
-	cudaMemoryAllocsTotal           *Expirer[prometheus.Counter]
-	cudaMemoryFreeBytesTotal        *Expirer[prometheus.Counter]
-	cudaMemsetBytesTotal            *Expirer[prometheus.Counter]
-	cudaStreamCreateCallsTotal      *Expirer[prometheus.Counter]
-	cudaStreamDestroyCallsTotal     *Expirer[prometheus.Counter]
-	cudaEventRecordCallsTotal       *Expirer[prometheus.Counter]
-	cudaEventSynchronizeCallsTotal  *Expirer[prometheus.Counter]
-	cudaStreamSynchronizeCallsTotal *Expirer[prometheus.Counter]
-	cudaDeviceSynchronizeCallsTotal *Expirer[prometheus.Counter]
-	cudaHostRegisterBytesTotal      *Expirer[prometheus.Counter]
-	cudaKernelGridSize              *Expirer[prometheus.Histogram]
-	cudaKernelBlockSize             *Expirer[prometheus.Histogram]
-	cudaMemoryCopySize              *Expirer[prometheus.Histogram]
+	cudaKernelCallsTotal  *Expirer[prometheus.Counter]
+	cudaGraphCallsTotal   *Expirer[prometheus.Counter]
+	cudaMemoryAllocsTotal *Expirer[prometheus.Counter]
+	cudaKernelGridSize    *Expirer[prometheus.Histogram]
+	cudaKernelBlockSize   *Expirer[prometheus.Histogram]
+	cudaMemoryCopySize    *Expirer[prometheus.Histogram]
 
 	// dns related metrics
 	dnsLookupDuration *Expirer[prometheus.Histogram]
@@ -257,11 +236,6 @@ type metricsReporter struct {
 
 	mcpClientOperationDuration *Expirer[prometheus.Histogram]
 	mcpServerOperationDuration *Expirer[prometheus.Histogram]
-
-	mcpClientSessionDuration *Expirer[prometheus.Histogram]
-	mcpServerSessionDuration *Expirer[prometheus.Histogram]
-
-	mcpSessions *mcpsession.Store
 
 	goRuntimeMetrics     goRuntimeMetricsCollector
 	goRuntimeHistograms  *goRuntimeHistogramCollector
@@ -280,7 +254,7 @@ type metricsReporter struct {
 
 	kubeEnabled         bool
 	dockerEnabled       bool
-	nodeMeta            metadata.NodeMeta
+	nodeMeta            meta.NodeMeta
 	userAttribSelection attributes.Selection
 
 	serviceMap  map[svc.UID]svc.Attrs
@@ -369,18 +343,17 @@ func newReporter(
 	attributeGetters := request.SpanPromGetters(unresolved)
 
 	if is.HTTPEnabled() {
-		httpGetters := request.SpanPromGettersForHTTP(unresolved)
-		attrHTTPDuration = attributes.PrometheusGetters(httpGetters,
+		attrHTTPDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPServerDuration))
-		attrHTTPClientDuration = attributes.PrometheusGetters(httpGetters,
+		attrHTTPClientDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPClientDuration))
-		attrHTTPRequestSize = attributes.PrometheusGetters(httpGetters,
+		attrHTTPRequestSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPServerRequestSize))
-		attrHTTPResponseSize = attributes.PrometheusGetters(httpGetters,
+		attrHTTPResponseSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPServerResponseSize))
-		attrHTTPClientRequestSize = attributes.PrometheusGetters(httpGetters,
+		attrHTTPClientRequestSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPClientRequestSize))
-		attrHTTPClientResponseSize = attributes.PrometheusGetters(httpGetters,
+		attrHTTPClientResponseSize = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.HTTPClientResponseSize))
 	}
 
@@ -419,15 +392,6 @@ func newReporter(
 	var attrCudaKernelLaunchCalls []attributes.Field[*request.Span, string]
 	var attrCudaGraphLaunchCalls []attributes.Field[*request.Span, string]
 	var attrCudaMemoryAllocations []attributes.Field[*request.Span, string]
-	var attrCudaMemoryFreeBytes []attributes.Field[*request.Span, string]
-	var attrCudaMemsetBytes []attributes.Field[*request.Span, string]
-	var attrCudaStreamCreateCalls []attributes.Field[*request.Span, string]
-	var attrCudaStreamDestroyCalls []attributes.Field[*request.Span, string]
-	var attrCudaEventRecordCalls []attributes.Field[*request.Span, string]
-	var attrCudaEventSynchronizeCalls []attributes.Field[*request.Span, string]
-	var attrCudaStreamSynchronizeCalls []attributes.Field[*request.Span, string]
-	var attrCudaDeviceSynchronizeCalls []attributes.Field[*request.Span, string]
-	var attrCudaHostRegisterBytes []attributes.Field[*request.Span, string]
 	var attrCudaKernelGridSize []attributes.Field[*request.Span, string]
 	var attrCudaKernelBlockSize []attributes.Field[*request.Span, string]
 	var attrCudaMemoryCopies []attributes.Field[*request.Span, string]
@@ -445,24 +409,6 @@ func newReporter(
 			attrsProvider.For(attributes.GPUCudaKernelBlockSize))
 		attrCudaMemoryCopies = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.GPUCudaMemoryCopies))
-		attrCudaMemoryFreeBytes = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaMemoryFreeBytes))
-		attrCudaMemsetBytes = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaMemsetBytes))
-		attrCudaStreamCreateCalls = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaStreamCreateCalls))
-		attrCudaStreamDestroyCalls = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaStreamDestroyCalls))
-		attrCudaEventRecordCalls = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaEventRecordCalls))
-		attrCudaEventSynchronizeCalls = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaEventSynchronizeCalls))
-		attrCudaStreamSynchronizeCalls = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaStreamSynchronizeCalls))
-		attrCudaDeviceSynchronizeCalls = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaDeviceSynchronizeCalls))
-		attrCudaHostRegisterBytes = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.GPUCudaHostRegisterBytes))
 	}
 
 	var attrDNSLookupDuration []attributes.Field[*request.Span, string]
@@ -477,8 +423,6 @@ func newReporter(
 	var attrGenAIOutputTokenUsage []attributes.Field[*request.Span, string]
 	var attrMCPClientDuration []attributes.Field[*request.Span, string]
 	var attrMCPServerDuration []attributes.Field[*request.Span, string]
-	var attrMCPClientSessionDuration []attributes.Field[*request.Span, string]
-	var attrMCPServerSessionDuration []attributes.Field[*request.Span, string]
 
 	if is.GenAIEnabled() {
 		attrGenAIClientDuration = attributes.PrometheusGetters(attributeGetters,
@@ -491,10 +435,6 @@ func newReporter(
 			attrsProvider.For(attributes.MCPClientOperationDuration))
 		attrMCPServerDuration = attributes.PrometheusGetters(attributeGetters,
 			attrsProvider.For(attributes.MCPServerOperationDuration))
-		attrMCPClientSessionDuration = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.MCPClientSessionDuration))
-		attrMCPServerSessionDuration = attributes.PrometheusGetters(attributeGetters,
-			attrsProvider.For(attributes.MCPServerSessionDuration))
 	}
 
 	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
@@ -523,59 +463,47 @@ func newReporter(
 	}
 
 	mr := &metricsReporter{
-		input:                          inputCh,
-		processEvents:                  processEventCh.Subscribe(msg.SubscriberName("prom.ProcessEvents")),
-		runtimeInput:                   runtimeInputCh,
-		serviceMap:                     map[svc.UID]svc.Attrs{},
-		pidsTracker:                    otel.NewPidServiceTracker(),
-		ctxInfo:                        ctxInfo,
-		cfg:                            cfg,
-		kubeEnabled:                    kubeEnabled,
-		dockerEnabled:                  dockerEnabled,
-		extraMetadataLabels:            extraMetadataLabels,
-		extraSpanMetadataLabels:        extraSpanMetadataLabels,
-		nodeMeta:                       ctxInfo.NodeMeta,
-		userAttribSelection:            selectorCfg.SelectionCfg,
-		is:                             is,
-		promConnect:                    ctxInfo.Prometheus,
-		shouldAddExemplar:              exemplarFilter(cfg.ExemplarFilter),
-		attrHTTPDuration:               attrHTTPDuration,
-		attrHTTPClientDuration:         attrHTTPClientDuration,
-		attrGRPCDuration:               attrGRPCDuration,
-		attrGRPCClientDuration:         attrGRPCClientDuration,
-		attrDBClientDuration:           attrDBClientDuration,
-		attrDBServerDuration:           attrDBServerDuration,
-		attrMsgPublishDuration:         attrMessagingPublishDuration,
-		attrMsgProcessDuration:         attrMessagingProcessDuration,
-		attrHTTPRequestSize:            attrHTTPRequestSize,
-		attrHTTPResponseSize:           attrHTTPResponseSize,
-		attrHTTPClientRequestSize:      attrHTTPClientRequestSize,
-		attrHTTPClientResponseSize:     attrHTTPClientResponseSize,
-		attrCudaKernelCalls:            attrCudaKernelLaunchCalls,
-		attrCudaGraphCalls:             attrCudaGraphLaunchCalls,
-		attrCudaMemoryAllocs:           attrCudaMemoryAllocations,
-		attrCudaMemoryFreeBytes:        attrCudaMemoryFreeBytes,
-		attrCudaMemsetBytes:            attrCudaMemsetBytes,
-		attrCudaStreamCreateCalls:      attrCudaStreamCreateCalls,
-		attrCudaStreamDestroyCalls:     attrCudaStreamDestroyCalls,
-		attrCudaEventRecordCalls:       attrCudaEventRecordCalls,
-		attrCudaEventSynchronizeCalls:  attrCudaEventSynchronizeCalls,
-		attrCudaStreamSynchronizeCalls: attrCudaStreamSynchronizeCalls,
-		attrCudaDeviceSynchronizeCalls: attrCudaDeviceSynchronizeCalls,
-		attrCudaHostRegisterBytes:      attrCudaHostRegisterBytes,
-		attrCudaKernelGridSize:         attrCudaKernelGridSize,
-		attrCudaKernelBlockSize:        attrCudaKernelBlockSize,
-		attrCudaMemoryCopies:           attrCudaMemoryCopies,
-		attrDNSLookupDuration:          attrDNSLookupDuration,
-		attrGenAIClientDuration:        attrGenAIClientDuration,
-		attrGenAIInputTokenUsage:       attrGenAIInputTokenUsage,
-		attrGenAIOutputTokenUsage:      attrGenAIOutputTokenUsage,
-		attrSvcGraph:                   attrSvcGraph,
-		attrMCPClientDuration:          attrMCPClientDuration,
-		attrMCPServerDuration:          attrMCPServerDuration,
-		attrMCPClientSessionDuration:   attrMCPClientSessionDuration,
-		attrMCPServerSessionDuration:   attrMCPServerSessionDuration,
-		mcpSessions:                    mcpsession.NewStore(),
+		input:                      inputCh,
+		processEvents:              processEventCh.Subscribe(msg.SubscriberName("prom.ProcessEvents")),
+		runtimeInput:               runtimeInputCh,
+		serviceMap:                 map[svc.UID]svc.Attrs{},
+		pidsTracker:                otel.NewPidServiceTracker(),
+		ctxInfo:                    ctxInfo,
+		cfg:                        cfg,
+		kubeEnabled:                kubeEnabled,
+		dockerEnabled:              dockerEnabled,
+		extraMetadataLabels:        extraMetadataLabels,
+		extraSpanMetadataLabels:    extraSpanMetadataLabels,
+		nodeMeta:                   ctxInfo.NodeMeta,
+		userAttribSelection:        selectorCfg.SelectionCfg,
+		is:                         is,
+		promConnect:                ctxInfo.Prometheus,
+		shouldAddExemplar:          exemplarFilter(cfg.ExemplarFilter),
+		attrHTTPDuration:           attrHTTPDuration,
+		attrHTTPClientDuration:     attrHTTPClientDuration,
+		attrGRPCDuration:           attrGRPCDuration,
+		attrGRPCClientDuration:     attrGRPCClientDuration,
+		attrDBClientDuration:       attrDBClientDuration,
+		attrDBServerDuration:       attrDBServerDuration,
+		attrMsgPublishDuration:     attrMessagingPublishDuration,
+		attrMsgProcessDuration:     attrMessagingProcessDuration,
+		attrHTTPRequestSize:        attrHTTPRequestSize,
+		attrHTTPResponseSize:       attrHTTPResponseSize,
+		attrHTTPClientRequestSize:  attrHTTPClientRequestSize,
+		attrHTTPClientResponseSize: attrHTTPClientResponseSize,
+		attrCudaKernelCalls:        attrCudaKernelLaunchCalls,
+		attrCudaGraphCalls:         attrCudaGraphLaunchCalls,
+		attrCudaMemoryAllocs:       attrCudaMemoryAllocations,
+		attrCudaKernelGridSize:     attrCudaKernelGridSize,
+		attrCudaKernelBlockSize:    attrCudaKernelBlockSize,
+		attrCudaMemoryCopies:       attrCudaMemoryCopies,
+		attrDNSLookupDuration:      attrDNSLookupDuration,
+		attrGenAIClientDuration:    attrGenAIClientDuration,
+		attrGenAIInputTokenUsage:   attrGenAIInputTokenUsage,
+		attrGenAIOutputTokenUsage:  attrGenAIOutputTokenUsage,
+		attrSvcGraph:               attrSvcGraph,
+		attrMCPClientDuration:      attrMCPClientDuration,
+		attrMCPServerDuration:      attrMCPServerDuration,
 		obiInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: attr.VendorPrefix + buildInfoSuffix,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -827,60 +755,6 @@ func newReporter(
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrCudaMemoryCopies)).MetricVec, timeNow, cfg.TTL)
 		}),
-		cudaMemoryFreeBytesTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaMemoryFreeBytes.Prom,
-				Help: "amount of NVIDIA GPU cuda freed memory in bytes",
-			}, labelNames(attrCudaMemoryFreeBytes)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaMemsetBytesTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaMemsetBytes.Prom,
-				Help: "amount of NVIDIA GPU cuda memory set in bytes",
-			}, labelNames(attrCudaMemsetBytes)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaStreamCreateCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaStreamCreateCalls.Prom,
-				Help: "number of NVIDIA GPU cuda stream creations",
-			}, labelNames(attrCudaStreamCreateCalls)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaStreamDestroyCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaStreamDestroyCalls.Prom,
-				Help: "number of NVIDIA GPU cuda stream destructions",
-			}, labelNames(attrCudaStreamDestroyCalls)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaEventRecordCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaEventRecordCalls.Prom,
-				Help: "number of NVIDIA GPU cuda event records",
-			}, labelNames(attrCudaEventRecordCalls)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaEventSynchronizeCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaEventSynchronizeCalls.Prom,
-				Help: "number of NVIDIA GPU cuda event synchronizations",
-			}, labelNames(attrCudaEventSynchronizeCalls)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaStreamSynchronizeCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaStreamSynchronizeCalls.Prom,
-				Help: "number of NVIDIA GPU cuda stream synchronizations",
-			}, labelNames(attrCudaStreamSynchronizeCalls)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaDeviceSynchronizeCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaDeviceSynchronizeCalls.Prom,
-				Help: "number of NVIDIA GPU cuda device synchronizations",
-			}, labelNames(attrCudaDeviceSynchronizeCalls)).MetricVec, timeNow, cfg.TTL)
-		}),
-		cudaHostRegisterBytesTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
-			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: attributes.GPUCudaHostRegisterBytes.Prom,
-				Help: "amount of NVIDIA GPU cuda host registered memory in bytes",
-			}, labelNames(attrCudaHostRegisterBytes)).MetricVec, timeNow, cfg.TTL)
-		}),
 		dnsLookupDuration: optionalHistogramProvider(is.DNSEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            attributes.DNSLookupDuration.Prom,
@@ -931,26 +805,6 @@ func newReporter(
 				NativeHistogramMaxBucketNumber:  cfg.NativeHistogram.MaxBucketNumber,
 				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
 			}, labelNames(attrMCPServerDuration)).MetricVec, timeNow, cfg.TTL)
-		}),
-		mcpClientSessionDuration: optionalHistogramProvider(is.GenAIEnabled(), func() *Expirer[prometheus.Histogram] {
-			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.MCPClientSessionDuration.Prom,
-				Help:                            "measures the duration of an MCP session as observed on the sender",
-				Buckets:                         cfg.Buckets.DurationHistogram,
-				NativeHistogramBucketFactor:     cfg.NativeHistogram.BucketFactor,
-				NativeHistogramMaxBucketNumber:  cfg.NativeHistogram.MaxBucketNumber,
-				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
-			}, labelNames(attrMCPClientSessionDuration)).MetricVec, timeNow, cfg.TTL)
-		}),
-		mcpServerSessionDuration: optionalHistogramProvider(is.GenAIEnabled(), func() *Expirer[prometheus.Histogram] {
-			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.MCPServerSessionDuration.Prom,
-				Help:                            "measures the duration of an MCP session as observed on the receiver",
-				Buckets:                         cfg.Buckets.DurationHistogram,
-				NativeHistogramBucketFactor:     cfg.NativeHistogram.BucketFactor,
-				NativeHistogramMaxBucketNumber:  cfg.NativeHistogram.MaxBucketNumber,
-				NativeHistogramMinResetDuration: cfg.NativeHistogram.MinResetDuration,
-			}, labelNames(attrMCPServerSessionDuration)).MetricVec, timeNow, cfg.TTL)
 		}),
 	}
 
@@ -1028,8 +882,6 @@ func newReporter(
 			registeredMetrics = append(registeredMetrics, mr.genAITokenUsage)
 			registeredMetrics = append(registeredMetrics, mr.mcpClientOperationDuration)
 			registeredMetrics = append(registeredMetrics, mr.mcpServerOperationDuration)
-			registeredMetrics = append(registeredMetrics, mr.mcpClientSessionDuration)
-			registeredMetrics = append(registeredMetrics, mr.mcpServerSessionDuration)
 		}
 	}
 
@@ -1068,13 +920,6 @@ func newReporter(
 		registeredMetrics = append(registeredMetrics, mr.pythonRuntimeMetrics.collectors()...)
 		registeredMetrics = append(registeredMetrics,
 			mr.dotnetRuntimeMetrics.collections,
-			mr.dotnetRuntimeMetrics.gcHeapTotalAllocated,
-			mr.dotnetRuntimeMetrics.gcPauseTime,
-			mr.dotnetRuntimeMetrics.jitCompiledILSize,
-			mr.dotnetRuntimeMetrics.jitCompiledMethods,
-			mr.dotnetRuntimeMetrics.jitCompilationTime,
-			mr.dotnetRuntimeMetrics.threadPoolWorkItemCount,
-			mr.dotnetRuntimeMetrics.monitorLockContentions,
 			mr.dotnetRuntimeMetrics.processMemoryWorkingSet,
 			mr.dotnetRuntimeMetrics.gcCommittedMemory,
 			mr.dotnetRuntimeMetrics.threadPoolThreadCount,
@@ -1089,15 +934,6 @@ func newReporter(
 			mr.cudaKernelCallsTotal,
 			mr.cudaGraphCallsTotal,
 			mr.cudaMemoryAllocsTotal,
-			mr.cudaMemoryFreeBytesTotal,
-			mr.cudaMemsetBytesTotal,
-			mr.cudaStreamCreateCallsTotal,
-			mr.cudaStreamDestroyCallsTotal,
-			mr.cudaEventRecordCallsTotal,
-			mr.cudaEventSynchronizeCallsTotal,
-			mr.cudaStreamSynchronizeCallsTotal,
-			mr.cudaDeviceSynchronizeCallsTotal,
-			mr.cudaHostRegisterBytesTotal,
 			mr.cudaKernelGridSize,
 			mr.cudaKernelBlockSize,
 			mr.cudaMemoryCopySize,
@@ -1153,10 +989,6 @@ func (r *metricsReporter) reportMetrics(ctx context.Context) {
 }
 
 func (r *metricsReporter) collectMetrics(ctx context.Context) {
-	defer r.closeAllMCPSessions()
-	if r.mcpSessions != nil {
-		go r.mcpSessions.Start(ctx, r.cfg.TTL, r.closeMCPSession)
-	}
 	go r.watchForProcessEvents(ctx)
 	if r.runtimeInput != nil {
 		go r.watchForRuntimeMetrics(ctx)
@@ -1339,7 +1171,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.observeHistogram(r.grpcDuration.WithLabelValues(labelValues(span, r.attrGRPCDuration)...).Metric, duration, span)
 			case span.SubType == request.HTTPSubtypeMCP && r.is.GenAIEnabled():
 				r.observeHistogram(r.mcpServerOperationDuration.WithLabelValues(labelValues(span, r.attrMCPServerDuration)...).Metric, duration, span)
-				r.recordMCPSession(span, t)
 			case r.is.HTTPEnabled():
 				r.observeHistogram(r.httpDuration.WithLabelValues(labelValues(span, r.attrHTTPDuration)...).Metric, duration, span)
 			}
@@ -1356,7 +1187,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.observeHistogram(r.msgPublishDuration.WithLabelValues(labelValues(span, r.attrMsgPublishDuration)...).Metric, duration, span)
 			case span.SubType == request.HTTPSubtypeMCP && r.is.GenAIEnabled():
 				r.observeHistogram(r.mcpClientOperationDuration.WithLabelValues(labelValues(span, r.attrMCPClientDuration)...).Metric, duration, span)
-				r.recordMCPSession(span, t)
 			case r.is.GenAIEnabled() && request.IsGenAISubtype(span.SubType):
 				r.observeHistogram(r.genAIClientDuration.WithLabelValues(labelValues(span, r.attrGenAIClientDuration)...).Metric, duration, span)
 				if tokens, reported := span.GenAIInputTokenCount(); reported {
@@ -1470,7 +1300,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 			}
 		case request.EventTypeGPUCudaGraphLaunch:
 			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaGraphCallsTotal.WithLabelValues(labelValues(span, r.attrCudaGraphCalls)...).Metric, 1, span)
+				r.addCounter(r.cudaGraphCallsTotal.WithLabelValues(labelValues(span, r.attrCudaKernelCalls)...).Metric, 1, span)
 			}
 		case request.EventTypeGPUCudaMalloc:
 			if r.is.GPUEnabled() {
@@ -1479,42 +1309,6 @@ func (r *metricsReporter) observe(span *request.Span) {
 		case request.EventTypeGPUCudaMemcpy:
 			if r.is.GPUEnabled() {
 				r.observeHistogram(r.cudaMemoryCopySize.WithLabelValues(labelValues(span, r.attrCudaMemoryCopies)...).Metric, float64(span.ContentLength), span)
-			}
-		case request.EventTypeGPUCudaFree:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaMemoryFreeBytesTotal.WithLabelValues(labelValues(span, r.attrCudaMemoryFreeBytes)...).Metric, float64(span.ContentLength), span)
-			}
-		case request.EventTypeGPUCudaMemset:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaMemsetBytesTotal.WithLabelValues(labelValues(span, r.attrCudaMemsetBytes)...).Metric, float64(span.ContentLength), span)
-			}
-		case request.EventTypeGPUCudaStreamCreate:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaStreamCreateCallsTotal.WithLabelValues(labelValues(span, r.attrCudaStreamCreateCalls)...).Metric, 1, span)
-			}
-		case request.EventTypeGPUCudaStreamDestroy:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaStreamDestroyCallsTotal.WithLabelValues(labelValues(span, r.attrCudaStreamDestroyCalls)...).Metric, 1, span)
-			}
-		case request.EventTypeGPUCudaEventRecord:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaEventRecordCallsTotal.WithLabelValues(labelValues(span, r.attrCudaEventRecordCalls)...).Metric, 1, span)
-			}
-		case request.EventTypeGPUCudaEventSynchronize:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaEventSynchronizeCallsTotal.WithLabelValues(labelValues(span, r.attrCudaEventSynchronizeCalls)...).Metric, 1, span)
-			}
-		case request.EventTypeGPUCudaStreamSynchronize:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaStreamSynchronizeCallsTotal.WithLabelValues(labelValues(span, r.attrCudaStreamSynchronizeCalls)...).Metric, 1, span)
-			}
-		case request.EventTypeGPUCudaDeviceSynchronize:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaDeviceSynchronizeCallsTotal.WithLabelValues(labelValues(span, r.attrCudaDeviceSynchronizeCalls)...).Metric, 1, span)
-			}
-		case request.EventTypeGPUCudaHostRegister:
-			if r.is.GPUEnabled() {
-				r.addCounter(r.cudaHostRegisterBytesTotal.WithLabelValues(labelValues(span, r.attrCudaHostRegisterBytes)...).Metric, float64(span.ContentLength), span)
 			}
 		case request.EventTypeDNS:
 			if r.is.DNSEnabled() {
@@ -1655,7 +1449,7 @@ func k8sTargetInfoLabelNames() []attr.Name {
 	}
 }
 
-func targetInfoLabelNames(kubeEnabled, dockerEnabled bool, nodeMeta *metadata.NodeMeta, extraMetadataLabelNames []attr.Name) []attr.Name {
+func targetInfoLabelNames(kubeEnabled, dockerEnabled bool, nodeMeta *meta.NodeMeta, extraMetadataLabelNames []attr.Name) []attr.Name {
 	names := baseTargetInfoLabelNames()
 
 	if kubeEnabled {
@@ -1676,7 +1470,7 @@ func targetInfoLabelNames(kubeEnabled, dockerEnabled bool, nodeMeta *metadata.No
 
 func labelNamesTargetInfo(
 	kubeEnabled, dockerEnabled bool,
-	nodeMeta *metadata.NodeMeta,
+	nodeMeta *meta.NodeMeta,
 	extraMetadataLabelNames []attr.Name,
 	attrSelector attributes.Selection,
 ) []string {
@@ -1695,7 +1489,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 	return r.labelValuesForNodeMeta(service, &r.nodeMeta)
 }
 
-func (r *metricsReporter) labelValuesForNodeMeta(service *svc.Attrs, nodeMeta *metadata.NodeMeta) []string {
+func (r *metricsReporter) labelValuesForNodeMeta(service *svc.Attrs, nodeMeta *meta.NodeMeta) []string {
 	labels := []targetInfoResourceLabel{
 		{name: attr.HostID, value: nodeMeta.HostID},
 		{name: attr.HostName, value: service.HostName},
@@ -1832,38 +1626,6 @@ func (r *metricsReporter) deleteTargetInfoMetrics(service *svc.Attrs) {
 
 	r.deleteTargetInfoMetric(service)
 	r.deleteTracesTargetInfoMetric(service)
-}
-
-func (r *metricsReporter) closeMCPSession(sess *mcpsession.Session, client bool) {
-	synth := sess.SyntheticSpan()
-	if client {
-		r.observeHistogram(r.mcpClientSessionDuration.WithLabelValues(labelValues(synth, r.attrMCPClientSessionDuration)...).Metric, sess.Duration().Seconds(), synth)
-		return
-	}
-	r.observeHistogram(r.mcpServerSessionDuration.WithLabelValues(labelValues(synth, r.attrMCPServerSessionDuration)...).Metric, sess.Duration().Seconds(), synth)
-}
-
-func (r *metricsReporter) recordMCPSession(span *request.Span, t request.Timings) {
-	if r.mcpSessions == nil {
-		return
-	}
-	mcp := span.MCP()
-	if mcp == nil || mcp.SessionID == "" {
-		return
-	}
-
-	isClient := span.Type == request.EventTypeHTTPClient
-
-	uid := span.Service.UID
-	key := uid.Namespace + "\x00" + uid.Name + "\x00" + uid.Instance + "\x00" + mcp.SessionID
-	r.mcpSessions.Record(key, isClient, span, t)
-}
-
-func (r *metricsReporter) closeAllMCPSessions() {
-	if r.mcpSessions == nil {
-		return
-	}
-	r.mcpSessions.CloseAll(r.closeMCPSession)
 }
 
 func (r *metricsReporter) deleteMetricsForService(service *svc.Attrs) {

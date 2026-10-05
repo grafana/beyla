@@ -93,6 +93,14 @@ type DotnetRuntimeMetricSnapshot struct {
 	ThreadPoolQueueLength   *int64
 	TimerCount              *int64
 	AssemblyCount           *int64
+
+	GCHeapTotalAllocated    *uint64
+	GCPauseTime             *float64
+	JITCompiledILSize       *uint64
+	JITCompiledMethods      *uint64
+	JITCompilationTime      *float64
+	ThreadPoolWorkItemCount *uint64
+	MonitorLockContentions  *uint64
 }
 
 type GoRuntimeMetricSnapshot struct {

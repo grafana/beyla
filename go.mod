@@ -8,6 +8,7 @@ replace go.opentelemetry.io/obi => ./.obi-src
 
 require (
 	github.com/caarlos0/env/v9 v9.0.0
+	github.com/cilium/ebpf v0.22.0
 	github.com/goccy/go-json v0.11.1
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12
@@ -38,7 +39,7 @@ require (
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.161.0
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.161.0
 	go.opentelemetry.io/collector/pdata v1.67.0
-	go.opentelemetry.io/obi v0.13.0
+	go.opentelemetry.io/obi v0.14.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/metric v1.46.0
 	go.opentelemetry.io/otel/sdk v1.46.0
@@ -46,6 +47,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/mod v0.41.0
+	golang.org/x/net v0.59.0
 	golang.org/x/sync v0.23.0
 	golang.org/x/sys v0.48.0
 	google.golang.org/grpc v1.84.0
@@ -70,6 +72,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ecs v1.95.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.19 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.10.1 // indirect
@@ -80,12 +83,12 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
+	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd // indirect
 	github.com/buger/jsonparser v1.6.1 // indirect
 	github.com/caarlos0/env/v11 v11.4.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cilium/ebpf v0.22.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containers/common v0.64.2 // indirect
@@ -198,6 +201,7 @@ require (
 	go.opentelemetry.io/collector/pipeline v1.67.0 // indirect
 	go.opentelemetry.io/collector/pipeline/xpipeline v0.161.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ec2/v2 v2.5.3 // indirect
+	go.opentelemetry.io/contrib/detectors/aws/ecs v1.46.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/eks v1.46.0 // indirect
 	go.opentelemetry.io/contrib/detectors/azure/azurevm v0.18.0 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.46.0 // indirect
@@ -216,7 +220,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.31.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

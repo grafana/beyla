@@ -5,6 +5,7 @@
 // others
 #include <bpfcore/bpf_core_read.h>
 #include <bpfcore/bpf_helpers.h>
+#include <bpfcore/bpf_tracing.h>
 
 #include <pid/types/pid_data.h>
 
@@ -113,7 +114,7 @@ int survey_watch_connect(void *ctx) {
 }
 
 SEC("kprobe/security_socket_listen")
-int survey_watch_listen(struct socket *sock, int backlog) {
+int BPF_KPROBE(survey_watch_listen, struct socket *sock) {
   struct sock *sk = BPF_CORE_READ(sock, sk);
   u16 port = BPF_CORE_READ(sk, __sk_common.skc_num);
 

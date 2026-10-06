@@ -376,6 +376,10 @@ own. The eBPF socket watcher records the ports a process listens on, so the
 privileged-port check doesn't add per-process overhead. A root process that
 starts listening on a privileged port later is promoted at that point.
 
+Survey entries remain alternatives: a root process can qualify through another
+matching entry without `non_root`, and an entry with socket filtering disabled
+can admit it without socket activity.
+
 ## Exclude services from instrumentation
 
 The `exclude_instrument` section lets you specify selection criteria for excluding services from being instrumented. It follows the same definition format as described in the [discovery services](#discovery-services) section of this document.

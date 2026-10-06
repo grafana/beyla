@@ -114,14 +114,14 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	dynamicFilteredFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dynamicFilteredFlows")
 	var dynamicSelector selection.PIDSelector
-	if f.ctxInfo.DynamicPIDSelector != nil {
-		dynamicSelector = f.ctxInfo.DynamicPIDSelector.NetworkMetrics()
+	if f.ctxInfo.DynamicSelector != nil {
+		dynamicSelector = f.ctxInfo.DynamicSelector.NetworkMetrics()
 	}
 	dynamicDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dynamicDecoratedFlows")
-	swi.Add(dynamicpid.MetadataDecoratorProvider(f.ctxInfo.DynamicPIDSelector, dynamicSelector,
+	swi.Add(dynamicpid.MetadataDecoratorProvider(f.ctxInfo.DynamicSelector, dynamicSelector,
 		f.ctxInfo.K8sInformer, recordAttrs, decoratedFlows, dynamicDecoratedFlows),
 		swarm.WithID("DynamicPIDMetadataDecorator"))
-	swi.Add(filter.ByDynamicPID(dynamicSelector, f.ctxInfo.K8sInformer,
+	swi.Add(filter.ByDynamicPID("net", dynamicSelector, f.ctxInfo.K8sInformer,
 		recordAttrs, dynamicDecoratedFlows, dynamicFilteredFlows),
 		swarm.WithID("DynamicPIDFilter"))
 

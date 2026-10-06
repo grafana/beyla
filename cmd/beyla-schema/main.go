@@ -63,7 +63,7 @@ var obiPackagesToScan = []string{
 	"pkg/transform",
 	"pkg/filter",
 	"pkg/appolly/services",
-	"pkg/appolly/meta",
+	"pkg/metadata",
 	"pkg/internal/pipe/geoip",
 	"pkg/internal/pipe/rdns",
 }

@@ -20,8 +20,9 @@
     orig.ctxHook.disable();
     orig.ctxHook = undefined;
   }
+  orig.requestFd = undefined;
 
-  const { AsyncLocalStorage, createHook } = require('async_hooks');
+  const { AsyncLocalStorage, createHook, executionAsyncResource } = require('async_hooks');
   const {
     monitorEventLoopDelay,
     performance,
@@ -41,9 +42,9 @@
   // Substituted by the injector from the same predicate that sets the
   // g_traces_ctx_v1_enabled BPF constant (Config.PopulateTraceContext).
   // The before hook below runs on EVERY async callback, so it is installed
-  // only when something reads traces_ctx_v1: the log enricher, the manual
-  // span bridge, or an external reader. Client spans are parented from the
-  // fd-pair map instead, so they do not depend on it.
+  // only when something reads traces_ctx_v1: the log enricher or an external
+  // reader. Client spans are parented from the fd-pair map and manual spans
+  // from the fd carried in their own sentinel, so neither depends on it.
   const CTX_HOOK_ENABLED = false; /*OBI_CTX_HOOK_ENABLED*/
 
   if (debug_enabled) {
@@ -52,8 +53,39 @@
   }
 
   if (TRACES_ENABLED) {
-    // ALS store holds only incomingFd
     const als = new AsyncLocalStorage();
+    const pad4 = n => String(n).padStart(4, '0');
+
+    orig.requestFd = () => {
+      const store = als.getStore();
+      return store && store.incomingFd != null ? store.incomingFd : -1;
+    };
+
+    let ctxActive = false;
+    let ctxFd = -1;
+    const signalCtx = (fd) => {
+      ctxActive = true;
+      ctxFd = fd;
+      try {
+        fs.existsSync(`/dev/null/obi-ctx/${pad4(fd)}`);
+      } catch (_) {}
+    };
+
+    const resetCtx = () => {
+      ctxFd = -1;
+    };
+
+    const resetCtxOnConnect = Symbol('obi.resetCtxOnConnect');
+
+    const isMicrotask = (resource) =>
+      resource instanceof Promise ||
+      (resource !== null &&
+        typeof resource === 'object' &&
+        typeof resource.callback === 'function' &&
+        'args' in resource);
+
+    const runsMicrotask = () =>
+      typeof executionAsyncResource === 'function' && isMicrotask(executionAsyncResource());
 
     net.Server.prototype.emit = function (event, ...args) {
       if (event === 'connection') {
@@ -72,8 +104,6 @@
       }
       return orig.serverEmit.call(this, event, ...args);
     };
-
-    const pad4 = n => String(n).padStart(4, '0');
 
     function correlate(incomingFd, outFd, socket) {
       if (incomingFd < 0 || outFd < 0 || incomingFd === outFd) {
@@ -125,6 +155,16 @@
 
       if (store) {
         const outFd = this._handle && this._handle.fd;
+        if (CTX_HOOK_ENABLED && outFd !== store.incomingFd) {
+          ctxFd = -1;
+          if (this.connecting && !this[resetCtxOnConnect]) {
+            this[resetCtxOnConnect] = true;
+            this.once('connect', () => {
+              this[resetCtxOnConnect] = false;
+              resetCtx();
+            });
+          }
+        }
         correlate(store.incomingFd, outFd, this);
       }
 
@@ -138,24 +178,23 @@
     //
     // When a callback fires OUTSIDE any request (e.g. a background timer, or a
     // callback that ran after its request finished), the kernel map would otherwise
-    // still hold the last request's context — so a manual span ending in that
-    // callback (bpf/generictracer/nodejs.c: obi_ctx__get) would be mis-parented
-    // into that stale trace. We therefore emit an explicit clear when leaving
-    // request scope. To avoid a synchronous syscall on every non-request callback
-    // (there can be very many), we only clear on the request -> no-request
-    // transition, tracked by `ctxActive`; a subsequent request callback re-sets it.
+    // still hold the last request's context — so a log line written in that
+    // callback would be correlated with that stale trace. We therefore emit an
+    // explicit clear when leaving request scope. To avoid a synchronous syscall
+    // on every non-request callback (there can be very many), we only clear on
+    // the request -> no-request transition, tracked by `ctxActive`; a subsequent
+    // request callback re-sets it.
     if (CTX_HOOK_ENABLED) {
-      let ctxActive = false;
       orig.ctxHook = createHook({
         before() {
           const store = als.getStore();
           if (store && store.incomingFd != null && store.incomingFd >= 0) {
-            ctxActive = true;
-            try {
-              fs.existsSync(`/dev/null/obi-ctx/${pad4(store.incomingFd)}`);
-            } catch (_) {}
+            if (store.incomingFd !== ctxFd || !runsMicrotask()) {
+              signalCtx(store.incomingFd);
+            }
           } else if (ctxActive) {
             ctxActive = false;
+            ctxFd = -1;
             try {
               // Explicit "no request context" signal: obi_uv_fs_access deletes the
               // traces_ctx_v1 entry so later spans are not parented into a stale trace.

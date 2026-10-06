@@ -140,7 +140,7 @@ const (
 type Event struct {
 	EventFlags EventAttributes
 	Name       String
-	EventType  CodedIndex[TypeDefOrRef]
+	EventType  CodedIndex[TypeDefOrRef] // @nullable=true
 }
 
 // ExportedType is defined in §II.22.14.
@@ -154,27 +154,38 @@ type ExportedType struct {
 }
 
 // FieldAttributes is defined in §II.23.1.5.
+// It stores the complete metadata word; use Access and Flags to inspect its parts.
 type FieldAttributes uint16
 
+const fieldAccessMask FieldAttributes = 0x0007
+
+// MemberAccess is an exclusive field or method access level (§II.23.1.5, §II.23.1.10).
+type MemberAccess uint16
+
 const (
-	FieldAttributes_FieldAccessMask    FieldAttributes = 0x0007
-	FieldAttributes_CompilerControlled FieldAttributes = 0x0000
-	FieldAttributes_Private            FieldAttributes = 0x0001
-	FieldAttributes_FamANDAssem        FieldAttributes = 0x0002
-	FieldAttributes_Assembly           FieldAttributes = 0x0003
-	FieldAttributes_Family             FieldAttributes = 0x0004
-	FieldAttributes_FamORAssem         FieldAttributes = 0x0005
-	FieldAttributes_Public             FieldAttributes = 0x0006
-	FieldAttributes_Static             FieldAttributes = 0x0010
-	FieldAttributes_InitOnly           FieldAttributes = 0x0020
-	FieldAttributes_Literal            FieldAttributes = 0x0040
-	FieldAttributes_NotSerialized      FieldAttributes = 0x0080
-	FieldAttributes_SpecialName        FieldAttributes = 0x0200
-	FieldAttributes_PInvokeImpl        FieldAttributes = 0x2000
-	FieldAttributes_RTSpecialName      FieldAttributes = 0x0400
-	FieldAttributes_HasFieldMarshal    FieldAttributes = 0x1000
-	FieldAttributes_HasDefault         FieldAttributes = 0x8000
-	FieldAttributes_HasFieldRVA        FieldAttributes = 0x0100
+	MemberAccess_CompilerControlled MemberAccess = 0x0000
+	MemberAccess_Private            MemberAccess = 0x0001
+	MemberAccess_FamANDAssem        MemberAccess = 0x0002
+	MemberAccess_Assembly           MemberAccess = 0x0003
+	MemberAccess_Family             MemberAccess = 0x0004
+	MemberAccess_FamORAssem         MemberAccess = 0x0005
+	MemberAccess_Public             MemberAccess = 0x0006
+)
+
+// FieldFlags contains independent field flags, not an access level.
+type FieldFlags uint16
+
+const (
+	FieldFlags_Static          FieldFlags = 0x0010
+	FieldFlags_InitOnly        FieldFlags = 0x0020
+	FieldFlags_Literal         FieldFlags = 0x0040
+	FieldFlags_NotSerialized   FieldFlags = 0x0080
+	FieldFlags_HasFieldRVA     FieldFlags = 0x0100
+	FieldFlags_SpecialName     FieldFlags = 0x0200
+	FieldFlags_RTSpecialName   FieldFlags = 0x0400
+	FieldFlags_HasFieldMarshal FieldFlags = 0x1000
+	FieldFlags_PInvokeImpl     FieldFlags = 0x2000
+	FieldFlags_HasDefault      FieldFlags = 0x8000
 )
 
 // Field is defined in §II.22.15.
@@ -207,11 +218,16 @@ type FieldRVA struct {
 }
 
 // FileAttributes is defined in §II.23.1.6.
-type FileAttributes uint16
+type FileAttributes uint32
+
+const fileContentMask FileAttributes = 0x0001
+
+// FileContent describes whether a file contains metadata.
+type FileContent uint32
 
 const (
-	FileAttributes_ContainsMetaData   FileAttributes = 0x0000
-	FileAttributes_ContainsNoMetaData FileAttributes = 0x0001
+	FileContent_ContainsMetaData   FileContent = 0x0000
+	FileContent_ContainsNoMetaData FileContent = 0x0001
 )
 
 // File is defined in §II.22.19.
@@ -225,15 +241,26 @@ type File struct {
 // GenericParamAttributes is defined in §II.23.1.7.
 type GenericParamAttributes uint16
 
+const genericVarianceMask GenericParamAttributes = 0x0003
+
+// GenericVariance is the exclusive variance of a generic parameter.
+type GenericVariance uint16
+
 const (
-	GenericParamAttributes_VarianceMask                   GenericParamAttributes = 0x0003
-	GenericParamAttributes_None                           GenericParamAttributes = 0x0000
-	GenericParamAttributes_Covariant                      GenericParamAttributes = 0x0001
-	GenericParamAttributes_Contravariant                  GenericParamAttributes = 0x0002
-	GenericParamAttributes_SpecialConstraintMask          GenericParamAttributes = 0x001C
-	GenericParamAttributes_ReferenceTypeConstraint        GenericParamAttributes = 0x0004
-	GenericParamAttributes_NotNullableValueTypeConstraint GenericParamAttributes = 0x0008
-	GenericParamAttributes_DefaultConstructorConstraint   GenericParamAttributes = 0x0010
+	GenericVariance_None          GenericVariance = 0x0000
+	GenericVariance_Covariant     GenericVariance = 0x0001
+	GenericVariance_Contravariant GenericVariance = 0x0002
+)
+
+// GenericConstraints contains the special-constraint bits. Constraints can be
+// combined, but ReferenceTypeConstraint and NotNullableValueTypeConstraint are
+// mutually incompatible (§II.10.1.7).
+type GenericConstraints uint16
+
+const (
+	GenericConstraints_ReferenceTypeConstraint        GenericConstraints = 0x0004
+	GenericConstraints_NotNullableValueTypeConstraint GenericConstraints = 0x0008
+	GenericConstraints_DefaultConstructorConstraint   GenericConstraints = 0x0010
 )
 
 // GenericParam is defined in §II.22.20.
@@ -256,19 +283,37 @@ type GenericParamConstraint struct {
 type PInvokeAttributes uint16
 
 const (
-	PInvokeAttributes_NoMangle            PInvokeAttributes = 0x0001
-	PInvokeAttributes_CharSetMask         PInvokeAttributes = 0x0006
-	PInvokeAttributes_CharSetNotSpec      PInvokeAttributes = 0x0000
-	PInvokeAttributes_CharSetAnsi         PInvokeAttributes = 0x0002
-	PInvokeAttributes_CharSetUnicode      PInvokeAttributes = 0x0004
-	PInvokeAttributes_CharSetAuto         PInvokeAttributes = 0x0006
-	PInvokeAttributes_SupportsLastError   PInvokeAttributes = 0x0040
-	PInvokeAttributes_CallConvMask        PInvokeAttributes = 0x0700
-	PInvokeAttributes_CallConvPlatformapi PInvokeAttributes = 0x0100
-	PInvokeAttributes_CallConvCdecl       PInvokeAttributes = 0x0200
-	PInvokeAttributes_CallConvStdcall     PInvokeAttributes = 0x0300
-	PInvokeAttributes_CallConvThiscall    PInvokeAttributes = 0x0400
-	PInvokeAttributes_CallConvFastcall    PInvokeAttributes = 0x0500
+	pinvokeCharSetMask           PInvokeAttributes = 0x0006
+	pinvokeCallingConventionMask PInvokeAttributes = 0x0700
+)
+
+// PInvokeCharSet is the character-set choice for a native import.
+type PInvokeCharSet uint16
+
+const (
+	PInvokeCharSet_NotSpecified PInvokeCharSet = 0x0000
+	PInvokeCharSet_Ansi         PInvokeCharSet = 0x0002
+	PInvokeCharSet_Unicode      PInvokeCharSet = 0x0004
+	PInvokeCharSet_Auto         PInvokeCharSet = 0x0006
+)
+
+// PInvokeCallingConvention is the calling-convention choice for a native import.
+type PInvokeCallingConvention uint16
+
+const (
+	PInvokeCallingConvention_PlatformAPI PInvokeCallingConvention = 0x0100
+	PInvokeCallingConvention_Cdecl       PInvokeCallingConvention = 0x0200
+	PInvokeCallingConvention_Stdcall     PInvokeCallingConvention = 0x0300
+	PInvokeCallingConvention_Thiscall    PInvokeCallingConvention = 0x0400
+	PInvokeCallingConvention_Fastcall    PInvokeCallingConvention = 0x0500
+)
+
+// PInvokeFlags contains independent native-import flags.
+type PInvokeFlags uint16
+
+const (
+	PInvokeFlags_NoMangle          PInvokeFlags = 0x0001
+	PInvokeFlags_SupportsLastError PInvokeFlags = 0x0040
 )
 
 // ImplMap is defined in §II.22.22.
@@ -290,10 +335,14 @@ type InterfaceImpl struct {
 // ManifestResourceAttributes is defined in §II.23.1.9.
 type ManifestResourceAttributes uint32
 
+const resourceVisibilityMask ManifestResourceAttributes = 0x0007
+
+// ResourceVisibility is an exclusive manifest-resource visibility.
+type ResourceVisibility uint32
+
 const (
-	ManifestResourceAttributes_VisibilityMask ManifestResourceAttributes = 0x0007
-	ManifestResourceAttributes_Public         ManifestResourceAttributes = 0x0001
-	ManifestResourceAttributes_Private        ManifestResourceAttributes = 0x0002
+	ResourceVisibility_Public  ResourceVisibility = 0x0001
+	ResourceVisibility_Private ResourceVisibility = 0x0002
 )
 
 // ManifestResource is defined in §II.22.24.
@@ -302,7 +351,7 @@ type ManifestResource struct {
 	Offset         uint32
 	Flags          ManifestResourceAttributes
 	Name           String
-	Implementation CodedIndex[Implementation]
+	Implementation CodedIndex[Implementation] // @nullable=true
 }
 
 // MemberRef is defined in §II.22.25.
@@ -317,50 +366,72 @@ type MemberRef struct {
 type MethodAttributes uint16
 
 const (
-	MethodAttributes_MemberAccessMask   MethodAttributes = 0x0007
-	MethodAttributes_CompilerControlled MethodAttributes = 0x0000
-	MethodAttributes_Private            MethodAttributes = 0x0001
-	MethodAttributes_FamANDAssem        MethodAttributes = 0x0002
-	MethodAttributes_Assem              MethodAttributes = 0x0003
-	MethodAttributes_Family             MethodAttributes = 0x0004
-	MethodAttributes_FamORAssem         MethodAttributes = 0x0005
-	MethodAttributes_Public             MethodAttributes = 0x0006
-	MethodAttributes_Static             MethodAttributes = 0x0010
-	MethodAttributes_Final              MethodAttributes = 0x0020
-	MethodAttributes_Virtual            MethodAttributes = 0x0040
-	MethodAttributes_HideBySig          MethodAttributes = 0x0080
-	MethodAttributes_VtableLayoutMask   MethodAttributes = 0x0100
-	MethodAttributes_ReuseSlot          MethodAttributes = 0x0000
-	MethodAttributes_NewSlot            MethodAttributes = 0x0100
-	MethodAttributes_Strict             MethodAttributes = 0x0200
-	MethodAttributes_Abstract           MethodAttributes = 0x0400
-	MethodAttributes_SpecialName        MethodAttributes = 0x0800
-	MethodAttributes_PInvokeImpl        MethodAttributes = 0x2000
-	MethodAttributes_UnmanagedExport    MethodAttributes = 0x0008
-	MethodAttributes_RTSpecialName      MethodAttributes = 0x1000
-	MethodAttributes_HasSecurity        MethodAttributes = 0x4000
-	MethodAttributes_RequireSecObject   MethodAttributes = 0x8000
+	methodAccessMask       MethodAttributes = 0x0007
+	methodVtableLayoutMask MethodAttributes = 0x0100
+)
+
+// MethodVtableLayout selects reuse of an inherited slot or creation of a new slot.
+type MethodVtableLayout uint16
+
+const (
+	MethodVtableLayout_ReuseSlot MethodVtableLayout = 0x0000
+	MethodVtableLayout_NewSlot   MethodVtableLayout = 0x0100
+)
+
+// MethodFlags contains independent method flags, not access or slot choices.
+type MethodFlags uint16
+
+const (
+	MethodFlags_UnmanagedExport  MethodFlags = 0x0008
+	MethodFlags_Static           MethodFlags = 0x0010
+	MethodFlags_Final            MethodFlags = 0x0020
+	MethodFlags_Virtual          MethodFlags = 0x0040
+	MethodFlags_HideBySig        MethodFlags = 0x0080
+	MethodFlags_Strict           MethodFlags = 0x0200
+	MethodFlags_Abstract         MethodFlags = 0x0400
+	MethodFlags_SpecialName      MethodFlags = 0x0800
+	MethodFlags_RTSpecialName    MethodFlags = 0x1000
+	MethodFlags_PInvokeImpl      MethodFlags = 0x2000
+	MethodFlags_HasSecurity      MethodFlags = 0x4000
+	MethodFlags_RequireSecObject MethodFlags = 0x8000
 )
 
 // MethodImplAttributes is defined in §II.23.1.11.
 type MethodImplAttributes uint16
 
 const (
-	MethodImplAttributes_CodeTypeMask     MethodImplAttributes = 0x0003
-	MethodImplAttributes_IL               MethodImplAttributes = 0x0000
-	MethodImplAttributes_Native           MethodImplAttributes = 0x0001
-	MethodImplAttributes_OPTIL            MethodImplAttributes = 0x0002
-	MethodImplAttributes_Runtime          MethodImplAttributes = 0x0003
-	MethodImplAttributes_ManagedMask      MethodImplAttributes = 0x0004
-	MethodImplAttributes_Unmanaged        MethodImplAttributes = 0x0004
-	MethodImplAttributes_Managed          MethodImplAttributes = 0x0000
-	MethodImplAttributes_ForwardRef       MethodImplAttributes = 0x0010
-	MethodImplAttributes_PreserveSig      MethodImplAttributes = 0x0080
-	MethodImplAttributes_InternalCall     MethodImplAttributes = 0x1000
-	MethodImplAttributes_Synchronized     MethodImplAttributes = 0x0020
-	MethodImplAttributes_NoInlining       MethodImplAttributes = 0x0008
-	MethodImplAttributes_MaxMethodImplVal MethodImplAttributes = 0xffff
-	MethodImplAttributes_NoOptimization   MethodImplAttributes = 0x0040
+	methodCodeTypeMask    MethodImplAttributes = 0x0003
+	methodManagednessMask MethodImplAttributes = 0x0004
+)
+
+// MethodCodeType selects how a method is implemented.
+type MethodCodeType uint16
+
+const (
+	MethodCodeType_IL      MethodCodeType = 0x0000
+	MethodCodeType_Native  MethodCodeType = 0x0001
+	MethodCodeType_OPTIL   MethodCodeType = 0x0002 // Reserved by ECMA-335.
+	MethodCodeType_Runtime MethodCodeType = 0x0003
+)
+
+// MethodManagedness selects managed or unmanaged implementation code.
+type MethodManagedness uint16
+
+const (
+	MethodManagedness_Managed   MethodManagedness = 0x0000
+	MethodManagedness_Unmanaged MethodManagedness = 0x0004
+)
+
+// MethodImplFlags contains independent implementation flags.
+type MethodImplFlags uint16
+
+const (
+	MethodImplFlags_NoInlining     MethodImplFlags = 0x0008
+	MethodImplFlags_ForwardRef     MethodImplFlags = 0x0010
+	MethodImplFlags_Synchronized   MethodImplFlags = 0x0020
+	MethodImplFlags_NoOptimization MethodImplFlags = 0x0040
+	MethodImplFlags_PreserveSig    MethodImplFlags = 0x0080
+	MethodImplFlags_InternalCall   MethodImplFlags = 0x1000
 )
 
 // MethodDef is defined in §II.22.26.
@@ -406,7 +477,7 @@ type MethodSemantics struct {
 // @table=0x2B
 type MethodSpec struct {
 	Method        CodedIndex[MethodDefOrRef]
-	Instantiation []byte
+	Instantiation SigMethodSpecBlob
 }
 
 // Module is defined in §II.22.30.
@@ -441,7 +512,6 @@ const (
 	ParamAttributes_Optional        ParamAttributes = 0x0010
 	ParamAttributes_HasDefault      ParamAttributes = 0x1000
 	ParamAttributes_HasFieldMarshal ParamAttributes = 0x2000
-	ParamAttributes_Unused          ParamAttributes = 0xcfe0
 )
 
 // Param is defined in §II.22.33.
@@ -459,7 +529,6 @@ const (
 	PropertyAttributes_SpecialName   PropertyAttributes = 0x0200
 	PropertyAttributes_RTSpecialName PropertyAttributes = 0x0400
 	PropertyAttributes_HasDefault    PropertyAttributes = 0x1000
-	PropertyAttributes_Unused        PropertyAttributes = 0xe9ff
 )
 
 // Property is defined in §II.22.34.
@@ -484,40 +553,77 @@ type StandAloneSig struct {
 }
 
 // TypeAttributes is defined in §II.23.1.15.
+// It stores the complete metadata word; its accessors separate choices from flags.
 type TypeAttributes uint32
 
 const (
-	TypeAttributes_VisibilityMask         TypeAttributes = 0x00000007
-	TypeAttributes_NotPublic              TypeAttributes = 0x00000000
-	TypeAttributes_Public                 TypeAttributes = 0x00000001
-	TypeAttributes_NestedPublic           TypeAttributes = 0x00000002
-	TypeAttributes_NestedPrivate          TypeAttributes = 0x00000003
-	TypeAttributes_NestedFamily           TypeAttributes = 0x00000004
-	TypeAttributes_NestedAssembly         TypeAttributes = 0x00000005
-	TypeAttributes_NestedFamANDAssem      TypeAttributes = 0x00000006
-	TypeAttributes_NestedFamORAssem       TypeAttributes = 0x00000007
-	TypeAttributes_LayoutMask             TypeAttributes = 0x00000018
-	TypeAttributes_AutoLayout             TypeAttributes = 0x00000000
-	TypeAttributes_SequentialLayout       TypeAttributes = 0x00000008
-	TypeAttributes_ExplicitLayout         TypeAttributes = 0x00000010
-	TypeAttributes_ClassSemanticsMask     TypeAttributes = 0x00000020
-	TypeAttributes_Class                  TypeAttributes = 0x00000000
-	TypeAttributes_Interface              TypeAttributes = 0x00000020
-	TypeAttributes_Abstract               TypeAttributes = 0x00000080
-	TypeAttributes_Sealed                 TypeAttributes = 0x00000100
-	TypeAttributes_SpecialName            TypeAttributes = 0x00000400
-	TypeAttributes_Import                 TypeAttributes = 0x00001000
-	TypeAttributes_Serializable           TypeAttributes = 0x00002000
-	TypeAttributes_StringFormatMask       TypeAttributes = 0x00030000
-	TypeAttributes_AnsiClass              TypeAttributes = 0x00000000
-	TypeAttributes_UnicodeClass           TypeAttributes = 0x00010000
-	TypeAttributes_AutoClass              TypeAttributes = 0x00020000
-	TypeAttributes_CustomFormatClass      TypeAttributes = 0x00030000
-	TypeAttributes_CustomStringFormatMask TypeAttributes = 0x00C00000
-	TypeAttributes_BeforeFieldInit        TypeAttributes = 0x00100000
-	TypeAttributes_RTSpecialName          TypeAttributes = 0x00000800
-	TypeAttributes_HasSecurity            TypeAttributes = 0x00040000
-	TypeAttributes_IsTypeForwarder        TypeAttributes = 0x00200000
+	typeVisibilityMask   TypeAttributes = 0x00000007
+	typeLayoutMask       TypeAttributes = 0x00000018
+	typeSemanticsMask    TypeAttributes = 0x00000020
+	typeStringFormatMask TypeAttributes = 0x00030000
+)
+
+// TypeVisibility is the exclusive visibility of a type.
+type TypeVisibility uint32
+
+const (
+	TypeVisibility_NotPublic         TypeVisibility = 0x00000000
+	TypeVisibility_Public            TypeVisibility = 0x00000001
+	TypeVisibility_NestedPublic      TypeVisibility = 0x00000002
+	TypeVisibility_NestedPrivate     TypeVisibility = 0x00000003
+	TypeVisibility_NestedFamily      TypeVisibility = 0x00000004
+	TypeVisibility_NestedAssembly    TypeVisibility = 0x00000005
+	TypeVisibility_NestedFamANDAssem TypeVisibility = 0x00000006
+	TypeVisibility_NestedFamORAssem  TypeVisibility = 0x00000007
+)
+
+// IsNested reports whether the visibility is one of the six nested-type choices.
+// It returns false for unnamed encodings.
+func (v TypeVisibility) IsNested() bool {
+	return v >= TypeVisibility_NestedPublic && v <= TypeVisibility_NestedFamORAssem
+}
+
+// TypeLayout selects automatic, sequential, or explicit layout.
+type TypeLayout uint32
+
+const (
+	TypeLayout_AutoLayout       TypeLayout = 0x00000000
+	TypeLayout_SequentialLayout TypeLayout = 0x00000008
+	TypeLayout_ExplicitLayout   TypeLayout = 0x00000010
+)
+
+// TypeSemantics distinguishes classes from interfaces.
+type TypeSemantics uint32
+
+const (
+	TypeSemantics_Class     TypeSemantics = 0x00000000
+	TypeSemantics_Interface TypeSemantics = 0x00000020
+)
+
+// TypeStringFormat selects how native-interoperability strings are interpreted.
+type TypeStringFormat uint32
+
+const (
+	TypeStringFormat_AnsiClass         TypeStringFormat = 0x00000000
+	TypeStringFormat_UnicodeClass      TypeStringFormat = 0x00010000
+	TypeStringFormat_AutoClass         TypeStringFormat = 0x00020000
+	TypeStringFormat_CustomFormatClass TypeStringFormat = 0x00030000
+)
+
+// TypeFlags contains independent type flags. Custom string-format bits remain
+// opaque in TypeAttributes and are not exposed as independent flags.
+type TypeFlags uint32
+
+const (
+	TypeFlags_Abstract        TypeFlags = 0x00000080
+	TypeFlags_Sealed          TypeFlags = 0x00000100
+	TypeFlags_SpecialName     TypeFlags = 0x00000400
+	TypeFlags_RTSpecialName   TypeFlags = 0x00000800
+	TypeFlags_Import          TypeFlags = 0x00001000
+	TypeFlags_Serializable    TypeFlags = 0x00002000
+	TypeFlags_HasSecurity     TypeFlags = 0x00040000
+	TypeFlags_BeforeFieldInit TypeFlags = 0x00100000
+	TypeFlags_IsTypeForwarder TypeFlags = 0x00200000
 )
 
 // TypeDef is defined in §II.22.37.
@@ -526,15 +632,15 @@ type TypeDef struct {
 	Flags      TypeAttributes
 	Name       String
 	Namespace  String
-	Extends    CodedIndex[TypeDefOrRef]
-	FieldList  Slice // @ref=Field
-	MethodList Slice // @ref=MethodDef
+	Extends    CodedIndex[TypeDefOrRef] // @nullable=true
+	FieldList  Slice                    // @ref=Field
+	MethodList Slice                    // @ref=MethodDef
 }
 
 // TypeRef is defined in §II.22.38.
 // @table=0x01
 type TypeRef struct {
-	ResolutionScope CodedIndex[ResolutionScope]
+	ResolutionScope CodedIndex[ResolutionScope] // @nullable=true
 	Name            String
 	Namespace       String
 }
@@ -542,5 +648,5 @@ type TypeRef struct {
 // TypeSpec is defined in §II.22.39.
 // @table=0x1B
 type TypeSpec struct {
-	Signature []byte
+	Signature SigTypeSpecBlob
 }

@@ -174,7 +174,7 @@ func (t table) width(la *layout) uint8 {
 	case tableFieldRVA:
 		return 4 + la.simpleSizes[tableField]
 	case tableFile:
-		return 2 + la.stringSize + la.blobSize
+		return 4 + la.stringSize + la.blobSize
 	case tableGenericParam:
 		return 2 + 2 + la.codedSizes[codedTypeOrMethodDef] + la.stringSize
 	case tableGenericParamConstraint:
@@ -222,315 +222,684 @@ func (t table) width(la *layout) uint8 {
 
 // Define table decoding functions
 
-func decodeAssembly(r recordReader) (Assembly, error) {
+func decodeAssembly(r recordReader) (Assembly, string, error) {
 	var rec Assembly
 	rec.HashAlgID = AssemblyHashAlgorithm(r.uint32())
+	if r.err != nil {
+		return rec, "HashAlgID", r.err
+	}
 	rec.MajorVersion = r.uint16()
+	if r.err != nil {
+		return rec, "MajorVersion", r.err
+	}
 	rec.MinorVersion = r.uint16()
+	if r.err != nil {
+		return rec, "MinorVersion", r.err
+	}
 	rec.BuildNumber = r.uint16()
+	if r.err != nil {
+		return rec, "BuildNumber", r.err
+	}
 	rec.RevisionNumber = r.uint16()
+	if r.err != nil {
+		return rec, "RevisionNumber", r.err
+	}
 	rec.Flags = AssemblyFlags(r.uint32())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.PublicKey = r.blob()
+	if r.err != nil {
+		return rec, "PublicKey", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Culture = r.string()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Culture", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeassemblyOS(r recordReader) (assemblyOS, error) {
+func decodeassemblyOS(r recordReader) (assemblyOS, string, error) {
 	var rec assemblyOS
 	rec.OSPlatformID = r.uint32()
+	if r.err != nil {
+		return rec, "OSPlatformID", r.err
+	}
 	rec.OSMajorVersion = r.uint32()
+	if r.err != nil {
+		return rec, "OSMajorVersion", r.err
+	}
 	rec.OSMinorVersion = r.uint32()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "OSMinorVersion", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeassemblyProcessor(r recordReader) (assemblyProcessor, error) {
+func decodeassemblyProcessor(r recordReader) (assemblyProcessor, string, error) {
 	var rec assemblyProcessor
 	rec.Processor = r.uint32()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Processor", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeAssemblyRef(r recordReader) (AssemblyRef, error) {
+func decodeAssemblyRef(r recordReader) (AssemblyRef, string, error) {
 	var rec AssemblyRef
 	rec.MajorVersion = r.uint16()
+	if r.err != nil {
+		return rec, "MajorVersion", r.err
+	}
 	rec.MinorVersion = r.uint16()
+	if r.err != nil {
+		return rec, "MinorVersion", r.err
+	}
 	rec.BuildNumber = r.uint16()
+	if r.err != nil {
+		return rec, "BuildNumber", r.err
+	}
 	rec.RevisionNumber = r.uint16()
+	if r.err != nil {
+		return rec, "RevisionNumber", r.err
+	}
 	rec.Flags = AssemblyFlags(r.uint32())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.PublicKeyOrToken = r.blob()
+	if r.err != nil {
+		return rec, "PublicKeyOrToken", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Culture = r.string()
+	if r.err != nil {
+		return rec, "Culture", r.err
+	}
 	rec.HashValue = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "HashValue", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeassemblyRefOS(r recordReader) (assemblyRefOS, error) {
+func decodeassemblyRefOS(r recordReader) (assemblyRefOS, string, error) {
 	var rec assemblyRefOS
 	rec.OSPlatformID = r.uint32()
+	if r.err != nil {
+		return rec, "OSPlatformID", r.err
+	}
 	rec.OSMajorVersion = r.uint32()
+	if r.err != nil {
+		return rec, "OSMajorVersion", r.err
+	}
 	rec.OSMinorVersion = r.uint32()
+	if r.err != nil {
+		return rec, "OSMinorVersion", r.err
+	}
 	rec.AssemblyRef = r.index(tableAssemblyRef)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "AssemblyRef", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeassemblyRefProcessor(r recordReader) (assemblyRefProcessor, error) {
+func decodeassemblyRefProcessor(r recordReader) (assemblyRefProcessor, string, error) {
 	var rec assemblyRefProcessor
 	rec.Processor = r.uint32()
+	if r.err != nil {
+		return rec, "Processor", r.err
+	}
 	rec.AssemblyRef = r.index(tableAssemblyRef)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "AssemblyRef", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeClassLayout(r recordReader) (ClassLayout, error) {
+func decodeClassLayout(r recordReader) (ClassLayout, string, error) {
 	var rec ClassLayout
 	rec.PackingSize = r.uint16()
+	if r.err != nil {
+		return rec, "PackingSize", r.err
+	}
 	rec.ClassSize = r.uint32()
+	if r.err != nil {
+		return rec, "ClassSize", r.err
+	}
 	rec.Parent = r.index(tableTypeDef)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Parent", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeConstant(r recordReader) (Constant, error) {
+func decodeConstant(r recordReader) (Constant, string, error) {
 	var rec Constant
 	rec.Type = ElementType(r.uint8())
+	if r.err != nil {
+		return rec, "Type", r.err
+	}
 	rec.Padding = r.uint8()
-	rec.Parent = readCoded[HasConstant](&r.ecma335Reader)
+	if r.err != nil {
+		return rec, "Padding", r.err
+	}
+	rec.Parent = readCoded[HasConstant](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Parent", r.err
+	}
 	rec.Value = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Value", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeCustomAttribute(r recordReader) (CustomAttribute, error) {
+func decodeCustomAttribute(r recordReader) (CustomAttribute, string, error) {
 	var rec CustomAttribute
-	rec.Parent = readCoded[HasCustomAttribute](&r.ecma335Reader)
-	rec.Type = readCoded[CustomAttributeType](&r.ecma335Reader)
+	rec.Parent = readCoded[HasCustomAttribute](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Parent", r.err
+	}
+	rec.Type = readCoded[CustomAttributeType](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Type", r.err
+	}
 	rec.Value = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Value", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeDeclSecurity(r recordReader) (DeclSecurity, error) {
+func decodeDeclSecurity(r recordReader) (DeclSecurity, string, error) {
 	var rec DeclSecurity
 	rec.Action = r.uint16()
-	rec.Parent = readCoded[HasDeclSecurity](&r.ecma335Reader)
+	if r.err != nil {
+		return rec, "Action", r.err
+	}
+	rec.Parent = readCoded[HasDeclSecurity](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Parent", r.err
+	}
 	rec.PermissionSet = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "PermissionSet", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeEventMap(r recordReader) (EventMap, error) {
+func decodeEventMap(r recordReader) (EventMap, string, error) {
 	var rec EventMap
 	rec.Parent = r.index(tableTypeDef)
+	if r.err != nil {
+		return rec, "Parent", r.err
+	}
 	rec.EventList = r.slice(tableEventMap, tableEvent)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "EventList", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeEvent(r recordReader) (Event, error) {
+func decodeEvent(r recordReader) (Event, string, error) {
 	var rec Event
 	rec.EventFlags = EventAttributes(r.uint16())
+	if r.err != nil {
+		return rec, "EventFlags", r.err
+	}
 	rec.Name = r.string()
-	rec.EventType = readCoded[TypeDefOrRef](&r.ecma335Reader)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
+	rec.EventType = readCoded[TypeDefOrRef](&r.ecma335Reader, true)
+	if r.err != nil {
+		return rec, "EventType", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeExportedType(r recordReader) (ExportedType, error) {
+func decodeExportedType(r recordReader) (ExportedType, string, error) {
 	var rec ExportedType
 	rec.Flags = TypeAttributes(r.uint32())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.TypeDefID = r.uint32()
+	if r.err != nil {
+		return rec, "TypeDefID", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Namespace = r.string()
-	rec.Implementation = readCoded[Implementation](&r.ecma335Reader)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Namespace", r.err
+	}
+	rec.Implementation = readCoded[Implementation](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Implementation", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeField(r recordReader) (Field, error) {
+func decodeField(r recordReader) (Field, string, error) {
 	var rec Field
 	rec.Flags = FieldAttributes(r.uint16())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Signature = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Signature", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeFieldLayout(r recordReader) (FieldLayout, error) {
+func decodeFieldLayout(r recordReader) (FieldLayout, string, error) {
 	var rec FieldLayout
 	rec.Offset = r.uint32()
+	if r.err != nil {
+		return rec, "Offset", r.err
+	}
 	rec.Field = r.index(tableField)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Field", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeFieldMarshal(r recordReader) (FieldMarshal, error) {
+func decodeFieldMarshal(r recordReader) (FieldMarshal, string, error) {
 	var rec FieldMarshal
-	rec.Parent = readCoded[HasFieldMarshal](&r.ecma335Reader)
+	rec.Parent = readCoded[HasFieldMarshal](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Parent", r.err
+	}
 	rec.NativeType = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "NativeType", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeFieldRVA(r recordReader) (FieldRVA, error) {
+func decodeFieldRVA(r recordReader) (FieldRVA, string, error) {
 	var rec FieldRVA
 	rec.RVA = r.uint32()
+	if r.err != nil {
+		return rec, "RVA", r.err
+	}
 	rec.Field = r.index(tableField)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Field", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeFile(r recordReader) (File, error) {
+func decodeFile(r recordReader) (File, string, error) {
 	var rec File
-	rec.Flags = FileAttributes(r.uint16())
+	rec.Flags = FileAttributes(r.uint32())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.HashValue = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "HashValue", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeGenericParam(r recordReader) (GenericParam, error) {
+func decodeGenericParam(r recordReader) (GenericParam, string, error) {
 	var rec GenericParam
 	rec.Number = r.uint16()
+	if r.err != nil {
+		return rec, "Number", r.err
+	}
 	rec.Flags = GenericParamAttributes(r.uint16())
-	rec.Owner = readCoded[TypeOrMethodDef](&r.ecma335Reader)
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
+	rec.Owner = readCoded[TypeOrMethodDef](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Owner", r.err
+	}
 	rec.Name = r.string()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeGenericParamConstraint(r recordReader) (GenericParamConstraint, error) {
+func decodeGenericParamConstraint(r recordReader) (GenericParamConstraint, string, error) {
 	var rec GenericParamConstraint
 	rec.Owner = r.index(tableGenericParam)
-	rec.Constraint = readCoded[TypeDefOrRef](&r.ecma335Reader)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Owner", r.err
+	}
+	rec.Constraint = readCoded[TypeDefOrRef](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Constraint", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeImplMap(r recordReader) (ImplMap, error) {
+func decodeImplMap(r recordReader) (ImplMap, string, error) {
 	var rec ImplMap
 	rec.MappingFlags = PInvokeAttributes(r.uint16())
-	rec.MemberForwarded = readCoded[MemberForwarded](&r.ecma335Reader)
+	if r.err != nil {
+		return rec, "MappingFlags", r.err
+	}
+	rec.MemberForwarded = readCoded[MemberForwarded](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "MemberForwarded", r.err
+	}
 	rec.ImportName = r.string()
+	if r.err != nil {
+		return rec, "ImportName", r.err
+	}
 	rec.ImportScope = r.index(tableModuleRef)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "ImportScope", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeInterfaceImpl(r recordReader) (InterfaceImpl, error) {
+func decodeInterfaceImpl(r recordReader) (InterfaceImpl, string, error) {
 	var rec InterfaceImpl
 	rec.Class = r.index(tableTypeDef)
-	rec.Interface = readCoded[TypeDefOrRef](&r.ecma335Reader)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Class", r.err
+	}
+	rec.Interface = readCoded[TypeDefOrRef](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Interface", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeManifestResource(r recordReader) (ManifestResource, error) {
+func decodeManifestResource(r recordReader) (ManifestResource, string, error) {
 	var rec ManifestResource
 	rec.Offset = r.uint32()
+	if r.err != nil {
+		return rec, "Offset", r.err
+	}
 	rec.Flags = ManifestResourceAttributes(r.uint32())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.Name = r.string()
-	rec.Implementation = readCoded[Implementation](&r.ecma335Reader)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
+	rec.Implementation = readCoded[Implementation](&r.ecma335Reader, true)
+	if r.err != nil {
+		return rec, "Implementation", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeMemberRef(r recordReader) (MemberRef, error) {
+func decodeMemberRef(r recordReader) (MemberRef, string, error) {
 	var rec MemberRef
-	rec.Class = readCoded[MemberRefParent](&r.ecma335Reader)
+	rec.Class = readCoded[MemberRefParent](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Class", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Signature = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Signature", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeMethodDef(r recordReader) (MethodDef, error) {
+func decodeMethodDef(r recordReader) (MethodDef, string, error) {
 	var rec MethodDef
 	rec.RVA = r.uint32()
+	if r.err != nil {
+		return rec, "RVA", r.err
+	}
 	rec.ImplFlags = MethodImplAttributes(r.uint16())
+	if r.err != nil {
+		return rec, "ImplFlags", r.err
+	}
 	rec.Flags = MethodAttributes(r.uint16())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Signature = r.blob()
+	if r.err != nil {
+		return rec, "Signature", r.err
+	}
 	rec.ParamList = r.slice(tableMethodDef, tableParam)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "ParamList", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeMethodImpl(r recordReader) (MethodImpl, error) {
+func decodeMethodImpl(r recordReader) (MethodImpl, string, error) {
 	var rec MethodImpl
 	rec.Class = r.index(tableTypeDef)
-	rec.MethodBody = readCoded[MethodDefOrRef](&r.ecma335Reader)
-	rec.MethodDeclaration = readCoded[MethodDefOrRef](&r.ecma335Reader)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Class", r.err
+	}
+	rec.MethodBody = readCoded[MethodDefOrRef](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "MethodBody", r.err
+	}
+	rec.MethodDeclaration = readCoded[MethodDefOrRef](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "MethodDeclaration", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeMethodSemantics(r recordReader) (MethodSemantics, error) {
+func decodeMethodSemantics(r recordReader) (MethodSemantics, string, error) {
 	var rec MethodSemantics
 	rec.Semantics = MethodSemanticsAttributes(r.uint16())
+	if r.err != nil {
+		return rec, "Semantics", r.err
+	}
 	rec.Method = r.index(tableMethodDef)
-	rec.Association = readCoded[HasSemantics](&r.ecma335Reader)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Method", r.err
+	}
+	rec.Association = readCoded[HasSemantics](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Association", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeMethodSpec(r recordReader) (MethodSpec, error) {
+func decodeMethodSpec(r recordReader) (MethodSpec, string, error) {
 	var rec MethodSpec
-	rec.Method = readCoded[MethodDefOrRef](&r.ecma335Reader)
+	rec.Method = readCoded[MethodDefOrRef](&r.ecma335Reader, false)
+	if r.err != nil {
+		return rec, "Method", r.err
+	}
 	rec.Instantiation = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Instantiation", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeModule(r recordReader) (Module, error) {
+func decodeModule(r recordReader) (Module, string, error) {
 	var rec Module
 	rec.Generation = r.uint16()
+	if r.err != nil {
+		return rec, "Generation", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Mvid = r.guid()
+	if r.err != nil {
+		return rec, "Mvid", r.err
+	}
 	rec.EncID = r.guid()
+	if r.err != nil {
+		return rec, "EncID", r.err
+	}
 	rec.EncBaseID = r.guid()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "EncBaseID", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeModuleRef(r recordReader) (ModuleRef, error) {
+func decodeModuleRef(r recordReader) (ModuleRef, string, error) {
 	var rec ModuleRef
 	rec.Name = r.string()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeNestedClass(r recordReader) (NestedClass, error) {
+func decodeNestedClass(r recordReader) (NestedClass, string, error) {
 	var rec NestedClass
 	rec.NestedClass = r.index(tableTypeDef)
+	if r.err != nil {
+		return rec, "NestedClass", r.err
+	}
 	rec.EnclosingClass = r.index(tableTypeDef)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "EnclosingClass", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeParam(r recordReader) (Param, error) {
+func decodeParam(r recordReader) (Param, string, error) {
 	var rec Param
 	rec.Flags = ParamAttributes(r.uint16())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.Sequence = r.uint16()
+	if r.err != nil {
+		return rec, "Sequence", r.err
+	}
 	rec.Name = r.string()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeProperty(r recordReader) (Property, error) {
+func decodeProperty(r recordReader) (Property, string, error) {
 	var rec Property
 	rec.Flags = PropertyAttributes(r.uint16())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Type = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Type", r.err
+	}
+	return rec, "", nil
 }
 
-func decodePropertyMap(r recordReader) (PropertyMap, error) {
+func decodePropertyMap(r recordReader) (PropertyMap, string, error) {
 	var rec PropertyMap
 	rec.Parent = r.index(tableTypeDef)
+	if r.err != nil {
+		return rec, "Parent", r.err
+	}
 	rec.PropertyList = r.slice(tablePropertyMap, tableProperty)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "PropertyList", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeStandAloneSig(r recordReader) (StandAloneSig, error) {
+func decodeStandAloneSig(r recordReader) (StandAloneSig, string, error) {
 	var rec StandAloneSig
 	rec.Signature = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Signature", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeTypeDef(r recordReader) (TypeDef, error) {
+func decodeTypeDef(r recordReader) (TypeDef, string, error) {
 	var rec TypeDef
 	rec.Flags = TypeAttributes(r.uint32())
+	if r.err != nil {
+		return rec, "Flags", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Namespace = r.string()
-	rec.Extends = readCoded[TypeDefOrRef](&r.ecma335Reader)
+	if r.err != nil {
+		return rec, "Namespace", r.err
+	}
+	rec.Extends = readCoded[TypeDefOrRef](&r.ecma335Reader, true)
+	if r.err != nil {
+		return rec, "Extends", r.err
+	}
 	rec.FieldList = r.slice(tableTypeDef, tableField)
+	if r.err != nil {
+		return rec, "FieldList", r.err
+	}
 	rec.MethodList = r.slice(tableTypeDef, tableMethodDef)
-	return rec, r.err
+	if r.err != nil {
+		return rec, "MethodList", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeTypeRef(r recordReader) (TypeRef, error) {
+func decodeTypeRef(r recordReader) (TypeRef, string, error) {
 	var rec TypeRef
-	rec.ResolutionScope = readCoded[ResolutionScope](&r.ecma335Reader)
+	rec.ResolutionScope = readCoded[ResolutionScope](&r.ecma335Reader, true)
+	if r.err != nil {
+		return rec, "ResolutionScope", r.err
+	}
 	rec.Name = r.string()
+	if r.err != nil {
+		return rec, "Name", r.err
+	}
 	rec.Namespace = r.string()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Namespace", r.err
+	}
+	return rec, "", nil
 }
 
-func decodeTypeSpec(r recordReader) (TypeSpec, error) {
+func decodeTypeSpec(r recordReader) (TypeSpec, string, error) {
 	var rec TypeSpec
 	rec.Signature = r.blob()
-	return rec, r.err
+	if r.err != nil {
+		return rec, "Signature", r.err
+	}
+	return rec, "", nil
 }

@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/kprobe"
 )
 
 type probe struct {
@@ -163,7 +164,7 @@ func NewStatsFetcher(cfg *config.EBPFTracer, features *export.Features, selector
 			continue
 		}
 
-		l, err := link.Kprobe(k.name, k.program, nil)
+		l, err := kprobe.Attach(k.name, k.program, false)
 		if err != nil {
 			closeAll(closables)
 			return nil, fmt.Errorf("failed kprobe attachment %s: %w", k.name, err)
@@ -182,7 +183,7 @@ func NewStatsFetcher(cfg *config.EBPFTracer, features *export.Features, selector
 		if !k.enabled {
 			continue
 		}
-		l, err := link.Kretprobe(k.name, k.program, nil)
+		l, err := kprobe.Attach(k.name, k.program, true)
 		if err != nil {
 			closeAll(closables)
 			return nil, fmt.Errorf("failed kretprobe attachment %s: %w", k.name, err)

@@ -314,6 +314,19 @@
       },
       "type": "object"
     },
+    "CloudMetadataConfig": {
+      "properties": {
+        "cluster_name": {
+          "type": "string",
+          "x-env-var": "OTEL_EBPF_CLUSTER_NAME"
+        },
+        "region": {
+          "type": "string",
+          "x-env-var": "OTEL_EBPF_CLOUD_REGION"
+        }
+      },
+      "type": "object"
+    },
     "CollectConfig": {
       "properties": {
         "RunMode": {
@@ -561,6 +574,20 @@
           "type": "integer",
           "x-env-var": "OTEL_EBPF_INSTRUMENT_CUDA"
         },
+        "kafka_consumer_group_cache_size": {
+          "type": "integer",
+          "x-env-var": "OTEL_KAFKA_CONSUMER_GROUP_CACHE_SIZE"
+        },
+        "kafka_consumer_group_ttl": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OTEL_EBPF_BPF_KAFKA_CONSUMER_GROUP_TTL"
+        },
         "kafka_topic_uuid_cache_size": {
           "type": "integer",
           "x-env-var": "OTEL_KAFKA_TOPIC_UUID_CACHE_SIZE"
@@ -635,6 +662,21 @@
         "wakeup_len": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_WAKEUP_LEN"
+        }
+      },
+      "type": "object"
+    },
+    "ECSNameResolverConfig": {
+      "properties": {
+        "refresh_interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OTEL_EBPF_NAME_RESOLVER_ECS_REFRESH_INTERVAL"
         }
       },
       "type": "object"
@@ -1669,11 +1711,15 @@
           "type": "integer",
           "x-env-var": "OTEL_EBPF_NAME_RESOLVER_CACHE_LEN"
         },
+        "ecs": {
+          "$ref": "#/$defs/ECSNameResolverConfig"
+        },
         "sources": {
           "items": {
             "type": "string",
             "enum": [
               "dns",
+              "ecs",
               "k8s",
               "kube",
               "kubernetes",
@@ -2712,6 +2758,9 @@
     "channel_send_timeout_panic": {
       "type": "boolean",
       "x-env-var": "BEYLA_CHANNEL_SEND_TIMEOUT_PANIC"
+    },
+    "cloud_metadata": {
+      "$ref": "#/$defs/CloudMetadataConfig"
     },
     "discovery": {
       "$ref": "#/$defs/BeylaDiscoveryConfig",

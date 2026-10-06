@@ -74,14 +74,14 @@ func (s *Stats) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	dynamicFilteredStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "dynamicFilteredStats")
 	var dynamicSelector selection.PIDSelector
-	if s.ctxInfo.DynamicPIDSelector != nil {
-		dynamicSelector = s.ctxInfo.DynamicPIDSelector.StatsMetrics()
+	if s.ctxInfo.DynamicSelector != nil {
+		dynamicSelector = s.ctxInfo.DynamicSelector.StatsMetrics()
 	}
 	dynamicDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "dynamicDecoratedStats")
-	swi.Add(dynamicpid.MetadataDecoratorProvider(s.ctxInfo.DynamicPIDSelector, dynamicSelector,
+	swi.Add(dynamicpid.MetadataDecoratorProvider(s.ctxInfo.DynamicSelector, dynamicSelector,
 		s.ctxInfo.K8sInformer, statAttrs, decoratedStats, dynamicDecoratedStats),
 		swarm.WithID("DynamicPIDMetadataDecorator"))
-	swi.Add(filter.ByDynamicPID(dynamicSelector, s.ctxInfo.K8sInformer,
+	swi.Add(filter.ByDynamicPID("stats", dynamicSelector, s.ctxInfo.K8sInformer,
 		statAttrs, dynamicDecoratedStats, dynamicFilteredStats),
 		swarm.WithID("DynamicPIDFilter"))
 

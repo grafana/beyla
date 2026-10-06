@@ -1588,10 +1588,13 @@ var goAutoSDKActivationPrerequisiteSymbols = []string{
 
 var goHTTP2FlushProbeSymbols = []string{
 	"golang.org/x/net/http2.(*Framer).WriteHeaders",
+	"golang.org/x/net/http2.(*Framer).WriteContinuation",
 	"golang.org/x/net/http2.(*Framer).endWrite",
 	"net/http.(*http2Framer).WriteHeaders",
+	"net/http.(*http2Framer).WriteContinuation",
 	"net/http.(*http2Framer).endWrite",
 	"net/http/internal/http2.(*Framer).WriteHeaders",
+	"net/http/internal/http2.(*Framer).WriteContinuation",
 	"net/http/internal/http2.(*Framer).endWrite",
 }
 
@@ -1723,6 +1726,15 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}},
 		"net/http/internal/http2.(*serverConn).processHeaders": {{
 			Start: p.bpfObjects.ObiUprobeHttp2ServerProcessHeaders,
+		}},
+		"golang.org/x/net/http2.(*serverConn).newWriterAndRequest": {{
+			End: p.bpfObjects.ObiUprobeHttp2serverConnNewWriterAndRequestReturns, // hands the traceparent to the stream
+		}},
+		"net/http.(*http2serverConn).newWriterAndRequest": {{
+			End: p.bpfObjects.ObiUprobeHttp2serverConnNewWriterAndRequestReturns,
+		}},
+		"net/http/internal/http2.(*serverConn).newWriterAndRequest": {{
+			End: p.bpfObjects.ObiUprobeHttp2serverConnNewWriterAndRequestReturns,
 		}},
 		// tracking of tcp connections for black-box propagation
 		"net/http.(*conn).serve": {{ // http server
@@ -2092,6 +2104,10 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 				End:   p.bpfObjects.ObiUprobeGrpcFramerWriteHeadersReturns,
 			},
 		}
+		m["golang.org/x/net/http2.(*Framer).WriteContinuation"] = []*ebpfcommon.ProbeDesc{{
+			Start: p.bpfObjects.ObiUprobeH2FramerWriteContinuation,
+			End:   p.bpfObjects.ObiUprobeH2FramerWriteContinuationReturns,
+		}}
 		m["net/http.(*http2Framer).WriteHeaders"] = []*ebpfcommon.ProbeDesc{{ // http2 context propagation
 			Start: p.bpfObjects.ObiUprobeNetHttp2FramerWriteHeaders,
 			End:   p.bpfObjects.ObiUprobeHttp2FramerWriteHeadersReturns,
@@ -2122,7 +2138,7 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 						},
 					},
 					{
-						Symbol:     goHTTP2FlushProbeSymbols[1],
+						Symbol:     goHTTP2FlushProbeSymbols[2],
 						CalledFrom: goHTTP2FlushProbeSymbols[0],
 						Probe: &ebpfcommon.ProbeDesc{
 							Start: p.bpfObjects.ObiUprobeHttp2FramerEndWrite,
@@ -2132,18 +2148,25 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 			},
 			ebpfcommon.GoProbeGroup{
 				Name:        "go_http2_stdlib_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[2]},
+				RequiresAll: []string{goHTTP2FlushProbeSymbols[3]},
 				Probes: []ebpfcommon.GoProbe{
 					{
-						Symbol: goHTTP2FlushProbeSymbols[2],
+						Symbol: goHTTP2FlushProbeSymbols[3],
 						Probe: &ebpfcommon.ProbeDesc{
 							Start:       p.bpfObjects.ObiUprobeHttp2FramerReservePaddingVendored,
 							UsePadStart: true,
 						},
 					},
 					{
-						Symbol:     goHTTP2FlushProbeSymbols[3],
-						CalledFrom: goHTTP2FlushProbeSymbols[2],
+						Symbol: goHTTP2FlushProbeSymbols[4],
+						Probe: &ebpfcommon.ProbeDesc{
+							Start: p.bpfObjects.ObiUprobeHttp2FramerWriteContinuation,
+							End:   p.bpfObjects.ObiUprobeHttp2FramerWriteHeadersReturns,
+						},
+					},
+					{
+						Symbol:     goHTTP2FlushProbeSymbols[5],
+						CalledFrom: goHTTP2FlushProbeSymbols[3],
 						Probe: &ebpfcommon.ProbeDesc{
 							Start: p.bpfObjects.ObiUprobeHttp2FramerEndWrite,
 						},
@@ -2152,18 +2175,25 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 			},
 			ebpfcommon.GoProbeGroup{
 				Name:        "go_http2_internal_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[4]},
+				RequiresAll: []string{goHTTP2FlushProbeSymbols[6]},
 				Probes: []ebpfcommon.GoProbe{
 					{
-						Symbol: goHTTP2FlushProbeSymbols[4],
+						Symbol: goHTTP2FlushProbeSymbols[6],
 						Probe: &ebpfcommon.ProbeDesc{
 							Start:       p.bpfObjects.ObiUprobeHttp2FramerReservePaddingVendored,
 							UsePadStart: true,
 						},
 					},
 					{
-						Symbol:     goHTTP2FlushProbeSymbols[5],
-						CalledFrom: goHTTP2FlushProbeSymbols[4],
+						Symbol: goHTTP2FlushProbeSymbols[7],
+						Probe: &ebpfcommon.ProbeDesc{
+							Start: p.bpfObjects.ObiUprobeHttp2FramerWriteContinuation,
+							End:   p.bpfObjects.ObiUprobeHttp2FramerWriteHeadersReturns,
+						},
+					},
+					{
+						Symbol:     goHTTP2FlushProbeSymbols[8],
+						CalledFrom: goHTTP2FlushProbeSymbols[6],
 						Probe: &ebpfcommon.ProbeDesc{
 							Start: p.bpfObjects.ObiUprobeHttp2FramerEndWrite,
 						},

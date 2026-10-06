@@ -14,33 +14,17 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/features"
 	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
+
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/tracefs"
 )
 
-const traceFSShutdownTimeoutMultiplier = 3
-
-var (
-	traceFSFallbackUsed atomic.Bool
-	multiDisabled       atomic.Bool
-)
-
-// EffectiveShutdownTimeout allows extra time for tracefs uprobes to be removed.
-// this is trully only needed for kernels 5.15 - 5.19. earlier than 5.15 allow us to
-// use the PMU for uprobes without SYS_ADMIN and after 5.19 we can use whole group
-// delete of the tracefs probes on shutdown. 6.6+ supports uprobe_multi, so we don't
-// even need these tracefs legacy uprobes.
-func EffectiveShutdownTimeout(configured time.Duration) time.Duration {
-	if traceFSFallbackUsed.Load() {
-		return traceFSShutdownTimeoutMultiplier * configured
-	}
-	return configured
-}
+var multiDisabled atomic.Bool
 
 // ConfigureMulti disables uprobe_multi for subsequent loads and attachments. It's meant
 // for testing only.
@@ -284,7 +268,7 @@ func multiOptions(opts Options) *link.UprobeMultiOptions {
 }
 
 func attachLegacy(exe *link.Executable, path string, prog *ebpf.Program, opts Options) (io.Closer, error) {
-	return attachWithTraceFSFallback(
+	return tracefs.WithFallback(tracefs.Uprobe,
 		func() (io.Closer, error) { return attachPerfEvents(exe, prog, opts) },
 		func() (io.Closer, error) { return attachTraceFS(path, prog, opts) },
 	)
@@ -313,38 +297,6 @@ func attachPerfEvents(exe *link.Executable, prog *ebpf.Program, opts Options) (i
 		return links[0], nil
 	}
 	return links, nil
-}
-
-var traceFSFallbackLog = sync.OnceFunc(func() {
-	slog.Info("attached uprobe through tracefs because PMU access was denied")
-})
-
-var traceFSErrorFallbackLog sync.Once
-
-func attachWithTraceFSFallback(
-	attachPerf func() (io.Closer, error),
-	attachTraceFS func() (io.Closer, error),
-) (io.Closer, error) {
-	closer, err := attachPerf()
-	if err == nil || !errors.Is(err, unix.EACCES) {
-		return closer, err
-	}
-
-	slog.Debug("failed to use uprobe with PMU, likely no SYS_ADMIN capability provided, trying tracefs attach", "error", err)
-
-	closer, traceFSErr := attachTraceFS()
-	if traceFSErr != nil {
-		traceFSErrorFallbackLog.Do(func() {
-			slog.Error(
-				"cannot attach tracefs based uprobe, maybe CAP_DAC_OVERRIDE is missing or tracefs/debugfs is not mounted",
-				"error", traceFSErr,
-			)
-		})
-		return nil, errors.Join(err, traceFSErr)
-	}
-	traceFSFallbackUsed.Store(true)
-	traceFSFallbackLog()
-	return closer, nil
 }
 
 type perfEventLinks []io.Closer

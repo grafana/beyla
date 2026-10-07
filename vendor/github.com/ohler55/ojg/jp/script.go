@@ -196,6 +196,8 @@ func (s *Script) evalWithRoot(stack, data, root any) (any, Expr) {
 		locs    Expr
 	)
 	switch td := data.(type) {
+	case nil:
+		return stack, locs
 	case []any:
 		dlen = len(td)
 	case gen.Array:

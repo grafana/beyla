@@ -107,6 +107,9 @@ func (f Descent) locate(pp Expr, data any, rest Expr, max int) (locs []Expr) {
 	case nil, bool, string, float64, float32, gen.Bool, gen.Float, gen.String,
 		int, uint, int8, int16, int32, int64, uint8, uint16, uint32, uint64, gen.Int:
 	default:
+		if isNil(data) {
+			return
+		}
 		rd := reflect.ValueOf(data)
 		rt := rd.Type()
 		if rt.Kind() == reflect.Pointer {

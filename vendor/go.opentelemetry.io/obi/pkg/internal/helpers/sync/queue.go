@@ -4,6 +4,7 @@
 package sync // import "go.opentelemetry.io/obi/pkg/internal/helpers/sync"
 
 import (
+	"context"
 	"sync"
 )
 
@@ -50,6 +51,31 @@ func (q *Queue[T]) Dequeue() T {
 	item := q.remove()
 	q.mutex.Unlock()
 	return item
+}
+
+// DequeueContext retrieves the first element in the queue. If the queue is empty, DequeueContext
+// blocks until an element is available or the context is canceled.
+func (q *Queue[T]) DequeueContext(ctx context.Context) (T, error) {
+	stop := context.AfterFunc(ctx, func() {
+		q.mutex.Lock()
+		q.cond.Broadcast()
+		q.mutex.Unlock()
+	})
+	defer stop()
+
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	for {
+		if err := ctx.Err(); err != nil {
+			var zero T
+			return zero, err
+		}
+		if q.head != nil {
+			return q.remove(), nil
+		}
+		q.cond.Wait()
+	}
 }
 
 func (q *Queue[T]) append(item T) {

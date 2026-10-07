@@ -125,7 +125,7 @@ that do not match the [OBI Service Discovery configuration](https://opentelemetr
 Beyla has a special [survey mode](./configure/service-discovery.md#survey-mode) that is
 aimed exclusively at discovering which of your currently uninstrumented services can be instrumented by Beyla.
 It enables faster auto-configuration of your services within
-[Grafana Cloud's Instrumentation Hub](https://grafana.com/docs/grafana-cloud/get-started/inst-hub-setup/).
+[Grafana Cloud's Instrumentation Hub](https://grafana.com/docs/grafana-cloud/send-data/inst-hub-setup/).
 
 At the moment, there is no direct replacement for Beyla's survey mode in OBI, but there is
 an ongoing initiative to port [Beyla's survey mode to OBI](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/2285).

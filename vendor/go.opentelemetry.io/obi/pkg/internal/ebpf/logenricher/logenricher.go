@@ -79,6 +79,12 @@ func (d *destFile) release() {
 // its superblock, since bare inode numbers collide across filesystems
 type pipeKey = BpfLogPipeKeyT
 
+// mirrors enum log_dest_kind in bpf/logenricher/types.h
+const (
+	logDestPipe uint8 = iota
+	logDestTTY
+)
+
 type Tracer struct {
 	ctx         context.Context
 	cfg         *obi.Config
@@ -502,31 +508,6 @@ func (p *Tracer) pipeDestCandidates(key pipeKey) []string {
 	return paths
 }
 
-func (p *Tracer) pipeRegistered(key pipeKey) bool {
-	p.pipesMU.RLock()
-	defer p.pipesMU.RUnlock()
-
-	_, ok := p.logPipes[key]
-	return ok
-}
-
-// identity to pin the tty fallback destination with; rejects an unregistered
-// pipe (app IPC)
-func (p *Tracer) fallbackDest(path string) (pipeKey, bool, bool) {
-	var st unix.Stat_t
-	if err := unix.Stat(path, &st); err != nil {
-		return pipeKey{}, false, false
-	}
-
-	key := pipeKey{Ino: st.Ino, Dev: kernelDev(st.Dev)}
-	isPipe := st.Mode&unix.S_IFMT == unix.S_IFIFO
-	if isPipe && !p.pipeRegistered(key) {
-		return pipeKey{}, false, false
-	}
-
-	return key, isPipe, true
-}
-
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.pipesMU.Lock()
 	delete(p.trackedPids, uint32(pid))
@@ -616,8 +597,8 @@ func (p *Tracer) handleLogEvent(record *ringbuf.Record) (request.Span, bool, err
 	// event's reference keeps the descriptor open even if the process exits
 	// and its registration is retired before the async writer gets to this
 	// line.
-	if event.Fd != 0 {
-		key := pipeKey{Ino: event.Ino, Dev: uint64(event.Dev)}
+	key := pipeKey{Ino: event.Ino, Dev: uint64(event.Dev)}
+	if event.DestKind == logDestPipe {
 		// address the pipe through a live owner, the writer may already be gone
 		for _, candidate := range p.pipeDestCandidates(key) {
 			if d, err := p.openPipeDestination(candidate, key); err == nil {
@@ -631,24 +612,9 @@ func (p *Tracer) handleLogEvent(record *ringbuf.Record) (request.Span, bool, err
 			return request.Span{}, true, nil
 		}
 	} else {
-		e.dest = e.ttyPath()
-		var (
-			pin      pipeKey
-			pipeDest bool
-		)
-		if unix.ByteSliceToString(event.FilePath[:]) == "" {
-			var ok bool
-			if pin, pipeDest, ok = p.fallbackDest(e.dest); !ok {
-				p.log.Debug("unsafe tty fallback destination, dropping line", "path", e.dest)
-				return request.Span{}, true, nil
-			}
-		}
-		var d *destFile
-		if pipeDest {
-			d, err = p.openPipeDestination(e.dest, pin)
-		} else {
-			d, err = p.openLogDestination(e.dest, pin)
-		}
+		// the writer's own fd names its terminal in any mount namespace
+		e.dest = procFdPath(event.Tgid, int(event.Fd))
+		d, err := p.openLogDestination(e.dest, key)
 		if err != nil {
 			p.logOpenError(e.dest, err)
 			return request.Span{}, true, nil
@@ -663,7 +629,7 @@ func (p *Tracer) handleLogEvent(record *ringbuf.Record) (request.Span, bool, err
 	return request.Span{}, true, nil
 }
 
-var errStaleDestination = errors.New("destination no longer points at the captured pipe")
+var errStaleDestination = errors.New("destination no longer points at the file the line was written to")
 
 func fileKey(f *os.File) pipeKey {
 	var st unix.Stat_t
@@ -676,9 +642,10 @@ func fileKey(f *os.File) pipeKey {
 
 // O_NONBLOCK so a reader-less pipe fails the open with ENXIO instead of
 // blocking the event handler forever; writes revert to blocking so a full
-// pipe backpressures its shard instead of dropping lines
+// pipe backpressures its shard instead of dropping lines. O_NOCTTY so a
+// reopened terminal never becomes OBI's controlling terminal
 func openDestFile(path string) (*os.File, error) {
-	fd, err := unix.Open(path, unix.O_WRONLY|unix.O_APPEND|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	fd, err := unix.Open(path, unix.O_WRONLY|unix.O_APPEND|unix.O_NONBLOCK|unix.O_CLOEXEC|unix.O_NOCTTY, 0)
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: path, Err: err}
 	}
@@ -775,11 +742,12 @@ func (p *Tracer) openPipeDestination(path string, pin pipeKey) (*destFile, error
 	return p.openDestination(path, pin, true)
 }
 
-// a gone, re-pointed, or reader-less destination means its process died or
-// redirected between writing the line and us getting to it: expected, drop
-// quietly
+// a gone, re-pointed, reader-less, or hung-up destination means its process
+// died or redirected between writing the line and us getting to it:
+// expected, drop quietly
 func (p *Tracer) logOpenError(path string, err error) {
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, errStaleDestination) || errors.Is(err, unix.ENXIO) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, errStaleDestination) ||
+		errors.Is(err, unix.ENXIO) || errors.Is(err, unix.EIO) {
 		p.log.Debug("log destination is gone, dropping line", "path", path, "error", err)
 		return
 	}
@@ -791,24 +759,10 @@ func procFdPath(pid uint32, fd int) string {
 	return filepath.Join("/proc", strconv.FormatUint(uint64(pid), 10), "fd", strconv.Itoa(fd))
 }
 
-func (e LogEvent) ttyPath() string {
-	fp := unix.ByteSliceToString(e.orig.FilePath[:])
-	if fp == "" {
-		// Fallback to process stdout in the case path resolver failed
-		fp = procFdPath(e.orig.Tgid, 1)
-	}
-
-	return fp
-}
-
-// pipe lines shard by pipe identity so a changing candidate path cannot move
-// a pipe's lines across shards and reorder them; tty lines shard by path
+// lines shard by destination identity so a changing candidate path cannot
+// move a destination's lines across shards and reorder them
 func (e LogEvent) shardKey() string {
-	if e.orig.Fd != 0 {
-		return "pipe:" + strconv.FormatUint(uint64(e.orig.Dev), 10) + ":" + strconv.FormatUint(e.orig.Ino, 10)
-	}
-
-	return e.dest
+	return strconv.FormatUint(uint64(e.orig.Dev), 10) + ":" + strconv.FormatUint(e.orig.Ino, 10)
 }
 
 func (p *Tracer) handle(e LogEvent) {

@@ -18,7 +18,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obiconfig "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export"
@@ -32,6 +31,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 
@@ -188,6 +188,8 @@ network:
 			MSSQLPreparedStatementsCacheSize:    1024,
 			MongoRequestsCacheSize:              1024,
 			KafkaTopicUUIDCacheSize:             1024,
+			KafkaConsumerGroupCacheSize:         4096,
+			KafkaConsumerGroupTTL:               2 * time.Minute,
 			CouchbaseDBCacheSize:                1024,
 			PayloadExtraction: obiconfig.PayloadExtraction{
 				HTTP: obiconfig.HTTPConfig{
@@ -365,7 +367,7 @@ network:
 			RenameUnresolvedHosts:          "unresolved",
 			RenameUnresolvedHostsOutgoing:  "outgoing",
 			RenameUnresolvedHostsIncoming:  "incoming",
-			MetadataRetry:                  meta.DefaultRetryConfig,
+			MetadataRetry:                  metadata.DefaultRetryConfig,
 			MetricSpanNameAggregationLimit: 100,
 		},
 		Routes: &transform.RoutesConfig{
@@ -377,6 +379,7 @@ network:
 			Sources:  []transform.Source{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
+			ECS:      transform.ECSNameResolverConfig{RefreshInterval: 30 * time.Second},
 		},
 		Processes: process.CollectConfig{
 			RunMode:  process.RunModePrivileged,

@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/appolly/meta"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -27,6 +26,7 @@ import (
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -40,7 +40,7 @@ func rmlog() *slog.Logger {
 type RuntimeMetricsReporter struct {
 	ctx            context.Context
 	cfg            *otelcfg.MetricsConfig
-	nodeMeta       meta.NodeMeta
+	nodeMeta       metadata.NodeMeta
 	exporter       sdkmetric.Exporter
 	reporters      otelcfg.ReporterPool[*svc.Attrs, *RuntimeMetrics]
 	input          <-chan []runtimemetrics.RuntimeMetricSnapshot
@@ -65,13 +65,53 @@ type RuntimeMetrics struct {
 }
 
 type dotnetRuntimeMetrics struct {
-	collections instrument.Int64Counter
-	values      map[app.PID]*dotnetRuntimeMetricValues
+	collections             instrument.Int64Counter
+	gcHeapTotalAllocated    instrument.Int64Counter
+	gcPauseTime             instrument.Float64Counter
+	jitCompiledILSize       instrument.Int64Counter
+	jitCompiledMethods      instrument.Int64Counter
+	jitCompilationTime      instrument.Float64Counter
+	threadPoolWorkItemCount instrument.Int64Counter
+	monitorLockContentions  instrument.Int64Counter
+	processMemoryWorkingSet instrument.Int64UpDownCounter
+	gcCommittedMemory       instrument.Int64UpDownCounter
+	threadPoolThreadCount   instrument.Int64UpDownCounter
+	threadPoolQueueLength   instrument.Int64UpDownCounter
+	timerCount              instrument.Int64UpDownCounter
+	assemblyCount           instrument.Int64UpDownCounter
+	values                  map[app.PID]*dotnetRuntimeMetricValues
+	activeCurrent           dotnetRuntimeMetricCounts
+	clock                   expire.Clock
+	lastExpiration          time.Time
+	ttl                     time.Duration
+}
+
+type dotnetRuntimeMetricCounts struct {
+	processMemoryWorkingSet int
+	gcCommittedMemory       int
+	threadPoolThreadCount   int
+	threadPoolQueueLength   int
+	timerCount              int
+	assemblyCount           int
 }
 
 type dotnetRuntimeMetricValues struct {
-	generation  uint64
-	collections [runtimemetrics.DotnetGCGenerationCount]runtimeCounterValue
+	generation              uint64
+	lastSeen                time.Time
+	collections             [runtimemetrics.DotnetGCGenerationCount]runtimeCounterValue
+	gcHeapTotalAllocated    runtimeCounterValue
+	gcPauseTime             *float64
+	jitCompiledILSize       runtimeCounterValue
+	jitCompiledMethods      runtimeCounterValue
+	jitCompilationTime      *float64
+	threadPoolWorkItemCount runtimeCounterValue
+	monitorLockContentions  runtimeCounterValue
+	processMemoryWorkingSet *int64
+	gcCommittedMemory       *int64
+	threadPoolThreadCount   *int64
+	threadPoolQueueLength   *int64
+	timerCount              *int64
+	assemblyCount           *int64
 }
 
 type pythonRuntimeMetrics struct {
@@ -252,13 +292,15 @@ func setupRuntimeMeters(
 	if err := setupPythonRuntimeMeters(&metrics.pythonMetrics, meter); err != nil {
 		return err
 	}
-	if err := setupDotnetRuntimeMeters(&metrics.dotnetMetrics, meter); err != nil {
+	if err := setupDotnetRuntimeMeters(&metrics.dotnetMetrics, meter, ttl); err != nil {
 		return err
 	}
 	return nil
 }
 
-func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Meter) error {
+func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Meter, ttl time.Duration) error {
+	metrics.clock = timeNow
+	metrics.ttl = ttl
 	var err error
 	metrics.collections, err = meter.Int64Counter(
 		attributes.DotnetGCCollections.OTEL,
@@ -267,6 +309,52 @@ func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Me
 	)
 	if err != nil {
 		return fmt.Errorf("creating .NET GC collections: %w", err)
+	}
+	for _, counter := range []struct {
+		name   attributes.Name
+		metric *instrument.Int64Counter
+	}{
+		{attributes.DotnetGCHeapTotalAllocated, &metrics.gcHeapTotalAllocated},
+		{attributes.DotnetJITCompiledILSize, &metrics.jitCompiledILSize},
+		{attributes.DotnetJITCompiledMethods, &metrics.jitCompiledMethods},
+		{attributes.DotnetThreadPoolWorkItemCount, &metrics.threadPoolWorkItemCount},
+		{attributes.DotnetMonitorLockContentions, &metrics.monitorLockContentions},
+	} {
+		*counter.metric, err = meter.Int64Counter(counter.name.OTEL, instrument.WithUnit(counter.name.Unit))
+		if err != nil {
+			return fmt.Errorf("creating .NET metric %s: %w", counter.name.OTEL, err)
+		}
+	}
+	for _, counter := range []struct {
+		name   attributes.Name
+		metric *instrument.Float64Counter
+	}{
+		{attributes.DotnetGCPauseTime, &metrics.gcPauseTime},
+		{attributes.DotnetJITCompilationTime, &metrics.jitCompilationTime},
+	} {
+		*counter.metric, err = meter.Float64Counter(counter.name.OTEL, instrument.WithUnit(counter.name.Unit))
+		if err != nil {
+			return fmt.Errorf("creating .NET metric %s: %w", counter.name.OTEL, err)
+		}
+	}
+	for _, current := range []struct {
+		name   attributes.Name
+		metric *instrument.Int64UpDownCounter
+	}{
+		{attributes.DotnetProcessMemoryWorkingSet, &metrics.processMemoryWorkingSet},
+		{attributes.DotnetGCCommittedMemory, &metrics.gcCommittedMemory},
+		{attributes.DotnetThreadPoolThreadCount, &metrics.threadPoolThreadCount},
+		{attributes.DotnetThreadPoolQueueLength, &metrics.threadPoolQueueLength},
+		{attributes.DotnetTimerCount, &metrics.timerCount},
+		{attributes.DotnetAssemblyCount, &metrics.assemblyCount},
+	} {
+		*current.metric, err = meter.Int64UpDownCounter(
+			current.name.OTEL,
+			instrument.WithUnit(current.name.Unit),
+		)
+		if err != nil {
+			return fmt.Errorf("creating .NET metric %s: %w", current.name.OTEL, err)
+		}
 	}
 	return nil
 }
@@ -471,6 +559,7 @@ func recordRuntimeMetrics(ctx context.Context, metrics *RuntimeMetrics, snapshot
 	if metrics == nil {
 		return
 	}
+	expireDotnetCurrentMetrics(ctx, &metrics.dotnetMetrics)
 
 	if snapshot.Service.SDKLanguage == svc.InstrumentableGolang {
 		if snapshot.Histogram != nil && metrics.goHistogramProducer != nil {
@@ -518,17 +607,23 @@ func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 	previous := metrics.values[snapshot.PID]
 	if snapshot.Removed {
 		if previous != nil && previous.generation == snapshot.Generation {
+			recordDotnetCurrentMetrics(ctx, metrics, previous, &runtimemetrics.DotnetRuntimeMetricSnapshot{})
 			delete(metrics.values, snapshot.PID)
 		}
 		return
 	}
 	if previous == nil || previous.generation != snapshot.Generation {
+		if previous != nil {
+			recordDotnetCurrentMetrics(ctx, metrics, previous, &runtimemetrics.DotnetRuntimeMetricSnapshot{})
+		}
 		previous = &dotnetRuntimeMetricValues{generation: snapshot.Generation}
 		if metrics.values == nil {
 			metrics.values = make(map[app.PID]*dotnetRuntimeMetricValues)
 		}
 		metrics.values[snapshot.PID] = previous
 	}
+	previous.lastSeen = metrics.clock()
+	recordDotnetCurrentMetrics(ctx, metrics, previous, snapshot.Dotnet)
 	for generation, count := range snapshot.Dotnet.GCCollections {
 		if count == nil {
 			continue
@@ -537,6 +632,90 @@ func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 			Key: attr.DotnetGCHeapGeneration.OTEL(), Value: attribute.StringValue(fmt.Sprintf("gen%d", generation)),
 		}
 		recordRuntimeCounterWithAttributes(ctx, metrics.collections, &previous.collections[generation], *count, generationAttr)
+	}
+	for _, counter := range []struct {
+		metric   instrument.Int64Counter
+		previous *runtimeCounterValue
+		value    *uint64
+	}{
+		{metrics.gcHeapTotalAllocated, &previous.gcHeapTotalAllocated, snapshot.Dotnet.GCHeapTotalAllocated},
+		{metrics.jitCompiledILSize, &previous.jitCompiledILSize, snapshot.Dotnet.JITCompiledILSize},
+		{metrics.jitCompiledMethods, &previous.jitCompiledMethods, snapshot.Dotnet.JITCompiledMethods},
+		{metrics.threadPoolWorkItemCount, &previous.threadPoolWorkItemCount, snapshot.Dotnet.ThreadPoolWorkItemCount},
+		{metrics.monitorLockContentions, &previous.monitorLockContentions, snapshot.Dotnet.MonitorLockContentions},
+	} {
+		if counter.value != nil {
+			recordRuntimeCounterWithAttributes(ctx, counter.metric, counter.previous, *counter.value)
+		}
+	}
+	for _, counter := range []struct {
+		metric   instrument.Float64Counter
+		previous **float64
+		value    *float64
+	}{
+		{metrics.gcPauseTime, &previous.gcPauseTime, snapshot.Dotnet.GCPauseTime},
+		{metrics.jitCompilationTime, &previous.jitCompilationTime, snapshot.Dotnet.JITCompilationTime},
+	} {
+		if counter.value == nil {
+			continue
+		}
+		value := *counter.value
+		delta := runtimemetrics.CounterDelta(*counter.previous, value)
+		if *counter.previous == nil || value < **counter.previous || delta > 0 {
+			counter.metric.Add(ctx, delta)
+		}
+		*counter.previous = &value
+	}
+}
+
+func expireDotnetCurrentMetrics(ctx context.Context, metrics *dotnetRuntimeMetrics) {
+	if metrics.ttl == 0 {
+		return
+	}
+	now := metrics.clock()
+	// Sweep on incoming samples at TTL intervals; stale contributions can remain
+	// for another interval until the next sweep.
+	if !metrics.lastExpiration.IsZero() && now.Sub(metrics.lastExpiration) <= metrics.ttl {
+		return
+	}
+	metrics.lastExpiration = now
+	for _, previous := range metrics.values {
+		if previous.lastSeen.IsZero() || now.Sub(previous.lastSeen) <= metrics.ttl {
+			continue
+		}
+		recordDotnetCurrentMetrics(ctx, metrics, previous, &runtimemetrics.DotnetRuntimeMetricSnapshot{})
+		previous.lastSeen = time.Time{}
+	}
+}
+
+func recordDotnetCurrentMetrics(ctx context.Context, metrics *dotnetRuntimeMetrics, previous *dotnetRuntimeMetricValues, values *runtimemetrics.DotnetRuntimeMetricSnapshot) {
+	for _, current := range []struct {
+		metric   instrument.Int64UpDownCounter
+		previous **int64
+		value    *int64
+		active   *int
+	}{
+		{metrics.processMemoryWorkingSet, &previous.processMemoryWorkingSet, values.ProcessMemoryWorkingSet, &metrics.activeCurrent.processMemoryWorkingSet},
+		{metrics.gcCommittedMemory, &previous.gcCommittedMemory, values.GCCommittedMemory, &metrics.activeCurrent.gcCommittedMemory},
+		{metrics.threadPoolThreadCount, &previous.threadPoolThreadCount, values.ThreadPoolThreadCount, &metrics.activeCurrent.threadPoolThreadCount},
+		{metrics.threadPoolQueueLength, &previous.threadPoolQueueLength, values.ThreadPoolQueueLength, &metrics.activeCurrent.threadPoolQueueLength},
+		{metrics.timerCount, &previous.timerCount, values.TimerCount, &metrics.activeCurrent.timerCount},
+		{metrics.assemblyCount, &previous.assemblyCount, values.AssemblyCount, &metrics.activeCurrent.assemblyCount},
+	} {
+		if current.value != nil {
+			if *current.previous == nil {
+				(*current.active)++
+			}
+			recordCurrentRuntimeMetric(ctx, current.metric, current.previous, current.value)
+		} else if *current.previous != nil {
+			zero := int64(0)
+			recordCurrentRuntimeMetric(ctx, current.metric, current.previous, &zero)
+			*current.previous = nil
+			(*current.active)--
+			if *current.active == 0 {
+				current.metric.Remove(ctx)
+			}
+		}
 	}
 }
 

@@ -111,10 +111,6 @@ func (ic *InformersCache) Subscribe(msg *informer.SubscribeMessage, server infor
 		"fromEpoch", o.fromEpoch,
 		"fromLast", time.Since(time.Unix(o.fromEpoch, 0)))
 	ic.informers.Subscribe(o)
-	go func() {
-		<-server.Context().Done()
-		o.messages.Enqueue(nil)
-	}()
 	// Keep the connection open
 	o.handleMessagesQueue(server.Context())
 	ic.informers.Unsubscribe(o)
@@ -169,7 +165,11 @@ func (o *connection) handleMessagesQueue(ctx context.Context) {
 			o.log.Debug("context done. Closing client connection")
 			return
 		default:
-			event := o.messages.Dequeue()
+			event, err := o.messages.DequeueContext(ctx)
+			if err != nil {
+				o.log.Debug("context done. Closing client connection")
+				return
+			}
 			if event == nil {
 				return
 			}

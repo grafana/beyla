@@ -62,7 +62,7 @@ func newMetadata(pefile *pe.File) (*Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	version, rawHeaps, err := readMetadata(pefile, dir.VirtualAddress)
+	version, rawHeaps, err := readMetadata(pefile, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -82,16 +82,19 @@ func newMetadata(pefile *pe.File) (*Metadata, error) {
 			f.GUID, err = readGUIDHeap(h)
 		case "#~":
 			tableHeap = h
+		case "#-":
+			return nil, errors.New("uncompressed metadata tables stream (#-) is not supported")
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
-	if tableHeap != nil {
-		f.Tables, f.layout, err = readTablesHeap(tableHeap, &heaps{f.Strings, f.Blob, f.GUID})
-		if err != nil {
-			return nil, err
-		}
+	if tableHeap == nil {
+		return nil, errors.New("missing metadata tables stream (#~)")
+	}
+	f.Tables, f.layout, err = readTablesHeap(tableHeap, &heaps{f.Strings, f.Blob, f.GUID})
+	if err != nil {
+		return nil, err
 	}
 	return f, nil
 }
@@ -106,86 +109,90 @@ func readMetadataDirectory(pefile *pe.File, pe64 bool) (pe.DataDirectory, error)
 		comdd = pefile.OptionalHeader.(*pe.OptionalHeader32).DataDirectory[pe.IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR]
 	}
 
+	// The CLI header defined in §II.25.3.3 is at least 72 bytes long.
+	const minCLIHeaderSize = 72
+	if comdd.Size < minCLIHeaderSize {
+		return pe.DataDirectory{}, fmt.Errorf("COM descriptor directory is smaller than the CLI header: %w", io.ErrUnexpectedEOF)
+	}
+
 	// figure out which section contains the COM descriptor directory table
 	ds := sectionByRVA(pefile, comdd.VirtualAddress)
 	if ds == nil {
 		return pe.DataDirectory{}, errors.New("COM descriptor directory table is missing")
 	}
 
-	// read COM descriptor directory table might be in a large section,
-	// we better don't call ds.Data()
-	r := ds.Open()
-
-	// seek to the COM descriptor data directory virtual address.
-	_, err := r.Seek(int64(comdd.VirtualAddress-ds.VirtualAddress), io.SeekStart)
-	if err != nil {
-		return pe.DataDirectory{}, fmt.Errorf("failure to seek to the COM descriptor data directory root: %v", err)
+	// Restrict reads to the declared directory, not unrelated section bytes.
+	offset := uint64(comdd.VirtualAddress - ds.VirtualAddress)
+	if offset+uint64(comdd.Size) > uint64(ds.Size) {
+		return pe.DataDirectory{}, fmt.Errorf("COM descriptor directory exceeds the section data: %w", io.ErrUnexpectedEOF)
 	}
-
-	read := func(data any) bool {
-		err = binary.Read(r, binary.LittleEndian, data)
-		return err == nil
-	}
-	readDataDirectory := func(data *pe.DataDirectory) bool {
-		return read(&data.VirtualAddress) && read(&data.Size)
-	}
+	r := io.NewSectionReader(ds, int64(offset), int64(comdd.Size))
 
 	// The CLI header contains all of the runtime-specific data entries and other information.
-	// We are only interested on in the metadata data directory.
+	// Only the metadata directory is used, but the complete header must be present.
 	// Defined in §II.25.3.3.
 	var hdr struct {
 		Size                uint32
 		MajorRuntimeVersion uint16
 		MinorRuntimeVersion uint16
 		Metadata            pe.DataDirectory
+		_                   [minCLIHeaderSize - 16]byte
 	}
-	if !read(&hdr.Size) ||
-		!read(&hdr.MajorRuntimeVersion) ||
-		!read(&hdr.MinorRuntimeVersion) ||
-		!readDataDirectory(&hdr.Metadata) {
-		return pe.DataDirectory{}, fmt.Errorf("failure to read the CLI header: %v", err)
+	if err := binary.Read(r, binary.LittleEndian, &hdr); err != nil {
+		return pe.DataDirectory{}, fmt.Errorf("failure to read the CLI header: %w", err)
+	}
+	if hdr.Size < minCLIHeaderSize || hdr.Size > comdd.Size {
+		return pe.DataDirectory{}, fmt.Errorf("invalid CLI header size %d for COM descriptor directory size %d", hdr.Size, comdd.Size)
 	}
 	return hdr.Metadata, nil
 }
 
 // readMetadata reads the Metadata from pefile.
-func readMetadata(pefile *pe.File, rva uint32) (string, []*heap, error) {
+func readMetadata(pefile *pe.File, dir pe.DataDirectory) (string, []*heap, error) {
 	// figure out which section contains the metadata.
-	ds := sectionByRVA(pefile, rva)
+	ds := sectionByRVA(pefile, dir.VirtualAddress)
 	if ds == nil {
 		return "", nil, errors.New("metadata section is missing")
 	}
 
-	// The metadata section can be huge, we better don't call ds.Data()
-	r := ds.Open()
-
-	// seek to the virtual address specified in the COM descriptor data directory.
-	rootOffset := int64(rva - ds.VirtualAddress)
-	_, err := r.Seek(rootOffset, io.SeekStart)
-	if err != nil {
-		return "", nil, fmt.Errorf("failure to seek to the metadata root: %v", err)
+	// Bound both header and heap reads to the declared metadata directory,
+	// rather than accepting unrelated bytes elsewhere in the PE section.
+	rootOffset := int64(dir.VirtualAddress - ds.VirtualAddress)
+	if uint64(rootOffset)+uint64(dir.Size) > uint64(ds.Size) {
+		return "", nil, fmt.Errorf("metadata directory exceeds the section data: %w", io.ErrUnexpectedEOF)
 	}
+	r := io.NewSectionReader(ds, rootOffset, int64(dir.Size))
 
+	var err error
 	read := func(data any) bool {
 		err = binary.Read(r, binary.LittleEndian, data)
 		return err == nil
 	}
-	readStr := func(n int, data *string) bool {
+	readStr := func(n uint32, data *string) bool {
 		const maxLength = 255
-		if n > maxLength {
-			err = fmt.Errorf("string length (%d) is higher than the maximum length (%d)", n, maxLength)
+		// Length includes padding to a 4-byte boundary; the limit applies
+		// to the version string and its null terminator, without padding.
+		const maxPaddedLength = (maxLength + 3) &^ 3
+		if n > maxPaddedLength {
+			err = fmt.Errorf("padded string length (%d) is higher than the maximum length (%d)", n, maxPaddedLength)
 			return false
 		}
 		buf := make([]byte, n)
 		err = binary.Read(r, binary.LittleEndian, buf)
-		if err == nil {
-			i := bytes.IndexByte(buf, 0)
-			if i == -1 {
-				i = len(buf)
-			}
-			*data = string(buf[:i])
+		if err != nil {
+			return false
 		}
-		return err == nil
+		i := bytes.IndexByte(buf, 0)
+		if i == -1 {
+			err = errors.New("version string must be null-terminated")
+			return false
+		}
+		if i+1 > maxLength {
+			err = fmt.Errorf("string length (%d) is higher than the maximum length (%d)", i+1, maxLength)
+			return false
+		}
+		*data = string(buf[:i])
+		return true
 	}
 
 	// the Metadata header is defined in §II.24.2.1.
@@ -211,7 +218,7 @@ func readMetadata(pefile *pe.File, rva uint32) (string, []*heap, error) {
 		!read(&hdr.MinorVersion) ||
 		!read(&hdr.Reserved) ||
 		!read(&cstringLength) ||
-		!readStr(int(cstringLength), &hdr.Version) ||
+		!readStr(cstringLength, &hdr.Version) ||
 		!read(&hdr.Flags) ||
 		!read(&streamsCount) {
 		return "", nil, fmt.Errorf("failure to read the metadata header: %v", err)
@@ -226,22 +233,18 @@ func readMetadata(pefile *pe.File, rva uint32) (string, []*heap, error) {
 		var nameBuf [nameMaxLength]byte
 		// Read in chunks of 4 bytes, accumulating the string
 		// into nameBuf until the first \x00 character is found.
-		var found bool
 		for j := 0; j < nameMaxLength; j += namePadding {
 			if !read(nameBuf[j : j+namePadding]) {
-				break
+				return false
 			}
 			idx := bytes.IndexByte(nameBuf[j:j+namePadding], 0)
 			if idx != -1 {
-				found = true
 				*data = string(nameBuf[:idx+j])
-				break
+				return true
 			}
 		}
-		if !found {
-			err = errors.New("name not found")
-		}
-		return err == nil
+		err = errors.New("name not found")
+		return false
 	}
 
 	// parse stream headers.
@@ -258,14 +261,17 @@ func readMetadata(pefile *pe.File, rva uint32) (string, []*heap, error) {
 		if !read(&s.Offset) ||
 			!read(&s.Size) ||
 			!readStreamNameStr(&s.Name) {
-			return "", nil, fmt.Errorf("failure to read the stream header (%d): %v", i, err)
+			return "", nil, fmt.Errorf("failure to read the stream header (%d): %w", i, err)
 		}
 		// check for duplicated names.
 		if _, ok := streamNames[s.Name]; ok {
 			return "", nil, fmt.Errorf("duplicated %s stream", s.Name)
 		}
 		streamNames[s.Name] = struct{}{}
-		sr := io.NewSectionReader(ds, rootOffset+int64(s.Offset), int64(s.Size))
+		if uint64(s.Offset)+uint64(s.Size) > uint64(dir.Size) {
+			return "", nil, fmt.Errorf("stream %q exceeds the metadata directory: %w", s.Name, io.ErrUnexpectedEOF)
+		}
+		sr := io.NewSectionReader(r, int64(s.Offset), int64(s.Size))
 		streams = append(streams, &heap{
 			sr:       sr,
 			ReaderAt: sr,
@@ -321,8 +327,10 @@ func readStringHeap(r *heap) (StringHeap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fail to read string heap: %v", err)
 	}
-	if buf[len(buf)-1] != 0 {
-		return nil, errors.New("string heap must be null-terminated")
+	// The first entry is the empty string. Unreferenced bytes, including at
+	// the end of the heap, may be garbage; StringHeap.String checks each entry.
+	if len(buf) == 0 || buf[0] != 0 {
+		return nil, errors.New("string heap must start with the empty string")
 	}
 	return StringHeap(buf), nil
 }
@@ -348,15 +356,29 @@ func readTablesHeap(tableHeap *heap, hps *heaps) (*Tables, *layout, error) {
 	if !read(&padding6) || !read(&heapSizes) || !read(&padding1) || !read(&valid) || !read(&sorted) {
 		return nil, nil, fmt.Errorf("fail to read the tables stream header: %v", err)
 	}
-	tablesCount := bits.OnesCount64(valid)
-	if tablesCount >= int(tableMax) {
-		return nil, nil, fmt.Errorf("invalid bit vector of present tables: 0b%b", tablesCount)
+	// Exclude pointer tables and Edit-and-Continue tables, which are not
+	// supported in the #~ stream, as well as bits beyond the last table.
+	const validTables = (1<<tableMax - 1) &^ (1<<3 | 1<<5 | 1<<7 | 1<<19 | 1<<22 | 1<<30 | 1<<31)
+	if valid&^validTables != 0 {
+		return nil, nil, fmt.Errorf("invalid bit vector of present tables: 0b%b", valid)
 	}
+	tablesCount := bits.OnesCount64(valid)
 	// read an array of tablesCount 4-byte unsigned integers indicating the number of
 	// rows for each present table.
 	rows := make([]uint32, tablesCount)
 	if !read(rows) {
 		return nil, nil, fmt.Errorf("fail to read tables stream rows: %v", err)
+	}
+	headerSize := 24 + 4*tablesCount
+	// The CLR's ExtraData extension adds a DWORD after the row counts.
+	// Its value is unused, but treating it as table data would shift every row.
+	const heapSizesExtraData = 0x40
+	if heapSizes&heapSizesExtraData != 0 {
+		var extraData uint32
+		if !read(&extraData) {
+			return nil, nil, fmt.Errorf("fail to read tables stream extra data: %w", err)
+		}
+		headerSize += 4
 	}
 	var tableRowCounts [tableMax]uint32
 	for j, i := 0, 0; i < len(tableRowCounts); i++ {
@@ -370,7 +392,11 @@ func readTablesHeap(tableHeap *heap, hps *heaps) (*Tables, *layout, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("fail to read tables stream: %v", err)
 	}
-	layout := generateLayout(heapSizes, tableRowCounts)
-	tables := newTables(buf[24+4*tablesCount:], hps, layout)
+	buf = buf[headerSize:]
+	layout, err := generateLayout(heapSizes, tableRowCounts, len(buf))
+	if err != nil {
+		return nil, nil, err
+	}
+	tables := newTables(buf, hps, layout)
 	return tables, layout, nil
 }

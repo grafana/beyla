@@ -101,8 +101,8 @@ func samplerFromConfig(s *services.SamplerConfig) trace.Sampler {
 }
 
 func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
-	var name string
-	var namespace string
+	name := t.cfg.ServiceName
+	namespace := t.cfg.ServiceNamespace
 	exportModes := services.ExportModeUnset
 	var samplerConfig *services.SamplerConfig
 	var routesConfig *services.CustomRoutesConfig

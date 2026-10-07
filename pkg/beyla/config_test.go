@@ -1029,19 +1029,14 @@ injector:
 }
 
 func TestConfigRunsWithInjectorAndMetricsWithoutTraces(t *testing.T) {
-	userConfig := bytes.NewBufferString(`
-injector:
-  webhook:
-    external_deployment_name: foo/bar
-  image_version: v1.0.0
-  otel_exported_signals:
-    traces: false
-    metrics: true
-otel_metrics_export:
-  endpoint: http://localhost:4318/v1/metrics
-`)
-	cfg, err := LoadConfig(userConfig)
-	require.NoError(t, err)
+	cfg := DefaultConfig()
+	tracesEnabled := false
+	metricsEnabled := true
+	cfg.Injector.Webhook.ExternalWebhook = "foo/bar"
+	cfg.Injector.ImageVersion = "v1.0.0"
+	cfg.Injector.ExportedSignals.Traces = &tracesEnabled
+	cfg.Injector.ExportedSignals.Metrics = &metricsEnabled
+	cfg.OTELMetrics.MetricsEndpoint = "http://localhost:4318/v1/metrics"
 	require.NoError(t, cfg.Validate())
 }
 

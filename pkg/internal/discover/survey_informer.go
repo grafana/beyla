@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -24,9 +26,10 @@ func SurveyEventGenerator(
 	output *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	m := &surveyor{
-		log:    slog.With("component", "discover.SurveyEventGenerator"),
-		input:  input.Subscribe(msg.SubscriberName("surveyEventInput")),
-		output: output,
+		log:                     slog.With("component", "discover.SurveyEventGenerator"),
+		input:                   input.Subscribe(msg.SubscriberName("surveyEventInput")),
+		output:                  output,
+		processMetadataResolver: metadata.NewProcessResourceDetector(),
 	}
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		if k8sInformer != nil && k8sInformer.IsKubeEnabled() {
@@ -43,14 +46,19 @@ func SurveyEventGenerator(
 }
 
 type surveyor struct {
-	log         *slog.Logger
-	input       <-chan []obiDiscover.Event[ebpf.Instrumentable]
-	output      *msg.Queue[exec.ProcessEvent]
-	store       *kube.Store
-	clusterName string
+	log                     *slog.Logger
+	input                   <-chan []obiDiscover.Event[ebpf.Instrumentable]
+	output                  *msg.Queue[exec.ProcessEvent]
+	store                   *kube.Store
+	clusterName             string
+	processMetadataResolver processMetadataResolver
 }
 
-func (m *surveyor) run(_ context.Context) {
+type processMetadataResolver interface {
+	ResolveMetadata(svc.InstrumentableType, *exec.FileInfo)
+}
+
+func (m *surveyor) run(ctx context.Context) {
 	defer m.output.Close()
 	m.log.Debug("starting survey event generation node")
 	for i := range m.input {
@@ -58,9 +66,9 @@ func (m *surveyor) run(_ context.Context) {
 		for _, pe := range i {
 			m.fetchMetadata(&pe.Obj)
 			if pe.Type == obiDiscover.EventDeleted {
-				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: pe.Obj.FileInfo})
+				m.output.SendCtx(ctx, exec.ProcessEvent{Type: exec.ProcessEventTerminated, File: pe.Obj.FileInfo})
 			} else {
-				m.output.Send(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pe.Obj.FileInfo})
+				m.output.SendCtx(ctx, exec.ProcessEvent{Type: exec.ProcessEventCreated, File: pe.Obj.FileInfo})
 			}
 			m.log.Debug("survey info generation", "pid", pe.Obj.FileInfo.Pid(), "ns", pe.Obj.FileInfo.Ns(), "cmd", pe.Obj.FileInfo.CmdExePath(), "service", pe.Obj.FileInfo.ServiceAttrs().UID)
 		}
@@ -68,6 +76,12 @@ func (m *surveyor) run(_ context.Context) {
 }
 
 func (m *surveyor) fetchMetadata(i *ebpf.Instrumentable) {
+	// Kubernetes metadata is authoritative when available. Outside Kubernetes,
+	// inspect the process deployment before applying the executable-name fallback.
+	if m.store == nil {
+		m.processMetadataResolver.ResolveMetadata(i.Type, i.FileInfo)
+	}
+
 	// default name uses the search criteria name, if any (as set in ExecTyper).
 	// Now it will complete some information from the executable information
 	i.CopyToServiceAttributes()

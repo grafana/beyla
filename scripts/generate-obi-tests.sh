@@ -807,6 +807,26 @@ ensure_client_trace_waits_for_complete_attachment() {
         /^[[:space:]]*trace = traces\[0\]$/ { next }
         { print }
     ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+
+    # Keep the helper with its untagged caller. Beyla extension helpers carry
+    # the integration tag, so placing it there breaks ordinary builds and the
+    # go get step used to vendor the generated test dependencies.
+    cat >> "$file" <<'EOF'
+
+func clientTraceWithServerPort(traces []jaeger.Trace, operation string, serverPort int) (jaeger.Trace, bool) {
+	for _, trace := range traces {
+		for _, span := range trace.FindByOperationName(operation, "") {
+			port, ok := jaeger.FindIn(span.Tags, "server.port")
+			value, numeric := port.Value.(float64)
+			if ok && numeric && value == float64(serverPort) {
+				return trace, true
+			}
+		}
+	}
+
+	return jaeger.Trace{}, false
+}
+EOF
 }
 
 ensure_malicious_ioctl_local_downstream() {

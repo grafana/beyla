@@ -93,6 +93,29 @@ otel_metrics_export:
     stat_tcp_rtt_histogram: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1]
 ```
 
+### V8 garbage collection duration buckets
+
+The `v8js_gc_duration_histogram` property sets explicit bucket boundaries, in seconds, for the `v8js.gc.duration` histogram. Configure it separately under `otel_metrics_export.buckets` and `prometheus_export.buckets`. If you configure both exporters, each exporter uses its own value. There is no global `metrics.buckets` setting, so neither exporter-specific value overrides the other.
+
+If you leave the property unset, Beyla uses these boundaries:
+
+```
+0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10
+```
+
+For example, to override the boundaries for both exporters:
+
+```yaml
+otel_metrics_export:
+  buckets:
+    v8js_gc_duration_histogram: [0.01, 0.05, 0.1, 0.5, 1, 5]
+prometheus_export:
+  buckets:
+    v8js_gc_duration_histogram: [0.01, 0.05, 0.1, 0.5, 1, 5]
+```
+
+OpenTelemetry ignores explicit bucket boundaries when `otel_metrics_export.histogram_aggregation` is `base2_exponential_bucket_histogram`.
+
 ## Use native histograms and exponential histograms
 
 For Prometheus, you enable [native histograms](https://prometheus.io/docs/specs/native_histograms/) with the `--enable-feature=native-histograms` feature flag (Prometheus <= 3.8.0) or with the `scrape_native_histograms` configuration setting (Prometheus >= 3.8.0).

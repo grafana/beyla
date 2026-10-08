@@ -395,10 +395,19 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Injector.Webhook.Enabled() {
-		if !c.Traces.Enabled() {
-			return ConfigError("you can't enable OTEL SDK instrumentation injection without enabling OTEL traces")
+		proto := c.Injector.Protocol
+		hasEndpoint := c.Injector.Endpoint != ""
+		if !hasEndpoint && c.Injector.ExportedSignals.TracesEnabled() && c.Traces.Enabled() {
+			proto = c.Traces.GetProtocol()
+			hasEndpoint = true
 		}
-		proto := c.Traces.GetProtocol()
+		if !hasEndpoint && c.Injector.ExportedSignals.MetricsEnabled() && c.OTELMetrics.EndpointEnabled() {
+			proto = c.OTELMetrics.GetProtocol()
+			hasEndpoint = true
+		}
+		if !hasEndpoint {
+			return ConfigError("working with OTEL SDK injection requires defining an OTLP endpoint")
+		}
 		pos := slices.IndexFunc([]otelcfg.Protocol{otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, otelcfg.ProtocolGRPC, ""}, func(p otelcfg.Protocol) bool {
 			return p == proto
 		})

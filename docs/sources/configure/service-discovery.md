@@ -321,6 +321,65 @@ Beyla writes the discovered information from survey mode to a metric called `sur
 
 Configure the `survey` section exactly like the `instrument` section. For more details, see the [discovery services section](#discovery-services) of this document.
 
+### Survey only applications with sockets
+
+Set `socket_apps.enabled: true` on a `discovery.survey` entry to hold back matching
+survey candidates until Beyla observes socket activity. It defaults to `false` per
+entry and it doesn't affect instrumentation selection, including when instrumentation
+and survey are enabled together.
+
+```yaml
+discovery:
+  survey:
+    - exe_path: "*"
+      socket_apps:
+        enabled: true
+    - exe_path: "/opt/batch/*"
+```
+
+Criteria within an entry are combined with AND, while entries are combined with OR.
+In this example, processes under `/opt/batch/` qualify without socket activity, while
+all other processes must use sockets. You can also use `socket_apps.enabled: true` alone
+in an entry to select any process with socket activity. The socket watcher starts
+only if at least one survey entry enables it.
+
+A Beyla-specific eBPF watcher observes `connect` and `listen` attempts on valid
+sockets, including failed or non-blocking connections and Unix sockets. A listening
+port isn't required, meaning, client-only applications qualify too. At startup, a kernel
+task/file iterator also records processes already holding sockets, including
+inherited listeners and established keepalive connections across network namespaces.
+
+Previously held candidates are promoted automatically to `survey_info`. 
+After being admitted, a process stays admitted until it exits, even if it closes
+all sockets. PID reuse doesn't inherit admission.
+
+#### Exclude root-owned services
+
+Set `socket_apps.non_root: true` to additionally exclude processes running as
+root (real UID 0), unless they listen on a privileged port below 1024. This is
+useful for surveying user-deployed application services while skipping the
+system daemons commonly found on a host, such as SSH or cron. System services
+that legitimately serve privileged ports, for example a web server on port 443,
+are still reported.
+
+```yaml
+discovery:
+  survey:
+    - exe_path: "*"
+      socket_apps:
+        enabled: true
+        non_root: true
+```
+
+`non_root` requires `enabled: true` on the same entry and has no effect on its
+own. The eBPF socket watcher records the ports a process listens on, so the
+privileged-port check doesn't add per-process overhead. A root process that
+starts listening on a privileged port later is promoted at that point.
+
+Survey entries remain alternatives: a root process can qualify through another
+matching entry without `non_root`, and an entry with socket filtering disabled
+can admit it without socket activity.
+
 ## Exclude services from instrumentation
 
 The `exclude_instrument` section lets you specify selection criteria for excluding services from being instrumented. It follows the same definition format as described in the [discovery services](#discovery-services) section of this document.

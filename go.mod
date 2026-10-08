@@ -8,6 +8,7 @@ replace go.opentelemetry.io/obi => ./.obi-src
 
 require (
 	github.com/caarlos0/env/v9 v9.0.0
+	github.com/cilium/ebpf v0.22.0
 	github.com/goccy/go-json v0.11.1
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12
@@ -88,7 +89,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cilium/ebpf v0.22.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containers/common v0.64.2 // indirect

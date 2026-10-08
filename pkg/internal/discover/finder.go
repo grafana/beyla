@@ -137,6 +137,18 @@ func (pf *ProcessFinder) connectSurveySubPipeline(ctx context.Context, swi *swar
 	swi.Add(SurveyCriteriaMatcherProvider(pf.cfg, kubeEnrichedEvents, surveyFilteredEvents),
 		swarm.WithID("SurveyCriteriaMatcherProvider"))
 
+	// Socket apps can't always be discovered right away, so we end up filtering them later.
+	// Essentially, an application can use sockets, but at the time Beyla discovers it, no
+	// sockets are opened yet, it may open one later. We block the unmatched PIDs here and
+	// we let them go later once we have found a socket on them.
+	if pf.cfg.Discovery.Survey.SocketAppsEnabled() {
+		socketEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessMatch]](
+			obiCfg, "surveySocketEvents")
+		swi.Add(surveySocketFilterProvider(obiCfg, pf.ebpfEventContext, surveyFilteredEvents, socketEvents),
+			swarm.WithID("SurveySocketFilter"))
+		surveyFilteredEvents = socketEvents
+	}
+
 	surveyExecutables := msg2.QueueFromConfig[[]obiDiscover.Event[ebpf.Instrumentable]](
 		pf.cfg.AsOBI(), "surveyExecutables")
 	swi.Add(obiDiscover.ExecTyperProvider(obiCfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, surveyFilteredEvents, surveyExecutables),

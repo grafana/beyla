@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -53,6 +54,36 @@ func TestAsOBINameResolver(t *testing.T) {
 		}}
 		assert.Equal(t, []transform.Source{transform.SourceDNS}, config.AsOBI().NameResolver.Sources)
 	})
+}
+
+func TestCloudMetadataConfigRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		yaml string
+		want transform.CloudMetadataConfig
+	}{
+		{name: "defaults", yaml: "{}"},
+		{
+			name: "configured overrides",
+			yaml: `
+cloud_metadata:
+  cluster_name: test-cluster
+  region: test-region
+`,
+			want: transform.CloudMetadataConfig{ClusterName: "test-cluster", Region: "test-region"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			require.NoError(t, yaml.Unmarshal([]byte(tc.yaml), cfg))
+
+			converted := cfg.AsOBI()
+			require.Equal(t, tc.want, converted.CloudMetadata)
+
+			restored := FromOBI(converted)
+			assert.Equal(t, tc.want, restored.AsOBI().CloudMetadata)
+		})
+	}
 }
 
 // TestOverrideOBIGlobalConfig_MetricNames pins the Beyla-renamed metric definitions. The

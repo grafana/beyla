@@ -1,17 +1,129 @@
 package webhook
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
 )
+
+func TestEmptySelectionClearsInjectorState(t *testing.T) {
+	for _, restrictLocal := range []bool{false, true} {
+		t.Run(fmt.Sprintf("restrict_local_node=%v", restrictLocal), func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			pod := makePod("alloy-1", "monitoring", "node-1", "alloy-container", []metav1.OwnerReference{
+				{APIVersion: "apps/v1", Kind: "DaemonSet", Name: "alloy", UID: "alloy-uid"},
+			})
+			writer := newTestWriter(client, pod)
+			require.NoError(t, writer.Init(t.Context()))
+			previous := &beyla.Config{}
+			namespace := services.NewGlob("apps")
+			previous.Injector.Instrument = services.GlobDefinitionCriteria{{
+				Metadata: map[string]*services.GlobAttr{services.AttrNamespace: &namespace},
+			}}
+			oldConfig := buildInjectConfig(previous, "http://alloy:4318", "http/protobuf")
+			require.NotEmpty(t, oldConfig.Rules)
+			require.NoError(t, writer.Write(t.Context(), &oldConfig, nil))
+
+			eligible, err := simplelru.NewLRU[string, *configmap.EligibleDeployment](maxEligibleDeployments, nil)
+			require.NoError(t, err)
+			// This workload list would exceed the 1 MiB ConfigMap limit. Empty
+			// selections must publish a small payload regardless of cached targets.
+			for i := range 8000 {
+				d := &configmap.EligibleDeployment{
+					Namespace: "production", Kind: "Deployment",
+					Name: fmt.Sprintf("java-service-%05d", i), Hash: strings.Repeat("a", 64),
+				}
+				eligible.Add(d.Name, d)
+			}
+			largeYAML, err := yaml.Marshal(eligible.Values())
+			require.NoError(t, err)
+			require.Greater(t, len(largeYAML), 1<<20)
+			cfg := &beyla.Config{}
+			cfg.Attributes.Kubernetes.MetaRestrictLocalNode = restrictLocal
+			server := &Server{
+				cfg: cfg, matcher: NewPodMatcher(cfg), logger: slog.Default(),
+				mutator:     &PodMutator{endpoint: "http://alloy:4318", proto: "http/protobuf"},
+				stateWriter: writer, eligibleDeployments: eligible, nodeName: "node-1",
+			}
+			// No metadata provider or process scanner is needed for empty startup.
+			server.startInitialState(t.Context())
+			require.NotZero(t, server.stateWriteRequestNS.Load())
+			server.rebuildEligibleDeployments()
+			// Age the request to avoid waiting the production debounce interval.
+			requested := time.Now().Add(-2 * stateConfigMapDebounceDelay).UnixNano()
+			server.stateWriteRequestNS.Store(requested)
+			event := &informer.Event{Type: informer.EventType_UPDATED, Resource: &informer.ObjectMeta{
+				Name: "java", Namespace: "apps",
+				Annotations: map[string]string{"beyla.grafana.com/inject": "old-config"},
+				Pod:         &informer.PodInfo{NodeName: "node-1"},
+			}}
+			for range 1000 {
+				require.NoError(t, server.On(event))
+			}
+			require.Equal(t, requested, server.stateWriteRequestNS.Load(), "pod events must not postpone empty configuration")
+			var attempts atomic.Int64
+			client.PrependReactor("update", "configmaps", func(clienttesting.Action) (bool, runtime.Object, error) {
+				if attempts.Add(1) == 1 {
+					return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "configmaps"}, "alloy", fmt.Errorf("stale resource version"))
+				}
+				return false, nil, nil
+			})
+
+			ctx, cancel := context.WithCancel(t.Context())
+			stopped := make(chan struct{})
+			go func() {
+				defer close(stopped)
+				server.runStateConfigMapWriter(ctx)
+			}()
+			defer func() { cancel(); <-stopped }()
+			require.Eventually(t, func() bool {
+				return attempts.Load() == 1 && server.stateWriteRequestNS.Load() > requested
+			}, 5*time.Second, 10*time.Millisecond, "empty configuration must be retried after an API conflict")
+			server.stateWriteRequestNS.Store(requested)
+			require.Eventually(t, func() bool {
+				cm, err := client.CoreV1().ConfigMaps("monitoring").Get(ctx, stateConfigMapName("alloy", "node-1"), metav1.GetOptions{})
+				if err != nil {
+					return false
+				}
+				var config configmap.InjectConfig
+				if yaml.Unmarshal([]byte(cm.Data[configmap.KeyInstrumentation]), &config) != nil {
+					return false
+				}
+				return len(config.Rules) == 0
+			}, 5*time.Second, 10*time.Millisecond)
+			cm, err := client.CoreV1().ConfigMaps("monitoring").Get(ctx, stateConfigMapName("alloy", "node-1"), metav1.GetOptions{})
+			require.NoError(t, err)
+			var targets []*configmap.EligibleDeployment
+			require.NoError(t, yaml.Unmarshal([]byte(cm.Data[configmap.KeyEligibleForRestart]), &targets))
+			assert.Empty(t, targets)
+			assert.Equal(t, int64(2), attempts.Load())
+			assert.Less(t, len(cm.Data[configmap.KeyEligibleForRestart])+len(cm.Data[configmap.KeyInstrumentation]), 1<<20)
+		})
+	}
+}
 
 func TestEnrichProcessInfo(t *testing.T) {
 	tests := []struct {

@@ -167,15 +167,7 @@ func (s *Server) Start(ctx context.Context) error {
 		go s.runEligibleDeploymentsRebuilder(ctx)
 	}
 
-	if s.matcher.HasSelectionCriteria() {
-		s.logger.Info("starting initial state scanning")
-		go func() {
-			err := s.getInitialState(ctx)
-			if err != nil {
-				s.logger.Error("encountered error during initial state scan", "error", err)
-			}
-		}()
-	}
+	s.startInitialState(ctx)
 
 	// Start internal metrics HTTP server if configured
 	if s.cfg.InternalMetrics.Prometheus.Port != 0 && s.ctxInfo.Prometheus != nil {
@@ -205,6 +197,21 @@ func (s *Server) setOrUpdateInitialProcessState() error {
 
 func (s *Server) establishInitialProcessState() error {
 	return s.setOrUpdateInitialProcessState()
+}
+
+// startInitialState publishes empty selections without a process scan or a
+// metadata subscription. The injection controller discovers cleanup targets.
+func (s *Server) startInitialState(ctx context.Context) {
+	if !s.matcher.HasSelectionCriteria() {
+		s.requestStateConfigMapWrite()
+		return
+	}
+	s.logger.Info("starting initial state scanning")
+	go func() {
+		if err := s.getInitialState(ctx); err != nil {
+			s.logger.Error("encountered error during initial state scan", "error", err)
+		}
+	}()
 }
 
 func (s *Server) getInitialState(ctx context.Context) error {
@@ -291,6 +298,11 @@ func (s *Server) runStateConfigMapWriter(ctx context.Context) {
 			}
 			if err := s.writeStateConfigMap(ctx); err != nil {
 				s.logger.Warn("failed to write injector state ConfigMap", "error", err)
+				if !s.matcher.HasSelectionCriteria() {
+					// Empty pipelines have no pod subscription to trigger a
+					// later write after a transient Kubernetes API failure.
+					s.requestStateConfigMapWrite()
+				}
 			}
 		}
 	}
@@ -336,14 +348,18 @@ func (s *Server) writeStateConfigMap(ctx context.Context) error {
 	}
 
 	s.logger.Debug("writing state config map")
+	config := buildInjectConfig(s.cfg, s.mutator.Endpoint(), s.mutator.Protocol())
+	if !s.matcher.HasSelectionCriteria() {
+		// Cleanup targets are discovered by the injection controller, so an
+		// empty pipeline never serializes a workload list into its ConfigMap.
+		return s.stateWriter.Write(ctx, &config, nil)
+	}
 
 	s.eligibleDeploymentsMux.Lock()
 	defer s.eligibleDeploymentsMux.Unlock()
 	eligible := make([]*configmap.EligibleDeployment, 0, s.eligibleDeployments.Len())
 	eligible = append(eligible, s.eligibleDeployments.Values()...)
 	sortEligible(eligible)
-
-	config := buildInjectConfig(s.cfg, s.mutator.Endpoint(), s.mutator.Protocol())
 
 	return s.stateWriter.Write(ctx, &config, eligible)
 }
@@ -372,6 +388,10 @@ func (s *Server) On(event *informer.Event) error {
 	}
 
 	s.logger.Debug("new pod event", "pod", event.Resource, "type", event.Type)
+
+	if !s.matcher.HasSelectionCriteria() {
+		return nil
+	}
 
 	if s.handleExternalWebhookEvent(event) {
 		return nil
@@ -517,6 +537,10 @@ func (s *Server) needsToUpdateEligibleDeployments() bool {
 }
 
 func (s *Server) rebuildEligibleDeployments() {
+	// Empty selections have no process discovery state to rebuild.
+	if !s.matcher.HasSelectionCriteria() {
+		return
+	}
 	if err := s.setOrUpdateInitialProcessState(); err != nil {
 		s.logger.Warn("unable to update initial process state", "error", err)
 		return

@@ -209,6 +209,7 @@ attributes:
 | `kubeconfig_path`<p>`KUBECONFIG`</p>                                   | Path to the Kubernetes configuration file. For more information, refer to the [Kubernetes configuration path section](#kubernete-configuration-path).                                         | string         | ~/.kube/config |
 | `disable_informers`<p>`BEYLA_KUBE_DISABLE_INFORMERS`</p>               | List of informers to disable (`node`, `service`). For more information, refer to the [disable informers section](#disable-informers).                                                         | string         | (empty)        |
 | `meta_restrict_local_node`<p>`BEYLA_KUBE_META_RESTRICT_LOCAL_NODE`</p> | Restrict metadata to local node only. For more information, refer to the [meta restrict local node section](#meta-restrict-local-node).                                                       | boolean        | false          |
+| `meta_cache_address`<p>`BEYLA_KUBE_META_CACHE_ADDRESS`</p>             | Address of the Kubernetes metadata cache service, in `host:port` format. For more information, refer to the [meta cache address section](#meta-cache-address).                                | string         | (empty)        |
 | `informers_sync_timeout`<p>`BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT`</p>     | Maximum time to wait for Kubernetes metadata before starting. For more information, refer to the [informers sync timeout section](#informers-sync-timeout).                                   | Duration       | 30s            |
 | `informers_resync_period`<p>`BEYLA_KUBE_INFORMERS_RESYNC_PERIOD`</p>   | Periodically resynchronize all Kubernetes metadata. For more information, refer to the [informers resynchronization period section](#informers-resynchronization-period).                     | Duration       | 30m            |
 | `service_name_template`<p>`BEYLA_SERVICE_NAME_TEMPLATE`</p>            | Go template for service names. For more information, refer to the [service name template section](#service-name-template).                                                                    | string         | (empty)        |
@@ -250,6 +251,12 @@ You cannot disable the Pods informer. To do that, disable the whole Kubernetes m
 If true, Beyla stores Pod and Node metadata only from the node where the Beyla instance runs.
 
 This option decreases the memory used to store metadata, but some metrics such as network bytes or service graph metrics won't include metadata from destination pods on a different node.
+
+### Meta cache address
+
+If set, Beyla gets the Kubernetes metadata from the Kubernetes metadata cache service at the provided `host:port` address, instead of running its own informers against the Kubernetes API.
+
+When you deploy Beyla as a DaemonSet in very large clusters, a metadata cache reduces the load on the Kubernetes API, because only the cache instances watch the Kubernetes API. The Beyla Helm chart sets this option when you deploy the cache. For more information, refer to [Deploy the Kubernetes metadata cache](../../setup/kubernetes-helm/#deploy-the-kubernetes-metadata-cache).
 
 ### Informers sync timeout
 

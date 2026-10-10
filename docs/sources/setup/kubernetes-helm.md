@@ -24,10 +24,11 @@ Contents:
 
 <!-- TOC -->
 
-- [Deploy Beyla with helm](#deploy-beyla-from-helm)
+- [Deploy Beyla with helm](#deploy-beyla-with-helm)
 - [Configure Beyla](#configure-beyla)
 - [Configure Beyla metadata](#configure-beyla-metadata)
 - [Provide secrets to the Helm configuration](#provide-secrets-to-the-helm-configuration)
+- [Deploy the Kubernetes metadata cache](#deploy-the-kubernetes-metadata-cache)
 <!-- TOC -->
 
 ## Deploy Beyla with helm
@@ -143,3 +144,38 @@ envValueFrom:
       key: otlp-headers
       name: grafana-secret
 ```
+
+## Deploy the Kubernetes metadata cache
+
+By default, each Beyla instance runs its own Kubernetes informers, which list and watch Pods, Nodes, and Services through the Kubernetes API. When you deploy Beyla as a DaemonSet in a large cluster, the informers of all the Beyla instances might overload the Kubernetes API.
+
+To reduce this load, deploy the Kubernetes metadata cache as a separate service. Only the cache instances watch the Kubernetes API, and the Beyla instances get the Kubernetes metadata from the cache.
+
+To deploy the cache, set `k8sCache.replicas` to a value greater than `0` in your `helm-beyla.yml` file:
+
+```yaml
+k8sCache:
+  replicas: 1
+```
+
+The Helm chart deploys the cache as a Deployment and a Service, both named `beyla-k8s-cache`, and exposes the cache on port `50055`. It also configures the Beyla DaemonSet to connect to the cache through the `BEYLA_KUBE_META_CACHE_ADDRESS` environment variable. To change the name or the port, set `k8sCache.service.name` and `k8sCache.service.port`. For more information, refer to the [meta cache address](../../configure/metrics-traces-attributes/#meta-cache-address) configuration option.
+
+### Limit the memory usage of the metadata cache
+
+In large clusters, the metadata cache receives the metadata of the whole cluster when it starts. The cache might store this metadata in memory faster than it forwards it to the connected Beyla instances, and its memory usage might grow until the container runs out of memory and restarts. When this happens, the connected Beyla instances lose their connection to the cache and need to reconnect.
+
+To prevent this, set a memory limit for the cache container, and set the `GOMEMLIMIT` environment variable to a value slightly below that limit, for example, about 90% of it. `GOMEMLIMIT` sets a soft memory limit for the Go runtime: as the memory usage of the cache approaches this value, the garbage collector runs more often to keep the memory usage below it. For more information, refer to the [Go garbage collector guide](https://go.dev/doc/gc-guide#Memory_limit).
+
+For example:
+
+```yaml
+k8sCache:
+  replicas: 1
+  resources:
+    limits:
+      memory: 1Gi
+  env:
+    GOMEMLIMIT: 900MiB
+```
+
+Adjust both values to the size of your cluster. `GOMEMLIMIT` accepts a number of bytes, or a number followed by one of the `B`, `KiB`, `MiB`, `GiB`, or `TiB` units. If you deploy the cache without the Helm chart, set the `GOMEMLIMIT` environment variable in the cache container.

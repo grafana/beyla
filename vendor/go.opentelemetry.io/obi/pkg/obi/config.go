@@ -36,6 +36,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/filter"
 	"go.opentelemetry.io/obi/pkg/health"
 	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
+	"go.opentelemetry.io/obi/pkg/internal/cloud"
 	"go.opentelemetry.io/obi/pkg/internal/pipe/cidr"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/klogbridge"
@@ -226,6 +227,10 @@ var DefaultConfig = Config{
 		BPFFSPath:      "/sys/fs/bpf/",
 		InstrumentCuda: config.CudaModeAuto,
 	},
+	CloudMetadata: transform.CloudMetadataConfig{
+		RefreshInterval: 30 * time.Second,
+		Route53:         transform.Route53MetadataConfig{RefreshInterval: cloud.DefaultRoute53RefreshInterval},
+	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources: []transform.Source{
 			transform.SourceK8s,
@@ -233,9 +238,6 @@ var DefaultConfig = Config{
 		},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
-		ECS: transform.ECSNameResolverConfig{
-			RefreshInterval: 30 * time.Second,
-		},
 	},
 	Metrics: perapp.GlobalMetricsConfig{
 		Features: export.FeatureApplicationRED | export.FeatureApplicationSizes,
@@ -810,6 +812,17 @@ func (c *Config) validate(context validationContext) error {
 
 	if err := validate.Struct(c); err != nil {
 		return ConfigError(err.Error())
+	}
+
+	if c.NameResolver != nil {
+		for _, source := range c.NameResolver.Sources {
+			if strings.EqualFold(string(source), string(transform.SourceRoute53)) {
+				if err := c.CloudMetadata.Route53.Validate(); err != nil {
+					return ConfigError(err.Error())
+				}
+				break
+			}
+		}
 	}
 
 	if err := c.EBPF.LogEnricher.Validate(); err != nil {

@@ -1,6 +1,6 @@
 plugins {
     java
-    id("com.diffplug.spotless") version "8.10.2" apply false
+    id("com.diffplug.spotless") version "8.10.3" apply false
 }
 
 import org.gradle.api.tasks.compile.JavaCompile

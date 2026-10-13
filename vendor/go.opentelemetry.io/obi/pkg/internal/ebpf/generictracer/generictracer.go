@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math"
 	"os"
 	"sync"
@@ -40,7 +41,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS Bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
 
 type Tracer struct {
 	pidsFilter         ebpfcommon.ServiceFilter
@@ -58,29 +59,24 @@ type Tracer struct {
 	jvmGenerations     sync.Map
 	iters              []*ebpfcommon.Iter
 	iterMu             sync.Mutex
-	seenNetns          *expirable.LRU[uint64, struct{}]
-	eventCtx           *ebpfcommon.EBPFEventContext
-	jvmUSDTManager     ebpfcommon.USDTSpecManager
-	pythonRuntime      *pythonRuntimeController
+	// the valid_pids words as last written to the BPF map
+	validPids      []uint64
+	validPidsMu    sync.Mutex
+	seenNetns      *expirable.LRU[uint64, struct{}]
+	eventCtx       *ebpfcommon.EBPFEventContext
+	jvmUSDTManager ebpfcommon.USDTSpecManager
+	pythonRuntime  *pythonRuntimeController
 }
 
 func tlog() *slog.Logger {
 	return slog.With("component", "generic.Tracer")
 }
 
-// Keep in sync with the BPF side, which asserts the relation between both
-// constants at compile time (bpf/pid/pid.h).
 const (
 	seenNetnsCacheLen = 1024
 	seenNetnsTTL      = 5 * time.Minute
 
-	// mirrors k_max_concurrent_pids (bpf/pid/maps/map_sizing.h): estimate of
-	// 1000 concurrent processes (including children) * 3 namespaces per pid
-	maxConcurrentPids = 3001
-	// mirrors k_prime_hash (bpf/pid/pid.h): closest prime below
-	// maxConcurrentPids * 64; modulo by a prime distributes the hash evenly
-	// across the segment bit array
-	primeHash = 192053
+	validPidsWords = uint32(ebpfcommon.BpfValidPidsSizeK_validPidsWords)
 )
 
 func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
@@ -102,43 +98,14 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 	return tracer
 }
 
-func pidSegmentBit(k uint64) (uint32, uint32) {
-	h := uint32(k % primeHash)
-	segment := h / 64
-	bit := h & 63
-
-	return segment, bit
-}
-
-func (p *Tracer) buildPidFilter() []uint64 {
-	result := make([]uint64, maxConcurrentPids)
-	for nsid, pids := range p.pidsFilter.CurrentPIDs(ebpfcommon.PIDTypeKProbes) {
-		for pid := range pids {
-			// skip any pids that might've been added, but are not tracked by the kprobes
-			p.log.Debug("Reallowing pid", "pid", pid, "namespace", nsid)
-
-			k := (uint64(nsid) << 32) | uint64(pid)
-
-			segment, bit := pidSegmentBit(k)
-
-			v := result[segment]
-			v |= (1 << bit)
-			result[segment] = v
-		}
-	}
-
-	return result
-}
-
 // validateValidPidsMap ensures the loaded map matches the index space written
-// by rebuildValidPids: a smaller map makes pid_matches() lookups miss and fail
-// open, while a larger one leaves segments unset, silently filtering out
-// matching PIDs.
+// by rebuildValidPids: a smaller map has no words for the highest pids, which
+// valid_pid() then rejects.
 func (p *Tracer) validateValidPidsMap() error {
-	if got := p.bpfObjects.ValidPids.MaxEntries(); got != maxConcurrentPids {
+	if got := p.bpfObjects.ValidPids.MaxEntries(); got != validPidsWords {
 		return fmt.Errorf(
 			"valid_pids BPF map holds %d entries, expected %d: BPF and userspace PID filter constants have diverged",
-			got, maxConcurrentPids)
+			got, validPidsWords)
 	}
 
 	return nil
@@ -149,15 +116,41 @@ func (p *Tracer) rebuildValidPids() error {
 		return nil
 	}
 
-	v := p.buildPidFilter()
+	p.validPidsMu.Lock()
+	defer p.validPidsMu.Unlock()
 
-	p.log.Debug("number of segments in pid filter cache", "len", len(v))
+	if p.validPids == nil {
+		p.validPids = make([]uint64, validPidsWords)
+	}
 
-	for i, segment := range v {
-		if err := p.bpfObjects.ValidPids.Put(uint32(i), segment); err != nil {
-			return fmt.Errorf("setting up pid segment %d in BPF space: %w", i, err)
+	pids := p.pidsFilter.ProcPIDs(ebpfcommon.PIDTypeKProbes)
+	want := map[uint32]uint64{}
+	for _, pid := range pids {
+		if uint64(pid) >= uint64(validPidsWords)*64 {
+			p.log.Warn("pid beyond the BPF PID filter, it won't be instrumented", "pid", pid)
+			continue
+		}
+		want[uint32(pid/64)] |= 1 << (pid % 64)
+	}
+
+	for word, bits := range p.validPids {
+		if _, ok := want[uint32(word)]; bits != 0 && !ok {
+			want[uint32(word)] = 0
 		}
 	}
+
+	written := 0
+	for word, bits := range want {
+		if p.validPids[word] == bits {
+			continue
+		}
+		if err := p.bpfObjects.ValidPids.Put(word, bits); err != nil {
+			return fmt.Errorf("writing word %d of the BPF PID filter: %w", word, err)
+		}
+		p.validPids[word] = bits
+		written++
+	}
+	p.log.Debug("BPF PID filter rebuilt", "pids", len(pids), "wordsWritten", written)
 
 	return nil
 }
@@ -181,12 +174,6 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 		return
 	}
 
-	// Keep the cache consistent with the updated filter.
-	if p.bpfObjects.PidCache != nil {
-		pidU32 := uint32(pid)
-		_ = p.bpfObjects.PidCache.Put(pidU32, pidU32)
-	}
-
 	p.runItersForPID(pid)
 }
 
@@ -206,13 +193,6 @@ func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 
 	if err := p.rebuildValidPids(); err != nil {
 		p.log.Error("rebuilding the BPF PID filter", "error", err)
-		return
-	}
-
-	// Remove from cache so next access re-evaluates.
-	if p.bpfObjects.PidCache != nil {
-		pidU32 := uint32(pid)
-		_ = p.bpfObjects.PidCache.Delete(pidU32)
 	}
 }
 
@@ -254,6 +234,7 @@ func (p *Tracer) constants() map[string]any {
 	} else {
 		m["filter_pids"] = int32(1)
 	}
+	maps.Copy(m, ebpfcommon.PIDFilterConstants())
 
 	if p.cfg.EBPF.TrackRequestHeaders ||
 		p.cfg.EBPF.ContextPropagation.IsEnabled() {

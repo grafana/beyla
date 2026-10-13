@@ -161,6 +161,14 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 				for gcGeneration, count := range snapshot.GCCollections {
 					totals[gcGeneration] = *count
 				}
+				// CPU totals are sampled at publication time, independently of EventPipe intervals.
+				user, system, cpuErr := readProcessCPUTimes(process)
+				if cpuErr != nil {
+					log.Debug("unable to read .NET process CPU times", "error", cpuErr)
+				} else {
+					snapshot.ProcessCPUTimeUser = &user
+					snapshot.ProcessCPUTimeSystem = &system
+				}
 				c.queue.SendCtx(publishCtx, []runtimemetrics.RuntimeMetricSnapshot{{
 					Service: file.ServiceAttrs(), PID: process.PID(), Generation: generation,
 					Time: time.Now(), Dotnet: snapshot,

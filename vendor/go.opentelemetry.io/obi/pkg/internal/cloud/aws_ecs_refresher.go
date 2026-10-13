@@ -1,15 +1,12 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ecs // import "go.opentelemetry.io/obi/pkg/internal/ecs"
+package cloud // import "go.opentelemetry.io/obi/pkg/internal/cloud"
 
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
-	"sync"
-	"time"
 
 	awsecs "github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
@@ -17,62 +14,27 @@ import (
 
 const describeTasksBatchSize = 100
 
-type Client interface {
+type ECSClient interface {
 	ListTasks(context.Context, *awsecs.ListTasksInput, ...func(*awsecs.Options)) (*awsecs.ListTasksOutput, error)
 	DescribeTasks(context.Context, *awsecs.DescribeTasksInput, ...func(*awsecs.Options)) (*awsecs.DescribeTasksOutput, error)
 }
 
-type Inventory struct {
-	client  Client
+type ECSInventoryRefresher struct {
+	client  ECSClient
 	cluster string
-	log     *slog.Logger
-
-	mu                   sync.RWMutex
-	serviceByIP          map[string]string
-	serviceByContainerID map[string]string
-	changes              chan struct{}
 }
 
-func NewInventory(client Client, cluster string) *Inventory {
-	return &Inventory{
-		client:      client,
-		cluster:     cluster,
-		log:         slog.With("component", "ecs.Inventory"),
-		serviceByIP: map[string]string{},
-		changes:     make(chan struct{}),
-	}
+func NewECSRefresher(client ECSClient, cluster string) *ECSInventoryRefresher {
+	return &ECSInventoryRefresher{client: client, cluster: cluster}
 }
 
-func (i *Inventory) ServiceNameForIP(ip string) (string, bool) {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	name, ok := i.serviceByIP[ip]
-	return name, ok
-}
+func (i *ECSInventoryRefresher) Name() string { return "ecs" }
 
-func (i *Inventory) ServiceNameForContainerID(id string) (string, bool) {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	name, ok := i.serviceByContainerID[id]
-	return name, ok
-}
-
-// Changes is closed when a successful refresh publishes a new snapshot.
-// Consumers obtain the next channel before reading the updated inventory.
-func (i *Inventory) Changes() <-chan struct{} {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	return i.changes
-}
-
-func (i *Inventory) Refresh(ctx context.Context) error {
+func (i *ECSInventoryRefresher) Refresh(ctx context.Context, snapshot *MetadataSnapshot) error {
 	taskARNs, err := i.listTasks(ctx)
 	if err != nil {
 		return err
 	}
-
-	next := make(map[string]string, len(taskARNs))
-	nextByContainerID := make(map[string]string, len(taskARNs))
 	for start := 0; start < len(taskARNs); start += describeTasksBatchSize {
 		end := min(start+describeTasksBatchSize, len(taskARNs))
 		out, err := i.client.DescribeTasks(ctx, &awsecs.DescribeTasksInput{
@@ -91,41 +53,19 @@ func (i *Inventory) Refresh(ctx context.Context) error {
 				continue
 			}
 			for _, ip := range taskIPs(task.Attachments) {
-				next[ip] = name
+				snapshot.ServiceByIP[ip] = name
 			}
 			for _, container := range task.Containers {
 				if container.RuntimeId != nil && *container.RuntimeId != "" {
-					nextByContainerID[*container.RuntimeId] = name
+					snapshot.ServiceByContainerID[*container.RuntimeId] = name
 				}
 			}
 		}
 	}
-
-	i.mu.Lock()
-	i.serviceByIP = next
-	i.serviceByContainerID = nextByContainerID
-	close(i.changes)
-	i.changes = make(chan struct{})
-	i.mu.Unlock()
 	return nil
 }
 
-func (i *Inventory) Run(ctx context.Context, refreshInterval time.Duration) {
-	ticker := time.NewTicker(refreshInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := i.Refresh(ctx); err != nil {
-				i.log.Warn("can't refresh ECS task inventory", "error", err)
-			}
-		}
-	}
-}
-
-func (i *Inventory) listTasks(ctx context.Context) ([]string, error) {
+func (i *ECSInventoryRefresher) listTasks(ctx context.Context) ([]string, error) {
 	var taskARNs []string
 	var nextToken *string
 	for {

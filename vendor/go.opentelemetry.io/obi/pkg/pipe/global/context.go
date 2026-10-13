@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
-	"go.opentelemetry.io/obi/pkg/internal/ecs"
+	"go.opentelemetry.io/obi/pkg/internal/cloud"
 	netebpf "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	statsebpf "go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
@@ -44,8 +44,8 @@ type ContextInfo struct {
 	// DockerMetadata stores per-PID information of docker containers
 	DockerMetadata *docker.ContainerStore
 	// ECSInventory is shared by endpoint resolution and process metadata enrichment.
-	// TODO: add ECS name resolution features to network metrics
-	ECSInventory *ecs.Inventory
+	// TODO: add AWS name resolution features to network metrics
+	CloudMetaInventory *cloud.Inventory
 
 	// OverrideAppExportQueue allows overriding the output queue of the application exporter
 	// to connect your own application exporters outside the OBI code base. If left unset, OBI will

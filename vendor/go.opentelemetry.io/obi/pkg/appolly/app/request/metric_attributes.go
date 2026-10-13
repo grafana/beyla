@@ -4,6 +4,7 @@
 package request // import "go.opentelemetry.io/obi/pkg/appolly/app/request"
 
 import (
+	"net"
 	"strconv"
 	"strings"
 
@@ -177,6 +178,17 @@ func MessagingMessageID(val string) attribute.KeyValue {
 	return attribute.Key(attr.MessagingMessageID).String(val)
 }
 
+const (
+	RPCSystemAWSAPI = "aws-api"
+	RPCSystemONCRPC = "onc_rpc"
+)
+
+const (
+	awsServiceS3  = "S3"
+	awsServiceSQS = "SQS"
+	awsServiceSNS = "SNS"
+)
+
 func RPCSystem(val string) attribute.KeyValue {
 	return attribute.Key(attr.RPCSystem).String(val)
 }
@@ -190,7 +202,7 @@ func S3RPCMethod(method string) string {
 	if method == "" {
 		return ""
 	}
-	return "S3/" + method
+	return awsServiceS3 + "/" + method
 }
 
 // SNSRPCMethod returns the fully-qualified rpc.method value for AWS SNS operations.
@@ -198,7 +210,7 @@ func SNSRPCMethod(method string) string {
 	if method == "" {
 		return ""
 	}
-	return "SNS/" + method
+	return awsServiceSNS + "/" + method
 }
 
 func AWSRequestID(val string) attribute.KeyValue {
@@ -264,6 +276,13 @@ func HTTPClientHost(span *Span) string {
 	}
 
 	return HostAsServer(span)
+}
+
+func hostWithoutPort(hostPort string) string {
+	if host, _, err := net.SplitHostPort(hostPort); err == nil {
+		return host
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(hostPort, "["), "]")
 }
 
 func HTTPScheme(span *Span) string {

@@ -88,14 +88,14 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventsDockerDecorated,
 	))
 
-	processEventsECSDecorated := msg2.QueueFromConfig[exec.ProcessEvent](obiCfg, "processEventsECSDecorated")
-	swi.Add(transform.ECSProcessEventDecoratorProvider(
-		ctxInfo, processEventsDockerDecorated, processEventsECSDecorated,
-	), swarm.WithID("ECSProcessEventDecorator"))
+	processEventsCloudDecorated := msg2.QueueFromConfig[exec.ProcessEvent](obiCfg, "processEventsCloudDecorated")
+	swi.Add(transform.CloudProcessEventDecoratorProvider(
+		ctxInfo, processEventsDockerDecorated, processEventsCloudDecorated,
+	), swarm.WithID("CloudProcessEventDecorator"))
 
 	runtimeMetrics := newRuntimeMetricsQueue(config.AsOBI())
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsECSDecorated, runtimeMetrics)
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsCloudDecorated, runtimeMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}

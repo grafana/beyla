@@ -320,9 +320,22 @@
           "type": "string",
           "x-env-var": "OTEL_EBPF_CLUSTER_NAME"
         },
+        "refresh_interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OTEL_EBPF_CLOUD_META_REFRESH_INTERVAL"
+        },
         "region": {
           "type": "string",
           "x-env-var": "OTEL_EBPF_CLOUD_REGION"
+        },
+        "route53": {
+          "$ref": "#/$defs/Route53MetadataConfig"
         }
       },
       "type": "object"
@@ -662,21 +675,6 @@
         "wakeup_len": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_BPF_WAKEUP_LEN"
-        }
-      },
-      "type": "object"
-    },
-    "ECSNameResolverConfig": {
-      "properties": {
-        "refresh_interval": {
-          "type": "string",
-          "pattern": "^[0-9]+(ms|s|m)$",
-          "examples": [
-            "30s",
-            "5m",
-            "1ms"
-          ],
-          "x-env-var": "OTEL_EBPF_NAME_RESOLVER_ECS_REFRESH_INTERVAL"
         }
       },
       "type": "object"
@@ -1711,9 +1709,6 @@
           "type": "integer",
           "x-env-var": "OTEL_EBPF_NAME_RESOLVER_CACHE_LEN"
         },
-        "ecs": {
-          "$ref": "#/$defs/ECSNameResolverConfig"
-        },
         "sources": {
           "items": {
             "type": "string",
@@ -1723,7 +1718,8 @@
               "k8s",
               "kube",
               "kubernetes",
-              "rdns"
+              "rdns",
+              "route53"
             ]
           },
           "type": "array",
@@ -2312,6 +2308,28 @@
             "none"
           ],
           "x-env-var": "OTEL_EBPF_REVERSE_DNS_TYPE"
+        }
+      },
+      "type": "object"
+    },
+    "Route53MetadataConfig": {
+      "properties": {
+        "hosted_zone_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-env-var": "OTEL_EBPF_NAME_RESOLVER_ROUTE53_HOSTED_ZONE_IDS"
+        },
+        "refresh_interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ],
+          "x-env-var": "OTEL_EBPF_NAME_RESOLVER_ROUTE53_REFRESH_INTERVAL"
         }
       },
       "type": "object"

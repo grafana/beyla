@@ -16,10 +16,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/internal/cloud"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	memorystore "go.opentelemetry.io/obi/pkg/internal/rdns/store"
 	"go.opentelemetry.io/obi/pkg/kube"
-	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -39,6 +39,7 @@ const (
 	SourceKubernetes Source = "kubernetes"
 	SourceRDNS       Source = "rdns"
 	SourceECS        Source = "ecs"
+	SourceRoute53    Source = "route53"
 )
 
 const (
@@ -46,6 +47,7 @@ const (
 	ResolverK8s
 	ResolverRDNS
 	ResolverECS
+	ResolverRoute53
 )
 
 func resolverSources(src []Source) maps.Bits {
@@ -56,16 +58,17 @@ func resolverSources(src []Source) maps.Bits {
 		SourceKubernetes: ResolverK8s,
 		SourceRDNS:       ResolverRDNS,
 		SourceECS:        ResolverECS,
+		SourceRoute53:    ResolverRoute53,
 	}, maps.WithTransform(func(s Source) Source {
 		return Source(strings.ToLower(string(s)))
 	}))
 }
 
 type NameResolverConfig struct {
-	// Sources specifies the backends used for name resolving. Accepted values: dns, ecs, k8s, rdns.
+	// Sources specifies the backends used for name resolving. Accepted values: dns, ecs, k8s, rdns, route53.
 	// The "ecs" source requires ecs:ListTasks and ecs:DescribeTasks permissions.
-	Sources []Source              `yaml:"sources" env:"OTEL_EBPF_NAME_RESOLVER_SOURCES" envSeparator:","`
-	ECS     ECSNameResolverConfig `yaml:"ecs"`
+	// The "route53" source requires route53:ListResourceRecordSets on the configured hosted zones.
+	Sources []Source `yaml:"sources" env:"OTEL_EBPF_NAME_RESOLVER_SOURCES" envSeparator:","`
 	// CacheLen specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_NAME_RESOLVER_CACHE_LEN" validate:"gt=0"`
@@ -81,26 +84,20 @@ type CloudMetadataConfig struct {
 	ClusterName string `yaml:"cluster_name" env:"OTEL_EBPF_CLUSTER_NAME"`
 	// Region overrides automatic region detection.
 	Region string `yaml:"region" env:"OTEL_EBPF_CLOUD_REGION"`
-}
+	// RefreshInterval controls how often the cloud metadata inventory is refreshed.
+	RefreshInterval time.Duration `yaml:"refresh_interval" env:"OTEL_EBPF_CLOUD_META_REFRESH_INTERVAL" validate:"gt=0"`
 
-// ECSNameResolverConfig configures ECS service name resolution.
-type ECSNameResolverConfig struct {
-	// RefreshInterval controls how often the ECS task inventory is refreshed.
-	RefreshInterval time.Duration `yaml:"refresh_interval" env:"OTEL_EBPF_NAME_RESOLVER_ECS_REFRESH_INTERVAL" validate:"gt=0"`
-}
-
-type ecsServiceResolver interface {
-	ServiceNameForIP(string) (string, bool)
-	ServiceNameForContainerID(string) (string, bool)
+	// Route53 provides configuration for Route53 metadata extraction
+	Route53 Route53MetadataConfig `yaml:"route53"`
 }
 
 type NameResolver struct {
-	cache    *expirable.LRU[string, string]
-	cfg      *NameResolverConfig
-	store    *kube.Store
-	dnsCache *memorystore.InMemory
-	ecs      ecsServiceResolver
-	logger   *slog.Logger
+	cache          *expirable.LRU[string, string]
+	cfg            *NameResolverConfig
+	store          *kube.Store
+	dnsCache       *memorystore.InMemory
+	cloudInventory *cloud.Inventory
+	logger         *slog.Logger
 
 	sources maps.Bits
 }
@@ -134,13 +131,6 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 		sources &= ^ResolverK8s
 	}
 
-	var ecsResolver ecsServiceResolver
-	if sources.Has(ResolverECS) &&
-		ctxInfo.NodeMeta.Features.Has(metadata.ClusterECS) &&
-		ctxInfo.ECSInventory != nil {
-		ecsResolver = ctxInfo.ECSInventory
-	}
-
 	logger := slog.With("component", "transform.NameResolver")
 	dnsCache, err := memorystore.NewInMemory(cfg.CacheLen)
 	if err != nil {
@@ -148,13 +138,13 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 	}
 
 	nr := NameResolver{
-		cfg:      cfg,
-		store:    store,
-		dnsCache: dnsCache,
-		ecs:      ecsResolver,
-		cache:    expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
-		sources:  sources,
-		logger:   logger,
+		cfg:            cfg,
+		store:          store,
+		dnsCache:       dnsCache,
+		cloudInventory: ctxInfo.CloudMetaInventory,
+		cache:          expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
+		sources:        sources,
+		logger:         logger,
 	}
 
 	in := input.Subscribe(msg.SubscriberName("transform.NameResolver"))
@@ -205,7 +195,7 @@ func parseK8sFQDN(fqdn string) (string, string) {
 
 func (nr *NameResolver) resolveNames(span *request.Span) {
 	var hn, pn, ns string
-	nr.resolveLocalECSService(span)
+	nr.resolveLocalCloudInventory(span)
 
 	if span.Type == request.EventTypeDNS && nr.sources.Has(ResolverRDNS) && nr.dnsCache != nil {
 		nr.handleRDNS(span)
@@ -259,11 +249,11 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 	)
 }
 
-func (nr *NameResolver) resolveLocalECSService(span *request.Span) {
-	if nr.ecs == nil || !span.Service.AutoName() {
+func (nr *NameResolver) resolveLocalCloudInventory(span *request.Span) {
+	if nr.cloudInventory == nil || !span.Service.AutoName() {
 		return
 	}
-	if name, ok := nr.ecs.ServiceNameForContainerID(span.Service.RuntimeContainerID); ok {
+	if name, ok := nr.cloudInventory.ServiceNameForContainerID(span.Service.RuntimeContainerID); ok {
 		span.Service.UID.Name = name
 	}
 }
@@ -324,8 +314,8 @@ func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string, s
 		}
 	}
 
-	if nr.sources.Has(ResolverECS) && nr.ecs != nil {
-		if name, ok := nr.ecs.ServiceNameForIP(ip); ok {
+	if nr.cloudInventory != nil {
+		if name, ok := nr.cloudInventory.ServiceNameForIP(ip); ok {
 			return name, "", ""
 		}
 	}

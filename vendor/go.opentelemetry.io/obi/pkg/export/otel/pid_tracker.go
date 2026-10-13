@@ -117,13 +117,29 @@ func (p *PidServiceTracker) ReplaceUID(staleUID, newUID svc.UID) {
 		return
 	}
 
-	if pids, ok := p.servicePIDs[staleUID]; ok {
-		for pid := range pids {
-			p.pidToService[pid] = newUID
-		}
-		p.servicePIDs[newUID] = pids
-		delete(p.servicePIDs, staleUID)
+	stalePIDs, ok := p.servicePIDs[staleUID]
+	if !ok {
+		return
 	}
+
+	newPIDs, ok := p.servicePIDs[newUID]
+	if !ok {
+		newPIDs = map[app.PID]struct{}{}
+		p.servicePIDs[newUID] = newPIDs
+	}
+
+	for pid := range stalePIDs {
+		p.pidToService[pid] = newUID
+		newPIDs[pid] = struct{}{}
+	}
+
+	delete(p.servicePIDs, staleUID)
+
+	staleName := staleUID.NameNamespace()
+	if p.names[staleName] == staleUID {
+		delete(p.names, staleName)
+	}
+	p.names[newUID.NameNamespace()] = newUID
 }
 
 func (p *PidServiceTracker) Count() int {

@@ -500,6 +500,7 @@ func getDefinitions(
 				attr.HTTPRequestBodySize:     false,
 				attr.HTTPResponseBodySize:    false,
 				attr.OBIHTTPResponseObserved: false,
+				attr.HTTPUrlTemplate:         false,
 			},
 		},
 		GPUCudaKernelLaunchCalls.Section: {
@@ -725,6 +726,16 @@ func getDefinitions(
 		GoRuntimeScheduleDuration.Section: {
 			SubGroups:  []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{},
+		},
+		DotnetProcessCPUCount.Section: {
+			SubGroups:  []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{},
+		},
+		DotnetProcessCPUTime.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.CPUMode: true,
+			},
 		},
 		DotnetGCCollections.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes},

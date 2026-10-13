@@ -1023,6 +1023,10 @@ copy_oats() {
 adjust_oats_compose_paths() {
     echo "  Adjusting OATs docker-compose paths..."
     find "$OATS_DEST" -name "docker-compose*.yml" | while read -r file; do
+        # Builds only download dependencies; host networking is needed at runtime.
+        # Bake rejects build.network: host without a network.host entitlement.
+        sed_i -e '/^[[:space:]]*network: host[[:space:]]*$/d' "$file"
+
         # Component build contexts: OATs reference OBI components via relative path
         # ../../integration/components/ → absolute path via .obi-src
         # Depth matches upstream (4 levels from oats/SUBDIR/ to repo root)

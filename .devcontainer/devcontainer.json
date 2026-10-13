@@ -1,0 +1,60 @@
+{
+  "name": "Beyla (OBI generator)",
+  "build": {
+    "dockerfile": "../.obi-src/generator.Dockerfile",
+    "context": "../.obi-src"
+  },
+  "initializeCommand": ["sh", ".devcontainer/initialize.sh"],
+  "features": {
+    "./features/development": {}
+  },
+  "overrideCommand": true,
+  "init": true,
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind",
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker-host.sock,type=bind"
+  ],
+  "runArgs": ["--network=host"],
+  "postStartCommand": "sudo /usr/local/bin/beyla-docker-start",
+  "containerEnv": {
+    "DOCKER_HOST": "unix:///var/run/docker.sock",
+    "GOROOT": "/usr/local/go",
+    "GOPATH": "/go",
+    "BPF2GO": "/go/bin/bpf2go",
+    "BPF_CLANG": "clang-22",
+    "CLANG": "clang-22",
+    "BPF_CFLAGS": "-O2 -g -Wall -Werror",
+    "GOCACHE": "/home/vscode/.cache/go-build"
+  },
+  "remoteEnv": {
+    "PATH": "/usr/lib/llvm22/bin:${containerEnv:PATH}"
+  },
+  "capAdd": ["SYS_PTRACE"],
+  "securityOpt": ["seccomp=unconfined"],
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go"],
+      "settings": {
+        "go.goroot": "/usr/local/go",
+        "go.gopath": "/go",
+        "go.toolsManagement.autoUpdate": false,
+        "go.alternateTools": {
+          "gopls": "/go/bin/gopls",
+          "dlv": "/go/bin/dlv"
+        },
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "[go]": {
+          "editor.defaultFormatter": "golang.go",
+          "editor.formatOnSave": true
+        }
+      }
+    },
+    "jetbrains": {
+      "backend": "IntelliJ",
+      "plugins": ["org.jetbrains.plugins.go"]
+    }
+  }
+}

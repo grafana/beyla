@@ -30,6 +30,8 @@ type InternalMetrics struct {
 	KubeCacheForwardLag      Name
 	BpfNetworkIgnoredPackets Name
 	BpfNetworkPackets        Name
+	BpfRingbufWrites         Name
+	BpfRingbufWriteFailures  Name
 	QueueCapacityRatio       Name
 }
 
@@ -98,6 +100,16 @@ func NewInternalMetrics(prefix string) InternalMetrics {
 		BpfNetworkPackets: metric(Name{
 			OTEL: prefix + ".bpf.network.packets",
 			Unit: "{packet}",
+			Type: InstrumentCounter,
+		}),
+		BpfRingbufWrites: metric(Name{
+			OTEL: prefix + ".bpf.ringbuf.writes",
+			Unit: "{write}",
+			Type: InstrumentCounter,
+		}),
+		BpfRingbufWriteFailures: metric(Name{
+			OTEL: prefix + ".bpf.ringbuf.write.failures",
+			Unit: "{write}",
 			Type: InstrumentCounter,
 		}),
 		QueueCapacityRatio: metric(Name{

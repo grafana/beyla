@@ -15,8 +15,8 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/cloud"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	"go.opentelemetry.io/obi/pkg/internal/cloud"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	memorystore "go.opentelemetry.io/obi/pkg/internal/rdns/store"
 	"go.opentelemetry.io/obi/pkg/kube"
@@ -206,7 +206,7 @@ func (nr *NameResolver) resolveNames(span *request.Span) {
 		if hn == "" || hn == span.Host {
 			hostHeader := request.HostFromSchemeHost(span)
 			if hostHeader != "" {
-				hn, span.OtherNamespace = parseK8sFQDN(hostHeader)
+				hn, span.OtherNamespace = parseK8sFQDN(request.HostWithoutPort(hostHeader))
 			}
 		}
 		pn, ns, _ = nr.resolve(&span.Service, span.Peer, span.PeerName)

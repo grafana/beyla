@@ -90,9 +90,13 @@ func (ex *Expirer[Record, Metric, ValType]) ForRecord(r Record, extraAttrs ...at
 	})
 }
 
+// recordAttributes returns the record's attribute set and the cache key that
+// identifies it. Getters omit attributes they have no value for, so the key
+// carries each attribute's name next to its value: otherwise two records that
+// omit different attributes could share a key.
 func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttrs ...attribute.KeyValue) (attribute.Set, []string) {
 	keyVals := make([]attribute.KeyValue, 0, len(ex.attrs)+len(extraAttrs))
-	vals := make([]string, 0, len(ex.attrs)+len(extraAttrs))
+	key := make([]string, 0, 2*(len(ex.attrs)+len(extraAttrs)))
 
 	for _, attr := range ex.attrs {
 		kv := sanitizeKeyValue(attr.Get(m))
@@ -100,15 +104,15 @@ func (ex *Expirer[Record, Metric, ValType]) recordAttributes(m Record, extraAttr
 			continue
 		}
 		keyVals = append(keyVals, kv)
-		vals = append(vals, kv.Value.Emit())
+		key = append(key, string(kv.Key), kv.Value.Emit())
 	}
 	for i := range extraAttrs {
 		kv := sanitizeKeyValue(extraAttrs[i])
 		keyVals = append(keyVals, kv)
-		vals = append(vals, kv.Value.Emit())
+		key = append(key, string(kv.Key), kv.Value.Emit())
 	}
 
-	return attribute.NewSet(keyVals...), vals
+	return attribute.NewSet(keyVals...), key
 }
 
 func sanitizeKeyValue(kv attribute.KeyValue) attribute.KeyValue {

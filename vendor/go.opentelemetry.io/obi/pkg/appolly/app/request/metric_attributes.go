@@ -270,6 +270,8 @@ func HostFromSchemeHost(span *Span) string {
 	return ""
 }
 
+// HTTPClientHost returns the host an HTTP client request was sent to, as the
+// request named it: the Host header keeps a non-default port.
 func HTTPClientHost(span *Span) string {
 	if host := HostFromSchemeHost(span); host != "" {
 		return host
@@ -278,7 +280,15 @@ func HTTPClientHost(span *Span) string {
 	return HostAsServer(span)
 }
 
-func hostWithoutPort(hostPort string) string {
+// HTTPClientServerAddr returns the server.address of an HTTP client request,
+// which semconv defines without the port.
+func HTTPClientServerAddr(span *Span) string {
+	return HostWithoutPort(HTTPClientHost(span))
+}
+
+// HostWithoutPort strips the port, and the brackets of an IPv6 literal, from a
+// host as an HTTP Host header carries it.
+func HostWithoutPort(hostPort string) string {
 	if host, _, err := net.SplitHostPort(hostPort); err == nil {
 		return host
 	}

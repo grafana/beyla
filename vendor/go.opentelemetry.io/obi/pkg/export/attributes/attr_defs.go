@@ -361,6 +361,7 @@ func getDefinitions(
 		nil,
 		map[attr.Name]Default{
 			attr.ServerAddr: true,
+			attr.ServerPort: true,
 		},
 		extraGroupAttributes[GroupGRPCClientInfo],
 	)
@@ -435,6 +436,7 @@ func getDefinitions(
 				attr.RPCMethod:             true,
 				attr.RPCSystem:             true,
 				attr.RPCResponseStatusCode: true,
+				attr.ErrorType:             true,
 			},
 		},
 		DBClientDuration.Section: {
@@ -445,7 +447,7 @@ func getDefinitions(
 				attr.DBOperation:          true,
 				attr.DBSystemName:         true,
 				attr.ErrorType:            true,
-				attr.DBCollectionName:     false,
+				attr.DBCollectionName:     true,
 				attr.DBNamespace:          true,
 				attr.DBResponseStatusCode: true,
 			},
@@ -456,7 +458,7 @@ func getDefinitions(
 				attr.DBOperation:          true,
 				attr.DBSystemName:         true,
 				attr.ErrorType:            true,
-				attr.DBCollectionName:     false,
+				attr.DBCollectionName:     true,
 				attr.DBNamespace:          true,
 				attr.DBResponseStatusCode: true,
 			},

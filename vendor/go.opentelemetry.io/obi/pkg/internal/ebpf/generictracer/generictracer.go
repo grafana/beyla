@@ -224,6 +224,7 @@ func (p *Tracer) constants() map[string]any {
 	m := make(map[string]any, 2)
 
 	m["wakeup_data_bytes"] = uint32(p.cfg.EBPF.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}))
+	m["ringbuf_metrics_enabled"] = p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics)
 
 	// The eBPF side does some basic filtering of events that do not belong to
 	// processes which we monitor. We filter more accurately in the userspace, but

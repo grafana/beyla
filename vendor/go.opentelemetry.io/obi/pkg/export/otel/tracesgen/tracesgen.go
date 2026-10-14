@@ -676,6 +676,19 @@ func appendIfSet(attrs []attribute.KeyValue, f func(string) attribute.KeyValue, 
 	return append(attrs, f(val))
 }
 
+// appendElasticsearchPathParameters records the URL path parameters OBI maps,
+// keyed by their Elasticsearch API specification names. The index parameter
+// carries the same value as db.collection.name.
+func appendElasticsearchPathParameters(attrs []attribute.KeyValue, es *request.Elasticsearch) []attribute.KeyValue {
+	if es.DBCollectionName != "" {
+		attrs = append(attrs, semconv.DBOperationParameter("index", es.DBCollectionName))
+	}
+	if es.DocumentID != "" {
+		attrs = append(attrs, semconv.DBOperationParameter("id", es.DocumentID))
+	}
+	return attrs
+}
+
 // appendHTTPResponseStatus reports the status only when one was seen: semconv requires
 // http.response.status_code "if and only if one was received/sent".
 func appendHTTPResponseStatus(attrs []attribute.KeyValue, span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
@@ -817,7 +830,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		attrs = []attribute.KeyValue{
 			request.ServerPort(span.HostPort),
 		}
-		attrs = appendIfSet(attrs, request.ServerAddr, host)
+		attrs = appendIfSet(attrs, request.ServerAddr, request.HostWithoutPort(host))
 		attrs = appendPeerService(attrs, span, optionalAttrs)
 
 		if transport != httpTransportNone {
@@ -840,6 +853,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 
 		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
 			attrs = appendIfSet(attrs, request.DBCollectionName, span.Elasticsearch.DBCollectionName)
+			attrs = appendElasticsearchPathParameters(attrs, span.Elasticsearch)
 			attrs = appendIfSet(attrs, request.ElasticsearchNodeName, span.Elasticsearch.NodeName)
 			attrs = appendIfSet(attrs, request.DBNamespace, span.DBNamespace)
 			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
@@ -1583,6 +1597,9 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		attrs = []attribute.KeyValue{
 			request.ServerPort(span.HostPort),
 			request.RPCSystem(request.RPCSystemONCRPC),
+		}
+		if span.ResponseObservation == request.ResponseParsed {
+			attrs = append(attrs, semconv.RPCResponseStatusCode(request.SunRPCResponseStatusCode(span.Status)))
 		}
 		attrs = appendIfSet(attrs, request.ServerAddr, request.HostAsServer(span))
 		attrs = appendIfSet(attrs, semconv.RPCMethod, span.SunRPCMethodForExport())

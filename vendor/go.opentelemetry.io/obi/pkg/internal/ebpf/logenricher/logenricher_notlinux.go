@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -22,7 +23,7 @@ import (
 
 type Tracer struct{}
 
-func New(_ *obi.Config) *Tracer                                          { return nil }
+func New(_ *obi.Config, _ imetrics.Reporter) *Tracer                     { return nil }
 func (p *Tracer) AllowPID(_ app.PID, _ uint32, _ *exec.FileInfo)         {}
 func (p *Tracer) BlockPID(_ app.PID, _ uint32)                           {}
 func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error)           { return nil, nil }

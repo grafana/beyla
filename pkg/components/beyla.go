@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
+	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
@@ -292,6 +293,10 @@ func buildCommonContextInfo(
 	)
 
 	ctxInfo.DockerMetadata = docker.NewStore()
+
+	ctxInfo.CloudMetaInventory = transform.NewCloudMetadataInventory(
+		ctx, &ctxInfo.NodeMeta, config.NameResolver, config.CloudMetadata,
+	)
 
 	attributeGroups(config, ctxInfo)
 

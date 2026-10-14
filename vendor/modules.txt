@@ -875,6 +875,7 @@ go.opentelemetry.io/obi/pkg/appolly/discover/exec
 go.opentelemetry.io/obi/pkg/appolly/services
 go.opentelemetry.io/obi/pkg/appolly/traces
 go.opentelemetry.io/obi/pkg/buildinfo
+go.opentelemetry.io/obi/pkg/cloud
 go.opentelemetry.io/obi/pkg/config
 go.opentelemetry.io/obi/pkg/docker
 go.opentelemetry.io/obi/pkg/ebpf
@@ -909,7 +910,6 @@ go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
 go.opentelemetry.io/obi/pkg/health
 go.opentelemetry.io/obi/pkg/internal/avoidedsvc
-go.opentelemetry.io/obi/pkg/internal/cloud
 go.opentelemetry.io/obi/pkg/internal/cpython/runtime
 go.opentelemetry.io/obi/pkg/internal/denotools
 go.opentelemetry.io/obi/pkg/internal/dotnet
@@ -1772,6 +1772,8 @@ k8s.io/client-go/tools/clientcmd
 k8s.io/client-go/tools/clientcmd/api
 k8s.io/client-go/tools/clientcmd/api/latest
 k8s.io/client-go/tools/clientcmd/api/v1
+k8s.io/client-go/tools/leaderelection
+k8s.io/client-go/tools/leaderelection/resourcelock
 k8s.io/client-go/tools/metrics
 k8s.io/client-go/tools/pager
 k8s.io/client-go/tools/reference
@@ -1842,7 +1844,7 @@ k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/ptr
 k8s.io/utils/trace
-# sigs.k8s.io/controller-runtime v0.25.1
+# sigs.k8s.io/controller-runtime v0.25.2
 ## explicit; go 1.26.0
 sigs.k8s.io/controller-runtime/pkg/cache/cacheapi
 sigs.k8s.io/controller-runtime/pkg/client
@@ -1851,6 +1853,7 @@ sigs.k8s.io/controller-runtime/pkg/client/internal/consistencyhandler
 sigs.k8s.io/controller-runtime/pkg/client/internal/writebarrier
 sigs.k8s.io/controller-runtime/pkg/controller/controllerutil
 sigs.k8s.io/controller-runtime/pkg/log
+sigs.k8s.io/controller-runtime/pkg/metrics
 # sigs.k8s.io/e2e-framework v0.7.0
 ## explicit; go 1.25.7
 sigs.k8s.io/e2e-framework/klient

@@ -198,6 +198,9 @@ SCHEMA_TRANSFORMS=(
     # them as obi.* because attr.VendorPrefix defaults to "obi" upstream.
     'metric_name: obi\.|metric_name: beyla.'
     'id: metric\.obi\.|id: metric.beyla.'
+    # Same rename for OBI's definition/2 registry files, where metrics are
+    # identified by `name:` instead of `metric_name:`/`id:`.
+    '^\(  - name: \)obi\.|\1beyla.'
 
     # OBI's internal build-info attributes are all derived from
     # attr.VendorPrefix. The behavioral transforms above already rename version
@@ -529,11 +532,14 @@ transform_go_imports_and_paths() {
     # only resolves inside .obi-src, so the build context must be pathObiSrc
     # and the dockerfile literals must stay relative to that context (undo the
     # ".obi-src/…" rewrite apply_go_import_path_transforms just applied).
-    if [[ -f "$OBI_DEST/go_auto_sdk_test.go" ]] \
-        && grep -q 'buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile)' "$OBI_DEST/go_auto_sdk_test.go"; then
+    if [[ -f "$OBI_DEST/go_auto_sdk_test.go" ]]; then
+        if ! grep -q 'buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile[,)]' "$OBI_DEST/go_auto_sdk_test.go"; then
+            echo "ERROR: go_auto_sdk_test.go no longer calls buildDockerImage as expected; update the goautosdk transform" >&2
+            exit 1
+        fi
         sed_i \
             -e 's|dockerfile: "\.obi-src/internal/test/integration/components/goautosdk/|dockerfile: "internal/test/integration/components/goautosdk/|g' \
-            -e 's|buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile)|buildDockerImageWithContext(t.Context(), t.Output(), version.image, pathObiSrc, version.dockerfile)|g' \
+            -e 's|buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile\([,)]\)|buildDockerImageWithContext(t.Context(), t.Output(), version.image, pathObiSrc, version.dockerfile\1|g' \
             "$OBI_DEST/go_auto_sdk_test.go"
     fi
 

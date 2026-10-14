@@ -1,0 +1,1199 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package goexec // import "go.opentelemetry.io/obi/pkg/internal/goexec"
+
+import (
+	"bytes"
+	"debug/dwarf"
+	"debug/elf"
+	_ "embed"
+	"fmt"
+	"log/slog"
+	"strings"
+
+	"github.com/grafana/go-offsets-tracker/pkg/offsets"
+	"github.com/hashicorp/go-version"
+)
+
+func log() *slog.Logger {
+	return slog.With("component", "goexec.structMemberOffsets")
+}
+
+// this const table must match what's in go_offsets.h
+type GoOffset uint32
+
+var (
+	grpcOneSixZero      = version.Must(version.NewVersion("1.60.0"))
+	grpcOneSixNine      = version.Must(version.NewVersion("1.69.0"))
+	grpcOneSevenSeven   = version.Must(version.NewVersion("1.77.0"))
+	http2ZeroFortyFive  = version.Must(version.NewVersion("0.45.0"))
+	mongoOneThirteenOne = version.Must(version.NewVersion("1.13.1"))
+	pqOneElevenZero     = version.Must(version.NewVersion("1.11.0"))
+)
+
+type activationModule struct {
+	path string
+	sums map[string]string
+}
+
+// Activation writes private structs owned by each of these modules.
+var goAutoSDKActivationModules = [...]activationModule{
+	{
+		path: "go.opentelemetry.io/auto/sdk",
+		sums: map[string]string{
+			"v1.1.0": "h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=",
+			"v1.2.0": "h1:YpRtUFjvhSymycLS2T81lT6IGhcUP+LUPtv0iv1N8bM=",
+			"v1.2.1": "h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=",
+		},
+	},
+	{
+		path: "go.opentelemetry.io/otel",
+		sums: map[string]string{
+			"v1.33.0": "h1:/FerN9bax5LoK51X/sI0SVYrjSE0/yUL7DpxW4K3FWw=",
+			"v1.34.0": "h1:zRLXxLCgL1WyKsPVrgbSdMN4c0FMkDAskSTQP+0hdUY=",
+			"v1.35.0": "h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ=",
+			"v1.36.0": "h1:UumtzIklRBY6cI/lllNZlALOF5nNIzJVb16APdvgTXg=",
+			"v1.37.0": "h1:9zhNfelUvx0KBfu/gb+ZgeAfAgtWrfHJZcAqFC228wQ=",
+			"v1.38.0": "h1:RkfdswUDRimDg0m2Az18RKOsnI8UDzppJAtj01/Ymk8=",
+			"v1.39.0": "h1:8yPrr/S0ND9QEfTfdP9V+SiwT4E0G7Y5MO7p85nis48=",
+			"v1.40.0": "h1:oA5YeOcpRTXq6NN7frwmwFR0Cn3RhTVZvXsP4duvCms=",
+			"v1.41.0": "h1:YlEwVsGAlCvczDILpUXpIpPSL/VPugt7zHThEMLce1c=",
+			"v1.42.0": "h1:lSQGzTgVR3+sgJDAU/7/ZMjN9Z+vUip7leaqBKy4sho=",
+			"v1.43.0": "h1:mYIM03dnh5zfN7HautFE4ieIig9amkNANT+xcVxAj9I=",
+			"v1.44.0": "h1:JjwHmHpA4iZ3wBxluu2fbbE7j4kqlE8jXyAyPXH7HqU=",
+			"v1.45.0": "h1:pdrWmLHofpubmArBv1LgFSv1Z0Ie/ppdZzu+kUN5EeU=",
+			"v1.46.0": "h1:FHt5/CDyVxi/8IM1CH7VE/rRgq3kLHa2mSTVMO8AWyc=",
+		},
+	},
+	{
+		path: "go.opentelemetry.io/otel/trace",
+		sums: map[string]string{
+			"v1.33.0": "h1:cCJuF7LRjUFso9LPnEAHJDB2pqzp+hbO8eu1qqW2d/s=",
+			"v1.34.0": "h1:+ouXS2V8Rd4hp4580a8q23bg0azF2nI8cqLYnC8mh/k=",
+			"v1.35.0": "h1:dPpEfJu1sDIqruz7BHFG3c7528f6ddfSWfFDVt/xgMs=",
+			"v1.36.0": "h1:ahxWNuqZjpdiFAyrIoQ4GIiAIhxAunQR6MUoKrsNd4w=",
+			"v1.37.0": "h1:HLdcFNbRQBE2imdSEgm/kwqmQj1Or1l/7bW6mxVK7z4=",
+			"v1.38.0": "h1:Fxk5bKrDZJUH+AMyyIXGcFAPah0oRcT+LuNtJrmcNLE=",
+			"v1.39.0": "h1:2d2vfpEDmCJ5zVYz7ijaJdOF59xLomrvj7bjt6/qCJI=",
+			"v1.40.0": "h1:WA4etStDttCSYuhwvEa8OP8I5EWu24lkOzp+ZYblVjw=",
+			"v1.41.0": "h1:Vbk2co6bhj8L59ZJ6/xFTskY+tGAbOnCtQGVVa9TIN0=",
+			"v1.42.0": "h1:OUCgIPt+mzOnaUTpOQcBiM/PLQ/Op7oq6g4LenLmOYY=",
+			"v1.43.0": "h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09nk+3A=",
+			"v1.44.0": "h1:jxF5CsGYCe74MCRx2X4g7WsY/VBKRqqpNvXlX/6gtIk=",
+			"v1.45.0": "h1:l/mP6Uv7oNO7/TblbhpbgMidxhq1uO/rPsikOyVhxag=",
+			"v1.46.0": "h1:OULy7ccdJnZtJ0UDYFOIGaCmiWzJ8Vi2G/Rsu60qs1c=",
+		},
+	},
+}
+
+const (
+	// go common
+	ConnFdPos GoOffset = iota + 1 // start at 1, must match what's in go_offsets.h
+	FdLaddrPos
+	FdRaddrPos
+	NetFdPfdPos
+	PollFdSysfdPos
+	TCPAddrPortPtrPos
+	TCPAddrIPPtrPos
+	// http
+	URLPtrPos
+	PathPtrPos
+	RawQueryPtrPos
+	HostPtrPos
+	SchemePtrPos
+	MethodPtrPos
+	StatusCodePtrPos
+	ResponseLengthPtrPos
+	ContentLengthPtrPos
+	ReqHeaderPtrPos
+	IoWriterBufPtrPos
+	IoWriterNPos
+	IoWriterWrPos
+	CcNextStreamIDPos
+	CcNextStreamIDVendoredPos
+	CcFramerPos
+	CcFramerVendoredPos
+	FramerWPos
+	PcConnPos
+	PcTLSPos
+	NetConnPos
+	CcTconnPos
+	CcTconnVendoredPos
+	CcTLSPos
+	CcTLSVendoredPos
+	ScConnPos
+	CRwcPos
+	CTlsPos
+	TextReaderRPos
+	BufReaderBufPos
+	BufReaderWPos
+	// grpc
+	GrpcStreamStPtrPos
+	GrpcStreamMethodPtrPos
+	GrpcStatusSPos
+	GrpcStatusCodePtrPos
+	MetaHeadersFrameFieldsPtrPos
+	ValueContextValPtrPos
+	GrpcStConnPos
+	GrpcTConnPos
+	GrpcTSchemePos
+	GrpcTransportStreamIDPos
+	GrpcTransportBufWriterBufPos
+	GrpcTransportBufWriterOffsetPos
+	GrpcTransportBufWriterConnPos
+	// redis
+	RedisConnBwPos
+	// kafka go
+	KafkaGoWriterTopicPos
+	KafkaGoProtocolConnPos
+	KafkaGoReaderTopicPos
+	// kafka sarama
+	SaramaBrokerCorrIDPos
+	SaramaResponseCorrIDPos
+	SaramaBrokerConnPos
+	SaramaBufconnConnPos
+	// grpc versioning
+	GrpcOneSixZero
+	GrpcOneSixNine
+	GrpcOneSevenSeven
+	// HTTP2 versioning
+	HTTP2ZeroFortyFive
+	// grpc 1.69
+	GrpcServerStreamStream
+	GrpcServerStreamStPtr
+	GrpcClientStreamStream
+	// go manual spans
+	GoTracerDelegatePos
+	GoTracerAttributeOptOffset
+	GoErrorStringOffset
+	SpanContextTraceIDPos
+	SpanContextSpanIDPos
+	SpanContextTraceFlagsPos
+	AutoSDKSpanContextPos
+	AutoSDKActivationSupported
+	// go runtime channels
+	HchanQcountPos
+	HchanDataqsizPos
+	HchanSendxPos
+	HchanRecvxPos
+	// go jsonrpc
+	GoJsonrpcRequestHeaderServiceMethodPos
+	// go mongodb
+	MongoConnNamePos
+	MongoOpNamePos
+	MongoOpDBPos
+	MongoOneThirteenOne
+	// database/sql stdlib
+	DriverConnCiPos
+	// lib/pq driver
+	PqConnCfgPos
+	PqConfigHostPos
+	PqOneElevenZero
+	PqConnTypeOffset
+	// mysql driver
+	MySQLConnCfgPos
+	MySQLConfigAddrPos
+	MySQLConnTypeOffset
+	// pgx driver
+	PgxConnConfigPos
+	PgxConfigHostPos
+	// route harvesting offsets
+	MuxTemplatePos
+	GinFullpathPos
+	// Go runtime metrics
+	RuntimeMemstatsNumGCPos
+	RuntimeGCControllerMemoryLimitPos
+	RuntimeGCControllerGCPercentPos
+	RuntimeWorkCPUStatsPos
+	RuntimeCPUStatsGCAssistTimePos
+	RuntimeCPUStatsGCDedicatedTimePos
+	RuntimeCPUStatsGCIdleTimePos
+	RuntimeCPUStatsGCPauseTimePos
+	RuntimeCPUStatsScavengeAssistTimePos
+	RuntimeCPUStatsScavengeBgTimePos
+	RuntimeCPUStatsIdleTimePos
+	RuntimeCPUStatsUserTimePos
+	RuntimeMemstatsHeapStatsPos
+	RuntimeMemstatsStacksSysPos
+	RuntimeMemstatsMspanSysPos
+	RuntimeMemstatsMcacheSysPos
+	RuntimeMemstatsBuckhashSysPos
+	RuntimeMemstatsGCMiscSysPos
+	RuntimeMemstatsOtherSysPos
+	RuntimeConsistentHeapStatsStatsPos
+	RuntimeHeapStatsDeltaCommittedPos
+	RuntimeHeapStatsDeltaInStacksPos
+	RuntimeHeapStatsDeltaLargeAllocPos
+	RuntimeHeapStatsDeltaLargeAllocCountPos
+	RuntimeHeapStatsDeltaSmallAllocCountPos
+	RuntimeHeapStatsDeltaSmallFreeCountPos
+	RuntimeSchedNgSysPos
+	RuntimeSchedGFreeStackPos
+	RuntimeSchedGFreeNoStackPos
+	RuntimePFreeGPos
+	RuntimeGListSizePos
+	RuntimeGCControllerHeapGoalPos
+	RuntimeSchedTimeToRunPos
+	RuntimeSchedSTWTotalTimeGCPos
+	RuntimeTimeHistogramUnderflowPos
+	RuntimeTimeHistogramOverflowPos
+	FramerPadLengthStackPos
+	FramerPadLengthStackVendoredPos
+	// Go connection interface types
+	GrpcSyscallConnTypeAddress
+	TLSConnTypeAddress
+)
+
+//go:embed offsets.json
+var prefetchedOffsets string
+
+type structInfo struct {
+	// lib is the name of the library where the struct is defined.
+	// "go" for the standar library or e.g. "google.golang.org/grpc"
+	lib string
+	// fields of the struct as key, and the name of the constant defined in the eBPF code as value
+	fields map[string]GoOffset
+}
+
+type nestedStructField struct {
+	parentType  string
+	parentField string
+	childField  string
+	offset      GoOffset
+}
+
+const (
+	runtimePointerSize = 8
+	runtimeInt32Size   = 4
+)
+
+var nestedRuntimeFields = []nestedStructField{
+	{
+		parentType:  "runtime.schedt",
+		parentField: "gFree",
+		childField:  "stack",
+		offset:      RuntimeSchedGFreeStackPos,
+	},
+	{
+		parentType:  "runtime.schedt",
+		parentField: "gFree",
+		childField:  "noStack",
+		offset:      RuntimeSchedGFreeNoStackPos,
+	},
+}
+
+// level-1 key = Struct type name and its containing library
+// level-2 key = name of the field
+// level-3 value = C constant name to override (e.g. path_ptr_pos)
+var structMembers = map[string]structInfo{
+	"net/http.Request": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"URL":           URLPtrPos,
+			"Method":        MethodPtrPos,
+			"ContentLength": ContentLengthPtrPos,
+			"Header":        ReqHeaderPtrPos,
+		},
+	},
+	"net/url.URL": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"Path":     PathPtrPos,
+			"RawQuery": RawQueryPtrPos,
+			"Host":     HostPtrPos,
+			"Scheme":   SchemePtrPos,
+		},
+	},
+	"net/http.Response": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"StatusCode":    StatusCodePtrPos,
+			"ContentLength": ResponseLengthPtrPos,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.Stream": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"st":     GrpcStreamStPtrPos,
+			"method": GrpcStreamMethodPtrPos,
+			"id":     GrpcTransportStreamIDPos,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.ServerStream": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"Stream": GrpcServerStreamStream,
+			"st":     GrpcServerStreamStPtr,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.ClientStream": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"Stream": GrpcClientStreamStream,
+		},
+	},
+	"google.golang.org/grpc/internal/status.Status": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"s": GrpcStatusSPos,
+		},
+	},
+	"google.golang.org/genproto/googleapis/rpc/status.Status": {
+		lib: "google.golang.org/genproto",
+		fields: map[string]GoOffset{
+			"Code": GrpcStatusCodePtrPos,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.http2Server": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"conn": GrpcStConnPos,
+		},
+	},
+	"net.TCPAddr": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"IP":   TCPAddrIPPtrPos,
+			"Port": TCPAddrPortPtrPos,
+		},
+	},
+	"bufio.Writer": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"buf": IoWriterBufPtrPos,
+			"n":   IoWriterNPos,
+			"wr":  IoWriterWrPos,
+		},
+	},
+	"context.valueCtx": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"val": ValueContextValPtrPos,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.http2Client": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"conn":   GrpcTConnPos,
+			"scheme": GrpcTSchemePos,
+		},
+	},
+	"golang.org/x/net/http2.ClientConn": {
+		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"nextStreamID": CcNextStreamIDPos,
+			"tconn":        CcTconnPos,
+			"tlsState":     CcTLSPos,
+			"fr":           CcFramerPos,
+		},
+	},
+	"net/http.http2Framer": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"w": FramerWPos,
+		},
+	},
+	"golang.org/x/net/http2.Framer": {
+		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"w": FramerWPos,
+		},
+	},
+	"golang.org/x/net/http2.MetaHeadersFrame": {
+		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"Fields": MetaHeadersFrameFieldsPtrPos,
+		},
+	},
+	"net/http.http2MetaHeadersFrame": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"Fields": MetaHeadersFrameFieldsPtrPos,
+		},
+	},
+	"golang.org/x/net/http2.serverConn": {
+		lib: "golang.org/x/net",
+		fields: map[string]GoOffset{
+			"conn": ScConnPos,
+		},
+	},
+	"net/http.http2ClientConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"nextStreamID": CcNextStreamIDVendoredPos,
+			"tconn":        CcTconnVendoredPos,
+			"tlsState":     CcTLSVendoredPos,
+			"fr":           CcFramerVendoredPos,
+		},
+	},
+	"net/http.http2serverConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"conn": ScConnPos,
+		},
+	},
+	"net/http/internal/http2.ClientConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"nextStreamID": CcNextStreamIDVendoredPos,
+			"tconn":        CcTconnVendoredPos,
+			"tlsState":     CcTLSVendoredPos,
+			"fr":           CcFramerVendoredPos,
+		},
+	},
+	"net/http/internal/http2.Framer": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"w": FramerWPos,
+		},
+	},
+	"net/http/internal/http2.MetaHeadersFrame": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"Fields": MetaHeadersFrameFieldsPtrPos,
+		},
+	},
+	"net/http/internal/http2.serverConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"conn": ScConnPos,
+		},
+	},
+	"net.TCPConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"conn": NetConnPos,
+		},
+	},
+	"net.conn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"fd": ConnFdPos,
+		},
+	},
+	"net.netFD": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"laddr": FdLaddrPos,
+			"raddr": FdRaddrPos,
+			"pfd":   NetFdPfdPos,
+		},
+	},
+	"internal/poll.FD": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"Sysfd": PollFdSysfdPos,
+		},
+	},
+	"net/http.persistConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"conn":     PcConnPos,
+			"tlsState": PcTLSPos,
+		},
+	},
+	"net/http.conn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"rwc":      CRwcPos,
+			"tlsState": CTlsPos,
+		},
+	},
+	"net/rpc.Request": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"ServiceMethod": GoJsonrpcRequestHeaderServiceMethodPos,
+		},
+	},
+	"net/textproto.Reader": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"R": TextReaderRPos,
+		},
+	},
+	"bufio.Reader": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"buf": BufReaderBufPos,
+			"w":   BufReaderWPos,
+		},
+	},
+	"google.golang.org/grpc/internal/transport.bufWriter": {
+		lib: "google.golang.org/grpc",
+		fields: map[string]GoOffset{
+			"buf":    GrpcTransportBufWriterBufPos,
+			"offset": GrpcTransportBufWriterOffsetPos,
+			"conn":   GrpcTransportBufWriterConnPos,
+		},
+	},
+	"github.com/IBM/sarama.Broker": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaBrokerCorrIDPos,
+			"conn":          SaramaBrokerConnPos,
+		},
+	},
+	"github.com/IBM/sarama.responsePromise": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaResponseCorrIDPos,
+		},
+	},
+	"github.com/IBM/sarama.bufConn": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]GoOffset{
+			"Conn": SaramaBufconnConnPos,
+		},
+	},
+	// These are duplicate because the Sarama library changed orgs,
+	// from Shopify to IBM at version 1.40
+	"github.com/Shopify/sarama.Broker": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaBrokerCorrIDPos,
+			"conn":          SaramaBrokerConnPos,
+		},
+	},
+	"github.com/Shopify/sarama.responsePromise": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]GoOffset{
+			"correlationID": SaramaResponseCorrIDPos,
+		},
+	},
+	"github.com/Shopify/sarama.bufConn": {
+		lib: "github.com/IBM/sarama",
+		fields: map[string]GoOffset{
+			"Conn": SaramaBufconnConnPos,
+		},
+	},
+	"github.com/redis/go-redis/v9/internal/pool.Conn": {
+		lib: "github.com/redis/go-redis/v9",
+		fields: map[string]GoOffset{
+			"bw": RedisConnBwPos,
+		},
+	},
+	"github.com/segmentio/kafka-go.Writer": {
+		lib: "github.com/segmentio/kafka-go",
+		fields: map[string]GoOffset{
+			"Topic": KafkaGoWriterTopicPos,
+		},
+	},
+	"github.com/segmentio/kafka-go/protocol.Conn": {
+		lib: "github.com/segmentio/kafka-go",
+		fields: map[string]GoOffset{
+			"conn": KafkaGoProtocolConnPos,
+		},
+	},
+	"github.com/segmentio/kafka-go.reader": {
+		lib: "github.com/segmentio/kafka-go",
+		fields: map[string]GoOffset{
+			"topic": KafkaGoReaderTopicPos,
+		},
+	},
+	"go.opentelemetry.io/otel/internal/global.tracer": {
+		lib: "go.opentelemetry.io/otel",
+		fields: map[string]GoOffset{
+			"delegate": GoTracerDelegatePos,
+		},
+	},
+	"go.opentelemetry.io/otel/trace.SpanContext": {
+		lib: "go.opentelemetry.io/otel/trace",
+		fields: map[string]GoOffset{
+			"traceID":    SpanContextTraceIDPos,
+			"spanID":     SpanContextSpanIDPos,
+			"traceFlags": SpanContextTraceFlagsPos,
+		},
+	},
+	"go.opentelemetry.io/auto/sdk.span": {
+		lib: "go.opentelemetry.io/auto/sdk",
+		fields: map[string]GoOffset{
+			"spanContext": AutoSDKSpanContextPos,
+		},
+	},
+	"runtime.hchan": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"qcount":   HchanQcountPos,
+			"dataqsiz": HchanDataqsizPos,
+			"sendx":    HchanSendxPos,
+			"recvx":    HchanRecvxPos,
+		},
+	},
+	"go.mongodb.org/mongo-driver/mongo.Collection": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"name": MongoConnNamePos,
+		},
+	},
+	"go.mongodb.org/mongo-driver/x/mongo/driver.Operation": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"Name":     MongoOpNamePos,
+			"Database": MongoOpDBPos,
+		},
+	},
+	"go.mongodb.org/mongo-driver/v2/mongo.Collection": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"name": MongoConnNamePos,
+		},
+	},
+	"go.mongodb.org/mongo-driver/v2/x/mongo/driver.Operation": {
+		lib: "go.mongodb.org/mongo-driver",
+		fields: map[string]GoOffset{
+			"Name":     MongoOpNamePos,
+			"Database": MongoOpDBPos,
+		},
+	},
+	"database/sql.driverConn": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"ci": DriverConnCiPos,
+		},
+	},
+	"github.com/lib/pq.conn": {
+		lib: "github.com/lib/pq",
+		fields: map[string]GoOffset{
+			"cfg": PqConnCfgPos,
+		},
+	},
+	"github.com/lib/pq.Config": {
+		lib: "github.com/lib/pq",
+		fields: map[string]GoOffset{
+			"Host": PqConfigHostPos,
+		},
+	},
+	"github.com/go-sql-driver/mysql.mysqlConn": {
+		lib: "github.com/go-sql-driver/mysql",
+		fields: map[string]GoOffset{
+			"cfg": MySQLConnCfgPos,
+		},
+	},
+	"github.com/go-sql-driver/mysql.Config": {
+		lib: "github.com/go-sql-driver/mysql",
+		fields: map[string]GoOffset{
+			"Addr": MySQLConfigAddrPos,
+		},
+	},
+	"github.com/jackc/pgx/v5.Conn": {
+		lib: "github.com/jackc/pgx/v5",
+		fields: map[string]GoOffset{
+			"config": PgxConnConfigPos,
+		},
+	},
+	"github.com/jackc/pgx/v5/pgconn.Config": {
+		lib: "github.com/jackc/pgx/v5",
+		fields: map[string]GoOffset{
+			"Host": PgxConfigHostPos,
+		},
+	},
+	"github.com/gorilla/mux.routeRegexp": {
+		lib: "github.com/gorilla/mux",
+		fields: map[string]GoOffset{
+			"template": MuxTemplatePos,
+		},
+	},
+	"github.com/gin-gonic/gin.nodeValue": {
+		lib: "github.com/gin-gonic/gin",
+		fields: map[string]GoOffset{
+			"fullPath": GinFullpathPos,
+		},
+	},
+	"runtime.mstats": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"numgc":        RuntimeMemstatsNumGCPos,
+			"heapStats":    RuntimeMemstatsHeapStatsPos,
+			"stacks_sys":   RuntimeMemstatsStacksSysPos,
+			"mspan_sys":    RuntimeMemstatsMspanSysPos,
+			"mcache_sys":   RuntimeMemstatsMcacheSysPos,
+			"buckhash_sys": RuntimeMemstatsBuckhashSysPos,
+			"gcMiscSys":    RuntimeMemstatsGCMiscSysPos,
+			"other_sys":    RuntimeMemstatsOtherSysPos,
+		},
+	},
+	"runtime.gcControllerState": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"memoryLimit": RuntimeGCControllerMemoryLimitPos,
+			"gcPercent":   RuntimeGCControllerGCPercentPos,
+			"heapGoal":    RuntimeGCControllerHeapGoalPos,
+		},
+	},
+	"runtime.workType": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"cpuStats": RuntimeWorkCPUStatsPos,
+		},
+	},
+	"runtime.cpuStats": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"GCAssistTime":       RuntimeCPUStatsGCAssistTimePos,
+			"GCDedicatedTime":    RuntimeCPUStatsGCDedicatedTimePos,
+			"GCIdleTime":         RuntimeCPUStatsGCIdleTimePos,
+			"GCPauseTime":        RuntimeCPUStatsGCPauseTimePos,
+			"ScavengeAssistTime": RuntimeCPUStatsScavengeAssistTimePos,
+			"ScavengeBgTime":     RuntimeCPUStatsScavengeBgTimePos,
+			"IdleTime":           RuntimeCPUStatsIdleTimePos,
+			"UserTime":           RuntimeCPUStatsUserTimePos,
+		},
+	},
+	"runtime.consistentHeapStats": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"stats": RuntimeConsistentHeapStatsStatsPos,
+		},
+	},
+	"runtime.heapStatsDelta": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"committed":       RuntimeHeapStatsDeltaCommittedPos,
+			"inStacks":        RuntimeHeapStatsDeltaInStacksPos,
+			"largeAlloc":      RuntimeHeapStatsDeltaLargeAllocPos,
+			"largeAllocCount": RuntimeHeapStatsDeltaLargeAllocCountPos,
+			"smallAllocCount": RuntimeHeapStatsDeltaSmallAllocCountPos,
+			"smallFreeCount":  RuntimeHeapStatsDeltaSmallFreeCountPos,
+		},
+	},
+	"runtime.schedt": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"ngsys":          RuntimeSchedNgSysPos,
+			"timeToRun":      RuntimeSchedTimeToRunPos,
+			"stwTotalTimeGC": RuntimeSchedSTWTotalTimeGCPos,
+		},
+	},
+	"runtime.p": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"gFree": RuntimePFreeGPos,
+		},
+	},
+	"runtime.gList": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"size": RuntimeGListSizePos,
+		},
+	},
+	"runtime.timeHistogram": {
+		lib: "go",
+		fields: map[string]GoOffset{
+			"underflow": RuntimeTimeHistogramUnderflowPos,
+			"overflow":  RuntimeTimeHistogramOverflowPos,
+		},
+	},
+}
+
+func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
+	// first, try to read offsets from DWARF debug info
+	var offs FieldOffsets
+	var expected map[GoOffset]struct{}
+	dwarfData, err := elfFile.DWARF()
+	if err == nil {
+		offs, expected = structMemberOffsetsFromDwarf(dwarfData)
+		if len(expected) > 0 {
+			log().Debug("Fields not found in the DWARF file", "fields", expected)
+		} else {
+			libVersions, err := findLibraryVersions(elfFile)
+			if err != nil {
+				return nil, fmt.Errorf("searching for library versions: %w", err)
+			}
+			offs = offsetsForLibVersions(offs, libVersions.versions, log())
+			setGoAutoSDKActivationSupport(offs, libVersions, elfFile)
+			return offs, nil
+		}
+	} else {
+		// initialize empty offsets
+		offs = FieldOffsets{}
+	}
+
+	log().Debug("Can't read all offsets from DWARF info. Checking in prefetched database")
+
+	// if it is not possible, query from prefetched offsets
+	return structMemberPreFetchedOffsets(elfFile, offs)
+}
+
+func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]string, log *slog.Logger) FieldOffsets {
+	for lib, ver := range libVersions {
+		switch lib {
+		case "google.golang.org/grpc":
+			ver = cleanLibVersion(ver, true, lib, log)
+
+			if v, err := version.NewVersion(ver); err == nil {
+				if v.GreaterThanOrEqual(grpcOneSixZero) {
+					fieldOffsets[GrpcOneSixZero] = uint64(1)
+				} else {
+					fieldOffsets[GrpcOneSixZero] = uint64(0)
+				}
+				if v.GreaterThanOrEqual(grpcOneSixNine) {
+					fieldOffsets[GrpcOneSixNine] = uint64(1)
+				} else {
+					fieldOffsets[GrpcOneSixNine] = uint64(0)
+				}
+				if v.GreaterThanOrEqual(grpcOneSevenSeven) {
+					fieldOffsets[GrpcOneSevenSeven] = uint64(1)
+				} else {
+					fieldOffsets[GrpcOneSevenSeven] = uint64(0)
+				}
+			} else {
+				log.Debug("can't parse version for", "library", lib)
+			}
+		case "go.mongodb.org/mongo-driver":
+			ver = cleanLibVersion(ver, true, lib, log)
+
+			if v, err := version.NewVersion(ver); err == nil {
+				if v.GreaterThanOrEqual(mongoOneThirteenOne) {
+					fieldOffsets[MongoOneThirteenOne] = uint64(1)
+				} else {
+					fieldOffsets[MongoOneThirteenOne] = uint64(0)
+				}
+			}
+		case "golang.org/x/net":
+			ver = cleanLibVersion(ver, true, lib, log)
+
+			if v, err := version.NewVersion(ver); err == nil {
+				if v.GreaterThanOrEqual(http2ZeroFortyFive) {
+					fieldOffsets[HTTP2ZeroFortyFive] = uint64(1)
+				} else {
+					fieldOffsets[HTTP2ZeroFortyFive] = uint64(0)
+				}
+			} else {
+				log.Debug("can't parse version for", "library", lib)
+			}
+		case "github.com/lib/pq":
+			ver = cleanLibVersion(ver, true, lib, log)
+
+			if v, err := version.NewVersion(ver); err == nil {
+				if v.GreaterThanOrEqual(pqOneElevenZero) {
+					fieldOffsets[PqOneElevenZero] = uint64(1)
+				} else {
+					fieldOffsets[PqOneElevenZero] = uint64(0)
+				}
+			} else {
+				log.Debug("can't parse version for", "library", lib)
+			}
+		}
+	}
+
+	return fieldOffsets
+}
+
+func setGoAutoSDKActivationSupport(
+	fieldOffsets FieldOffsets,
+	modules moduleVersions,
+	elfFile *elf.File,
+) {
+	fieldOffsets[AutoSDKActivationSupported] = uint64(0)
+	if goAutoSDKActivationArchitectureSupported(elfFile) &&
+		goAutoSDKActivationSupported(modules) {
+		fieldOffsets[AutoSDKActivationSupported] = uint64(1)
+	}
+}
+
+func goAutoSDKActivationArchitectureSupported(elfFile *elf.File) bool {
+	if elfFile == nil || elfFile.Class != elf.ELFCLASS64 {
+		return false
+	}
+
+	return elfFile.Machine == elf.EM_X86_64 || elfFile.Machine == elf.EM_AARCH64
+}
+
+func goAutoSDKActivationSupported(modules moduleVersions) bool {
+	if modules.invalid {
+		return false
+	}
+
+	for _, required := range goAutoSDKActivationModules {
+		if _, replaced := modules.replacements[required.path]; replaced {
+			return false
+		}
+
+		moduleVersion, found := modules.versions[required.path]
+		moduleSum, checksummed := modules.sums[required.path]
+		canonicalSum, supported := required.sums[moduleVersion]
+		if !found || !checksummed || !supported || moduleSum != canonicalSum {
+			return false
+		}
+	}
+
+	return true
+}
+
+func cleanLibVersion(version string, found bool, lib string, log *slog.Logger) string {
+	if !found {
+		log.Debug("can't find version for library. Assuming 0.0.0", "lib", lib)
+		// unversioned libraries are accounted as "0.0.0" in offsets.json file
+		// https://github.com/grafana/go-offsets-tracker/blob/main/pkg/writer/writer.go#L108-L110
+		return "0.0.0"
+	}
+
+	dash := strings.Index(version, "-")
+	if dash > 0 {
+		version = version[:dash]
+	}
+	return version
+}
+
+func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets) (FieldOffsets, error) {
+	log := log().With("function", "structMemberPreFetchedOffsets")
+	offs, err := offsets.Read(bytes.NewBufferString(prefetchedOffsets))
+	if err != nil {
+		return nil, fmt.Errorf("reading offsets file contents: %w", err)
+	}
+	libVersions, err := findLibraryVersions(elfFile)
+	if err != nil {
+		return nil, fmt.Errorf("searching for library versions: %w", err)
+	}
+	fieldOffsets = offsetsForLibVersions(fieldOffsets, libVersions.versions, log)
+	setGoAutoSDKActivationSupport(fieldOffsets, libVersions, elfFile)
+	// after putting the offsets.json in a Go structure, we search all the
+	// structMembers elements on it, to get the annotated offsets
+	for strName, strInfo := range structMembers {
+		version, ok := libVersions.versions[strInfo.lib]
+		version = cleanLibVersion(version, ok, strInfo.lib, log)
+		for fieldName, constantName := range strInfo.fields {
+			if _, found := fieldOffsets[constantName]; found {
+				continue
+			}
+
+			// look the version of the required field in the offsets.json memory copy
+			offset, ok := offs.Find(strName, fieldName, version)
+			if constantName == RuntimeGCControllerHeapGoalPos {
+				offset, ok = prefetchedGoRuntimeGCGoalOffset(offs, version)
+			}
+			if !ok {
+				log.Debug("can't find offsets for field",
+					"lib", strInfo.lib, "name", strName, "field", fieldName, "version", version)
+				continue
+			}
+			log.Debug("found offset", "fieldName", fieldName, "constantOffset", constantName, "offset", offset)
+			fieldOffsets[constantName] = offset
+		}
+	}
+	version, ok := libVersions.versions["go"]
+	resolveNestedStructPreFetchedOffsets(
+		offs, fieldOffsets, cleanLibVersion(version, ok, "go", log), log,
+	)
+	return fieldOffsets, nil
+}
+
+func prefetchedGoRuntimeGCGoalOffset(offs *offsets.Track, goVersion string) (uint64, bool) {
+	field, ok := offs.Data["runtime.gcControllerState"]["heapGoal"]
+	if !ok {
+		return 0, false
+	}
+
+	target, err := version.NewVersion(goVersion)
+	if err != nil {
+		return 0, false
+	}
+	newest, err := version.NewVersion(field.Versions.Newest)
+	if err != nil || target.GreaterThan(newest) {
+		return 0, false
+	}
+
+	return field.GetOffset(goVersion)
+}
+
+func resolveNestedStructPreFetchedOffsets(
+	offs *offsets.Track,
+	fieldOffsets FieldOffsets,
+	goVersion string,
+	log *slog.Logger,
+) {
+	if _, stackOK := fieldOffsets[RuntimeSchedGFreeStackPos]; stackOK {
+		if _, noStackOK := fieldOffsets[RuntimeSchedGFreeNoStackPos]; noStackOK {
+			return
+		}
+	}
+
+	gFreeOff, ok := offs.Find("runtime.schedt", "gFree", goVersion)
+	if !ok {
+		log.Debug("can't derive nested runtime offsets",
+			"missing_field", "runtime.schedt.gFree", "go_version", goVersion)
+		return
+	}
+	mutexKeyOff, ok := offs.Find("runtime.mutex", "key", goVersion)
+	if !ok {
+		log.Debug("can't derive nested runtime offsets",
+			"missing_field", "runtime.mutex.key", "go_version", goVersion)
+		return
+	}
+	gListSizeOff, ok := offs.Find("runtime.gList", "size", goVersion)
+	if !ok {
+		log.Debug("can't derive nested runtime offsets",
+			"missing_field", "runtime.gList.size", "go_version", goVersion)
+		return
+	}
+
+	mutexSize := alignRuntimeOffset(mutexKeyOff+runtimePointerSize, runtimePointerSize)
+	gListSize := alignRuntimeOffset(gListSizeOff+runtimeInt32Size, runtimePointerSize)
+	stackOff := gFreeOff + mutexSize
+	noStackOff := stackOff + gListSize
+	if _, ok := fieldOffsets[RuntimeSchedGFreeStackPos]; !ok {
+		log.Debug("found nested offset", "fieldName", "gFree.stack", "offset", stackOff)
+		fieldOffsets[RuntimeSchedGFreeStackPos] = stackOff
+	}
+	if _, ok := fieldOffsets[RuntimeSchedGFreeNoStackPos]; !ok {
+		log.Debug("found nested offset", "fieldName", "gFree.noStack", "offset", noStackOff)
+		fieldOffsets[RuntimeSchedGFreeNoStackPos] = noStackOff
+	}
+}
+
+func alignRuntimeOffset(offset, alignment uint64) uint64 {
+	if alignment == 0 || offset%alignment == 0 {
+		return offset
+	}
+	return offset + alignment - offset%alignment
+}
+
+// structMemberOffsetsFromDwarf reads the executable dwarf information to get
+// the offsets specified in the structMembers map
+func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]struct{}) {
+	log := log().With("function", "structMemberOffsetsFromDwarf")
+	expectedReturns := map[GoOffset]struct{}{}
+	for _, str := range structMembers {
+		for _, ctName := range str.fields {
+			expectedReturns[ctName] = struct{}{}
+		}
+	}
+	for _, field := range nestedRuntimeFields {
+		expectedReturns[field.offset] = struct{}{}
+	}
+	log.Debug("searching offests for field constants", "constants", expectedReturns)
+
+	fieldOffsets := FieldOffsets{}
+	reader := data.Reader()
+	for {
+		entry, err := reader.Next()
+		if err != nil {
+			log.Debug("error reading DWARF info", "data", err)
+			return fieldOffsets, expectedReturns
+		}
+		if entry == nil { // END of dwarf data
+			return fieldOffsets, expectedReturns
+		}
+		if entry.Tag != dwarf.TagStructType {
+			continue
+		}
+		attrs := getAttrs(entry)
+		typeName, ok := attrs[dwarf.AttrName].(string)
+		if !ok {
+			reader.SkipChildren()
+			continue
+		}
+		structMember, ok := structMembers[typeName]
+		if !ok {
+			reader.SkipChildren()
+			continue
+		}
+		log.Debug("inspecting fields for struct type", "type", typeName)
+		resolveNestedStructOffsets(data, entry.Offset, typeName, expectedReturns, fieldOffsets)
+		if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
+			log.Debug("error reading DWARF info", "type", typeName, "error", err)
+			return fieldOffsets, expectedReturns
+		}
+	}
+}
+
+func resolveNestedStructOffsets(
+	data *dwarf.Data,
+	typeOffset dwarf.Offset,
+	typeName string,
+	expectedReturns map[GoOffset]struct{},
+	offsets FieldOffsets,
+) {
+	var fields []nestedStructField
+	for _, field := range nestedRuntimeFields {
+		if field.parentType == typeName {
+			fields = append(fields, field)
+		}
+	}
+	if len(fields) == 0 {
+		return
+	}
+
+	typeInfo, err := data.Type(typeOffset)
+	if err != nil {
+		return
+	}
+	parent, ok := typeInfo.(*dwarf.StructType)
+	if !ok {
+		return
+	}
+	for _, field := range fields {
+		parentField := dwarfStructFieldByName(parent, field.parentField)
+		if parentField == nil {
+			continue
+		}
+		child, ok := parentField.Type.(*dwarf.StructType)
+		if !ok {
+			continue
+		}
+		childField := dwarfStructFieldByName(child, field.childField)
+		if childField == nil {
+			continue
+		}
+		offsets[field.offset] = uint64(parentField.ByteOffset + childField.ByteOffset)
+		delete(expectedReturns, field.offset)
+	}
+}
+
+func dwarfStructFieldByName(structType *dwarf.StructType, name string) *dwarf.StructField {
+	for _, field := range structType.Field {
+		if field.Name == name {
+			return field
+		}
+	}
+	return nil
+}
+
+type dwarfReader interface {
+	Next() (*dwarf.Entry, error)
+}
+
+func readMembers(
+	reader dwarfReader,
+	fields map[string]GoOffset,
+	expectedReturns map[GoOffset]struct{},
+	offsets FieldOffsets,
+) error {
+	log := log()
+	for {
+		entry, err := reader.Next()
+		if err != nil {
+			return fmt.Errorf("can't read DWARF data: %w", err)
+		}
+		if entry == nil { // END of dwarf data
+			return nil
+		}
+		// Nil tag: end of the members list
+		if entry.Tag == 0 {
+			return nil
+		}
+		attrs := getAttrs(entry)
+		if constName, ok := fields[attrs[dwarf.AttrName].(string)]; ok {
+			value := attrs[dwarf.AttrDataMemberLoc]
+			if constLocation, ok := value.(int64); ok {
+				delete(expectedReturns, constName)
+				log.Debug("found struct member offset",
+					"const", constName, "offset", attrs[dwarf.AttrDataMemberLoc])
+				offsets[constName] = uint64(constLocation)
+			} else {
+				// Temporary workaround
+				return fmt.Errorf("at the moment, OBI only supports constant values for DW_AT_data_member_location;"+
+					"got %s. OBI will read the offsets from a pre-fetched database", attrs[dwarf.AttrDataMemberLoc])
+			}
+		}
+	}
+}
+
+func getAttrs(entry *dwarf.Entry) map[dwarf.Attr]any {
+	attrs := map[dwarf.Attr]any{}
+	for f := range entry.Field {
+		attrs[entry.Field[f].Attr] = entry.Field[f].Val
+	}
+	return attrs
+}

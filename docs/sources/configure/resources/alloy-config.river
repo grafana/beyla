@@ -1,0 +1,43 @@
+otelcol.receiver.otlp "default" {
+    grpc {}
+    http {}
+
+    output {
+        metrics = [otelcol.processor.batch.default.input]
+        traces = [otelcol.processor.batch.default.input]
+    }
+}
+    
+otelcol.processor.batch "default" {
+    output {
+        metrics = [otelcol.exporter.prometheus.default.input]
+        traces  = [otelcol.exporter.otlp.tempo.input]
+    }
+}
+    
+otelcol.exporter.prometheus "default" {
+    forward_to = [prometheus.remote_write.mimir.receiver]
+}
+    
+prometheus.remote_write "mimir" {
+    endpoint {
+        url = "https://" + env("MIMIR_ENDPOINT") + "/api/prom/push"
+        basic_auth {
+            username = env("MIMIR_USER")
+            password = env("GRAFANA_API_KEY")
+        }
+    }
+}
+    
+otelcol.exporter.otlp "tempo" {
+    // Send traces to a locally running Tempo without TLS enabled.
+    client {
+        endpoint = env("TEMPO_ENDPOINT")
+        auth     = otelcol.auth.basic.creds.handler
+    }
+}
+    
+otelcol.auth.basic "creds" {
+    username = env("TEMPO_USER")
+    password = env("GRAFANA_API_KEY")
+}

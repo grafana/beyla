@@ -1,0 +1,393 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+// Package attr contains definition of the attribute names of for the metrics, especially
+// for the metrics whose reported attributes are selected in the attributes.select YAML option
+package attr // import "go.opentelemetry.io/obi/pkg/export/attributes/names"
+
+import (
+	"runtime/debug"
+	"strings"
+
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+
+	"go.opentelemetry.io/obi/pkg/buildinfo"
+)
+
+// Name of an attribute. This is the common internal representation of a metric attribute name,
+// which can be converted to OTEL or Prometheus format right before exporting them.
+type Name attribute.Key
+
+func (an Name) OTEL() attribute.Key {
+	return attribute.Key(an)
+}
+
+func (an Name) Prom() string {
+	return strings.ReplaceAll(string(an), ".", "_")
+}
+
+// OpenTelemetry 1.41.0 semantic convention
+const (
+	HTTPRequestMethod      = Name(semconv.HTTPRequestMethodKey)
+	HTTPResponseStatusCode = Name(semconv.HTTPResponseStatusCodeKey)
+	HTTPURLScheme          = Name(semconv.URLSchemeKey)
+	HTTPUrlPath            = Name(semconv.URLPathKey)
+	HTTPUrlFull            = Name(semconv.URLFullKey)
+	HTTPUrlQuery           = Name(semconv.URLQueryKey)
+	ClientAddr             = Name(semconv.ClientAddressKey)
+	ServerAddr             = Name(semconv.ServerAddressKey)
+	ServerPort             = Name(semconv.ServerPortKey)
+	HTTPRequestBodySize    = Name(semconv.HTTPRequestBodySizeKey)
+	HTTPResponseBodySize   = Name(semconv.HTTPResponseBodySizeKey)
+	SpanKind               = Name("span.kind")
+	SpanName               = Name("span.name")
+	StatusCode             = Name("status.code")
+	Source                 = Name("source")
+	Client                 = Name("client")
+	ClientNamespace        = Name("client_service_namespace")
+	Server                 = Name("server")
+	ServerNamespace        = Name("server_service_namespace")
+	ConnectionType         = Name("connection_type")
+	DBOperation            = Name(semconv.DBOperationNameKey)
+	DBCollectionName       = Name(semconv.DBCollectionNameKey)
+	DBSystemName           = Name(semconv.DBSystemNameKey)
+	ErrorType              = Name(semconv.ErrorTypeKey)
+	ProcessExecutableName  = Name(semconv.ProcessExecutableNameKey)
+	RPCMethod              = Name(semconv.RPCMethodKey)
+	RPCSystem              = Name(semconv.RPCSystemNameKey)
+	HTTPRoute              = Name(semconv.HTTPRouteKey)
+	MessagingOpName        = Name(semconv.MessagingOperationNameKey)
+	MessagingOpType        = Name(semconv.MessagingOperationTypeKey)
+	MessagingMessageID     = Name(semconv.MessagingMessageIDKey)
+	MessagingSystem        = Name(semconv.MessagingSystemKey)
+	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
+	MessagingConsumerGroup = Name(semconv.MessagingConsumerGroupNameKey)
+	GraphQLDocument        = Name(semconv.GraphQLDocumentKey)
+	GraphQLOperationName   = Name(semconv.GraphQLOperationNameKey)
+	GraphQLOperationType   = Name(semconv.GraphQLOperationTypeKey)
+	DNSAnswers             = Name(semconv.DNSAnswersKey)
+	DBQuerySummary         = Name(semconv.DBQuerySummaryKey)
+	UserAgentOriginal      = Name(semconv.UserAgentOriginalKey)
+	HTTPRequestMethodOrig  = Name(semconv.HTTPRequestMethodOriginalKey)
+	NetworkPeerAddress     = Name(semconv.NetworkPeerAddressKey)
+	NetworkPeerPort        = Name(semconv.NetworkPeerPortKey)
+	NetworkProtocolVersion = Name(semconv.NetworkProtocolVersionKey)
+	TelemetrySDKLanguage   = Name(semconv.TelemetrySDKLanguageKey)
+
+	K8sNamespaceName   = Name(semconv.K8SNamespaceNameKey)
+	K8sPodName         = Name(semconv.K8SPodNameKey)
+	K8sContainerName   = Name(semconv.K8SContainerNameKey)
+	K8sDeploymentName  = Name(semconv.K8SDeploymentNameKey)
+	K8sReplicaSetName  = Name(semconv.K8SReplicaSetNameKey)
+	K8sJobName         = Name(semconv.K8SJobNameKey)
+	K8sCronJobName     = Name(semconv.K8SCronJobNameKey)
+	K8sDaemonSetName   = Name(semconv.K8SDaemonSetNameKey)
+	K8sStatefulSetName = Name(semconv.K8SStatefulSetNameKey)
+	K8sOwnerName       = Name("k8s.owner.name")
+	K8sNodeName        = Name(semconv.K8SNodeNameKey)
+	K8sPodUID          = Name(semconv.K8SPodUIDKey)
+	K8sPodStartTime    = Name(semconv.K8SPodStartTimeKey)
+	K8sKind            = Name("k8s.kind")
+	K8SClientNamespace = Name("client_k8s_namespace_name")
+	K8SServerNamespace = Name("server_k8s_namespace_name")
+	K8SClientCluster   = Name("client_k8s_cluster_name")
+	K8SServerCluster   = Name("server_k8s_cluster_name")
+
+	ContainerName = Name(semconv.ContainerNameKey)
+	ContainerID   = Name(semconv.ContainerIDKey)
+
+	// HTTP enrichment attribute prefixes and keys
+	HTTPRequestHeaderPrefix  = "http.request.header."
+	HTTPResponseHeaderPrefix = "http.response.header."
+	HTTPRequestBodyContent   = Name("http.request.body.content")
+	HTTPResponseBodyContent  = Name("http.response.body.content")
+)
+
+// HTTPRequestHeaderKey returns the attribute key for a request header (lowercased).
+func HTTPRequestHeaderKey(name string) string {
+	return HTTPRequestHeaderPrefix + strings.ToLower(name)
+}
+
+// HTTPResponseHeaderKey returns the attribute key for a response header (lowercased).
+func HTTPResponseHeaderKey(name string) string {
+	return HTTPResponseHeaderPrefix + strings.ToLower(name)
+}
+
+// OBI-specific network attributes
+// obi.-prefixed attributes are a var instead of a constant to allow overriding the prefix
+// from components that vendor OBI as a library
+
+// VendorPrefix allows identifying some metrics (network, internal counters...)
+// as custom metrics, since at the moment they don't follow any semantic convention for them.
+// This value can be overridden when OBI is vendored as a library (e.g. from the OTEL collector)
+var (
+	VendorPrefix        = "obi"
+	VendorSDKName       = "opentelemetry"
+	VendorSDKVersion    = "unknown"
+	TelemetryDistroName = "opentelemetry-ebpf-instrumentation"
+)
+
+// TelemetryDistroVersion reports the distro version to set on emitted resources. It reads
+// buildinfo.Version on each call because a component that vendors OBI overrides that variable
+// at runtime, after this package is initialized.
+func TelemetryDistroVersion() string {
+	return buildinfo.Version
+}
+
+func init() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, dep := range info.Deps {
+			if dep.Path == "go.opentelemetry.io/otel/sdk" {
+				VendorSDKVersion = dep.Version
+				return
+			}
+		}
+	}
+}
+
+var OBIIP = Name("obi.ip")
+
+// OBIHTTPResponseObserved is false on a span whose response was never seen, and absent
+// otherwise.
+var OBIHTTPResponseObserved = Name("obi.http.response.observed")
+
+const (
+	Transport       = Name("transport")
+	NetworkType     = Name(semconv.NetworkTypeKey)
+	NetworkProtocol = Name(semconv.NetworkProtocolNameKey)
+	SrcAddress      = Name("src.address")
+	DstAddress      = Name("dst.address")
+	SrcPort         = Name("src.port")
+	DstPort         = Name("dst.port")
+	SrcName         = Name("src.name")
+	DstName         = Name("dst.name")
+	Iface           = Name("iface")
+	SrcCIDR         = Name("src.cidr")
+	DstCIDR         = Name("dst.cidr")
+	SrcZone         = Name("src.zone")
+	DstZone         = Name("dst.zone")
+
+	ClientPort = Name(semconv.ClientPortKey)
+
+	// Direction values: request or response
+	Direction = Name("direction")
+	// IfaceDirection values: ingress or egress
+	IfaceDirection = Name("iface.direction")
+
+	K8sSrcOwnerName = Name("k8s.src.owner.name")
+	K8sSrcNamespace = Name("k8s.src.namespace")
+	K8sDstOwnerName = Name("k8s.dst.owner.name")
+	K8sDstNamespace = Name("k8s.dst.namespace")
+	K8sClusterName  = Name(semconv.K8SClusterNameKey)
+	K8sSrcName      = Name("k8s.src.name")
+	K8sSrcType      = Name("k8s.src.type")
+	K8sSrcOwnerType = Name("k8s.src.owner.type")
+	K8sSrcNodeIP    = Name("k8s.src.node.ip")
+	K8sSrcNodeName  = Name("k8s.src.node.name")
+	K8sDstName      = Name("k8s.dst.name")
+	K8sDstType      = Name("k8s.dst.type")
+	K8sDstOwnerType = Name("k8s.dst.owner.type")
+	K8sDstNodeIP    = Name("k8s.dst.node.ip")
+	K8sDstNodeName  = Name("k8s.dst.node.name")
+
+	SrcCountry = Name("src.country")
+	DstCountry = Name("dst.country")
+	SrcASN     = Name("src.asn")
+	DstASN     = Name("dst.asn")
+)
+
+// other OBI-specific attributes
+const (
+	// Instance and Job are only explicitly used in the Prometheus
+	// exporter, as the OpenTelemetry SDK already sets them implicitly.
+	// It is advised for users to configure their Prometheus scraper with
+	// the `honor_labels` option set to true, to avoid overwriting the
+	// instance attribute with the target attribute.
+	Instance = Name("instance")
+	Job      = Name("job")
+
+	// ServiceName and ServiceNamespace are going to be used only on Prometheus
+	// as metric attributes. The OTEL exporter already uses them as Resource
+	// attributes, which can't be enabled/disabled by the users
+	ServiceName      = Name(semconv.ServiceNameKey)
+	ServiceNamespace = Name(semconv.ServiceNamespaceKey)
+
+	// TODO: replace with {server|client}.service.{name|namespace}
+	// if this is issue is approved https://github.com/open-telemetry/semantic-conventions/issues/3472
+	ServicePeerName      = Name(semconv.ServicePeerNameKey)
+	ServicePeerNamespace = Name(semconv.ServicePeerNamespaceKey)
+
+	HostID      = Name(semconv.HostIDKey)
+	HostImageID = Name(semconv.HostImageIDKey)
+	HostName    = Name(semconv.HostNameKey)
+	HostType    = Name(semconv.HostTypeKey)
+
+	ServiceInstanceID      = Name(semconv.ServiceInstanceIDKey)
+	SkipSpanMetrics        = Name("span.metrics.skip")
+	JVMMemoryType          = Name("jvm.memory.type")
+	JVMMemoryPoolName      = Name("jvm.memory.pool.name")
+	JVMThreadDaemon        = Name("jvm.thread.daemon")
+	JVMGCName              = Name("jvm.gc.name")
+	JVMGCAction            = Name("jvm.gc.action")
+	CPythonGCGeneration    = Name("cpython.gc.generation")
+	DotnetGCHeapGeneration = Name("dotnet.gc.heap.generation")
+
+	NodejsEventLoopState = Name("nodejs.eventloop.state")
+
+	V8JSGCType        = Name("v8js.gc.type")
+	V8JSHeapSpaceName = Name("v8js.heap.space.name")
+	V8JSResourceType  = Name("v8js.resource.type")
+
+	VendorVersionSuffix   = Name(".version")
+	VendorRevisionSuffix  = Name(".revision")
+	VendorGoarchSuffix    = Name(".goarch")
+	VendorGoosSuffix      = Name(".goos")
+	VendorGoversionSuffix = Name(".goversion")
+)
+
+// Attributes carried by OBI's own self-observability metrics: the obi.* internal metrics and
+// the bpf_* Prometheus collector metrics. Declared here so that the Prometheus label name is
+// derived from the OTLP attribute key via Name.Prom(), instead of being written a second time
+// by the exporters.
+const (
+	BpfMapID   = Name("bpf.map.id")
+	BpfMapName = Name("bpf.map.name")
+	BpfMapType = Name("bpf.map.type")
+
+	BpfProbeID   = Name("bpf.probe.id")
+	BpfProbeName = Name("bpf.probe.name")
+	BpfProbeType = Name("bpf.probe.type")
+
+	TelemetryType = Name("telemetry.type")
+	Subscriber    = Name("subscriber")
+)
+
+// InternalAttributes are the vendor-prefixed attributes carried by OBI's own internal metrics.
+// Like the internal metric names, they are built from a prefix at call time rather than declared
+// as package constants, because a component that vendors OBI can override VendorPrefix and
+// package-level initialization would run before it had the chance.
+type InternalAttributes struct {
+	Goarch    Name
+	Goos      Name
+	Goversion Name
+	Version   Name
+	Revision  Name
+}
+
+func NewInternalAttributes(prefix string) InternalAttributes {
+	return InternalAttributes{
+		Goarch:    Name(prefix + string(VendorGoarchSuffix)),
+		Goos:      Name(prefix + string(VendorGoosSuffix)),
+		Goversion: Name(prefix + string(VendorGoversionSuffix)),
+		Version:   Name(prefix + string(VendorVersionSuffix)),
+		Revision:  Name(prefix + string(VendorRevisionSuffix)),
+	}
+}
+
+// traces related attributes
+const (
+	// SQL
+	DBQueryText          = Name(semconv.DBQueryTextKey)
+	DBResponseStatusCode = Name(semconv.DBResponseStatusCodeKey)
+	DBNamespace          = Name(semconv.DBNamespaceKey)
+	DBResponseError      = Name("db.response.error")
+	DBOperationBatchSize = Name(semconv.DBOperationBatchSizeKey)
+
+	// Messaging
+	MessagingPartition   = Name(semconv.MessagingDestinationPartitionIDKey)
+	MessagingKafkaOffset = Name(semconv.MessagingKafkaOffsetKey)
+
+	// Elasticsearch
+	ElasticsearchNodeName = Name(semconv.ElasticsearchNodeNameKey)
+
+	// AWS
+	AWSRequestID         = Name(semconv.AWSRequestIDKey)
+	AWSExtendedRequestID = Name(semconv.AWSExtendedRequestIDKey)
+	AWSS3Bucket          = Name(semconv.AWSS3BucketKey)
+	AWSS3Key             = Name(semconv.AWSS3KeyKey)
+	AWSSQSQueueURL       = Name(semconv.AWSSQSQueueURLKey)
+	AWSSNSTopicARN       = Name(semconv.AWSSNSTopicARNKey)
+	MessagingBatchCount  = Name(semconv.MessagingBatchMessageCountKey)
+
+	// Cloud
+	CloudRegion = Name(semconv.CloudRegionKey)
+
+	// GenAI
+	// NOTE: semconv v1.42.0 drops gen_ai.* (moved to a separate repo with no Go bindings yet); revisit these on the next semconv bump.
+	GenAIInput             = Name(semconv.GenAIInputMessagesKey)
+	GenAIInstructions      = Name(semconv.GenAISystemInstructionsKey)
+	GenAIOutput            = Name(semconv.GenAIOutputMessagesKey)
+	GenAIMetadata          = Name("gen_ai.metadata")
+	GenAITools             = Name(semconv.GenAIToolDefinitionsKey)
+	GenAIToolName          = Name(semconv.GenAIToolNameKey)
+	GenAIToolType          = Name(semconv.GenAIToolTypeKey)
+	GenAIToolCallID        = Name(semconv.GenAIToolCallIDKey)
+	GenAIToolCallArguments = Name(semconv.GenAIToolCallArgumentsKey)
+	GenAIToolCallResult    = Name(semconv.GenAIToolCallResultKey)
+	GenAIPromptName        = Name(semconv.GenAIPromptNameKey)
+	GenAIResponseError     = Name("gen_ai.response.error")
+)
+
+// OBI specific GPU events
+const (
+	// GPU/Cuda related attributes
+	CudaMemcpyKind  = Name("cuda.memcpy.kind")
+	CudaDeviceIndex = Name("cuda.device.index")
+	CudaDeviceUUID  = Name("cuda.device.uuid")
+	CudaDeviceModel = Name("cuda.device.model")
+)
+
+// JSON-RPC attributes (current semconv, replacing deprecated rpc.jsonrpc.* attributes)
+const (
+	JSONRPCProtocolVersion = Name(semconv.JSONRPCProtocolVersionKey)
+	JSONRPCRequestID       = Name(semconv.JSONRPCRequestIDKey)
+	RPCResponseStatusCode  = Name(semconv.RPCResponseStatusCodeKey)
+)
+
+// ONC RPC (Sun RPC) span attributes — semconv v1.38.0+ (development stability).
+const (
+	OncRPCProgramName     = Name(semconv.OncRPCProgramNameKey)
+	OncRPCProcedureName   = Name(semconv.OncRPCProcedureNameKey)
+	OncRPCProcedureNumber = Name(semconv.OncRPCProcedureNumberKey)
+	OncRPCVersion         = Name(semconv.OncRPCVersionKey)
+	// Extension until semconv adds an official auth flavor attribute.
+	OncRPCAuthFlavor = Name("onc_rpc.auth.flavor")
+)
+
+// MCP (Model Context Protocol) attributes
+// NOTE: semconv v1.42.0 drops mcp.* too, same caveat as the GenAI block above.
+const (
+	MCPMethodName      = Name(semconv.McpMethodNameKey)
+	MCPSessionID       = Name(semconv.McpSessionIDKey)
+	MCPProtocolVersion = Name(semconv.McpProtocolVersionKey)
+	MCPResourceURI     = Name(semconv.McpResourceURIKey)
+)
+
+// DNS events
+const (
+	DNSQuestionName = Name(semconv.DNSQuestionNameKey)
+)
+
+// GenAI events
+
+const (
+	GenAIOperationName = Name(semconv.GenAIOperationNameKey)
+	GenAIProviderName  = Name(semconv.GenAIProviderNameKey)
+	QwenProviderName   = "qwen"
+	// With GenAI events, it's the first time we have a single event produce two separate metrics: input->tokens, output->tokens.
+	// All of our current metrics have one set of attributes and a value for that. These two attributes are internal and they
+	// map to semconv.GenAITokenTypeKey when they are generated in metrics. The span_getter.go code will generate
+	// semconv.GenAITokenTypeKey with "input" string and semconv.GenAITokenTypeKey with "output" string.
+	GenAITokenTypeInput  = Name(semconv.GenAITokenTypeKey)
+	GenAITokenTypeOutput = Name("gen_ai.token.type_output")
+	GenAIRequestModel    = Name(semconv.GenAIRequestModelKey)
+	GenAIResponseModel   = Name(semconv.GenAIResponseModelKey)
+)
+
+// Stat metrics
+const (
+	TCPFailedConnectionReason = Name("reason")
+	NetworkTCPHandshakeRole   = Name("network.tcp.handshake.role")
+	NetworkIoDirection        = Name(semconv.NetworkIODirectionKey)
+)

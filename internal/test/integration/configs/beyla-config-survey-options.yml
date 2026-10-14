@@ -1,0 +1,30 @@
+discovery:
+  survey:
+    # Even though both entries match, the unrestricted entry must admit the
+    # idle root process. non_root on its own must not enable socket filtering.
+    - exe_path: /survey-fixture
+      cmd_args: "*--id=ordinary-*"
+      socket_apps:
+        enabled: true
+        non_root: true
+    - exe_path: /survey-fixture
+      cmd_args: "*--id=ordinary-*"
+      socket_apps:
+        enabled: false
+        non_root: true
+    - exe_path: /survey-fixture
+      cmd_args: "*--id=socket-*"
+      socket_apps:
+        enabled: true
+    - exe_path: /survey-fixture
+      cmd_args: "*--id=nonroot-*"
+      socket_apps:
+        enabled: true
+        non_root: true
+
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+  interval: 500ms
+
+metrics:
+  features: [application]

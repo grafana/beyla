@@ -1,0 +1,494 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package otel // import "go.opentelemetry.io/obi/pkg/export/otel"
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/instrumentation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+	"go.opentelemetry.io/otel/trace"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
+	"go.opentelemetry.io/obi/pkg/export/otel/metric"
+	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/metadata"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+)
+
+func sglog() *slog.Logger {
+	return slog.With("component", "otel.SvcGraphMetricsReporter")
+}
+
+// SvcGraphMetricsReporter implements the graph node that receives request.Span
+// instances and forwards them as OTEL metrics.
+type SvcGraphMetricsReporter struct {
+	ctx              context.Context
+	cfg              *otelcfg.MetricsConfig
+	nodeMeta         metadata.NodeMeta
+	exporter         sdkmetric.Exporter
+	reporters        otelcfg.ReporterPool[*svc.Attrs, *SvcGraphMetrics]
+	pidTracker       PidServiceTracker
+	is               instrumentations.InstrumentationSelection
+	metricAttributes []attributes.Field[*request.Span, attribute.KeyValue]
+	selector         attributes.Selection
+
+	input         <-chan []request.Span
+	processEvents <-chan exec.ProcessEvent
+
+	log *slog.Logger
+}
+
+// SvcGraphMetrics is a set of metrics associated with a given OTEL Metrics.
+// There is a Metrics instance for each service/process instrumented by OBI.
+type SvcGraphMetrics struct {
+	ctx                      context.Context
+	service                  *svc.Attrs
+	provider                 *metric.MeterProvider
+	resourceAttributes       []attribute.KeyValue
+	tracesResourceAttributes attribute.Set
+
+	serviceGraphClient *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphServer *Expirer[*request.Span, instrument.Float64Histogram, float64]
+	serviceGraphFailed *Expirer[*request.Span, instrument.Int64Counter, int64]
+	serviceGraphTotal  *Expirer[*request.Span, instrument.Int64Counter, int64]
+}
+
+func ReportSvcGraphMetrics(
+	ctxInfo *global.ContextInfo,
+	cfg *otelcfg.MetricsConfig,
+	jointMetricsConfig *perapp.GlobalMetricsConfig,
+	selectorCfg *attributes.SelectorConfig,
+	unresolved request.UnresolvedNames,
+	input *msg.Queue[[]request.Span],
+	processEvents *msg.Queue[exec.ProcessEvent],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
+		if !cfg.EndpointEnabled() || !jointMetricsConfig.Features.ServiceGraph() {
+			return swarm.EmptyRunFunc()
+		}
+		otelcfg.SetupInternalOTELSDKLogger(cfg.SDKLogLevel)
+
+		mr, err := newSvcGraphMetricsReporter(
+			ctx,
+			ctxInfo,
+			cfg,
+			selectorCfg,
+			unresolved,
+			input,
+			processEvents,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("instantiating OTEL metrics reporter: %w", err)
+		}
+
+		return mr.reportMetrics, nil
+	}
+}
+
+func newSvcGraphMetricsReporter(
+	ctx context.Context,
+	ctxInfo *global.ContextInfo,
+	cfg *otelcfg.MetricsConfig,
+	selectorCfg *attributes.SelectorConfig,
+	unresolved request.UnresolvedNames,
+	input *msg.Queue[[]request.Span],
+	processEventCh *msg.Queue[exec.ProcessEvent],
+) (*SvcGraphMetricsReporter, error) {
+	log := sglog()
+
+	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
+
+	mr := SvcGraphMetricsReporter{
+		ctx:              ctx,
+		cfg:              cfg,
+		is:               is,
+		nodeMeta:         ctxInfo.NodeMeta,
+		input:            input.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.input")),
+		processEvents:    processEventCh.Subscribe(msg.SubscriberName("otel.SvcGraphMetricsReporter.processEvents")),
+		metricAttributes: serviceGraphGetters(unresolved, ctxInfo.K8sInformer.IsKubeEnabled()),
+		selector:         selectorCfg.SelectionCfg,
+		log:              log,
+	}
+
+	var err error
+	mr.reporters, err = otelcfg.NewReporterPool[*svc.Attrs, *SvcGraphMetrics](cfg.ReportersCacheLen, cfg.TTL, timeNow,
+		func(id svc.UID, v *SvcGraphMetrics) {
+			llog := log.With("service", id)
+			llog.Debug("evicting metrics reporter from cache")
+			v.cleanupAllMetricsInstances()
+
+			go func() {
+				if err := v.provider.Shutdown(ctx); err != nil {
+					llog.Warn("error shutting down evicted metrics provider", "error", err)
+				}
+			}()
+		}, mr.newMetricSet)
+	if err != nil {
+		return nil, fmt.Errorf("creating service graph metrics reporters pool: %w", err)
+	}
+
+	// Instantiate the OTLP HTTP or GRPC metrics exporter
+	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
+
+	mr.pidTracker = NewPidServiceTracker()
+
+	return &mr, nil
+}
+
+func (mr *SvcGraphMetricsReporter) graphMetricOptions() []metric.Option {
+	return []metric.Option{
+		metric.WithView(mr.otelHistogramConfig(attributes.ServiceGraphClient.OTEL, mr.cfg.Buckets.DurationHistogram)),
+		metric.WithView(mr.otelHistogramConfig(attributes.ServiceGraphServer.OTEL, mr.cfg.Buckets.DurationHistogram)),
+	}
+}
+
+func (mr *SvcGraphMetricsReporter) isExponentialAggregation() bool {
+	switch mr.cfg.HistogramAggregation {
+	case otelcfg.HistogramAggregationExponential:
+		return true
+	case otelcfg.HistogramAggregationExplicit:
+	// do nothing
+	default:
+		mr.log.Warn("invalid value for histogram aggregation. Accepted values are: "+
+			string(otelcfg.HistogramAggregationExponential)+", "+string(otelcfg.HistogramAggregationExplicit)+" (default). Using default",
+			"value", mr.cfg.HistogramAggregation)
+	}
+	return false
+}
+
+func (mr *SvcGraphMetricsReporter) otelHistogramConfig(metricName string, buckets []float64) metric.View {
+	if mr.isExponentialAggregation() {
+		return metric.NewView(
+			metric.Instrument{
+				Name:  metricName,
+				Scope: instrumentation.Scope{Name: reporterName},
+			},
+			metric.Stream{
+				Name: metricName,
+				Aggregation: sdkmetric.AggregationBase2ExponentialHistogram{
+					MaxScale: mr.cfg.ExponentialHistogram.MaxScale,
+					MaxSize:  mr.cfg.ExponentialHistogram.MaxSize,
+				},
+			})
+	}
+	return metric.NewView(
+		metric.Instrument{
+			Name:  metricName,
+			Scope: instrumentation.Scope{Name: reporterName},
+		},
+		metric.Stream{
+			Name: metricName,
+			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+				Boundaries: buckets,
+			},
+		})
+}
+
+func (mr *SvcGraphMetricsReporter) setupGraphMeters(m *SvcGraphMetrics, meter instrument.Meter) error {
+	var err error
+
+	client := attributes.ServiceGraphClient
+	serviceGraphClient, err := meter.Float64Histogram(client.OTEL, instrument.WithUnit(client.Unit))
+	if err != nil {
+		return fmt.Errorf("creating service graph client histogram: %w", err)
+	}
+	m.serviceGraphClient = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.ctx, serviceGraphClient, mr.metricAttributes, timeNow, mr.cfg.TTL)
+
+	server := attributes.ServiceGraphServer
+	serviceGraphServer, err := meter.Float64Histogram(server.OTEL, instrument.WithUnit(server.Unit))
+	if err != nil {
+		return fmt.Errorf("creating service graph server histogram: %w", err)
+	}
+	m.serviceGraphServer = NewExpirer[*request.Span, instrument.Float64Histogram, float64](
+		m.ctx, serviceGraphServer, mr.metricAttributes, timeNow, mr.cfg.TTL)
+
+	serviceGraphFailed, err := meter.Int64Counter(attributes.ServiceGraphFailed.OTEL)
+	if err != nil {
+		return fmt.Errorf("creating service graph failed total: %w", err)
+	}
+	m.serviceGraphFailed = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.ctx, serviceGraphFailed, mr.metricAttributes, timeNow, mr.cfg.TTL)
+
+	serviceGraphTotal, err := meter.Int64Counter(attributes.ServiceGraphTotal.OTEL)
+	if err != nil {
+		return fmt.Errorf("creating service graph total: %w", err)
+	}
+	m.serviceGraphTotal = NewExpirer[*request.Span, instrument.Int64Counter, int64](
+		m.ctx, serviceGraphTotal, mr.metricAttributes, timeNow, mr.cfg.TTL)
+
+	return nil
+}
+
+func (mr *SvcGraphMetricsReporter) newSvcGraphMetricsInstance(service *svc.Attrs) *SvcGraphMetrics {
+	log := mr.log
+	var resourceAttributes []attribute.KeyValue
+	if service != nil {
+		log = log.With("service", service)
+		resourceAttributes = append(otelcfg.GetAppResourceAttrs(&mr.nodeMeta, service), otelcfg.ResourceAttrsFromEnv(service)...)
+		resourceAttributes = otelcfg.FilterResourceAttrs(resourceAttributes, mr.selector)
+	}
+	log.Debug("creating new Metrics reporter")
+	resources := resource.NewWithAttributes(attr.OBISchemaURL, resourceAttributes...)
+
+	opts := []metric.Option{
+		metric.WithResource(resources),
+		metric.WithReader(metric.NewPeriodicReader(sharedExporter{mr.exporter},
+			metric.WithInterval(mr.cfg.Interval))),
+	}
+
+	opts = append(opts, mr.graphMetricOptions()...)
+
+	return &SvcGraphMetrics{
+		ctx:                      mr.ctx,
+		service:                  service,
+		resourceAttributes:       resourceAttributes,
+		tracesResourceAttributes: mr.tracesResourceAttributes(service),
+		provider: metric.NewMeterProvider(
+			opts...,
+		),
+	}
+}
+
+func (mr *SvcGraphMetricsReporter) newMetricSet(service *svc.Attrs) (*SvcGraphMetrics, error) {
+	m := mr.newSvcGraphMetricsInstance(service)
+
+	mr.log.Debug("creating new metric set", "service", service)
+
+	meter := m.provider.Meter(reporterName)
+
+	if err := mr.setupGraphMeters(m, meter); err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
+
+func (mr *SvcGraphMetricsReporter) close() {
+	go func() {
+		if err := mr.exporter.Shutdown(mr.ctx); err != nil {
+			mr.log.Warn("closing metrics provider", "error", err)
+			return
+		}
+		mr.log.Debug("Metrics reporter closed")
+	}()
+}
+
+func (mr *SvcGraphMetricsReporter) tracesResourceAttributes(service *svc.Attrs) attribute.Set {
+	if service == nil {
+		return *attribute.EmptySet()
+	}
+	baseAttrs := []attribute.KeyValue{
+		semconv.ServiceName(service.UID.Name),
+		semconv.ServiceInstanceID(service.UID.Instance),
+		semconv.ServiceNamespace(service.UID.Namespace),
+		semconv.TelemetrySDKLanguageKey.String(service.SDKLanguage.String()),
+		semconv.TelemetrySDKNameKey.String(attr.VendorSDKName),
+		semconv.TelemetrySDKVersion(attr.VendorSDKVersion),
+		semconv.TelemetryDistroName(attr.TelemetryDistroName),
+		semconv.TelemetryDistroVersion(attr.TelemetryDistroVersion()),
+		request.SourceMetric(attr.VendorPrefix),
+		semconv.OSTypeKey.String("linux"),
+	}
+
+	extraAttrs := []attribute.KeyValue{
+		semconv.HostID(mr.nodeMeta.HostID),
+	}
+
+	for k, v := range service.Metadata {
+		extraAttrs = append(extraAttrs, k.OTEL().String(v))
+	}
+
+	filteredAttrs := otelcfg.GetFilteredAttributesByPrefix(baseAttrs, nil, extraAttrs, MetricTypes)
+	filteredAttrs = otelcfg.FilterResourceAttrs(filteredAttrs, mr.selector)
+	return attribute.NewSet(filteredAttrs...)
+}
+
+func serviceGraphGetters(unresolved request.UnresolvedNames, k8sEnabled bool) []attributes.Field[*request.Span, attribute.KeyValue] {
+	attrs := []attr.Name{
+		attr.Client,
+		attr.ClientNamespace,
+		attr.Server,
+		attr.ServerNamespace,
+		attr.Source,
+	}
+	if k8sEnabled {
+		attrs = append(attrs, attr.K8SClientCluster, attr.K8SServerCluster, attr.K8SClientNamespace, attr.K8SServerNamespace)
+	}
+	return attributes.OpenTelemetryGetters(
+		request.SpanOTELGetters(unresolved), attrs)
+}
+
+func (r *SvcGraphMetrics) record(span *request.Span, mr *SvcGraphMetricsReporter) {
+	if span.IsDNSSpan() {
+		return
+	}
+
+	t := span.Timings()
+	duration := t.End.Sub(t.RequestStart).Seconds()
+
+	// The request counter is its own instrument, so a span whose duration was never
+	// measured still counts on the edge it traveled. Dropping it would erase an edge
+	// where every call goes unobserved. Only the two histograms are withheld.
+	durationMeasured := !request.IgnoreDurations(span)
+
+	ctx := trace.ContextWithSpanContext(r.ctx, trace.SpanContext{}.WithTraceID(span.TraceID).WithSpanID(span.SpanID).WithTraceFlags(trace.TraceFlags(span.TraceFlags)))
+
+	if !span.IsSelfReferenceSpan() || mr.cfg.AllowServiceGraphSelfReferences {
+		// connection_type is an enumerated attribute: omit it for direct
+		// HTTP/gRPC requests (empty value) instead of emitting an empty
+		// string, which is not a valid enum member.
+		var connType []attribute.KeyValue
+		if ct := ConnectionTypeForSpan(span, &mr.pidTracker); ct != "" {
+			connType = append(connType, request.ConnectionTypeMetric(ct))
+		}
+
+		if span.IsClientSpan() {
+			if durationMeasured {
+				sgc, attrs := r.serviceGraphClient.ForRecord(span, connType...)
+				sgc.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+			// If we managed to resolve the remote name only, we check to see
+			// we are not instrumenting the server service, then and only then,
+			// we generate client span count for service graph total
+			if ClientSpanToUninstrumentedService(&mr.pidTracker, span) {
+				sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType...)
+				sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+			}
+		} else {
+			if durationMeasured {
+				sgs, attrs := r.serviceGraphServer.ForRecord(span, connType...)
+				sgs.Record(ctx, duration, instrument.WithAttributeSet(attrs))
+			}
+			sgt, attrs := r.serviceGraphTotal.ForRecord(span, connType...)
+			sgt.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+		}
+		// An unmeasured span has status Unset, so it never counts against the edge.
+		if request.SpanStatusCode(span) == request.StatusCodeError {
+			sgf, attrs := r.serviceGraphFailed.ForRecord(span, connType...)
+			sgf.Add(ctx, 1, instrument.WithAttributeSet(attrs))
+		}
+	}
+}
+
+func ConnectionTypeForSpan(span *request.Span, tracker *PidServiceTracker) string {
+	connType := span.ServiceGraphConnectionType()
+	if connType != "" {
+		return connType
+	}
+
+	// For client spans to uninstrumented services, set virtual_node
+	if span.IsClientSpan() && ClientSpanToUninstrumentedService(tracker, span) {
+		return "virtual_node"
+	}
+
+	return ""
+}
+
+func ClientSpanToUninstrumentedService(tracker *PidServiceTracker, span *request.Span) bool {
+	if span.HostName != "" {
+		n := svc.ServiceNameNamespace{Name: span.HostName, Namespace: span.OtherNamespace}
+		return !tracker.IsTrackingServerService(n)
+	}
+	// If we haven't resolved a hostname, don't add this node to the service graph.
+	// It will appear only in client requests. Essentially, in this case we have no
+	// idea if the service is instrumented or not; therefore, we take the conservative
+	// approach to avoid double counting.
+	return false
+}
+
+func (mr *SvcGraphMetricsReporter) setupPIDToServiceRelationship(pid app.PID, uid svc.UID) {
+	mr.pidTracker.AddPID(pid, uid)
+}
+
+func (mr *SvcGraphMetricsReporter) disassociatePIDFromService(pid app.PID) (bool, svc.UID) {
+	return mr.pidTracker.RemovePID(pid)
+}
+
+func (mr *SvcGraphMetricsReporter) reportMetrics(ctx context.Context) {
+	defer mr.close()
+	for {
+		select {
+		case <-ctx.Done():
+			mr.log.Debug("context done, stopping metrics reporting")
+			return
+		case pe, ok := <-mr.processEvents:
+			if !ok {
+				mr.log.Debug("process events channel closed, stopping metrics reporting")
+				return
+			}
+			mr.onProcessEvent(&pe)
+		case spans, ok := <-mr.input:
+			if !ok {
+				mr.log.Debug("input channel closed, stopping metrics reporting")
+				return
+			}
+			mr.onSpan(spans)
+		}
+	}
+}
+
+func (mr *SvcGraphMetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
+	snap := pe.ServiceFile().ServiceAttrs()
+	pid := pe.File.Pid()
+	mr.log.Debug("Received new process event", "event type", pe.Type, "pid", pid, "uid", snap.UID)
+
+	if pe.Type == exec.ProcessEventCreated {
+		mr.setupPIDToServiceRelationship(pid, snap.UID)
+	} else {
+		if deleted, origUID := mr.disassociatePIDFromService(pid); deleted {
+			mr.log.Debug("deleting infos for", "pid", pid, "uid", origUID)
+		}
+	}
+}
+
+func (mr *SvcGraphMetricsReporter) onSpan(spans []request.Span) {
+	for i := range spans {
+		s := &spans[i]
+		if s.InternalSignal() {
+			continue
+		}
+		if !s.Service.ExportModes.CanExportMetrics() {
+			continue
+		}
+		// If we are ignoring this span because of route patterns or features, don't do anything
+		if request.IgnoreMetrics(s) || !s.Service.Features.ServiceGraph() {
+			continue
+		}
+		reporter, err := mr.reporters.For(&s.Service)
+		if err != nil {
+			mr.log.Error("unexpected error creating OTEL resource. Ignoring metric",
+				"error", err, "service", s.Service.UID)
+			continue
+		}
+		reporter.record(s, mr)
+	}
+}
+
+func (r *SvcGraphMetrics) cleanupAllMetricsInstances() {
+	cleanupMetrics(r.ctx, r.serviceGraphClient)
+	cleanupMetrics(r.ctx, r.serviceGraphServer)
+	cleanupCounterMetrics(r.ctx, r.serviceGraphFailed)
+	cleanupCounterMetrics(r.ctx, r.serviceGraphTotal)
+}

@@ -1,0 +1,276 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package svc // import "go.opentelemetry.io/obi/pkg/appolly/app/svc"
+
+import (
+	"log/slog"
+
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/internal/transform/route"
+	"go.opentelemetry.io/obi/pkg/internal/transform/route/clusterurl"
+)
+
+type InstrumentableType int
+
+const (
+	InstrumentableUnknown InstrumentableType = iota
+	InstrumentableGolang
+	InstrumentableJava
+	InstrumentableJavaNative
+	InstrumentableDotnet
+	InstrumentablePython
+	InstrumentableRuby
+	InstrumentableNodejs
+	InstrumentableRust
+	InstrumentableGeneric
+	InstrumentablePHP
+	InstrumentableCPP
+	InstrumentableDeno
+)
+
+func (it InstrumentableType) String() string {
+	switch it {
+	case InstrumentableGolang:
+		return semconv.TelemetrySDKLanguageGo.Value.AsString()
+	case InstrumentableJava, InstrumentableJavaNative:
+		return semconv.TelemetrySDKLanguageJava.Value.AsString()
+	case InstrumentableDotnet:
+		return semconv.TelemetrySDKLanguageDotnet.Value.AsString()
+	case InstrumentablePython:
+		return semconv.TelemetrySDKLanguagePython.Value.AsString()
+	case InstrumentableRuby:
+		return semconv.TelemetrySDKLanguageRuby.Value.AsString()
+	case InstrumentableNodejs:
+		return semconv.TelemetrySDKLanguageNodejs.Value.AsString()
+	case InstrumentableDeno:
+		// There is no stable OTEL convention for Deno runtime.
+		// However, Deno sets "deno-rust" in its own native OTEL instrumentation
+		// https://docs.deno.com/runtime/fundamentals/open_telemetry/
+		return "deno-rust"
+	case InstrumentableRust:
+		return semconv.TelemetrySDKLanguageRust.Value.AsString()
+	case InstrumentablePHP:
+		return semconv.TelemetrySDKLanguagePHP.Value.AsString()
+	case InstrumentableCPP:
+		return semconv.TelemetrySDKLanguageCPP.Value.AsString()
+	case InstrumentableGeneric:
+		return "generic"
+	default:
+		// if this appears, it's a bug!!
+		return "unknown"
+	}
+}
+
+type idFlags uint8
+
+const (
+	autoName               idFlags = 0x1
+	exportsOTelMetrics     idFlags = 0x2
+	exportsOTelTraces      idFlags = 0x4
+	exportsOTelMetricsSpan idFlags = 0x8
+	autoNamespace          idFlags = 0x10
+)
+
+type ServiceNameNamespace struct {
+	Name      string
+	Namespace string
+}
+
+func (sn ServiceNameNamespace) String() string {
+	return sn.Namespace + "/" + sn.Name
+}
+
+// UID uniquely identifies a service instance across the whole system
+// according to the OpenTelemetry specification: (name, namespace, instance)
+type UID struct {
+	Name      string
+	Namespace string
+	Instance  string
+}
+
+func (uid *UID) NameNamespace() ServiceNameNamespace {
+	return ServiceNameNamespace{Name: uid.Name, Namespace: uid.Namespace}
+}
+
+func (uid *UID) Equals(other *UID) bool {
+	return uid.Name == other.Name && uid.Namespace == other.Namespace && uid.Instance == other.Instance
+}
+
+// Attrs stores the metadata attributes of a service/resource
+type Attrs struct {
+	// Instance uniquely identifies a service instance. It is not exported
+	// in the metrics or traces, but it is used to compose the Instance
+	UID UID
+
+	SDKLanguage InstrumentableType
+
+	Metadata map[attr.Name]string
+
+	// ProcPID is the PID of the instrumented process as seen by OBI's /proc filesystem.
+	// It is stored here at process discovery time, because it might differ form the
+	// UserPID and HostPID fields of the request.PidInfo struct.
+	ProcPID app.PID
+
+	// RuntimeContainerID is the full container ID used for local identity lookup.
+	// Exported container attributes are stored separately in Metadata.
+	RuntimeContainerID string
+
+	// DynamicSelectorPID is the PID whose dynamic signal selection controls this process.
+	// It usually matches ProcPID, but children discovered through a selected parent can inherit
+	// the parent's runtime signal selection.
+	DynamicSelectorPID app.PID
+
+	// HostName running the process. It will default to the OBI host and will be overridden
+	// by other metadata if available (e.g., Pod Name, Node Name, etc...)
+	HostName string
+
+	EnvVars map[string]string
+
+	flags idFlags
+
+	ExportModes services.ExportModes
+
+	Sampler trace.Sampler
+
+	// Features that are defined in a per-service basis. For example, we might want to enable
+	// Service Graph Metrics for all the services but RED metrics only for a few
+	Features export.Features
+
+	LogEnricherEnabled bool
+
+	CustomInRouteMatcher  route.Matcher
+	CustomOutRouteMatcher route.Matcher
+	IncomingRoutePolicy   *RoutePolicy
+	OutgoingRoutePolicy   *RoutePolicy
+	IncomingPathTrie      *clusterurl.PathTrie
+	OutgoingPathTrie      *clusterurl.PathTrie
+	HarvestedRouteMatcher route.Matcher
+	PathTrie              *clusterurl.PathTrie
+}
+
+// RoutePolicy contains the compiled, direction-specific route state attached
+// to a service discovered from config v2.
+type RoutePolicy struct {
+	Config        services.RoutePolicy
+	Matcher       route.Matcher
+	IgnoreMatcher route.Matcher
+	PathTrie      *clusterurl.PathTrie
+}
+
+func (i *Attrs) GetUID() UID {
+	return i.UID
+}
+
+// String uses a value receiver so nested Attrs values (e.g. Span.Service) never reflection-dump EnvVars
+func (i Attrs) String() string {
+	return i.Job()
+}
+
+// LogValue implements slog.LogValuer: JSON handlers marshal exported fields
+// instead of calling String, so without it they would emit EnvVars
+func (i Attrs) LogValue() slog.Value {
+	return slog.StringValue(i.Job())
+}
+
+func (i *Attrs) Job() string {
+	if i.UID.Namespace != "" {
+		return i.UID.Namespace + "/" + i.UID.Name
+	}
+	return i.UID.Name
+}
+
+func (i *Attrs) setFlag(flag idFlags) {
+	i.flags |= flag
+}
+
+func (i *Attrs) clearFlag(flag idFlags) {
+	i.flags &^= flag
+}
+
+func (i *Attrs) getFlag(flag idFlags) bool {
+	return (i.flags & flag) == flag
+}
+
+func (i *Attrs) SetAutoName() {
+	i.setFlag(autoName)
+}
+
+func (i *Attrs) ClearAutoName() {
+	i.clearFlag(autoName)
+}
+
+func (i *Attrs) AutoName() bool {
+	return i.getFlag(autoName)
+}
+
+func (i *Attrs) SetAutoNamespace() {
+	i.setFlag(autoNamespace)
+}
+
+func (i *Attrs) AutoNamespace() bool {
+	return i.getFlag(autoNamespace)
+}
+
+func (i *Attrs) SetExportsOTelMetrics() {
+	i.setFlag(exportsOTelMetrics)
+}
+
+func (i *Attrs) ExportsOTelMetrics() bool {
+	return i.getFlag(exportsOTelMetrics)
+}
+
+func (i *Attrs) SetExportsOTelMetricsSpan() {
+	i.setFlag(exportsOTelMetricsSpan)
+}
+
+func (i *Attrs) ExportsOTelMetricsSpan() bool {
+	return i.getFlag(exportsOTelMetricsSpan)
+}
+
+func (i *Attrs) SetExportsOTelTraces() {
+	i.setFlag(exportsOTelTraces)
+}
+
+func (i *Attrs) ExportsOTelTraces() bool {
+	return i.getFlag(exportsOTelTraces)
+}
+
+func (i *Attrs) SetCustomRoutes(config *services.CustomRoutesConfig) {
+	i.CustomInRouteMatcher = route.NewMatcher(config.Incoming)
+	i.CustomOutRouteMatcher = route.NewMatcher(config.Outgoing)
+}
+
+func (i *Attrs) SetDirectionalRoutes(config services.DirectionalRoutePolicies) {
+	i.IncomingRoutePolicy = NewRoutePolicy(config.Incoming)
+	i.OutgoingRoutePolicy = NewRoutePolicy(config.Outgoing)
+}
+
+func NewRoutePolicy(config services.RoutePolicy) *RoutePolicy {
+	return &RoutePolicy{
+		Config:        config.Clone(),
+		Matcher:       route.NewMatcher(config.Patterns),
+		IgnoreMatcher: route.NewMatcher(config.IgnorePatterns),
+		PathTrie:      NewRoutePathTrie(config),
+	}
+}
+
+// NewRoutePathTrie creates the mutable per-service state required by a
+// low-cardinality route policy.
+func NewRoutePathTrie(config services.RoutePolicy) *clusterurl.PathTrie {
+	if config.Unmatch != services.UnmatchLowCardinality || config.MaxPathSegmentCardinality <= 0 {
+		return nil
+	}
+
+	wildcard := byte('*')
+	if config.WildcardChar != "" {
+		wildcard = config.WildcardChar[0]
+	}
+	return clusterurl.NewPathTrie(config.MaxPathSegmentCardinality, wildcard)
+}

@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-agent-config
+data:
+  agent-config.river: |
+    otelcol.receiver.otlp "default" {
+      grpc {}
+      http {}
+    
+      output {
+        metrics = [otelcol.processor.batch.default.input]
+        traces = [otelcol.processor.batch.default.input]
+      }
+    }
+      
+    otelcol.processor.batch "default" {
+      output {
+        metrics = [otelcol.exporter.prometheus.default.input]
+        traces  = [otelcol.exporter.otlp.tempo.input]
+      }
+    }
+      
+    otelcol.exporter.prometheus "default" {
+      forward_to = [prometheus.remote_write.mimir.receiver]
+    }
+      
+    prometheus.remote_write "mimir" {
+      endpoint {
+        url = "https://" + env("MIMIR_ENDPOINT") + "/api/prom/push"
+        basic_auth {
+          username = env("MIMIR_USER")
+          password = env("GRAFANA_API_KEY")
+        }
+      }
+    }
+      
+    otelcol.exporter.otlp "tempo" {
+      // Send traces to a locally running Tempo without TLS enabled.
+      client {
+        endpoint = env("TEMPO_ENDPOINT")
+        auth     = otelcol.auth.basic.creds.handler
+      }
+    }
+      
+    otelcol.auth.basic "creds" {
+      username = env("TEMPO_USER")
+      password = env("GRAFANA_API_KEY")
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-agent
+  labels:
+    app: grafana-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana-agent
+  template:
+    metadata:
+      labels:
+        app: grafana-agent
+    spec:
+      volumes:
+        - name: grafana-agent-config
+          configMap:
+            name: grafana-agent-config
+      containers:
+        - name: grafana-agent
+          image: grafana/agent:main
+          command:
+            - "/usr/bin/grafana-agent"
+            - "run"
+            - "/grafana-agent-config/agent-config.river"
+          env:
+            - name: AGENT_MODE
+              value: flow
+            - name: TEMPO_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  key: tempo-endpoint
+                  name: grafana-secret
+            - name: TEMPO_USER
+              valueFrom:
+                secretKeyRef:
+                  key: tempo-user
+                  name: grafana-secret
+            - name: MIMIR_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  key: mimir-endpoint
+                  name: grafana-secret
+            - name: MIMIR_USER
+              valueFrom:
+                secretKeyRef:
+                  key: mimir-user
+                  name: grafana-secret
+            - name: GRAFANA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: grafana-api-key
+                  name: grafana-secret
+          ports:
+            - containerPort: 4318
+              protocol: TCP
+              name: http-traces
+          volumeMounts:
+            - mountPath: /grafana-agent-config
+              readOnly: true
+              name: grafana-agent-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-agent
+spec:
+  selector:
+    app: grafana-agent
+  ports:
+    - port: 4318
+      protocol: TCP
+      targetPort: http-traces

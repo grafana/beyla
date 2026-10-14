@@ -1,0 +1,232 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:best-practices',
+    'helpers:pinGitHubActionDigestsToSemver',
+  ],
+  postUpdateOptions: [
+    'gomodMassage',
+  ],
+  'git-submodules': {
+    enabled: false,
+  },
+  // Grafana's global force.enabled: true re-enables git-submodules after the
+  // manager-level enabled: false above. ignoreDeps and the packageRule below
+  // set skipReason, which force.enabled does not clear.
+  ignoreDeps: [
+    '.obi-src',
+  ],
+  ignorePaths: [
+    '.obi-src/**',
+    'internal/test/beyla_extensions/k8s/manifests/**',
+    'vendor/**',
+  ],
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: [
+        '/^\\.github/workflows/backport\\.yml$/',
+      ],
+      matchStrings: [
+        'ref:\\s+(?<currentDigest>[a-f0-9]{40})\\s+#\\s+main as of',
+      ],
+      depNameTemplate: 'grafana/grafana-github-actions',
+      packageNameTemplate: 'https://github.com/grafana/grafana-github-actions',
+      datasourceTemplate: 'git-refs',
+      currentValueTemplate: 'main',
+    },
+    {
+      customType: 'regex',
+      description: 'Track grafana/helm-charts update-helm-repo reusable workflow (referenced by bare commit SHA on main, which the standard github-actions manager cannot track)',
+      managerFilePatterns: [
+        '/^\\.github/workflows/helm-release\\.yml$/',
+      ],
+      matchStrings: [
+        'update-helm-repo\\.yaml@(?<currentDigest>[a-f0-9]{40})',
+      ],
+      depNameTemplate: 'grafana/helm-charts',
+      packageNameTemplate: 'https://github.com/grafana/helm-charts',
+      datasourceTemplate: 'git-refs',
+      currentValueTemplate: 'main',
+    },
+    {
+      customType: 'regex',
+      description: 'Update opentelemetry-injector version',
+      datasourceTemplate: 'github-releases',
+      depNameTemplate: 'open-telemetry/opentelemetry-injector',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+      managerFilePatterns: [
+        '(^|/)pkg/webhook/image/opentelemetry-injector/version\\.txt$',
+      ],
+      matchStrings: [
+        '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
+      ],
+    },
+    {
+      customType: 'regex',
+      description: 'Update Grafana OpenTelemetry Java agent version',
+      datasourceTemplate: 'github-releases',
+      depNameTemplate: 'grafana/grafana-opentelemetry-java',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+      managerFilePatterns: [
+        '(^|/)pkg/webhook/image/java/version\\.txt$',
+      ],
+      matchStrings: [
+        '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
+      ],
+    },
+    {
+      customType: 'regex',
+      description: 'Update OpenTelemetry Operator version (drives Python, Node.js, and .NET SDK versions)',
+      datasourceTemplate: 'github-releases',
+      depNameTemplate: 'open-telemetry/opentelemetry-operator',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+      managerFilePatterns: [
+        '(^|/)pkg/webhook/image/opentelemetry-operator/version\\.txt$',
+      ],
+      matchStrings: [
+        '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
+      ],
+    },
+  ],
+  packageRules: [
+    {
+      description: 'OBI submodule is updated by bot_sync-obi-submodule.yml, not Renovate',
+      matchManagers: [
+        'git-submodules',
+      ],
+      enabled: false,
+    },
+    {
+      // Group updates by ecosystem (manager) rather than by update type, each
+      // on its own day. This isolates failures: a flaky Go/license build can no
+      // longer hold an unrelated GitHub Action digest bump hostage in a single
+      // shared "all patch and digest" PR.
+      description: 'Run `go mod tidy` on any Go module update',
+      matchManagers: [
+        'gomod',
+      ],
+      postUpdateOptions: [
+        'gomodTidy',
+      ],
+    },
+    {
+      description: 'Block the known-bad github.com/cilium/ebpf v0.21.0 update while allowing later releases through',
+      matchManagers: [
+        'gomod',
+      ],
+      matchPackageNames: [
+        'github.com/cilium/ebpf',
+      ],
+      allowedVersions: '!/^v?0\\.21\\.0$/',
+    },
+    {
+      description: 'jsonschema v0.14 switched Schema.Properties to pb33f/ordered-map; OBI JSONSchema helpers still build wk8/go-ordered-map values',
+      matchManagers: [
+        'gomod',
+      ],
+      matchPackageNames: [
+        'github.com/invopop/jsonschema',
+      ],
+      allowedVersions: '<0.14.0',
+    },
+    {
+      description: 'predeclared v0.3 removed IgnoreFlag/QualifiedFlag, which golangci-lint v2.14 still calls',
+      matchManagers: [
+        'gomod',
+      ],
+      matchPackageNames: [
+        'github.com/nishanths/predeclared',
+      ],
+      allowedVersions: '<0.3.0',
+    },
+    {
+      groupName: 'Go',
+      matchManagers: [
+        'gomod',
+      ],
+      matchUpdateTypes: [
+        'patch',
+        'digest',
+        'minor',
+        'major',
+      ],
+      schedule: [
+        'before 8am on Monday',
+      ],
+    },
+    {
+      groupName: 'Docker',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchUpdateTypes: [
+        'patch',
+        'digest',
+        'minor',
+        'major',
+      ],
+      schedule: [
+        'before 8am on Tuesday',
+      ],
+    },
+    {
+      groupName: 'Github Actions',
+      matchManagers: [
+        'github-actions',
+      ],
+      matchUpdateTypes: [
+        'patch',
+        'digest',
+        'minor',
+        'major',
+      ],
+      schedule: [
+        'before 8am on Wednesday',
+      ],
+    },
+    {
+      description: 'Group the helm-charts reusable workflow bump with the other GitHub Actions updates',
+      groupName: 'Github Actions',
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchFileNames: [
+        '.github/workflows/helm-release.yml',
+      ],
+      schedule: [
+        'before 8am on Wednesday',
+      ],
+    },
+    {
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchFileNames: [
+        'pkg/webhook/image/opentelemetry-injector/version.txt',
+      ],
+      commitMessageTopic: 'inject-sdk-image: opentelemetry-injector version',
+    },
+    {
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchFileNames: [
+        'pkg/webhook/image/java/version.txt',
+      ],
+      commitMessageTopic: 'inject-sdk-image: Grafana OpenTelemetry Java agent version',
+    },
+    {
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchFileNames: [
+        'pkg/webhook/image/opentelemetry-operator/version.txt',
+      ],
+      commitMessageTopic: 'inject-sdk-image: OpenTelemetry Operator version',
+    },
+  ],
+  labels: [
+    'dependencies',
+  ],
+}

@@ -1,0 +1,140 @@
+name: Helm Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+  workflow_call:
+    inputs:
+      filter_regex_include:
+        description: this sets the scope of the super linter
+        default: "charts/beyla/"
+        required: false
+        type: string
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
+env:
+  CT_CONFIGFILE: "${{ github.workspace }}/.github/configs/ct.yml"
+  INTEGRARION_TESTS_DIR: "charts/beyla/tests/integration"
+
+jobs:
+  run-unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Run unit tests
+        run: make helm-unittest
+
+  lint-helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+          fetch-depth: 0 # required for chart-testing to work
+
+      - name: Regenerate docs
+        uses: docker://jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba327b1c6335cc15ce29267979c
+        with:
+          entrypoint: helm-docs
+          args: -c charts/beyla
+
+      - name: Check docs are up to date
+        run: |
+          if ! git diff --exit-code; then
+            echo "Helm chart documentation is not up to date. Please run 'helm-docs' and commit changes!" >&2
+            exit 1
+          fi
+
+      - name: Set up Linting with chart-testing
+        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --config "${CT_CONFIGFILE}")
+          if [[ -n "$changed" ]]; then
+            echo "::set-output name=changed::true"
+          fi
+
+      - name: Linting with chart-testing
+        run: ct lint --config "${CT_CONFIGFILE}"
+
+  list-integration-tests:
+    name: List integration tests
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.list_tests.outputs.tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: List tests
+        id: list_tests
+        working-directory: "${{ env.INTEGRARION_TESTS_DIR }}"
+        env:
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          tests=$(find . -name test-plan.yaml -exec dirname {} \; | sed -e "s/^\.\///g")
+          echo "Tests: ${tests}"
+          echo "tests=$(echo "${tests}" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(. != ""))')" >> "${GITHUB_OUTPUT}"
+
+  run-integration-tests:
+    name: Integration Test
+    needs: list-integration-tests
+    runs-on: ubuntu-latest
+    if: needs.list-integration-tests.outputs.tests != '[]'
+    strategy:
+      matrix:
+        test: ${{ fromJson(needs.list-integration-tests.outputs.tests) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: "false"
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: helm-chart-toolbox
+          repository: grafana/helm-chart-toolbox
+          persist-credentials: "false"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Install Flux CLI
+        uses: fluxcd/flux2/action@889be9d6cc8afa8ed639e1e1ba4ab678e3b38d8c # v2.9.4
+
+      - name: Install Kind CLI
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        with:
+          install_only: true
+
+      - name: Install Minikube CLI
+        uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
+        with:
+          start: false
+
+      - name: Run test
+        run: helm-chart-toolbox/tools/helm-test/helm-test "${TEST_DIRECTORY}"
+        env:
+          TEST_DIRECTORY: "source/${{ env.INTEGRARION_TESTS_DIR }}/${{ matrix.test }}"
+          DELETE_CLUSTER: true

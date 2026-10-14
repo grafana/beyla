@@ -1,0 +1,294 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/internal/langtools"
+	"go.opentelemetry.io/obi/pkg/internal/transform/route"
+)
+
+type RouteHarvester struct {
+	log      *slog.Logger
+	java     *JavaRoutes
+	disabled map[svc.InstrumentableType]struct{}
+	cfg      *services.RouteHarvestingConfig
+	timeout  time.Duration
+	mux      *sync.Mutex
+
+	// testing related
+	javaExtractRoutes   func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	nodeExtractRoutes   func(pid app.PID) (*RouteHarvesterResult, error)
+	denoExtractRoutes   func(pid app.PID) (*RouteHarvesterResult, error)
+	pythonExtractRoutes func(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	dotnetExtract       func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	phpExtractRoutes    func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	rubyExtractRoutes   func(ctx context.Context, pid app.PID) (*RouteHarvesterResult, error)
+}
+
+type RouteHarvesterResultKind uint8
+
+const (
+	CompleteRoutes RouteHarvesterResultKind = iota + 1
+	PartialRoutes
+)
+
+type RouteHarvesterResult struct {
+	Routes []string
+	Kind   RouteHarvesterResultKind
+}
+
+// HarvestError represents an error that occurred during route harvesting
+type HarvestError struct {
+	Message string
+}
+
+func (e *HarvestError) Error() string {
+	return e.Message
+}
+
+func NewRouteHarvester(cfg *services.RouteHarvestingConfig, disabled []services.RouteHarvesterLanguage, timeout time.Duration) *RouteHarvester {
+	dMap := map[svc.InstrumentableType]struct{}{}
+	for _, lang := range disabled {
+		if lang == services.RouteHarvesterLanguageRuby {
+			dMap[svc.InstrumentableRuby] = struct{}{}
+		}
+		if lang == services.RouteHarvesterLanguageJava {
+			dMap[svc.InstrumentableJava] = struct{}{}
+		}
+		if lang == services.RouteHarvesterLanguageNodejs {
+			dMap[svc.InstrumentableNodejs] = struct{}{}
+			dMap[svc.InstrumentableDeno] = struct{}{}
+		}
+		if lang == services.RouteHarvesterLanguagePython {
+			dMap[svc.InstrumentablePython] = struct{}{}
+		}
+		if lang == services.RouteHarvesterLanguageDotnet {
+			dMap[svc.InstrumentableDotnet] = struct{}{}
+		}
+		if lang == services.RouteHarvesterLanguagePHP {
+			dMap[svc.InstrumentablePHP] = struct{}{}
+		}
+	}
+
+	h := &RouteHarvester{
+		log:      slog.With("component", "route.harvester"),
+		java:     NewJavaRoutesHarvester(),
+		disabled: dMap,
+		timeout:  timeout,
+		cfg:      cfg,
+		mux:      &sync.Mutex{},
+	}
+
+	h.javaExtractRoutes = h.java.ExtractRoutes
+	h.nodeExtractRoutes = ExtractNodejsRoutes
+	h.denoExtractRoutes = ExtractDenoRoutes
+	h.rubyExtractRoutes = ExtractRubyRoutes
+	h.pythonExtractRoutes = ExtractPythonRoutes
+	h.dotnetExtract = ExtractDotnetRoutes
+	h.phpExtractRoutes = ExtractPHPRoutes
+
+	return h
+}
+
+func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error) {
+	// Ensure we harvest one by one
+	h.mux.Lock()
+	defer h.mux.Unlock()
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
+	defer cancel()
+
+	// Channel to receive the result
+	type result struct {
+		r   *RouteHarvesterResult
+		err error
+	}
+
+	resultChan := make(chan result, 1)
+
+	// Run the harvesting in a goroutine
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				h.log.Error("route harvesting failed", "error", r)
+				resultChan <- result{err: &HarvestError{Message: "harvesting failed"}}
+			}
+		}()
+
+		runtime := fileInfo.SDKLanguage()
+		switch runtime {
+		case svc.InstrumentableJava:
+			if _, ok := h.disabled[svc.InstrumentableJava]; !ok {
+				r, err := h.javaExtractRoutes(ctx, fileInfo)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		case svc.InstrumentableRuby:
+			if _, disabled := h.disabled[runtime]; disabled {
+				resultChan <- result{r: nil}
+				return
+			}
+			r, err := h.rubyExtractRoutes(ctx, fileInfo.Pid())
+			resultChan <- result{r: r, err: err}
+		case svc.InstrumentableNodejs:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.nodeExtractRoutes(fileInfo.Pid())
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				h.log.Debug("found application routes", "runtime", runtime.String(), "routes", r.Routes)
+
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		case svc.InstrumentableDeno:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.denoExtractRoutes(fileInfo.Pid())
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				h.log.Debug("found application routes", "runtime", "deno", "routes", r.Routes)
+
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		case svc.InstrumentablePython:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.pythonExtractRoutes(fileInfo)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				h.log.Debug("found application routes", "runtime", runtime.String(), "routes", r.Routes)
+
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		case svc.InstrumentableDotnet:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.dotnetExtract(ctx, fileInfo)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		case svc.InstrumentablePHP:
+			if _, ok := h.disabled[runtime]; !ok {
+				r, err := h.phpExtractRoutes(ctx, fileInfo)
+				if err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				h.log.Debug("found application routes", "runtime", runtime.String(), "routes", routeValues(r))
+				resultChan <- result{r: r}
+			} else {
+				resultChan <- result{r: nil}
+			}
+		default:
+			resultChan <- result{r: nil}
+		}
+	}()
+
+	// Wait for either completion or timeout
+	select {
+	case result := <-resultChan:
+		if errors.Is(result.err, context.DeadlineExceeded) {
+			h.log.Warn("route harvesting timed out", "timeout", h.timeout, "pid", fileInfo.Pid())
+			return nil, &HarvestError{Message: "route harvesting timed out"}
+		}
+		return result.r, result.err
+	case <-ctx.Done():
+		h.log.Warn("route harvesting timed out", "timeout", h.timeout, "pid", fileInfo.Pid())
+		return nil, &HarvestError{Message: "route harvesting timed out"}
+	}
+}
+
+func routeValues(result *RouteHarvesterResult) []string {
+	if result == nil {
+		return nil
+	}
+	return result.Routes
+}
+
+func RouteMatcherFromResult(r RouteHarvesterResult) route.Matcher {
+	switch r.Kind {
+	case CompleteRoutes:
+		return route.NewMatcher(r.Routes)
+	case PartialRoutes:
+		return route.NewPartialRouteMatcher(r.Routes)
+	}
+
+	return nil
+}
+
+func (h *RouteHarvester) HarvestRoutesDelay(fileInfo *exec.FileInfo) (bool, time.Duration) {
+	if fileInfo.SDKLanguage() == svc.InstrumentableJava {
+		return true, h.cfg.JavaHarvestDelay
+	}
+
+	return false, 0
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// for testing purposes
+var isDirFunc = isDir
+
+func FindScriptDirectory(root, firstArg, cwd string) string {
+	if strings.HasPrefix(firstArg, "/") {
+		if dir := resolveProcessDirectory(root, firstArg); dir != "" {
+			return dir
+		}
+
+		lastSlashPos := strings.LastIndex(firstArg, "/")
+		if lastSlashPos > 1 {
+			if dir := resolveProcessDirectory(root, firstArg[:lastSlashPos]); dir != "" {
+				return dir
+			}
+		}
+	}
+
+	return resolveProcessDirectory(root, cwd)
+}
+
+func resolveProcessDirectory(root, path string) string {
+	result, ok := langtools.ResolveProcessPath(root, "/", path)
+	if !ok || !isDirFunc(result) {
+		return ""
+	}
+	if result[len(result)-1] != filepath.Separator {
+		result += string(filepath.Separator)
+	}
+	return result
+}

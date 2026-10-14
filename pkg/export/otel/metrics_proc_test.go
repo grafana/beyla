@@ -1,0 +1,239 @@
+package otel
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	meta "go.opentelemetry.io/obi/pkg/metadata"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+
+	"github.com/grafana/beyla/v3/pkg/export/extraattributes"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
+	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
+	"github.com/grafana/beyla/v3/pkg/test/collector"
+)
+
+const timeout = 3 * time.Second
+
+func TestProcMetrics_Disaggregated(t *testing.T) {
+	t.Setenv("OTEL_METRIC_EXPORT_INTERVAL", "100")
+	ctx := t.Context()
+
+	otlp, err := collector.Start(ctx)
+	require.NoError(t, err)
+
+	// GIVEN an OTEL Metrics Exporter whose process CPU metrics consider the cpu.mode
+	includedAttributes := attributes.InclusionLists{
+		Include: []string{"process_command", "cpu_mode", "disk_io_direction", "network_io_direction"},
+	}
+	mCfg := otelcfg.MetricsConfig{
+		ReportersCacheLen: 100,
+		CommonEndpoint:    otlp.ServerEndpoint,
+		MetricsProtocol:   otelcfg.ProtocolHTTPProtobuf,
+		TTL:               3 * time.Minute,
+		Instrumentations: []instrumentations.Instrumentation{
+			instrumentations.InstrumentationALL,
+		},
+	}
+	instancer := &otelcfg.MetricsExporterInstancer{Cfg: &mCfg}
+
+	procsInput := msg.NewQueue[[]*process.Status](msg.ChannelBufferLen(10))
+	otelExporter, err := ProcMetricsExporterProvider(
+		&global.ContextInfo{OTELMetricsExporter: instancer}, &ProcMetricsConfig{
+			Metrics: &mCfg, SelectorCfg: &attributes.SelectorConfig{
+				SelectionCfg: attributes.Selection{
+					extraattributes.ProcessCPUTime.Section:        includedAttributes,
+					extraattributes.ProcessCPUUtilization.Section: includedAttributes,
+					extraattributes.ProcessDiskIO.Section:         includedAttributes,
+					extraattributes.ProcessNetIO.Section:          includedAttributes,
+				},
+			},
+			CommonCfg: &perapp.GlobalMetricsConfig{
+				Features: export.FeatureApplicationRED | bexport.FeatureProcess,
+			},
+		}, procsInput)(ctx)
+	require.NoError(t, err)
+
+	go otelExporter(ctx)
+
+	// WHEN it receives process metrics
+	procsInput.Send([]*process.Status{
+		{ID: process.ID{Command: "foo", Service: &svc.Attrs{}, UID: svc.UID{Instance: "foo"}},
+			CPUUtilisationWait: 3, CPUUtilisationSystem: 2, CPUUtilisationUser: 1,
+			CPUTimeUserDelta: 30, CPUTimeWaitDelta: 20, CPUTimeSystemDelta: 10,
+			IOReadBytesDelta: 123, IOWriteBytesDelta: 456,
+			NetRcvBytesDelta: 10, NetTxBytesDelta: 20,
+		},
+	})
+
+	// readMetricsOfName drains the records channel, collecting exactly n records
+	// whose Name matches name and discarding all others.  It fails the test if
+	// the named records cannot be collected before timeout.
+	readMetricsOfName := func(name string, n int) []collector.MetricRecord {
+		t.Helper()
+		var results []collector.MetricRecord
+		for len(results) < n {
+			select {
+			case m := <-otlp.Records():
+				if m.Name == name {
+					results = append(results, m)
+				}
+			case <-time.After(timeout):
+				t.Fatalf("timeout waiting for %d metrics named %q, collected %d so far", n, name, len(results))
+				return nil
+			}
+		}
+		return results
+	}
+
+	// THEN the metrics are exported aggregated by system/user/wait times.
+	// Datapoint ordering within a metric is non-deterministic, so we collect
+	// all records of a given name and assert on the resulting set.
+	cpuTimes := readMetricsOfName("process.cpu.time", 3)
+	gotCPUTimes := map[string]float64{}
+	for _, m := range cpuTimes {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotCPUTimes[m.Attributes["cpu.mode"]] = m.FloatVal
+	}
+	assert.Equal(t, map[string]float64{"user": 30, "system": 10, "wait": 20}, gotCPUTimes)
+
+	cpuUtils := readMetricsOfName("process.cpu.utilization", 3)
+	gotCPUUtils := map[string]float64{}
+	for _, m := range cpuUtils {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotCPUUtils[m.Attributes["cpu.mode"]] = m.FloatVal
+	}
+	assert.Equal(t, map[string]float64{"user": 1, "system": 2, "wait": 3}, gotCPUUtils)
+
+	diskIOs := readMetricsOfName("process.disk.io", 2)
+	gotDiskIO := map[string]int64{}
+	for _, m := range diskIOs {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotDiskIO[m.Attributes["disk.io.direction"]] = m.IntVal
+	}
+	assert.Equal(t, map[string]int64{"read": 123, "write": 456}, gotDiskIO)
+
+	netIOs := readMetricsOfName("process.network.io", 2)
+	gotNetIO := map[string]int64{}
+	for _, m := range netIOs {
+		assert.Equal(t, "foo", m.ResourceAttributes["process.command"])
+		gotNetIO[m.Attributes["network.io.direction"]] = m.IntVal
+	}
+	assert.Equal(t, map[string]int64{"receive": 10, "transmit": 20}, gotNetIO)
+}
+
+func TestGetFilteredProcessResourceAttrs(t *testing.T) {
+	nodeMeta := &meta.NodeMeta{HostID: "test-host-id"}
+
+	service := &svc.Attrs{
+		UID: svc.UID{
+			Name:      "test-service",
+			Instance:  "test-instance",
+			Namespace: "test-namespace",
+		},
+		HostName:    "test-host",
+		SDKLanguage: svc.InstrumentableGolang,
+	}
+
+	procID := &process.ID{
+		ProcessID:       12345,
+		ParentProcessID: 1000,
+		Command:         "test-process",
+		CommandLine:     "/bin/test-process --arg1 --arg2=value",
+		CommandArgs:     []string{"/bin/test-process", "--arg1", "--arg2=value"},
+		ExecName:        "test-process",
+		ExecPath:        "/bin/test-process",
+		User:            "testuser",
+		CreationTime:    "2023-11-21T09:25:34.853Z",
+		Service:         service,
+		UID:             service.UID,
+	}
+
+	attrSelector := attributes.Selection{
+		extraattributes.ProcessCPUTime.Section: attributes.InclusionLists{
+			Include: []string{"*"},
+			Exclude: []string{"process.command_args", "process.exec_path"},
+		},
+	}
+
+	result := getFilteredProcessResourceAttrs(nodeMeta, procID, attrSelector)
+
+	attrMap := make(map[string]string)
+	for _, attr := range result {
+		attrMap[string(attr.Key)] = attr.Value.Emit()
+	}
+
+	expectedBaseAttrs := []string{
+		"service.name",
+		"service.namespace",
+		"telemetry.sdk.language",
+		"telemetry.sdk.name",
+		"telemetry.sdk.version",
+		"host.name",
+		"host.id",
+	}
+
+	for _, attrName := range expectedBaseAttrs {
+		_, exists := attrMap[attrName]
+		assert.True(t, exists, "Base attribute %s should always be included", attrName)
+	}
+
+	assert.Equal(t, "test-instance", attrMap["service.instance.id"])
+
+	assert.Equal(t, "12345", attrMap["process.pid"])
+	assert.Equal(t, "test-process", attrMap["process.command"])
+	assert.Equal(t, "testuser", attrMap["process.owner"])
+
+	_, hasCommandArgs := attrMap["process.command_args"]
+	assert.False(t, hasCommandArgs, "process.command_args should be filtered out")
+
+	_, hasExecPath := attrMap["process.exec_path"]
+	assert.False(t, hasExecPath, "process.exec_path should be filtered out")
+
+	attrSelector = attributes.Selection{
+		extraattributes.ProcessMemoryUsage.Section: attributes.InclusionLists{
+			Include: []string{"*"},
+			Exclude: []string{"process.*"}, // Exclude all process attributes
+		},
+	}
+
+	result = getFilteredProcessResourceAttrs(nodeMeta, procID, attrSelector)
+
+	attrMap = make(map[string]string)
+	for _, attr := range result {
+		attrMap[string(attr.Key)] = attr.Value.Emit()
+	}
+
+	for _, attrName := range expectedBaseAttrs {
+		_, exists := attrMap[attrName]
+		assert.True(t, exists, "Base attribute %s should always be included", attrName)
+	}
+
+	// process.pid should be in the list because it's now part of the
+	// resource attributes
+	processAttrs := []string{
+		"process.parent_pid",
+		"process.command",
+		"process.command_line",
+		"process.command_args",
+		"process.exec_name",
+		"process.exec_path",
+		"process.owner",
+		"process.creation.time",
+	}
+
+	for _, attrName := range processAttrs {
+		_, exists := attrMap[attrName]
+		assert.False(t, exists, "Process attribute %s should be filtered out", attrName)
+	}
+}

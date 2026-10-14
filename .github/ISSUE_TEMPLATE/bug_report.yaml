@@ -1,0 +1,38 @@
+name: Bug report
+description: Create a report to help us improve Grafana Beyla.
+type: "Bug"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for opening a bug report for Grafana Beyla.
+  - type: textarea
+    attributes:
+      label: What's wrong?
+      description: Provide a brief description of the issue.
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: Please describe steps for us to be able to reproduce the issue.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: System information
+      description: Provide your operating system and architecture.
+      placeholder: e.g. Linux 5.16.15 x86_64
+  - type: input
+    attributes:
+      label: Software version
+      description: Provide the version of the software you are using and Helm Chart version (if applicable).
+      placeholder: e.g. Grafana Beyla v2.0.0
+  - type: textarea
+    attributes:
+      label: Configuration
+      description: Provide the relevant configuration file here. Remove sensitive information before sharing. This will be formatted into a code block; don't add backtick code fences.
+      render: text
+  - type: textarea
+    attributes:
+      label: Logs
+      description: Provide logs relevant to the issue. Remove sensitive information before sharing. This will be formatted into a code block; don't add backtick code fences.
+      render: text

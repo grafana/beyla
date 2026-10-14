@@ -1,0 +1,6 @@
+routes:
+  patterns:
+    - /smoke
+    - /greeting
+    - /ping
+  unmatched: path

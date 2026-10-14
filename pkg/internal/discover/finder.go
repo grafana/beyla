@@ -1,0 +1,170 @@
+package discover
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/ebpf"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
+
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/export/otel"
+	"github.com/grafana/beyla/v3/pkg/export/prom"
+	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
+)
+
+type ProcessFinder struct {
+	cfg              *beyla.Config
+	ctxInfo          *global.ContextInfo
+	ebpfEventContext *ebpfcommon.EBPFEventContext
+	obiProcessFinder *obiDiscover.ProcessFinder
+}
+
+func NewProcessFinder(
+	cfg *beyla.Config,
+	ctxInfo *global.ContextInfo,
+	tracesInput *msg.Queue[[]request.Span],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+	ebpfEventContext *ebpfcommon.EBPFEventContext) *ProcessFinder {
+	return &ProcessFinder{
+		cfg: cfg, ctxInfo: ctxInfo,
+		ebpfEventContext: ebpfEventContext,
+		obiProcessFinder: obiDiscover.NewProcessFinder(cfg.AsOBI(), ctxInfo, tracesInput, runtimeMetrics, ebpfEventContext),
+	}
+}
+
+func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
+	swi := swarm.Instancer{}
+	processEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
+		pf.cfg.AsOBI(), "processEvents")
+
+	obiCfg := pf.cfg.AsOBI()
+
+	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents, obiDiscover.FindingCriteria(obiCfg), obiDiscover.ProcessWatcherRescan{})),
+		swarm.WithID("ProcessWatcher"))
+
+	enrichedProcessEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
+		pf.cfg.AsOBI(), "enrichedProcessEvents")
+
+	swi.Add(obiDiscover.WatcherKubeEnricherProvider(pf.ctxInfo.K8sInformer, processEvents, enrichedProcessEvents),
+		swarm.WithID("WatcherKubeEnricher"))
+
+	pf.connectSurveySubPipeline(ctx, &swi, enrichedProcessEvents)
+
+	pipeline, err := swi.Instance(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("can't instantiate obiDiscovery.ProcessFinder pipeline: %w", err)
+	}
+
+	log := slog.With("component", "discovery.ProcessFinder")
+	log.Debug("starting survey mode pipeline")
+
+	pipeline.Start(ctx)
+
+	return nil, nil
+}
+
+// Start the ProcessFinder pipeline in background. It returns a channel where each new obiDiscovered
+// ebpf.ProcessTracer will be notified.
+func (pf *ProcessFinder) startMixedPipeline(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
+
+	enrichedProcessEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
+		pf.cfg.AsOBI(), "enrichedProcessEvents")
+	swi := swarm.Instancer{}
+	obiPFStart := make(chan (<-chan obiDiscover.Event[*ebpf.Instrumentable]), 1)
+	pf.connectSurveySubPipeline(ctx, &swi, enrichedProcessEvents)
+
+	// runs the OBI's process finder pipeline in a subnode, and listens for the enriched process events
+	// to connect there the Beyla survey pipeline
+	swi.Add(func(ctx context.Context) (swarm.RunFunc, error) {
+		instrumentableEvents, err := pf.obiProcessFinder.Start(ctx,
+			obiDiscover.WithEnrichedProcessEvents(enrichedProcessEvents))
+		if err != nil {
+			return nil, err
+		}
+		obiPFStart <- instrumentableEvents
+		return func(_ context.Context) {
+			<-pf.obiProcessFinder.Done()
+		}, err
+	}, swarm.WithID("OBIProcessFinderSubPipeline"))
+
+	pipeline, err := swi.Instance(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("can't instantiate obiDiscovery.ProcessFinder pipeline: %w", err)
+	}
+	log := slog.With("component", "discovery.ProcessFinder")
+	log.Debug("waiting for OBI internal ProcessFinder instantiator to return the tracer's channel")
+	tracerEventsCh := <-obiPFStart
+	log.Debug("starting OBI internal ProcessFinder pipeline")
+	pipeline.Start(ctx)
+	return tracerEventsCh, nil
+}
+
+func (pf *ProcessFinder) Start(ctx context.Context) (<-chan obiDiscover.Event[*ebpf.Instrumentable], error) {
+	if pf.IsInstrumentationEnabled() {
+		return pf.startMixedPipeline(ctx)
+	}
+
+	return pf.startSuveyPipeline(ctx)
+}
+
+func (pf *ProcessFinder) IsInstrumentationEnabled() bool {
+	c := pf.cfg
+
+	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
+		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled()
+}
+
+// connects the survey sub-pipeline to the pipe of kube enriched events, and forwards
+// survey_info metrics from there
+func (pf *ProcessFinder) connectSurveySubPipeline(ctx context.Context, swi *swarm.Instancer, kubeEnrichedEvents *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]]) {
+	if !pf.cfg.Discovery.SurveyEnabled() {
+		return
+	}
+	obiCfg := pf.cfg.AsOBI()
+
+	surveyFilteredEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessMatch]](
+		pf.cfg.AsOBI(), "surveyFilteredEvents")
+	swi.Add(SurveyCriteriaMatcherProvider(pf.cfg, kubeEnrichedEvents, surveyFilteredEvents),
+		swarm.WithID("SurveyCriteriaMatcherProvider"))
+
+	// Socket apps can't always be discovered right away, so we end up filtering them later.
+	// Essentially, an application can use sockets, but at the time Beyla discovers it, no
+	// sockets are opened yet, it may open one later. We block the unmatched PIDs here and
+	// we let them go later once we have found a socket on them.
+	if pf.cfg.Discovery.Survey.SocketAppsEnabled() {
+		socketEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessMatch]](
+			obiCfg, "surveySocketEvents")
+		swi.Add(surveySocketFilterProvider(obiCfg, pf.ebpfEventContext, surveyFilteredEvents, socketEvents),
+			swarm.WithID("SurveySocketFilter"))
+		surveyFilteredEvents = socketEvents
+	}
+
+	surveyExecutables := msg2.QueueFromConfig[[]obiDiscover.Event[ebpf.Instrumentable]](
+		pf.cfg.AsOBI(), "surveyExecutables")
+	swi.Add(obiDiscover.ExecTyperProvider(obiCfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, surveyFilteredEvents, surveyExecutables),
+		swarm.WithID("SurveyExecTyperProvider"))
+
+	surveyExecutableTypes := msg2.QueueFromConfig[[]obiDiscover.Event[ebpf.Instrumentable]](
+		pf.cfg.AsOBI(), "surveyExecutableTypes")
+	swi.Add(obiDiscover.ContainerStoreUpdaterProvider(pf.ctxInfo.K8sInformer, surveyExecutables, surveyExecutableTypes),
+		swarm.WithID("SurveyContainerStoreUpdaterProvider"))
+
+	surveyEvents := msg2.QueueFromConfig[exec.ProcessEvent](
+		pf.cfg.AsOBI(), "surveyEvents")
+	swi.Add(SurveyEventGenerator(&pf.cfg.Attributes.Kubernetes, pf.ctxInfo.K8sInformer, surveyExecutableTypes, surveyEvents),
+		swarm.WithID("SurveyEventGenerator"))
+	swi.Add(otel.SurveyInfoMetrics(pf.ctxInfo, &pf.cfg.OTELMetrics, surveyEvents),
+		swarm.WithID("SurveyInfoMetrics"))
+	swi.Add(prom.SurveyPrometheusEndpoint(ctx, pf.ctxInfo, &pf.cfg.Prometheus, surveyEvents),
+		swarm.WithID("SurveyPrometheusEndpoint"))
+}

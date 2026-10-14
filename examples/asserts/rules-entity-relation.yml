@@ -1,0 +1,165 @@
+name: dummy-entities
+entities:
+  - type: Service
+    name: k8s_src_owner_name
+    scope:
+      namespace: k8s_src_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_owner_name) (beyla_network_flow_bytes_total{k8s_src_owner_type=~"Pod|Deployment|Node|DaemonSet|ReplicaSet|StatefulSet"})
+  - type: Service
+    name: k8s_dst_owner_name
+    scope:
+      namespace: k8s_dst_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_owner_name) (beyla_network_flow_bytes_total{k8s_dst_owner_type=~"Pod|Deployment|Node|DaemonSet|ReplicaSet|StatefulSet"})
+  - type: Node
+    name: k8s_src_node_name
+    scope:
+      namespace: k8s_src_node_name
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_src_node_name) (beyla_network_flow_bytes_total{k8s_src_type=~"Pod|Node"})
+  - type: Node
+    name: k8s_dst_node_name
+    scope:
+      namespace: k8s_dst_node_name
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_dst_node_name) (beyla_network_flow_bytes_total{k8s_dst_type=~"Pod|Node"})
+  - type: Namespace
+    name: k8s_src_namespace
+    scope:
+      namespace: k8s_src_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_src_namespace) (beyla_network_flow_bytes_total{k8s_src_type="Pod"})
+  - type: Namespace
+    name: k8s_dst_namespace
+    scope:
+      namespace: k8s_dst_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_dst_namespace) (beyla_network_flow_bytes_total{k8s_dst_type="Pod"})
+  - type: Pod
+    name: k8s_src_name
+    scope:
+      namespace: k8s_src_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name) (beyla_network_flow_bytes_total{k8s_src_type="Pod"})
+  - type: Pod
+    name: k8s_dst_name
+    scope:
+      namespace: k8s_dst_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_name) (beyla_network_flow_bytes_total{k8s_dst_type="Pod"})
+  - type: Service
+    name: k8s_src_name
+    scope:
+      namespace: k8s_src_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name) (beyla_network_flow_bytes_total{k8s_src_type="Service"})
+  - type: Service
+    name: k8s_dst_name
+    scope:
+      namespace: k8s_dst_namespace
+      env: asserts_env
+      site: asserts_site
+    definedBy:
+      - query: |
+          group by (asserts_env, asserts_site, k8s_dst_namespace, k8s_dst_name) (beyla_network_flow_bytes_total{k8s_dst_ype="Service"})
+relations:
+  - type: ROUTES
+    startEntityType: Pod
+    endEntityType: Pod
+    definedBy: !<METRICS>
+      pattern: |
+        group by (asserts_env, asserts_site, k8s_src_namespace, k8s_src_name, k8s_dst_namespace, k8s_dst_name) (
+            rate(beyla_network_flow_bytes_total{k8s_src_type="Pod",k8s_dst_type="Pod"}[1m])
+        )
+      startEntityMatchers:
+        name: k8s_src_name
+        namespace: k8s_src_namespace
+        env: asserts_env
+        site: asserts_site
+      endEntityMatchers:
+        name: k8s_dst_name
+        namespace: k8s_dst_namespace
+        env: asserts_env
+        site: asserts_site
+  - type: ROUTES
+    startEntityType: Namespace
+    endEntityType: Namespace
+    definedBy: !<METRICS>
+      pattern: |
+        group by (asserts_env, asserts_site, k8s_src_namespace, k8s_dst_namespace) (
+            rate(beyla_network_flow_bytes_total{k8s_src_type="Pod",k8s_dst_type="Service"}[1m])
+        )
+      startEntityMatchers:
+        name: k8s_src_namespace
+        namespace: k8s_src_namespace
+        env: asserts_env
+        site: asserts_site
+      endEntityMatchers:
+        name: k8s_dst_namespace
+        namespace: k8s_dst_namespace
+        env: asserts_env
+        site: asserts_site
+  - type: ROUTES
+    startEntityType: Node
+    endEntityType: Node
+    definedBy: !<METRICS>
+      pattern: |
+        group by (asserts_env, asserts_site, k8s_src_node_name, k8s_dst_node_name) (
+            rate(beyla_network_flow_bytes_total{k8s_src_type=~"Pod|Node",k8s_dst_type=~"Pod|Node"}[1m])
+        )
+      startEntityMatchers:
+        name: k8s_src_node_name
+        namespace: k8s_src_node_name
+        env: asserts_env
+        site: asserts_site
+      endEntityMatchers:
+        name: k8s_dst_node_name
+        namespace: k8s_dst_node_name
+        env: asserts_env
+        site: asserts_site
+  - type: ROUTES
+    startEntityType: Service
+    endEntityType: Service
+    definedBy: !<METRICS>
+      pattern: |
+        group by (asserts_env, asserts_site, k8s_src_namespace, k8s_dst_namespace, k8s_src_owner_name, k8s_dst_owner_name) (
+            rate(beyla_network_flow_bytes_total{k8s_src_owner_type=~"Pod|Deployment|DaemonSet|ReplicaSet|StatefulSet|Service",k8s_dst_owner_type=~"Pod|Deployment|DaemonSet|ReplicaSet|StatefulSet|Service"}[1m])
+        )
+      startEntityMatchers:
+        name: k8s_src_owner_name
+        namespace: k8s_src_namespace
+        env: asserts_env
+        site: asserts_site
+      endEntityMatchers:
+        name: k8s_dst_owner_name
+        namespace: k8s_dst_namespace
+        env: asserts_env
+        site: asserts_site

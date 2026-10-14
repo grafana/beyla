@@ -1,0 +1,76 @@
+name: Update OBI submodule
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-obi-submodule-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+# Set restrictive permissions at workflow level
+permissions: {}
+
+jobs:
+  update-obi:
+    name: Update OBI submodule and open PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed for creating commits and pushing branch
+      pull-requests: write # Needed for creating PRs
+      id-token: write # Required for DockerHub login and create-github-app-token
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Update submodule
+        run: |
+          git submodule update --checkout --remote .obi-src
+          git add .obi-src
+
+      - name: Get OBI short SHA
+        id: obi-sha
+        run: |
+          echo "sha=$(git -C .obi-src rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      # make vendor-obi internally downloads the ghcr.io/open-telemetry/obi-generator image
+      # Since this task is executed daily, there is no risk we hit a ghcr.io rate limit.
+      - name: Rebuild BPF and vendor OBI
+        run: make vendor-obi
+
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Clean up stray action checkouts
+        run: rm -rf _shared-workflows-*
+
+      - name: Create/update PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.get-github-app-token.outputs.token }}
+          sign-commits: true
+          commit-message: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
+          title: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
+          body: |
+            Automated update of the OBI (OpenTelemetry eBPF Instrumentation) submodule to the latest commit from grafana/opentelemetry-ebpf-instrumentation main.
+
+            OBI commit: `${{ steps.obi-sha.outputs.sha }}`
+
+            If CI fails due to upstream breaking changes, add the **agent/fix-obi** label to this PR to run the agentic workflow and get suggested fixes.
+          base: main
+          branch: "update-obi-submodule-${{ github.run_id }}"
+          labels: automated-pr
+          delete-branch: true

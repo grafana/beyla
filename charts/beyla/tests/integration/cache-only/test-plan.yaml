@@ -1,0 +1,29 @@
+---
+apiVersion: helm-chart-toolbox.grafana.com/v1
+kind: TestPlan
+name: cache-only
+
+subject:
+  path: ../../..
+  valuesFile: values.yaml
+
+cluster:
+  type: kind
+
+tests:
+  - type: kubernetes-objects-test
+    values:
+      checks:
+        - kind: Deployment
+          name: beyla-k8s-cache
+          namespace: default
+        - kind: Service
+          name: beyla-k8s-cache
+          namespace: default
+        - kind: ConfigMap
+          name: cache-only-beyla
+          namespace: default
+      checkAbsent:
+        - kind: DaemonSet
+          name: cache-only-beyla
+          namespace: default

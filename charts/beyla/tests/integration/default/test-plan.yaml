@@ -1,0 +1,21 @@
+---
+apiVersion: helm-chart-toolbox.grafana.com/v1
+kind: TestPlan
+name: defaults
+
+subject:
+  path: ../../..
+
+cluster:
+  type: kind
+
+tests:
+  - type: kubernetes-objects-test
+    values:
+      checks:
+        - kind: Daemonset
+          name: defaults-beyla
+          namespace: default
+        - kind: ConfigMap
+          name: defaults-beyla
+          namespace: default

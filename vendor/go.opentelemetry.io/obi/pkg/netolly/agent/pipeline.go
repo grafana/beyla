@@ -1,0 +1,164 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package agent // import "go.opentelemetry.io/obi/pkg/netolly/agent"
+
+import (
+	"context"
+
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/prom"
+	"go.opentelemetry.io/obi/pkg/filter"
+	msgh "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
+	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/netolly/export"
+	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
+	"go.opentelemetry.io/obi/pkg/internal/pipe"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/cidr"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/decorate"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/geoip"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/dynamicpid"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/selection"
+)
+
+func recordAttrs(r *ebpf.Record) *pipe.CommonAttrs { return &r.CommonAttrs }
+
+// mockable functions for testing
+var newMapTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+	return f.mapTracer.TraceLoop(out)
+}
+
+var newRingBufTracer = func(f *Flows, out *msg.Queue[[]*ebpf.Record]) swarm.RunFunc {
+	return f.rbTracer.TraceLoop(out)
+}
+
+// buildPipeline defines the different nodes in the OBI's NetO11y module,
+// as well as how they are interconnected (in its Connect() method)
+func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
+	alog := alog()
+
+	alog.Debug("creating flows' processing graph")
+
+	selectorCfg := &attributes.SelectorConfig{
+		SelectionCfg:            f.cfg.Attributes.Select,
+		ExtraGroupAttributesCfg: f.cfg.Attributes.ExtraGroupAttributes,
+	}
+
+	swi := &swarm.Instancer{}
+	// Start nodes: those generating flow records (reading them from eBPF).
+	// ebpfFlows has two senders (MapTracer and RingBufTracer), so it must only be
+	// closed after both of them have marked it closeable, hence ClosingAttempts(2).
+	ebpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "ebpfFlows", msg.ClosingAttempts(2))
+	swi.Add(swarm.DirectInstance(newMapTracer(f, ebpfFlows)), swarm.WithID("MapTracer"))
+	swi.Add(swarm.DirectInstance(newRingBufTracer(f, ebpfFlows)), swarm.WithID("RingBufTracer"))
+
+	// Middle nodes: transforming flow records and passing them to the next stage in the pipeline.
+	// Many of the nodes here are not mandatory. It's decision of each InstanceFunc to decide
+	// whether the node needs to be instantiated or just bypass their input/output channels.
+	protocolFilteredEbpfFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "protocolFilteredEbpfFlows")
+	swi.Add(flow.ProtocolFilterProvider(f.cfg.NetworkFlows.Protocols, f.cfg.NetworkFlows.ExcludeProtocols,
+		ebpfFlows, protocolFilteredEbpfFlows), swarm.WithID("ProtocolFilter"))
+
+	dedupedEBPFFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dedupedEBPFFlows")
+	swi.Add(flow.DeduperProvider(&flow.Deduper{
+		Type:               f.cfg.NetworkFlows.Deduper,
+		FCTTL:              f.cfg.NetworkFlows.DeduperFCTTL,
+		CacheActiveTimeout: f.cfg.NetworkFlows.CacheActiveTimeout,
+	}, protocolFilteredEbpfFlows, dedupedEBPFFlows), swarm.WithID("FlowDeduper"))
+
+	kubeDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "kubeDecoratedFlows")
+	swi.Add(k8s.MetadataDecoratorProvider(ctx, &f.cfg.Attributes.Kubernetes, f.ctxInfo.K8sInformer,
+		recordAttrs,
+		dedupedEBPFFlows, kubeDecoratedFlows), swarm.WithID("K8sMetadataDecorator"))
+
+	dnsDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dnsDecoratedFlows")
+	swi.Add(rdns.ReverseDNSProvider(&f.cfg.NetworkFlows.ReverseDNS, recordAttrs, &f.cfg.EBPF,
+		kubeDecoratedFlows, dnsDecoratedFlows),
+		swarm.WithID("ReverseDNS"))
+
+	geoIPDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "geoIPDecoratedFlows")
+	swi.Add(geoip.GeoIPProvider(&f.cfg.NetworkFlows.GeoIP,
+		recordAttrs,
+		dnsDecoratedFlows, geoIPDecoratedFlows), swarm.WithID("GeoIPDecorator"))
+
+	cidrDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "cidrDecoratedFlows")
+	swi.Add(cidr.DecoratorProvider(f.cfg.NetworkFlows.CIDRs,
+		recordAttrs,
+		geoIPDecoratedFlows, cidrDecoratedFlows),
+		swarm.WithID("CIDRDecorator"))
+
+	commonDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "commonDecoratedFlows")
+	swi.Add(decorate.Decorate(f.agentIP,
+		recordAttrs,
+		cidrDecoratedFlows, commonDecoratedFlows),
+		swarm.WithID("CommonFlowDecorator"))
+
+	decoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "decoratedFlows")
+	swi.Add(func(_ context.Context) (swarm.RunFunc, error) {
+		// If deduper is enabled, we know that interfaces are unset.
+		// As an optimization, we just pass here an empty-string interface namer
+		ifaceNamer := f.interfaceNamer
+		if f.cfg.NetworkFlows.Deduper == flowdef.DeduperFirstCome {
+			ifaceNamer = func(_ int) string {
+				return ""
+			}
+		}
+		return flow.Decorate(ifaceNamer, commonDecoratedFlows, decoratedFlows), nil
+	}, swarm.WithID("FlowDecorator"))
+
+	dynamicFilteredFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dynamicFilteredFlows")
+	var dynamicSelector selection.PIDSelector
+	if f.ctxInfo.DynamicSelector != nil {
+		dynamicSelector = f.ctxInfo.DynamicSelector.NetworkMetrics()
+	}
+	dynamicDecoratedFlows := msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "dynamicDecoratedFlows")
+	swi.Add(dynamicpid.MetadataDecoratorProvider(f.ctxInfo.DynamicSelector, dynamicSelector,
+		f.ctxInfo.K8sInformer, recordAttrs, decoratedFlows, dynamicDecoratedFlows),
+		swarm.WithID("DynamicPIDMetadataDecorator"))
+	swi.Add(filter.ByDynamicPID("net", dynamicSelector, f.ctxInfo.K8sInformer,
+		recordAttrs, dynamicDecoratedFlows, dynamicFilteredFlows),
+		swarm.WithID("DynamicPIDFilter"))
+
+	filteredFlows := f.ctxInfo.OverrideNetExportQueue
+	if filteredFlows == nil {
+		filteredFlows = msgh.QueueFromConfig[[]*ebpf.Record](f.cfg, f.ctxInfo.Metrics, "filteredFlows")
+	}
+	swi.Add(filter.ByAttribute(
+		f.cfg.Filters.Network,
+		nil,
+		selectorCfg.ExtraGroupAttributesCfg,
+		ebpf.RecordStringGetters(ebpf.RecordGettersConfig{
+			PortGuessPolicy: f.cfg.NetworkFlows.GuessPorts,
+		}),
+		dynamicFilteredFlows,
+		filteredFlows,
+	), swarm.WithID("AttributeFilter"))
+
+	// Terminal nodes export the flow record information out of the pipeline: OTEL, Prom and printer.
+	// Not all the nodes are mandatory here. Is the responsibility of each Provider function to decide
+	// whether each node is going to be instantiated or just ignored.
+	swi.Add(otel.NetMetricsExporterProvider(f.ctxInfo, &otel.NetMetricsConfig{
+		Metrics:     &f.cfg.OTELMetrics,
+		SelectorCfg: selectorCfg,
+		CommonCfg:   &f.cfg.Metrics,
+		GuessPorts:  f.cfg.NetworkFlows.GuessPorts,
+	}, filteredFlows), swarm.WithID("OTelExporter"))
+
+	swi.Add(prom.NetPrometheusEndpoint(f.ctxInfo, &prom.NetPrometheusConfig{
+		Config:      &f.cfg.Prometheus,
+		SelectorCfg: selectorCfg,
+		CommonCfg:   &f.cfg.Metrics,
+		GuessPorts:  f.cfg.NetworkFlows.GuessPorts,
+	}, filteredFlows), swarm.WithID("PrometheusExporter"))
+
+	swi.Add(swarm.DirectInstance(export.FlowPrinterProvider(f.cfg.NetworkFlows.Print, filteredFlows)),
+		swarm.WithID("FlowPrinter"))
+
+	return swi.Instance(ctx)
+}

@@ -1,0 +1,585 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package transform // import "go.opentelemetry.io/obi/pkg/transform"
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"maps"
+	"sync"
+	"time"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
+	maps2 "go.opentelemetry.io/obi/pkg/internal/helpers/maps"
+	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
+	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
+	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
+)
+
+var containerInfoForPID = container.InfoForPID
+
+var errProcEventDecoratorStopped = errors.New("process event metadata decorator stopped")
+
+const procEventDecoratorMaxPendingProcessEvents = 1024
+
+func klog() *slog.Logger {
+	return slog.With("component", "transform.KubernetesDecorator")
+}
+
+type KubernetesDecorator struct {
+	Enable kubeflags.EnableFlag `yaml:"enable" env:"OTEL_EBPF_KUBE_METADATA_ENABLE" validate:"oneof=true false autodetect"`
+
+	// ClusterName overrides cluster name. If empty, OBI will try to retrieve it from node labels,
+	// the OpenShift Infrastructure CR, or cloud provider metadata (EC2, GCP, Azure),
+	// and leave it empty if all fail.
+	ClusterName string `yaml:"cluster_name" env:"OTEL_EBPF_KUBE_CLUSTER_NAME"`
+
+	// KubeconfigPath specifies the path to the kubeconfig file. If unset, it will look in the usual location.
+	KubeconfigPath string `yaml:"kubeconfig_path" env:"KUBECONFIG" validate:"omitempty,filepath"`
+
+	// InformersSyncTimeout specifies the timeout for waiting for informers to sync on startup.
+	InformersSyncTimeout time.Duration `yaml:"informers_sync_timeout" env:"OTEL_EBPF_KUBE_INFORMERS_SYNC_TIMEOUT" validate:"gt=0"`
+
+	// ReconnectInitialInterval specifies the time to wait before reconnecting to the Kubernetes API after a connection loss.
+	ReconnectInitialInterval time.Duration `yaml:"reconnect_initial_interval" env:"OTEL_EBPF_KUBE_RECONNECT_INITIAL_INTERVAL" validate:"gt=0"`
+
+	// InformersResyncPeriod defaults to 30m. Higher values will reduce the load on the Kube API.
+	InformersResyncPeriod time.Duration `yaml:"informers_resync_period" env:"OTEL_EBPF_KUBE_INFORMERS_RESYNC_PERIOD" validate:"gte=0"`
+
+	// DropExternal will drop, in NetO11y component, any flow where the source or destination
+	// IPs are not matched to any kubernetes entity, assuming they are cluster-external
+	DropExternal bool `yaml:"drop_external" env:"OTEL_EBPF_NETWORK_DROP_EXTERNAL" validate:"boolean"`
+
+	// DisableInformers allows selectively disabling some informers. Accepted value is a list
+	// that might contain node or service. Disabling any of them
+	// will cause metadata to be incomplete but will reduce the load of the Kube API.
+	// Pods informer can't be disabled. For that purpose, you should disable the whole
+	// kubernetes metadata decoration.
+	DisableInformers []string `yaml:"disable_informers" env:"OTEL_EBPF_KUBE_DISABLE_INFORMERS"`
+
+	// MetaCacheAddress specifies the host:port address of the obi-k8s-cache service instance
+	MetaCacheAddress string `yaml:"meta_cache_address" env:"OTEL_EBPF_KUBE_META_CACHE_ADDRESS"`
+
+	// MetaRestrictLocalNode will download only the metadata from the Pods that are located in the same
+	// node as the OBI instance. It will also restrict the Node information to the local node.
+	MetaRestrictLocalNode bool `yaml:"meta_restrict_local_node" env:"OTEL_EBPF_KUBE_META_RESTRICT_LOCAL_NODE" validate:"boolean"`
+
+	// MetaSourceLabels allows OBI overriding the service name and namespace of an application from
+	// the given labels.
+	//
+	// Deprecated: kept for backwards-compatibility with Beyla 1.9
+	MetaSourceLabels kube.MetaSourceLabels `yaml:"meta_source_labels"`
+
+	// ResourceLabels allows OBI overriding the OTEL Resource attributes from a map of user-defined labels.
+	ResourceLabels kube.ResourceLabels `yaml:"resource_labels"`
+
+	// ServiceNameTemplate allows to override the service.name with a custom value. Uses the go template language.
+	ServiceNameTemplate string `yaml:"service_name_template" env:"OTEL_EBPF_SERVICE_NAME_TEMPLATE"`
+}
+
+const (
+	clusterMetadataRetries       = 5
+	clusterMetadataFailRetryTime = 500 * time.Millisecond
+)
+
+func KubeDecoratorProvider(
+	ctxInfo *global.ContextInfo,
+	cfg *KubernetesDecorator,
+	input, output *msg.Queue[[]request.Span],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
+		if !ctxInfo.K8sInformer.IsKubeEnabled() {
+			// if kubernetes decoration is disabled, we just bypass the node
+			return swarm.Bypass(input, output)
+		}
+		store, err := ctxInfo.K8sInformer.Get(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
+		}
+		decorator := &metadataDecorator{
+			store:       store,
+			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
+			input:       input.Subscribe(msg.SubscriberName("transform.KubeDecorator")),
+			output:      output,
+		}
+		return decorator.nodeLoop, nil
+	}
+}
+
+func KubeProcessEventDecoratorProvider(
+	ctxInfo *global.ContextInfo,
+	cfg *KubernetesDecorator,
+	input, output *msg.Queue[exec.ProcessEvent],
+) swarm.InstanceFunc {
+	return func(ctx context.Context) (swarm.RunFunc, error) {
+		if !ctxInfo.K8sInformer.IsKubeEnabled() {
+			return swarm.Bypass(input, output)
+		}
+		store, err := ctxInfo.K8sInformer.Get(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
+		}
+
+		decorator := &procEventMetadataDecorator{
+			log:                 slog.With("component", "transform.KubeProcessEventDecoratorProvider"),
+			store:               store,
+			clusterName:         KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
+			input:               input.Subscribe(msg.SubscriberName("transform.KubeProcessEventDecorator")),
+			output:              output,
+			podsInfoCh:          make(chan Event[*informer.ObjectMeta]),
+			observerDone:        make(chan struct{}),
+			subscribeObserver:   store.Subscribe,
+			waitForSubscription: waitForSubscription,
+			unsubscribeObserver: store.Unsubscribe,
+			tracker:             newPidContainerTracker(),
+		}
+
+		decorator.log.Debug("starting KubeDecoratorProvider")
+		return decorator.k8sLoop, nil
+	}
+}
+
+type metadataDecorator struct {
+	store       *kube.Store
+	clusterName string
+	input       <-chan []request.Span
+	output      *msg.Queue[[]request.Span]
+}
+
+func (md *metadataDecorator) nodeLoop(ctx context.Context) {
+	// output channel must be closed so later stages in the pipeline can finish in cascade
+	defer md.output.Close()
+	swarms.ForEachInput(ctx, md.input, klog().Debug, func(spans []request.Span) {
+		// in-place decoration and forwarding
+		for i := range spans {
+			md.do(&spans[i])
+		}
+		md.output.SendCtx(ctx, spans)
+	})
+}
+
+func (md *metadataDecorator) do(span *request.Span) {
+	if podMeta, containerName := md.store.PodContainerByPIDNs(span.Pid.Namespace, span.Pid.HostPID); podMeta != nil {
+		applyKubeMetadata(md.store, &span.Service, podMeta, md.clusterName, containerName)
+	} else if span.Service.Metadata == nil {
+		// do not leave the service attributes map as nil
+		span.Service.Metadata = map[attr.Name]string{}
+	}
+	// override the peer and host names from Kubernetes metadata, if found
+	if span.Host != "" {
+		if name, _, _ := md.store.ServiceNameNamespaceForIP(span.Host); name != "" {
+			span.HostName = name
+		}
+	}
+	if span.Peer != "" {
+		if name, _, _ := md.store.ServiceNameNamespaceForIP(span.Peer); name != "" {
+			span.PeerName = name
+		}
+	}
+}
+
+type PodEventType int
+
+const (
+	EventCreated = PodEventType(iota)
+	EventDeleted
+	EventInstanceDeleted
+)
+
+type Event[T any] struct {
+	Type PodEventType
+	Obj  T
+}
+
+type procEventMetadataDecorator struct {
+	log                 *slog.Logger
+	store               *kube.Store
+	clusterName         string
+	input               <-chan exec.ProcessEvent
+	output              *msg.Queue[exec.ProcessEvent]
+	podsInfoCh          chan Event[*informer.ObjectMeta]
+	observerDone        chan struct{}
+	deliveryReady       chan<- struct{}
+	subscribeObserver   func(meta.Observer)
+	waitForSubscription func(<-chan struct{})
+	unsubscribeObserver func(meta.Observer)
+	tracker             *pidContainerTracker
+}
+
+type procEventDecoratorInput struct {
+	processEvent *exec.ProcessEvent
+	podEvent     *Event[*informer.ObjectMeta]
+}
+
+type pidContainerTracker struct {
+	missedPods    maps2.Map2[string, app.PID, *exec.ProcessEvent]
+	missedPodsMux sync.Mutex
+	missedPodPids map[app.PID]string
+}
+
+func newPidContainerTracker() *pidContainerTracker {
+	return &pidContainerTracker{
+		missedPods:    maps2.Map2[string, app.PID, *exec.ProcessEvent]{},
+		missedPodsMux: sync.Mutex{},
+		missedPodPids: map[app.PID]string{},
+	}
+}
+
+func (t *pidContainerTracker) track(containerID string, pe *exec.ProcessEvent) {
+	if pe == nil {
+		return
+	}
+	t.missedPodsMux.Lock()
+	defer t.missedPodsMux.Unlock()
+	pid := pe.File.Pid()
+	t.missedPods.Put(containerID, pid, pe)
+	t.missedPodPids[pid] = containerID
+}
+
+func (t *pidContainerTracker) remove(pid app.PID) {
+	t.missedPodsMux.Lock()
+	defer t.missedPodsMux.Unlock()
+	if containerID, ok := t.missedPodPids[pid]; ok {
+		t.missedPods.Delete(containerID, pid)
+	}
+	delete(t.missedPodPids, pid)
+}
+
+func (t *pidContainerTracker) removeAll(containerID string) {
+	t.missedPodsMux.Lock()
+	defer t.missedPodsMux.Unlock()
+
+	if pids, exists := t.missedPods[containerID]; exists {
+		for pid := range pids {
+			delete(t.missedPodPids, pid)
+		}
+	}
+
+	t.missedPods.DeleteAll(containerID)
+}
+
+func (t *pidContainerTracker) info(containerID string) (map[app.PID]*exec.ProcessEvent, bool) {
+	t.missedPodsMux.Lock()
+	defer t.missedPodsMux.Unlock()
+
+	m, ok := t.missedPods[containerID]
+
+	return m, ok
+}
+
+func (md *procEventMetadataDecorator) ID() string { return "unique-proc-event-metadata-decorator-id" }
+
+func (md *procEventMetadataDecorator) On(event *informer.Event) error {
+	select {
+	case <-md.observerDone:
+		return errProcEventDecoratorStopped
+	default:
+	}
+
+	// ignoring updates on non-pod resources
+	if event.Resource == nil || event.GetResource().GetPod() == nil {
+		return nil
+	}
+	var podEvent Event[*informer.ObjectMeta]
+	switch event.Type {
+	case informer.EventType_CREATED, informer.EventType_UPDATED:
+		podEvent = Event[*informer.ObjectMeta]{Type: EventCreated, Obj: event.Resource}
+	case informer.EventType_DELETED:
+		podEvent = Event[*informer.ObjectMeta]{Type: EventDeleted, Obj: event.Resource}
+	default:
+		return nil
+	}
+
+	if md.deliveryReady != nil {
+		select {
+		case md.deliveryReady <- struct{}{}:
+		default:
+		}
+	}
+	select {
+	case md.podsInfoCh <- podEvent:
+		return nil
+	case <-md.observerDone:
+		return errProcEventDecoratorStopped
+	}
+}
+
+func (md *procEventMetadataDecorator) k8sLoop(ctx context.Context) {
+	md.log.Debug("starting kubernetes process event decoration loop")
+	subscriptionDone := make(chan struct{})
+	go func() {
+		defer close(subscriptionDone)
+		md.subscribeObserver(md)
+	}()
+	defer func() {
+		close(md.observerDone)
+		md.waitForSubscription(subscriptionDone)
+		md.unsubscribeObserver(md)
+	}()
+	// output channel must be closed so later stages in the pipeline can finish in cascade
+	defer md.output.Close()
+	subscribing := (<-chan struct{})(subscriptionDone)
+	var pending []procEventDecoratorInput
+	pendingProcessEvents := 0
+
+mainLoop:
+	for {
+		if subscribing == nil && len(pending) > 0 {
+			select {
+			case <-ctx.Done():
+				break mainLoop
+			default:
+			}
+			event := pending[0]
+			pending[0] = procEventDecoratorInput{}
+			pending = pending[1:]
+			if len(pending) == 0 {
+				pending = nil
+			}
+			if event.processEvent != nil {
+				pendingProcessEvents--
+				md.handleProcessEvent(*event.processEvent)
+			} else {
+				md.handlePodEvent(*event.podEvent)
+			}
+			continue
+		}
+
+		input := md.input
+		if subscribing != nil && pendingProcessEvents >= procEventDecoratorMaxPendingProcessEvents {
+			input = nil
+		}
+
+		select {
+		case <-ctx.Done():
+			break mainLoop
+		case <-subscribing:
+			subscribing = nil
+		case pe, ok := <-input:
+			if !ok {
+				break mainLoop
+			}
+			if subscribing != nil {
+				pending = append(pending, procEventDecoratorInput{processEvent: &pe})
+				pendingProcessEvents++
+			} else {
+				md.handleProcessEvent(pe)
+			}
+		case podEvent := <-md.podsInfoCh:
+			if subscribing != nil {
+				pending = append(pending, procEventDecoratorInput{podEvent: &podEvent})
+			} else {
+				md.handlePodEvent(podEvent)
+			}
+		}
+	}
+
+	md.log.Debug("stopping kubernetes process event decoration loop")
+}
+
+func waitForSubscription(done <-chan struct{}) {
+	<-done
+}
+
+func (md *procEventMetadataDecorator) handleProcessEvent(pe exec.ProcessEvent) {
+	md.log.Debug("annotating process event", "event", pe)
+
+	if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns(), pe.File.Pid()); podMeta != nil {
+		AppendKubeMetadata(md.store, pe.File, podMeta, md.clusterName, containerName)
+	} else {
+		// do not leave the service attributes map as nil
+		pe.File.SetMetadata(map[attr.Name]string{})
+
+		md.log.Debug("no metadata for event", "event", pe)
+
+		if pe.Type == exec.ProcessEventCreated {
+			if containerInfo, err := md.getContainerInfo(pe.File.Pid()); err == nil {
+				md.log.Debug("storing pid info", "pid", pe.File.Pid(), "containerId", containerInfo.ContainerID)
+				md.tracker.track(containerInfo.ContainerID, &pe)
+			}
+		} else {
+			md.tracker.remove(pe.File.Pid())
+		}
+	}
+
+	// in-place decoration and forwarding
+	md.output.Send(pe)
+}
+
+func (md *procEventMetadataDecorator) handlePodEvent(podEvent Event[*informer.ObjectMeta]) {
+	switch podEvent.Type {
+	case EventCreated:
+		md.log.Debug("created pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
+		md.handlePodUpdateEvent(podEvent.Obj)
+	case EventDeleted:
+		md.cleanupPodData(podEvent.Obj)
+		md.log.Debug("deleted pod event", "pod", podEvent.Obj.Name, "namespace", podEvent.Obj.Namespace)
+	}
+}
+
+func (md *procEventMetadataDecorator) getContainerInfo(pid app.PID) (container.Info, error) {
+	cntInfo, err := containerInfoForPID(pid)
+	if err != nil {
+		return container.Info{}, err
+	}
+	return cntInfo, nil
+}
+
+func (md *procEventMetadataDecorator) handlePodUpdateEvent(pod *informer.ObjectMeta) {
+	md.log.Debug("pod update event", "pod", pod.Name, "namespace", pod.Namespace)
+	for _, cnt := range pod.Pod.Containers {
+		md.log.Debug("looking up running process for pod container", "container", cnt.Id)
+		if peMap, ok := md.tracker.info(cnt.Id); ok {
+			md.log.Debug("found missed pid info", "containerId", cnt.Id)
+			for _, pe := range peMap {
+				if podMeta, containerName := md.store.PodContainerByPIDNs(pe.File.Ns(), pe.File.Pid()); podMeta != nil {
+					md.log.Debug("resubmitting process event", "event", pe)
+					AppendKubeMetadata(md.store, pe.File, podMeta, md.clusterName, containerName)
+					md.output.Send(*pe)
+				}
+			}
+			md.tracker.removeAll(cnt.Id)
+		}
+	}
+}
+
+func (md *procEventMetadataDecorator) cleanupPodData(pod *informer.ObjectMeta) {
+	for _, cnt := range pod.Pod.Containers {
+		md.log.Debug("deleting info for pod container", "container", cnt.Id)
+		md.tracker.removeAll(cnt.Id)
+	}
+}
+
+// AppendKubeMetadata populates some metadata values in the passed svc.Attrs.
+// This method should be invoked by any entity willing to follow a common policy for
+// setting metadata attributes. For example this metadataDecorator or the survey informer
+func AppendKubeMetadata(store *kube.Store, fi *exec.FileInfo, meta *ikube.CachedObjMeta, clusterName, containerName string) {
+	snap := fi.ServiceAttrs()
+	if !applyKubeMetadata(store, &snap, meta, clusterName, containerName) {
+		return
+	}
+	fi.SetUID(snap.UID)
+	fi.SetMetadata(snap.Metadata)
+	fi.SetHostName(snap.HostName)
+}
+
+func applyKubeMetadata(store *kube.Store, s *svc.Attrs, meta *ikube.CachedObjMeta, clusterName, containerName string) bool {
+	if meta.Meta.Pod == nil {
+		// if this message happen, there is a bug
+		klog().Debug("pod metadata for is nil. Ignoring decoration", "meta", meta)
+		return false
+	}
+	topOwner := ikube.TopOwner(meta.Meta.Pod)
+	name, namespace := store.ServiceNameNamespaceForMetadata(meta.Meta, containerName)
+	if s.AutoName() {
+		s.UID.Name = name
+	}
+	if s.UID.Namespace == "" || s.AutoNamespace() {
+		s.UID.Namespace = namespace
+	}
+	// overriding the Instance here will avoid reusing the OTEL resource reporter
+	// if the application/process was discovered and reported information
+	// before the kubernetes metadata was available
+	// (related issue: https://github.com/grafana/beyla/issues/1124)
+	// Service Instance ID is set according to OTEL collector conventions:
+	// (related issue: https://github.com/grafana/k8s-monitoring-helm/issues/942)
+	s.UID.Instance = meta.Meta.Namespace + "." + meta.Meta.Name + "." + containerName
+
+	k8sMeta := map[attr.Name]string{
+		attr.K8sNamespaceName: meta.Meta.Namespace,
+		attr.K8sPodName:       meta.Meta.Name,
+		attr.K8sContainerName: containerName,
+		attr.K8sNodeName:      meta.Meta.Pod.NodeName,
+		attr.K8sPodUID:        meta.Meta.Pod.Uid,
+		attr.K8sPodStartTime:  meta.Meta.Pod.StartTimeStr,
+		attr.K8sClusterName:   clusterName,
+	}
+
+	m := make(map[attr.Name]string)
+	if s.Metadata != nil {
+		maps.Copy(m, s.Metadata)
+	}
+	maps.Copy(m, k8sMeta)
+
+	// ownerKind could be also "Pod", but we won't insert it as "owner" label to avoid
+	// growing cardinality
+	if topOwner != nil {
+		m[attr.K8sOwnerName] = topOwner.Name
+		m[attr.K8sKind] = topOwner.Kind
+	}
+
+	for _, owner := range meta.Meta.Pod.Owners {
+		if _, ok := m[attr.K8sKind]; !ok {
+			m[attr.K8sKind] = owner.Kind
+		}
+		if kindLabel := OwnerLabelName(owner.Kind); kindLabel != "" {
+			m[kindLabel] = owner.Name
+		}
+	}
+
+	maps.Copy(m, meta.OTELResourceMeta)
+
+	s.Metadata = m
+	s.HostName = meta.Meta.Name
+	return true
+}
+
+func OwnerLabelName(kind string) attr.Name {
+	switch kind {
+	case "Deployment":
+		return attr.K8sDeploymentName
+	case "StatefulSet":
+		return attr.K8sStatefulSetName
+	case "DaemonSet":
+		return attr.K8sDaemonSetName
+	case "ReplicaSet":
+		return attr.K8sReplicaSetName
+	case "Job":
+		return attr.K8sJobName
+	case "CronJob":
+		return attr.K8sCronJobName
+	default:
+		return ""
+	}
+}
+
+func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator, k8sInformer *kube.MetadataProvider) string {
+	log := klog().With("func", "KubeClusterName")
+	if cfg.ClusterName != "" {
+		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
+		return cfg.ClusterName
+	}
+	retries := 0
+	for retries < clusterMetadataRetries {
+		if clusterName := fetchClusterName(ctx, k8sInformer); clusterName != "" {
+			return clusterName
+		}
+		retries++
+		log.Debug("retrying cluster name fetching in 500 ms...")
+		select {
+		case <-ctx.Done():
+			log.Debug("context canceled before starting the kubernetes decorator node")
+			return ""
+		case <-time.After(clusterMetadataFailRetryTime):
+			// retry or end!
+		}
+	}
+	log.Warn("can't fetch Kubernetes Cluster Name." +
+		" Network metrics won't contain k8s.cluster.name attribute unless you explicitly set " +
+		" the OTEL_EBPF_KUBE_CLUSTER_NAME environment variable")
+	return ""
+}

@@ -1,0 +1,22 @@
+flowchart TD
+
+    EA1(Auto-instrumenter) --> OTLP
+
+    OTLP(OpenTelemetry receiver) --> |Metrics & traces| BATCH(Batch processor)
+    BATCH --> |Metrics| PE(Prometheus exporter)
+    BATCH --> |Traces| OE(OpenTelemetry Exporter)
+
+    PE --> M
+    OE --> T
+
+    subgraph Alloy
+        OTLP
+        BATCH
+        PE
+        OE
+    end
+
+    subgraph Grafana
+        M(Mimir)
+        T(Tempo)
+    end

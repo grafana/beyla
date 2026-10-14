@@ -1,0 +1,196 @@
+name: Publish inject-sdk-image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pkg/webhook/image/**'
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "This workflow normally runs automatically on pushes to main that touch pkg/webhook/image/**. Only run manually for an out-of-band republish."
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-inject-sdk-image
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/grafana/beyla/inject-sdk-image
+  PACKAGE_NAME: beyla%2Finject-sdk-image
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Validate manual dispatch
+        if: github.event_name == 'workflow_dispatch' && inputs.confirm != true
+        run: |
+          echo "::error::You must acknowledge the confirmation checkbox to run this workflow manually."
+          exit 1
+
+      - name: Resolve target version
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TODAY=$(date -u +%Y.%m.%d)
+
+          if versions=$(
+            gh api \
+              --paginate \
+              --slurp \
+              -H "Accept: application/vnd.github+json" \
+              "/orgs/grafana/packages/container/${PACKAGE_NAME}/versions"
+          ); then
+            :
+          else
+            versions='[]'
+          fi
+
+          # Find the highest counter published today (e.g. for 2026.06.03.2, that's 2).
+          # Defaults to -1 if none exist so the first version of the day is .0.
+          existing_counter=$(
+            jq -r --arg today "${TODAY}" '
+              [
+                .[]?[]
+                | .metadata.container.tags[]?
+                | select(startswith($today + "."))
+                | ltrimstr($today + ".")
+                | select(test("^[0-9]+$"))
+                | tonumber
+              ] | max // -1
+            ' <<< "${versions}"
+          )
+
+          VERSION="${TODAY}.$((existing_counter + 1))"
+
+          echo "Today: ${TODAY}"
+          echo "Existing counter for today: ${existing_counter}"
+          echo "Publishing version: ${VERSION}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: resolve-version
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            artifact_suffix: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./pkg/webhook/image
+          file: ./pkg/webhook/image/Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,"name=${{ env.IMAGE_NAME }}",push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          touch "${{ runner.temp }}/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digests-inject-sdk-image-${{ matrix.artifact_suffix }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  create-manifest:
+    needs:
+      - resolve-version
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Download amd64 digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: digests-inject-sdk-image-amd64
+          path: ${{ runner.temp }}/digests/amd64
+
+      - name: Download arm64 digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: digests-inject-sdk-image-arm64
+          path: ${{ runner.temp }}/digests/arm64
+
+      - name: Create manifest list and push
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          DIGESTS_DIR: ${{ runner.temp }}/digests
+        run: |
+          AMD64_DIGEST=$(basename "${DIGESTS_DIR}"/amd64/*)
+          ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
+          docker buildx imagetools create \
+            -t "${IMAGE_NAME}:${VERSION}" \
+            -t "${IMAGE_NAME}:latest" \
+            "${IMAGE_NAME}@sha256:${AMD64_DIGEST}" \
+            "${IMAGE_NAME}@sha256:${ARM64_DIGEST}"
+
+      - name: Summarize published tag
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          {
+            echo "## inject-sdk-image published"
+            echo
+            echo "- Image: \`${IMAGE_NAME}\`"
+            echo "- Tags: \`${VERSION}\`, \`latest\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

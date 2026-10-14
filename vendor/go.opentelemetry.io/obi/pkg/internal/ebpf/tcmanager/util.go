@@ -1,0 +1,37 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build linux
+
+package tcmanager // import "go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+
+import "io"
+
+const eNoDevMsg = "Interface no longer exists"
+
+func closeWith(override func() error, fallback io.Closer) error {
+	if override != nil {
+		return override()
+	}
+
+	return fallback.Close()
+}
+
+func removeIf[T any](s []T, pred func(T) bool) []T {
+	i := 0
+
+	for _, v := range s {
+		if !pred(v) {
+			s[i] = v
+			i++
+		}
+	}
+
+	return s[:i]
+}
+
+func apply[T any](s []T, applyFunc func(T)) {
+	for _, v := range s {
+		applyFunc(v)
+	}
+}

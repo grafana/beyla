@@ -1,0 +1,12 @@
+# Vendor directories
+vendor/** linguist-generated linguist-vendored
+.obi-src/** linguist-vendored
+
+# Generated files
+*.pb.go linguist-generated
+*_grpc.pb.go linguist-generated
+third_party_licenses.csv linguist-generated
+scripts/integration-test-weights.generated.json linguist-generated
+scripts/beyla-integration-test-weights.generated.json linguist-generated
+
+.github/workflows/*.lock.yml linguist-generated=true merge=ours

@@ -1,0 +1,15 @@
+flowchart TD
+    EA1(Auto-instrumenter)  --> |Push OTLP metrics & traces| GA1(Grafana Alloy)
+
+    subgraph Grafana
+        M(Mimir)
+        T(Tempo)
+        OTLP(OpenTelemetry<br/>endpoint)
+    end
+
+    GA1 --> |Metrics| M
+    GA1 --> |Traces| T
+
+    EA2(Auto-instrumenter) --> |Push OTLP metrics & traces| OTLP
+
+    P(Prometheus) --> |Pull /metrics HTTP endpoint| EA2

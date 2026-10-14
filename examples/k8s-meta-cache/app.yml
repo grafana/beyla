@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla
+rules:
+  - apiGroups: [ "apps" ]
+    resources: [ "replicasets" ]
+    verbs: [ "list", "watch" ]
+  - apiGroups: [ "" ]
+    resources: [ "pods", "services", "nodes" ]
+    verbs: [ "list", "watch" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: beyla
+subjects:
+  - kind: ServiceAccount
+    name: beyla
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: beyla
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: beyla-cache
+spec:
+  selector:
+    matchLabels:
+      instrumentation: beyla-cache
+  template:
+    metadata:
+      labels:
+        instrumentation: beyla-cache
+    spec:
+      serviceAccountName: beyla
+      containers:
+        - name: beyla-cache
+          image: grafana/beyla-k8s-cache:latest
+          ports:
+            - containerPort: 8999
+              protocol: TCP
+              name: protobuf
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: beyla-cache
+spec:
+  selector:
+    instrumentation: "beyla-cache"
+  ports:
+    - port: 8999
+      protocol: TCP
+      targetPort: protobuf

@@ -1,0 +1,67 @@
+beyla.ebpf "default" {
+	// Enable Kubernetes decoration
+	attributes {
+		kubernetes {
+			enable = "true"
+		}
+	}
+
+	// Enable debug mode
+	debug = true
+
+	// Discovery all deployments in the default namespace
+	discovery {
+		services {
+			kubernetes {
+				namespace       = "default"
+				deployment_name = "."
+			}
+		}
+	}
+
+	// Enable all metrics features for Prometheus
+	metrics {
+		features = [
+			"application",
+		]
+	}
+
+	output {
+		traces = [otelcol.exporter.logging.traces.input, otelcol.exporter.otlp.grafana_cloud_tempo.input]
+	}
+}
+
+otelcol.exporter.logging "traces" {
+	verbosity           = "detailed"
+	sampling_initial    = 1
+	sampling_thereafter = 1
+}
+
+prometheus.scrape "beyla" {
+	targets      = beyla.ebpf.default.targets
+	honor_labels = true
+	forward_to   = [prometheus.remote_write.rw.receiver]
+}
+
+prometheus.remote_write "rw" {
+	endpoint {
+		url = "https://prometheus-us-central1.grafana.net/api/prom/push"
+
+		basic_auth {
+			username = env("PROMETHEUS_REMOTE_WRITE_USERNAME")
+			password = env("PROMETHEUS_REMOTE_WRITE_PASSWORD")
+		}
+	}
+}
+
+otelcol.exporter.otlp "grafana_cloud_tempo" {
+	client {
+		endpoint = "tempo-us-central1.grafana.net:443"
+		auth     = otelcol.auth.basic.grafana_cloud_tempo.handler
+	}
+}
+
+otelcol.auth.basic "grafana_cloud_tempo" {
+	username = env("TEMPO_REMOTE_WRITE_USERNAME")
+	password = env("TEMPO_REMOTE_WRITE_PASSWORD")
+}

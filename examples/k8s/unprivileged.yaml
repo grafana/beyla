@@ -1,0 +1,178 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: beyla-demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+  namespace: beyla-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: beyla-demo
+  name: beyla-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: beyla-role-binding
+  namespace: beyla-demo
+subjects:
+- kind: ServiceAccount
+  name: beyla
+roleRef:
+  kind: Role
+  name: beyla-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "nodes", "pods"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  # list and watch services are needed by network-policy beyla.
+  verbs: ["list", "watch"]
+- apiGroups: ["*"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs", "replicationcontrollers"]
+  # Required to retrieve the owner references used by the seccomp beyla.
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["security-profiles-operator.x-k8s.io"]
+  resources: ["seccompprofiles"]
+  # Required for integration with the Kubernetes Security Profiles Operator
+  verbs: ["list", "watch", "create"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: beyla-cluster-role-binding
+subjects:
+- kind: ServiceAccount
+  name: beyla
+  namespace: beyla-demo
+roleRef:
+  kind: ClusterRole
+  name: beyla-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  namespace: beyla-demo
+  labels:
+    k8s-app: beyla
+spec:
+  selector:
+    matchLabels:
+      k8s-app: beyla
+  template:
+    metadata:
+      labels:
+        k8s-app: beyla
+    spec:
+      serviceAccount: beyla
+      hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes 
+      containers:
+      - name: beyla
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: grafana/beyla:latest
+        env:
+          - name: BEYLA_TRACE_PRINTER
+            value: "text"
+          - name: BEYLA_EXECUTABLE_NAME
+            value: "greetings"
+          - name: BEYLA_SERVICE_NAMESPACE
+            value: "k8s-test"
+          - name: BEYLA_LOG_LEVEL
+            value: "INFO"
+          - name: BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT
+            value: "8999"
+          - name: BEYLA_KUBE_METADATA_ENABLE
+            value: "autodetect"
+          - name: KUBE_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        securityContext:
+          runAsUser: 0
+          readOnlyRootFilesystem: true
+          capabilities:
+            add:
+              - BPF                 # <-- Important. Required for most eBPF probes to function correctly.
+              - SYS_PTRACE          # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
+              - NET_RAW             # <-- Important. Allows Beyla to use socket filters for http requests.
+              - CHECKPOINT_RESTORE  # <-- Important. Allows Beyla to open ELF files.
+              - DAC_READ_SEARCH     # <-- Important. Allows Beyla to open ELF files.
+              - PERFMON             # <-- Important. Allows Beyla to load BPF programs.
+              #- SYS_RESOURCE       # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
+              - SYS_ADMIN           # <-- Required for user space probes, or if kernel.perf_event_paranoid >= 3 on Debian distributions.
+            drop:
+              - ALL
+        volumeMounts:
+        - name: var-run-beyla
+          mountPath: /var/run/beyla
+        - name: cgroup
+          mountPath: /sys/fs/cgroup
+        - name: tracefs # <-- Important. Allows Beyla to mitigate the FIONREAD kernel bug for the broken kernel versions.
+          mountPath: /sys/kernel/tracing  
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
+      volumes:
+      - name: var-run-beyla
+        emptyDir: {}      
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+      - name: tracefs
+        hostPath:
+          path: /sys/kernel/tracing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rust-service
+  namespace: beyla-demo
+  labels:
+    k8s-app: rust-service
+spec:
+  selector:
+    matchLabels:
+      k8s-app: rust-service
+  template:
+    metadata:
+      labels:
+        k8s-app: rust-service
+    spec:
+      serviceAccount: beyla
+      containers:
+        - name: rust-service
+          image: 'ghcr.io/grafana/beyla-demo/greeting-actix-rust/0.0.1'
+          imagePullPolicy: IfNotPresent
+          ports:          
+          - containerPort: 8090
+            hostPort: 8090
+            name: service
+          resources:
+            limits:
+              memory: 120Mi
+          securityContext:
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+---          

@@ -1,0 +1,254 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package services // import "go.opentelemetry.io/obi/pkg/appolly/services"
+
+import (
+	"fmt"
+	"iter"
+	"regexp"
+
+	"github.com/invopop/jsonschema"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
+	"gopkg.in/yaml.v3"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+)
+
+// RegexDefinitionCriteria allows defining a group of services to be instrumented according to a set
+// of attributes. If a given executable/service matches multiple of the attributes, the
+// earliest defined service will take precedence.
+type RegexDefinitionCriteria []RegexSelector
+
+func (dc RegexDefinitionCriteria) Validate() error {
+	// an empty definition criteria is valid
+	for i := range dc {
+		if dc[i].OpenPorts.Len() == 0 &&
+			!dc[i].Path.IsSet() &&
+			!dc[i].PathRegexp.IsSet() &&
+			!dc[i].Languages.IsSet() &&
+			len(dc[i].PIDs) == 0 &&
+			!dc[i].CmdArgs.IsSet() &&
+			!dc[i].ContainersOnly &&
+			len(dc[i].Metadata) == 0 &&
+			len(dc[i].PodLabels) == 0 &&
+			len(dc[i].PodAnnotations) == 0 {
+			return fmt.Errorf("index [%d] should define at least one selection criteria", i)
+		}
+		for k := range dc[i].Metadata {
+			if _, ok := AllowedAttributeNames[k]; !ok {
+				return fmt.Errorf("unknown attribute in index [%d]: %s", i, k)
+			}
+		}
+	}
+	return nil
+}
+
+func (dc RegexDefinitionCriteria) PortOfInterest(port int) bool {
+	for i := range dc {
+		if dc[i].OpenPorts.Matches(port) {
+			return true
+		}
+	}
+	return false
+}
+
+type MetadataRegexMap map[string]*RegexpAttr
+
+func (MetadataRegexMap) JSONSchema() *jsonschema.Schema {
+	propMap := orderedmap.New[string, *jsonschema.Schema]()
+	for k := range AllowedAttributeNames {
+		propMap.Set(k, &jsonschema.Schema{
+			Ref: "#/$defs/RegexpAttr",
+		})
+	}
+	return &jsonschema.Schema{
+		Properties:  propMap,
+		Type:        "object",
+		Description: "Metadata attributes to match against the instrumented service",
+	}
+}
+
+// RegexSelector that specify a given instrumented service.
+// Each instance has to define either the OpenPorts or Path property, or both. These are used to match
+// a given executable. If both OpenPorts and Path are defined, the inspected executable must fulfill both
+// properties.
+type RegexSelector struct {
+	// Name will define a name for the matching service. If unset, it will take the name of the executable process,
+	// from the OTEL_SERVICE_NAME env var of the instrumented process, or from other metadata like Kubernetes annotations.
+	//
+	// Deprecated: Name should be set in the instrumentation target via kube metadata or standard env vars.
+	//
+	// To be kept undocumented until we remove it.
+	Name string `yaml:"name"`
+	// Namespace will define a namespace for the matching service. If unset, it will be left empty.
+	//
+	// Deprecated: Namespace should be set in the instrumentation target via kube metadata or standard env vars.
+	//
+	// To be kept undocumented until we remove it.
+	Namespace string `yaml:"namespace"`
+	// OpenPorts allows defining a group of ports that this service could open. It accepts a comma-separated
+	// list of port numbers (e.g. 80) and port ranges (e.g. 8080-8089)
+	OpenPorts IntEnum `yaml:"open_ports"`
+	// PIDs allows selecting processes by PID. When non-empty, the process PID must be in this list (in addition to any path/port criteria).
+	PIDs []uint32 `yaml:"target_pids"`
+	// Path allows defining the regular expression matching the full executable path.
+	Path RegexpAttr `yaml:"exe_path"`
+	// Language allows defining services to instrument based on the
+	// programming language they are written in.
+	Languages RegexpAttr `yaml:"languages"`
+	// CmdArgs allows matching by command line arguments
+	CmdArgs RegexpAttr `yaml:"cmd_args"`
+	// PathRegexp is deprecated but kept here for backwards compatibility with Beyla 1.0.x.
+
+	// Deprecated: Please use Path (exe_path YAML attribute)
+	PathRegexp RegexpAttr `yaml:"exe_path_regexp"`
+
+	// Metadata stores other attributes, such as Kubernetes object metadata
+	Metadata MetadataRegexMap `yaml:",inline" mapstructure:",remain"`
+
+	// PodLabels allows matching against the labels of a pod
+	PodLabels map[string]*RegexpAttr `yaml:"k8s_pod_labels"`
+
+	// PodAnnotations allows matching against the annotations of a pod
+	PodAnnotations map[string]*RegexpAttr `yaml:"k8s_pod_annotations"`
+
+	// Restrict the discovery to processes which are running inside a container
+	ContainersOnly bool `yaml:"containers_only"`
+
+	// Configures what to export. Allowed values are 'metrics', 'traces',
+	// or an empty array (disabled). An unspecified value (nil) will use the
+	// default configuration value
+	ExportModes ExportModes `yaml:"exports"`
+
+	SamplerConfig *SamplerConfig `yaml:"sampler"`
+
+	Routes *CustomRoutesConfig `yaml:"routes"`
+
+	// Metrics configuration that is custom for this service match
+	Metrics perapp.SvcMetricsConfig `yaml:"metrics"`
+}
+
+// RegexpAttr stores a regular expression representing an executable file path.
+type RegexpAttr struct {
+	re *regexp.Regexp
+}
+
+func (RegexpAttr) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:        "string",
+		Description: "Regular expression to match against the executable file path",
+		Format:      "regex",
+		Examples:    []any{`^app-.*`, `^service-..$`, `^prod-.*-db$`},
+	}
+}
+
+func NewRegexp(pattern string) RegexpAttr {
+	return RegexpAttr{re: regexp.MustCompile(pattern)}
+}
+
+func (p *RegexpAttr) IsSet() bool {
+	return p.re != nil
+}
+
+func (p *RegexpAttr) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.ScalarNode {
+		return fmt.Errorf("RegexpAttr: unexpected YAML node kind %d", value.Kind)
+	}
+	if len(value.Value) == 0 {
+		p.re = nil
+		return nil
+	}
+	re, err := regexp.Compile(value.Value)
+	if err != nil {
+		return fmt.Errorf("invalid regular expression in node %s: %w", value.Tag, err)
+	}
+	p.re = re
+	return nil
+}
+
+func (p RegexpAttr) MarshalYAML() (any, error) {
+	if p.re != nil {
+		return p.re.String(), nil
+	}
+	return "", nil
+}
+
+func (p *RegexpAttr) UnmarshalText(text []byte) error {
+	if len(text) == 0 {
+		p.re = nil
+		return nil
+	}
+	re, err := regexp.Compile(string(text))
+	if err != nil {
+		return fmt.Errorf("invalid regular expression %q: %w", string(text), err)
+	}
+	p.re = re
+	return nil
+}
+
+func (p *RegexpAttr) MatchString(input string) bool {
+	// no regexp means "empty regexp", so anything will match it
+	if p.re == nil {
+		return true
+	}
+	return p.re.MatchString(input)
+}
+
+func (a *RegexSelector) GetName() string                        { return a.Name }
+func (a *RegexSelector) GetNamespace() string                   { return a.Namespace }
+func (a *RegexSelector) GetPath() StringMatcher                 { return &a.Path }
+func (a *RegexSelector) GetLanguages() StringMatcher            { return &a.Languages }
+func (a *RegexSelector) GetPathRegexp() StringMatcher           { return &a.PathRegexp }
+func (a *RegexSelector) GetOpenPorts() *IntEnum                 { return &a.OpenPorts }
+func (a *RegexSelector) GetPIDs() ([]app.PID, bool)             { return a.pids() }
+func (a *RegexSelector) GetCmdArgs() StringMatcher              { return &a.CmdArgs }
+func (a *RegexSelector) IsContainersOnly() bool                 { return a.ContainersOnly }
+func (a *RegexSelector) MetricsConfig() perapp.SvcMetricsConfig { return a.Metrics }
+func (a *RegexSelector) RangeMetadata() iter.Seq2[string, StringMatcher] {
+	return func(yield func(string, StringMatcher) bool) {
+		for k, v := range a.Metadata {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}
+
+func (a *RegexSelector) RangePodLabels() iter.Seq2[string, StringMatcher] {
+	return func(yield func(string, StringMatcher) bool) {
+		for k, v := range a.PodLabels {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}
+
+func (a *RegexSelector) RangePodAnnotations() iter.Seq2[string, StringMatcher] {
+	return func(yield func(string, StringMatcher) bool) {
+		for k, v := range a.PodAnnotations {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}
+
+func (a *RegexSelector) GetExportModes() ExportModes { return a.ExportModes }
+
+func (a *RegexSelector) GetSamplerConfig() *SamplerConfig { return a.SamplerConfig }
+
+func (a *RegexSelector) GetRoutesConfig() *CustomRoutesConfig { return a.Routes }
+
+func (a *RegexSelector) pids() ([]app.PID, bool) {
+	if len(a.PIDs) == 0 {
+		return nil, false
+	}
+	out := make([]app.PID, len(a.PIDs))
+	for i, pid := range a.PIDs {
+		out[i] = app.PID(pid)
+	}
+	return out, true
+}

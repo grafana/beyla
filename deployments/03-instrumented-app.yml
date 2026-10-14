@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    routes:
+      unmatched: heuristic
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: system-config
+data:
+  lockdown: none [integrity] confidentiality    
+---
+# Feel free to replace the demo app by something different,
+# but it needs to bring the autoinstrumenter as a sidecar container
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goblog
+  labels:
+    app: goblog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goblog
+  template:
+    metadata:
+      labels:
+        app: goblog
+    spec:
+      # required so the sidecar instrumenter can access the service process
+      shareProcessNamespace: true
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: system-config
+          configMap:
+            name: system-config
+      containers:
+        - name: goblog
+          image: mariomac/goblog:dev
+          imagePullPolicy: IfNotPresent
+          command: [ "/goblog" ]
+          ports:
+            - containerPort: 8443
+              name: https
+        - name: autoinstrumenter
+          image: grafana/beyla:main
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+            - mountPath: /sys/kernel/security
+              name: system-config
+          env:
+            - name: BEYLA_CONFIG_PATH
+              value: "/config/beyla-config.yml"
+            - name: BEYLA_SERVICE_NAME
+              value: "goblog"
+            - name: BEYLA_TRACE_PRINTER
+              value: "text"
+            - name: BEYLA_OPEN_PORT
+              value: "8443"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://grafana-agent:4318"
+            - name: BEYLA_LOG_LEVEL
+              value: "DEBUG"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=production"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblog
+spec:
+  selector:
+    app: goblog
+  ports:
+    - port: 8443
+      protocol: TCP
+      targetPort: https

@@ -1,0 +1,212 @@
+name: Pull request integration tests
+
+on:
+  push:
+    branches: ["main", "release-*"]
+  pull_request:
+    branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - "scripts/generate-integration-matrix.sh"
+      - "scripts/generate-obi-tests.sh"
+      - ".github/workflows/pull_request_integration_tests.yml"
+      - ".obi-src"
+      - ".obi-src/**"
+
+concurrency:
+  group: integration-tests-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
+jobs:
+  test-matrix:
+    name: "Build integration matrix"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Generate OBI tests
+        run: make generate-obi-tests
+
+      - name: Build matrix
+        id: build-matrix
+        env:
+          PARTITIONS: 24
+          TEST_TAGS: integration
+        run: |
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make integration-test-matrix-json >> $GITHUB_OUTPUT
+
+  test:
+    name: ${{ matrix.description }}
+    needs: test-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Grant specific permissions needed only for this job
+    permissions:
+      contents: read
+      pull-requests: write
+      # required for CODECOV token, Dockerhub access
+      id-token: write
+      checks: write
+      # Required for uploading artifacts
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
+    steps:
+      - name: Check initial disk usage
+        run: df -h
+
+      - name: Free up disk space
+        run: |
+          # Docker's reclaimed-space total excludes the toolchains removed below.
+          # Report each operation separately to identify expensive cleanup work.
+          free_kib() {
+            df -Pk / | awk 'NR == 2 {print $4}'
+          }
+
+          cleanup() {
+            local label="$1"
+            shift
+            local started=$SECONDS before after status=0
+            before=$(free_kib)
+            echo "::group::${label}"
+            "$@" || status=$?
+            after=$(free_kib)
+            echo "${label}: $((SECONDS - started))s, $(((after - before) / 1024)) MiB reclaimed, $((after / 1024)) MiB available (exit ${status})"
+            echo "::endgroup::"
+            return "$status"
+          }
+
+          df -h /
+          cleanup "Remove Java" sudo rm -rf /usr/lib/jvm
+          cleanup "Remove .NET" sudo rm -rf /usr/share/dotnet
+          cleanup "Remove Swift" sudo rm -rf /usr/share/swift
+          cleanup "Remove Haskell" sudo rm -rf /usr/local/.ghcup
+          cleanup "Remove Julia" sudo rm -rf /usr/local/julia*
+          cleanup "Remove Android SDKs" sudo rm -rf /usr/local/lib/android
+          cleanup "Remove Chromium" sudo rm -rf /usr/local/share/chromium
+          cleanup "Remove Edge and Chrome" sudo rm -rf /opt/microsoft /opt/google
+          cleanup "Remove Azure CLI" sudo rm -rf /opt/az
+          cleanup "Remove PowerShell" sudo rm -rf /usr/local/share/powershell
+          # Keep the rest of hostedtoolcache for Go.
+          cleanup "Remove CodeQL" sudo rm -rf /opt/hostedtoolcache/CodeQL
+          cleanup "Prune Docker" docker system prune -af || true
+          cleanup "Prune Docker builder" docker builder prune -af || true
+          df -h
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Login to DockerHub
+        if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
+        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: "go.mod"
+          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+
+      - name: Go build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
+        with:
+          path: ~/.cache/go-build
+          key: go-build-integration-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+          restore-keys: |
+            go-build-integration-race-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Generate files
+        run: make prereqs vendor-obi
+
+      - name: Verify Beyla compiles
+        run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
+
+      - name: Check disk usage before tests
+        run: df -h
+
+      - name: Run integration tests
+        env:
+          # zizmor template-injection fixes: pass data as env vars
+          MATRIX_ID: ${{ matrix.id }}
+          MATRIX_JSON: ${{ toJson(matrix) }}
+          MATRIX_TEST_PATTERN: ${{ matrix.test_pattern }}
+          RUN_NUMBER: ${{ github.run_number }}
+          TEST_TAGS: integration
+        run: |
+          echo Partition
+          echo "${MATRIX_JSON}"
+
+          if [ -z "${MATRIX_TEST_PATTERN}" ]; then
+            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            exit 1
+          fi
+
+          mkdir -p /home/runner/reports
+
+          ./bin/gotestsum \
+              --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
+              --packages="./internal/testgenerated/integration" -ftestname \
+              --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
+              -- -race -count=1 -tags=${TEST_TAGS} -timeout 30m \
+              -mod vendor \
+              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration
+
+      - name: Process coverage data
+        run: make itest-coverage-data
+
+      - id: get-codecov-token
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
+        continue-on-error: true
+        with:
+          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
+          repo_secrets: |
+            CODECOV_TOKEN=codecov:token
+
+      - name: Report coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./testoutput/itest-covdata.txt
+          flags: integration-test
+          name: go-integration-test-coverage-${{ matrix.id }}-${{ github.run_number }}
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-integration-test-reports-${{ matrix.id }}-${{ github.run_number }}
+          path: /home/runner/reports/*.log
+          retention-days: 5
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: go-integration-test-logs-${{ matrix.id }}-${{ github.run_number }}
+          path: |
+            testoutput/*.log
+            testoutput/kind
+
+      - name: Check final disk usage
+        if: always()
+        run: df -h

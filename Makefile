@@ -1,0 +1,649 @@
+# Main binary configuration
+CMD ?= beyla
+JAVA_AGENT ?= obi-java-agent.jar
+MAIN_GO_FILE ?= cmd/$(CMD)/main.go
+
+# populated from go.mod replace, as you might need to temporarily change it during development
+OBI_MODULE ?= $(shell sh -c "echo $$(grep 'replace go.opentelemetry.io/obi =>' go.mod | awk '{print $$4}')")
+
+CACHE_CMD ?= k8s-cache
+CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
+
+GOOS ?= linux
+GOARCH ?= amd64
+
+# RELEASE_VERSION will contain the tag name, or the branch name if current commit is not a tag
+RELEASE_VERSION := $(shell git describe --all | cut -d/ -f2)
+RELEASE_REVISION := $(shell git rev-parse --short HEAD )
+BUILDINFO_PKG ?= github.com/grafana/beyla/v3/pkg/buildinfo
+TEST_OUTPUT ?= ./testoutput
+
+IMG_REGISTRY ?= docker.io
+# Set your registry username. You mustn't use 'grafana' for manual pushing.
+IMG_ORG ?= grafana
+IMG_NAME ?= beyla
+
+# Container image creation
+VERSION ?= dev
+IMG = $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(VERSION)
+
+# Override the value in `release-*` branches to a compatible version
+GEN_IMG_VERSION=latest
+
+# The generator is a container image that provides a reproducible environment for
+# building eBPF binaries
+GEN_IMG ?= ghcr.io/open-telemetry/obi-generator:$(GEN_IMG_VERSION)
+
+COMPOSE_ARGS ?= -f internal/testgenerated/integration/docker-compose.yml
+
+OCI_BIN ?= docker
+
+# Single source of truth: extracted from the `uses: docker://...` line in the
+# helm-test workflow so Renovate's github-actions manager keeps it up to date
+# and we don't locally generate documents that later differ from the CI tests.
+HELM_DOCS_IMG ?= $(shell sed -n 's|.*docker://\(jnorwood/helm-docs[^[:space:]]*\).*|\1|p' .github/workflows/helm-test.yml | head -1)
+HELM_UNITTEST_IMG ?= helmunittest/helm-unittest:3.21.0-1.0.3
+
+# BPF code generator dependencies
+CLANG ?= clang
+CFLAGS := -O2 -g -Wunaligned-access -Wpacked -Wpadded -Wall -Werror $(CFLAGS)
+
+CLANG_TIDY ?= clang-tidy
+
+# regular expressions for excluded file patterns
+EXCLUDE_COVERAGE_FILES="(_bpfel.go)|(/beyla/v2/internal/test/)|(/beyla/v2/configs/)|(/v2/examples/)|(.pb.go)|(/beyla/v2/pkg/export/otel/metric/)"
+
+.DEFAULT_GOAL := all
+
+# Tool versions are pinned declaratively in the tools sub-module at
+# $(TOOLS_MOD_DIR). Binaries are compiled into $(TOOLS_DIR) via `go install`,
+# invoked from the sub-module so the parent module's vendor/ directory is not
+# in scope. Bumping a tool version is `cd internal/tools && go get -tool pkg@vX`.
+PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
+
+TOOLS_DIR ?= $(PROJECT_DIR)/bin
+TOOLS_MOD_DIR := $(PROJECT_DIR)/internal/tools
+TOOLS_MOD := $(TOOLS_MOD_DIR)/go.mod $(TOOLS_MOD_DIR)/go.sum
+
+# go-install-tool installs $(2) (a package import path declared in the tools
+# sub-module) into $(1). Versions are resolved from $(TOOLS_MOD_DIR)/go.mod.
+# $(1) destination binary path
+# $(2) package import path
+define go-install-tool
+@mkdir -p $(dir $(1))
+@echo "### Installing $(2)"
+@cd $(TOOLS_MOD_DIR) && GOBIN=$(abspath $(dir $(1))) go install $(2)
+endef
+
+# host OS/ARCH normalized for matching pre-built release asset filenames
+HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+HOST_ARCH := $(shell uname -m)
+ifeq ($(HOST_ARCH),x86_64)
+HOST_ARCH := amd64
+endif
+ifeq ($(HOST_ARCH),aarch64)
+HOST_ARCH := arm64
+endif
+
+# download-release-tool fetches a pre-built binary from a GitHub release tarball
+# and installs it locally to $(1). The tarball must contain the binary named
+# $(notdir $(1)) at its root.
+# $(1) destination binary path
+# $(2) version (used as a stamp file suffix; no leading "v")
+# $(3) tarball URL
+define download-release-tool
+@[ -f "$(1)-$(2)" ] || { \
+set -e ;\
+echo "Removing any outdated version of $(1)";\
+rm -f $(1)*;\
+mkdir -p $(TOOLS_DIR) ;\
+TMP_DIR=$$(mktemp -d) ;\
+echo "Downloading $(3)" ;\
+curl -sSfL "$(3)" -o "$$TMP_DIR/tool.tar.gz" ;\
+tar -xzf "$$TMP_DIR/tool.tar.gz" -C "$$TMP_DIR" $(notdir $(1)) ;\
+mv "$$TMP_DIR/$(notdir $(1))" "$(1)" ;\
+chmod +x "$(1)" ;\
+touch "$(1)-$(2)" ;\
+rm -rf $$TMP_DIR ;\
+}
+endef
+
+# Check that given variables are set and all have non-empty values,
+# die with an error otherwise.
+#
+# Params:
+#   1. Variable name(s) to test.
+#   2. (optional) Error message to print.
+check_defined = \
+	$(strip $(foreach 1,$1, \
+		$(call __check_defined,$1,$(strip $(value 2)))))
+__check_defined = \
+	$(if $(value $1),, \
+	  $(error Undefined $1$(if $2, ($2))))
+
+# prereqs binary dependencies
+GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
+BPF2GO ?= $(TOOLS_DIR)/bpf2go
+GO_LICENSES = $(TOOLS_DIR)/go-licenses
+KIND = $(TOOLS_DIR)/kind
+DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
+DASHBOARD_LINTER_VERSION = 0.1.1
+DASHBOARD_LINTER_URL = https://github.com/grafana/dashboard-linter/releases/download/v$(DASHBOARD_LINTER_VERSION)/dashboard-linter_$(DASHBOARD_LINTER_VERSION)_$(HOST_OS)_$(HOST_ARCH).tar.gz
+GINKGO = $(TOOLS_DIR)/ginkgo
+GOTESTSUM = $(TOOLS_DIR)/gotestsum
+
+# Required for k8s-cache unit tests
+ENVTEST = $(TOOLS_DIR)/setup-envtest
+ENVTEST_K8S_VERSION = 1.30.0
+
+.PHONY: obi-submodule
+obi-submodule:
+	@echo "# Updating OBI Git submodule..."
+	git submodule update --init --recursive
+
+.PHONY: install-hooks
+install-hooks:
+	@if [ ! -f .git/hooks/pre-commit ]; then \
+		echo "Installing pre-commit hook..."; \
+		cp hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit; \
+		echo "Pre-commit hook installed."; \
+	fi
+
+# An explicitly supplied bpf2go (for example the generator image's binary) is
+# managed by its caller. Don't try to overwrite it when local manifests are newer.
+$(BPF2GO): $(if $(filter $(TOOLS_DIR)/bpf2go,$(BPF2GO)),$(TOOLS_MOD))
+	$(call go-install-tool,$@,github.com/cilium/ebpf/cmd/bpf2go)
+
+$(GOLANGCI_LINT): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/golangci/golangci-lint/v2/cmd/golangci-lint)
+
+$(GO_LICENSES): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/google/go-licenses/v2)
+
+$(KIND): $(TOOLS_MOD)
+	$(call go-install-tool,$@,sigs.k8s.io/kind)
+
+$(ENVTEST): $(TOOLS_MOD)
+	$(call go-install-tool,$@,sigs.k8s.io/controller-runtime/tools/setup-envtest)
+
+$(GOTESTSUM): $(TOOLS_MOD)
+	$(call go-install-tool,$@,gotest.tools/gotestsum)
+
+# Target the versioned stamp file (not the bare binary) so that bumping
+# $(DASHBOARD_LINTER_VERSION) renames the prerequisite and re-triggers download.
+$(DASHBOARD_LINTER)-$(DASHBOARD_LINTER_VERSION):
+	$(call download-release-tool,$(DASHBOARD_LINTER),$(DASHBOARD_LINTER_VERSION),$(DASHBOARD_LINTER_URL))
+
+.PHONY: bpf2go
+bpf2go: $(BPF2GO)
+
+.PHONY: prereqs
+prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_LICENSES) $(KIND) $(DASHBOARD_LINTER)-$(DASHBOARD_LINTER_VERSION) $(ENVTEST) $(GOTESTSUM)
+	@echo "### Check if prerequisites are met, and installing missing dependencies"
+	mkdir -p $(TEST_OUTPUT)/run
+
+.PHONY: fmt
+fmt: prereqs
+	@echo "### Formatting code and fixing imports"
+	$(GOLANGCI_LINT) fmt
+
+.PHONY: checkfmt
+checkfmt:
+	@echo '### check correct formatting and imports'
+	@if [ "$(strip $(check_format))" != "" ]; then \
+		echo "$(check_format)"; \
+		echo "Above files are not properly formatted. Run 'make fmt' to fix them"; \
+		exit 1; \
+	fi
+
+.PHONY: clang-tidy
+clang-tidy:
+	cd bpf && find . -type f \( -name '*.c' -o -name '*.h' \) ! -path "./bpfcore/*" | xargs clang-tidy
+
+.PHONY: lint-dashboard
+lint-dashboard: prereqs
+	@echo "### Linting dashboard";
+	@if [ "$(shell sh -c 'git ls-files --modified | grep grafana/*.json ')" != "" ]; then \
+		for file in grafana/*.json; do \
+			$(DASHBOARD_LINTER) lint --strict $$file; \
+		done; \
+	else \
+		echo '(no git changes detected. Skipping)'; \
+	fi
+
+.PHONY: lint
+lint: prereqs checkfmt
+	@echo "### Linting code"
+	$(GOLANGCI_LINT) run ./... --timeout=6m
+
+.PHONY: generate
+generate: obi-submodule
+	@echo "### Generating files..."
+	@cd $(OBI_MODULE) && make generate
+	@$(MAKE) generate-beyla
+
+# Beyla-owned BPF programs use OBI's headers, but never write into OBI or vendor.
+.PHONY: generate-beyla
+generate-beyla: export BPF_CLANG := $(CLANG)
+generate-beyla: export BPF_CFLAGS := $(CFLAGS)
+generate-beyla: export BPF2GO := $(BPF2GO)
+generate-beyla: export OBI_BPF_INCLUDE := $(abspath $(OBI_MODULE))/bpf
+generate-beyla: $(BPF2GO)
+	GOOS=linux go generate ./pkg/internal/ebpf/surveywatcher
+
+.PHONY: docker-generate
+docker-generate: obi-submodule
+	@echo "### Generating files (submodule:  $(OBI_MODULE))"
+	@cd $(OBI_MODULE) && make docker-generate
+	$(OCI_BIN) run --rm -u "$$(id -u):$$(id -g)" \
+		-v "$(PROJECT_DIR):/src:z" -w /src -e GOCACHE=/tmp/go-build \
+		--entrypoint /bin/sh $(GEN_IMG) -c \
+		'for llvm_bin in /usr/lib/llvm*/bin; do PATH="$$llvm_bin:$$PATH"; done; \
+		export PATH; make generate-beyla BPF2GO=/go/bin/bpf2go'
+
+.PHONY: copy-obi-vendor
+copy-obi-vendor: vendor-obi-tests
+	@echo "### Vendoring OBI submodule..."
+	go get go.opentelemetry.io/obi
+	go mod tidy
+	go mod vendor
+
+.PHONY: vendor-obi-tests
+vendor-obi-tests:
+	@echo "### Vendoring OBI test dependencies..."
+	go get -t ./internal/testgenerated/integration/...
+	go mod tidy
+	go mod vendor
+
+CONFIG_SCHEMA_FILE ?= docs/config-schema.json
+
+.PHONY: generate-config-schema
+generate-config-schema:
+	@echo "### Generating JSON schema for Beyla configuration"
+	@mkdir -p $(dir $(CONFIG_SCHEMA_FILE))
+	go run ./cmd/beyla-schema -output $(CONFIG_SCHEMA_FILE)
+
+.PHONY: check-config-schema
+check-config-schema:
+	@echo "### Checking if JSON schema is up-to-date"
+	@mkdir -p $(dir $(CONFIG_SCHEMA_FILE))
+	@go run ./cmd/beyla-schema -output $(CONFIG_SCHEMA_FILE).tmp
+	@if ! diff -q $(CONFIG_SCHEMA_FILE) $(CONFIG_SCHEMA_FILE).tmp > /dev/null 2>&1; then \
+		echo "JSON schema is out of date. Run 'make generate-config-schema' to update it."; \
+		echo "Diff:"; \
+		diff $(CONFIG_SCHEMA_FILE) $(CONFIG_SCHEMA_FILE).tmp || true; \
+		rm -f $(CONFIG_SCHEMA_FILE).tmp; \
+		exit 1; \
+	fi
+	@rm -f $(CONFIG_SCHEMA_FILE).tmp
+
+.PHONY: vendor-obi
+vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor
+
+.PHONY: verify
+verify: prereqs lint-dashboard vendor-obi lint test
+
+.PHONY: build
+build: vendor-obi verify compile
+
+.PHONY: all
+all: vendor-obi build
+
+.PHONY: compile compile-cache
+compile:
+	@echo "### Compiling Beyla"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
+compile-cache:
+	@echo "### Compiling Beyla K8s cache"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
+
+.PHONY: debug
+debug:
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -gcflags "-N -l" -ldflags="-X '$(BUILDINFO_PKG).Version=$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=$(RELEASE_REVISION)'" -a -o bin/$(CMD) $(MAIN_GO_FILE)
+
+.PHONY: dev
+dev: prereqs generate compile-for-coverage
+
+# Generated binary can provide coverage stats according to https://go.dev/blog/integration-test-coverage
+.PHONY: compile-for-coverage compile-cache-for-coverage
+compile-for-coverage:
+	@echo "### Compiling project to generate coverage profiles"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -ldflags="-X '$(BUILDINFO_PKG).Version=test-$(RELEASE_VERSION)' -X '$(BUILDINFO_PKG).Revision=test-$(RELEASE_REVISION)'" -cover -a -o bin/$(CMD) $(MAIN_GO_FILE)
+compile-cache-for-coverage:
+	@echo "### Compiling K8s cache service to generate coverage profiles"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -mod vendor -cover -a -o bin/$(CACHE_CMD) $(CACHE_MAIN_GO_FILE)
+
+# Java agent targets
+JAVA_AGENT_DIR      := .obi-src/pkg/internal/java
+JAVA_AGENT_PATCH_DIR := internal/java
+JAVA_AGENT_EMBED_DIR := vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded
+
+.PHONY: java-build
+java-build:
+	@echo "### Building Java agent"
+	mkdir -p $(JAVA_AGENT_EMBED_DIR)
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
+	cd $(JAVA_AGENT_DIR) && gradle build -PnativeOnly=true
+	cp $(JAVA_AGENT_DIR)/build/$(JAVA_AGENT) $(JAVA_AGENT_EMBED_DIR)/$(JAVA_AGENT)
+
+.PHONY: java-docker-build
+java-docker-build:
+	@echo "### Building Java agent with Docker"
+	mkdir -p $(JAVA_AGENT_EMBED_DIR)
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
+	$(OCI_BIN) build --output type=local,dest=$(JAVA_AGENT_EMBED_DIR) --target=export -f javaagent.Dockerfile .
+
+.PHONY: java-test
+java-test:
+	@echo "### Testing Java agent"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
+	cd $(JAVA_AGENT_DIR) && gradle test
+
+.PHONY: java-spotless-check
+java-spotless-check:
+	@echo "### Checking Java code formatting"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
+	cd $(JAVA_AGENT_DIR) && gradle spotlessCheck
+
+.PHONY: java-spotless-apply
+java-spotless-apply:
+	@echo "### Formatting Java code"
+	cp -r $(JAVA_AGENT_PATCH_DIR)/* $(JAVA_AGENT_DIR)
+	cd $(JAVA_AGENT_DIR) && gradle spotlessApply
+
+.PHONY: java-clean
+java-clean:
+	@echo "### Cleaning Java agent build artifacts"
+	cd $(JAVA_AGENT_DIR) && gradle clean
+
+.PHONY: java-verify
+java-verify: java-spotless-check java-test java-build
+
+.PHONY: test
+test:
+	@echo "### Testing code"
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
+
+.PHONY: test-privileged
+test-privileged:
+	@echo "### Testing code with privileged tests enabled"
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" PRIVILEGED_TESTS=true go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile $(TEST_OUTPUT)/cover.all.txt
+
+.PHONY: helm-unittest
+helm-unittest:
+	@echo "### Running Helm chart unit tests"
+	$(OCI_BIN) run --rm -v "$(PROJECT_DIR):/apps" -w /apps -u "$$(id -u)" \
+		-e HELM_CACHE_HOME=/tmp/.cache -e XDG_CACHE_HOME=/tmp/.cache -e HOME=/tmp \
+		$(HELM_UNITTEST_IMG) -f 'tests/unit/*.yaml' charts/beyla
+
+.PHONY: helm-docs
+helm-docs:
+	@echo "### Generating Helm chart documentation"
+	cd charts && $(OCI_BIN) run --rm --volume "$$(pwd):/helm-docs" -u "$$(id -u)" $(HELM_DOCS_IMG)
+
+.PHONY: cov-exclude-generated
+cov-exclude-generated:
+	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/cover.all.txt > $(TEST_OUTPUT)/cover.txt
+
+.PHONY: cov-exclude-generated-shard
+cov-exclude-generated-shard:
+	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/cover-shard-$(SHARD_ID).all.txt > $(TEST_OUTPUT)/cover-shard-$(SHARD_ID).txt
+
+.PHONY: unit-test-matrix-json
+unit-test-matrix-json:
+	@go list -mod vendor ./... | grep -v /internal/testgenerated/ | $(GOTESTSUM) tool ci-matrix --partitions $${PARTITIONS:-3} --timing-files=$(TEST_OUTPUT)/unit-test-shard-*.log
+
+.PHONY: run-unit-test-shard
+run-unit-test-shard:
+	@echo "### Running unit test shard $(SHARD_ID)"
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" \
+	$(GOTESTSUM) \
+		--jsonfile=$(TEST_OUTPUT)/unit-test-shard-$(SHARD_ID).log \
+		-- -race -mod vendor -a -coverpkg=./... \
+		-coverprofile $(TEST_OUTPUT)/cover-shard-$(SHARD_ID).all.txt \
+		$(UNIT_TEST_PACKAGES)
+
+.PHONY: coverage-report
+coverage-report: cov-exclude-generated
+	@echo "### Generating coverage report"
+	go tool cover --func=$(TEST_OUTPUT)/cover.txt
+
+.PHONY: coverage-report-html
+coverage-report-html: cov-exclude-generated
+	@echo "### Generating HTML coverage report"
+	go tool cover --html=$(TEST_OUTPUT)/cover.txt
+
+.PHONY: image-build
+image-build: vendor-obi
+	$(call check_defined, IMG_ORG, Your Docker repository user name)
+	@echo "### Building the auto-instrumenter image"
+	$(OCI_BIN) buildx build --build-arg GEN_IMG="$(GEN_IMG)" --platform linux/amd64,linux/arm64 -t ${IMG} .
+
+.PHONY: dev-image-build
+dev-image-build: vendor-obi
+	$(call check_defined, IMG_ORG, Your Docker repository user name)
+	@echo "### Building the auto-instrumenter dev image"
+	$(OCI_BIN) buildx build --build-arg GEN_IMG="$(GEN_IMG)" --build-arg DEV_OBI=1 -t ${IMG} .
+
+.PHONY: prepare-integration-test
+prepare-integration-test: vendor-obi
+	@echo "### Removing resources from previous integration tests, if any"
+	rm -rf $(TEST_OUTPUT)/* || true
+	$(MAKE) cleanup-integration-test
+
+.PHONY: cleanup-integration-test
+cleanup-integration-test:
+	@echo "### Removing integration test clusters"
+	$(KIND) delete cluster -n test-kind-cluster || true
+	@echo "### Removing docker containers and images"
+	$(OCI_BIN) compose $(COMPOSE_ARGS) stop || true
+	$(OCI_BIN) compose $(COMPOSE_ARGS) rm -f || true
+	$(OCI_BIN) rm -f $(shell $(OCI_BIN) ps --format '{{.Names}}' | grep 'integration-') || true
+	$(OCI_BIN) rmi -f $(shell $(OCI_BIN) images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
+
+.PHONY: run-integration-test
+run-integration-test:
+	@echo "### Running integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration --tags=integration
+
+.PHONY: run-integration-test-k8s
+run-integration-test-k8s:
+	@echo "### Running K8s integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration/k8s/... --tags=integration
+
+.PHONY: run-integration-test-vm
+run-integration-test-vm:
+	@echo "### Running integration tests (pattern: $(TEST_PATTERN))"
+	@TEST_TIMEOUT="60m"; \
+	TEST_PARALLEL="1"; \
+	if [ -f "/precompiled-tests/integration.test" ]; then \
+		echo "Using pre-compiled integration tests"; \
+		chmod +x /precompiled-tests/integration.test; \
+		/precompiled-tests/integration.test \
+			-test.parallel=$$TEST_PARALLEL \
+			-test.timeout=$$TEST_TIMEOUT \
+			-test.failfast \
+			-test.v \
+			-test.run="^($(TEST_PATTERN))\$$"; \
+	else \
+		echo "Pre-compiled tests not found, compiling in VM"; \
+		go test \
+			-p $$TEST_PARALLEL \
+			-timeout $$TEST_TIMEOUT \
+			-failfast \
+			-v -a \
+			-mod vendor \
+			-tags=integration \
+			-run="^($(TEST_PATTERN))\$$" ./internal/testgenerated/integration; \
+	fi
+
+.PHONY: run-integration-test-arm
+run-integration-test-arm:
+	@echo "### Running integration tests (ARM)"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/testgenerated/integration --tags=integration -run "^TestMultiProcess"
+
+.PHONY: integration-test-matrix-json
+integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/testgenerated/integration "$${PARTITIONS:-5}"
+
+.PHONY: vm-integration-test-matrix-json
+vm-integration-test-matrix-json:
+	@./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/testgenerated/integration "$${PARTITIONS:-3}" "TestMultiProcess"
+
+.PHONY: k8s-integration-test-matrix-json
+k8s-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh internal/testgenerated/integration/k8s common
+
+.PHONY: oats-integration-test-matrix-json
+oats-integration-test-matrix-json:
+	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats
+
+.PHONY: beyla-integration-test-matrix-json
+beyla-integration-test-matrix-json:
+	@WEIGHTS_FILE=scripts/beyla-integration-test-weights.generated.json \
+		./scripts/generate-integration-matrix.sh "$${TEST_TAGS:-integration}" internal/test/integration "$${PARTITIONS:-5}"
+
+.PHONY: run-beyla-integration-test
+run-beyla-integration-test:
+	@echo "### Running Beyla integration tests"
+	go clean -testcache
+	go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration
+
+.PHONY: integration-test
+integration-test: prereqs generate-obi-tests prepare-integration-test
+	$(MAKE) run-integration-test || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+.PHONY: integration-test-k8s
+integration-test-k8s: prereqs generate-obi-tests prepare-integration-test
+	$(MAKE) run-integration-test-k8s || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+.PHONY: integration-test-arm
+integration-test-arm: prereqs generate-obi-tests prepare-integration-test
+	$(MAKE) run-integration-test-arm || (ret=$$?; $(MAKE) cleanup-integration-test && exit $$ret)
+	$(MAKE) itest-coverage-data
+	$(MAKE) cleanup-integration-test
+
+.PHONY: generate-obi-tests
+generate-obi-tests:
+	@echo "### Generating OBI integration tests from .obi-src"
+	./scripts/generate-obi-tests.sh
+
+.PHONY: clean-obi-tests
+clean-obi-tests:
+	@echo "### Cleaning generated OBI tests"
+	./scripts/generate-obi-tests.sh --clean
+
+.PHONY: itest-coverage-data
+itest-coverage-data:
+	# merge coverage data from all the integration tests
+	mkdir -p $(TEST_OUTPUT)/merge
+	go tool covdata merge -i=$(TEST_OUTPUT) -o $(TEST_OUTPUT)/merge
+	go tool covdata textfmt -i=$(TEST_OUTPUT)/merge -o $(TEST_OUTPUT)/itest-covdata.raw.txt
+	# replace the unexpected /src/cmd/beyla/main.go file by the module path
+	sed 's/^\/src\/cmd\//github.com\/grafana\/beyla\/cmd\//' $(TEST_OUTPUT)/itest-covdata.raw.txt > $(TEST_OUTPUT)/itest-covdata.all.txt
+	# exclude generated files from coverage data
+	grep -vE $(EXCLUDE_COVERAGE_FILES) $(TEST_OUTPUT)/itest-covdata.all.txt > $(TEST_OUTPUT)/itest-covdata.txt || true
+
+$(GINKGO): $(TOOLS_MOD)
+	$(call go-install-tool,$@,github.com/onsi/ginkgo/v2/ginkgo)
+
+.PHONY: oats-prereq
+oats-prereq: $(GINKGO) vendor-obi
+	mkdir -p $(TEST_OUTPUT)/run
+
+.PHONY: oats-test-sql
+oats-test-sql: oats-prereq
+	mkdir -p internal/testgenerated/oats/sql/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/sql && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-redis
+oats-test-redis: oats-prereq
+	mkdir -p internal/testgenerated/oats/redis/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/redis && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-kafka
+oats-test-kafka: oats-prereq
+	mkdir -p internal/testgenerated/oats/kafka/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/kafka && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-http
+oats-test-http: oats-prereq
+	mkdir -p internal/testgenerated/oats/http/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/http && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-mongo
+oats-test-mongo: oats-prereq
+	mkdir -p internal/testgenerated/oats/mongo/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/mongo && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-memcached
+oats-test-memcached: oats-prereq
+	mkdir -p internal/testgenerated/oats/memcached/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/memcached && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-ai
+oats-test-ai: oats-prereq
+	mkdir -p internal/testgenerated/oats/ai/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/ai && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-nats
+oats-test-nats: oats-prereq
+	mkdir -p internal/testgenerated/oats/nats/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/nats && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test-amqp
+oats-test-amqp: oats-prereq
+	mkdir -p internal/testgenerated/oats/amqp/$(TEST_OUTPUT)/run
+	cd internal/testgenerated/oats/amqp && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+.PHONY: oats-test
+oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai oats-test-nats oats-test-amqp
+	$(MAKE) itest-coverage-data
+
+.PHONY: oats-test-debug
+oats-test-debug: oats-prereq
+	cd internal/testgenerated/oats/kafka && TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h $(GINKGO) -v -r
+
+.PHONY: update-licenses check-license
+update-licenses: prereqs generate-obi-tests
+	@echo "### Updating third_party_licenses.csv"
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO_LICENSES) report --ignore testing --ignore debug --ignore expvar --ignore structs --ignore go --ignore html --ignore text --ignore compress --ignore mime --ignore database --ignore unique --ignore vendor/golang.org --ignore hash --ignore embed --ignore flag --ignore weak --ignore cmp --ignore net --ignore context --ignore bufio --ignore container --ignore crypto --ignore iter --ignore path --ignore strconv --ignore strings --ignore encoding --ignore reflect --ignore fmt --ignore log --ignore maps --ignore errors --ignore io --ignore slices --ignore runtime --ignore syscall --ignore time --ignore sync --ignore sort --ignore bytes --ignore os --ignore regex --ignore internal --ignore math --ignore unicode --ignore go.opentelemetry.io/obi ./... 2>/dev/null | sed 's/\r$$//' > third_party_licenses.csv
+
+check-licenses: update-licenses
+	@echo "### Checking third party licenses"
+	@if [ "$(strip $(shell git diff HEAD third_party_licenses.csv))" != "" ]; then \
+		echo "### Diff for third_party_licenses.csv"; \
+		git --no-pager diff -- third_party_licenses.csv; \
+		echo "ERROR: third_party_licenses.csv is not up to date. Run 'make update-licenses' and push the changes to your PR"; \
+		exit 1; \
+	fi
+
+.PHONY: artifact
+artifact: vendor-obi compile
+	@echo "### Packing generated artifact"
+	cp LICENSE ./bin
+	cp NOTICE ./bin
+	cp third_party_licenses.csv ./bin
+	tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE third_party_licenses.csv
+
+.PHONY: clean-testoutput
+clean-testoutput:
+	@echo "### Cleaning ${TEST_OUTPUT} folder"
+	rm -rf ${TEST_OUTPUT}/*
+
+
+.PHONY: clang-format
+clang-format:
+	find ./bpf -type f -name "*.c" | xargs -P 0 -n 1 clang-format -i
+	find ./bpf -type f -name "*.h" | xargs -P 0 -n 1 clang-format -i
+
+.PHONY: clean-ebpf-generated-files
+clean-ebpf-generated-files:
+	find . -name "*_bpfel*" | xargs rm

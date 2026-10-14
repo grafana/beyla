@@ -1,0 +1,427 @@
+---
+title: Configure Beyla metrics and traces attributes
+menuTitle: Metrics attributes
+description: Configure the metrics and traces attributes component that controls the attributes reported, including instance ID decoration and metadata of instrumented Kubernetes pods.
+weight: 30
+keywords:
+  - Beyla
+  - eBPF
+---
+
+# Configure Beyla metrics and traces attributes
+
+You can configure how Beyla decorates attributes for metrics and traces. Use the `attributes` top YAML section to enable and configure how attributes are set.
+
+The [Beyla exported metrics](../../metrics/) document lists the attributes you can report with each metric. Beyla reports some attributes by default and hides others to control cardinality.
+
+For each metric, you control which attributes to see with the `select` subsection. This is a map where each key is the name of a metric either in its OpenTelemetry or Prometheus port, and each metric has two sub-properties: `include` and `exclude`.
+
+- `include` is a list of attributes to report. Each attribute can be a name or a wildcard, for example, `k8s.dst.*` to include all attributes starting with `k8s.dst`. If you don't provide an `include` list, Beyla reports the default attribute set, refer to [Beyla exported metrics](../../metrics/) for more information about default attributes for a given metric
+- `exclude` is a list of attribute names or wildcards to remove from the `include` list, or the default attribute set
+
+Example:
+
+```yaml
+attributes:
+  select:
+    beyla_network_flow_bytes:
+      # limit the beyla_network_flow_bytes attributes to only the three attributes
+      include:
+        - beyla.ip
+        - src.name
+        - dst.port
+    db_client_operation_duration:
+      # report all the possible attributes but db_query_text
+      include: ["*"]
+      exclude: ["db_query_text"]
+    http_client_request_duration:
+      # report the default attribute set but exclude the Kubernetes Pod information
+      exclude: ["k8s.pod.*"]
+```
+
+### Select database metric attributes
+
+Use `db_client_operation_duration` to select attributes for database client
+operation metrics and `db_server_operation_duration` for database server
+operation metrics. Both selectors accept the following attribute names in
+their `include` and `exclude` lists:
+
+| Attribute | Prometheus-style name | Default |
+| --- | --- | --- |
+| `db.namespace` | `db_namespace` | Included when available |
+| `db.response.status_code` | `db_response_status_code` | Included when available |
+
+The `db.namespace` attribute identifies the database namespace, such as a
+database or bucket. Whether Beyla can report it depends on the database
+protocol and the information available to its protocol detector. Beyla omits
+the attribute when it cannot determine a value. The `db.response.status_code`
+attribute is reported when a database error code is available. For
+Elasticsearch, Beyla reports the HTTP response status code when it receives a
+response.
+
+Each distinct attribute value can create additional time series. In
+particular, many database namespaces can increase cardinality, and response
+status codes add a series for each distinct code. Exclude an attribute when
+that dimension is not useful for your monitoring:
+
+```yaml
+attributes:
+  select:
+    db_client_operation_duration:
+      exclude: ["db_namespace", "db_response_status_code"]
+    db_server_operation_duration:
+      exclude: ["db_namespace", "db_response_status_code"]
+```
+
+If you set an `include` list, add either spelling of an attribute to that
+list to keep it; an explicit `include` list replaces the default attribute
+set.
+
+The `db.client.operation.duration` (`db_client_operation_duration_seconds` in
+Prometheus) metric includes `server.port` by default when Beyla detects a valid
+database port. The `include` and `exclude` lists accept both `server.port` and
+its Prometheus-style name, `server_port`.
+
+For example, you can remove the port from the default attribute set by using
+the Prometheus-style names:
+
+```yaml
+attributes:
+  select:
+    db_client_operation_duration:
+      exclude: ["server_port"]
+```
+
+You can use `server.port` instead of `server_port` in the example; the two forms
+are equivalent. Including a server port can increase metric cardinality when an
+application connects to many database ports, so exclude it when that
+distinction isn't useful.
+
+Additionally, you can use wildcards as metric names to add and exclude attributes for groups of metrics with the same name. For example:
+
+```yaml
+attributes:
+  select:
+    http_*:
+      include: ["*"]
+      exclude: ["http_path", "http_route"]
+    http_client_*:
+      # override http_* exclusion
+      include: ["http_path"]
+    http_server_*:
+      # override http_* exclusion
+      include: ["http_route"]
+```
+
+In the previous example, all metrics with a name starting with `http_` or `http.` include all possible attributes except `http_path` and `http_route` or `http.path`/`http.route`. The `http_client_*` and `http_server_*` sections override the base configuration, enabling the `http_path` attribute for HTTP client metrics and `http_route` for HTTP server metrics.
+
+When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
+
+## Select trace attributes
+
+Besides metric names, the `select` subsection accepts the special key `traces`, which controls the optional attributes exported on OTLP spans.
+
+Keys are matched as globs against the section name, and spans use the section name `traces`. A key like `http_*` therefore never reaches these attributes, while a catch-all `*` does match them along with every metric.
+
+Most of these attributes carry request payloads, so they're opt-in: they're only exported when listed in `include`. The exceptions are `dns.question.name` and `url.query`, which are exported by default and can be turned off with `exclude`.
+
+| Attribute | Exported by default |
+| --------- | ------------------- |
+| `dns.question.name` | yes |
+| `url.query` | yes |
+| `db.query.text` | no |
+| `db.response.error` | no |
+| `graphql.document` | no |
+| `gen_ai.input.messages` | no |
+| `gen_ai.output.messages` | no |
+| `gen_ai.system_instructions` | no |
+| `gen_ai.metadata` | no |
+| `gen_ai.tool.definitions` | no |
+| `gen_ai.tool.call.arguments` | no |
+| `gen_ai.tool.call.result` | no |
+| `gen_ai.response.error` | no |
+
+Example:
+
+```yaml
+attributes:
+  select:
+    traces:
+      # export the SQL statement and the GraphQL query on spans
+      include:
+        - db.query.text
+        - graphql.document
+      # stop exporting the query string
+      exclude:
+        - url.query
+```
+
+Values of known-sensitive query parameters are redacted inside `url.query` before export. The other attributes in this table are exported as captured, so enable them only when the payloads they carry are safe to store.
+
+## Instance ID decoration
+
+YAML section: `attributes.instance_id`
+
+Beyla decorates metrics and traces with a unique instance ID string, identifying each instrumented application. By default, Beyla uses the host name that runs Beyla (can be a container or Pod name), followed by the PID of the instrumented process. You can override how the instance ID is composed in the `instance_id` YAML subsection under the `attributes` top-level section.
+
+For example:
+
+```yaml
+attributes:
+  instance_id:
+    dns: false
+```
+
+| YAML<p>environment variable</p>             | Description                                                                                                                                                                               | Type    | Default |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `dns`<p>`BEYLA_HOSTNAME_DNS_RESOLUTION`</p> | If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, uses local name. For more information, refer to the [dns section](#dns).                        | boolean | true    |
+| `override_hostname`<p>`BEYLA_HOSTNAME`</p>  | If set, Beyla uses the provided string as the host part of the Instance ID. Overrides DNS resolution. For more information, refer to the [override hostname section](#override-hostname). | string  | (unset) |
+
+### DNS
+
+If `true`, Beyla tries to resolve the local hostname against the network DNS. If `false`, it uses the local hostname.
+
+### Override hostname
+
+If set, Beyla uses the provided string as the host part of the Instance ID instead of trying to resolve the host name. This option takes precedence over `dns`.
+
+## Kubernetes decorator
+
+YAML section: `attributes.kubernetes`
+
+You can configure the component under the `attributes.kubernetes` section of your YAML configuration or via environment variables.
+
+To enable this feature, you must provide extra permissions to the Beyla Pod. See the ["Configuring Kubernetes metadata decoration section" in the "Running Beyla in Kubernetes"](../../setup/kubernetes/) page.
+
+If you set this option to `true`, Beyla decorates metrics and traces with Kubernetes metadata. If you set it to `false`, Beyla disables the Kubernetes metadata decorator. If you set it to `autodetect`, Beyla tries to detect if it is running inside Kubernetes and enables metadata decoration if so.
+
+For example:
+
+```yaml
+attributes:
+  kubernetes:
+    enable: true
+```
+
+| YAML<p>environment variable</p>                                        | Description                                                                                                                                                                                   | Type           | Default        |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------- |
+| `enable`<p>`BEYLA_KUBE_METADATA_ENABLE`</p>                            | Enable or disable Kubernetes metadata decoration. Set to `autodetect` to enable if running in Kubernetes. For more information, refer to the [enable kubernetes section](#enable-kubernetes). | boolean/string | false          |
+| `kubeconfig_path`<p>`KUBECONFIG`</p>                                   | Path to the Kubernetes configuration file. For more information, refer to the [Kubernetes configuration path section](#kubernete-configuration-path).                                         | string         | ~/.kube/config |
+| `disable_informers`<p>`BEYLA_KUBE_DISABLE_INFORMERS`</p>               | List of informers to disable (`node`, `service`). For more information, refer to the [disable informers section](#disable-informers).                                                         | string         | (empty)        |
+| `meta_restrict_local_node`<p>`BEYLA_KUBE_META_RESTRICT_LOCAL_NODE`</p> | Restrict metadata to local node only. For more information, refer to the [meta restrict local node section](#meta-restrict-local-node).                                                       | boolean        | false          |
+| `informers_sync_timeout`<p>`BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT`</p>     | Maximum time to wait for Kubernetes metadata before starting. For more information, refer to the [informers sync timeout section](#informers-sync-timeout).                                   | Duration       | 30s            |
+| `informers_resync_period`<p>`BEYLA_KUBE_INFORMERS_RESYNC_PERIOD`</p>   | Periodically resynchronize all Kubernetes metadata. For more information, refer to the [informers resynchronization period section](#informers-resynchronization-period).                     | Duration       | 30m            |
+| `service_name_template`<p>`BEYLA_SERVICE_NAME_TEMPLATE`</p>            | Go template for service names. For more information, refer to the [service name template section](#service-name-template).                                                                    | string         | (empty)        |
+
+### Enable kubernetes
+
+If you run Beyla in a Kubernetes environment, you can configure it to decorate traces and metrics with the standard OpenTelemetry labels:
+
+- `k8s.namespace.name`
+- `k8s.deployment.name`
+- `k8s.statefulset.name`
+- `k8s.replicaset.name`
+- `k8s.daemonset.name`
+- `k8s.node.name`
+- `k8s.pod.name`
+- `k8s.container.name`
+- `k8s.pod.uid`
+- `k8s.pod.start_time`
+- `k8s.cluster.name`
+
+### Kubernetes configuration path
+
+This is a standard Kubernetes configuration environment variable. Use it to tell Beyla where to find the Kubernetes configuration to communicate with the Kubernetes Cluster. Usually, you do not need to change this value.
+
+### Disable informers
+
+The accepted value is a list that might contain `node` and `service`.
+
+This option lets you selectively disable some Kubernetes informers, which continuously listen to the Kubernetes API to get the metadata needed for decorating network metrics or application metrics and traces.
+
+When you deploy Beyla as a DaemonSet in very large clusters, all the Beyla instances creating multiple informers might overload the Kubernetes API.
+
+Disabling some informers causes reported metadata to be incomplete, but reduces the load on the Kubernetes API.
+
+You cannot disable the Pods informer. To do that, disable the whole Kubernetes metadata decoration.
+
+### Meta restrict local node
+
+If true, Beyla stores Pod and Node metadata only from the node where the Beyla instance runs.
+
+This option decreases the memory used to store metadata, but some metrics such as network bytes or service graph metrics won't include metadata from destination pods on a different node.
+
+### Informers sync timeout
+
+This is the maximum time Beyla waits to get all the Kubernetes metadata before starting to decorate metrics and traces. If this timeout is reached, Beyla starts normally, but the metadata attributes might be incomplete until all the Kubernetes metadata is updated in the background.
+
+### Informers resynchronization period
+
+Beyla immediately receives any update on resources' metadata. In addition, Beyla periodically resynchronizes all Kubernetes metadata at the frequency you specify with this property. Higher values reduce the load on the Kubernetes API service.
+
+### Service name template
+
+You can template service names using Go templates. This lets you create conditional or extended service names.
+
+The following context is available to the template:
+
+```
+Meta: (*informer.ObjectMeta)
+  Name: (string)
+  Namespace: (string)
+  Labels:
+    label1: lv1
+    label2: lv2
+  Annotations:
+    Anno1: av1
+    Anno2: av2
+  Pod: (*PodInfo)
+  ...
+
+ContainerName: (string)
+```
+
+You can find the full object and structure in the `kubecache informer.pb.go` source file.
+
+Service name template examples:
+
+```
+{{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}{{ if .ContainerName }}/{{ .ContainerName -}}{{ end -}}
+```
+
+or
+
+```
+{{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}
+```
+
+In this example, only the first line is used and trimmed to prevent white space in the service name.
+
+## Extra group attributes
+
+Beyla allows you to enhance your metrics with custom attributes using the `extra_group_attributes` configuration. This gives you the flexibility to include additional metadata in your metrics, beyond the standard set.
+
+To use this feature, specify the group name and the list of attributes you want to include in that group.
+
+The following groups are supported:
+
+- `k8s_app_meta`: Kubernetes-specific metadata such as Pod name, namespace, container name, Pod UID, and more.
+- `app`: application-level attributes shared by most application metrics, such as `service.name` and `service.namespace`.
+
+Example configuration:
+
+```yaml
+attributes:
+  kubernetes:
+    enable: true
+  extra_group_attributes:
+    k8s_app_meta: ["k8s.app.version"]
+```
+
+In this example:
+
+- Adding `k8s.app.version` to the `extra_group_attributes > k8s_app_meta` block causes the `k8s.app.version` label to appear in the metrics.
+- You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests, these annotations are automatically included in the metrics.
+
+By default, Beyla sets `extra_group_attributes > app` to `["service.name", "service.namespace"]`, so these two attributes are reported both as OTEL resource attributes and as metric-level attributes. If you set `extra_group_attributes > app` yourself, your list replaces this default entirely.
+
+The following table describes the default group attributes.
+
+| Group          | Label                  |
+| -------------- | ---------------------- |
+| `k8s_app_meta` | `k8s.namespace.name`   |
+| `k8s_app_meta` | `k8s.pod.name`         |
+| `k8s_app_meta` | `k8s.container.name`   |
+| `k8s_app_meta` | `k8s.deployment.name`  |
+| `k8s_app_meta` | `k8s.replicaset.name`  |
+| `k8s_app_meta` | `k8s.daemonset.name`   |
+| `k8s_app_meta` | `k8s.statefulset.name` |
+| `k8s_app_meta` | `k8s.node.name`        |
+| `k8s_app_meta` | `k8s.pod.uid`          |
+| `k8s_app_meta` | `k8s.pod.start_time`   |
+| `k8s_app_meta` | `k8s.cluster.name`     |
+| `k8s_app_meta` | `k8s.owner.name`       |
+
+And the following table describes the metrics and their associated groups.
+| Group | OTEL Metric | Prom Metric |
+|---------------------|---------------------------------|---------------------------------|
+| `k8s_app_meta` | `process.cpu.utilization` | `process_cpu_utilization_ratio` |
+| `k8s_app_meta` | `process.cpu.time` | `process_cpu_time_seconds_total` |
+| `k8s_app_meta` | `process.memory.usage` | `process_memory_usage_bytes` |
+| `k8s_app_meta` | `process.memory.virtual` | `process_memory_virtual_bytes` |
+| `k8s_app_meta` | `process.disk.io` | `process_disk_io_bytes_total` |
+| `k8s_app_meta` | `messaging.publish.duration` | `messaging_publish_duration_seconds` |
+| `k8s_app_meta` | `messaging.process.duration` | `messaging_process_duration_seconds` |
+| `k8s_app_meta` | `http.server.request.duration` | `http_server_request_duration_seconds` |
+| `k8s_app_meta` | `http.server.request.body.size` | `http_server_request_body_size_bytes` |
+| `k8s_app_meta` | `http.server.response.body.size` | `http_server_response_body_size_bytes` |
+| `k8s_app_meta` | `http.client.request.duration` | `http_client_request_duration_seconds` |
+| `k8s_app_meta` | `http.client.request.body.size` | `http_client_request_body_size_bytes` |
+| `k8s_app_meta` | `http.client.response.body.size` | `http_client_response_body_size_bytes` |
+| `k8s_app_meta` | `rpc.client.call.duration` | `rpc_client_call_duration_seconds` |
+| `k8s_app_meta` | `rpc.server.call.duration` | `rpc_server_call_duration_seconds` |
+| `k8s_app_meta` | `db.client.operation.duration` | `db_client_operation_duration_seconds` |
+| `k8s_app_meta` | `gpu.kernel.launch.calls` | `gpu_kernel_launch_calls_total` |
+| `k8s_app_meta` | `gpu.kernel.grid.size` | `gpu_kernel_grid_size_total` |
+| `k8s_app_meta` | `gpu.kernel.block.size` | `gpu_kernel_block_size_total` |
+| `k8s_app_meta` | `gpu.memory.allocations` | `gpu_memory_allocations_bytes_total` |
+
+## Redact sensitive query parameters
+
+YAML section: `attributes`
+
+Beyla replaces the values of known-sensitive query parameters with `REDACTED` in the `url.full` and `url.query` trace attributes.
+
+The built-in list is:
+
+`X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `AWSAccessKeyId`, `Signature`, `SecurityToken`, `X-Goog-Signature`, `sig`, `token`, `access_token`, `refresh_token`, `id_token`, `jwt`, `session`, `sid`, `signature`, `api_key`, `apikey`, `client_secret`, `secret`, `password`, `pass`, `pwd`, `reset_token`, `invite_token`, `verify_token`, `otp`, `totp`, `mfa_code`, `verification_code`, `SAMLResponse`, `assertion`, `card`, `cc`, `pan`, `cvv`, `ssn`, `tax_id`.
+
+The first eight come from the [OpenTelemetry HTTP semantic conventions](https://opentelemetry.io/docs/specs/semconv/http/http-spans/); the rest are common credential, session and payment parameter names. The list is defined in [`attr_selector.go`](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/blob/main/pkg/export/attributes/attr_selector.go) in OpenTelemetry eBPF Instrumentation.
+
+| YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `sensitive_query_params.add`<p>`BEYLA_SENSITIVE_QUERY_PARAMS_ADD`</p> | Parameter names to redact in addition to the built-in list. | list of strings | (empty) |
+| `sensitive_query_params.remove`<p>`BEYLA_SENSITIVE_QUERY_PARAMS_REMOVE`</p> | Parameter names to drop from the built-in list. | list of strings | (empty) |
+
+The effective list is the built-in list, minus the names in `remove`, plus the names in `add`. When both options are empty, the built-in list is used unchanged. In the environment variables, the names are comma separated.
+
+```yaml
+attributes:
+  sensitive_query_params:
+    add:
+      - internal_token
+      - X-Tenant-Key
+    remove:
+      - sig
+```
+
+Names are matched exactly and are case sensitive, so `token` does not cover `Token`. Percent-encoded parameter names are decoded before matching, which means `?X-Amz-Signatur%65=v` is redacted like `?X-Amz-Signature=v`; the parameter name is exported as it appeared in the request, only the value is replaced.
+
+## Configure cardinality limits
+
+YAML section: `attributes`
+
+Since Beyla instruments at the protocol level, it doesn't have access to programming language/framework information about host names or URL routes. Therefore, it's possible to create a metric cardinality explosion, without putting restrictions on how many possible values can be reported for a given metric label. To limit the possibility of cardinality explosion, Beyla has several options that control cardinality.
+
+
+| YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| `metric_span_names_limit`<p>`BEYLA_METRIC_SPAN_NAMES_LIMIT`</p> | Sets the maximum cardinality of the `span_name` attribute for span metrics. See more details below. | int | (100)    |
+| `rename_unresolved_hosts`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS`</p>  | Value used for the host and peer service graph attributes when they are empty or contain unresolved IP addresses to reduce cardinality. | string  | "unresolved" |
+| `rename_unresolved_hosts_outgoing`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_OUTGOING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "outgoing" |
+| `rename_unresolved_hosts_incoming`<p>`BEYLA_RENAME_UNRESOLVED_HOSTS_INCOMING`</p>  | Value used for the client peer service graph attribute when it's empty or contain unresolved IP addresses to reduce cardinality. | string  | "incoming" |
+
+### Host identity metrics
+
+When `application_host` is enabled, Beyla exports `traces.host.info` with the `grafana.host.id` attribute over OTLP, and `traces_host_info` with the `grafana_host_id` label over Prometheus. The value is Beyla's resolved host ID, including any `BEYLA_HOST_ID` override. No attribute selection configuration is required.
+
+The gauge has value `1` while eligible instrumented processes are active. It expires according to each exporter's metric TTL and is removed when the last active process terminates. This attribute is specific to host-info metrics; Beyla does not add it to span calls, duration, or size metrics.
+
+### Metric span name limit
+
+`metric_span_names_limit` works `per service` and only relates to span metrics (metrics option `application_span`).
+When the `span_name` cardinality surpasses this limit, the `span_name` is be reported as AGGREGATED for all future spans. If the value is set to less or equal to zero, the aggregation is disabled.
+
+### Unresolved host names
+
+`rename_unresolved_hosts`, `rename_unresolved_hosts_outgoing` and `rename_unresolved_hosts_incoming` only affect service graph metrics (metrics option `application_service_graph`).

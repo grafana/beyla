@@ -1,0 +1,999 @@
+package webhook
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/prom"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+
+	"github.com/grafana/beyla/v3/pkg/beyla"
+	svcextra "github.com/grafana/beyla/v3/pkg/services"
+	"github.com/grafana/beyla/v3/pkg/webhook/configmap"
+)
+
+func TestNewPodMutator(t *testing.T) {
+	tracesDisabled := false
+	metricsEnabled := true
+
+	tests := []struct {
+		name             string
+		cfg              *beyla.Config
+		expectedEndpoint string
+		expectedProtocol string
+	}{
+		{
+			// When the injector is given an explicit endpoint, it is used
+			// verbatim and the Beyla traces configuration is ignored.
+			name: "injector endpoint overrides traces config (grpc)",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					Endpoint: "collector.example.com:4317",
+					Protocol: otelcfg.ProtocolGRPC,
+				},
+				// Deliberately different to prove it is NOT consulted.
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://should-not-be-used:4318",
+					Protocol:       otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "collector.example.com:4317",
+			expectedProtocol: "grpc",
+		},
+		{
+			name: "injector endpoint overrides traces config (http)",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					Endpoint: "https://otel.example.com/custom",
+					Protocol: otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "https://otel.example.com/custom",
+			expectedProtocol: "http/protobuf",
+		},
+		{
+			// No injector endpoint: fall back to deriving the destination from
+			// Beyla's own traces export configuration.
+			name: "falls back to traces http endpoint",
+			cfg: &beyla.Config{
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://otel-collector:4318",
+					Protocol:       otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4318",
+			expectedProtocol: "http/protobuf",
+		},
+		{
+			name: "falls back to traces grpc endpoint",
+			cfg: &beyla.Config{
+				Traces: otelcfg.TracesConfig{
+					CommonEndpoint: "http://otel-collector:4317",
+					Protocol:       otelcfg.ProtocolGRPC,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4317",
+			expectedProtocol: "grpc",
+		},
+		{
+			name: "uses metrics endpoint for metrics-only injection",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{ExportedSignals: configmap.SDKExportedSignals{
+					Traces:  &tracesDisabled,
+					Metrics: &metricsEnabled,
+				}},
+				OTELMetrics: otelcfg.MetricsConfig{
+					MetricsEndpoint: "http://otel-collector:4318/v1/metrics",
+					Protocol:        otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4318",
+			expectedProtocol: "http/protobuf",
+		},
+		{
+			// An explicit (non-common) traces endpoint keeps its path, but the
+			// /v1/traces signal suffix is trimmed off.
+			name: "trims /v1/traces from explicit traces endpoint",
+			cfg: &beyla.Config{
+				Traces: otelcfg.TracesConfig{
+					TracesEndpoint: "http://otel-collector:4318/v1/traces",
+					Protocol:       otelcfg.ProtocolHTTPProtobuf,
+				},
+			},
+			expectedEndpoint: "http://otel-collector:4318",
+			expectedProtocol: "http/protobuf",
+		},
+		{
+			// Injector endpoint set but no protocol: protocol defaults to
+			// http/protobuf rather than being left empty.
+			name: "defaults protocol when injector protocol unset",
+			cfg: &beyla.Config{
+				Injector: beyla.SDKInject{
+					Endpoint: "collector.example.com:4317",
+				},
+			},
+			expectedEndpoint: "collector.example.com:4317",
+			expectedProtocol: "http/protobuf",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matcher := NewPodMatcher(tt.cfg)
+
+			mutator, err := NewPodMutator(tt.cfg, matcher, nil)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedEndpoint, mutator.Endpoint())
+			assert.Equal(t, tt.expectedProtocol, mutator.Protocol())
+		})
+	}
+}
+
+func TestErrorResponse(t *testing.T) {
+	tests := []struct {
+		name     string
+		message  string
+		expected string
+	}{
+		{
+			name:     "simple error message",
+			message:  "something went wrong",
+			expected: "something went wrong",
+		},
+		{
+			name:     "empty message",
+			message:  "",
+			expected: "",
+		},
+		{
+			name:     "long error message",
+			message:  "this is a very long error message that describes what went wrong in great detail",
+			expected: "this is a very long error message that describes what went wrong in great detail",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			admResponse := &admissionv1.AdmissionResponse{
+				Allowed: true, // Start as allowed
+			}
+
+			errorResponse(admResponse, tt.message)
+
+			assert.False(t, admResponse.Allowed)
+			assert.NotNil(t, admResponse.Result)
+			assert.Equal(t, tt.expected, admResponse.Result.Message)
+		})
+	}
+}
+
+func TestPodMutator_CanInstrument(t *testing.T) {
+	mutator := &PodMutator{
+		cfg: &beyla.Config{
+			Injector: beyla.SDKInject{
+				EnabledSDKs: []svcextra.InstrumentableType{
+					{InstrumentableType: svc.InstrumentableJava},
+					{InstrumentableType: svc.InstrumentableDotnet},
+					{InstrumentableType: svc.InstrumentableNodejs},
+					{InstrumentableType: svc.InstrumentablePython},
+					{InstrumentableType: svc.InstrumentableRuby},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		kind     svc.InstrumentableType
+		expected bool
+	}{
+		{
+			name:     "Java is supported",
+			kind:     svc.InstrumentableJava,
+			expected: true,
+		},
+		{
+			name:     "Dotnet is supported",
+			kind:     svc.InstrumentableDotnet,
+			expected: true,
+		},
+		{
+			name:     "NodeJS is supported",
+			kind:     svc.InstrumentableNodejs,
+			expected: true,
+		},
+		{
+			name:     "Python is supported",
+			kind:     svc.InstrumentablePython,
+			expected: true,
+		},
+		{
+			name:     "Go is not supported",
+			kind:     svc.InstrumentableGolang,
+			expected: false,
+		},
+		{
+			name:     "Ruby is supported",
+			kind:     svc.InstrumentableRuby,
+			expected: true,
+		},
+		{
+			name:     "Generic is not supported",
+			kind:     svc.InstrumentableGeneric,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mutator.CanInstrumentLanguage(tt.kind)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPodMutator_PreloadsSomethingElse(t *testing.T) {
+	mutator := &PodMutator{}
+
+	tests := []struct {
+		name     string
+		info     *ProcessInfo
+		expected bool
+	}{
+		{
+			name: "no LD_PRELOAD set",
+			info: &ProcessInfo{
+				env: map[string]string{},
+			},
+			expected: false,
+		},
+		{
+			name: "LD_PRELOAD set to our injector",
+			info: &ProcessInfo{
+				env: map[string]string{
+					envVarLdPreloadName: envVarLdPreloadValue,
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "LD_PRELOAD set to something else",
+			info: &ProcessInfo{
+				env: map[string]string{
+					envVarLdPreloadName: "/some/other/library.so",
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "LD_PRELOAD set to multiple libraries",
+			info: &ProcessInfo{
+				env: map[string]string{
+					envVarLdPreloadName: "/lib1.so:/lib2.so",
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "LD_PRELOAD empty string",
+			info: &ProcessInfo{
+				env: map[string]string{
+					envVarLdPreloadName: "",
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "nil env map",
+			info: &ProcessInfo{
+				env: nil,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mutator.PreloadsSomethingElse(tt.info)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsLDPreloadConflict(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      []corev1.EnvVar
+		expected bool
+	}{
+		{
+			name:     "no LD_PRELOAD - not a conflict",
+			env:      nil,
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD empty string - not a conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: ""}},
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD set to Beyla value - not a conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: envVarLdPreloadValue}},
+			expected: false,
+		},
+		{
+			name:     "LD_PRELOAD set to other library - conflict",
+			env:      []corev1.EnvVar{{Name: envVarLdPreloadName, Value: "/some/other/lib.so"}},
+			expected: true,
+		},
+		{
+			name:     "unrelated env vars only - not a conflict",
+			env:      []corev1.EnvVar{{Name: "OTHER_VAR", Value: "/lib.so"}},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &corev1.Container{Env: tt.env}
+			assert.Equal(t, tt.expected, isLDPreloadConflict(c))
+		})
+	}
+}
+
+func TestDetectLanguage(t *testing.T) {
+	t.Run("languageFromImageName", func(t *testing.T) {
+		tests := []struct {
+			image string
+			want  string
+		}{
+			// Node.js
+			{"node:20", "nodejs"},
+			{"node:alpine", "nodejs"},
+			// node-exporter must NOT match as nodejs (fixed false positive)
+			{"node-exporter:latest", ""},
+			{"prom/node-exporter:v1.8.0", ""},
+			// Python
+			{"python:3.12", "python"},
+			{"python:3.12@sha256:abcdef1234", "python"},
+			// Ruby
+			{"ruby:3.3", "ruby"},
+			{"ruby:3.4-alpine", "ruby"},
+			// Java
+			{"openjdk:17", "java"},
+			{"eclipse-temurin:21", "java"},
+			{"amazoncorretto:17", "java"},
+			// .NET — only the last path component is matched, so "aspnet" works but bare "runtime" does not
+			{"mcr.microsoft.com/dotnet/aspnet:8.0", "dotnet"},
+			{"dotnet/aspnet:8.0", "dotnet"},
+			{"mcr.microsoft.com/dotnet/runtime:8.0", ""},
+			// Registry with port — must not strip the image name component
+			{"registry:5000/myapp:latest", ""},
+			{"registry:5000/python:latest", "python"},
+			// No language cue
+			{"nginx:latest", ""},
+			{"alpine:3.18", ""},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.image, func(t *testing.T) {
+				assert.Equal(t, tt.want, languageFromImageName(tt.image))
+			})
+		}
+	})
+
+	t.Run("detectLanguageFromPodSpec_command_args", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			image   string
+			command []string
+			args    []string
+			want    string
+		}{
+			{
+				name:    "path_stripped_python",
+				image:   "ubuntu:22.04",
+				command: []string{"/usr/bin/python3"},
+				want:    "python",
+			},
+			{
+				name:    "node_command",
+				image:   "ubuntu:22.04",
+				command: []string{"node"},
+				args:    []string{"index.js"},
+				want:    "nodejs",
+			},
+			{
+				name:    "ruby_command",
+				image:   "ubuntu:22.04",
+				command: []string{"/usr/bin/ruby"},
+				want:    "ruby",
+			},
+			{
+				// node-exporter as a command must NOT match nodejs
+				name:    "node_exporter_command_not_nodejs",
+				image:   "ubuntu:22.04",
+				command: []string{"node-exporter"},
+				want:    "",
+			},
+			{
+				name:  "image_takes_priority_over_command",
+				image: "python:3.12",
+				args:  []string{"node"},
+				want:  "python",
+			},
+			{
+				name:  "no_cues",
+				image: "ubuntu:22.04",
+				want:  "",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				p := &corev1.Pod{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Image: tt.image, Command: tt.command, Args: tt.args},
+						},
+					},
+				}
+				assert.Equal(t, tt.want, detectLanguageFromPodSpec(p))
+			})
+		}
+	})
+}
+
+func TestPodMutator_AddLabel(t *testing.T) {
+	tests := []struct {
+		name     string
+		meta     *metav1.ObjectMeta
+		key      string
+		value    string
+		expected map[string]string
+	}{
+		{
+			name:  "add label to empty labels",
+			meta:  &metav1.ObjectMeta{},
+			key:   "test-key",
+			value: "test-value",
+			expected: map[string]string{
+				"test-key": "test-value",
+			},
+		},
+		{
+			name: "add label to existing labels",
+			meta: &metav1.ObjectMeta{
+				Labels: map[string]string{
+					"existing": "label",
+				},
+			},
+			key:   "new-key",
+			value: "new-value",
+			expected: map[string]string{
+				"existing": "label",
+				"new-key":  "new-value",
+			},
+		},
+		{
+			name: "overwrite existing label",
+			meta: &metav1.ObjectMeta{
+				Labels: map[string]string{
+					"test-key": "old-value",
+				},
+			},
+			key:   "test-key",
+			value: "new-value",
+			expected: map[string]string{
+				"test-key": "new-value",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mutator := &PodMutator{}
+			mutator.addLabel(tt.meta, tt.key, tt.value)
+			assert.Equal(t, tt.expected, tt.meta.Labels)
+		})
+	}
+}
+
+func TestPodMutator_GetLabel(t *testing.T) {
+	tests := []struct {
+		name          string
+		meta          *metav1.ObjectMeta
+		key           string
+		expectedValue string
+		expectedOk    bool
+	}{
+		{
+			name: "get existing label",
+			meta: &metav1.ObjectMeta{
+				Labels: map[string]string{
+					"test-key": "test-value",
+				},
+			},
+			key:           "test-key",
+			expectedValue: "test-value",
+			expectedOk:    true,
+		},
+		{
+			name: "get non-existent label",
+			meta: &metav1.ObjectMeta{
+				Labels: map[string]string{
+					"other-key": "other-value",
+				},
+			},
+			key:           "test-key",
+			expectedValue: "",
+			expectedOk:    false,
+		},
+		{
+			name:          "get label from nil labels",
+			meta:          &metav1.ObjectMeta{},
+			key:           "test-key",
+			expectedValue: "",
+			expectedOk:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mutator := &PodMutator{}
+			value, ok := mutator.getLabel(tt.meta, tt.key)
+			assert.Equal(t, tt.expectedValue, value)
+			assert.Equal(t, tt.expectedOk, ok)
+		})
+	}
+}
+
+func TestFindEnvVar(t *testing.T) {
+	tests := []struct {
+		name        string
+		container   *corev1.Container
+		envName     string
+		expectedPos int
+		expectedOk  bool
+	}{
+		{
+			name: "find existing env var at position 0",
+			container: &corev1.Container{
+				Env: []corev1.EnvVar{
+					{Name: "TEST_VAR", Value: "test-value"},
+					{Name: "OTHER_VAR", Value: "other-value"},
+				},
+			},
+			envName:     "TEST_VAR",
+			expectedPos: 0,
+			expectedOk:  true,
+		},
+		{
+			name: "find existing env var at position 1",
+			container: &corev1.Container{
+				Env: []corev1.EnvVar{
+					{Name: "OTHER_VAR", Value: "other-value"},
+					{Name: "TEST_VAR", Value: "test-value"},
+				},
+			},
+			envName:     "TEST_VAR",
+			expectedPos: 1,
+			expectedOk:  true,
+		},
+		{
+			name: "env var not found",
+			container: &corev1.Container{
+				Env: []corev1.EnvVar{
+					{Name: "OTHER_VAR", Value: "other-value"},
+				},
+			},
+			envName:     "TEST_VAR",
+			expectedPos: -1,
+			expectedOk:  false,
+		},
+		{
+			name:        "empty env list",
+			container:   &corev1.Container{},
+			envName:     "TEST_VAR",
+			expectedPos: -1,
+			expectedOk:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pos, ok := findEnvVar(tt.container, tt.envName)
+			assert.Equal(t, tt.expectedPos, pos)
+			assert.Equal(t, tt.expectedOk, ok)
+		})
+	}
+}
+
+func TestSetEnvVar(t *testing.T) {
+	tests := []struct {
+		name        string
+		container   *corev1.Container
+		envVarName  string
+		value       string
+		expectedEnv []corev1.EnvVar
+	}{
+		{
+			name:       "add new env var to empty list",
+			container:  &corev1.Container{},
+			envVarName: "TEST_VAR",
+			value:      "test-value",
+			expectedEnv: []corev1.EnvVar{
+				{Name: "TEST_VAR", Value: "test-value"},
+			},
+		},
+		{
+			name: "add new env var to existing list",
+			container: &corev1.Container{
+				Env: []corev1.EnvVar{
+					{Name: "EXISTING", Value: "existing-value"},
+				},
+			},
+			envVarName: "TEST_VAR",
+			value:      "test-value",
+			expectedEnv: []corev1.EnvVar{
+				{Name: "EXISTING", Value: "existing-value"},
+				{Name: "TEST_VAR", Value: "test-value"},
+			},
+		},
+		{
+			name: "overwrite existing env var",
+			container: &corev1.Container{
+				Env: []corev1.EnvVar{
+					{Name: "TEST_VAR", Value: "old-value"},
+				},
+			},
+			envVarName: "TEST_VAR",
+			value:      "new-value",
+			expectedEnv: []corev1.EnvVar{
+				{Name: "TEST_VAR", Value: "new-value"},
+			},
+		},
+		{
+			name: "overwrite env var with ValueFrom",
+			container: &corev1.Container{
+				Env: []corev1.EnvVar{
+					{
+						Name: "TEST_VAR",
+						ValueFrom: &corev1.EnvVarSource{
+							FieldRef: &corev1.ObjectFieldSelector{
+								FieldPath: "metadata.name",
+							},
+						},
+					},
+				},
+			},
+			envVarName: "TEST_VAR",
+			value:      "new-value",
+			expectedEnv: []corev1.EnvVar{
+				{Name: "TEST_VAR", Value: "new-value", ValueFrom: nil},
+			},
+		},
+		{
+			name: "don't add env var with empty value",
+			container: &corev1.Container{
+				Env: []corev1.EnvVar{
+					{Name: "EXISTING", Value: "existing-value"},
+				},
+			},
+			envVarName: "TEST_VAR",
+			value:      "",
+			expectedEnv: []corev1.EnvVar{
+				{Name: "EXISTING", Value: "existing-value"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setEnvVar(tt.container, tt.envVarName, tt.value)
+			assert.Equal(t, tt.expectedEnv, tt.container.Env)
+		})
+	}
+}
+
+func TestOwnersFrom(t *testing.T) {
+	tests := []struct {
+		name        string
+		meta        *metav1.ObjectMeta
+		expected    int
+		checkOwners func(t *testing.T, owners []*informer.Owner)
+	}{
+		{
+			name: "no owner references",
+			meta: &metav1.ObjectMeta{
+				Name: "test-pod",
+			},
+			expected: 1,
+			checkOwners: func(t *testing.T, owners []*informer.Owner) {
+				assert.Equal(t, "Pod", owners[0].Kind)
+				assert.Equal(t, "test-pod", owners[0].Name)
+			},
+		},
+		{
+			name: "single owner reference",
+			meta: &metav1.ObjectMeta{
+				Name: "test-pod",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "StatefulSet",
+						Name:       "test-statefulset",
+					},
+				},
+			},
+			expected: 1,
+			checkOwners: func(t *testing.T, owners []*informer.Owner) {
+				assert.Equal(t, "StatefulSet", owners[0].Kind)
+				assert.Equal(t, "test-statefulset", owners[0].Name)
+			},
+		},
+		{
+			name: "replicaset owner extracts deployment",
+			meta: &metav1.ObjectMeta{
+				Name: "test-pod",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "my-deployment-abc123",
+					},
+				},
+			},
+			expected: 2,
+			checkOwners: func(t *testing.T, owners []*informer.Owner) {
+				assert.Equal(t, "ReplicaSet", owners[0].Kind)
+				assert.Equal(t, "my-deployment-abc123", owners[0].Name)
+				assert.Equal(t, "Deployment", owners[1].Kind)
+				assert.Equal(t, "my-deployment", owners[1].Name)
+			},
+		},
+		{
+			name: "job owner extracts cronjob",
+			meta: &metav1.ObjectMeta{
+				Name: "test-pod",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "batch/v1",
+						Kind:       "Job",
+						Name:       "my-cronjob-1234567890",
+					},
+				},
+			},
+			expected: 2,
+			checkOwners: func(t *testing.T, owners []*informer.Owner) {
+				assert.Equal(t, "Job", owners[0].Kind)
+				assert.Equal(t, "my-cronjob-1234567890", owners[0].Name)
+				assert.Equal(t, "CronJob", owners[1].Kind)
+				assert.Equal(t, "my-cronjob", owners[1].Name)
+			},
+		},
+		{
+			name: "multiple owner references",
+			meta: &metav1.ObjectMeta{
+				Name: "test-pod",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "DaemonSet",
+						Name:       "my-daemonset",
+					},
+					{
+						APIVersion: "v1",
+						Kind:       "Node",
+						Name:       "my-node",
+					},
+				},
+			},
+			expected: 2,
+			checkOwners: func(t *testing.T, owners []*informer.Owner) {
+				assert.Equal(t, "DaemonSet", owners[0].Kind)
+				assert.Equal(t, "my-daemonset", owners[0].Name)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			owners := ownersFrom(tt.meta)
+			assert.Len(t, owners, tt.expected)
+			if tt.checkOwners != nil {
+				tt.checkOwners(t, owners)
+			}
+		})
+	}
+}
+
+func TestProcessMetadata(t *testing.T) {
+	tests := []struct {
+		name             string
+		meta             *metav1.ObjectMeta
+		checkMetadata    map[string]string
+		checkLabels      map[string]string
+		checkAnnotations map[string]string
+		checkOwnerChain  []configmap.Owner
+	}{
+		{
+			name: "simple pod metadata",
+			meta: &metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+				Labels: map[string]string{
+					"app": "test-app",
+				},
+				Annotations: map[string]string{
+					"annotation": "value",
+				},
+			},
+			checkMetadata: map[string]string{
+				services.AttrNamespace: "default",
+				services.AttrPodName:   "test-pod",
+				services.AttrOwnerName: "test-pod",
+			},
+			checkLabels: map[string]string{
+				"app": "test-app",
+			},
+			checkAnnotations: map[string]string{
+				"annotation": "value",
+			},
+		},
+		{
+			name: "pod with replicaset owner",
+			meta: &metav1.ObjectMeta{
+				Name:      "test-pod-abc",
+				Namespace: "production",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "my-deployment-xyz123",
+					},
+				},
+			},
+			checkMetadata: map[string]string{
+				services.AttrNamespace: "production",
+				services.AttrPodName:   "test-pod-abc",
+				services.AttrOwnerName: "my-deployment",
+			},
+		},
+		{
+			name: "pod with job owner",
+			meta: &metav1.ObjectMeta{
+				Name:      "test-pod-xyz",
+				Namespace: "batch-jobs",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "batch/v1",
+						Kind:       "Job",
+						Name:       "my-cronjob-1234567890",
+					},
+				},
+			},
+			checkMetadata: map[string]string{
+				services.AttrNamespace: "batch-jobs",
+				services.AttrPodName:   "test-pod-xyz",
+				services.AttrOwnerName: "my-cronjob",
+			},
+		},
+		{
+			// ownersFrom heuristically expands a ReplicaSet into [ReplicaSet, Deployment].
+			// ownerChain must contain both so OwnerName/OwnerKind selectors can match either.
+			name: "pod with replicaset expands to deployment chain",
+			meta: &metav1.ObjectMeta{
+				Name:      "my-pod-abc-xyz",
+				Namespace: "prod",
+				OwnerReferences: []metav1.OwnerReference{
+					{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "my-deploy-abc"},
+				},
+			},
+			checkOwnerChain: []configmap.Owner{
+				{Name: "my-deploy-abc", Kind: "ReplicaSet"},
+				{Name: "my-deploy", Kind: "Deployment"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := processMetadata(tt.meta)
+
+			assert.NotNil(t, info)
+
+			if tt.checkMetadata != nil {
+				for key, expected := range tt.checkMetadata {
+					actual, ok := info.metadata[key]
+					assert.True(t, ok, "metadata key %s not found", key)
+					assert.Equal(t, expected, actual, "metadata key %s has wrong value", key)
+				}
+			}
+
+			if tt.checkLabels != nil {
+				assert.Equal(t, tt.checkLabels, info.podLabels)
+			}
+
+			if tt.checkAnnotations != nil {
+				assert.Equal(t, tt.checkAnnotations, info.podAnnotations)
+			}
+
+			if tt.checkOwnerChain != nil {
+				assert.Equal(t, tt.checkOwnerChain, info.ownerChain)
+			}
+		})
+	}
+}
+
+func TestProtocolEndpoint(t *testing.T) {
+	type testCase struct {
+		name           string
+		cfg            beyla.Config
+		expectEndpoint string
+		expectProtocol string
+	}
+	// TODO: replace by new(false) after we upgrade to Go 1.26
+	falseVal := false
+	for _, tc := range []testCase{{
+		name:           "Override endpoint and proto",
+		cfg:            beyla.Config{Injector: beyla.SDKInject{Endpoint: "http://foo:4356", Protocol: "grpc"}},
+		expectEndpoint: "http://foo:4356",
+		expectProtocol: "grpc",
+	}, {
+		name:           "Default protocol",
+		cfg:            beyla.Config{Injector: beyla.SDKInject{Endpoint: "http://foo:4356"}},
+		expectEndpoint: "http://foo:4356",
+		expectProtocol: "http/protobuf",
+	}, {
+		name: "Defines both OTLP endpoints. Traces enabled",
+		cfg: beyla.Config{
+			Traces:      otelcfg.TracesConfig{Protocol: "http/json", TracesEndpoint: "http://traces:4356/v1/traces"},
+			OTELMetrics: otelcfg.MetricsConfig{MetricsEndpoint: "http://metrics:4356/v1/metrics"},
+		},
+		expectProtocol: "http/json",
+		expectEndpoint: "http://traces:4356",
+	}, {
+		name: "Defines both OTLP endpoints. Traces disabled",
+		cfg: beyla.Config{
+			Injector:    beyla.SDKInject{ExportedSignals: configmap.SDKExportedSignals{Traces: &falseVal}},
+			Traces:      otelcfg.TracesConfig{TracesEndpoint: "http://traces:4356/v1/traces"},
+			OTELMetrics: otelcfg.MetricsConfig{Protocol: "http/json", MetricsEndpoint: "http://metrics:4356/v1/metrics"},
+		},
+		expectProtocol: "http/json",
+		expectEndpoint: "http://metrics:4356",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			protocol, endpoint, err := protoEndpoint(&tc.cfg)
+			require.NoError(t, err)
+			assert.EqualValues(t, tc.expectProtocol, protocol)
+			assert.Equal(t, tc.expectEndpoint, endpoint)
+		})
+	}
+}
+
+func TestProtocolEndpoit_Error(t *testing.T) {
+	_, _, err := protoEndpoint(&beyla.Config{Prometheus: prom.PrometheusConfig{Port: 9090}})
+	assert.Error(t, err)
+}
+
+func TestProtocolEndpointDoesNotUseDisabledMetrics(t *testing.T) {
+	falseVal := false
+	_, _, err := protoEndpoint(&beyla.Config{
+		Injector: beyla.SDKInject{ExportedSignals: configmap.SDKExportedSignals{
+			Traces:  &falseVal,
+			Metrics: &falseVal,
+		}},
+		OTELMetrics: otelcfg.MetricsConfig{MetricsEndpoint: "http://metrics:4318/v1/metrics"},
+	})
+	assert.Error(t, err)
+}

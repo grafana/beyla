@@ -1,0 +1,525 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package kafkaparser // import "go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
+
+import (
+	"encoding/binary"
+	"errors"
+
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
+)
+
+// Protocol details
+// https://kafka.apache.org/41/design/protocol/
+
+const (
+	Int8Len            = 1
+	Int16Len           = 2
+	Int32Len           = 4
+	Int64Len           = 8
+	UUIDLen            = 16
+	MinKafkaRequestLen = // 14
+	Int32Len +         // MessageSize
+		Int16Len + // APIKey
+		Int16Len + // APIVersion
+		Int32Len + // CorrelationID
+		Int16Len // Length of ClientID
+	MinKafkaResponseLen = Int32Len + // MessageSize
+		Int32Len // CorrelationID
+	KafkaMaxPayloadLen = 20 * 1024 * 1024 // 20 MB max, 1MB is default for most Kafka installations
+)
+
+var (
+	errKafkaPacketTooShortForRequestHeader  = errors.New("packet too short for Kafka request header")
+	errKafkaInvalidClientIDSize             = errors.New("invalid client ID size")
+	errKafkaPacketTooShortForClientID       = errors.New("packet too short for client ID")
+	errKafkaPacketTooShortForResponseHeader = errors.New("packet too short for Kafka response header")
+	errKafkaTaggedFieldValueExceedsBuffer   = errors.New("tagged field value exceeds buffer")
+	errKafkaVarintIncomplete                = errors.New("data ended before varint was complete")
+	errKafkaIllegalVarint                   = errors.New("illegal varint")
+	errKafkaReqMessageSizeTooSmall          = errors.New("invalid Kafka request header: message size too small")
+	errKafkaReqAPIVersionNegative           = errors.New("invalid Kafka request header: API version is negative")
+	errKafkaReqMessageSizeTooLarge          = errors.New("invalid Kafka request header: message size exceeds maximum payload length")
+	errKafkaReqUnsupportedFetchVersion      = errors.New("invalid Kafka request header: unsupported API key version for Fetch")
+	errKafkaReqUnsupportedProduceVersion    = errors.New("invalid Kafka request header: unsupported API key version for Produce")
+	errKafkaReqUnsupportedMetadataVersion   = errors.New("invalid Kafka request header: unsupported API key version for Metadata")
+	errKafkaReqUnsupportedGroupVersion      = errors.New("invalid Kafka request header: unsupported API key version for group request")
+	errKafkaReqUnsupportedAPIKey            = errors.New("invalid Kafka request header: unsupported API key")
+	errKafkaReqCorrelationIDNegative        = errors.New("invalid Kafka request header: correlation ID is negative")
+	errKafkaRespSizeTooSmall                = errors.New("invalid Kafka response header: size too small")
+	errKafkaRespMessageSizeTooLarge         = errors.New("invalid Kafka response header: message size exceeds maximum payload length")
+	errKafkaRespCorrelationIDNegative       = errors.New("invalid Kafka response header: correlation ID is negative")
+	errKafkaRespCorrelationIDMismatch       = errors.New("invalid Kafka response header: correlation ID does not match request header")
+	errKafkaPacketTooShortForTopicUUID      = errors.New("packet too short for topic UUID")
+	errKafkaStringSizeExceedsPacket         = errors.New("string size exceeds packet size")
+	errKafkaInvalidCharactersInString       = errors.New("invalid characters in string")
+	errKafkaPacketTooShortForStringLength   = errors.New("packet too short for string length")
+	errKafkaInvalidStringSize               = errors.New("invalid string size")
+	errKafkaDataTooShortForInt16            = errors.New("data too short for int16")
+	errKafkaDataTooShortForInt32            = errors.New("data too short for int32")
+	errKafkaDataTooShortForInt64            = errors.New("data too short for int64")
+)
+
+type KafkaAPIKey int8
+
+// https://kafka.apache.org/protocol#protocol_api_keys
+const (
+	APIKeyProduce      KafkaAPIKey = 0
+	APIKeyFetch        KafkaAPIKey = 1
+	APIKeyMetadata     KafkaAPIKey = 3
+	APIKeyOffsetCommit KafkaAPIKey = 8
+	APIKeyOffsetFetch  KafkaAPIKey = 9
+	APIKeyJoinGroup    KafkaAPIKey = 11
+	APIKeyHeartbeat    KafkaAPIKey = 12
+	APIKeyLeaveGroup   KafkaAPIKey = 13
+	APIKeySyncGroup    KafkaAPIKey = 14
+	// KIP-848 consumer group protocol (preview since Kafka 3.7, GA in 4.0; client opts in
+	// with group.protocol=consumer).
+	APIKeyConsumerGroupHeartbeat KafkaAPIKey = 68
+)
+
+type UUID [UUIDLen]byte
+
+// KafkaRequestHeader is a zero-copy view over a *largebuf.LargeBuffer.
+// Fixed-width fields are read on demand via scalar accessors; ClientID is
+// read on demand from offset 14 using the stored length.
+type KafkaRequestHeader struct {
+	lb          *largebuf.LargeBuffer
+	bodyOffset  int32 // absolute offset of the first request-body byte
+	clientIDLen int16 // ≥ 0 guaranteed after successful construction
+}
+
+func (h KafkaRequestHeader) MessageSize() int32 {
+	v, _ := h.lb.I32BEAt(0)
+	return v
+}
+
+func (h KafkaRequestHeader) APIKey() KafkaAPIKey {
+	v, _ := h.lb.I16BEAt(4)
+	return KafkaAPIKey(v)
+}
+
+func (h KafkaRequestHeader) APIVersion() int16 {
+	v, _ := h.lb.I16BEAt(6)
+	return v
+}
+
+func (h KafkaRequestHeader) CorrelationID() int32 {
+	v, _ := h.lb.I32BEAt(8)
+	return v
+}
+
+// ClientID reads the client ID on demand from the underlying buffer.
+// The Kafka wire format stores the length as an INT16 at offset 12,
+// followed by N UTF-8 bytes starting at offset 14.
+func (h KafkaRequestHeader) ClientID() string {
+	if h.clientIDLen == 0 {
+		return ""
+	}
+	b, _ := h.lb.UnsafeViewAt(14, int(h.clientIDLen))
+	return string(b)
+}
+
+func (h KafkaRequestHeader) NewBodyReader() (largebuf.LargeBufferReader, error) {
+	r := h.lb.NewReader()
+
+	err := r.Skip(int(h.bodyOffset))
+	if err != nil {
+		return largebuf.LargeBufferReader{}, err
+	}
+
+	return r, nil
+}
+
+func NewKafkaRequestHeader(lb *largebuf.LargeBuffer) (KafkaRequestHeader, error) {
+	if lb.Len() < MinKafkaRequestLen {
+		return KafkaRequestHeader{}, errKafkaPacketTooShortForRequestHeader
+	}
+
+	h := KafkaRequestHeader{lb: lb}
+
+	if err := h.validate(); err != nil {
+		return KafkaRequestHeader{}, err
+	}
+
+	// ClientID: length at offset 12 (INT16), data at offset 14.
+	clientIDLen, err := lb.I16BEAt(12)
+	if err != nil {
+		return KafkaRequestHeader{}, err
+	}
+
+	if clientIDLen < 0 {
+		return KafkaRequestHeader{}, errKafkaInvalidClientIDSize
+	}
+
+	clientIDEnd := 14 + int(clientIDLen)
+	if lb.Len() < clientIDEnd {
+		return KafkaRequestHeader{}, errKafkaPacketTooShortForClientID
+	}
+
+	h.clientIDLen = clientIDLen
+
+	bodyOff := clientIDEnd
+	if isFlexible(h) {
+		bodyOff, err = skipTaggedFieldsAt(lb, clientIDEnd)
+		if err != nil {
+			return KafkaRequestHeader{}, err
+		}
+	}
+	h.bodyOffset = int32(bodyOff)
+	return h, nil
+}
+
+type KafkaResponseHeader struct {
+	MessageSize   int32
+	CorrelationID int32
+}
+
+func ParseKafkaResponseHeader(r *largebuf.LargeBufferReader, requestHeader KafkaRequestHeader) (*KafkaResponseHeader, error) {
+	if r.Remaining() < MinKafkaResponseLen {
+		return nil, errKafkaPacketTooShortForResponseHeader
+	}
+	msgSizeBytes, err := r.ReadN(Int32Len)
+	if err != nil {
+		return nil, err
+	}
+	correlationIDBytes, err := r.ReadN(Int32Len)
+	if err != nil {
+		return nil, err
+	}
+	header := &KafkaResponseHeader{
+		MessageSize:   int32(binary.BigEndian.Uint32(msgSizeBytes)),
+		CorrelationID: int32(binary.BigEndian.Uint32(correlationIDBytes)),
+	}
+
+	if err := validateKafkaResponseHeader(header, requestHeader); err != nil {
+		return nil, err
+	}
+	if err := skipTaggedFields(r, requestHeader); err != nil {
+		return nil, err
+	}
+	return header, nil
+}
+
+func skipTaggedFields(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	if !isFlexible(header) {
+		return nil // no tagged fields to skip for non-flexible versions
+	}
+	taggedFieldsLen, err := readUnsignedVarint(r)
+	if err != nil {
+		return err
+	}
+	for range taggedFieldsLen {
+		if _, err = readUnsignedVarint(r); err != nil { // read tag ID
+			return err
+		}
+		tagLen, err := readUnsignedVarint(r) // read tag length
+		if err != nil {
+			return err
+		}
+		if err = r.Skip(tagLen); err != nil { // skip tag value
+			return err
+		}
+	}
+	return nil
+}
+
+// skipTaggedFieldsAt skips flexible-version tagged fields starting at absolute
+// offset off in lb, returning the new absolute offset after all tagged fields.
+func skipTaggedFieldsAt(lb *largebuf.LargeBuffer, off int) (int, error) {
+	count, n, err := readUVarintAt(lb, off)
+	if err != nil {
+		return 0, err
+	}
+	off += n
+	for range count {
+		_, n, err = readUVarintAt(lb, off) // tag ID
+		if err != nil {
+			return 0, err
+		}
+		off += n
+		tagLen, n, err := readUVarintAt(lb, off) // tag length
+		if err != nil {
+			return 0, err
+		}
+		if tagLen < 0 || tagLen > lb.Len()-off-n {
+			return 0, errKafkaTaggedFieldValueExceedsBuffer
+		}
+		off += n + tagLen
+	}
+	return off, nil
+}
+
+// readUVarintAt reads an unsigned varint from lb at absolute offset off.
+// Returns value, bytes consumed, and any error.
+func readUVarintAt(lb *largebuf.LargeBuffer, off int) (int, int, error) {
+	value, shift, n := 0, 0, 0
+	for {
+		b, err := lb.U8At(off + n)
+		if err != nil {
+			return 0, 0, errKafkaVarintIncomplete
+		}
+		n++
+		if b&0x80 == 0 {
+			value |= int(b) << shift
+			return value, n, nil
+		}
+		value |= int(b&0x7F) << shift
+		shift += 7
+		if shift > 28 {
+			return 0, 0, errKafkaIllegalVarint
+		}
+	}
+}
+
+func (h KafkaRequestHeader) validate() error {
+	if h.MessageSize() < int32(MinKafkaRequestLen) {
+		return errKafkaReqMessageSizeTooSmall
+	}
+
+	if h.APIVersion() < 0 {
+		return errKafkaReqAPIVersionNegative
+	}
+
+	if h.MessageSize() > KafkaMaxPayloadLen {
+		return errKafkaReqMessageSizeTooLarge
+	}
+
+	switch h.APIKey() {
+	case APIKeyFetch:
+		if h.APIVersion() > 18 { // latest: Fetch Request (Version: 17)
+			return errKafkaReqUnsupportedFetchVersion
+		}
+	case APIKeyProduce:
+		if h.APIVersion() > 13 { // latest: Produce Request (Version: 13)
+			return errKafkaReqUnsupportedProduceVersion
+		}
+	case APIKeyMetadata:
+		if h.APIVersion() < 10 || h.APIVersion() > 13 { // latest: Metadata Request (Version: 13), only versions 10-13 contain topic_id which we are interested in
+			return errKafkaReqUnsupportedMetadataVersion
+		}
+	// Group-coordination and offset APIs (parsed by ParseGroupRequest); latest versions from
+	// the upstream *Request.json schemas. FindCoordinator (10) is left out on purpose: its
+	// key is a group id only when KeyType == 0 (1 = transaction, 2 = share group), and the
+	// JoinGroup/Heartbeat that follow carry the group id anyway.
+	case APIKeyOffsetCommit:
+		// validVersions 2-10: v0/v1 lack generation_id/member_id and would misparse
+		if h.APIVersion() < 2 || h.APIVersion() > 10 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyOffsetFetch:
+		if h.APIVersion() < 1 || h.APIVersion() > 10 { // validVersions 1-10
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyJoinGroup:
+		if h.APIVersion() > 9 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyLeaveGroup, APIKeySyncGroup:
+		if h.APIVersion() > 5 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyHeartbeat:
+		if h.APIVersion() > 4 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	case APIKeyConsumerGroupHeartbeat:
+		if h.APIVersion() > 1 {
+			return errKafkaReqUnsupportedGroupVersion
+		}
+	default:
+		return errKafkaReqUnsupportedAPIKey
+	}
+	if h.CorrelationID() < 0 {
+		return errKafkaReqCorrelationIDNegative
+	}
+	return nil
+}
+
+func validateKafkaResponseHeader(header *KafkaResponseHeader, requestHeader KafkaRequestHeader) error {
+	if header.MessageSize < MinKafkaResponseLen {
+		return errKafkaRespSizeTooSmall
+	}
+
+	if header.MessageSize > KafkaMaxPayloadLen {
+		return errKafkaRespMessageSizeTooLarge
+	}
+
+	if header.CorrelationID < 0 {
+		return errKafkaRespCorrelationIDNegative
+	}
+	if header.CorrelationID != requestHeader.CorrelationID() {
+		return errKafkaRespCorrelationIDMismatch
+	}
+	return nil
+}
+
+// isFlexible checks for each API key if the version is flexible.
+// a flexible version uses a dynamic size for arrays and strings
+func isFlexible(header KafkaRequestHeader) bool {
+	ver := header.APIVersion()
+	switch header.APIKey() {
+	// https://github.com/apache/kafka/blob/9983331d917fe8f57c37c88f0749b757e5af0c87/clients/src/main/resources/common/message/ProduceRequest.json#L51
+	case APIKeyProduce:
+		return ver >= 9
+	// https://github.com/apache/kafka/blob/9983331d917fe8f57c37c88f0749b757e5af0c87/clients/src/main/resources/common/message/FetchRequest.json#L62C4-L62C20
+	case APIKeyFetch:
+		return ver >= 12
+	// https://github.com/apache/kafka/blob/9983331d917fe8f57c37c88f0749b757e5af0c87/clients/src/main/resources/common/message/MetadataRequest.json#L22
+	case APIKeyMetadata:
+		return ver >= 9
+	// flexibleVersions from the *Request.json schemas of each group API
+	case APIKeyOffsetCommit:
+		return ver >= 8
+	case APIKeyOffsetFetch, APIKeyJoinGroup:
+		return ver >= 6
+	case APIKeyHeartbeat, APIKeyLeaveGroup, APIKeySyncGroup:
+		return ver >= 4
+	case APIKeyConsumerGroupHeartbeat:
+		return true
+	default:
+		return false
+	}
+}
+
+func readArrayLength(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (int, error) {
+	if isFlexible(header) {
+		size, err := readUnsignedVarint(r)
+		if err != nil {
+			return 0, err
+		}
+		if size == 0 {
+			return 0, nil // return 0 for null
+		}
+		return size - 1, nil
+	}
+	return readInt32(r)
+}
+
+func readUUID(r *largebuf.LargeBufferReader) (*UUID, error) {
+	b, err := r.ReadN(UUIDLen)
+	if err != nil {
+		return nil, errKafkaPacketTooShortForTopicUUID
+	}
+	var uuid UUID
+	copy(uuid[:], b)
+	return &uuid, nil
+}
+
+func readString(r *largebuf.LargeBufferReader, header KafkaRequestHeader, nullable bool) (string, error) {
+	size, err := readStringLength(r, header, nullable)
+	if err != nil {
+		return "", err
+	}
+	if nullable && size == 0 {
+		return "", nil // return empty string for null
+	}
+	if r.Remaining() < size {
+		return "", errKafkaStringSizeExceedsPacket
+	}
+	b, err := r.ReadN(size)
+	if err != nil {
+		return "", errKafkaStringSizeExceedsPacket
+	}
+	if !validateKafkaString(b, size) {
+		return "", errKafkaInvalidCharactersInString
+	}
+	return string(b), nil
+}
+
+func validateKafkaString(pkt []byte, size int) bool {
+	for j := range size {
+		ch := pkt[j]
+		if ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9') || ch == '.' || ch == '_' || ch == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func readStringLength(r *largebuf.LargeBufferReader, header KafkaRequestHeader, nullable bool) (int, error) {
+	if !isFlexible(header) {
+		// length is stored as a fixed size int16
+		if r.Remaining() < Int16Len {
+			return 0, errKafkaPacketTooShortForStringLength
+		}
+		b, err := r.ReadN(Int16Len)
+		if err != nil {
+			return 0, errKafkaPacketTooShortForStringLength
+		}
+		size := int16(binary.BigEndian.Uint16(b))
+		if nullable && size == -1 {
+			return 0, nil // return 0 for null
+		}
+		if size < 1 {
+			return 0, errKafkaInvalidStringSize
+		}
+		return int(size), nil
+	}
+
+	// length is stored as a varint
+	size, err := readUnsignedVarint(r)
+	if err != nil {
+		return 0, err
+	}
+	if nullable && size == 0 {
+		return 0, nil // return 0 for null
+	}
+	if size <= 0 {
+		return 0, errKafkaInvalidStringSize
+	}
+	size-- // size is stored as a varint, so we subtract 1
+	if size < 0 {
+		return 0, errKafkaInvalidStringSize
+	}
+	return size, nil
+}
+
+func readUnsignedVarint(r *largebuf.LargeBufferReader) (int, error) {
+	value := 0
+	i := 0
+	for {
+		if r.Remaining() == 0 {
+			return 0, errKafkaVarintIncomplete
+		}
+		b, err := r.ReadN(1)
+		if err != nil {
+			return 0, err
+		}
+		if (b[0] & 0x80) == 0 {
+			value |= int(b[0]) << i
+			return value, nil
+		}
+		value |= int(b[0]&0x7F) << i
+		i += 7
+		if i > 28 {
+			return 0, errKafkaIllegalVarint
+		}
+	}
+}
+
+func readInt16(r *largebuf.LargeBufferReader) (int, error) {
+	b, err := r.ReadN(Int16Len)
+	if err != nil {
+		return 0, errKafkaDataTooShortForInt16
+	}
+	return int(int16(binary.BigEndian.Uint16(b))), nil
+}
+
+func readInt32(r *largebuf.LargeBufferReader) (int, error) {
+	b, err := r.ReadN(Int32Len)
+	if err != nil {
+		return 0, errKafkaDataTooShortForInt32
+	}
+	return int(int32(binary.BigEndian.Uint32(b))), nil
+}
+
+func readInt64(r *largebuf.LargeBufferReader) (int64, error) {
+	b, err := r.ReadN(Int64Len)
+	if err != nil {
+		return 0, errKafkaDataTooShortForInt64
+	}
+	return int64(binary.BigEndian.Uint64(b)), nil
+}

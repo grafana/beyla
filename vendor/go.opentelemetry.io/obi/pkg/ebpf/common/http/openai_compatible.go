@@ -1,0 +1,123 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common/http"
+
+import (
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/config"
+)
+
+func OpenAICompatibleSpan(baseSpan *request.Span, req *http.Request, resp *http.Response, gateways []config.OpenAICompatibleGateway) (request.Span, bool) {
+	var reqHost string
+	if req.URL != nil {
+		reqHost = req.URL.Host
+	}
+	if reqHost == "" {
+		reqHost = req.Host
+	}
+
+	hostOnly := reqHost
+	port := 0
+	if h, p, err := net.SplitHostPort(reqHost); err == nil {
+		hostOnly = h
+		if pInt, err := strconv.Atoi(p); err == nil {
+			port = pInt
+		}
+	}
+
+	var matchedGateway *config.OpenAICompatibleGateway
+	for i := range gateways {
+		gw := &gateways[i]
+		if !strings.EqualFold(hostOnly, gw.Host) {
+			continue
+		}
+		if gw.Port > 0 && port > 0 && gw.Port != port {
+			continue
+		}
+		matchedGateway = gw
+		break
+	}
+
+	if matchedGateway == nil {
+		return *baseSpan, false
+	}
+
+	reqB, ok := readHTTPRequestBody("OpenAICompatibleSpan", req, baseSpan)
+	if !ok {
+		return *baseSpan, false
+	}
+
+	respB, ok := readHTTPResponseBody("OpenAICompatibleSpan", resp, baseSpan)
+	if !ok {
+		return *baseSpan, false
+	}
+
+	parsedRequest := parseOpenAIInput(reqB, isOpenAIResponsesRequest(req))
+	parsedResponse, toolCalls := parseOpenAICompatibleResponse(respB)
+
+	if parsedResponse.ResponseModel == "" && len(parsedResponse.Choices) == 0 &&
+		!hasOpenAIUsage(parsedResponse.Usage) && len(parsedResponse.Data) == 0 &&
+		len(parsedResponse.Output) == 0 && parsedRequest.Model == "" {
+		return *baseSpan, false
+	}
+
+	if parsedResponse.ResponseModel == "" {
+		parsedResponse.ResponseModel = parsedRequest.Model
+	}
+	if parsedRequest.Model == "" {
+		parsedRequest.Model = parsedResponse.ResponseModel
+	}
+
+	parsedResponse.Request = parsedRequest
+	parsedResponse.ToolCalls = toolCalls
+
+	// Classified by the same path reader as the OpenAI parser: a gateway serves
+	// the same endpoints, mounted under a prefix of its own
+	// (e.g. /litellm/v1/chat/completions).
+	parsedResponse.OperationName, parsedResponse.APIType = openAIOperation(requestPath(req))
+
+	parsedResponse.ProviderName = matchedGateway.Provider
+	baseSpan.SubType = request.HTTPSubtypeOpenAICompatible
+	baseSpan.GenAI = &request.GenAI{
+		OpenAICompatible: parsedResponse,
+	}
+
+	return *baseSpan, true
+}
+
+func hasOpenAIUsage(usage request.OpenAIUsage) bool {
+	counts := []request.TokenCount{
+		usage.InputTokens,
+		usage.OutputTokens,
+		usage.TotalTokens,
+		usage.PromptTokens,
+		usage.CompletionTokens,
+	}
+	if usage.InputDetails != nil {
+		counts = append(counts,
+			usage.InputDetails.CachedTokens,
+			usage.InputDetails.CacheCreationTokens,
+			usage.InputDetails.AudioTokens,
+		)
+	}
+	if usage.OutputDetails != nil {
+		counts = append(counts,
+			usage.OutputDetails.ReasoningTokens,
+			usage.OutputDetails.AudioTokens,
+			usage.OutputDetails.AcceptedPredictionTokens,
+			usage.OutputDetails.RejectedPredictionTokens,
+		)
+	}
+	for _, count := range counts {
+		if _, reported := count.Get(); reported {
+			return true
+		}
+	}
+	return false
+}

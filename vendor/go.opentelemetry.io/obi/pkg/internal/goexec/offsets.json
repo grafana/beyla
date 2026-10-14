@@ -1,0 +1,2746 @@
+{
+  "data": {
+    "[]internal/abi.Imethod": {
+      "len": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "bufio.Reader": {
+      "buf": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "w": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "bufio.Writer": {
+      "buf": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "n": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "wr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "context.valueCtx": {
+      "val": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "database/sql.driverConn": {
+      "ci": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "github.com/IBM/sarama.Broker": {
+      "conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.60.2"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.40.0"
+          }
+        ]
+      },
+      "correlationID": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.60.2"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "github.com/IBM/sarama.bufConn": {
+      "Conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.60.2"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "github.com/IBM/sarama.responsePromise": {
+      "correlationID": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.60.2"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "github.com/Shopify/sarama.Broker": {
+      "conn": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.37.0"
+          }
+        ]
+      },
+      "correlationID": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.37.0"
+          }
+        ]
+      }
+    },
+    "github.com/Shopify/sarama.bufConn": {
+      "Conn": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.37.0"
+          }
+        ]
+      }
+    },
+    "github.com/Shopify/sarama.responsePromise": {
+      "correlationID": {
+        "versions": {
+          "oldest": "1.37.0",
+          "newest": "1.38.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.37.0"
+          }
+        ]
+      }
+    },
+    "github.com/gin-gonic/gin.nodeValue": {
+      "fullPath": {
+        "versions": {
+          "oldest": "1.6.0",
+          "newest": "1.12.0"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.6.0"
+          },
+          {
+            "offset": 40,
+            "since": "1.7.0"
+          }
+        ]
+      }
+    },
+    "github.com/go-sql-driver/mysql.Config": {
+      "Addr": {
+        "versions": {
+          "oldest": "1.5.0",
+          "newest": "1.10.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.5.0"
+          }
+        ]
+      }
+    },
+    "github.com/go-sql-driver/mysql.mysqlConn": {
+      "cfg": {
+        "versions": {
+          "oldest": "1.5.0",
+          "newest": "1.10.1"
+        },
+        "offsets": [
+          {
+            "offset": 168,
+            "since": "1.5.0"
+          },
+          {
+            "offset": 200,
+            "since": "1.8.0"
+          },
+          {
+            "offset": 136,
+            "since": "1.9.0"
+          }
+        ]
+      }
+    },
+    "github.com/gorilla/mux.routeRegexp": {
+      "template": {
+        "versions": {
+          "oldest": "1.5.0",
+          "newest": "1.8.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.5.0"
+          }
+        ]
+      }
+    },
+    "github.com/jackc/pgx/v5.Conn": {
+      "config": {
+        "versions": {
+          "oldest": "5.0.0",
+          "newest": "5.11.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "5.0.0"
+          }
+        ]
+      }
+    },
+    "github.com/jackc/pgx/v5/pgconn.Config": {
+      "Host": {
+        "versions": {
+          "oldest": "5.0.0",
+          "newest": "5.11.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "5.0.0"
+          }
+        ]
+      }
+    },
+    "github.com/lib/pq.Config": {
+      "Host": {
+        "versions": {
+          "oldest": "1.11.0",
+          "newest": "1.12.3"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.11.0"
+          }
+        ]
+      }
+    },
+    "github.com/lib/pq.conn": {
+      "cfg": {
+        "versions": {
+          "oldest": "1.11.0",
+          "newest": "1.12.3"
+        },
+        "offsets": [
+          {
+            "offset": 576,
+            "since": "1.11.0"
+          }
+        ]
+      }
+    },
+    "github.com/redis/go-redis/v9/internal/pool.Conn": {
+      "bw": {
+        "versions": {
+          "oldest": "9.0.0",
+          "newest": "9.22.0"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "9.0.0"
+          },
+          {
+            "offset": 48,
+            "since": "9.6.0"
+          },
+          {
+            "offset": 32,
+            "since": "9.7.0"
+          },
+          {
+            "offset": 40,
+            "since": "9.16.0"
+          },
+          {
+            "offset": 48,
+            "since": "9.17.0"
+          },
+          {
+            "offset": 56,
+            "since": "9.18.0"
+          }
+        ]
+      }
+    },
+    "github.com/segmentio/kafka-go.Writer": {
+      "Topic": {
+        "versions": {
+          "oldest": "0.4.11",
+          "newest": "0.4.51"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "0.4.11"
+          }
+        ]
+      }
+    },
+    "github.com/segmentio/kafka-go.reader": {
+      "topic": {
+        "versions": {
+          "oldest": "0.4.11",
+          "newest": "0.4.51"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "0.4.11"
+          }
+        ]
+      }
+    },
+    "github.com/segmentio/kafka-go/protocol.Conn": {
+      "conn": {
+        "versions": {
+          "oldest": "0.4.11",
+          "newest": "0.4.51"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "0.4.11"
+          }
+        ]
+      }
+    },
+    "go.mongodb.org/mongo-driver/mongo.Collection": {
+      "name": {
+        "versions": {
+          "oldest": "1.10.1",
+          "newest": "1.17.10"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.10.1"
+          }
+        ]
+      }
+    },
+    "go.mongodb.org/mongo-driver/v2/mongo.Collection": {
+      "name": {
+        "versions": {
+          "oldest": "2.0.1",
+          "newest": "2.9.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "2.0.1"
+          }
+        ]
+      }
+    },
+    "go.mongodb.org/mongo-driver/v2/x/mongo/driver.Operation": {
+      "Database": {
+        "versions": {
+          "oldest": "2.0.1",
+          "newest": "2.9.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "2.0.1"
+          }
+        ]
+      },
+      "Name": {
+        "versions": {
+          "oldest": "2.0.1",
+          "newest": "2.9.1"
+        },
+        "offsets": [
+          {
+            "offset": 208,
+            "since": "2.0.1"
+          },
+          {
+            "offset": 216,
+            "since": "2.1.0"
+          },
+          {
+            "offset": 232,
+            "since": "2.6.0"
+          }
+        ]
+      }
+    },
+    "go.mongodb.org/mongo-driver/x/mongo/driver.Operation": {
+      "Database": {
+        "versions": {
+          "oldest": "1.10.1",
+          "newest": "1.17.10"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.10.1"
+          }
+        ]
+      },
+      "Name": {
+        "versions": {
+          "oldest": "1.10.1",
+          "newest": "1.17.10"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.10.1"
+          },
+          {
+            "offset": 216,
+            "since": "1.13.1"
+          }
+        ]
+      }
+    },
+    "go.opentelemetry.io/auto/sdk.span": {
+      "spanContext": {
+        "versions": {
+          "oldest": "1.1.0",
+          "newest": "1.2.1"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.1.0"
+          }
+        ]
+      }
+    },
+    "go.opentelemetry.io/otel/internal/global.tracer": {
+      "delegate": {
+        "versions": {
+          "oldest": "1.10.0",
+          "newest": "1.46.0"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.10.0"
+          },
+          {
+            "offset": 64,
+            "since": "1.20.0"
+          }
+        ]
+      }
+    },
+    "go.opentelemetry.io/otel/trace.SpanContext": {
+      "spanID": {
+        "versions": {
+          "oldest": "1.0.0",
+          "newest": "1.46.0"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.0.0"
+          }
+        ]
+      },
+      "traceFlags": {
+        "versions": {
+          "oldest": "1.0.0",
+          "newest": "1.46.0"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.0.0"
+          }
+        ]
+      },
+      "traceID": {
+        "versions": {
+          "oldest": "1.0.0",
+          "newest": "1.46.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.0.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2.ClientConn": {
+      "fr": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 304,
+            "since": "0.12.0"
+          },
+          {
+            "offset": 296,
+            "since": "0.15.0"
+          },
+          {
+            "offset": 304,
+            "since": "0.23.0"
+          },
+          {
+            "offset": 328,
+            "since": "0.30.0"
+          },
+          {
+            "offset": 336,
+            "since": "0.31.0"
+          },
+          {
+            "offset": 360,
+            "since": "0.32.0"
+          },
+          {
+            "offset": 352,
+            "since": "0.44.0"
+          },
+          {
+            "offset": 368,
+            "since": "0.48.0"
+          }
+        ]
+      },
+      "nextStreamID": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 176,
+            "since": "0.12.0"
+          },
+          {
+            "offset": 168,
+            "since": "0.15.0"
+          },
+          {
+            "offset": 176,
+            "since": "0.23.0"
+          },
+          {
+            "offset": 192,
+            "since": "0.32.0"
+          },
+          {
+            "offset": 184,
+            "since": "0.44.0"
+          }
+        ]
+      },
+      "tconn": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "0.12.0"
+          }
+        ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "0.12.0"
+          },
+          {
+            "offset": 24,
+            "since": "0.15.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2.Framer": {
+      "w": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 120,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2.MetaHeadersFrame": {
+      "Fields": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2.serverConn": {
+      "conn": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
+    "golang.org/x/net/http2/hpack.Encoder": {
+      "w": {
+        "versions": {
+          "oldest": "0.12.0",
+          "newest": "0.59.0"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "0.12.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/genproto/googleapis/rpc/status.Status": {
+      "Code": {
+        "versions": {
+          "oldest": "0.0.0",
+          "newest": "0.0.0"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "0.0.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/status.Status": {
+      "s": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.ClientStream": {
+      "Stream": {
+        "versions": {
+          "oldest": "1.69.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.69.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.ServerStream": {
+      "Stream": {
+        "versions": {
+          "oldest": "1.69.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.69.0"
+          }
+        ]
+      },
+      "st": {
+        "versions": {
+          "oldest": "1.69.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.69.0"
+          },
+          {
+            "offset": 328,
+            "since": "1.77.0"
+          },
+          {
+            "offset": 360,
+            "since": "1.83.1"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.Stream": {
+      "id": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 108,
+            "since": "1.77.0"
+          }
+        ]
+      },
+      "method": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 88,
+            "since": "1.66.0"
+          },
+          {
+            "offset": 24,
+            "since": "1.69.0"
+          },
+          {
+            "offset": 16,
+            "since": "1.77.0"
+          }
+        ]
+      },
+      "st": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 328,
+            "since": "1.77.0"
+          },
+          {
+            "offset": 360,
+            "since": "1.83.1"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.bufWriter": {
+      "buf": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 8,
+            "since": "1.58.0"
+          },
+          {
+            "offset": 64,
+            "since": "1.84.0"
+          }
+        ]
+      },
+      "conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 48,
+            "since": "1.58.0"
+          },
+          {
+            "offset": 32,
+            "since": "1.84.0"
+          }
+        ]
+      },
+      "offset": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 32,
+            "since": "1.58.0"
+          },
+          {
+            "offset": 16,
+            "since": "1.84.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.http2Client": {
+      "conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 136,
+            "since": "1.52.0"
+          },
+          {
+            "offset": 128,
+            "since": "1.58.0"
+          }
+        ]
+      },
+      "scheme": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 184,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 256,
+            "since": "1.52.0"
+          },
+          {
+            "offset": 248,
+            "since": "1.58.0"
+          },
+          {
+            "offset": 256,
+            "since": "1.68.0"
+          }
+        ]
+      }
+    },
+    "google.golang.org/grpc/internal/transport.http2Server": {
+      "conn": {
+        "versions": {
+          "oldest": "1.40.0",
+          "newest": "1.84.0"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.40.0"
+          },
+          {
+            "offset": 16,
+            "since": "1.60.0"
+          }
+        ]
+      }
+    },
+    "internal/abi": {
+      "Array": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 17,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Chan": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 18,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Func": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 19,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Interface": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 20,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "KindDirectIface": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Map": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 21,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Pointer": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 22,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Slice": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 23,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Struct": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 25,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "TFlagExtraStar": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 2,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "TFlagUncommon": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 1,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.ArrayType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.ChanType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.FuncType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.ITab": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Fun": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Inter": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Type": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.InterfaceType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Methods": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.Kind": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 1,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.MapType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 136,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.NameOff": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 4,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.PtrType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.SliceType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.StructType": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.TFlag": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 1,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.Type": {
+      "$size": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Kind_": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 23,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "Str": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "TFlag": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 20,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/abi.UncommonType": {
+      "PkgPath": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "internal/poll.FD": {
+      "Sysfd": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net.TCPAddr": {
+      "IP": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Port": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net.TCPConn": {
+      "conn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net.conn": {
+      "fd": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net.netFD": {
+      "laddr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 96,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "pfd": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "raddr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 112,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.Request": {
+      "ContentLength": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 88,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Header": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Method": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "URL": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.Response": {
+      "ContentLength": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "StatusCode": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.conn": {
+      "rwc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.http2ClientConn": {
+      "fr": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.8"
+        },
+        "offsets": [
+          {
+            "offset": 208,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.17.3"
+          },
+          {
+            "offset": 312,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.21.0"
+          },
+          {
+            "offset": 296,
+            "since": "1.22.0"
+          },
+          {
+            "offset": 304,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 360,
+            "since": "1.24.0"
+          },
+          {
+            "offset": 368,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "nextStreamID": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.8"
+        },
+        "offsets": [
+          {
+            "offset": 168,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 176,
+            "since": "1.17.3"
+          },
+          {
+            "offset": 184,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 176,
+            "since": "1.21.0"
+          },
+          {
+            "offset": 168,
+            "since": "1.22.0"
+          },
+          {
+            "offset": 176,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 192,
+            "since": "1.24.0"
+          },
+          {
+            "offset": 184,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "tconn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.8"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.8"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.http2Framer": {
+      "w": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.8"
+        },
+        "offsets": [
+          {
+            "offset": 112,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 120,
+            "since": "1.18.0"
+          }
+        ]
+      }
+    },
+    "net/http.http2MetaHeadersFrame": {
+      "Fields": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.8"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.http2serverConn": {
+      "conn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.26.8"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http.persistConn": {
+      "conn": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 80,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 96,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/http/internal/http2.ClientConn": {
+      "fr": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 368,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "nextStreamID": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 184,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "tconn": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "tlsState": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "net/http/internal/http2.Framer": {
+      "w": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 120,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "net/http/internal/http2.MetaHeadersFrame": {
+      "Fields": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "net/http/internal/http2.serverConn": {
+      "conn": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "net/rpc.Request": {
+      "ServiceMethod": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/textproto.Reader": {
+      "R": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "net/url.URL": {
+      "Host": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "Path": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "RawQuery": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 96,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 88,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "Scheme": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "runtime.consistentHeapStats": {
+      "stats": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      }
+    },
+    "runtime.cpuStats": {
+      "GCAssistTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "GCDedicatedTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "GCIdleTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 16,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "GCPauseTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "IdleTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "ScavengeAssistTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "ScavengeBgTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "UserTime": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.23.0"
+          }
+        ]
+      }
+    },
+    "runtime.gList": {
+      "size": {
+        "versions": {
+          "oldest": "1.25.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.25.0"
+          }
+        ]
+      }
+    },
+    "runtime.gcControllerState": {
+      "gcPercent": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "heapGoal": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.18.10"
+        },
+        "offsets": [
+          {
+            "offset": 32,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 104,
+            "since": "1.18.0"
+          }
+        ]
+      },
+      "memoryLimit": {
+        "versions": {
+          "oldest": "1.19.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.19.0"
+          }
+        ]
+      }
+    },
+    "runtime.hchan": {
+      "dataqsiz": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 8,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "qcount": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "recvx": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 48,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 56,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "sendx": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 48,
+            "since": "1.23.0"
+          }
+        ]
+      }
+    },
+    "runtime.heapStatsDelta": {
+      "committed": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "inStacks": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 24,
+            "since": "1.23.0"
+          }
+        ]
+      },
+      "largeAlloc": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 56,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 48,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "largeAllocCount": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 56,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "smallAllocCount": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 64,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "smallFreeCount": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 632,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 624,
+            "since": "1.25.0"
+          }
+        ]
+      }
+    },
+    "runtime.moduledata": {
+      "etext": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 184,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "itaboffset": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 320,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "itabsize": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 328,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "maxpc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 168,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "minpc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 160,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "pcHeader": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "pclntable": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 104,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "text": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 176,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "typedesclen": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 304,
+            "since": "1.27.0"
+          }
+        ]
+      },
+      "types": {
+        "versions": {
+          "oldest": "1.27.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 296,
+            "since": "1.27.0"
+          }
+        ]
+      }
+    },
+    "runtime.mstats": {
+      "buckhash_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 3568,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3544,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "gcMiscSys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 3576,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3552,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "heapStats": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 5960,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 0,
+            "since": "1.19.0"
+          }
+        ]
+      },
+      "mcache_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 3560,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3536,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "mspan_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 3552,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3528,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "numgc": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 4280,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 7704,
+            "since": "1.19.0"
+          },
+          {
+            "offset": 7680,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "other_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 3584,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3560,
+            "since": "1.25.0"
+          }
+        ]
+      },
+      "stacks_sys": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 3544,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 3520,
+            "since": "1.25.0"
+          }
+        ]
+      }
+    },
+    "runtime.mutex": {
+      "key": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      }
+    },
+    "runtime.p": {
+      "gFree": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 3584,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 2464,
+            "since": "1.18.0"
+          },
+          {
+            "offset": 2456,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 2464,
+            "since": "1.26.0"
+          }
+        ]
+      }
+    },
+    "runtime.schedt": {
+      "gFree": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 152,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 160,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 168,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 184,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "goidgen": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.17.0"
+          }
+        ]
+      },
+      "ngsys": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 72,
+            "since": "1.17.0"
+          },
+          {
+            "offset": 80,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 96,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "stwTotalTimeGC": {
+        "versions": {
+          "oldest": "1.22.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 4224,
+            "since": "1.22.0"
+          },
+          {
+            "offset": 4248,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 4264,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "timeToRun": {
+        "versions": {
+          "oldest": "1.20.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 320,
+            "since": "1.20.0"
+          },
+          {
+            "offset": 344,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 360,
+            "since": "1.26.0"
+          }
+        ]
+      }
+    },
+    "runtime.timeHistogram": {
+      "overflow": {
+        "versions": {
+          "oldest": "1.20.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 1288,
+            "since": "1.20.0"
+          }
+        ]
+      },
+      "underflow": {
+        "versions": {
+          "oldest": "1.20.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 1280,
+            "since": "1.20.0"
+          }
+        ]
+      }
+    },
+    "runtime.workType": {
+      "cpuStats": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 472,
+            "since": "1.23.0"
+          },
+          {
+            "offset": 504,
+            "since": "1.23.4"
+          },
+          {
+            "offset": 592,
+            "since": "1.25.0"
+          },
+          {
+            "offset": 728,
+            "since": "1.26.0"
+          }
+        ]
+      },
+      "full": {
+        "versions": {
+          "oldest": "1.23.0",
+          "newest": "1.27.1"
+        },
+        "offsets": [
+          {
+            "offset": 0,
+            "since": "1.23.0"
+          }
+        ]
+      }
+    }
+  }
+}

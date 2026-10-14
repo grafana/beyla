@@ -1,0 +1,131 @@
+x-fixture: &fixture
+  build:
+    context: ../components/survey
+  image: beyla-survey-fixture
+  volumes:
+    - ${SURVEY_CONTROL_DIR:?set SURVEY_CONTROL_DIR}:/control
+  environment:
+    OTEL_SERVICE_NAMESPACE: survey-options
+  healthcheck:
+    test: [CMD, /survey-healthcheck]
+    interval: 1s
+    timeout: 1s
+    retries: 30
+
+services:
+  ordinary-idle:
+    <<: *fixture
+    user: "0:0"
+    command: [--id=ordinary-idle]
+    environment:
+      OTEL_SERVICE_NAMESPACE: survey-options
+      OTEL_SERVICE_NAME: ordinary-idle
+
+  socket-root-client:
+    <<: *fixture
+    user: "0:0"
+    command: [--id=socket-root-client, --connect=nonroot-root-1024:1024]
+    environment:
+      OTEL_SERVICE_NAMESPACE: survey-options
+      OTEL_SERVICE_NAME: socket-root-client
+    depends_on:
+      nonroot-root-1024:
+        condition: service_healthy
+
+  nonroot-idle:
+    <<: *fixture
+    user: "1000:1000"
+    command: [--id=nonroot-idle]
+    environment:
+      OTEL_SERVICE_NAMESPACE: survey-options
+      OTEL_SERVICE_NAME: nonroot-idle
+
+  nonroot-client:
+    <<: *fixture
+    user: "1000:1000"
+    command: [--id=nonroot-client, --connect=nonroot-root-1024:1024]
+    environment:
+      OTEL_SERVICE_NAMESPACE: survey-options
+      OTEL_SERVICE_NAME: nonroot-client
+    depends_on:
+      nonroot-root-1024:
+        condition: service_healthy
+
+  nonroot-root-client:
+    <<: *fixture
+    user: "0:0"
+    command: [--id=nonroot-root-client, --connect=nonroot-root-1024:1024]
+    environment:
+      OTEL_SERVICE_NAMESPACE: survey-options
+      OTEL_SERVICE_NAME: nonroot-root-client
+    depends_on:
+      nonroot-root-1024:
+        condition: service_healthy
+
+  nonroot-root-1023:
+    <<: *fixture
+    user: "0:0"
+    command: [--id=nonroot-root-1023, --listen=1023]
+    environment:
+      OTEL_SERVICE_NAMESPACE: survey-options
+      OTEL_SERVICE_NAME: nonroot-root-1023
+
+  nonroot-root-1024:
+    <<: *fixture
+    user: "0:0"
+    command: [--id=nonroot-root-1024, --listen=1024]
+    environment:
+      OTEL_SERVICE_NAMESPACE: survey-options
+      OTEL_SERVICE_NAME: nonroot-root-1024
+
+  beyla:
+    build:
+      context: ../../../..
+      dockerfile: internal/test/integration/components/beyla/Dockerfile
+    image: beyla
+    command: [--config=/configs/beyla-config-survey-options.yml]
+    privileged: true
+    pid: host
+    volumes:
+      - ../configs:/configs:ro
+      - ../system/sys/kernel/security:/sys/kernel/security:ro
+      # Required to resolve sched_process_exit for the socket watcher's tracepoint.
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - ../../../../testoutput:/coverage
+    environment:
+      GOCOVERDIR: /coverage
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_LOG_LEVEL: DEBUG
+      BEYLA_ENFORCE_SYS_CAPS: "false"
+      BEYLA_SERVICE_NAMESPACE: survey-options
+    depends_on:
+      ordinary-idle:
+        condition: service_healthy
+      socket-root-client:
+        condition: service_healthy
+      nonroot-idle:
+        condition: service_healthy
+      nonroot-client:
+        condition: service_healthy
+      nonroot-root-client:
+        condition: service_healthy
+      nonroot-root-1023:
+        condition: service_healthy
+      nonroot-root-1024:
+        condition: service_healthy
+
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.160.0@sha256:799dc6cf12c96192af37b5bdba804da8c10b3bc563b43cb90c3f3c58d9572ad6
+    # Expire missing points quickly so cached metrics cannot hide lost admission.
+    command: [--config=/etc/otelcol-config.yml, --set=exporters.prometheus.metric_expiration=2s]
+    volumes:
+      - ../configs/otelcol-config.yml:/etc/otelcol-config.yml:ro
+
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    command: [--config.file=/etc/prometheus/prometheus.yml]
+    volumes:
+      - ../configs/prometheus-config-survey-options.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1::9090"

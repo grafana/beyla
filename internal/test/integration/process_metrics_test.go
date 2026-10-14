@@ -1,0 +1,150 @@
+//go:build integration
+
+package integration
+
+import (
+	"path"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/v3/internal/test/tools/docker"
+	"github.com/grafana/beyla/v3/internal/test/tools/promtest"
+)
+
+func TestProcessMetrics(t *testing.T) {
+	compose, err := docker.ComposeSuite("compose/docker-compose-process.yml", path.Join(pathOutput, "test-suite-process-level-metrics.log"))
+	require.NoError(t, err)
+	require.NoError(t, compose.Up())
+
+	t.Run("prometheus export", func(t *testing.T) {
+		testAllInstances(t, "prometheus")
+	})
+	t.Run("OTEL export", func(t *testing.T) {
+		testAllInstances(t, "otel")
+	})
+
+	require.NoError(t, compose.Close())
+}
+
+func testAllInstances(t *testing.T, exported string) {
+	t.Run("host-info metric", func(t *testing.T) {
+		// Both the direct scrape and OTLP-to-Prometheus path must preserve the Grafana host label.
+		pq := promtest.Client{HostPort: prometheusHostPort}
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`traces_host_info{exported="` + exported + `"}`)
+			require.NoError(t, err)
+			// Query without a host-label filter so a missing label or an extra OBI series fails the test.
+			require.Len(t, results, 1)
+			assert.Equal(t, "integration-test-host", results[0].Metric["grafana_host_id"])
+			assert.Equal(t, "1", results[0].Value[1])
+		}, testTimeout, time.Millisecond)
+	})
+
+	t.Run("Pingclient process-level metrics", testProcesses(
+		`{exported="`+exported+`",container_name=~".*client.*",container_id!=""}`,
+		map[string]string{
+			"process_executable_name": "httppinger",
+			"process_executable_path": "/httppinger",
+			"process_command":         "httppinger",
+			"process_command_line":    "/httppinger",
+		}))
+
+	t.Run("Testserver process-level metrics", testProcesses(
+		`{exported="`+exported+`",container_name=~".*testserver-go.*",container_id!=""}`,
+		map[string]string{
+			"process_executable_name": "testserver",
+			"process_executable_path": "/testserver",
+			"process_command":         "testserver",
+			"process_command_line":    "/testserver",
+		}))
+
+	t.Run("Python server process metrics", testProcesses(
+		`{exported="`+exported+`",container_name=~".*testserver-python.*",container_id!=""}`,
+		map[string]string{
+			"process_executable_name": "python",
+			"process_executable_path": "/usr/local/bin/python",
+			"process_command":         "gunicorn",
+			"process_command_line":    "/usr/local/bin/python /usr/local/bin/gunicorn -w 4 -b 0.0.0.0:8380 main:app --timeout 90",
+		}))
+}
+
+func testProcesses(extraQuery string, attribMatcher map[string]string) func(t *testing.T) {
+	return func(t *testing.T) {
+		pq := promtest.Client{HostPort: prometheusHostPort}
+		utilizationLen := 0
+		// cpu load is so low in integration tests that we don't check if the
+		// value is > 0
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`process_cpu_utilization_ratio` + extraQuery)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+			utilizationLen = len(results)
+		}, testTimeout, time.Millisecond)
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`process_cpu_time_seconds_total` + extraQuery)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+			assert.Len(t, results, utilizationLen)
+		}, testTimeout, time.Millisecond)
+		// checking that the memory is present and has a reasonable values
+		memory := map[string]int{}
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`process_memory_usage_bytes` + extraQuery)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+			// any of the processes used in the integration tests
+			// should take more than 1MB of memory
+			for _, result := range results {
+				physicalMem, err := strconv.Atoi(result.Value[1].(string))
+				require.NoError(t, err)
+				require.Greater(t, physicalMem, 1_000_000)
+				memory[instanceID(result)] = physicalMem
+			}
+		}, testTimeout, time.Millisecond)
+		// checking that virtual memory has larger value than physical memory
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`process_memory_virtual_bytes` + extraQuery)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+			for _, result := range results {
+				virtualMem, err := strconv.Atoi(result.Value[1].(string))
+				require.NoError(t, err)
+				physicalMem, ok := memory[instanceID(result)]
+				require.Truef(t, ok, "did not find physical memory for process %s",
+					instanceID(result))
+				require.Greater(t, virtualMem, physicalMem)
+			}
+		}, testTimeout, time.Millisecond)
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`process_disk_io_bytes_total` + extraQuery)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+		}, testTimeout, time.Millisecond)
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
+			results, err := pq.Query(`process_network_io_bytes_total` + extraQuery)
+			require.NoError(t, err)
+			matchAttributes(t, results, attribMatcher)
+		}, testTimeout, time.Millisecond)
+	}
+}
+
+func instanceID(res promtest.Result) string {
+	// instance ID will differ in OTEL or Prom exporter
+	if i, ok := res.Metric["service_instance_id"]; ok {
+		return i
+	}
+	return res.Metric["instance"]
+}
+
+func matchAttributes(t require.TestingT, results []promtest.Result, attribMatcher map[string]string) {
+	assert.NotEmpty(t, results)
+	for _, result := range results {
+		for k, v := range attribMatcher {
+			assert.Equalf(t, v, result.Metric[k], "attribute %v expected to be %v", k, v)
+		}
+	}
+}

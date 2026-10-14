@@ -1,0 +1,1141 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package obi // import "go.opentelemetry.io/obi/pkg/obi"
+
+import (
+	"encoding"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"reflect"
+	"strings"
+	"time"
+
+	"github.com/caarlos0/env/v11"
+	"github.com/go-playground/validator/v10"
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/invopop/jsonschema"
+	"gopkg.in/yaml.v3"
+
+	"go.opentelemetry.io/collector/confmap"
+
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
+	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/debug"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/export/prom"
+	"go.opentelemetry.io/obi/pkg/filter"
+	"go.opentelemetry.io/obi/pkg/health"
+	"go.opentelemetry.io/obi/pkg/internal/avoidedsvc"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/cidr"
+	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/kube/klogbridge"
+	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
+	"go.opentelemetry.io/obi/pkg/metadata"
+	"go.opentelemetry.io/obi/pkg/transform"
+)
+
+type LogLevel string
+
+const (
+	LogLevelDebug LogLevel = "DEBUG"
+	LogLevelInfo  LogLevel = "INFO"
+	LogLevelWarn  LogLevel = "WARN"
+	LogLevelError LogLevel = "ERROR"
+)
+
+type LogFormat string
+
+const (
+	LogFormatText LogFormat = "text"
+	LogFormatJSON LogFormat = "json"
+)
+
+// CustomValidations is a map of tag:function for custom validations
+type CustomValidations map[string]validator.Func
+
+const (
+	validationTagAgentIPIface = "agentIPIface"
+)
+
+const ReporterLRUSize = 256
+
+// Features that can be enabled in OBI (can be at the same time): App O11y and/or Net O11y and/or Stats O11y
+type Feature uint
+
+const (
+	FeatureAppO11y = Feature(1 << iota)
+	FeatureNetO11y
+	FeatureStatsO11y
+)
+
+const (
+	defaultMetricsTTL = 5 * time.Minute
+)
+
+// ExtraGroupAttributesMap defines additional attributes for attribute groups.
+// Supported keys are "app" and "k8s_app_meta".
+type ExtraGroupAttributesMap map[string][]attr.Name
+
+func (ExtraGroupAttributesMap) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:        "object",
+		Description: "Map of attribute group names to arrays of attribute names. Supported keys are 'app' and 'k8s_app_meta'.",
+		PropertyNames: &jsonschema.Schema{
+			Enum: []any{"app", "k8s_app_meta"},
+		},
+		AdditionalProperties: &jsonschema.Schema{
+			Type: "array",
+			Items: &jsonschema.Schema{
+				Type: "string",
+			},
+		},
+	}
+}
+
+const (
+	k8sGKEDefaultNamespacesRegex = "|^gke-connect$|^gke-gmp-system$|^gke-managed-cim$|^gke-managed-filestorecsi$|^gke-managed-metrics-server$|^gke-managed-system$|^gke-system$|^gke-managed-volumepopulator$"
+	k8sGKEDefaultNamespacesGlob  = ",gke-connect,gke-gmp-system,gke-managed-cim,gke-managed-filestorecsi,gke-managed-metrics-server,gke-managed-system,gke-system,gke-managed-volumepopulator"
+)
+
+const (
+	k8sAKSDefaultNamespacesRegex = "|^gatekeeper-system"
+	k8sAKSDefaultNamespacesGlob  = ",gatekeeper-system"
+)
+
+var (
+	k8sDefaultNamespacesRegex = services.NewRegexp("^kube-system$|^kube-node-lease$|^local-path-storage$|^cert-manager$|^monitoring$" + k8sGKEDefaultNamespacesRegex + k8sAKSDefaultNamespacesRegex)
+	k8sDefaultNamespacesGlob  = services.NewGlob("{kube-system,kube-node-lease,local-path-storage,cert-manager,monitoring" + k8sGKEDefaultNamespacesGlob + k8sAKSDefaultNamespacesGlob + "}")
+)
+
+var DefaultConfig = Config{
+	ChannelBufferLen:        50,
+	ChannelSendTimeout:      time.Minute,
+	ChannelSendTimeoutPanic: false,
+	LogLevel:                LogLevelInfo,
+	LogFormat:               LogFormatText,
+	ShutdownTimeout:         10 * time.Second,
+	EnforceSysCaps:          false,
+	EBPF: config.EBPFTracer{
+		BatchLength:               100,
+		BatchTimeout:              time.Second,
+		HTTPRequestTimeout:        0,
+		GoHTTPClientBufferTimeout: time.Second,
+		WakeupLen:                 500,
+		StatsWakeupDataBytes:      4096,
+		TCBackend:                 config.TCBackendAuto,
+		DNSRequestTimeout:         5 * time.Second,
+		ContextPropagation:        config.ContextPropagationDisabled,
+		RedisDBCache: config.RedisDBCacheConfig{
+			Enabled: false,
+			MaxSize: 1000,
+		},
+		BufferSizes: config.EBPFBufferSizes{
+			HTTP:      0,
+			MySQL:     0,
+			Postgres:  0,
+			Kafka:     0,
+			MSSQL:     0,
+			TCP:       0,
+			Aerospike: 0,
+		},
+		MySQLPreparedStatementsCacheSize:    1024,
+		PostgresPreparedStatementsCacheSize: 1024,
+		MSSQLPreparedStatementsCacheSize:    1024,
+		MongoRequestsCacheSize:              1024,
+		KafkaTopicUUIDCacheSize:             1024,
+		KafkaConsumerGroupCacheSize:         4096,
+		KafkaConsumerGroupTTL:               2 * time.Minute,
+		CouchbaseDBCacheSize:                1024,
+		OverrideBPFLoopEnabled:              false,
+		PayloadExtraction: config.PayloadExtraction{
+			HTTP: config.HTTPConfig{
+				GraphQL: config.GraphQLConfig{
+					Enabled: false,
+				},
+				Elasticsearch: config.ElasticsearchConfig{
+					Enabled: false,
+				},
+				AWS: config.AWSConfig{
+					Enabled: false,
+				},
+				SQLPP: config.SQLPPConfig{
+					Enabled: false,
+					EndpointPatterns: []string{
+						"/query/service",
+					},
+				},
+				GenAI: config.GenAIConfig{
+					OpenAI: config.OpenAIConfig{
+						Enabled: false,
+					},
+					Anthropic: config.AnthropicConfig{
+						Enabled: false,
+					},
+					Gemini: config.GeminiConfig{
+						Enabled: false,
+					},
+					Qwen: config.QwenConfig{
+						Enabled: false,
+					},
+					Bedrock: config.BedrockConfig{
+						Enabled: false,
+					},
+					MCP: config.MCPConfig{
+						Enabled: false,
+					},
+				},
+				Enrichment: config.EnrichmentConfig{
+					Enabled: false,
+					Policy: config.HTTPParsingPolicy{
+						DefaultAction: config.HTTPParsingDefaultAction{
+							Headers: config.HTTPParsingActionExclude,
+							Body:    config.HTTPParsingActionExclude,
+						},
+						DefaultObfuscationString: "***",
+					},
+					Rules: []config.HTTPParsingRule{},
+				},
+			},
+		},
+		MaxTransactionTime: 5 * time.Minute,
+		LogEnricher: config.LogEnricherConfig{
+			FieldNames: config.LogEnricherFieldNames{
+				TraceID: "trace_id",
+				SpanID:  "span_id",
+			},
+			PlainText: config.LogEnricherPlainTextConfig{
+				Enabled:   true,
+				Placement: config.LogEnricherPlacementSuffix,
+				Multiline: config.LogEnricherMultilineFirstLine,
+			},
+			CacheTTL:              30 * time.Minute,
+			CacheSize:             128,
+			AsyncWriterWorkers:    8,
+			AsyncWriterChannelLen: 500,
+		},
+		BPFFSPath:      "/sys/fs/bpf/",
+		InstrumentCuda: config.CudaModeAuto,
+	},
+	NameResolver: &transform.NameResolverConfig{
+		Sources: []transform.Source{
+			transform.SourceK8s,
+			transform.SourceECS,
+		},
+		CacheLen: 1024,
+		CacheTTL: 5 * time.Minute,
+		ECS: transform.ECSNameResolverConfig{
+			RefreshInterval: 30 * time.Second,
+		},
+	},
+	Metrics: perapp.GlobalMetricsConfig{
+		Features: export.FeatureApplicationRED | export.FeatureApplicationSizes,
+	},
+	OTELMetrics: otelcfg.MetricsConfig{
+		Protocol:        otelcfg.ProtocolUnset,
+		MetricsProtocol: otelcfg.ProtocolUnset,
+		// Matches recommended scrape interval for OpenTelemetry and other collectors
+		OTELIntervalMS:       60_000,
+		Buckets:              export.DefaultBuckets,
+		ReportersCacheLen:    ReporterLRUSize,
+		HistogramAggregation: otelcfg.HistogramAggregationExplicit,
+		ExponentialHistogram: otelcfg.ExponentialHistogramConfig{
+			MaxSize:  160,
+			MaxScale: 20,
+		},
+		Instrumentations: []instrumentations.Instrumentation{
+			instrumentations.InstrumentationALL,
+		},
+		TTL: defaultMetricsTTL,
+	},
+	Traces: otelcfg.TracesConfig{
+		Protocol:          otelcfg.ProtocolUnset,
+		TracesProtocol:    otelcfg.ProtocolUnset,
+		BatchMaxSize:      4096,
+		QueueSize:         16384,
+		BatchTimeout:      15 * time.Second,
+		ReportersCacheLen: ReporterLRUSize,
+		Instrumentations: []instrumentations.Instrumentation{
+			instrumentations.InstrumentationHTTP,
+			instrumentations.InstrumentationGRPC,
+			instrumentations.InstrumentationSQL,
+			instrumentations.InstrumentationRedis,
+			instrumentations.InstrumentationKafka,
+			instrumentations.InstrumentationMQTT,
+			instrumentations.InstrumentationNATS,
+			instrumentations.InstrumentationAMQP,
+			instrumentations.InstrumentationMongo,
+			instrumentations.InstrumentationCouchbase,
+			instrumentations.InstrumentationMemcached,
+			instrumentations.InstrumentationSunRPC,
+			instrumentations.InstrumentationAerospike,
+			// no traces for DNS and GPU by default
+		},
+	},
+	Prometheus: prom.PrometheusConfig{
+		Path:            "/metrics",
+		Buckets:         export.DefaultBuckets,
+		NativeHistogram: prom.DefaultNativeHistogramConfig,
+		Instrumentations: []instrumentations.Instrumentation{
+			instrumentations.InstrumentationALL,
+		},
+		TTL:                         defaultMetricsTTL,
+		SpanMetricsServiceCacheSize: 10000,
+	},
+	TracePrinter: debug.TracePrinterDisabled,
+	InternalMetrics: imetrics.InternalMetricsConfig{
+		Exporter: imetrics.InternalMetricsExporterDisabled,
+		AvoidedServices: imetrics.AvoidedServicesConfig{
+			Limit: avoidedsvc.DefaultLimit,
+		},
+		Prometheus: imetrics.PrometheusEndpointConfig{
+			Port: 0, // disabled by default
+			Path: "/internal/metrics",
+		},
+		BpfMetricScrapeInterval: 15 * time.Second,
+	},
+	Attributes: Attributes{
+		InstanceID: config.InstanceIDConfig{
+			HostnameDNSResolution: true,
+		},
+		Kubernetes: transform.KubernetesDecorator{
+			Enable:                   kubeflags.EnabledDefault,
+			InformersSyncTimeout:     30 * time.Second,
+			ReconnectInitialInterval: 5 * time.Second,
+			InformersResyncPeriod:    30 * time.Minute,
+			ResourceLabels:           kube.DefaultResourceLabels,
+		},
+		HostID:                         HostIDConfig{},
+		MetadataRetry:                  metadata.DefaultRetryConfig,
+		RenameUnresolvedHosts:          "unresolved",
+		RenameUnresolvedHostsOutgoing:  "outgoing",
+		RenameUnresolvedHostsIncoming:  "incoming",
+		MetricSpanNameAggregationLimit: 100,
+	},
+	Routes: &transform.RoutesConfig{
+		Unmatch:                   transform.UnmatchDefault,
+		WildcardChar:              "*",
+		MaxPathSegmentCardinality: 10,
+	},
+	NetworkFlows: DefaultNetworkConfig,
+	Stats:        DefaultStatsConfig,
+	Discovery: services.DiscoveryConfig{
+		ExcludeOTelInstrumentedServices: true,
+		DefaultExcludeServices: services.RegexDefinitionCriteria{
+			services.RegexSelector{
+				Path: services.NewRegexp("(?:^|/)(obi$|otelcol[^/]*$)"),
+			},
+			services.RegexSelector{
+				Metadata: map[string]*services.RegexpAttr{"k8s_namespace": &k8sDefaultNamespacesRegex},
+			},
+		},
+		DefaultExcludeInstrument: services.GlobDefinitionCriteria{
+			services.GlobAttributes{
+				Path: services.NewGlob("{*/obi,obi,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}"),
+			},
+			services.GlobAttributes{
+				Metadata: map[string]*services.GlobAttr{"k8s_namespace": &k8sDefaultNamespacesGlob},
+			},
+		},
+		MinProcessAge:              5 * time.Second,
+		ProcessContextPollInterval: time.Second,
+		DefaultOtlpGRPCPort:        4317,
+		RouteHarvesterTimeout:      10 * time.Second,
+		RouteHarvestConfig: services.RouteHarvestingConfig{
+			JavaHarvestDelay: 5 * time.Second,
+		},
+		ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
+	},
+	NodeJS: NodeJSConfig{
+		Enabled: true,
+	},
+	Java: JavaConfig{
+		Enabled: true,
+		Timeout: 10 * time.Second,
+	},
+	JVMRuntimeMetrics: JVMRuntimeMetricsConfig{
+		SamplingInterval: time.Second,
+	},
+	DotnetRuntimeMetrics: DotnetRuntimeMetricsConfig{
+		SamplingInterval: time.Second,
+		Timeout:          10 * time.Second,
+	},
+	HealthCheck: HealthCheckConfig{
+		Port:          0,
+		ListenAddress: health.DefaultListenAddress,
+	},
+}
+
+type Config struct {
+	EBPF config.EBPFTracer `yaml:"ebpf"`
+
+	// NetworkFlows configuration for Network Observability feature
+	NetworkFlows NetworkConfig `yaml:"network"`
+	Stats        StatsConfig   `yaml:"stats"`
+
+	Filters filter.AttributesConfig `yaml:"filter"`
+
+	Attributes    Attributes                    `yaml:"attributes"`
+	CloudMetadata transform.CloudMetadataConfig `yaml:"cloud_metadata"`
+	// Routes configures URL path grouping. If not set, data will be directly forwarded to exporters.
+	Routes       *transform.RoutesConfig       `yaml:"routes"`
+	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
+	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
+	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
+	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
+	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"OTEL_EBPF_TRACE_PRINTER"`
+
+	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
+	//
+	// Deprecated: Use OTEL_EBPF_AUTO_TARGET_EXE
+	Exec services.RegexpAttr `yaml:"executable_path" env:"OTEL_EBPF_EXECUTABLE_PATH"`
+
+	// AutoTargetExe selects the executable to instrument matching a Glob against the executable path.
+	// To set this value via YAML, use discovery > instrument.
+	// It also accepts OTEL_GO_AUTO_TARGET_EXE for compatibility with opentelemetry-go-instrumentation
+	AutoTargetExe services.GlobAttr `env:"OTEL_EBPF_AUTO_TARGET_EXE,expand" envDefault:"${OTEL_GO_AUTO_TARGET_EXE}"`
+
+	// Port allows selecting the instrumented executable that owns the Port value. If this value is set (and
+	// different to zero), the value of the Exec property won't take effect.
+	// It's important to emphasize that if your process opens multiple HTTP/GRPC ports, the auto-instrumenter
+	// will instrument all the service calls in all the ports, not only the port specified here.
+	Port services.IntEnum `yaml:"open_port" env:"OTEL_EBPF_OPEN_PORT"`
+
+	// AutoTargetLanguage selects the executable to instrument matching a Glob of chosen languages.
+	// To set this value via YAML, use discovery > instrument.
+	AutoTargetLanguage services.GlobAttr `env:"OTEL_EBPF_AUTO_TARGET_LANGUAGE,expand"`
+
+	// TargetPIDs selects processes by PID for instrumentation. When non-empty, only these PIDs are
+	// instrumented. Accepts YAML list (target_pids: [1234, 5678]), single number, or env
+	// OTEL_EBPF_TARGET_PID=1234,5678. Alternative to Exec or AutoTargetExe when PIDs are known.
+	TargetPIDs services.IntEnum `yaml:"target_pids" env:"OTEL_EBPF_TARGET_PID"`
+
+	// ServiceName specifies the name of the instrumented service, taken from either OTEL_EBPF_SERVICE_NAME env var or OTEL_SERVICE_NAME (for OTEL spec compatibility).
+	// Using env and envDefault is a trick to get the value either from one of either variables.
+	//
+	// Deprecated: Service name should be set in the instrumentation target (env vars, kube metadata...)
+	// as this is a reminiscence of past times when we only supported one executable per instance.
+	ServiceName string `yaml:"service_name" env:"OTEL_SERVICE_NAME,expand" envDefault:"${OTEL_EBPF_SERVICE_NAME}"`
+	//
+	// Deprecated: Service namespace should be set in the instrumentation target (env vars, kube metadata...)
+	// as this is a reminiscence of past times when we only supported one executable per instance.
+	ServiceNamespace string `yaml:"service_namespace" env:"OTEL_EBPF_SERVICE_NAMESPACE"`
+
+	// Metrics configures the progressive support of the OTEL declarative configuration.
+	Metrics perapp.GlobalMetricsConfig `yaml:"metrics"`
+
+	// Discovery configuration
+	Discovery services.DiscoveryConfig `yaml:"discovery"`
+
+	LogLevel LogLevel `yaml:"log_level" env:"OTEL_EBPF_LOG_LEVEL"`
+
+	LogFormat LogFormat `yaml:"log_format" env:"OTEL_EBPF_LOG_FORMAT"`
+
+	// Timeout for a graceful shutdown
+	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"OTEL_EBPF_SHUTDOWN_TIMEOUT"`
+
+	// Check for required system capabilities and bail if they are not
+	// present. If set to 'false', OBI will still print a list of missing
+	// capabilities, but the execution will continue
+	EnforceSysCaps bool `yaml:"enforce_sys_caps" env:"OTEL_EBPF_ENFORCE_SYS_CAPS"`
+
+	// From this comment, the properties below will remain undocumented, as they
+	// are useful for development purposes. They might be helpful for customer support.
+
+	ChannelBufferLen        int           `yaml:"channel_buffer_len" env:"OTEL_EBPF_CHANNEL_BUFFER_LEN"`
+	ChannelSendTimeout      time.Duration `yaml:"channel_send_timeout" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT"`
+	ChannelSendTimeoutPanic bool          `yaml:"channel_send_timeout_panic" env:"OTEL_EBPF_CHANNEL_SEND_TIMEOUT_PANIC"`
+
+	ProfilePort     int                            `yaml:"profile_port" env:"OTEL_EBPF_PROFILE_PORT" validate:"gte=0,lte=65535"`
+	InternalMetrics imetrics.InternalMetricsConfig `yaml:"internal_metrics"`
+
+	// LogConfig enables the logging of the configuration on startup.
+	LogConfig LogConfigOption `yaml:"log_config" env:"OTEL_EBPF_LOG_CONFIG"`
+
+	NodeJS NodeJSConfig `yaml:"nodejs"`
+	Java   JavaConfig   `yaml:"javaagent"`
+
+	JVMRuntimeMetrics    JVMRuntimeMetricsConfig    `yaml:"jvm_runtime_metrics"`
+	DotnetRuntimeMetrics DotnetRuntimeMetricsConfig `yaml:"dotnet_runtime_metrics"`
+
+	HealthCheck HealthCheckConfig `yaml:"health_check"`
+}
+
+// JoinMetricsConfig returns a combination of the base and per-application metrics config.
+// It is used to initialize resources that should be available if they are enabled
+// for any possible service match. Per-service features still decide whether each
+// service emits the corresponding metrics.
+func (c *Config) JoinMetricsConfig() *perapp.GlobalMetricsConfig {
+	if c == nil {
+		return &perapp.GlobalMetricsConfig{}
+	}
+
+	mc := c.Metrics
+	for _, d := range c.Discovery.Instrument {
+		mc.Features |= d.Metrics.Features
+	}
+	for _, d := range c.Discovery.Services {
+		mc.Features |= d.Metrics.Features
+	}
+	return &mc
+}
+
+func (c *Config) AppRuntimeMetricsEnabled() bool {
+	return c != nil && c.JoinMetricsConfig().Features.AppRuntime()
+}
+
+// PopulateTraceContext reports whether the pinned traces_ctx_v1 map must be kept
+// populated, which is the case when anything reads it: OBI's own log enricher, or
+// a reader outside OBI opted in through ebpf.populate_trace_context.
+//
+// Population costs a refresh on every async context switch of the instrumented
+// runtime, so with no reader it is skipped entirely.
+func (c *Config) PopulateTraceContext() bool {
+	return c != nil && (c.EBPF.PopulateTraceContext ||
+		c.EBPF.LogEnricher.Enabled())
+}
+
+type HealthCheckConfig struct {
+	// 0 (default) means disabled
+	Port int `yaml:"port" env:"OTEL_EBPF_HEALTH_CHECK_PORT" validate:"gte=0,lte=65535"`
+	// IP address the TCP health endpoint binds to. Defaults to 127.0.0.1. Set to 0.0.0.0
+	// or :: only when external probes require access.
+	ListenAddress string `yaml:"listen_address" env:"OTEL_EBPF_HEALTH_CHECK_LISTEN_ADDRESS" validate:"omitempty,ip" jsonschema:"type=string,format=ip"`
+	// when set, the health endpoint binds this unix socket (a filesystem path or a leading-'@'
+	// abstract name) instead of the TCP port
+	UnixSocketPath string `yaml:"unix_socket_path" env:"OTEL_EBPF_HEALTH_CHECK_UNIX_SOCKET_PATH"`
+}
+
+func (c *Config) Unmarshal(component *confmap.Conf) error {
+	if component == nil {
+		return nil
+	}
+
+	raw := component.ToStringMap()
+
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName:          "yaml",
+		Result:           c,
+		WeaklyTypedInput: true,
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			cidrDefinitionsHookFunc(),
+			mapstructure.StringToTimeDurationHookFunc(),
+			// ComposeDecodeHookFunc feeds each hook the previous hook's output, so the
+			// slice-joining hook must run before TextUnmarshallerHookFunc, which only
+			// fires on strings.
+			stringSliceToTextUnmarshalerHookFunc(),
+			mapstructure.TextUnmarshallerHookFunc(),
+			inlineMetadataHookFunc(),
+		),
+	})
+	if err != nil {
+		return err
+	}
+
+	return dec.Decode(raw)
+}
+
+func cidrDefinitionsHookFunc() mapstructure.DecodeHookFunc {
+	return func(_ reflect.Type, to reflect.Type, data any) (any, error) {
+		if to != reflect.TypeFor[cidr.Definitions]() {
+			return data, nil
+		}
+		from := reflect.TypeOf(data)
+		if from == nil || (from.Kind() != reflect.Slice && from.Kind() != reflect.Array) {
+			return data, nil
+		}
+
+		encoded, err := yaml.Marshal(data)
+		if err != nil {
+			return nil, fmt.Errorf("encoding CIDR definitions: %w", err)
+		}
+
+		var definitions cidr.Definitions
+		if err := yaml.Unmarshal(encoded, &definitions); err != nil {
+			return nil, err
+		}
+		return definitions, nil
+	}
+}
+
+func (c *Config) Log() {
+	if c.LogConfig == "" {
+		return
+	}
+	var configString string
+	configYaml, err := yaml.Marshal(c)
+	if err != nil {
+		slog.Warn("can't marshal configuration to YAML", "error", err)
+		return
+	}
+	switch c.LogConfig {
+	case LogConfigOptionYAML:
+		configString = string(configYaml)
+	case LogConfigOptionJSON:
+		// instead of annotating the config with json tags, we unmarshal the YAML to a map[string]any, and marshal that map to
+		var configMap map[string]any
+		err = yaml.Unmarshal(configYaml, &configMap)
+		if err != nil {
+			slog.Warn("can't unmarshal yaml configuration to map", "error", err)
+			break
+		}
+		configJSON, err := json.Marshal(configMap)
+		if err != nil {
+			slog.Warn("can't marshal configuration to JSON", "error", err)
+			break
+		}
+		configString = string(configJSON)
+	}
+	if configString != "" {
+		slog.Info("Running OpenTelemetry eBPF Instrumentation with configuration")
+		fmt.Println(configString)
+	}
+}
+
+// stringSliceToTextUnmarshalerHookFunc returns a DecodeHookFunc that converts
+// slices of strings (or []interface{} containing strings) to types implementing
+// encoding.TextUnmarshaler by joining them with commas.
+// This handles types like Features and ExportModes that have UnmarshalYAML for
+// YAML sequences but also support comma-separated text via UnmarshalText.
+func stringSliceToTextUnmarshalerHookFunc() mapstructure.DecodeHookFunc {
+	return func(_ reflect.Type, to reflect.Type, data any) (any, error) {
+		// Check if target implements TextUnmarshaler
+		if to.Kind() == reflect.Pointer {
+			to = to.Elem()
+		}
+		toPtr := reflect.New(to)
+		if _, ok := reflect.TypeAssert[encoding.TextUnmarshaler](toPtr); !ok {
+			return data, nil
+		}
+
+		if slice, ok := data.([]any); ok {
+			strs := make([]string, 0, len(slice))
+			for _, v := range slice {
+				if s, ok := v.(string); ok {
+					strs = append(strs, s)
+				} else {
+					// Not a string slice, let mapstructure handle it
+					return data, nil
+				}
+			}
+			return strings.Join(strs, ","), nil
+		}
+
+		// Handle []string directly
+		if slice, ok := data.([]string); ok {
+			return strings.Join(slice, ","), nil
+		}
+
+		return data, nil
+	}
+}
+
+// inlineMetadataHookFunc returns a DecodeHookFunc that handles the ",inline" yaml tag
+// for Metadata fields in GlobAttributes and RegexSelector types.
+// Since mapstructure uses TagName: "yaml" but doesn't understand the yaml ",inline" directive,
+// this hook manually extracts keys that are in AllowedAttributeNames and places them in the "Metadata" field.
+func inlineMetadataHookFunc() mapstructure.DecodeHookFunc {
+	return func(_ reflect.Type, to reflect.Type, data any) (any, error) {
+		// Only process map inputs
+		inputMap, ok := data.(map[string]any)
+		if !ok {
+			return data, nil
+		}
+
+		// Check if target type is GlobAttributes or RegexSelector
+		switch to {
+		case reflect.TypeFor[services.GlobAttributes](), reflect.TypeFor[services.RegexSelector]():
+			// continue processing
+		default:
+			return data, nil
+		}
+
+		// Extract fields that are in AllowedAttributeNames into metadata
+		metadata := make(map[string]any)
+		for k, v := range inputMap {
+			if _, isAllowed := services.AllowedAttributeNames[k]; isAllowed {
+				metadata[k] = v
+			}
+		}
+
+		// If there are metadata fields, add them to the input map under "Metadata"
+		// mapstructure will use the struct field name when the yaml tag is ",inline"
+		if len(metadata) > 0 {
+			// Remove metadata keys from the original map
+			for k := range metadata {
+				delete(inputMap, k)
+			}
+			// Add them under the "Metadata" key (matching the struct field name)
+			inputMap["Metadata"] = metadata
+		}
+
+		return inputMap, nil
+	}
+}
+
+type LogConfigOption string
+
+const (
+	LogConfigOptionYAML = LogConfigOption("yaml")
+	LogConfigOptionJSON = LogConfigOption("json")
+)
+
+// Attributes configures the decoration of some extra attributes that will be
+// added to each span
+type Attributes struct {
+	Kubernetes           transform.KubernetesDecorator `yaml:"kubernetes"`
+	InstanceID           config.InstanceIDConfig       `yaml:"instance_id"`
+	Select               attributes.Selection          `yaml:"select"`
+	HostID               HostIDConfig                  `yaml:"host_id"`
+	ExtraGroupAttributes ExtraGroupAttributesMap       `yaml:"extra_group_attributes"`
+	MetadataRetry        metadata.RetryConfig          `yaml:"metadata_retry"`
+
+	// RenameUnresolvedHosts will replace HostName and PeerName attributes when they are empty or contain
+	// unresolved IP addresses to reduce cardinality.
+	// Set this value to the empty string to disable this feature.
+	RenameUnresolvedHosts         string `yaml:"rename_unresolved_hosts" env:"OTEL_EBPF_RENAME_UNRESOLVED_HOSTS"`
+	RenameUnresolvedHostsOutgoing string `yaml:"rename_unresolved_hosts_outgoing" env:"OTEL_EBPF_RENAME_UNRESOLVED_HOSTS_OUTGOING"`
+	RenameUnresolvedHostsIncoming string `yaml:"rename_unresolved_hosts_incoming" env:"OTEL_EBPF_RENAME_UNRESOLVED_HOSTS_INCOMING"`
+
+	// MetricSpanNameAggregationLimit works PER SERVICE and only relates to span_metrics.
+	// When the span_name cardinality surpasses this limit, the span_name will be reported as AGGREGATED.
+	// If the value <= 0, it is disabled.
+	MetricSpanNameAggregationLimit int `yaml:"metric_span_names_limit" env:"OTEL_EBPF_METRIC_SPAN_NAMES_LIMIT"`
+
+	// SensitiveQueryParams controls which query-parameter keys are redacted in url.full and url.query.
+	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
+}
+
+type HostIDConfig struct {
+	// Override allows overriding the reported host.id in OBI
+	Override string `yaml:"override" env:"OTEL_EBPF_HOST_ID"`
+}
+
+type NodeJSConfig struct {
+	// Enabled turns on the Node.js injector agent, used for trace-context
+	// propagation and runtime metrics. Setting it to false disables the
+	// injection entirely, runtime metrics included.
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_NODEJS_ENABLED"`
+	// ManualSpans injects the span bridge (spanbridge.js) into Node.js
+	// processes, capturing spans the application creates through the
+	// OpenTelemetry API when no OpenTelemetry SDK is registered.
+	ManualSpans bool `yaml:"manual_spans" env:"OTEL_EBPF_NODEJS_MANUAL_SPANS"`
+}
+
+type JavaConfig struct {
+	// Enabled turns on the Java injector agent, used for TLS tracing, virtual thread
+	// correlation, and agent-backed runtime metrics. Setting it to false disables
+	// GC duration, class, thread, and CPU runtime metrics. HotSpot memory metrics
+	// remain available.
+	Enabled              bool          `yaml:"enabled" env:"OTEL_EBPF_JAVAAGENT_ENABLED"`
+	Debug                bool          `yaml:"debug" env:"OTEL_EBPF_JAVAAGENT_DEBUG"`
+	DebugInstrumentation bool          `yaml:"debug_instrumentation" env:"OTEL_EBPF_JAVAAGENT_DEBUG_INSTRUMENTATION"`
+	Timeout              time.Duration `yaml:"attach_timeout" env:"OTEL_EBPF_JAVAAGENT_ATTACH_TIMEOUT" validate:"gte=0"`
+}
+
+type JVMRuntimeMetricsConfig struct {
+	// SamplingInterval controls HotSpot memory event sampling and Java agent
+	// class, thread, and CPU snapshot collection.
+	SamplingInterval time.Duration `yaml:"sampling_interval" env:"OBI_JVM_RUNTIME_METRICS_SAMPLING_INTERVAL"`
+}
+
+type DotnetRuntimeMetricsConfig struct {
+	// SamplingInterval sets the collection interval requested from System.Runtime EventCounters.
+	// It also sets the delay before reconnecting after a collection session ends.
+	SamplingInterval time.Duration `yaml:"sampling_interval" env:"OBI_DOTNET_RUNTIME_METRICS_SAMPLING_INTERVAL"`
+	// Timeout bounds diagnostic IPC setup and EventPipe session shutdown.
+	Timeout time.Duration `yaml:"timeout" env:"OBI_DOTNET_RUNTIME_METRICS_TIMEOUT"`
+}
+
+type ConfigError string
+
+func (e ConfigError) Error() string {
+	return string(e)
+}
+
+// Validate validates a standalone OBI configuration.
+func (c *Config) Validate() error {
+	return c.validate(validationContext{checkCiliumCompatibility: tcmanager.EnsureCiliumCompatibility})
+}
+
+// ValidateStatic validates a standalone OBI configuration without inspecting
+// host state.
+func (c *Config) ValidateStatic() error {
+	return c.validate(validationContext{})
+}
+
+// ValidateForReceiver validates an OBI configuration whose signal consumers
+// are supplied by a Collector receiver.
+func (c *Config) ValidateForReceiver() error {
+	return c.validate(validationContext{
+		hostTracesSink:           true,
+		hostMetricsSink:          true,
+		checkCiliumCompatibility: tcmanager.EnsureCiliumCompatibility,
+	})
+}
+
+// ValidateStaticForReceiver validates a Collector receiver configuration
+// without inspecting host state.
+func (c *Config) ValidateStaticForReceiver() error {
+	return c.validate(validationContext{hostTracesSink: true, hostMetricsSink: true})
+}
+
+type validationContext struct {
+	hostTracesSink           bool
+	hostMetricsSink          bool
+	checkCiliumCompatibility func(config.TCBackend) error
+}
+
+//nolint:cyclop
+func (c *Config) validate(context validationContext) error {
+	validate := validator.New(validator.WithRequiredStructEnabled())
+
+	// for future custom validations
+	customValidations := CustomValidations{
+		validationTagAgentIPIface: ValidateAgentIPIface,
+	}
+
+	if err := registerCustomValidations(validate, customValidations); err != nil {
+		return ConfigError("error registering custom validations: " + err.Error())
+	}
+
+	if err := validate.Struct(c); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if err := c.EBPF.LogEnricher.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if c.JVMRuntimeMetrics.SamplingInterval <= 0 {
+		return ConfigError("jvm_runtime_metrics.sampling_interval must be greater than 0")
+	}
+	if c.DotnetRuntimeMetrics.SamplingInterval <= 0 {
+		return ConfigError("dotnet_runtime_metrics.sampling_interval must be greater than 0")
+	}
+	if c.DotnetRuntimeMetrics.Timeout <= 0 {
+		return ConfigError("dotnet_runtime_metrics.timeout must be greater than 0")
+	}
+	if err := c.Discovery.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if err := c.EBPF.PayloadExtraction.HTTP.Enrichment.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if err := c.NetworkFlows.CIDRs.Validate(); err != nil {
+		return ConfigError("network " + err.Error())
+	}
+
+	if err := c.Stats.CIDRs.Validate(); err != nil {
+		return ConfigError("stats " + err.Error())
+	}
+
+	if err := c.Traces.NormalizeQueueConfig(); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	networkEnabled := c.enabledForValidation(FeatureNetO11y, context)
+	applicationEnabled := c.enabledForValidation(FeatureAppO11y, context)
+	statsEnabled := c.enabledForValidation(FeatureStatsO11y, context)
+	if !networkEnabled && !applicationEnabled && !statsEnabled {
+		return ConfigError("at least one of 'network', 'application' or 'stats' features must be enabled. " +
+			"Enable an OpenTelemetry or Prometheus metrics export, then enable any of the network*, application* or stats*" +
+			"features using the 'OTEL_EBPF_METRICS_FEATURES=network,application,stats' environment variable " +
+			"or 'meter_provider: { features: [network,application,stats] }' in the YAML configuration file. ")
+	}
+
+	if networkEnabled && c.NetworkFlows.Source == EbpfSourceTC && context.checkCiliumCompatibility != nil {
+		if err := context.checkCiliumCompatibility(c.EBPF.TCBackend); err != nil {
+			return ConfigError("Cilium compatibility error: " + err.Error())
+		}
+	}
+
+	otelMetricsEnabled := context.hostMetricsSink || c.OTELMetrics.EndpointEnabled()
+	tracesEnabled := context.hostTracesSink || c.Traces.Enabled()
+
+	if networkEnabled && !otelMetricsEnabled &&
+		!c.Prometheus.EndpointEnabled() && !c.NetworkFlows.Print {
+		return ConfigError("enabling network metrics requires to enable at least the OpenTelemetry" +
+			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EBPF_PROMETHEUS_PORT environment variables. For debugging" +
+			" purposes, you can also set OTEL_EBPF_NETWORK_PRINT_FLOWS=true")
+	}
+
+	if statsEnabled && !otelMetricsEnabled &&
+		!c.Prometheus.EndpointEnabled() && !c.Stats.Print {
+		return ConfigError("enabling stat metrics requires to enable at least the OpenTelemetry" +
+			" metrics exporter: otel_metrics_export or prometheus_export sections in the YAML configuration file; or the" +
+			" OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or OTEL_EBPF_PROMETHEUS_PORT environment variables. For debugging" +
+			" purposes, you can also set OTEL_EBPF_STATS_PRINT_STATS=true")
+	}
+
+	if !c.TracePrinter.Valid() {
+		return ConfigError(fmt.Sprintf("invalid value for trace_printer: '%s'", c.TracePrinter))
+	}
+
+	if applicationEnabled && !c.TracePrinter.Enabled() &&
+		!otelMetricsEnabled && !tracesEnabled &&
+		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
+		return ConfigError("you need to define at least one exporter: trace_printer," +
+			" otel_metrics_export, otel_traces_export or prometheus_export")
+	}
+
+	if applicationEnabled && (c.Prometheus.EndpointEnabled() || otelMetricsEnabled) {
+		if err := c.resolveSpanMetricsFormats(); err != nil {
+			return err
+		}
+		if err := c.validateAppSizeMetrics(); err != nil {
+			return err
+		}
+		// Per-service sections can enable features the top-level list does not, and they
+		// drive the exporters through JoinMetricsConfig, so report against the same set.
+		c.warnDeprecatedMetricsFeatures()
+	}
+
+	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && c.InternalMetrics.Prometheus.Port != 0 {
+		return ConfigError("you can't enable both OTEL and Prometheus internal metrics")
+	}
+	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !otelMetricsEnabled {
+		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
+	}
+
+	return nil
+}
+
+// validateAppSizeMetrics rejects application_sizes without the application RED metrics.
+// The body size histograms are emitted from the HTTP application metric pipeline, so on
+// their own they would produce no telemetry at all.
+//
+// Every list is checked on its own: a defined per-service list replaces the global one
+// rather than extending it, so both features have to appear in the same list to have any
+// effect on the services that list applies to.
+func (c *Config) validateAppSizeMetrics() error {
+	for _, features := range c.metricsFeatureMasks() {
+		if features.Undefined() {
+			continue
+		}
+		if features.AppSizes() && !features.AppRED() {
+			return ConfigError("application_sizes needs the application RED metrics enabled in the" +
+				" same features list: use 'application', or add 'application_red' next to" +
+				" 'application_sizes'")
+		}
+	}
+	return nil
+}
+
+// metricsFeatureMasks returns every feature list that reaches the exporters: the top-level
+// one plus each per-service one.
+func (c *Config) metricsFeatureMasks() []*export.Features {
+	masks := make([]*export.Features, 0, 1+len(c.Discovery.Instrument)+len(c.Discovery.Services))
+	masks = append(masks, &c.Metrics.Features)
+	for i := range c.Discovery.Instrument {
+		masks = append(masks, &c.Discovery.Instrument[i].Metrics.Features)
+	}
+	for i := range c.Discovery.Services {
+		masks = append(masks, &c.Discovery.Services[i].Metrics.Features)
+	}
+	return masks
+}
+
+// resolveSpanMetricsFormats rejects an explicit legacy + OTel combination and resolves the
+// implicit one coming from "all"/"*" in favor of OTel, for every feature list that reaches
+// the exporters. Resolving only the top-level list would let a per-service "all" put every
+// span-metrics service back on the legacy names.
+func (c *Config) resolveSpanMetricsFormats() error {
+	resolved := false
+	legacyEnabled := false
+	otelEnabled := false
+	// JoinMetricsConfig ORs the lists together, so a format conflict left unresolved in any
+	// of them decides the naming for all services.
+	for _, features := range c.metricsFeatureMasks() {
+		if features.InvalidSpanMetricsConfig() {
+			return ConfigError("you can only enable one format of span metrics," +
+				" application_span or application_span_otel")
+		}
+		if features.ResolveSpanMetricsConflict() {
+			resolved = true
+		}
+		if features.LegacySpanMetrics() {
+			legacyEnabled = true
+		} else if features.SpanMetrics() {
+			otelEnabled = true
+		}
+	}
+
+	// The exporters choose the metric names from the OR of all masks, so a legacy format in
+	// one list and OTel in another would silently select legacy names for every service.
+	// Track each format separately because joining an "all" mask with an explicit legacy
+	// mask reconstructs FeatureAll and makes InvalidSpanMetricsConfig exempt the conflict.
+	if legacyEnabled && otelEnabled {
+		return ConfigError("you can only enable one format of span metrics across the" +
+			" top-level and per-service metrics features, application_span or" +
+			" application_span_otel")
+	}
+
+	// Reachable only through "all"/"*": an explicit combination is rejected above. The user
+	// did not pick the legacy format, so report the resolution without a deprecation notice.
+	if resolved {
+		slog.Warn("application_span and application_span_otel cannot be used together," +
+			" application_span_otel is selected automatically")
+	}
+	return nil
+}
+
+// warnDeprecatedMetricsFeatures reports every deprecated metrics feature that is still
+// enabled, across the top-level and per-service configurations.
+func (c *Config) warnDeprecatedMetricsFeatures() {
+	for _, deprecated := range c.JoinMetricsConfig().Features.DeprecatedEnabled() {
+		if deprecated.Replacement == "" {
+			slog.Warn("metrics feature is deprecated and will be removed in a future release",
+				"feature", deprecated.Name)
+			continue
+		}
+		slog.Warn("metrics feature is deprecated and will be removed in a future release",
+			"feature", deprecated.Name, "use", deprecated.Replacement)
+	}
+}
+
+func (c *Config) enabledForValidation(feature Feature, context validationContext) bool {
+	if c.Enabled(feature) {
+		return true
+	}
+	if !context.hostMetricsSink {
+		return false
+	}
+
+	switch feature {
+	case FeatureNetO11y:
+		return c.Metrics.Features.AnyNetwork()
+	case FeatureStatsO11y:
+		return c.Metrics.Features.StatMetrics()
+	default:
+		return false
+	}
+}
+
+func (c *Config) promNetO11yEnabled() bool {
+	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.AnyNetwork()
+}
+
+func (c *Config) otelNetO11yEnabled() bool {
+	return c.OTELMetrics.EndpointEnabled() && c.Metrics.Features.AnyNetwork()
+}
+
+func (c *Config) promStatsO11yEnabled() bool {
+	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
+func (c *Config) otelStatsO11yEnabled() bool {
+	return c.OTELMetrics.EndpointEnabled() && c.Metrics.Features.StatMetrics()
+}
+
+func (c *Config) willUseTC() bool {
+	return c.Enabled(FeatureNetO11y) && c.NetworkFlows.Source == EbpfSourceTC
+}
+
+// Enabled checks if a given OBI feature is enabled according to the global configuration
+func (c *Config) Enabled(feature Feature) bool {
+	switch feature {
+	case FeatureNetO11y:
+		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
+	case FeatureAppO11y:
+		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || len(c.Discovery.Instrument) > 0 ||
+			c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.TargetPIDs.Len() > 0
+	case FeatureStatsO11y:
+		return c.promStatsO11yEnabled() || c.otelStatsO11yEnabled()
+	}
+	return false
+}
+
+func (c *Config) SpanMetricsEnabledForTraces() bool {
+	return c.Metrics.Features.AnySpanMetrics() &&
+		(c.OTELMetrics.EndpointEnabled() || c.Prometheus.EndpointEnabled())
+}
+
+// ExternalLogger sets the logging capabilities of OBI.
+// Used for integrating OBI with an external logging system (for example an OpenTelemetry collector)
+// TODO: maybe this method has too many responsibilities, as it affects the global logger.
+func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
+	slog.SetDefault(slog.New(handler))
+	klogbridge.Install()
+	if debugMode {
+		c.TracePrinter = debug.TracePrinterText
+		c.EBPF.BpfDebug = true
+		c.EBPF.ProtocolDebug = true
+		if c.NetworkFlows.Enable {
+			c.NetworkFlows.Print = true
+		}
+	}
+}
+
+// LoadConfig overrides configuration in the following order (from less to most priority)
+// 1 - Default configuration (defaultConfig variable)
+// 2 - Contents of the provided file reader (nillable)
+// 3 - Environment variables
+func LoadConfig(file io.Reader) (*Config, error) {
+	cfg := DefaultConfig
+	// Deep-copy pointer fields so YAML/env unmarshal cannot mutate DefaultConfig through shared pointers.
+	if cfg.Routes != nil {
+		cfg.Routes = cfg.Routes.Clone()
+	}
+	if cfg.NameResolver != nil {
+		nrCopy := *cfg.NameResolver
+		cfg.NameResolver = &nrCopy
+	}
+	if file != nil {
+		cfgBuf, err := io.ReadAll(file)
+		if err != nil {
+			return nil, fmt.Errorf("reading YAML configuration: %w", err)
+		}
+		// replaces environment variables in YAML file
+		cfgBuf = config.ReplaceEnv(cfgBuf)
+		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
+			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
+		}
+	}
+	if err := env.Parse(&cfg); err != nil {
+		return nil, fmt.Errorf("reading env vars: %w", err)
+	}
+
+	cfg.normalize()
+
+	return &cfg, nil
+}
+
+func registerCustomValidations(validate *validator.Validate, customValidations CustomValidations) error {
+	for k, v := range customValidations {
+		if err := validate.RegisterValidation(k, v); err != nil {
+			return fmt.Errorf("cannot add validation with the given tag %q: %w", k, err)
+		}
+	}
+	return nil
+}
+
+// normalizeConfig normalizes user input to a common set of assumptions that are global to OBI
+func (c *Config) normalize() {
+	c.Attributes.Select.Normalize()
+	// backwards compatibility assumptions for the deprecated Metric feature sections in OTEL and Prom metrics config.
+	// Old, deprecated properties would take precedence over metrics > features, to avoid breaking changes.
+	if c.OTELMetrics.EndpointEnabled() && c.OTELMetrics.DeprFeatures != 0 {
+		// if the user has overridden otel_metrics_export > features
+		c.Metrics.Features = c.OTELMetrics.DeprFeatures
+	} else if c.Prometheus.EndpointEnabled() && c.Prometheus.DeprFeatures != 0 {
+		// if the user has overridden prometheus_export > features
+		c.Metrics.Features = c.Prometheus.DeprFeatures
+	}
+	// Deprecated: to be removed together with OTEL_EBPF_NETWORK_METRICS bool flag
+	if c.NetworkFlows.Enable {
+		c.Metrics.Features |= export.FeatureNetwork
+	}
+}

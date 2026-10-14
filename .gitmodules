@@ -1,0 +1,3 @@
+[submodule "obi-src"]
+	path = .obi-src
+	url = https://github.com/grafana/opentelemetry-ebpf-instrumentation.git

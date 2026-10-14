@@ -1,0 +1,7 @@
+discovery:
+  instrument:
+    - open_ports: 443
+otel_metrics_export:
+  endpoint: http://localhost:4318
+otel_traces_export:
+  endpoint: http://localhost:4318

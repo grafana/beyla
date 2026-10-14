@@ -1,0 +1,149 @@
+name: Pull request Beyla integration tests
+
+on:
+  push:
+    branches: ["main", "release-*"]
+  pull_request:
+    branches: ["main", "release-*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "bpf/**"
+      - "internal/**"
+      - "pkg/**"
+      - "cmd/**"
+      - "vendor/**"
+      - "Makefile"
+      - "scripts/generate-integration-matrix.sh"
+      - ".github/workflows/pull_request_beyla_integration_tests.yml"
+      - ".obi-src"
+      - ".obi-src/**"
+
+concurrency:
+  group: beyla-integration-tests-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+# Set restrictive permissions at workflow level
+permissions:
+  contents: read
+
+jobs:
+  test-matrix:
+    name: "Build Beyla integration matrix"
+    runs-on: ubuntu-x64
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build matrix
+        id: build-matrix
+        env:
+          PARTITIONS: 1
+          TEST_TAGS: integration
+        run: |
+          echo -n "matrix=" >> $GITHUB_OUTPUT
+          make beyla-integration-test-matrix-json >> $GITHUB_OUTPUT
+
+  test:
+    name: ${{ matrix.description }}
+    needs: test-matrix
+    runs-on: ubuntu-x64
+    # Grant specific permissions needed only for this job
+    permissions:
+      contents: read
+      pull-requests: write
+      # required for CODECOV token, Dockerhub access
+      id-token: write
+      checks: write
+      # Required for uploading artifacts
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Login to DockerHub
+        if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
+        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: Generate files
+        run: make prereqs vendor-obi
+
+      - name: Verify Beyla compiles
+        run: docker build -f internal/test/integration/components/beyla/Dockerfile .
+
+      - name: Run Beyla integration tests
+        env:
+          # zizmor template-injection fixes: pass data as env vars
+          MATRIX_ID: ${{ matrix.id }}
+          MATRIX_JSON: ${{ toJson(matrix) }}
+          MATRIX_TEST_PATTERN: ${{ matrix.test_pattern }}
+          RUN_NUMBER: ${{ github.run_number }}
+          TEST_TAGS: integration
+        run: |
+          echo Partition
+          echo "${MATRIX_JSON}"
+
+          if [ -z "${MATRIX_TEST_PATTERN}" ]; then
+            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            exit 1
+          fi
+
+          mkdir -p reports
+
+          ./bin/gotestsum \
+              --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
+              --packages="./internal/test/integration" -ftestname \
+              --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
+              -- -race -tags=${TEST_TAGS} -timeout 30m \
+              -mod vendor \
+              -run="^(${MATRIX_TEST_PATTERN})$" ./internal/test/integration
+
+      - name: Process coverage data
+        run: make itest-coverage-data
+
+      - id: get-codecov-token
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
+        continue-on-error: true
+        with:
+          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
+          repo_secrets: |
+            CODECOV_TOKEN=codecov:token
+
+      - name: Report coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./testoutput/itest-covdata.txt
+          flags: beyla-integration-test
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: beyla-test-reports-${{ github.run_number }}-${{ matrix.id }}
+          path: reports/*.log
+          retention-days: 5
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: beyla-test-logs-${{ github.run_number }}-${{ matrix.id }}
+          path: |
+            testoutput/*.log
+            testoutput/kind

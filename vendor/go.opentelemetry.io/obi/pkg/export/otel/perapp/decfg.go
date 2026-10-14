@@ -1,0 +1,27 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+// Package perapp is a placeholder for the future global and per-service support
+// of different metrics/traces export options.
+package perapp // import "go.opentelemetry.io/obi/pkg/export/otel/perapp"
+
+import (
+	"go.opentelemetry.io/obi/pkg/export"
+)
+
+// GlobalMetricsConfig is a placeholder for the progressive support of global and per-service
+// configuration of metrics.
+type GlobalMetricsConfig struct {
+	// Features specifies which metric features to export. Accepted values: application, network,
+	// application_span, application_service_graph, stats, ...
+	// envDefault is provided to avoid breaking changes
+	Features export.Features `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}" envSeparator:","`
+}
+
+// SvcMetricsConfig is equivalent to GlobalMetricsConfig, but avoids defining environment variable, since this
+// is a per-service configuration that needs to be defined exclusively in the service definition YAML.
+type SvcMetricsConfig struct {
+	// Features specifies which metric features to export. Accepted values: application, network,
+	// application_span, application_service_graph, ...
+	Features export.Features `yaml:"features"`
+}

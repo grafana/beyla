@@ -1,0 +1,222 @@
+name: Build alloy-beyla image
+on:
+  workflow_call:
+    inputs:
+      beyla_version:
+        description: "Beyla version tag to embed (e.g. v3.15.0)"
+        required: true
+        type: string
+      tag_suffix:
+        description: "Optional rebuild suffix appended as -<suffix> (e.g. 1, 2)"
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      beyla_version:
+        description: "Beyla version tag to embed (e.g. v3.15.0)"
+        required: true
+        type: string
+      tag_suffix:
+        description: "Optional rebuild suffix appended as -<suffix> (e.g. 1, 2). Leave empty for the first build."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            artifact_suffix: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: arm64
+    steps:
+      - name: Check initial disk usage
+        run: df -h
+
+      - name: Free up disk space
+        run: |
+          # Docker's reclaimed-space total excludes the toolchains removed below.
+          # Report each operation separately to identify expensive cleanup work.
+          free_kib() {
+            df -Pk / | awk 'NR == 2 {print $4}'
+          }
+
+          cleanup() {
+            local label="$1"
+            shift
+            local started=$SECONDS before after status=0
+            before=$(free_kib)
+            echo "::group::${label}"
+            "$@" || status=$?
+            after=$(free_kib)
+            echo "${label}: $((SECONDS - started))s, $(((after - before) / 1024)) MiB reclaimed, $((after / 1024)) MiB available (exit ${status})"
+            echo "::endgroup::"
+            return "$status"
+          }
+
+          df -h /
+          cleanup "Remove Java" sudo rm -rf /usr/lib/jvm
+          cleanup "Remove .NET" sudo rm -rf /usr/share/dotnet
+          cleanup "Remove Swift" sudo rm -rf /usr/share/swift
+          cleanup "Remove Haskell" sudo rm -rf /usr/local/.ghcup
+          cleanup "Remove Julia" sudo rm -rf /usr/local/julia*
+          cleanup "Remove Android SDKs" sudo rm -rf /usr/local/lib/android
+          cleanup "Remove Chromium" sudo rm -rf /usr/local/share/chromium
+          cleanup "Remove Edge and Chrome" sudo rm -rf /opt/microsoft /opt/google
+          cleanup "Remove Azure CLI" sudo rm -rf /opt/az
+          cleanup "Remove PowerShell" sudo rm -rf /usr/local/share/powershell
+          # Keep the rest of hostedtoolcache for Go.
+          cleanup "Remove CodeQL" sudo rm -rf /opt/hostedtoolcache/CodeQL
+          cleanup "Prune Docker" docker system prune -af || true
+          cleanup "Prune Docker builder" docker builder prune -af || true
+          df -h
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: grafana/alloy
+          ref: main
+          persist-credentials: "false"
+
+      # The git commit is required: Alloy's tools/image-tag appends "+dirty"
+      # to the embedded VERSION when the worktree has uncommitted changes,
+      # and GIT_REVISION would otherwise report the upstream commit's SHA.
+      # The commit is local to this runner and never pushed.
+      - name: Pin Beyla version in Alloy
+        env:
+          BEYLA_VERSION: ${{ inputs.beyla_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${BEYLA_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "::error::Invalid beyla_version: ${BEYLA_VERSION}. Expected vX.Y.Z or vX.Y.Z-suffix."
+            exit 1
+          fi
+          VERSION_FILE=internal/component/beyla/ebpf/internal/config/gen/beyla/beyla_version.yaml
+          env -u GOOS -u GOARCH -u GOARM go run ./internal/component/beyla/ebpf/internal/config/gen/download.go \
+            --update-checksums "${BEYLA_VERSION}" "${VERSION_FILE}"
+          cat "${VERSION_FILE}"
+          if ! git diff --quiet "${VERSION_FILE}"; then
+            git config user.email "grafana-beyla-bot[bot]@users.noreply.github.com"
+            git config user.name "grafana-beyla-bot[bot]"
+            git add "${VERSION_FILE}"
+            git commit -m "Pin Beyla ${BEYLA_VERSION} (ephemeral)"
+          fi
+
+      - name: Login to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/grafana/alloy-beyla,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          touch "${{ runner.temp }}/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digests-alloy-beyla-${{ matrix.artifact_suffix }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  create-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Derive image tag
+        id: tag
+        env:
+          BEYLA_VERSION: ${{ inputs.beyla_version }}
+          TAG_SUFFIX: ${{ inputs.tag_suffix }}
+        run: |
+          set -euo pipefail
+          VERSION="${BEYLA_VERSION#v}"
+          if [[ -n "${TAG_SUFFIX}" ]]; then
+            TAG="${VERSION}-${TAG_SUFFIX}"
+          else
+            TAG="${VERSION}"
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "Image tag: ghcr.io/grafana/alloy-beyla:${TAG}"
+
+      - name: Download amd64 digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: digests-alloy-beyla-amd64
+          path: ${{ runner.temp }}/digests/amd64
+
+      - name: Download arm64 digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: digests-alloy-beyla-arm64
+          path: ${{ runner.temp }}/digests/arm64
+
+      - name: Create manifest list and push
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGESTS_DIR: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          AMD64_DIGEST=$(basename "${DIGESTS_DIR}"/amd64/*)
+          ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
+          docker buildx imagetools create \
+            -t "ghcr.io/grafana/alloy-beyla:${TAG}" \
+            "ghcr.io/grafana/alloy-beyla@sha256:${AMD64_DIGEST}" \
+            "ghcr.io/grafana/alloy-beyla@sha256:${ARM64_DIGEST}"
+
+      - name: Print summary
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          BEYLA_VERSION: ${{ inputs.beyla_version }}
+        run: |
+          {
+            echo "## alloy-beyla image"
+            echo ""
+            echo "- Beyla version embedded: \`${BEYLA_VERSION}\`"
+            echo "- Image: \`ghcr.io/grafana/alloy-beyla:${TAG}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

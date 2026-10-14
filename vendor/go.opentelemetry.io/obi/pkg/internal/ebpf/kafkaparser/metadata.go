@@ -1,0 +1,193 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package kafkaparser // import "go.opentelemetry.io/obi/pkg/internal/ebpf/kafkaparser"
+
+import (
+	"errors"
+
+	"go.opentelemetry.io/obi/pkg/internal/largebuf"
+)
+
+type MetadataTopic struct {
+	Name string
+	UUID UUID
+}
+
+type MetadataResponse struct {
+	Topics []*MetadataTopic
+}
+
+var errNoTopicsInMetadata = errors.New("no Topics found in metadata response")
+
+func ParseMetadataResponse(r *largebuf.LargeBufferReader, header KafkaRequestHeader) (*MetadataResponse, error) {
+	if err := metadataResponseSkipUntilTopics(r, header); err != nil {
+		return nil, err
+	}
+	topics, err := parseMetadataTopics(r, header)
+	if err != nil {
+		return nil, err
+	}
+	if len(topics) == 0 {
+		return nil, errNoTopicsInMetadata
+	}
+	return &MetadataResponse{
+		Topics: topics,
+	}, nil
+}
+
+func metadataResponseSkipUntilTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	if err := r.Skip(Int32Len); err != nil { // throttle_time_ms
+		return err
+	}
+	if err := skipMetadataResponseBrokers(r, header); err != nil {
+		return err
+	}
+
+	clusterIDLen, err := readStringLength(r, header, true)
+	if err != nil {
+		return err
+	}
+	return r.Skip(clusterIDLen + Int32Len) // cluster_id + controller_id
+}
+
+func skipMetadataResponseBrokers(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	brokersLen, err := readArrayLength(r, header)
+	if err != nil {
+		return err
+	}
+	for range brokersLen {
+		if err = r.Skip(Int32Len); err != nil { // node_id
+			return err
+		}
+		var hostLen int
+		hostLen, err = readStringLength(r, header, false)
+		if err != nil {
+			return err
+		}
+		if err = r.Skip(hostLen + Int32Len); err != nil { // host + port
+			return err
+		}
+		var rackLen int
+		rackLen, err = readStringLength(r, header, true)
+		if err != nil {
+			return err
+		}
+		if err = r.Skip(rackLen); err != nil { // rack
+			return err
+		}
+		if err = skipTaggedFields(r, header); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parseMetadataTopics(r *largebuf.LargeBufferReader, header KafkaRequestHeader) ([]*MetadataTopic, error) {
+	topicsLen, err := readArrayLength(r, header)
+	if err != nil {
+		return nil, err
+	}
+	var topics []*MetadataTopic
+	for i := range topicsLen {
+		topic, err := parseMetadataTopic(r, header, i == topicsLen-1)
+		if err != nil {
+			// return the Topics parsed so far, even if one topic failed
+			return topics, nil
+		}
+		if topic != nil {
+			topics = append(topics, topic)
+		}
+	}
+	return topics, nil
+}
+
+// skipMetadataPartition advances the reader past one partition entry of a
+// Metadata Response topic (v10-13):
+// partitions => { error_code partition_index leader_id leader_epoch (replica_nodes) (isr_nodes) (offline_replicas) }
+// https://kafka.apache.org/43/design/protocol/
+// replica/isr/offline are compact arrays of INT32 node ids, so the entry is
+// variable-length and must be walked field by field.
+func skipMetadataPartition(r *largebuf.LargeBufferReader, header KafkaRequestHeader) error {
+	// error_code + partition_index + leader_id + leader_epoch
+	if err := r.Skip(Int16Len + Int32Len*3); err != nil {
+		return err
+	}
+	// replica_nodes, isr_nodes, offline_replicas
+	for range 3 {
+		n, err := readArrayLength(r, header)
+		if err != nil {
+			return err
+		}
+		if err = r.Skip(n * Int32Len); err != nil {
+			return err
+		}
+	}
+	return skipTaggedFields(r, header)
+}
+
+func parseMetadataTopic(r *largebuf.LargeBufferReader, header KafkaRequestHeader, isLast bool) (*MetadataTopic, error) {
+	var topic MetadataTopic
+	/*
+	  Metadata Response (Version: 10, 11, 12 and 13)
+	  Topics => error_code Name topic_id is_internal [partitions] topic_authorized_operations _tagged_fields
+	    error_code => INT16
+	    Name => COMPACT_STRING / (12+) COMPACT_NULLABLE_STRING
+	    topic_id => UUID
+	    is_internal => BOOLEAN
+	    partitions => error_code partition_index leader_id leader_epoch [replica_nodes] [isr_nodes] [offline_replicas] _tagged_fields
+	      error_code => INT16
+	      partition_index => INT32
+	      leader_id => INT32
+	      leader_epoch => INT32
+	      replica_nodes => INT32
+	      isr_nodes => INT32
+	      offline_replicas => INT32
+	    topic_authorized_operations => INT32
+	*/
+	if err := r.Skip(Int16Len); err != nil { // error_code
+		return nil, err
+	}
+	isNullable := header.APIVersion() >= 12
+	topicName, err := readString(r, header, isNullable)
+	if err != nil {
+		return nil, err
+	}
+	topic.Name = topicName
+	topicUUID, err := readUUID(r)
+	if err != nil {
+		return nil, err
+	}
+	topic.UUID = *topicUUID
+	// optimization: no need to continue reading if this is the last topic
+	if isLast {
+		return &topic, nil
+	}
+	// is_internal (BOOLEAN) precedes the partitions array in the wire format.
+	// It must be skipped to stay aligned for the next topic; otherwise every
+	// topic after the first is mis-parsed (its name/UUID are read from the
+	// middle of this topic's partition data).
+	if err = r.Skip(Int8Len); err != nil { // is_internal
+		return &topic, nil
+	}
+	partitionsCount, err := readArrayLength(r, header)
+	if err != nil {
+		return &topic, nil
+	}
+	// Each partition is variable-length in the flexible (compact) encoding
+	// (replica_nodes/isr_nodes/offline_replicas are compact arrays, plus a
+	// per-partition tagged-fields section), so it cannot be skipped with a
+	// fixed size.
+	for range partitionsCount {
+		if err = skipMetadataPartition(r, header); err != nil {
+			return &topic, nil
+		}
+	}
+	if err = r.Skip(Int32Len); err != nil { // topic_authorized_operations
+		return &topic, nil
+	}
+	if err = skipTaggedFields(r, header); err != nil {
+		return &topic, nil
+	}
+	return &topic, nil
+}

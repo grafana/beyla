@@ -1,0 +1,189 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package prom // import "go.opentelemetry.io/obi/pkg/export/prom"
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/prometheus/client_golang/prometheus"
+
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/connector"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+)
+
+// injectable function reference for testing
+
+// NetPrometheusConfig for network metrics just wraps the global prom.NetPrometheusConfig as provided by the user
+type NetPrometheusConfig struct {
+	Config      *PrometheusConfig
+	SelectorCfg *attributes.SelectorConfig
+	CommonCfg   *perapp.GlobalMetricsConfig
+	GuessPorts  flowdef.PortGuessPolicy
+}
+
+// Enabled returns whether the node needs to be activated
+func (p NetPrometheusConfig) Enabled() bool {
+	return p.Config != nil && p.Config.EndpointEnabled() && p.CommonCfg.Features.AnyNetwork()
+}
+
+type netMetricsReporter struct {
+	cfg *PrometheusConfig
+
+	flowBytes   *Expirer[prometheus.Counter]
+	flowPackets *Expirer[prometheus.Counter]
+
+	interZone *Expirer[prometheus.Counter]
+
+	promConnect *connector.PrometheusManager
+
+	flowAttrs        []attributes.Field[*ebpf.Record, string]
+	flowPacketsAttrs []attributes.Field[*ebpf.Record, string]
+
+	interZoneAttrs []attributes.Field[*ebpf.Record, string]
+
+	input <-chan []*ebpf.Record
+}
+
+func NetPrometheusEndpoint(
+	ctxInfo *global.ContextInfo,
+	cfg *NetPrometheusConfig,
+	input *msg.Queue[[]*ebpf.Record],
+) swarm.InstanceFunc {
+	return func(_ context.Context) (swarm.RunFunc, error) {
+		if !cfg.Enabled() {
+			// This node is not going to be instantiated. Let the swarm library just ignore it.
+			return swarm.EmptyRunFunc()
+		}
+		reporter, err := newNetReporter(ctxInfo, cfg, input)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.Config.Registry != nil {
+			return reporter.collectMetrics, nil
+		}
+		return reporter.reportMetrics, nil
+	}
+}
+
+func newNetReporter(
+	ctxInfo *global.ContextInfo,
+	cfg *NetPrometheusConfig,
+	input *msg.Queue[[]*ebpf.Record],
+) (*netMetricsReporter, error) {
+	group := ctxInfo.MetricAttributeGroups
+	// this property can't be set inside the ConfiguredGroups function, otherwise the
+	// OTEL exporter would report also some prometheus-exclusive attributes
+	group.Add(attributes.GroupPrometheus)
+
+	provider, err := attributes.NewAttrSelector(group, cfg.SelectorCfg)
+	if err != nil {
+		return nil, fmt.Errorf("network Prometheus exporter attributes enable: %w", err)
+	}
+
+	// If service name is not explicitly set, we take the service name as set by the
+	// executable inspector
+	mr := &netMetricsReporter{
+		cfg:         cfg.Config,
+		promConnect: ctxInfo.Prometheus,
+	}
+	recordGettersConfig := ebpf.RecordGettersConfig{
+		PortGuessPolicy: cfg.GuessPorts,
+	}
+	var register []prometheus.Collector
+	log := slog.With("component", "prom.NetworkEndpoint")
+	if cfg.CommonCfg.Features.NetworkBytes() {
+		log.Debug("registering network flow bytes metric")
+		mr.flowAttrs = attributes.PrometheusGetters(
+			ebpf.RecordStringGetters(recordGettersConfig),
+			provider.For(attributes.NetworkFlow))
+
+		mr.flowBytes = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.NetworkFlow.Prom,
+			Help: "bytes submitted from a source network endpoint to a destination network endpoint",
+		}, labelNames(mr.flowAttrs)).MetricVec, timeNow, cfg.Config.TTL)
+		register = append(register, mr.flowBytes)
+	}
+
+	if cfg.CommonCfg.Features.NetworkFlowPackets() {
+		log.Debug("registering network flow packets metric")
+		mr.flowPacketsAttrs = attributes.PrometheusGetters(
+			ebpf.RecordStringGetters(recordGettersConfig),
+			provider.For(attributes.NetworkFlowPackets))
+
+		mr.flowPackets = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.NetworkFlowPackets.Prom,
+			Help: "packets sent from a source network endpoint to a destination network endpoint",
+		}, labelNames(mr.flowPacketsAttrs)).MetricVec, timeNow, cfg.Config.TTL)
+		register = append(register, mr.flowPackets)
+	}
+
+	if cfg.CommonCfg.Features.NetworkInterZone() {
+		log.Debug("registering network inter-zone metric")
+		mr.interZoneAttrs = attributes.PrometheusGetters(
+			ebpf.RecordStringGetters(recordGettersConfig),
+			provider.For(attributes.NetworkInterZone))
+
+		mr.interZone = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.NetworkInterZone.Prom,
+			Help: "bytes submitted between different cloud availability zones",
+		}, labelNames(mr.interZoneAttrs)).MetricVec, timeNow, cfg.Config.TTL)
+		register = append(register, mr.interZone)
+	}
+
+	if cfg.Config.Registry != nil {
+		cfg.Config.Registry.MustRegister(register...)
+	} else {
+		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
+	}
+
+	mr.input = input.Subscribe(msg.SubscriberName("prom.NetReporterInput"))
+	return mr, nil
+}
+
+func (r *netMetricsReporter) reportMetrics(ctx context.Context) {
+	go r.promConnect.StartHTTP(ctx)
+	r.collectMetrics(ctx)
+}
+
+func (r *netMetricsReporter) collectMetrics(_ context.Context) {
+	for flows := range r.input {
+		for _, flow := range flows {
+			r.observeFlowBytes(flow)
+			r.observeInterZone(flow)
+			r.observeFlowPackets(flow)
+		}
+	}
+}
+
+func (r *netMetricsReporter) observeFlowBytes(flow *ebpf.Record) {
+	if r.flowBytes == nil {
+		return
+	}
+	r.flowBytes.WithLabelValues(labelValues(flow, r.flowAttrs)...).
+		Metric.Add(float64(flow.Metrics.Bytes))
+}
+
+func (r *netMetricsReporter) observeInterZone(flow *ebpf.Record) {
+	if r.interZone == nil || flow.CommonAttrs.SrcZone == flow.CommonAttrs.DstZone {
+		return
+	}
+	r.interZone.WithLabelValues(labelValues(flow, r.interZoneAttrs)...).
+		Metric.Add(float64(flow.Metrics.Bytes))
+}
+
+func (r *netMetricsReporter) observeFlowPackets(flow *ebpf.Record) {
+	if r.flowPackets == nil {
+		return
+	}
+	r.flowPackets.WithLabelValues(labelValues(flow, r.flowPacketsAttrs)...).
+		Metric.Add(float64(flow.Metrics.Packets))
+}

@@ -1,0 +1,328 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package config // import "go.opentelemetry.io/obi/pkg/config"
+
+import (
+	"fmt"
+	"log/slog"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/invopop/jsonschema"
+)
+
+type ContextPropagationMode uint8
+
+type RedisDBCacheConfig struct {
+	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_BPF_REDIS_DB_CACHE_ENABLED" validate:"boolean"`
+	MaxSize int  `yaml:"max_size" env:"OTEL_EBPF_BPF_REDIS_DB_CACHE_MAX_SIZE" validate:"gt=0"`
+}
+
+const (
+	ContextPropagationDisabled ContextPropagationMode = 0
+	ContextPropagationHeaders  ContextPropagationMode = 1 << 0 // HTTP headers
+	ContextPropagationTCP      ContextPropagationMode = 1 << 1 // TCP options
+
+	// Convenience aliases
+	ContextPropagationAll         = ContextPropagationHeaders | ContextPropagationTCP
+	StrContextPropagationDisabled = "disabled"
+	StrContextPropagationAll      = "all"
+	StrContextPropagationHeaders  = "headers"
+	StrContextPropagationTCP      = "tcp"
+)
+
+type MapsConfig struct {
+	// GlobalScaleFactor scales map sizes in powers of two:
+	//   > 0: grows size (2x per step)
+	//   < 0: shrinks size (1/2 per step)
+	//   = 0: no change
+	GlobalScaleFactor int `yaml:"global_scale_factor" validate:"gte=-3,lte=3"`
+}
+
+// EBPFTracer configuration for eBPF programs
+type EBPFTracer struct {
+	// Enables logging of eBPF program events
+	BpfDebug bool `yaml:"bpf_debug" env:"OTEL_EBPF_BPF_DEBUG" validate:"boolean"`
+
+	// WakeupLen specifies how many messages need to be accumulated in the eBPF ringbuffer
+	// before sending a wakeup request.
+	// High values of WakeupLen could add a noticeable metric delay in services with low
+	// requests/second.
+	// Must be at least 0.
+	// The userspace ring buffer reader periodically flushes pending events regardless,
+	// so wakeup_len bounds wakeup overhead rather than maximum delivery delay.
+	WakeupLen int `yaml:"wakeup_len" env:"OTEL_EBPF_BPF_WAKEUP_LEN" validate:"gte=0"`
+
+	// StatsWakeupDataBytes specifies the minimum number of bytes that must be available in the
+	// stats eBPF ring buffer before waking up the userspace consumer.
+	// When 0, every submission wakes up userspace immediately.
+	// Higher values reduce wakeup overhead under high traffic at the cost of delivery latency.
+	// The value should be well below ring buffer size / flushInterval to avoid event loss.
+	StatsWakeupDataBytes int `yaml:"stats_wakeup_data_bytes" env:"OTEL_EBPF_STATS_WAKEUP_DATA_BYTES" validate:"gte=0"`
+
+	// BatchLength allows specifying how many items (traces/metrics) will be batched at the initial
+	// stage before being forwarded to the next stage
+	// Must be at least 1
+	BatchLength int `yaml:"batch_length" env:"OTEL_EBPF_BPF_BATCH_LENGTH" validate:"gt=0"`
+
+	// BatchTimeout specifies the timeout to forward the data batch if it didn't
+	// reach the BatchLength size
+	BatchTimeout time.Duration `yaml:"batch_timeout" env:"OTEL_EBPF_BPF_BATCH_TIMEOUT" validate:"gte=0"`
+
+	// TrackRequestHeaders enables the kprobes based HTTP request tracking to start tracking the request
+	// headers to process any 'Traceparent' fields.
+	TrackRequestHeaders bool `yaml:"track_request_headers" env:"OTEL_EBPF_BPF_TRACK_REQUEST_HEADERS" validate:"boolean"`
+
+	// Must be at least 0
+	HTTPRequestTimeout time.Duration `yaml:"http_request_timeout" env:"OTEL_EBPF_BPF_HTTP_REQUEST_TIMEOUT" validate:"gte=0"`
+
+	// GoHTTPClientBufferTimeout is the inactivity period after which a pending Go HTTP client
+	// event is enriched with its captured buffers and emitted. A zero value disables deferral.
+	GoHTTPClientBufferTimeout time.Duration `yaml:"go_http_client_buffer_timeout" env:"OTEL_EBPF_BPF_GO_HTTP_CLIENT_BUFFER_TIMEOUT" validate:"gte=0"`
+
+	// Enables distributed context propagation.
+	// Can be a combination of: headers, tcp (e.g., "headers,tcp" or "all")
+	ContextPropagation ContextPropagationMode `yaml:"context_propagation" env:"OTEL_EBPF_BPF_CONTEXT_PROPAGATION"`
+
+	// Skips checking the kernel version for bpf_loop functionality. Some modified kernels have this
+	// backported prior to version 5.17.
+	OverrideBPFLoopEnabled bool `yaml:"override_bpfloop_enabled" env:"OTEL_EBPF_OVERRIDE_BPF_LOOP_ENABLED" validate:"boolean"`
+
+	// Select the TC attachment backend: accepted values are 'tc' (netlink), and 'tcx'
+	TCBackend TCBackend `yaml:"traffic_control_backend" env:"OTEL_EBPF_BPF_TC_BACKEND" validate:"oneof=1 2 3" jsonschema:"type=string,enum=tc,enum=tcx,enum=auto"`
+
+	// Disables OBI black-box context propagation. Used for testing purposes only.
+	DisableBlackBoxCP bool `yaml:"disable_black_box_cp" env:"OTEL_EBPF_BPF_DISABLE_BLACK_BOX_CP" validate:"boolean"`
+
+	// Optimizes for getting requests information immediately when request response is seen
+	HighRequestVolume bool `yaml:"high_request_volume" env:"OTEL_EBPF_BPF_HIGH_REQUEST_VOLUME" validate:"boolean"`
+
+	// Enables the heuristic based detection of SQL requests. This can be used to detect
+	// talking to databases other than the ones we recognize in OBI, like Postgres and MySQL
+	HeuristicSQLDetect bool `yaml:"heuristic_sql_detect" env:"OTEL_EBPF_HEURISTIC_SQL_DETECT" validate:"boolean"`
+
+	// Enables GPU instrumentation for CUDA kernel launches and allocations
+	InstrumentCuda CudaMode `yaml:"instrument_cuda" env:"OTEL_EBPF_INSTRUMENT_CUDA" validate:"oneof=1 2 3"`
+
+	// Enables debug printing of the protocol data
+	ProtocolDebug bool `yaml:"protocol_debug_print" env:"OTEL_EBPF_PROTOCOL_DEBUG_PRINT" validate:"boolean"`
+
+	RedisDBCache RedisDBCacheConfig `yaml:"redis_db_cache"`
+
+	// Limit max data buffer size per protocol.
+	BufferSizes EBPFBufferSizes `yaml:"buffer_sizes"`
+
+	// MySQL prepared statements cache size.
+	MySQLPreparedStatementsCacheSize int `yaml:"mysql_prepared_statements_cache_size" env:"OTEL_EBPF_BPF_MYSQL_PREPARED_STATEMENTS_CACHE_SIZE" validate:"gt=0"`
+
+	// Postgres prepared statements cache size.
+	PostgresPreparedStatementsCacheSize int `yaml:"postgres_prepared_statements_cache_size" env:"OTEL_EBPF_BPF_POSTGRES_PREPARED_STATEMENTS_CACHE_SIZE" validate:"gt=0"`
+
+	// MSSQL prepared statements cache size.
+	MSSQLPreparedStatementsCacheSize int `yaml:"mssql_prepared_statements_cache_size" env:"OTEL_EBPF_BPF_MSSQL_PREPARED_STATEMENTS_CACHE_SIZE" validate:"gt=0"`
+
+	// Kafka Topic UUID to Name cache size.
+	KafkaTopicUUIDCacheSize int `yaml:"kafka_topic_uuid_cache_size" env:"OTEL_KAFKA_TOPIC_UUID_CACHE_SIZE" validate:"gt=0"`
+
+	// Kafka consumer groups cache size: number of processes whose consumer group membership,
+	// learned from group-coordination requests, is remembered and reported on consumer spans.
+	KafkaConsumerGroupCacheSize int `yaml:"kafka_consumer_group_cache_size" env:"OTEL_KAFKA_CONSUMER_GROUP_CACHE_SIZE" validate:"gt=0"`
+
+	// Kafka consumer group membership lifetime: how long a consumer is remembered after its last
+	// group request, and how long a process is observed before its Fetches are attributed to a
+	// group. Keep it above both the heartbeat interval and the longest rebalance of classic
+	// consumers (bounded by max.poll.interval.ms, 5m by default), or their Fetches can be reported
+	// with another group of their process; a larger value delays the attribute for newly seen
+	// processes. The 2m default trades rebalances longer than that for a shorter warm-up; raise it
+	// above max.poll.interval.ms when cooperative classic consumers (Kafka Streams) share a process
+	// with another group.
+	KafkaConsumerGroupTTL time.Duration `yaml:"kafka_consumer_group_ttl" env:"OTEL_EBPF_BPF_KAFKA_CONSUMER_GROUP_TTL" validate:"gt=0"`
+
+	// MongoDB requests cache size.
+	MongoRequestsCacheSize int `yaml:"mongo_requests_cache_size" env:"OTEL_EBPF_BPF_MONGO_REQUESTS_CACHE_SIZE" validate:"gt=0"`
+
+	// Configure data extraction/parsing based on protocol
+	PayloadExtraction PayloadExtraction `yaml:"payload_extraction"`
+
+	// Maximum time allowed for two requests to be correlated as parent -> child
+	// Some programs (e.g. load generators) keep on generating requests from the same thread in perpetuity,
+	// which can generate very large traces. We want to mark the parent trace as invalid if this happens.
+	MaxTransactionTime time.Duration `yaml:"max_transaction_time" env:"OTEL_EBPF_BPF_MAX_TRANSACTION_TIME" validate:"gt=0"`
+
+	// DNS timeout after which we report failed event
+	DNSRequestTimeout time.Duration `yaml:"dns_request_timeout" env:"OTEL_EBPF_BPF_DNS_REQUEST_TIMEOUT" validate:"gt=0"`
+
+	// Log trace-context enricher config
+	LogEnricher LogEnricherConfig `yaml:"log_enricher"`
+
+	// PopulateTraceContext keeps the pinned `traces_ctx_v1` map -- the trace and span
+	// ID of the request each OS thread is currently serving -- populated for readers
+	// outside OBI, such as a profiler correlating samples with spans, or another eBPF
+	// program reading the pin directly.
+	//
+	// Keeping the map aligned with the active request is not free: runtimes that
+	// decouple I/O from processing need a refresh on every context switch, which on
+	// Node.js means an `async_hooks` before hook running on every callback. OBI
+	// therefore only populates the map when something reads it. Its own reader -- the
+	// log enricher -- turns population on regardless of this setting; a reader outside
+	// OBI has no way to announce itself, so it opts in here.
+	//
+	// Go channel span links may be affected: the handoff correlation falls back
+	// to this map when it cannot resolve the sending goroutine from the protocol
+	// maps, so links that relied on that fallback are lost while population is
+	// off.
+	PopulateTraceContext bool `yaml:"populate_trace_context" env:"OTEL_EBPF_BPF_POPULATE_TRACE_CONTEXT" validate:"boolean"`
+
+	CouchbaseDBCacheSize int `yaml:"couchbase_db_cache_size" env:"OTEL_EBPF_COUCHBASE_DB_CACHE_SIZE" validate:"gt=0"`
+
+	// BPF path used to pin eBPF maps
+	BPFFSPath string `yaml:"bpf_fs_path" env:"OTEL_EBPF_BPF_FS_PATH"`
+
+	// ForceBPFMapReader forces the PerCPU HashMap operation of the Network Flows reader.
+	// The system will always try "batch", which is more efficient, but legacy systems like RHEL8-based will fallback to
+	// "legacy" (the slowest, more resource-consuming iterate&delete approach).
+	ForceBPFMapReader EBPFMapReader `yaml:"force_bpf_map_reader" env:"OTEL_EBPF_FORCE_BPF_MAP_READER" validate:"oneof=0 1 2" jsonschema:"type=string,enum=auto,enum=batch,enum=legacy"`
+
+	// eBPF map configurations
+	MapsConfig MapsConfig `yaml:"maps_config"`
+
+	// Disables uprobe_multi support for testing. This option is intentionally environment-only.
+	DisableUprobeMulti bool `yaml:"-" json:"-" env:"OTEL_EBPF_DEBUG_DISABLE_UPROBE_MULTI"`
+}
+
+var nvidiaSMIExistsFunc = nvidiaSMIExists
+
+func nvidiaSMIExists() bool {
+	if _, err := exec.LookPath("nvidia-smi"); err == nil {
+		return true
+	}
+
+	return false
+}
+
+func (e *EBPFTracer) CudaInstrumentationEnabled() bool {
+	switch e.InstrumentCuda {
+	case CudaModeOn:
+		return true
+	case CudaModeAuto:
+		return nvidiaSMIExistsFunc()
+	}
+	return false
+}
+
+// Per-protocol maximum bytes to capture per request per direction, sent to userspace via large buffer events.
+//
+// Default: 0 (disabled).
+type EBPFBufferSizes struct {
+	HTTP      uint32 `yaml:"http" env:"OTEL_EBPF_BPF_BUFFER_SIZE_HTTP" validate:"lte=262144"`
+	MySQL     uint32 `yaml:"mysql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MYSQL" validate:"lte=65536"`
+	Kafka     uint32 `yaml:"kafka" env:"OTEL_EBPF_BPF_BUFFER_SIZE_KAFKA" validate:"lte=65536"`
+	Postgres  uint32 `yaml:"postgres" env:"OTEL_EBPF_BPF_BUFFER_SIZE_POSTGRES" validate:"lte=65536"`
+	MSSQL     uint32 `yaml:"mssql" env:"OTEL_EBPF_BPF_BUFFER_SIZE_MSSQL" validate:"lte=65536"`
+	TCP       uint32 `yaml:"tcp" env:"OTEL_EBPF_BPF_BUFFER_SIZE_TCP" validate:"lte=65536"`
+	Aerospike uint32 `yaml:"aerospike" env:"OTEL_EBPF_BPF_BUFFER_SIZE_AEROSPIKE" validate:"lte=65536"`
+}
+
+// HasHeaders returns true if HTTP headers context propagation is enabled
+func (m ContextPropagationMode) HasHeaders() bool {
+	return m&ContextPropagationHeaders != 0
+}
+
+// HasTCP returns true if TCP options context propagation is enabled
+func (m ContextPropagationMode) HasTCP() bool {
+	return m&ContextPropagationTCP != 0
+}
+
+// IsEnabled returns true if any context propagation is enabled
+func (m ContextPropagationMode) IsEnabled() bool {
+	return m != ContextPropagationDisabled
+}
+
+func (m *ContextPropagationMode) UnmarshalText(text []byte) error {
+	str := strings.TrimSpace(string(text))
+
+	// Handle simple cases first
+	switch str {
+	case StrContextPropagationAll:
+		*m = ContextPropagationAll
+		return nil
+	case StrContextPropagationDisabled, "":
+		*m = ContextPropagationDisabled
+		return nil
+	}
+
+	// Parse comma-separated list
+	parts := strings.Split(str, ",")
+	var result ContextPropagationMode
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		switch part {
+		case StrContextPropagationHeaders:
+			result |= ContextPropagationHeaders
+		case StrContextPropagationTCP:
+			result |= ContextPropagationTCP
+		case "ip":
+			slog.Warn("context_propagation value 'ip' is deprecated and has no effect; IP options injection has been removed")
+		default:
+			return fmt.Errorf("invalid value for context_propagation: '%s' (valid: all, disabled, headers, tcp)", part)
+		}
+	}
+
+	*m = result
+	return nil
+}
+
+func (m ContextPropagationMode) MarshalText() ([]byte, error) {
+	if m == ContextPropagationDisabled {
+		return []byte("disabled"), nil
+	}
+
+	if m == ContextPropagationAll {
+		return []byte("all"), nil
+	}
+
+	var parts []string
+	if m.HasHeaders() {
+		parts = append(parts, "headers")
+	}
+	if m.HasTCP() {
+		parts = append(parts, "tcp")
+	}
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("invalid context propagation mode: %d", m)
+	}
+
+	return []byte(strings.Join(parts, ",")), nil
+}
+
+func (ContextPropagationMode) JSONSchema() *jsonschema.Schema {
+	options := []string{StrContextPropagationHeaders, StrContextPropagationTCP}
+	optionsStr := strings.Join(options, "|")
+	optionsRegexp := fmt.Sprintf("^(%s)(,(%s))*$", optionsStr, optionsStr)
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			{
+				Type:        "string",
+				Enum:        []any{StrContextPropagationAll, StrContextPropagationDisabled, ""},
+				Description: "Enable all propagation methods, disable propagation, or use empty string for disabled",
+			},
+			{
+				Type:        "string",
+				Description: "Comma-separated list of propagation methods (headers for HTTP headers, tcp for TCP options)",
+				Examples:    []any{"headers", "tcp", "headers,tcp"},
+				Pattern:     optionsRegexp,
+			},
+			{
+				Type:        "string",
+				Enum:        []any{"ip"},
+				Deprecated:  true,
+				Description: "IP options injection has been removed and has no effect",
+			},
+		},
+		Title:       "Context Propagation Mode",
+		Description: "Configures distributed context propagation. Can be 'all' to enable all methods, 'disabled'/'' to disable, or a comma-separated list of methods: 'headers' for HTTP headers, 'tcp' for TCP options (e.g. \"headers,tcp\").",
+	}
+}

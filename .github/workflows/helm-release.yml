@@ -1,0 +1,19 @@
+name: Release Helm chart
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-beyla-helm-chart:
+    uses: grafana/helm-charts/.github/workflows/update-helm-repo.yaml@5696bb317d9547467102857f36884c23f13943b9
+    permissions:
+      contents: "write"
+      id-token: "write"
+      packages: "write"
+    with:
+      github_app: grafana-beyla-bot
+      charts_dir: charts/beyla
+      cr_configfile: .github/configs/cr.yml
+      ct_configfile: .github/configs/ct.yml

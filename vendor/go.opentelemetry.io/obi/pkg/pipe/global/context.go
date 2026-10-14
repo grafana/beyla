@@ -1,0 +1,83 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package global // import "go.opentelemetry.io/obi/pkg/pipe/global"
+
+import (
+	"go.opentelemetry.io/otel/attribute"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/docker"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/connector"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/internal/ecs"
+	netebpf "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	statsebpf "go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/metadata"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/selection"
+)
+
+// ContextInfo stores some context information that must be shared across some nodes of the
+// processing graph.
+type ContextInfo struct {
+	// NodeMeta of the node (physical, VM, cloud instance...) running OBI.
+	// Including the HostID and other host metadata Attributes
+	NodeMeta metadata.NodeMeta
+
+	// AppO11y stores context information that is only required for application observability.
+	// Its values must be initialized by the App O11y code and shouldn't be accessed from the
+	// NetO11y part.
+	AppO11y AppO11y
+	// Metrics  that are internal to the pipe components
+	Metrics imetrics.Reporter
+	// Prometheus connection manager to coordinate metrics exposition from diverse nodes
+	Prometheus *connector.PrometheusManager
+	// MetricAttributeGroups will selectively enable or disable diverse groups of attributes
+	// in the metric exporters
+	MetricAttributeGroups attributes.AttrGroups
+	// K8sInformer enables direct access to the Kubernetes ContainerStore
+	K8sInformer *kube.MetadataProvider
+	// DockerMetadata stores per-PID information of docker containers
+	DockerMetadata *docker.ContainerStore
+	// ECSInventory is shared by endpoint resolution and process metadata enrichment.
+	// TODO: add ECS name resolution features to network metrics
+	ECSInventory *ecs.Inventory
+
+	// OverrideAppExportQueue allows overriding the output queue of the application exporter
+	// to connect your own application exporters outside the OBI code base. If left unset, OBI will
+	// create its own private queue.
+	// This is useful when OBI runs in vendored mode
+	OverrideAppExportQueue *msg.Queue[[]request.Span]
+
+	// OverrideNetExportQueue allows overriding the output queue of the network exporter
+	// to connect your own network exporters outside the OBI code base. If left unset, OBI will
+	// create its own private queue.
+	// This is useful when OBI runs in vendored mode
+	OverrideNetExportQueue *msg.Queue[[]*netebpf.Record]
+
+	// OverrideStatsExportQueue allows overriding the output queue of the stat exporter
+	// to connect your own stat exporters outside the OBI code base. If left unset, OBI will
+	// create its own private queue.
+	// This is useful when OBI runs in vendored mode
+	OverrideStatsExportQueue *msg.Queue[[]*statsebpf.Stat]
+
+	// ExtraResourceAttributes allows extending (or overriding) the reported resource attributes in the traces exporters
+	ExtraResourceAttributes []attribute.KeyValue
+
+	// OTELMetricsExporter allows sharing the same OTEL exporter through diverse metrics export nodes (Application, Network...)
+	OTELMetricsExporter *otelcfg.MetricsExporterInstancer
+
+	// DynamicSelector, when set, restricts App O11y, NetO11y, and StatsO11y signals to
+	// the runtime-selected targets for each signal view. Pass via instrumenter.WithDynamicSelector.
+	DynamicSelector selection.MultiSignalPIDSelector
+}
+
+// AppO11y stores context information that is only required for application observability.
+type AppO11y struct {
+	// ReportRoutes sets whether the metrics should set the http.route attribute
+	ReportRoutes bool
+}

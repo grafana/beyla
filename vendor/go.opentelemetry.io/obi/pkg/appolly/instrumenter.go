@@ -1,0 +1,310 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package appolly // import "go.opentelemetry.io/obi/pkg/appolly"
+
+import (
+	"context"
+	"time"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/debug"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/export/otel"
+	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/export/prom"
+	"go.opentelemetry.io/obi/pkg/filter"
+	msg2 "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
+	"go.opentelemetry.io/obi/pkg/internal/traces"
+	"go.opentelemetry.io/obi/pkg/obi"
+	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
+	"go.opentelemetry.io/obi/pkg/runtimemetrics"
+	"go.opentelemetry.io/obi/pkg/transform"
+)
+
+// builder with injectable instantiators for unit testing
+type graphFunctions struct {
+	config  *obi.Config
+	builder *swarm.Instancer
+	ctxInfo *global.ContextInfo
+}
+
+// Build instantiates the whole instrumentation --> processing --> submit
+// pipeline graph and returns it as a startable item.
+// Runtime metrics require a caller-owned queue shared with discovery.
+func Build(
+	ctx context.Context,
+	config *obi.Config,
+	ctxInfo *global.ContextInfo,
+	tracesCh *msg.Queue[[]request.Span],
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+) (*Instrumenter, error) {
+	return newGraphBuilder(config, ctxInfo, tracesCh, processEventsCh, runtimeMetrics).buildGraph(ctx)
+}
+
+// private constructor that can be instantiated from tests to override the node providers
+// and offsets inspector
+func newGraphBuilder(
+	config *obi.Config,
+	ctxInfo *global.ContextInfo,
+	tracesCh *msg.Queue[[]request.Span],
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+) *graphFunctions {
+	// First, we create a graph builder
+	swi := &swarm.Instancer{}
+	gb := &graphFunctions{
+		builder: swi,
+		config:  config,
+		ctxInfo: ctxInfo,
+	}
+
+	selectorCfg := &attributes.SelectorConfig{
+		SelectionCfg:            config.Attributes.Select,
+		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
+		SensitiveQueryParamsCfg: config.Attributes.SensitiveQueryParams,
+	}
+
+	// Second, we register instancers for each pipe node, as well as communication queues between them
+	swi.Add(transform.ECSInventoryProvider(ctxInfo, config.NameResolver, config.CloudMetadata), swarm.WithID("ECSInventory"))
+	// TODO: consider moving the queues to a public structure so when OBI is used as library, other components can
+	// listen to the messages and expanding the Pipeline
+	tracesReaderToRouter := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "tracesReaderToRouter")
+	swi.Add(traces.ReadFromChannel(&traces.ReadDecorator{
+		InstanceID:      config.Attributes.InstanceID,
+		TracesInput:     tracesCh,
+		DecoratedTraces: tracesReaderToRouter,
+	}), swarm.WithID("ReadFromChannel"))
+
+	routerToKubeDecorator := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "routerToKubeDecorator",
+		// make sure that we are able to wait for the informer sync timeout before failing the pipeline
+		// if a message gets bocked while the Kube decorator starts
+		msg.SendTimeout(max(config.Attributes.Kubernetes.InformersSyncTimeout, config.ChannelSendTimeout)))
+	swi.Add(transform.RoutesProvider(
+		config.Routes,
+		tracesReaderToRouter,
+		routerToKubeDecorator,
+	), swarm.WithID("Routes"))
+
+	// We connect the Kube and Docker metadata decorators in series, but only
+	// one of them will be active at the same time and bypass the other's queues
+	kubeToContainerDecorator := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "kubeToContainerDecorator")
+	swi.Add(transform.KubeDecoratorProvider(
+		ctxInfo, &config.Attributes.Kubernetes,
+		routerToKubeDecorator, kubeToContainerDecorator,
+	), swarm.WithID("KubeDecorator"))
+
+	containerDecoratorToNameResolver := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "containerDecoratorToNameResolver")
+	swi.Add(transform.DockerDecoratorProvider(
+		ctxInfo,
+		kubeToContainerDecorator, containerDecoratorToNameResolver,
+	), swarm.WithID("DockerDecorator"))
+
+	nameResolverToParentSettler := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "nameResolverToParentSettler")
+	swi.Add(transform.NameResolutionProvider(ctxInfo, config.NameResolver,
+		containerDecoratorToNameResolver, nameResolverToParentSettler),
+		swarm.WithID("NameResolution"))
+
+	// In vendored mode, the invoker might want to override the export queue for connecting their
+	// own exporters, otherwise we create a new queue
+	exportableSpans := ctxInfo.OverrideAppExportQueue
+	if exportableSpans == nil {
+		exportableSpans = msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "exportableSpans")
+	}
+	nameResolverToAttrFilter := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "nameResolverToAttrFilter")
+	swi.Add(SettleConditionalParents(config.EBPF.MaxTransactionTime,
+		nameResolverToParentSettler, nameResolverToAttrFilter),
+		swarm.WithID("SettleConditionalParents"))
+	attrFilteredSpans := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "attrFilteredSpans")
+	swi.Add(filter.ByAttribute(config.Filters.Application,
+		nil,
+		selectorCfg.ExtraGroupAttributesCfg,
+		spanPtrPromGetters(config),
+		nameResolverToAttrFilter,
+		attrFilteredSpans),
+		swarm.WithID("AttributesFilter"))
+	instrumentationFilteredSpans := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "instrumentationFilteredSpans")
+	swi.Add(InstrumentationFilterSpanGate(
+		config.Filters.ApplicationByInstrumentation,
+		selectorCfg.ExtraGroupAttributesCfg,
+		spanPtrPromGetters(config),
+		attrFilteredSpans,
+		instrumentationFilteredSpans,
+	), swarm.WithID("InstrumentationFilterSpanGate"))
+	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicSelector, instrumentationFilteredSpans, exportableSpans),
+		swarm.WithID("DynamicSignalSpanGate"))
+
+	swi.Add(otel.TracesReceiver(
+		ctxInfo, config.Traces, config.SpanMetricsEnabledForTraces(), selectorCfg, exportableSpans,
+	), swarm.WithID("OTELTracesReceiver"))
+	swi.Add(debug.PrinterNode(config.TracePrinter, exportableSpans),
+		swarm.WithID("PrinterNode"))
+
+	// some nodes (ipNodesFilter, span name limiter...) are only passed to the metrics export nodes.
+	// The exportableSpans queue already carries any dynamic per-signal trace/metrics gating.
+	// If no metrics exporter is configured, we will not start the metrics subpipeline to save resources.
+	jointMetricsConfig := JoinMetricsConfig(config)
+	exportingMetrics := jointMetricsConfig.Features.AnyAppO11yMetric() &&
+		(config.OTELMetrics.EndpointEnabled() || config.Prometheus.EndpointEnabled())
+	if exportingMetrics {
+		setupMetricsSubPipeline(config, ctxInfo, swi, exportableSpans, selectorCfg, processEventsCh, jointMetricsConfig, runtimeMetrics)
+	}
+
+	swi.Add(prom.BPFMetrics(ctxInfo, &config.Prometheus, jointMetricsConfig),
+		swarm.WithID("BPFMetrics"))
+
+	// The returned builder later invokes its "Build" function that, given
+	// the contents of the nodesMap struct, will instantiate
+	// and interconnect each node according to the SendTo invocations in the
+	// Connect() method of the nodesMap.
+	return gb
+}
+
+func setupMetricsSubPipeline(
+	config *obi.Config,
+	ctxInfo *global.ContextInfo,
+	swi *swarm.Instancer,
+	exportableSpans *msg.Queue[[]request.Span],
+	selectorCfg *attributes.SelectorConfig,
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+	jointMetricsConfig *perapp.GlobalMetricsConfig,
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+) {
+	metricsProcessEvents := msg2.QueueFromConfig[exec.ProcessEvent](config, ctxInfo.Metrics, "metricsProcessEvents")
+	swi.Add(DynamicSignalProcessEventGate(ctxInfo.DynamicSelector, processEventsCh, metricsProcessEvents),
+		swarm.WithID("DynamicSignalProcessEventGate"))
+
+	unresolvedCfg := request.UnresolvedNames{
+		Generic:  config.Attributes.RenameUnresolvedHosts,
+		Outgoing: config.Attributes.RenameUnresolvedHostsOutgoing,
+		Incoming: config.Attributes.RenameUnresolvedHostsIncoming,
+	}
+
+	var spanNameAggregatedMetrics *msg.Queue[[]request.Span]
+	if jointMetricsConfig.Features.AppOrSpan() || jointMetricsConfig.Features.ServiceGraph() {
+		spanNameAggregatedMetrics = msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "spanNameAggregatedMetrics")
+
+		swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
+			Limit:      config.Attributes.MetricSpanNameAggregationLimit,
+			OTEL:       &config.OTELMetrics,
+			Prom:       &config.Prometheus,
+			MetricsCfg: jointMetricsConfig,
+		}, exportableSpans, spanNameAggregatedMetrics))
+
+		swi.Add(otel.ReportMetrics(
+			ctxInfo,
+			&config.OTELMetrics,
+			jointMetricsConfig,
+			selectorCfg,
+			unresolvedCfg,
+			spanNameAggregatedMetrics,
+			metricsProcessEvents,
+		), swarm.WithID("OTELMetricsExport"))
+
+		swi.Add(otel.ReportSvcGraphMetrics(
+			ctxInfo,
+			&config.OTELMetrics,
+			jointMetricsConfig,
+			selectorCfg,
+			unresolvedCfg,
+			spanNameAggregatedMetrics,
+			metricsProcessEvents,
+		), swarm.WithID("OTELSvcGraphMetricsExport"))
+	}
+
+	runtimeMetricsEnabled := runtimemetrics.EnabledFeatures(jointMetricsConfig.Features)
+
+	runtimeMetricsInput := runtimeMetrics
+	if runtimeMetrics != nil {
+		gatedRuntimeMetrics := msg2.QueueFromConfig[[]runtimemetrics.RuntimeMetricSnapshot](config, ctxInfo.Metrics, "gatedRuntimeMetrics")
+		swi.Add(DynamicSignalRuntimeMetricsGate(ctxInfo.DynamicSelector, runtimeMetrics, gatedRuntimeMetrics),
+			swarm.WithID("DynamicSignalRuntimeMetricsGate"))
+		runtimeMetricsInput = gatedRuntimeMetrics
+	}
+
+	if jointMetricsConfig.Features.AppOrSpan() ||
+		jointMetricsConfig.Features.ServiceGraph() ||
+		runtimeMetricsEnabled.Any() {
+		swi.Add(prom.PrometheusEndpoint(
+			ctxInfo,
+			&config.Prometheus,
+			jointMetricsConfig,
+			selectorCfg,
+			unresolvedCfg,
+			spanNameAggregatedMetrics,
+			metricsProcessEvents,
+			runtimeMetricsInput,
+		), swarm.WithID("PrometheusEndpoint"))
+	}
+
+	if runtimeMetricsEnabled.Any() {
+		swi.Add(otel.ReportRuntimeMetrics(
+			ctxInfo,
+			&config.OTELMetrics,
+			jointMetricsConfig,
+			selectorCfg,
+			runtimeMetricsInput,
+			metricsProcessEvents,
+		), swarm.WithID("OTELRuntimeMetricsExport"))
+	}
+}
+
+func (gb *graphFunctions) buildGraph(ctx context.Context) (*Instrumenter, error) {
+	// setting explicitly some configuration properties that are needed by their
+	// respective node providers
+
+	grp, err := gb.builder.Instance(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &Instrumenter{
+		internalMetrics: gb.ctxInfo.Metrics,
+		graph:           grp,
+		cancelTimeout:   gb.config.ShutdownTimeout,
+	}, nil
+}
+
+type Instrumenter struct {
+	internalMetrics imetrics.Reporter
+	cancelTimeout   time.Duration
+	graph           *swarm.Runner
+}
+
+func (i *Instrumenter) Start(ctx context.Context) <-chan error {
+	go i.internalMetrics.Start(ctx)
+	i.graph.Start(ctx, swarm.WithCancelTimeout(i.cancelTimeout))
+	return i.graph.Done()
+}
+
+// spanPtrPromGetters adapts the invocation of spanPromGetters to work with a request.Span value
+// instead of a *request.Span pointer. This is a convenience method created to avoid having to
+// rewrite the pipeline types from []request.Span types to []*request.Span
+func spanPtrPromGetters(cfg *obi.Config) attributes.NamedGetters[request.Span, string] {
+	unresolvedCfg := request.UnresolvedNames{
+		Generic:  cfg.Attributes.RenameUnresolvedHosts,
+		Outgoing: cfg.Attributes.RenameUnresolvedHostsOutgoing,
+		Incoming: cfg.Attributes.RenameUnresolvedHostsIncoming,
+	}
+
+	getter := request.SpanPromGetters(unresolvedCfg)
+	return func(name attr.Name) (attributes.Getter[request.Span, string], bool) {
+		if ptrGetter, ok := getter(name); ok {
+			return func(span request.Span) string { return ptrGetter(&span) }, true
+		}
+		return nil, false
+	}
+}
+
+// JoinMetricsConfig returns a combination of the base and per-application metrics config.
+// it is used to initialize some resources that should be only initialized if they are enabled
+// for any of the possible service matches.
+// Then they would be used or not for each service, based on the per-service features-.
+func JoinMetricsConfig(cfg *obi.Config) *perapp.GlobalMetricsConfig {
+	return cfg.JoinMetricsConfig()
+}

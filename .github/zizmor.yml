@@ -1,0 +1,8 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin
+        actions/*: any
+        github/*: any
+        grafana/*: any

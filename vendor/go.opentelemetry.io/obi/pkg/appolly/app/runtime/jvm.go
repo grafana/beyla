@@ -1,0 +1,184 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package runtime // import "go.opentelemetry.io/obi/pkg/appolly/app/runtime"
+
+import (
+	"bytes"
+	"fmt"
+	"math"
+	"strings"
+	"time"
+
+	"go.opentelemetry.io/obi/pkg/appolly/app"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/ebpf/timing"
+)
+
+const JVMRawStringLen = 64
+
+type JVMRuntimeMetricKind string
+
+const (
+	JVMMetricMemoryUsed            JVMRuntimeMetricKind = "jvm.memory.used"
+	JVMMetricMemoryCommitted       JVMRuntimeMetricKind = "jvm.memory.committed"
+	JVMMetricMemoryLimit           JVMRuntimeMetricKind = "jvm.memory.limit"
+	JVMMetricMemoryUsedAfterLastGC JVMRuntimeMetricKind = "jvm.memory.used_after_last_gc"
+	JVMMetricGCDuration            JVMRuntimeMetricKind = "jvm.gc.duration"
+)
+
+type JVMMemoryType string
+
+const (
+	JVMMemoryTypeHeap    JVMMemoryType = "heap"
+	JVMMemoryTypeNonHeap JVMMemoryType = "non_heap"
+	JVMMemoryTypeUnknown JVMMemoryType = "unknown"
+)
+
+type JVMGCPhase string
+
+const (
+	JVMGCPhaseBefore JVMGCPhase = "before"
+	JVMGCPhaseAfter  JVMGCPhase = "after"
+)
+
+type JVMGCEvent struct {
+	PID            app.PID
+	PIDNamespaceID uint32
+	Service        svc.Attrs
+	Time           time.Time
+	Kind           JVMRuntimeMetricKind
+	PoolName       string
+	MemoryType     JVMMemoryType
+	GCPhase        JVMGCPhase
+	ValueBytes     uint64
+	GCName         string
+	GCAction       string
+	DurationNS     uint64
+}
+
+func ParseJVMGCDurationEvent(
+	timestamp uint64,
+	nsPID uint32,
+	pidNamespaceID uint32,
+	durationNS uint64,
+	collectorName [JVMRawStringLen]byte,
+	action [JVMRawStringLen]byte,
+) JVMGCEvent {
+	return JVMGCEvent{
+		PID:            app.PID(nsPID),
+		PIDNamespaceID: pidNamespaceID,
+		Time:           timing.KernelTime(timestamp),
+		Kind:           JVMMetricGCDuration,
+		GCName:         DecodeJVMRawString(collectorName),
+		GCAction:       DecodeJVMRawString(action),
+		DurationNS:     durationNS,
+	}
+}
+
+type JVMRuntimeValues struct {
+	LoadedClassCount        uint64
+	TotalLoadedClassCount   uint64
+	UnloadedClassCount      uint64
+	ThreadCount             uint64
+	DaemonThreadCount       uint64
+	AvailableProcessorCount uint64
+	ProcessCPUTimeNS        int64
+	RecentCPUUtilization    float64
+}
+
+type JVMRuntimeEvent struct {
+	PID            app.PID
+	PIDNamespaceID uint32
+	Generation     uint64
+	Service        svc.Attrs
+	Time           time.Time
+	Values         JVMRuntimeValues
+}
+
+type RawJVMGCWhenType uint32
+
+const (
+	RawJVMGCWhenBefore RawJVMGCWhenType = iota
+	RawJVMGCWhenAfter
+	RawJVMGCWhenEndSentinel
+)
+
+func ParseJVMMemoryPoolEvent(
+	timestamp uint64,
+	nsPID uint32,
+	pidNamespaceID uint32,
+	gcWhenType RawJVMGCWhenType,
+	used uint64,
+	committed uint64,
+	maxSize uint64,
+	pool [JVMRawStringLen]byte,
+) ([]JVMGCEvent, error) {
+	phase, err := parseRawJVMGCPhase(gcWhenType)
+	if err != nil {
+		return nil, err
+	}
+
+	poolName := DecodeJVMRawString(pool)
+	memoryType := InferJVMMemoryType(poolName)
+	base := JVMGCEvent{
+		PID:            app.PID(nsPID),
+		PIDNamespaceID: pidNamespaceID,
+		Time:           timing.KernelTime(timestamp),
+		PoolName:       poolName,
+		MemoryType:     memoryType,
+		GCPhase:        phase,
+	}
+
+	events := []JVMGCEvent{
+		withJVMMetric(base, JVMMetricMemoryUsed, used),
+		withJVMMetric(base, JVMMetricMemoryCommitted, committed),
+	}
+	if maxSize != math.MaxUint64 {
+		events = append(events, withJVMMetric(base, JVMMetricMemoryLimit, maxSize))
+	}
+	if phase == JVMGCPhaseAfter {
+		events = append(events, withJVMMetric(base, JVMMetricMemoryUsedAfterLastGC, used))
+	}
+	return events, nil
+}
+
+func DecodeJVMRawString(raw [JVMRawStringLen]byte) string {
+	end := bytes.IndexByte(raw[:], 0)
+	if end < 0 {
+		end = len(raw)
+	}
+	return string(raw[:end])
+}
+
+func InferJVMMemoryType(poolName string) JVMMemoryType {
+	name := strings.ToLower(poolName)
+	for _, nonHeapName := range []string{"metaspace", "code", "compressed class"} {
+		if strings.Contains(name, nonHeapName) {
+			return JVMMemoryTypeNonHeap
+		}
+	}
+	for _, heapName := range []string{"eden", "survivor", "old", "tenured", "young", "zheap", "shenandoah", "epsilon", "humongous"} {
+		if strings.Contains(name, heapName) {
+			return JVMMemoryTypeHeap
+		}
+	}
+	return JVMMemoryTypeUnknown
+}
+
+func withJVMMetric(base JVMGCEvent, kind JVMRuntimeMetricKind, value uint64) JVMGCEvent {
+	base.Kind = kind
+	base.ValueBytes = value
+	return base
+}
+
+func parseRawJVMGCPhase(raw RawJVMGCWhenType) (JVMGCPhase, error) {
+	switch raw {
+	case RawJVMGCWhenBefore:
+		return JVMGCPhaseBefore, nil
+	case RawJVMGCWhenAfter:
+		return JVMGCPhaseAfter, nil
+	default:
+		return "", fmt.Errorf("unsupported JVM GC phase: %d", raw)
+	}
+}

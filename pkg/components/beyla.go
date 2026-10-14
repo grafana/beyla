@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/docker"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
@@ -268,22 +269,22 @@ func buildCommonContextInfo(
 		OverrideAppExportQueue:  msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "overriddenAppExportQueue"),
 	}
 
-	ctxInfo.Metrics, err = internalMetrics(ctx, config, ctxInfo, promMgr)
-	if err != nil {
-		return nil, fmt.Errorf("can't create internal metrics: %w", err)
-	}
-
+	// Node metadata must be resolved before the internal-metrics reporter is
+	// created, so the reporter's OTLP resource carries host metadata (host.id,
+	// etc.). The kube informer is created first — NewNodeMeta reads it but not
+	// its metrics reporter — and the reporter is wired back in afterwards.
 	ctxInfo.K8sInformer = kube.NewMetadataProvider(kube.MetadataConfig{
-		Enable:              config.Attributes.Kubernetes.Enable,
-		KubeConfigPath:      config.Attributes.Kubernetes.KubeconfigPath,
-		SyncTimeout:         config.Attributes.Kubernetes.InformersSyncTimeout,
-		ResyncPeriod:        config.Attributes.Kubernetes.InformersResyncPeriod,
-		DisabledInformers:   config.Attributes.Kubernetes.DisableInformers,
-		MetaCacheAddr:       config.Attributes.Kubernetes.MetaCacheAddress,
-		ResourceLabels:      resourceLabels,
-		RestrictLocalNode:   config.Attributes.Kubernetes.MetaRestrictLocalNode,
-		ServiceNameTemplate: templ,
-	}, ctxInfo.Metrics)
+		Enable:                   config.Attributes.Kubernetes.Enable,
+		KubeConfigPath:           config.Attributes.Kubernetes.KubeconfigPath,
+		SyncTimeout:              config.Attributes.Kubernetes.InformersSyncTimeout,
+		ReconnectInitialInterval: config.Attributes.Kubernetes.ReconnectInitialInterval,
+		ResyncPeriod:             config.Attributes.Kubernetes.InformersResyncPeriod,
+		DisabledInformers:        config.Attributes.Kubernetes.DisableInformers,
+		MetaCacheAddr:            config.Attributes.Kubernetes.MetaCacheAddress,
+		ResourceLabels:           resourceLabels,
+		RestrictLocalNode:        config.Attributes.Kubernetes.MetaRestrictLocalNode,
+		ServiceNameTemplate:      templ,
+	}, imetrics.NoopReporter{})
 
 	ctxInfo.NodeMeta = meta.NewNodeMeta(
 		ctx,
@@ -292,11 +293,22 @@ func buildCommonContextInfo(
 		config.Attributes.MetadataRetry,
 	)
 
-	ctxInfo.DockerMetadata = docker.NewStore()
+	ctxInfo.Metrics, err = internalMetrics(ctx, config, ctxInfo, promMgr)
+	if err != nil {
+		return nil, fmt.Errorf("can't create internal metrics: %w", err)
+	}
+	ctxInfo.K8sInformer.SetInternalMetrics(ctxInfo.Metrics)
 
-	ctxInfo.CloudMetaInventory = transform.NewCloudMetadataInventory(
-		ctx, &ctxInfo.NodeMeta, config.NameResolver, config.CloudMetadata,
-	)
+	ctxInfo.DockerMetadata = docker.NewStore()
+	if !ctxInfo.K8sInformer.IsKubeEnabled() {
+		ctxInfo.DockerMetadata.Start(ctx)
+	}
+
+	if config.NameResolver != nil {
+		ctxInfo.CloudMetaInventory = cloud.NewInventory(transform.CloudMetadataRefreshers(
+			ctx, &ctxInfo.NodeMeta, config.NameResolver.Sources, config.CloudMetadata,
+		))
+	}
 
 	attributeGroups(config, ctxInfo)
 

@@ -23,6 +23,9 @@ type SunRPCInfo struct {
 	Method      string
 	AuthFlavor  string
 	Status      int
+	// ReplyParsed is set when a REPLY was parsed; until then Status holds no
+	// observation.
+	ReplyParsed bool
 }
 
 var errSunRPCParseFailed = errors.New("sunrpc parse failed")
@@ -76,12 +79,13 @@ func isSunRPCCallInfo(info *SunRPCInfo) bool {
 
 // mergeSunRPCReplyStatus copies accept_stat from a paired REPLY into the CALL span.
 func mergeSunRPCReplyStatus(callInfo *SunRPCInfo, replyInfo *SunRPCInfo, replyErr error, replyIgnore bool) {
-	if callInfo == nil || replyErr != nil || replyIgnore || replyInfo == nil {
+	if callInfo == nil || replyErr != nil || replyIgnore || replyInfo == nil || !replyInfo.ReplyParsed {
 		return
 	}
 	if replyInfo.Status != 0 {
 		callInfo.Status = replyInfo.Status
 	}
+	callInfo.ReplyParsed = true
 }
 
 // processSunRPCBuffer parses one capture buffer. The ignore flag means this buffer
@@ -132,6 +136,7 @@ func sunRPCInfoFromCall(call *sunrpcparser.CallInfo, reply *sunrpcparser.ReplyIn
 
 	if reply != nil && reply.MatchCallXid {
 		info.Status = sunRPCStatusFromReply(reply)
+		info.ReplyParsed = true
 	}
 
 	return info
@@ -141,6 +146,7 @@ func sunRPCInfoFromReply(reply *sunrpcparser.ReplyInfo) *SunRPCInfo {
 	info := &SunRPCInfo{
 		ProgramName: "sunrpc",
 		Method:      request.SunRPCSyntheticReplyMethod,
+		ReplyParsed: true,
 	}
 	info.Status = sunRPCStatusFromReply(reply)
 	return info
@@ -183,25 +189,31 @@ func TCPToSunRPCToSpan(trace *TCPRequestInfo, data *SunRPCInfo) request.Span {
 		route = strconv.FormatUint(uint64(data.Procedure), 10)
 	}
 
+	observation := request.ResponseParsed
+	if !data.ReplyParsed {
+		observation = request.ResponseUnread
+	}
+
 	return request.Span{
-		Type:         spanType,
-		Method:       data.Method,
-		Path:         data.ProgramName,
-		Route:        route,
-		Statement:    data.AuthFlavor,
-		SubType:      subType,
-		Peer:         peer,
-		PeerPort:     peerPort,
-		Host:         hostname,
-		HostPort:     hostPort,
-		RequestStart: int64(trace.StartMonotimeNs),
-		Start:        int64(trace.StartMonotimeNs),
-		End:          int64(trace.EndMonotimeNs),
-		Status:       data.Status,
-		TraceID:      trace.Tp.TraceId,
-		SpanID:       trace.Tp.SpanId,
-		ParentSpanID: trace.Tp.ParentId,
-		TraceFlags:   trace.Tp.Flags,
+		Type:                spanType,
+		ResponseObservation: observation,
+		Method:              data.Method,
+		Path:                data.ProgramName,
+		Route:               route,
+		Statement:           data.AuthFlavor,
+		SubType:             subType,
+		Peer:                peer,
+		PeerPort:            peerPort,
+		Host:                hostname,
+		HostPort:            hostPort,
+		RequestStart:        int64(trace.StartMonotimeNs),
+		Start:               int64(trace.StartMonotimeNs),
+		End:                 int64(trace.EndMonotimeNs),
+		Status:              data.Status,
+		TraceID:             trace.Tp.TraceId,
+		SpanID:              trace.Tp.SpanId,
+		ParentSpanID:        trace.Tp.ParentId,
+		TraceFlags:          trace.Tp.Flags,
 		Pid: request.PidInfo{
 			HostPID:   app.PID(trace.Pid.HostPid),
 			UserPID:   app.PID(trace.Pid.UserPid),

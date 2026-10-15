@@ -9,9 +9,16 @@ type runtimeCollection struct {
 	gc         gcRound
 	cumulative cumulativeCounters
 	polling    runtimemetrics.DotnetRuntimeMetricSnapshot
+	// ProcessorCount is emitted when the session is enabled, not every interval.
+	processorCount *int64
 }
 
 func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.DotnetRuntimeMetricSnapshot, error) {
+	if counter.Name == "processor-count" {
+		count := int64(counter.Value)
+		c.processorCount = &count
+		return nil, nil
+	}
 	// System.Runtime polls working-set before the other supported counters.
 	if c.polling.ProcessMemoryWorkingSet == nil && counter.Name != "working-set" {
 		return nil, nil
@@ -20,6 +27,7 @@ func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.Dot
 	if counter.Name == "working-set" && c.polling.ProcessMemoryWorkingSet != nil {
 		if c.polling.GCCollections[0] != nil {
 			snapshot := c.polling
+			snapshot.ProcessCPUCount = c.processorCount
 			completed = &snapshot
 		}
 		c.polling = runtimemetrics.DotnetRuntimeMetricSnapshot{}
@@ -46,6 +54,7 @@ func (c *runtimeCollection) finish() *runtimemetrics.DotnetRuntimeMetricSnapshot
 		return nil
 	}
 	snapshot := c.polling
+	snapshot.ProcessCPUCount = c.processorCount
 	c.polling = runtimemetrics.DotnetRuntimeMetricSnapshot{}
 	return &snapshot
 }

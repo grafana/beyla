@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/prometheus/client_golang/prometheus"
 
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -42,6 +43,7 @@ type BPFCollector struct {
 	probeMetrics     func() []ProbeMetrics
 	mapMetrics       func() []BpfMapMetrics
 	closeBPFStats    func()
+	lastRingbufStats [len(ringbufWriteMetrics)]ebpfcommon.RingbufWriteStats
 	mu               sync.Mutex
 	closed           bool
 }
@@ -84,6 +86,17 @@ type BpfMapMetrics struct {
 	mapID      string
 	maxEntries int
 	entries    uint64
+}
+
+const ringbufWriteStatsMapName = "ringbuf_write_stats_storage"
+
+var ringbufWriteMetrics = [...]struct {
+	name string
+	key  uint32
+}{
+	{name: "events", key: uint32(ebpfcommon.BpfRingbufIdRINGBUF_EVENTS)},
+	{name: "gpu_events", key: uint32(ebpfcommon.BpfRingbufIdRINGBUF_GPU_EVENTS)},
+	{name: "log_events", key: uint32(ebpfcommon.BpfRingbufIdRINGBUF_LOG_EVENTS)},
 }
 
 func BPFMetrics(
@@ -264,7 +277,40 @@ func (bc *BPFCollector) collectInternalMetrics(ctx context.Context) {
 				bc.ctxInfo.Metrics.BpfMapEntries(metric.mapID, metric.mapName, metric.mapType, int(metric.entries))
 				bc.ctxInfo.Metrics.BpfMapMaxEntries(metric.mapID, metric.mapName, metric.mapType, metric.maxEntries)
 			}
+
+			bc.collectRingbufWriteMetrics()
 		}
+	}
+}
+
+func (bc *BPFCollector) collectRingbufWriteMetrics() {
+	eventContext := bc.ctxInfo.AppO11y.EBPFEventContext
+	if eventContext == nil {
+		return
+	}
+
+	eventContext.MapsLock.Lock()
+	defer eventContext.MapsLock.Unlock()
+
+	statsMap := eventContext.EBPFMaps[ringbufWriteStatsMapName]
+	if statsMap == nil {
+		return
+	}
+
+	for index, metric := range ringbufWriteMetrics {
+		stats, err := ebpfcommon.LookupRingbufWriteStats(statsMap, metric.key)
+		if err != nil {
+			bc.log.Debug("can't retrieve ring buffer write stats", "ringbuf", metric.name, "error", err)
+			continue
+		}
+
+		last := &bc.lastRingbufStats[index]
+		bc.ctxInfo.Metrics.BPFRingbufWriteCounts(
+			metric.name,
+			stats.Writes-last.Writes,
+			stats.Failures-last.Failures,
+		)
+		*last = stats
 	}
 }
 

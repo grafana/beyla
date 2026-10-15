@@ -12,51 +12,62 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	awsecs "github.com/aws/aws-sdk-go-v2/service/ecs"
 
-	"go.opentelemetry.io/obi/pkg/internal/ecs"
+	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/metadata"
-	"go.opentelemetry.io/obi/pkg/pipe/global"
-	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
-func eclog() *slog.Logger {
-	return slog.With("component", "ECSInventoryProvider")
+func rlog() *slog.Logger {
+	return slog.With("component", "AWSMetadataRefresher")
 }
 
-// ECSInventoryProvider initializes the shared inventory before its consumers and
-// runs periodic refreshes for the lifetime of the application pipeline.
-func ECSInventoryProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig, cloudCfg CloudMetadataConfig) swarm.InstanceFunc {
-	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if cfg == nil || !resolverSources(cfg.Sources).Has(ResolverECS) {
-			return swarm.EmptyRunFunc()
+// CloudMetadataRefreshers returns enabled refreshers in order of increasing priority.
+func CloudMetadataRefreshers(
+	ctx context.Context,
+	nodeMeta *metadata.NodeMeta,
+	sources []Source,
+	cloudCfg CloudMetadataConfig,
+) []cloud.MetadataRefresher {
+	var refreshers []cloud.MetadataRefresher
+	enabled := resolverSources(sources)
+	if nodeMeta.Features.Has(metadata.ClusterEC2) && enabled.Has(ResolverRoute53) {
+		if refresher, err := route53InventoryRefresher(ctx, nodeMeta, cloudCfg); err != nil {
+			rlog().Warn("cloud metadata not available", "source", SourceRoute53, "error", err)
+		} else {
+			refreshers = append(refreshers, refresher)
 		}
-		if !ctxInfo.NodeMeta.Features.Has(metadata.ClusterECS) {
-			eclog().Debug("could not detect ECS Metadata. Deactivating")
-			return swarm.EmptyRunFunc()
-		}
-		if cfg.ECS.RefreshInterval <= 0 {
-			return nil, errors.New("initializing ECS name resolver: a positive refresh interval is required")
-		}
-		cluster, region := cloudCfg.ClusterName, cloudCfg.Region
-		if cluster == "" {
-			cluster = ctxInfo.NodeMeta.Cluster
-		}
-		if region == "" {
-			region = ctxInfo.NodeMeta.Region
-		}
-		if cluster == "" || region == "" {
-			return nil, errors.New("initializing ECS name resolver: configure cloud_metadata.cluster_name and cloud_metadata.region when cloud metadata does not supply them")
-		}
-		awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
-		if err != nil {
-			return nil, fmt.Errorf("loading AWS configuration for ECS name resolver: %w", err)
-		}
-		inventory := ecs.NewInventory(awsecs.NewFromConfig(awsCfg), cluster)
-		if err := inventory.Refresh(ctx); err != nil {
-			nrlog().Warn("can't load initial ECS task inventory; will retry", "error", err)
-		}
-		ctxInfo.ECSInventory = inventory
-		return func(ctx context.Context) {
-			inventory.Run(ctx, cfg.ECS.RefreshInterval)
-		}, nil
 	}
+	if nodeMeta.Features.Has(metadata.ClusterECS) && enabled.Has(ResolverECS) {
+		// TODO (later PR in this stack): return error and implement mechanism
+		if refresher, err := ecsInventoryRefresher(ctx, nodeMeta, cloudCfg); err != nil {
+			rlog().Warn("cloud metadata not available", "source", SourceECS, "error", err)
+		} else {
+			refreshers = append(refreshers, refresher)
+		}
+	}
+	return refreshers
+}
+
+func ecsInventoryRefresher(
+	ctx context.Context,
+	nodeMeta *metadata.NodeMeta,
+	cloudCfg CloudMetadataConfig,
+) (cloud.MetadataRefresher, error) {
+	if cloudCfg.RefreshInterval <= 0 {
+		return nil, errors.New("initializing ECS name resolver: a positive refresh interval is required")
+	}
+	cluster, region := cloudCfg.ClusterName, cloudCfg.Region
+	if cluster == "" {
+		cluster = nodeMeta.Cluster
+	}
+	if region == "" {
+		region = nodeMeta.Region
+	}
+	if cluster == "" || region == "" {
+		return nil, errors.New("initializing ECS name resolver: configure cloud_metadata.cluster_name and cloud_metadata.region when cloud metadata does not supply them")
+	}
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
+	if err != nil {
+		return nil, fmt.Errorf("loading AWS configuration for ECS name resolver: %w", err)
+	}
+	return cloud.NewECSRefresher(awsecs.NewFromConfig(awsCfg), cluster), nil
 }

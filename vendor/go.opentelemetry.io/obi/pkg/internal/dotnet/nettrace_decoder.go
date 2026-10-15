@@ -138,7 +138,11 @@ func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]runti
 		if err := d.checkSequence(event.CaptureThreadID, event.SequenceNumber, true); err != nil {
 			return nil, err
 		}
-		if definition.Header.ProviderName != "System.Runtime" || definition.Header.EventName != "EventCounters" {
+		if definition.Header.ProviderName != "System.Runtime" {
+			continue
+		}
+		eventName := definition.Header.EventName
+		if eventName != "EventCounters" && eventName != "ProcessorCount" {
 			continue
 		}
 		values, err := readNetTraceValues(valuesReader, definition.Fields)
@@ -148,7 +152,12 @@ func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]runti
 		if valuesReader.Len() != 0 {
 			return nil, errors.New("trailing bytes in NetTrace counter payload")
 		}
-		counter, err := decodeRuntimeCounter(values)
+		var counter runtimeCounter
+		if eventName == "ProcessorCount" {
+			counter, err = decodeProcessorCount(values)
+		} else {
+			counter, err = decodeRuntimeCounter(values)
+		}
 		if err != nil {
 			return nil, err
 		}

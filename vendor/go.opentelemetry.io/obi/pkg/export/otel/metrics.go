@@ -1591,6 +1591,9 @@ func (mr *MetricsReporter) onProcessEvent(pe *exec.ProcessEvent) {
 			mr.log.Debug("updating older service definition", "from", staleUID, "new", uid)
 			mr.pidTracker.ReplaceUID(staleUID, uid)
 			mr.deleteTargetMetrics(&staleUID)
+			// Other PIDs may already report the new UID. Recreating its target metrics
+			// without deleting them first would add 1 again to the target.info counter.
+			mr.deleteTargetMetrics(&uid)
 			mr.createTargetMetrics(&snap)
 			// we don't setup the pid again, we just replaced the metrics it's associated with
 			return

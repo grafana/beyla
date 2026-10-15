@@ -18,6 +18,8 @@ import (
 )
 
 type dotnetRuntimeMetricsCollector struct {
+	processCPUCount         *Expirer[prometheus.Gauge]
+	processCPUTime          *Expirer[prometheus.Counter]
 	collections             *Expirer[prometheus.Counter]
 	gcHeapTotalAllocated    *Expirer[prometheus.Counter]
 	gcPauseTime             *Expirer[prometheus.Counter]
@@ -57,6 +59,7 @@ type dotnetRuntimeGaugeAggregate struct {
 }
 
 type dotnetRuntimeCurrentAggregate struct {
+	processCPUCount         dotnetRuntimeGaugeAggregate
 	processMemoryWorkingSet dotnetRuntimeGaugeAggregate
 	gcCommittedMemory       dotnetRuntimeGaugeAggregate
 	threadPoolThreadCount   dotnetRuntimeGaugeAggregate
@@ -83,7 +86,7 @@ func (c *dotnetRuntimeMetricsCollector) delete(values []string) {
 	for _, index := range c.baseLabelIndexes {
 		labels = append(labels, values[index])
 	}
-	baseLabels := runtimeMetricLabelTuple(labels)
+	baseLabels := expire.LabelsKey(labels)
 	for _, counter := range []*Expirer[prometheus.Counter]{
 		c.gcHeapTotalAllocated,
 		c.gcPauseTime,
@@ -96,6 +99,10 @@ func (c *dotnetRuntimeMetricsCollector) delete(values []string) {
 		counter.DeleteLabelValues(labels...)
 	}
 	labels = append(labels, "")
+	for _, mode := range []string{"user", "system"} {
+		labels[len(labels)-1] = mode
+		c.processCPUTime.DeleteLabelValues(labels...)
+	}
 	for generation := range runtimemetrics.DotnetGCGenerationCount {
 		labels[len(labels)-1] = fmt.Sprintf("gen%d", generation)
 		c.collections.DeleteLabelValues(labels...)
@@ -168,7 +175,7 @@ func (r *metricsReporter) collectDotnetRuntimeMetrics(snapshot runtimemetrics.Ru
 		generation: snapshot.Generation,
 		lastSeen:   c.clock(),
 		labels:     append([]string(nil), labels...),
-		labelTuple: runtimeMetricLabelTuple(labels),
+		labelTuple: expire.LabelsKey(labels),
 		values:     *snapshot.Dotnet,
 	}
 	var oldValues runtimemetrics.DotnetRuntimeMetricSnapshot
@@ -216,23 +223,31 @@ func (r *metricsReporter) collectDotnetRuntimeMetrics(snapshot runtimemetrics.Ru
 		name   string
 		metric *Expirer[prometheus.Counter]
 		value  *float64
+		mode   string
 	}{
-		{attributes.DotnetGCPauseTime.Prom, c.gcPauseTime, snapshot.Dotnet.GCPauseTime},
-		{attributes.DotnetJITCompilationTime.Prom, c.jitCompilationTime, snapshot.Dotnet.JITCompilationTime},
+		{attributes.DotnetGCPauseTime.Prom, c.gcPauseTime, snapshot.Dotnet.GCPauseTime, ""},
+		{attributes.DotnetJITCompilationTime.Prom, c.jitCompilationTime, snapshot.Dotnet.JITCompilationTime, ""},
+		{attributes.DotnetProcessCPUTime.Prom, c.processCPUTime, snapshot.Dotnet.ProcessCPUTimeUser, "user"},
+		{attributes.DotnetProcessCPUTime.Prom, c.processCPUTime, snapshot.Dotnet.ProcessCPUTimeSystem, "system"},
 	} {
 		if counter.value == nil {
 			continue
 		}
+		counterLabels := labels
+		if counter.mode != "" {
+			// Expirer retains label slices, so each CPU mode owns its labels.
+			counterLabels = append(append([]string(nil), labels...), counter.mode)
+		}
 		key := dotnetRuntimeCounterKey{
 			pid: snapshot.PID, generation: snapshot.Generation, metric: counter.name,
-			labels: current.labelTuple, baseLabels: current.labelTuple,
+			labels: expire.LabelsKey(counterLabels), baseLabels: current.labelTuple,
 		}
 		var baseline *float64
 		if previous, exists := c.durationValues[key]; exists {
 			baseline = &previous
 		}
 		delta := runtimemetrics.CounterDelta(baseline, *counter.value)
-		counter.metric.WithLabelValues(labels...).Metric.Add(delta)
+		counter.metric.WithLabelValues(counterLabels...).Metric.Add(delta)
 		c.durationValues[key] = *counter.value
 	}
 	labels = append(labels, "")
@@ -242,8 +257,8 @@ func (r *metricsReporter) collectDotnetRuntimeMetrics(snapshot runtimemetrics.Ru
 		}
 		labels[len(labels)-1] = fmt.Sprintf("gen%d", generation)
 		key := dotnetRuntimeCounterKey{
-			pid: snapshot.PID, generation: snapshot.Generation, labels: runtimeMetricLabelTuple(labels),
-			baseLabels: runtimeMetricLabelTuple(labels[:len(labels)-1]),
+			pid: snapshot.PID, generation: snapshot.Generation, labels: expire.LabelsKey(labels),
+			baseLabels: expire.LabelsKey(labels[:len(labels)-1]),
 		}
 		previous, exists := c.values[key]
 		entry := c.collections.WithLabelValues(labels...)
@@ -297,6 +312,7 @@ func (c *dotnetRuntimeMetricsCollector) updateCurrentMetrics(entry dotnetRuntime
 		next      *int64
 	}{
 		{c.processMemoryWorkingSet, &aggregate.processMemoryWorkingSet, entry.values.ProcessMemoryWorkingSet, next.ProcessMemoryWorkingSet},
+		{c.processCPUCount, &aggregate.processCPUCount, entry.values.ProcessCPUCount, next.ProcessCPUCount},
 		{c.gcCommittedMemory, &aggregate.gcCommittedMemory, entry.values.GCCommittedMemory, next.GCCommittedMemory},
 		{c.threadPoolThreadCount, &aggregate.threadPoolThreadCount, entry.values.ThreadPoolThreadCount, next.ThreadPoolThreadCount},
 		{c.threadPoolQueueLength, &aggregate.threadPoolQueueLength, entry.values.ThreadPoolQueueLength, next.ThreadPoolQueueLength},
@@ -331,15 +347,22 @@ func newDotnetRuntimeMetricsCollector(runtimeLabelNames []string, clock expire.C
 	labels := make([]string, 0, len(runtimeLabelNames)+1)
 	baseLabelIndexes := make([]int, 0, len(runtimeLabelNames))
 	for index, name := range runtimeLabelNames {
-		if name == attr.DotnetGCHeapGeneration.Prom() {
+		if name == attr.DotnetGCHeapGeneration.Prom() || name == attr.CPUMode.Prom() {
 			continue
 		}
 		labels = append(labels, name)
 		baseLabelIndexes = append(baseLabelIndexes, index)
 	}
 	baseLabels := labels
+	cpuLabels := append(append([]string(nil), baseLabels...), attr.CPUMode.Prom())
 	labels = append(labels, attr.DotnetGCHeapGeneration.Prom())
 	return dotnetRuntimeMetricsCollector{
+		processCPUCount: newRuntimeGauge(attributes.DotnetProcessCPUCount.Prom,
+			"Number of processors available to the .NET process.", baseLabels, clock, ttl),
+		processCPUTime: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.DotnetProcessCPUTime.Prom,
+			Help: "CPU time consumed by the .NET process in seconds.",
+		}, cpuLabels).MetricVec, clock, ttl),
 		collections: NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: attributes.DotnetGCCollections.Prom,
 			Help: "The number of garbage collections since the collector baseline, exclusive per generation.",

@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_info_t -target amd64,arm64 Bpf ../../../../bpf/logger/logger.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_info_t -target $BPF_TARGETS Bpf ../../../../bpf/logger/logger.c -- -I../../../../bpf
 
 type BPFLogInfo BpfLogInfoT
 

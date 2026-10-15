@@ -9,10 +9,12 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
 	"go.opentelemetry.io/obi/pkg/export/prom"
@@ -48,6 +50,20 @@ func Build(
 	return newGraphBuilder(config, ctxInfo, tracesCh, processEventsCh, runtimeMetrics).buildGraph(ctx)
 }
 
+// BuildWithProtocolMetricSelection restricts all span-based metric families to selection.
+// A nil selection preserves the behavior of Build.
+func BuildWithProtocolMetricSelection(
+	ctx context.Context,
+	config *obi.Config,
+	ctxInfo *global.ContextInfo,
+	tracesCh *msg.Queue[[]request.Span],
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+	selection *instrumentations.InstrumentationSelection,
+) (*Instrumenter, error) {
+	return newGraphBuilderWithProtocolMetricSelection(config, ctxInfo, tracesCh, processEventsCh, runtimeMetrics, selection).buildGraph(ctx)
+}
+
 // private constructor that can be instantiated from tests to override the node providers
 // and offsets inspector
 func newGraphBuilder(
@@ -56,6 +72,17 @@ func newGraphBuilder(
 	tracesCh *msg.Queue[[]request.Span],
 	processEventsCh *msg.Queue[exec.ProcessEvent],
 	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+) *graphFunctions {
+	return newGraphBuilderWithProtocolMetricSelection(config, ctxInfo, tracesCh, processEventsCh, runtimeMetrics, nil)
+}
+
+func newGraphBuilderWithProtocolMetricSelection(
+	config *obi.Config,
+	ctxInfo *global.ContextInfo,
+	tracesCh *msg.Queue[[]request.Span],
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot],
+	selection *instrumentations.InstrumentationSelection,
 ) *graphFunctions {
 	// First, we create a graph builder
 	swi := &swarm.Instancer{}
@@ -72,7 +99,8 @@ func newGraphBuilder(
 	}
 
 	// Second, we register instancers for each pipe node, as well as communication queues between them
-	swi.Add(transform.ECSInventoryProvider(ctxInfo, config.NameResolver, config.CloudMetadata), swarm.WithID("ECSInventory"))
+	swi.Add(cloud.InventoryRefresherNode(ctxInfo.CloudMetaInventory, config.CloudMetadata.RefreshInterval))
+
 	// TODO: consider moving the queues to a public structure so when OBI is used as library, other components can
 	// listen to the messages and expanding the Pipeline
 	tracesReaderToRouter := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "tracesReaderToRouter")
@@ -137,7 +165,10 @@ func newGraphBuilder(
 		attrFilteredSpans,
 		instrumentationFilteredSpans,
 	), swarm.WithID("InstrumentationFilterSpanGate"))
-	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicSelector, instrumentationFilteredSpans, exportableSpans),
+	protocolFilteredSpans := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "protocolFilteredSpans")
+	swi.Add(protocolMetricsSpanGate(selection, instrumentationFilteredSpans, protocolFilteredSpans),
+		swarm.WithID("ProtocolMetricsSpanGate"))
+	swi.Add(DynamicSignalSpanGate(ctxInfo.DynamicSelector, protocolFilteredSpans, exportableSpans),
 		swarm.WithID("DynamicSignalSpanGate"))
 
 	swi.Add(otel.TracesReceiver(

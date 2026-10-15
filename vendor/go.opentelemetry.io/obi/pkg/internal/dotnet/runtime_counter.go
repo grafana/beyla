@@ -16,6 +16,14 @@ type runtimeCounter struct {
 	Increment   bool
 }
 
+func decodeProcessorCount(values map[string]any) (runtimeCounter, error) {
+	count, ok := values["processorCount"].(int32)
+	if !ok || count <= 0 {
+		return runtimeCounter{}, errors.New("invalid runtime processor count")
+	}
+	return runtimeCounter{Name: "processor-count", Value: float64(count)}, nil
+}
+
 // decodeRuntimeCounter extracts a .NET System.Runtime/EventCounters sample
 // from its nested payload. Increment values are counts, not rates per second.
 // Unsupported counters return an empty result.

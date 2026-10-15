@@ -7,7 +7,7 @@
 #include <bpfcore/bpf_helpers.h>
 #include <bpfcore/bpf_tracing.h>
 
-#include <pid/types/pid_data.h>
+#include <pid/types/pid_info.h>
 
 #define S_IFMT 0xF000   // File type mask.
 #define S_IFSOCK 0xC000 // Socket file type.
@@ -20,7 +20,8 @@ char LICENSE[] SEC("license") = "Dual MIT/GPL";
 
 struct survey_process {
   u64 start_time;
-  pid_data_t id;
+  pid_info id;
+  u32 reserved; // Explicit padding keeps map keys fully initialized.
 };
 
 // This is evidence of having used a socket, not a count of currently open
@@ -49,7 +50,8 @@ process_key(struct task_struct *task) {
   // OBI's namespace PID identity. Read the active namespace through thread_pid
   // so this also works at sched_process_exit, after task->nsproxy is cleared.
   bpf_core_read(&number, sizeof(number), &pid->numbers[level]);
-  key.id.pid = number.nr;
+  key.id.host_pid = BPF_CORE_READ(leader, tgid);
+  key.id.user_pid = number.nr;
   key.id.ns = BPF_CORE_READ(number.ns, ns.inum);
 
   key.start_time = BPF_CORE_READ(leader, start_boottime) / 10000000ULL;
@@ -63,7 +65,7 @@ static __always_inline void remember_socket(struct task_struct *task, u8 flags,
   }
 
   struct survey_process key = process_key(task);
-  if (!key.id.pid) {
+  if (!key.id.user_pid) {
     return;
   }
 

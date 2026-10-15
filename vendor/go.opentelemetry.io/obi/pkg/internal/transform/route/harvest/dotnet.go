@@ -29,6 +29,9 @@ type dotnetExtractor struct {
 	pe  *pe.File
 	md  *winmd.Metadata
 	rs  map[string]struct{}
+
+	routeCtors map[winmd.Index]int
+	decoder    *winmd.CustomAttributeDecoder
 }
 
 func ExtractDotnetRoutes(ctx context.Context, fi *exec.FileInfo) (*RouteHarvesterResult, error) {

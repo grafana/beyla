@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
@@ -373,7 +374,7 @@ func (c *runtimeCounterTracker) deleteAggregate(
 }
 
 func runtimeMetricLabelsKey(labels []string) string {
-	return runtimeMetricLabelTuple(labels)
+	return expire.LabelsKey(labels)
 }
 
 func (c *runtimeCounterTracker) deleteAggregateSource(metric string, labels []string, source string) {

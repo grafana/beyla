@@ -17,7 +17,7 @@ import (
 // Docker build context root, rather than pathRoot (the Beyla repo root).
 // Use this for images whose Dockerfile COPY instructions are relative to a
 // directory other than the Beyla repo root — e.g. .obi-src for go_otel.
-func buildDockerImageWithContext(ctx context.Context, output io.Writer, tag, contextDir, dockerfile string) error {
+func buildDockerImageWithContext(ctx context.Context, output io.Writer, tag, contextDir, dockerfile string, buildArgs ...map[string]*string) error {
 	buildContext, err := createBuildContext(contextDir)
 	if err != nil {
 		return err
@@ -26,9 +26,14 @@ func buildDockerImageWithContext(ctx context.Context, output io.Writer, tag, con
 		_ = buildContext.Close()
 	}()
 
+	var args map[string]*string
+	if len(buildArgs) > 0 {
+		args = buildArgs[0]
+	}
 	result, err := dockerPool.Client().ImageBuild(ctx, buildContext, client.ImageBuildOptions{
 		Tags:       []string{tag},
 		Dockerfile: dockerfile,
+		BuildArgs:  args,
 		Remove:     true,
 	})
 	if err != nil {

@@ -70,7 +70,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.ServerAddr:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTPClient {
-				return ServerAddr(HTTPClientHost(s))
+				return ServerAddr(HTTPClientServerAddr(s))
 			}
 			return ServerAddr(HostAsServer(s))
 		}
@@ -79,10 +79,10 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.RPCMethod:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeSunRPCClient || s.Type == EventTypeSunRPCServer {
-				if s.Route != "" {
-					return semconv.RPCMethod(s.Route)
+				if method := s.SunRPCMethodForExport(); method != "" {
+					return semconv.RPCMethod(method)
 				}
-				return semconv.RPCMethod(s.Method)
+				return attribute.KeyValue{}
 			}
 			if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
 				return semconv.RPCMethod(s.JSONRPC.QualifiedMethod())
@@ -90,18 +90,22 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
 				return semconv.RPCMethod(S3RPCMethod(s.AWS.S3.Method))
 			}
+			if s.Type == EventTypeGRPC || s.Type == EventTypeGRPCClient {
+				method, _ := GRPCMethod(s)
+				return semconv.RPCMethod(method)
+			}
 			return semconv.RPCMethod(s.Path)
 		}
 	case attr.RPCSystem:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeSunRPCClient || s.Type == EventTypeSunRPCServer {
-				return RPCSystem("onc_rpc")
+				return RPCSystem(RPCSystemONCRPC)
 			}
 			if s.SubType == HTTPSubtypeJSONRPC {
 				return semconv.RPCSystemNameJSONRPC
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 {
-				return RPCSystem("aws-api")
+				return RPCSystem(RPCSystemAWSAPI)
 			}
 			return semconv.RPCSystemNameGRPC
 		}
@@ -378,17 +382,10 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.DBCollectionName:
 		getter = func(s *Span) attribute.KeyValue {
-			switch s.Type {
-			case EventTypeHTTPClient:
-				if s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
-					return DBCollectionName(s.Elasticsearch.DBCollectionName)
-				} else if s.SubType == HTTPSubtypeSQLPP {
-					return DBCollectionName(s.Route)
-				}
-			case EventTypeSQLClient, EventTypeSQLServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeAerospikeClient, EventTypeAerospikeServer:
-				return DBCollectionName(s.Path)
+			if collection := dbCollectionName(s); collection != "" {
+				return DBCollectionName(collection)
 			}
-			return DBCollectionName("")
+			return attribute.KeyValue{}
 		}
 	case attr.DBQueryText:
 		getter = func(s *Span) attribute.KeyValue {
@@ -607,7 +604,10 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.GenAIRequestModel:
 		getter = func(s *Span) attribute.KeyValue {
-			return semconv.GenAIRequestModelKey.String(s.GenAIRequestModel())
+			if model := s.GenAIRequestModel(); model != "" {
+				return semconv.GenAIRequestModelKey.String(model)
+			}
+			return attribute.KeyValue{}
 		}
 	case attr.GenAIResponseModel:
 		getter = func(s *Span) attribute.KeyValue {
@@ -665,6 +665,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.RPCResponseStatusCode:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeSunRPCClient || s.Type == EventTypeSunRPCServer {
+				if s.ResponseObservation != ResponseParsed {
+					return attribute.KeyValue{}
+				}
 				return semconv.RPCResponseStatusCode(SunRPCResponseStatusCode(s.Status))
 			}
 			if mcp := s.MCP(); mcp != nil && mcp.ErrorCode != 0 {
@@ -730,6 +733,21 @@ func dbResponseStatusCode(span *Span) string {
 	}
 	if span.Status == 1 && span.SQLError != nil {
 		return span.SQLError.ResponseStatusCode()
+	}
+	return ""
+}
+
+func dbCollectionName(span *Span) string {
+	switch span.Type {
+	case EventTypeHTTPClient:
+		if span.SubType == HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
+			return span.Elasticsearch.DBCollectionName
+		}
+		if span.SubType == HTTPSubtypeSQLPP {
+			return span.Route
+		}
+	case EventTypeSQLClient, EventTypeSQLServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeAerospikeClient, EventTypeAerospikeServer:
+		return span.Path
 	}
 	return ""
 }

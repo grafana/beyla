@@ -1,0 +1,30 @@
+# Beyla-specific override of the OBI upstream obi-config-route53.yml.
+# Upstream uses the config v2 format, whose loader is internal to OBI, so Beyla
+# would ignore the whole document. This is the equivalent v1 configuration
+# used by TestRoute53ServiceResolution.
+log_level: debug
+discovery:
+  poll_interval: 500ms
+  instrument:
+    - open_ports: 8080
+      name: frontend
+      namespace: integration-test
+ebpf:
+  batch_timeout: 10ms
+prometheus_export:
+  port: 8999
+name_resolver:
+  sources: [route53]
+cloud_metadata:
+  route53:
+    # Keep discovery and record replacement fast in the integration test.
+    refresh_interval: 1s
+    hosted_zone_ids: ["${ROUTE53_HOSTED_ZONE_ID}"]
+attributes:
+  # server carries the resolved peer; server.address retains the HTTP Host.
+  extra_group_attributes:
+    app: [server]
+  select:
+    "*":
+      include: ["*"]
+shutdown_timeout: 2s

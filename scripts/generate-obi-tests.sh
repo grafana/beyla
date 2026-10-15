@@ -518,6 +518,18 @@ transform_go_imports_and_paths() {
     if [[ -f "$OBI_DEST/dockerutil_test.go" ]]; then
         sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
             "$OBI_DEST/dockerutil_test.go"
+
+        # obi.instrument() mounts the instrumenter configs as /configs. Mount the
+        # generated copy instead of .obi-src, so the Beyla overrides copied by
+        # copy_beyla_extensions (e.g. the v1 obi-config-route53.yml) take effect,
+        # as they already do for the docker compose suites.
+        local obi_configs_mount='bindMount(filepath.Join(pathRoot, ".obi-src/internal/test/integration/configs"), "/configs")'
+        if ! grep -qF "$obi_configs_mount" "$OBI_DEST/dockerutil_test.go"; then
+            echo "ERROR: dockerutil_test.go no longer mounts /configs as expected; update the obi.instrument() configs transform" >&2
+            exit 1
+        fi
+        sed_i -e 's|bindMount(filepath.Join(pathRoot, "\.obi-src/internal/test/integration/configs"), "/configs")|bindMount(filepath.Join(pathRoot, "internal/testgenerated/integration/configs"), "/configs")|' \
+            "$OBI_DEST/dockerutil_test.go"
     fi
 
     # go_otel BuildImage: use .obi-src as context (go_otel Dockerfile expects

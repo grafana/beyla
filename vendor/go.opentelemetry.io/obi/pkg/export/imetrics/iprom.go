@@ -54,6 +54,8 @@ type PrometheusReporter struct {
 	totalIgnoredPackets   uint64
 	bpfPacketCount        prometheus.Counter
 	bpfIgnoredPacketCount prometheus.Counter
+	bpfRingbufWrites      *prometheus.CounterVec
+	bpfRingbufFailures    *prometheus.CounterVec
 
 	queueCapacityRatio *prometheus.GaugeVec
 }
@@ -150,6 +152,14 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			Name: internalNames.BpfNetworkPackets.Prom,
 			Help: "How many network packets have been internally accounted",
 		}),
+		bpfRingbufWrites: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: internalNames.BpfRingbufWrites.Prom,
+			Help: "How many writes to the named ring buffer have been attempted",
+		}, []string{attr.BpfMapName.Prom()}),
+		bpfRingbufFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: internalNames.BpfRingbufWriteFailures.Prom,
+			Help: "How many writes to the named ring buffer failed because the buffer was full",
+		}, []string{attr.BpfMapName.Prom()}),
 		queueCapacityRatio: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: internalNames.QueueCapacityRatio.Prom,
 			Help: "Ratio [0-1] between the unread messages of an internal Go channel and its total capacity",
@@ -184,6 +194,8 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		pr.informerLag,
 		pr.bpfPacketCount,
 		pr.bpfIgnoredPacketCount,
+		pr.bpfRingbufWrites,
+		pr.bpfRingbufFailures,
 		pr.queueCapacityRatio,
 	}
 	if pr.avoidedServices != nil {
@@ -283,6 +295,11 @@ func (p *PrometheusReporter) BPFPacketStats(count, ignored uint64) {
 	p.bpfPacketCount.Add(float64(count - p.totalPackets))
 	p.bpfIgnoredPacketCount.Add(float64(ignored - p.totalIgnoredPackets))
 	p.totalPackets, p.totalIgnoredPackets = count, ignored
+}
+
+func (p *PrometheusReporter) BPFRingbufWriteCounts(ringbuf string, writes, failures uint64) {
+	p.bpfRingbufWrites.WithLabelValues(ringbuf).Add(float64(writes))
+	p.bpfRingbufFailures.WithLabelValues(ringbuf).Add(float64(failures))
 }
 
 func (p *PrometheusReporter) QueueBufferUtilization(subscriber string, ratio float64) {

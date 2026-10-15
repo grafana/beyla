@@ -144,13 +144,7 @@ func (p *ProcessHandle) Close() error {
 }
 
 func (p *ProcessHandle) startTime() (uint64, error) {
-	stat, err := p.Open("stat", unix.O_RDONLY)
-	if err != nil {
-		return 0, err
-	}
-	defer stat.Close()
-
-	data, err := io.ReadAll(stat)
+	data, err := p.readStat()
 	if err != nil {
 		return 0, err
 	}
@@ -158,14 +152,48 @@ func (p *ProcessHandle) startTime() (uint64, error) {
 	return parseStartTime(data)
 }
 
-func parseStartTime(stat []byte) (uint64, error) {
+// CPUTimeTicks returns process-lifetime user and system CPU ticks for this handle.
+func (p *ProcessHandle) CPUTimeTicks() (uint64, uint64, error) {
+	data, err := p.readStat()
+	if err != nil {
+		return 0, 0, err
+	}
+	startTime, err := parseStartTime(data)
+	if err != nil {
+		return 0, 0, err
+	}
+	if startTime != p.startTicks {
+		return 0, 0, errors.New("process stat start time does not match handle")
+	}
+	return parseCPUTimeTicks(data)
+}
+
+func (p *ProcessHandle) readStat() ([]byte, error) {
+	stat, err := p.Open("stat", unix.O_RDONLY)
+	if err != nil {
+		return nil, err
+	}
+	defer stat.Close()
+
+	return io.ReadAll(stat)
+}
+
+func processStatFields(stat []byte) ([]string, error) {
 	commEnd := strings.LastIndex(string(stat), ") ")
 	if commEnd < 0 {
-		return 0, errors.New("invalid process stat")
+		return nil, errors.New("invalid process stat")
 	}
 
-	// The fields after comm begin at field 3 (state); starttime is field 22.
-	fields := strings.Fields(string(stat[commEnd+2:]))
+	// The fields after comm begin at field 3 (state).
+	return strings.Fields(string(stat[commEnd+2:])), nil
+}
+
+func parseStartTime(stat []byte) (uint64, error) {
+	fields, err := processStatFields(stat)
+	if err != nil {
+		return 0, err
+	}
+	// starttime is field 22.
 	const startTimeIndex = 22 - 3
 	if len(fields) <= startTimeIndex {
 		return 0, errors.New("process stat has no start time")
@@ -176,4 +204,27 @@ func parseStartTime(stat []byte) (uint64, error) {
 		return 0, fmt.Errorf("parsing process start time: %w", err)
 	}
 	return startTime, nil
+}
+
+func parseCPUTimeTicks(stat []byte) (uint64, uint64, error) {
+	fields, err := processStatFields(stat)
+	if err != nil {
+		return 0, 0, err
+	}
+	const (
+		userTimeIndex   = 14 - 3
+		systemTimeIndex = 15 - 3
+	)
+	if len(fields) <= systemTimeIndex {
+		return 0, 0, errors.New("process stat has no CPU times")
+	}
+	user, err := strconv.ParseUint(fields[userTimeIndex], 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("parsing process user CPU time: %w", err)
+	}
+	system, err := strconv.ParseUint(fields[systemTimeIndex], 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("parsing process system CPU time: %w", err)
+	}
+	return user, system, nil
 }

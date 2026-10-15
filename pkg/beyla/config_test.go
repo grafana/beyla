@@ -379,8 +379,8 @@ network:
 			Sources:  []transform.Source{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
-			ECS:      transform.ECSNameResolverConfig{RefreshInterval: 30 * time.Second},
 		},
+		CloudMetadata: obi.DefaultConfig.CloudMetadata,
 		Processes: process.CollectConfig{
 			RunMode:  process.RunModePrivileged,
 			Interval: 5 * time.Second,

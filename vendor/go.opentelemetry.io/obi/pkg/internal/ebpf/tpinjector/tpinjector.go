@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"slices"
 	"sync"
@@ -33,10 +34,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfIter ../../../../bpf/tpinjector/sock_iter.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 BpfFionreadFixup ../../../../bpf/tpinjector/fionread_fixup.c -- -I../../../../bpf -I../../../../bpf
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -tags privileged_tests -target amd64,arm64 BpfH2MutationProbe ../../../../bpf/tests/testdata/h2_mutation_peer.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS Bpf ../../../../bpf/tpinjector/tpinjector.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS BpfIter ../../../../bpf/tpinjector/sock_iter.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS BpfFionreadFixup ../../../../bpf/tpinjector/fionread_fixup.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -tags privileged_tests -target $BPF_TARGETS BpfH2MutationProbe ../../../../bpf/tests/testdata/h2_mutation_peer.c -- -I../../../../bpf -I../../../../bpf
 
 type Tracer struct {
 	cfg                     *obi.Config
@@ -231,12 +232,15 @@ func (p *Tracer) constants() map[string]any {
 		filterPids = 0
 	}
 
-	return map[string]any{
+	m := map[string]any{
 		"filter_pids":          filterPids,
 		"max_transaction_time": uint64(p.cfg.EBPF.MaxTransactionTime.Nanoseconds()),
 		"inject_flags":         flags,
 		"g_bpf_debug":          p.cfg.EBPF.BpfDebug,
 	}
+	maps.Copy(m, ebpfcommon.PIDFilterConstants())
+
+	return m
 }
 
 func (p *Tracer) iterConstants() map[string]any {

@@ -368,6 +368,18 @@ var (
 		Unit:    "s",
 		Type:    InstrumentHistogram,
 	})
+	DotnetProcessCPUCount = metric(Name{
+		Section: "dotnet.process.cpu.count",
+		OTEL:    "dotnet.process.cpu.count",
+		Unit:    "{cpu}",
+		Type:    InstrumentUpDownCounter,
+	})
+	DotnetProcessCPUTime = metric(Name{
+		Section: "dotnet.process.cpu.time",
+		OTEL:    "dotnet.process.cpu.time",
+		Unit:    "s",
+		Type:    InstrumentCounter,
+	})
 	DotnetProcessMemoryWorkingSet = metric(Name{
 		Section: "dotnet.process.memory.working_set",
 		OTEL:    "dotnet.process.memory.working_set",

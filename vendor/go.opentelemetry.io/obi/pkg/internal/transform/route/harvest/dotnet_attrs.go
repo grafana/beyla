@@ -4,10 +4,20 @@
 package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 
 import (
-	"encoding/binary"
+	"log/slog"
 	"strings"
 
 	"github.com/microsoft/go-winmd/winmd"
+)
+
+const (
+	dotnetMvcNamespace     = "Microsoft.AspNetCore.Mvc"
+	dotnetRoutingNamespace = "Microsoft.AspNetCore.Mvc.Routing"
+	dotnetHTTPMethodAttr   = "HttpMethodAttribute"
+	dotnetAcceptVerbsAttr  = "AcceptVerbsAttribute"
+	dotnetRouteProperty    = "Route"
+	dotnetTemplateParam    = "template"
+	dotnetMaxBaseTypes     = 32
 )
 
 var dotnetRouteAttrs = map[string]struct{}{
@@ -85,20 +95,122 @@ func (e *dotnetExtractor) attrOwners() (map[winmd.Index]dotnetOwner, map[winmd.I
 	return types, methods, nil
 }
 
+// A cancelled context leaves the map partial, attrs() reports the cancellation.
+func (e *dotnetExtractor) customCtors() map[winmd.Index]int {
+	if e.routeCtors == nil {
+		if err := e.customRouteCtors(); err != nil {
+			slog.Debug("cannot collect .NET custom route attributes", "error", err)
+		}
+	}
+	return e.routeCtors
+}
+
+// customRouteCtors maps the constructors of in-assembly HttpMethodAttribute subclasses, such as
+// public class HttpQueryAttribute(string template) : HttpMethodAttribute(["QUERY"], template);
+// to the position of their parameter named template. Constructors without one are skipped, since
+// there is no way to tell which argument is the route.
+func (e *dotnetExtractor) customRouteCtors() error {
+	e.routeCtors = map[winmd.Index]int{}
+	for i := range e.md.Tables.TypeDef.Indices() {
+		if err := e.ctx.Err(); err != nil {
+			return err
+		}
+		t, err := e.md.Tables.TypeDef.At(i)
+		if err != nil {
+			slog.Debug("cannot read .NET type, skipping", "index", i, "error", err)
+			continue
+		}
+		if !e.isRouteAttr(t) {
+			continue
+		}
+		e.addRouteCtors(t)
+	}
+	return nil
+}
+
+func (e *dotnetExtractor) addRouteCtors(t winmd.TypeDef) {
+	for mi := range t.MethodList.All() {
+		m, err := e.md.Tables.MethodDef.At(mi)
+		if err != nil {
+			slog.Debug("cannot read .NET method, skipping", "type", t.Name.String(), "error", err)
+			continue
+		}
+		if m.Name.String() != ".ctor" {
+			continue
+		}
+		pos, ok, err := e.templateParam(m)
+		if err != nil {
+			slog.Debug("cannot read .NET attribute parameters, skipping", "type", t.Name.String(), "error", err)
+			continue
+		}
+		if !ok {
+			slog.Debug("route attribute constructor has no template parameter, skipping", "type", t.Name.String())
+			continue
+		}
+		e.routeCtors[mi] = pos
+	}
+}
+
+func (e *dotnetExtractor) templateParam(m winmd.MethodDef) (int, bool, error) {
+	for pi := range m.ParamList.All() {
+		p, err := e.md.Tables.Param.At(pi)
+		if err != nil {
+			return 0, false, err
+		}
+		if p.Sequence > 0 && strings.EqualFold(p.Name.String(), dotnetTemplateParam) {
+			return int(p.Sequence) - 1, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+func (e *dotnetExtractor) isRouteAttr(t winmd.TypeDef) bool {
+	for range dotnetMaxBaseTypes {
+		switch t.Extends.Tag {
+		case winmd.TypeDefOrRef_TypeRef:
+			base, err := e.md.Tables.TypeRef.At(t.Extends.Index)
+			if err != nil {
+				return false
+			}
+			return isDotnetRouteBase(base.Name.String(), base.Namespace.String())
+		case winmd.TypeDefOrRef_TypeDef:
+			base, err := e.md.Tables.TypeDef.At(t.Extends.Index)
+			if err != nil {
+				return false
+			}
+			t = base
+		case winmd.TypeDefOrRef_TypeSpec:
+			slog.Debug("generic .NET base type is not supported, skipping attribute", "type", t.Name.String())
+			return false
+		default:
+			return false
+		}
+	}
+	slog.Debug("too many .NET base types, skipping attribute", "type", t.Name.String())
+	return false
+}
+
+func isDotnetRouteBase(name, ns string) bool {
+	if ns == dotnetRoutingNamespace && name == dotnetHTTPMethodAttr {
+		return true
+	}
+	return isDotnetRouteAttr(name, ns)
+}
+
+func isDotnetRouteAttr(name, ns string) bool {
+	if ns != dotnetMvcNamespace {
+		return false
+	}
+	_, ok := dotnetRouteAttrs[name]
+	return ok
+}
+
 // addAttr validates and processes one route attribute at a time
 func (e *dotnetExtractor) addAttr(
 	a winmd.CustomAttribute,
 	types, methods map[winmd.Index]dotnetOwner,
 ) {
-	name, ns, ok := e.attrType(a)
-	if !ok || ns != "Microsoft.AspNetCore.Mvc" {
-		return
-	}
-	if _, ok := dotnetRouteAttrs[name]; !ok {
-		return
-	}
-
-	r, ok := dotnetAttrString(a.Value)
+	r, ok := e.attrRoute(a)
 	if !ok {
 		return
 	}
@@ -112,6 +224,65 @@ func (e *dotnetExtractor) addAttr(
 		return
 	}
 	e.add(dotnetTokens(r, owner))
+}
+
+func (e *dotnetExtractor) attrRoute(a winmd.CustomAttribute) (string, bool) {
+	if a.Type.Tag == winmd.CustomAttributeType_MethodDef {
+		pos, ok := e.customCtors()[a.Type.Index]
+		if !ok {
+			return "", false
+		}
+		return e.argString(a, pos)
+	}
+
+	name, ns, ok := e.attrType(a)
+	if !ok {
+		return "", false
+	}
+	if ns == dotnetMvcNamespace && name == dotnetAcceptVerbsAttr {
+		return e.namedRoute(a)
+	}
+	if !isDotnetRouteAttr(name, ns) {
+		return "", false
+	}
+	return e.argString(a, 0)
+}
+
+func (e *dotnetExtractor) argString(a winmd.CustomAttribute, pos int) (string, bool) {
+	v, ok := e.decode(a)
+	if !ok || pos >= len(v.FixedArguments) {
+		return "", false
+	}
+	r, ok := v.FixedArguments[pos].Value.(string)
+	return r, ok && r != ""
+}
+
+// namedRoute reads the Route property, for example: [AcceptVerbs("GET", "POST", Route = "api/items")]
+func (e *dotnetExtractor) namedRoute(a winmd.CustomAttribute) (string, bool) {
+	v, ok := e.decode(a)
+	if !ok {
+		return "", false
+	}
+	for _, n := range v.NamedArguments {
+		if n.Name != dotnetRouteProperty {
+			continue
+		}
+		r, ok := n.Value.(string)
+		return r, ok && r != ""
+	}
+	return "", false
+}
+
+func (e *dotnetExtractor) decode(a winmd.CustomAttribute) (winmd.CustomAttributeValue, bool) {
+	if e.decoder == nil {
+		e.decoder = winmd.NewCustomAttributeDecoder(e.md)
+	}
+	v, err := e.decoder.Decode(a)
+	if err != nil {
+		slog.Debug("cannot decode .NET route attribute", "error", err)
+		return winmd.CustomAttributeValue{}, false
+	}
+	return v, true
 }
 
 func (e *dotnetExtractor) attrType(a winmd.CustomAttribute) (string, string, bool) {
@@ -142,24 +313,6 @@ func (e *dotnetExtractor) memberType(m winmd.MemberRef) (string, string, bool) {
 	default:
 		return "", "", false
 	}
-}
-
-func dotnetAttrString(b []byte) (string, bool) {
-	if len(b) < 3 || binary.LittleEndian.Uint16(b) != 1 {
-		return "", false
-	}
-	return dotnetString(b[2:])
-}
-
-func dotnetString(b []byte) (string, bool) {
-	if len(b) == 0 || b[0] == 0xff {
-		return "", false
-	}
-	n, z, ok := dotnetLen(b)
-	if !ok || n == 0 || uint64(z)+uint64(n) > uint64(len(b)) {
-		return "", false
-	}
-	return string(b[z : z+int(n)]), true
 }
 
 // dotnetTokens replaces the ASP.NET attribute route tokens with their attribute owner.

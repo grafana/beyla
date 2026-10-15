@@ -87,6 +87,11 @@ type DotnetRuntimeMetricSnapshot struct {
 	// A nil entry means the count is unavailable.
 	GCCollections [DotnetGCGenerationCount]*uint64
 
+	ProcessCPUCount *int64
+	// CPU times are cumulative process-lifetime seconds; nil means unavailable.
+	ProcessCPUTimeUser   *float64
+	ProcessCPUTimeSystem *float64
+
 	ProcessMemoryWorkingSet *int64
 	GCCommittedMemory       *int64
 	ThreadPoolThreadCount   *int64

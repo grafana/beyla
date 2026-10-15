@@ -114,7 +114,7 @@ func (w *watcher) refresh() error {
 	var flags uint8
 
 	for entries.Next(&key, &flags) {
-		snapshot[Process{PID: key.Id.Pid, Namespace: key.Id.Ns, StartTime: key.StartTime, Flags: flags}] = struct{}{}
+		snapshot[Process{PID: key.Id.UserPid, Namespace: key.Id.Ns, StartTime: key.StartTime, Flags: flags}] = struct{}{}
 	}
 
 	if err := entries.Err(); err != nil {

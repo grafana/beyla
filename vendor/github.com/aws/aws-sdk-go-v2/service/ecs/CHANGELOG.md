@@ -1,3 +1,43 @@
+# v1.100.3 (2026-10-09.2)
+
+* **Dependency Update**: Update to smithy-go v1.28.5.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.100.2 (2026-10-08)
+
+* **Dependency Update**: Update to smithy-go v1.28.4.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.100.1 (2026-10-06)
+
+* No change notes available for this release.
+
+# v1.100.0 (2026-09-30)
+
+* **Feature**: Releasing VPCL for BlueGreen ecs deployments.
+
+# v1.99.1 (2026-09-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.99.0 (2026-09-15)
+
+* **Feature**: Enable schema-based (de)serialization for this service.
+
+# v1.98.0 (2026-09-11)
+
+* **Feature**: This feature adds support for setting the cpu architecture type that should be used to launch tasks for an Express Gateway Service.
+
+# v1.97.0 (2026-09-09)
+
+* **Feature**: Stop registering the `retry.MetricsHeader` middleware in generated clients. The `Amz-Sdk-Request` header is now set by the retry middleware itself.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.96.0 (2026-09-04)
+
+* **Feature**: Stop registering the `spanRetryLoop` middleware in generated clients. The retry loop's tracing span is now opened by the retry middleware itself.
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.95.0 (2026-09-03)
 
 * **Feature**: Adds a critical parameter to the Amazon ECS managed daemon APIs that controls whether a daemon task failure drains the container instance. Non-critical daemon failures no longer drain the instance or block instance registration.

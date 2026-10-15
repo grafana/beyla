@@ -65,6 +65,8 @@ type RuntimeMetrics struct {
 }
 
 type dotnetRuntimeMetrics struct {
+	processCPUCount         instrument.Int64UpDownCounter
+	processCPUTime          instrument.Float64Counter
 	collections             instrument.Int64Counter
 	gcHeapTotalAllocated    instrument.Int64Counter
 	gcPauseTime             instrument.Float64Counter
@@ -87,6 +89,7 @@ type dotnetRuntimeMetrics struct {
 }
 
 type dotnetRuntimeMetricCounts struct {
+	processCPUCount         int
 	processMemoryWorkingSet int
 	gcCommittedMemory       int
 	threadPoolThreadCount   int
@@ -96,6 +99,9 @@ type dotnetRuntimeMetricCounts struct {
 }
 
 type dotnetRuntimeMetricValues struct {
+	processCPUCount         *int64
+	processCPUTimeUser      *float64
+	processCPUTimeSystem    *float64
 	generation              uint64
 	lastSeen                time.Time
 	collections             [runtimemetrics.DotnetGCGenerationCount]runtimeCounterValue
@@ -330,6 +336,7 @@ func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Me
 		metric *instrument.Float64Counter
 	}{
 		{attributes.DotnetGCPauseTime, &metrics.gcPauseTime},
+		{attributes.DotnetProcessCPUTime, &metrics.processCPUTime},
 		{attributes.DotnetJITCompilationTime, &metrics.jitCompilationTime},
 	} {
 		*counter.metric, err = meter.Float64Counter(counter.name.OTEL, instrument.WithUnit(counter.name.Unit))
@@ -342,6 +349,7 @@ func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Me
 		metric *instrument.Int64UpDownCounter
 	}{
 		{attributes.DotnetProcessMemoryWorkingSet, &metrics.processMemoryWorkingSet},
+		{attributes.DotnetProcessCPUCount, &metrics.processCPUCount},
 		{attributes.DotnetGCCommittedMemory, &metrics.gcCommittedMemory},
 		{attributes.DotnetThreadPoolThreadCount, &metrics.threadPoolThreadCount},
 		{attributes.DotnetThreadPoolQueueLength, &metrics.threadPoolQueueLength},
@@ -652,9 +660,12 @@ func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 		metric   instrument.Float64Counter
 		previous **float64
 		value    *float64
+		mode     string
 	}{
-		{metrics.gcPauseTime, &previous.gcPauseTime, snapshot.Dotnet.GCPauseTime},
-		{metrics.jitCompilationTime, &previous.jitCompilationTime, snapshot.Dotnet.JITCompilationTime},
+		{metrics.gcPauseTime, &previous.gcPauseTime, snapshot.Dotnet.GCPauseTime, ""},
+		{metrics.jitCompilationTime, &previous.jitCompilationTime, snapshot.Dotnet.JITCompilationTime, ""},
+		{metrics.processCPUTime, &previous.processCPUTimeUser, snapshot.Dotnet.ProcessCPUTimeUser, "user"},
+		{metrics.processCPUTime, &previous.processCPUTimeSystem, snapshot.Dotnet.ProcessCPUTimeSystem, "system"},
 	} {
 		if counter.value == nil {
 			continue
@@ -662,7 +673,11 @@ func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 		value := *counter.value
 		delta := runtimemetrics.CounterDelta(*counter.previous, value)
 		if *counter.previous == nil || value < **counter.previous || delta > 0 {
-			counter.metric.Add(ctx, delta)
+			if counter.mode == "" {
+				counter.metric.Add(ctx, delta)
+			} else {
+				counter.metric.Add(ctx, delta, instrument.WithAttributes(attribute.String(string(attr.CPUMode), counter.mode)))
+			}
 		}
 		*counter.previous = &value
 	}
@@ -696,6 +711,7 @@ func recordDotnetCurrentMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 		active   *int
 	}{
 		{metrics.processMemoryWorkingSet, &previous.processMemoryWorkingSet, values.ProcessMemoryWorkingSet, &metrics.activeCurrent.processMemoryWorkingSet},
+		{metrics.processCPUCount, &previous.processCPUCount, values.ProcessCPUCount, &metrics.activeCurrent.processCPUCount},
 		{metrics.gcCommittedMemory, &previous.gcCommittedMemory, values.GCCommittedMemory, &metrics.activeCurrent.gcCommittedMemory},
 		{metrics.threadPoolThreadCount, &previous.threadPoolThreadCount, values.ThreadPoolThreadCount, &metrics.activeCurrent.threadPoolThreadCount},
 		{metrics.threadPoolQueueLength, &previous.threadPoolQueueLength, values.ThreadPoolQueueLength, &metrics.activeCurrent.threadPoolQueueLength},

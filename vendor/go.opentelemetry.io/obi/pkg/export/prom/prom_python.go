@@ -141,8 +141,8 @@ func (c *pythonRuntimeMetricsCollector) addCounter(
 	key := pythonRuntimeCounterKey{
 		pid:            pid,
 		metric:         metric,
-		labelTuple:     runtimeMetricLabelTuple(labels),
-		baseLabelTuple: runtimeMetricLabelTuple(labels[:len(c.baseLabelIndexes)]),
+		labelTuple:     expire.LabelsKey(labels),
+		baseLabelTuple: expire.LabelsKey(labels[:len(c.baseLabelIndexes)]),
 	}
 	previous, ok := c.values[key]
 	entry := counter.WithLabelValues(labels...)
@@ -170,7 +170,7 @@ func (c *pythonRuntimeMetricsCollector) delete(labels []string) {
 	c.valuesMu.Lock()
 	defer c.valuesMu.Unlock()
 
-	baseLabelTuple := runtimeMetricLabelTuple(baseLabels)
+	baseLabelTuple := expire.LabelsKey(baseLabels)
 	for key := range c.values {
 		if key.baseLabelTuple != baseLabelTuple {
 			continue

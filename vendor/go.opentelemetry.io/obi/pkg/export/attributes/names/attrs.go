@@ -35,6 +35,7 @@ const (
 	HTTPUrlPath            = Name(semconv.URLPathKey)
 	HTTPUrlFull            = Name(semconv.URLFullKey)
 	HTTPUrlQuery           = Name(semconv.URLQueryKey)
+	HTTPUrlTemplate        = Name(semconv.URLTemplateKey)
 	ClientAddr             = Name(semconv.ClientAddressKey)
 	ServerAddr             = Name(semconv.ServerAddressKey)
 	ServerPort             = Name(semconv.ServerPortKey)
@@ -232,6 +233,7 @@ const (
 	JVMGCAction            = Name("jvm.gc.action")
 	CPythonGCGeneration    = Name("cpython.gc.generation")
 	DotnetGCHeapGeneration = Name("dotnet.gc.heap.generation")
+	CPUMode                = Name("cpu.mode")
 
 	NodejsEventLoopState = Name("nodejs.eventloop.state")
 

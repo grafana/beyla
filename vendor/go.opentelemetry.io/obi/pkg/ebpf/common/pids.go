@@ -58,14 +58,18 @@ type ServiceFilter interface {
 	ValidPID(app.PID, uint32, PIDType) bool
 	Filter(inputSpans []request.Span) []request.Span
 	CurrentPIDs(PIDType) map[uint32]map[app.PID]svc.Attrs
+	ProcPIDs(PIDType) []app.PID
 }
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
 // be forwarded. Its Filter method filters the request.Span instances whose
 // PIDs are not in the allowed list.
 type PIDsFilter struct {
-	log                 *slog.Logger
-	current             map[uint32]map[app.PID]PIDInfo
+	log     *slog.Logger
+	current map[uint32]map[app.PID]PIDInfo
+	// live processes by the pid AllowPID received, which OBI's /proc numbers
+	// uniquely; unlike current, two processes' aliases cannot share a key here
+	procs               map[app.PID]PIDType
 	mux                 *sync.RWMutex
 	ignoreOtel          bool
 	ignoreOtelSpan      bool
@@ -77,6 +81,7 @@ func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetri
 	return &PIDsFilter{
 		log:                 log,
 		current:             map[uint32]map[app.PID]PIDInfo{},
+		procs:               map[app.PID]PIDType{},
 		mux:                 &sync.RWMutex{},
 		ignoreOtel:          c.ExcludeOTelInstrumentedServices,
 		ignoreOtelSpan:      c.ExcludeOTelInstrumentedServicesSpanMetrics,
@@ -153,6 +158,22 @@ func (pf *PIDsFilter) CurrentPIDs(t PIDType) map[uint32]map[app.PID]svc.Attrs {
 	return cp
 }
 
+// ProcPIDs returns one pid per live process of type t: the pid OBI's /proc
+// numbers it with, which is the one AllowPID received.
+func (pf *PIDsFilter) ProcPIDs(t PIDType) []app.PID {
+	pf.mux.RLock()
+	defer pf.mux.RUnlock()
+
+	var pids []app.PID
+	for pid, types := range pf.procs {
+		if types&t != 0 {
+			pids = append(pids, pid)
+		}
+	}
+
+	return pids
+}
+
 func (pf *PIDsFilter) normalizeTraceContext(span *request.Span) {
 	if !span.TraceID.IsValid() {
 		span.TraceID = idgen.RandomTraceID()
@@ -222,6 +243,8 @@ func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, fi *exec.FileInfo, t PIDT
 		return
 	}
 
+	pf.procs[pid] |= t
+
 	for _, p := range allPids {
 		pidInfo := ns[p]
 		if pidInfo.removedAt != 0 {
@@ -238,6 +261,8 @@ func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, fi *exec.FileInfo, t PIDT
 }
 
 func (pf *PIDsFilter) removePID(pid app.PID, nsid uint32) {
+	delete(pf.procs, pid)
+
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {
 		return
@@ -298,6 +323,10 @@ func (pf *IdentityPidsFilter) ValidPID(_ app.PID, _ uint32, _ PIDType) bool {
 }
 
 func (pf *IdentityPidsFilter) CurrentPIDs(_ PIDType) map[uint32]map[app.PID]svc.Attrs {
+	return nil
+}
+
+func (pf *IdentityPidsFilter) ProcPIDs(_ PIDType) []app.PID {
 	return nil
 }
 

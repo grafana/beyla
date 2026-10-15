@@ -195,9 +195,9 @@ func validFeatureNames() []string {
 	return names
 }
 
-// marshalNames returns the enabled feature names: aggregate names (e.g. "all", "stats")
+// Names returns the enabled feature names: aggregate names (e.g. "all", "stats")
 // when all of their bits are enabled, then the remaining single-bit names in declaration order.
-func (f Features) marshalNames() []string {
+func (f Features) Names() []string {
 	singles := make([]string, 0, len(FeatureMapper))
 	aggregates := make([]string, 0, len(FeatureMapper))
 	for name, feature := range FeatureMapper {
@@ -239,7 +239,7 @@ func (f Features) MarshalYAML() (any, error) {
 	}
 	// an empty sequence, in opposition of "null" in the undefined case
 	node := yaml.Node{Kind: yaml.SequenceNode}
-	for _, name := range f.marshalNames() {
+	for _, name := range f.Names() {
 		node.Content = append(node.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: name})
 	}
 	return node, nil

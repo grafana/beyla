@@ -561,6 +561,13 @@ func genAIOperationName(name string) string {
 	return name
 }
 
+func grpcMethodAttributes(span *request.Span) []attribute.KeyValue {
+	method, original := request.GRPCMethod(span)
+	attrs := []attribute.KeyValue{semconv.RPCMethod(method)}
+
+	return appendIfSet(attrs, semconv.RPCMethodOriginal, original)
+}
+
 // jsonRPCAttributes returns JSON-RPC span attributes following the OTEL RPC semantic conventions.
 func jsonRPCAttributes(span *request.Span) []attribute.KeyValue {
 	if span.SubType != request.HTTPSubtypeJSONRPC || span.JSONRPC == nil {
@@ -669,6 +676,19 @@ func appendIfSet(attrs []attribute.KeyValue, f func(string) attribute.KeyValue, 
 	return append(attrs, f(val))
 }
 
+// appendElasticsearchPathParameters records the URL path parameters OBI maps,
+// keyed by their Elasticsearch API specification names. The index parameter
+// carries the same value as db.collection.name.
+func appendElasticsearchPathParameters(attrs []attribute.KeyValue, es *request.Elasticsearch) []attribute.KeyValue {
+	if es.DBCollectionName != "" {
+		attrs = append(attrs, semconv.DBOperationParameter("index", es.DBCollectionName))
+	}
+	if es.DocumentID != "" {
+		attrs = append(attrs, semconv.DBOperationParameter("id", es.DocumentID))
+	}
+	return attrs
+}
+
 // appendHTTPResponseStatus reports the status only when one was seen: semconv requires
 // http.response.status_code "if and only if one was received/sent".
 func appendHTTPResponseStatus(attrs []attribute.KeyValue, span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
@@ -697,6 +717,14 @@ func appendHTTPResponseBodySize(attrs []attribute.KeyValue, span *request.Span, 
 	}
 
 	return append(attrs, request.HTTPResponseBodySize(span.ResponseBodyLength()))
+}
+
+func appendURLTemplate(attrs []attribute.KeyValue, span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
+	if _, ok := optionalAttrs[attr.HTTPUrlTemplate]; !ok {
+		return attrs
+	}
+
+	return appendIfSet(attrs, semconv.URLTemplate, span.Route)
 }
 
 func appendPeerService(attrs []attribute.KeyValue, span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
@@ -742,11 +770,11 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		attrs = append(attrs, jsonRPCAttributes(span)...)
 		attrs = append(attrs, httpEnrichmentAttributes(span)...)
 	case request.EventTypeGRPC:
-		attrs = []attribute.KeyValue{
-			semconv.RPCMethod(span.Path),
+		attrs = grpcMethodAttributes(span)
+		attrs = append(attrs,
 			semconv.RPCSystemNameGRPC,
 			request.ServerPort(span.HostPort),
-		}
+		)
 		attrs = appendIfSet(attrs, request.ClientAddr, request.PeerAsClient(span))
 		attrs = appendIfSet(attrs, request.ServerAddr, request.SpanHost(span))
 		// GRPCStatusCodeString returns "" for statuses outside the gRPC enum
@@ -802,7 +830,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		attrs = []attribute.KeyValue{
 			request.ServerPort(span.HostPort),
 		}
-		attrs = appendIfSet(attrs, request.ServerAddr, host)
+		attrs = appendIfSet(attrs, request.ServerAddr, request.HostWithoutPort(host))
 		attrs = appendPeerService(attrs, span, optionalAttrs)
 
 		if transport != httpTransportNone {
@@ -813,6 +841,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		if transport == httpTransportAll {
 			attrs = appendHTTPResponseStatus(attrs, span, optionalAttrs)
 			attrs = appendIfSet(attrs, semconv.URLScheme, scheme)
+			attrs = appendURLTemplate(attrs, span, optionalAttrs)
 			attrs = appendHTTPRequestBodySize(attrs, span, optionalAttrs)
 			attrs = appendHTTPResponseBodySize(attrs, span, optionalAttrs)
 			if scrubbedQS != "" {
@@ -824,6 +853,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 
 		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
 			attrs = appendIfSet(attrs, request.DBCollectionName, span.Elasticsearch.DBCollectionName)
+			attrs = appendElasticsearchPathParameters(attrs, span.Elasticsearch)
 			attrs = appendIfSet(attrs, request.ElasticsearchNodeName, span.Elasticsearch.NodeName)
 			attrs = appendIfSet(attrs, request.DBNamespace, span.DBNamespace)
 			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
@@ -841,7 +871,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 
 		if span.SubType == request.HTTPSubtypeAWSS3 && span.AWS != nil {
 			s3 := span.AWS.S3
-			attrs = append(attrs, request.RPCSystem("aws-api"))
+			attrs = append(attrs, request.RPCSystem(request.RPCSystemAWSAPI))
 			attrs = appendIfSet(attrs, semconv.RPCMethod, request.S3RPCMethod(s3.Method))
 			attrs = appendIfSet(attrs, semconv.CloudRegion, s3.Meta.Region)
 			attrs = appendIfSet(attrs, semconv.AWSRequestID, s3.Meta.RequestID)
@@ -867,7 +897,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		if span.SubType == request.HTTPSubtypeAWSSNS && span.AWS != nil {
 			sns := span.AWS.SNS
 			attrs = append(attrs,
-				request.RPCSystem("aws-api"),
+				request.RPCSystem(request.RPCSystemAWSAPI),
 				semconv.MessagingSystemAWSSNS,
 			)
 			attrs = appendIfSet(attrs, semconv.RPCMethod, request.SNSRPCMethod(sns.OperationName))
@@ -1443,11 +1473,11 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		attrs = append(attrs, jsonRPCAttributes(span)...)
 		attrs = append(attrs, httpEnrichmentAttributes(span)...)
 	case request.EventTypeGRPCClient:
-		attrs = []attribute.KeyValue{
-			semconv.RPCMethod(span.Path),
+		attrs = grpcMethodAttributes(span)
+		attrs = append(attrs,
 			semconv.RPCSystemNameGRPC,
 			request.ServerPort(span.HostPort),
-		}
+		)
 		attrs = appendIfSet(attrs, request.ServerAddr, request.HostAsServer(span))
 		attrs = appendPeerService(attrs, span, optionalAttrs)
 		// See the EventTypeGRPC case: omit the status code attribute when the
@@ -1566,9 +1596,13 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		// https://opentelemetry.io/docs/specs/semconv/registry/attributes/onc-rpc/
 		attrs = []attribute.KeyValue{
 			request.ServerPort(span.HostPort),
-			request.RPCSystem("onc_rpc"),
+			request.RPCSystem(request.RPCSystemONCRPC),
+		}
+		if span.ResponseObservation == request.ResponseParsed {
+			attrs = append(attrs, semconv.RPCResponseStatusCode(request.SunRPCResponseStatusCode(span.Status)))
 		}
 		attrs = appendIfSet(attrs, request.ServerAddr, request.HostAsServer(span))
+		attrs = appendIfSet(attrs, semconv.RPCMethod, span.SunRPCMethodForExport())
 		attrs = appendIfSet(attrs, semconv.OncRPCProgramName, span.Path)
 		if span.Route != "" {
 			if proc, err := strconv.Atoi(span.Route); err == nil {

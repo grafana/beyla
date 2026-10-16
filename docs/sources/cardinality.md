@@ -108,14 +108,14 @@ However, here is a list of factors that can influence the overall cardinality:
 * Client-side metrics, when Beyla instruments applications that perform requests to other applications:
   * `http.client.request.duration`
   * `http.client.request.body.size`
-  * `rpc.client.duration`
+  * `rpc.client.call.duration`
   * `db.client.operation.duration`
   * `messaging.publish.duration`
   * `messaging.process.duration`
 * Server-side metrics, when Beyla instruments application that dispatches requests from other applications:
   * `http.server.request.duration`
   * `http.server.request.body.size`
-  * `rpc.server.duration`
+  * `rpc.server.call.duration`
 * **HistogramBuckets** need to be accounted and multiply each metric, as every Application-level metric is an
   histogram. The buckets are configurable in Beyla, but the default number is 15 for duration metrics and 11 for body
   size metrics, plus 2 more metrics (histogram sum and count).
@@ -155,9 +155,9 @@ The numbers taken as reference:
 * 2 instances, client and backend
 * 5 metric types, according to their role and protocols:
   * Client
-    * `rpc.client.duration`
+    * `rpc.client.call.duration`
   * Backend as a RPC server
-    * `rpc.server.duration`
+    * `rpc.server.call.duration`
   * Backend as an SQL and HTTP client
     * `http.client.request.duration`
     * `http.client.request.body.size`
@@ -173,18 +173,18 @@ In this simple scenario, we can manually count more the maximum cardinality to 3
 
 | #   | Instance | Metric                          | Endpoint      | Operation  | Code |
 | --- | -------- | ------------------------------- | ------------- | ---------- | ---- |
-| 1   | Client   | `rpc.client.duration`           | Backend       | Add        | Ok   |
-| 2   | Client   | `rpc.client.duration`           | Backend       | Add        | Err  |
-| 3   | Client   | `rpc.client.duration`           | Backend       | List       | Ok   |
-| 4   | Client   | `rpc.client.duration`           | Backend       | List       | Err  |
-| 5   | Client   | `rpc.client.duration`           | Backend       | Delete     | Ok   |
-| 6   | Client   | `rpc.client.duration`           | Backend       | Delete     | Err  |
-| 7   | Backend  | `rpc.server.duration`           |               | Add        | Ok   |
-| 8   | Backend  | `rpc.server.duration`           |               | Add        | Err  |
-| 9   | Backend  | `rpc.server.duration`           |               | List       | Ok   |
-| 10  | Backend  | `rpc.server.duration`           |               | List       | Err  |
-| 11  | Backend  | `rpc.server.duration`           |               | Delete     | Ok   |
-| 12  | Backend  | `rpc.server.duration`           |               | Delete     | Err  |
+| 1   | Client   | `rpc.client.call.duration`      | Backend       | Add        | Ok   |
+| 2   | Client   | `rpc.client.call.duration`      | Backend       | Add        | Err  |
+| 3   | Client   | `rpc.client.call.duration`      | Backend       | List       | Ok   |
+| 4   | Client   | `rpc.client.call.duration`      | Backend       | List       | Err  |
+| 5   | Client   | `rpc.client.call.duration`      | Backend       | Delete     | Ok   |
+| 6   | Client   | `rpc.client.call.duration`      | Backend       | Delete     | Err  |
+| 7   | Backend  | `rpc.server.call.duration`      |               | Add        | Ok   |
+| 8   | Backend  | `rpc.server.call.duration`      |               | Add        | Err  |
+| 9   | Backend  | `rpc.server.call.duration`      |               | List       | Ok   |
+| 10  | Backend  | `rpc.server.call.duration`      |               | List       | Err  |
+| 11  | Backend  | `rpc.server.call.duration`      |               | Delete     | Ok   |
+| 12  | Backend  | `rpc.server.call.duration`      |               | Delete     | Err  |
 | 13  | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 200  |
 | 14  | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 401  |
 | 15  | Backend  | `http.client.request.duration`  | Identity Prov | PUT /login | 500  |

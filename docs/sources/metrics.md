@@ -23,8 +23,8 @@ The following table describes the exported metrics in both OpenTelemetry and Pro
 | Application         | `http.server.request.duration`  | `http_server_request_duration_seconds` | Histogram     | seconds | Duration of HTTP service calls from the server side                                                                                  |
 | Application         | `http.server.request.body.size` | `http_server_request_body_size_bytes`  | Histogram     | bytes   | Size of the HTTP request body as received at the server side                                                                         |
 | Application         | `http.server.response.body.size` | `http_server_response_body_size_bytes`  | Histogram     | bytes   | Size of the HTTP response body as received at the server side                                                                         |
-| Application         | `rpc.client.duration`           | `rpc_client_duration_seconds`          | Histogram     | seconds | Duration of GRPC service calls from the client side                                                                                  |
-| Application         | `rpc.server.duration`           | `rpc_server_duration_seconds`          | Histogram     | seconds | Duration of RPC service calls from the server side                                                                                   |
+| Application         | `rpc.client.call.duration`      | `rpc_client_call_duration_seconds`     | Histogram     | seconds | Duration of GRPC service calls from the client side                                                                                  |
+| Application         | `rpc.server.call.duration`      | `rpc_server_call_duration_seconds`     | Histogram     | seconds | Duration of RPC service calls from the server side                                                                                   |
 | Application         | `db.client.operation.duration`  | `db_client_operation_duration_seconds` | Histogram     | seconds | Duration of database client operations (SQL, Redis, MongoDB)                                                                         |
 | Application         | `messaging.publish.duration`    | `messaging_publish_duration`           | Histogram     | seconds | Duration of Messaging (Kafka) publish operations (Experimental)                                                                      |
 | Application         | `messaging.process.duration`    | `messaging_process_duration`           | Histogram     | seconds | Duration of Messaging (Kafka) process operations (Experimental)                                                                      |
@@ -103,9 +103,9 @@ For more information about the OpenTelemetry semantic conventions for each metri
 | Application (process)          | `process.owner`              | shown if process metrics are enabled              |
 | Application (process)          | `process.parent_pid`         | shown if process metrics are enabled              |
 | Application (process)          | `process.pid`                | shown if process metrics are enabled              |
-| Application `rpc.*`            | `rpc.grpc.status_code`       | shown                                             |
+| Application `rpc.*`            | `rpc.response.status_code`   | shown                                             |
 | Application `rpc.*`            | `rpc.method`                 | shown                                             |
-| Application `rpc.*`            | `rpc.system`                 | shown                                             |
+| Application `rpc.*`            | `rpc.system.name`            | shown                                             |
 | Application (server)           | `client.address`             | hidden                                            |
 | `db.client.operation.duration` | `db.operation.name`          | shown                                             |
 | `db.client.operation.duration` | `db.collection.name`         | hidden                                            |

@@ -286,7 +286,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sort_desc(topk by(rpc_method, service_name) (5,  max by (rpc_method, service_name) (histogram_quantile(0.95,  (sum by(rpc_method, service_name, le) (rate({__name__=~\"rpc_server_duration.*bucket\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))))))",
+          "expr": "sort_desc(topk by(rpc_method, service_name) (5,  max by (rpc_method, service_name) (histogram_quantile(0.95,  (sum by(rpc_method, service_name, le) (rate({__name__=~\"rpc_server_call_duration.*bucket\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))))))",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -452,7 +452,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"rpc_server_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"rpc_server_call_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p99",
           "range": true,
@@ -464,7 +464,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(service_name, le) (rate({__name__=~\"rpc_server_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(service_name, le) (rate({__name__=~\"rpc_server_call_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p95",
           "range": true,
@@ -476,7 +476,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"rpc_server_duration.*sum\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) / sum(rate({__name__=~\"rpc_server_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval]))",
+          "expr": "sum(rate({__name__=~\"rpc_server_call_duration.*sum\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) / sum(rate({__name__=~\"rpc_server_call_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC Avg",
           "range": true,
@@ -583,9 +583,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"rpc_server_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
+          "expr": "sum(rate({__name__=~\"rpc_server_call_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) by (service_name, rpc_response_status_code)",
           "hide": false,
-          "legendFormat": "RPC server (status {{rpc_grpc_status_code}})",
+          "legendFormat": "RPC server (status {{rpc_response_status_code}})",
           "range": true,
           "refId": "D"
         }
@@ -691,9 +691,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (rpc_grpc_status_code) (rate({__name__=~\"rpc_server_duration.*count\",service_name=\"${Service}\",rpc_grpc_status_code!=\"0\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate({__name__=~\"rpc_server_duration.*count\",service_name=\"${Service}\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval]))",
+          "expr": "sum by (rpc_response_status_code) (rate({__name__=~\"rpc_server_call_duration.*count\",service_name=\"${Service}\",rpc_response_status_code!=\"OK\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])) / ignoring(rpc_response_status_code) group_left sum(rate({__name__=~\"rpc_server_call_duration.*count\",service_name=\"${Service}\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval]))",
           "hide": false,
-          "legendFormat": "RPC server (status {{rpc_grpc_status_code}})",
+          "legendFormat": "RPC server (status {{rpc_response_status_code}})",
           "range": true,
           "refId": "D"
         }
@@ -836,7 +836,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"rpc_client_duration.*sum\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) / sum(rate({__name__=~\"rpc_client_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval]))",
+          "expr": "sum(rate({__name__=~\"rpc_client_call_duration.*sum\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) / sum(rate({__name__=~\"rpc_client_call_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval]))",
           "hide": false,
           "legendFormat": "RPC Avg",
           "range": true,
@@ -848,7 +848,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"rpc_client_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(service_name, le) (rate({__name__=~\"rpc_client_call_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])))",
           "hide": false,
           "legendFormat": "RPC p99",
           "range": true,
@@ -860,7 +860,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"rpc_client_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])) by (service_name, le)) ",
+          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"rpc_client_call_duration.*bucket\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])) by (service_name, le)) ",
           "hide": false,
           "legendFormat": "RPC p95",
           "range": true,
@@ -966,9 +966,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"rpc_client_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) by (service_name, rpc_grpc_status_code)",
+          "expr": "sum(rate({__name__=~\"rpc_client_call_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"}) [$__rate_interval])) by (service_name, rpc_response_status_code)",
           "hide": false,
-          "legendFormat": "RPC client (status {{rpc_grpc_status_code}})",
+          "legendFormat": "RPC client (status {{rpc_response_status_code}})",
           "range": true,
           "refId": "C"
         }
@@ -1099,9 +1099,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (rpc_grpc_status_code) (rate({__name__=~\"rpc_client_duration.*count\",service_name=\"$Service\",rpc_grpc_status_code!=\"0\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])) / ignoring(rpc_grpc_status_code) group_left sum(rate({__name__=~\"rpc_client_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval]))",
+          "expr": "sum by (rpc_response_status_code) (rate({__name__=~\"rpc_client_call_duration.*count\",service_name=\"$Service\",rpc_response_status_code!=\"OK\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval])) / ignoring(rpc_response_status_code) group_left sum(rate({__name__=~\"rpc_client_call_duration.*count\",service_name=\"$Service\"} + on(instance) group_left(job) (0 * target_info{instance=~\"$instance\",job=~\"$job\"})[$__rate_interval]))",
           "hide": false,
-          "legendFormat": "RPC client (status {{rpc_grpc_status_code}})",
+          "legendFormat": "RPC client (status {{rpc_response_status_code}})",
           "range": true,
           "refId": "D"
         }

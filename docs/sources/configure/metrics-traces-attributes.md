@@ -358,8 +358,8 @@ And the following table describes the metrics and their associated groups.
 | `k8s_app_meta` | `http.client.request.duration` | `http_client_request_duration_seconds` |
 | `k8s_app_meta` | `http.client.request.body.size` | `http_client_request_body_size_bytes` |
 | `k8s_app_meta` | `http.client.response.body.size` | `http_client_response_body_size_bytes` |
-| `k8s_app_meta` | `rpc.client.duration` | `rpc_client_duration_seconds` |
-| `k8s_app_meta` | `rpc.server.duration` | `rpc_server_duration_seconds` |
+| `k8s_app_meta` | `rpc.client.call.duration` | `rpc_client_call_duration_seconds` |
+| `k8s_app_meta` | `rpc.server.call.duration` | `rpc_server_call_duration_seconds` |
 | `k8s_app_meta` | `db.client.operation.duration` | `db_client_operation_duration_seconds` |
 | `k8s_app_meta` | `gpu.kernel.launch.calls` | `gpu_kernel_launch_calls_total` |
 | `k8s_app_meta` | `gpu.kernel.grid.size` | `gpu_kernel_grid_size_total` |

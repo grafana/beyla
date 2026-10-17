@@ -77,15 +77,38 @@ Various cloud and database protocols are implemented on top of HTTP. For example
 
 YAML section:
 
-```
+```yaml
 ebpf:
-  http:
-    graphql:
+  payload_extraction:
+    http:
+      graphql:
 ```
 
 | YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
-| `enabled`<p>`BEYLA_HTTP_GRAPHQL_ENABLED`</p>              | Enable GraphQL protocol detection in HTTP payload processing. | boolean | (true)  |
+| `enabled`<p>`BEYLA_HTTP_GRAPHQL_ENABLED`</p>              | Enable GraphQL payload extraction and parsing. | boolean | false  |
+
+When enabled, Beyla detects GraphQL in inbound HTTP `POST` requests by parsing their JSON bodies; detection does not depend on the request path. The HTTP capture buffer must be large enough to contain the request body. Configure its size in bytes with `ebpf.buffer_sizes.http` (`BEYLA_BPF_BUFFER_SIZE_HTTP`); the default is `0`, which disables the auxiliary HTTP buffer, and the maximum is `8192` bytes.
+
+GraphQL spans include `graphql.operation.name` and `graphql.operation.type`. The `graphql.document` attribute is opt-in: add it to [`attributes.select.traces.include`](./metrics-traces-attributes.md#select-trace-attributes) to export it. The document contains the captured query and is not redacted, so enable it only when query contents are safe to store.
+
+For example, enable GraphQL detection, allocate the maximum HTTP capture buffer, and opt in to exporting the GraphQL document:
+
+```yaml
+ebpf:
+  buffer_sizes:
+    http: 8192
+  payload_extraction:
+    http:
+      graphql:
+        enabled: true
+
+attributes:
+  select:
+    traces:
+      include:
+        - graphql.document
+```
 
 YAML section:
 

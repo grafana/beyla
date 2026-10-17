@@ -95,6 +95,48 @@ otel_metrics_export:
 
 ## Use native histograms and exponential histograms
 
-For Prometheus, you enable [native histograms](https://prometheus.io/docs/specs/native_histograms/) with the `--enable-feature=native-histograms` feature flag (Prometheus <= 3.8.0) or with the `scrape_native_histograms` configuration setting (Prometheus >= 3.8.0).
+Native and exponential histograms cover a wide value range without requiring fixed bucket boundaries. Their resolution settings balance accuracy against memory use and payload size.
 
-For OpenTelemetry, you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually. Set the standard [OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION](https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/otlp/#additional-configuration) environment variable. See the `histogram_aggregation` section in the [OTEL metrics exporter](../export-data/) section for more information.
+### OpenTelemetry exponential histograms
+
+To export OpenTelemetry exponential histograms, set `otel_metrics_export.histogram_aggregation` to `base2_exponential_bucket_histogram`. The settings under `otel_metrics_export.exponential_histogram` only take effect in this aggregation mode.
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --------------------------------------- | ----------- | ---- | ------- |
+| `max_scale`<p>`BEYLA_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SCALE`</p> | Maximum histogram scale. Higher scales use narrower buckets and preserve more detail, but can require more buckets. Valid values range from `-10` through `20`. | integer | `20` |
+| `max_size`<p>`BEYLA_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SIZE`</p> | Maximum number of buckets. Higher values reduce bucket compaction and preserve more detail at the cost of memory and larger metric payloads. Must be greater than `0`. | integer | `160` |
+
+For example, the following configuration limits exponential histograms to 80 buckets with a maximum scale of 12:
+
+```yaml
+otel_metrics_export:
+  histogram_aggregation: base2_exponential_bucket_histogram
+  exponential_histogram:
+    max_scale: 12
+    max_size: 80
+```
+
+Explicit boundaries under `otel_metrics_export.buckets` don't apply when you select exponential aggregation.
+
+### Prometheus native histograms
+
+For Prometheus, enable [native histograms](https://prometheus.io/docs/specs/native_histograms/) with the `--enable-feature=native-histograms` feature flag (Prometheus versions earlier than 3.8.0) or with the `scrape_native_histograms` configuration setting (Prometheus 3.8.0 or later).
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --------------------------------------- | ----------- | ---- | ------- |
+| `bucket_factor`<p>`BEYLA_PROMETHEUS_NATIVE_HISTOGRAM_BUCKET_FACTOR`</p> | Upper bound for the growth factor between consecutive buckets. Values closer to `1` provide finer resolution and use more buckets. Must be greater than `1`. | float | `1.1` |
+| `max_bucket_number`<p>`BEYLA_PROMETHEUS_NATIVE_HISTOGRAM_MAX_BUCKET_NUMBER`</p> | Maximum number of populated native histogram buckets. When the limit is exceeded, the histogram resets or reduces its resolution. Must be greater than `0`. | integer | `100` |
+| `min_reset_duration`<p>`BEYLA_PROMETHEUS_NATIVE_HISTOGRAM_MIN_RESET_DURATION`</p> | Minimum time between histogram resets. Before this interval elapses, an over-limit histogram reduces its resolution instead of resetting. Must be greater than `0`. | Duration | `1h` |
+
+Configure these settings under `prometheus_export.native_histogram`. For example:
+
+```yaml
+prometheus_export:
+  port: 9090
+  native_histogram:
+    bucket_factor: 1.2
+    max_bucket_number: 80
+    min_reset_duration: 30m
+```
+
+Prometheus native histogram settings don't change the explicit buckets configured under `prometheus_export.buckets`. A compatible Prometheus server can scrape the native histogram alongside explicitly configured classic buckets.

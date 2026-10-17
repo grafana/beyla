@@ -20,7 +20,7 @@ YAML section: `nodejs`
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
 | `enabled`<p>`BEYLA_NODEJS_ENABLED`</p>                    | Enable dynamic injection of the `NodeJS` agent.                 | boolean | (true)  |
 
-The `NodeJS` agent is used only for context propagation, since NodeJS uses `libssl` for TLS encryption and decryption. This agent is injected via the debugger interface. You should disable the `NodeJS` agent support if your program has a handler attached on `SIGUSR1`.
+The `NodeJS` agent provides context propagation and Node.js runtime metrics. It uses the debugger interface for injection. Setting `nodejs.enabled` to `false` also disables Node.js runtime metrics, even when the `application_runtime` feature is enabled. Disable the agent if your program has a handler attached on `SIGUSR1`.
 
 YAML section: `javaagent`
 
@@ -29,6 +29,8 @@ YAML section: `javaagent`
 | `enabled`<p>`BEYLA_JAVAAGENT_ENABLED`</p>                 | Enable dynamic injection of the Java agent.                   | boolean | (true)  |
 | `attach_timeout`<p>`BEYLA_JAVAAGENT_ATTACH_TIMEOUT`</p>   | Timeout for waiting on dynamic attach to succeed.             | string  | "10s"   |
 
-The `Java` agent is used for both context propagation and for TLS traffic capture. The dynamic injection of the agent is supported for `OpenJDK Hotspot` JVM (and derivatives) and for `OpenJ9`. Minimum `Java` version supported is `Java 8`. If the JVM is busy during the agent attach process, the attach process may take longer than 10 seconds. You can use the `attach_timeout` option to increase the time Beyla waits for the dynamic attach to successfully complete.
+The `Java` agent provides context propagation, TLS traffic capture, and agent-backed runtime metrics. Setting `javaagent.enabled` to `false` disables garbage collection duration, class, thread, and CPU metrics. HotSpot memory pool metrics remain available because Beyla collects them with eBPF USDT probes.
+
+The dynamic injection of the agent is supported for `OpenJDK Hotspot` JVM (and derivatives) and for `OpenJ9`. Minimum `Java` version supported is `Java 8`. If the JVM is busy during the agent attach process, the attach process may take longer than 10 seconds. You can use the `attach_timeout` option to increase the time Beyla waits for the dynamic attach to successfully complete.
 
 Injection of the `Java` agent requires that the target process has writeable file system, for example, the injection process doesn't work for containers with read-only file systems.

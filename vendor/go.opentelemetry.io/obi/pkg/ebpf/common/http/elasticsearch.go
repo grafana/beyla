@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
@@ -20,6 +21,7 @@ type elasticsearchOperation struct {
 	NodeName         string
 	DBQueryText      string
 	DBCollectionName string
+	DocumentID       string
 	DBSytemName      string
 }
 
@@ -68,6 +70,7 @@ func ElasticsearchSpan(baseSpan *request.Span, req *http.Request, resp *http.Res
 		NodeName:         op.NodeName,
 		DBOperationName:  operationName,
 		DBCollectionName: op.DBCollectionName,
+		DocumentID:       op.DocumentID,
 		DBQueryText:      op.DBQueryText,
 		DBSystemName:     dbSystemName,
 	}
@@ -92,6 +95,7 @@ func parseElasticsearchRequest(req *http.Request) (elasticsearchOperation, error
 	req.Body = io.NopCloser(bytes.NewBuffer(reqB))
 	op.DBQueryText = string(reqB)
 	op.DBCollectionName = extractElasticsearchDBCollectionName(req)
+	op.DocumentID = extractElasticsearchDocumentID(req)
 	return op, nil
 }
 
@@ -177,4 +181,19 @@ func extractElasticsearchDBCollectionName(req *http.Request) string {
 		return ""
 	}
 	return first
+}
+
+// extractElasticsearchDocumentID returns the {id} path parameter of the
+// /{index}/_doc/{id} document endpoint. It splits the escaped path, since a
+// document ID may contain an encoded slash, and decodes only the ID.
+func extractElasticsearchDocumentID(req *http.Request) string {
+	parts := strings.Split(strings.Trim(req.URL.EscapedPath(), "/"), "/")
+	if len(parts) != 3 || parts[1] != "_doc" {
+		return ""
+	}
+	id, err := url.PathUnescape(parts[2])
+	if err != nil {
+		return ""
+	}
+	return id
 }

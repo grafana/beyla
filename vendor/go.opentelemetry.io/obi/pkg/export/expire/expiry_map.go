@@ -4,7 +4,7 @@
 package expire // import "go.opentelemetry.io/obi/pkg/export/expire"
 
 import (
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -46,7 +46,7 @@ func NewExpiryMap[T any](clock Clock, ttl time.Duration) *ExpiryMap[T] {
 func (ex *ExpiryMap[T]) GetOrCreate(lbls []string, instancer func() T) T {
 	now := ex.clock()
 
-	h := labelsKey(lbls)
+	h := LabelsKey(lbls)
 	ex.mt.RLock()
 	e, ok := ex.entries[h]
 	ex.mt.RUnlock()
@@ -72,7 +72,7 @@ func (ex *ExpiryMap[T]) Delete(lbls []string) (T, bool) {
 	ex.mt.Lock()
 	defer ex.mt.Unlock()
 
-	key := labelsKey(lbls)
+	key := LabelsKey(lbls)
 	entry, ok := ex.entries[key]
 	if !ok {
 		var zero T
@@ -133,6 +133,20 @@ func (ex *ExpiryMap[T]) All() []T {
 	return items
 }
 
-func labelsKey(lbls []string) string {
-	return strings.Join(lbls, ":")
+// LabelsKey encodes label values without ambiguity between values.
+func LabelsKey(labels []string) string {
+	size := 0
+	for _, label := range labels {
+		size += len(label) + 2
+		for length := len(label); length >= 10; length /= 10 {
+			size++
+		}
+	}
+	key := make([]byte, 0, size)
+	for _, label := range labels {
+		key = strconv.AppendInt(key, int64(len(label)), 10)
+		key = append(key, ':')
+		key = append(key, label...)
+	}
+	return string(key)
 }

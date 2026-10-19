@@ -6,13 +6,13 @@ package prom // import "go.opentelemetry.io/obi/pkg/export/prom"
 import (
 	"errors"
 	"math/bits"
-	"strconv"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	"go.opentelemetry.io/obi/pkg/export/expire"
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
 
@@ -93,7 +93,7 @@ func (c *goRuntimeHistogramCollector) Update(
 	key := goRuntimeHistogramKey{
 		kind:       histogram.Kind,
 		pid:        pid,
-		labelTuple: runtimeMetricLabelTuple(labels),
+		labelTuple: expire.LabelsKey(labels),
 	}
 
 	c.mu.Lock()
@@ -143,7 +143,7 @@ func (c *goRuntimeHistogramCollector) Delete(labels []string) {
 		return
 	}
 
-	labelTuple := runtimeMetricLabelTuple(labels)
+	labelTuple := expire.LabelsKey(labels)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -303,14 +303,4 @@ func (c *goRuntimeHistogramCollector) descriptor(
 	default:
 		return nil, false
 	}
-}
-
-func runtimeMetricLabelTuple(labels []string) string {
-	key := make([]byte, 0, len(labels)*8)
-	for _, label := range labels {
-		key = strconv.AppendInt(key, int64(len(label)), 10)
-		key = append(key, ':')
-		key = append(key, label...)
-	}
-	return string(key)
 }

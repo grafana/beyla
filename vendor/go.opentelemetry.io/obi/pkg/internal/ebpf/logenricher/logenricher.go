@@ -31,6 +31,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/internal/shardedqueue"
@@ -38,7 +39,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_event_t -type log_pipe_key_t -target amd64,arm64 Bpf ../../../../bpf/logenricher/logenricher.c -- -I../../../../bpf -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type log_event_t -type log_pipe_key_t -target $BPF_TARGETS Bpf ../../../../bpf/logenricher/logenricher.c -- -I../../../../bpf -I../../../../bpf
 
 type LogEvent struct {
 	orig    BpfLogEventT
@@ -88,6 +89,7 @@ const (
 type Tracer struct {
 	ctx         context.Context
 	cfg         *obi.Config
+	metrics     imetrics.Reporter
 	bpfObjects  BpfObjects
 	closers     []io.Closer
 	log         *slog.Logger
@@ -103,7 +105,7 @@ type Tracer struct {
 	pipesMU     sync.RWMutex                 // guards trackedPids, logPipes, pidPipes; hot-path readers vs reconcile
 }
 
-func New(cfg *obi.Config) *Tracer {
+func New(cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
 	logger := slog.With("component", "logenricher")
 
 	if !ebpfcommon.SupportsLogInjection(logger) {
@@ -112,8 +114,9 @@ func New(cfg *obi.Config) *Tracer {
 	}
 
 	tr := &Tracer{
-		log: logger,
-		cfg: cfg,
+		log:     logger,
+		cfg:     cfg,
+		metrics: metrics,
 		fdCache: expirable.NewLRU[string, *destFile](cfg.EBPF.LogEnricher.CacheSize, func(_ string, d *destFile) {
 			d.release()
 		}, cfg.EBPF.LogEnricher.CacheTTL),
@@ -154,7 +157,10 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 }
 
 func (p *Tracer) constants() map[string]any {
-	return map[string]any{"g_bpf_debug": p.cfg.EBPF.BpfDebug}
+	return map[string]any{
+		"g_bpf_debug":             p.cfg.EBPF.BpfDebug,
+		"ringbuf_metrics_enabled": p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics),
+	}
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}

@@ -21,6 +21,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -35,7 +36,9 @@ cloud_metadata:
   region: eu-west-1
 `))
 	require.NoError(t, err)
-	want := transform.CloudMetadataConfig{ClusterName: "test-cluster", Region: "eu-west-1"}
+	want := obi.DefaultConfig.CloudMetadata
+	want.ClusterName = "test-cluster"
+	want.Region = "eu-west-1"
 	assert.Equal(t, want, cfg.AsOBI().CloudMetadata)
 	assert.Equal(t, want, FromOBI(cfg.AsOBI()).CloudMetadata)
 }
@@ -57,12 +60,17 @@ func TestAsOBINameResolver(t *testing.T) {
 }
 
 func TestCloudMetadataConfigRoundTrip(t *testing.T) {
+	defaults := obi.DefaultConfig.CloudMetadata
+	overrides := defaults
+	overrides.ClusterName = "test-cluster"
+	overrides.Region = "test-region"
+
 	for _, tc := range []struct {
 		name string
 		yaml string
 		want transform.CloudMetadataConfig
 	}{
-		{name: "defaults", yaml: "{}"},
+		{name: "defaults", yaml: "{}", want: defaults},
 		{
 			name: "configured overrides",
 			yaml: `
@@ -70,7 +78,7 @@ cloud_metadata:
   cluster_name: test-cluster
   region: test-region
 `,
-			want: transform.CloudMetadataConfig{ClusterName: "test-cluster", Region: "test-region"},
+			want: overrides,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -31,3 +31,7 @@ func CMDLineForPID(_ app.PID) (string, []string, error) {
 func CWDForPID(_ app.PID) (string, error) {
 	return "", nil
 }
+
+func PIDFilterConstants() map[string]any {
+	return pidFilterConstants(PIDNamespaceInit, 0)
+}

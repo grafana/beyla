@@ -29,6 +29,7 @@ type dotnetRuntimeMetricsCollector struct {
 	threadPoolWorkItemCount *Expirer[prometheus.Counter]
 	monitorLockContentions  *Expirer[prometheus.Counter]
 	processMemoryWorkingSet *Expirer[prometheus.Gauge]
+	gcHeapSize              *Expirer[prometheus.Gauge]
 	gcCommittedMemory       *Expirer[prometheus.Gauge]
 	threadPoolThreadCount   *Expirer[prometheus.Gauge]
 	threadPoolQueueLength   *Expirer[prometheus.Gauge]
@@ -61,6 +62,7 @@ type dotnetRuntimeGaugeAggregate struct {
 type dotnetRuntimeCurrentAggregate struct {
 	processCPUCount         dotnetRuntimeGaugeAggregate
 	processMemoryWorkingSet dotnetRuntimeGaugeAggregate
+	gcHeapSize              [runtimemetrics.DotnetHeapGenerationCount]dotnetRuntimeGaugeAggregate
 	gcCommittedMemory       dotnetRuntimeGaugeAggregate
 	threadPoolThreadCount   dotnetRuntimeGaugeAggregate
 	threadPoolQueueLength   dotnetRuntimeGaugeAggregate
@@ -319,28 +321,41 @@ func (c *dotnetRuntimeMetricsCollector) updateCurrentMetrics(entry dotnetRuntime
 		{c.timerCount, &aggregate.timerCount, entry.values.TimerCount, next.TimerCount},
 		{c.assemblyCount, &aggregate.assemblyCount, entry.values.AssemblyCount, next.AssemblyCount},
 	} {
-		if current.value != nil {
-			current.aggregate.sum -= float64(*current.value)
-			current.aggregate.contributors--
-		}
-		if current.aggregate.contributors == 0 {
-			current.aggregate.sum = 0
-		}
-		if current.next != nil {
-			current.aggregate.sum += float64(*current.next)
-			current.aggregate.contributors++
-		}
-		if current.aggregate.contributors > 0 {
+		if current.aggregate.update(current.metric, current.value, current.next, entry.labels) {
 			available = true
-			current.metric.WithLabelValues(entry.labels...).Metric.Set(current.aggregate.sum)
-		} else {
-			current.aggregate.sum = 0
-			current.metric.DeleteLabelValues(entry.labels...)
+		}
+	}
+	for generation, name := range runtimemetrics.DotnetHeapGenerations() {
+		// Expirer retains label slices; each generation owns its labels.
+		labels := append(append([]string(nil), entry.labels...), name)
+		if aggregate.gcHeapSize[generation].update(c.gcHeapSize, entry.values.GCHeapSize[generation], next.GCHeapSize[generation], labels) {
+			available = true
 		}
 	}
 	if !available {
 		delete(c.currentAggregates, entry.labelTuple)
 	}
+}
+
+func (a *dotnetRuntimeGaugeAggregate) update(metric *Expirer[prometheus.Gauge], previous, next *int64, labels []string) bool {
+	if previous != nil {
+		a.sum -= float64(*previous)
+		a.contributors--
+	}
+	if a.contributors == 0 {
+		a.sum = 0
+	}
+	if next != nil {
+		a.sum += float64(*next)
+		a.contributors++
+	}
+	if a.contributors > 0 {
+		metric.WithLabelValues(labels...).Metric.Set(a.sum)
+		return true
+	}
+	a.sum = 0
+	metric.DeleteLabelValues(labels...)
+	return false
 }
 
 func newDotnetRuntimeMetricsCollector(runtimeLabelNames []string, clock expire.Clock, ttl time.Duration) dotnetRuntimeMetricsCollector {
@@ -397,6 +412,8 @@ func newDotnetRuntimeMetricsCollector(runtimeLabelNames []string, clock expire.C
 		}, baseLabels).MetricVec, clock, ttl),
 		processMemoryWorkingSet: newRuntimeGauge(attributes.DotnetProcessMemoryWorkingSet.Prom,
 			"Current physical memory mapped to the .NET process in bytes.", baseLabels, clock, ttl),
+		gcHeapSize: newRuntimeGauge(attributes.DotnetGCHeapSize.Prom,
+			"Managed .NET heap size including fragmentation at the latest collection in bytes.", labels, clock, ttl),
 		gcCommittedMemory: newRuntimeGauge(attributes.DotnetGCCommittedMemory.Prom,
 			"Committed .NET GC memory at the latest collection in bytes.", baseLabels, clock, ttl),
 		threadPoolThreadCount: newRuntimeGauge(attributes.DotnetThreadPoolThreadCount.Prom,

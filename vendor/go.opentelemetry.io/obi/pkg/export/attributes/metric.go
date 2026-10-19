@@ -398,6 +398,12 @@ var (
 		Unit:    "By",
 		Type:    InstrumentCounter,
 	})
+	DotnetGCHeapSize = metric(Name{
+		Section: "dotnet.gc.last_collection.heap.size",
+		OTEL:    "dotnet.gc.last_collection.heap.size",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
 	DotnetGCCommittedMemory = metric(Name{
 		Section: "dotnet.gc.last_collection.memory.committed_size",
 		OTEL:    "dotnet.gc.last_collection.memory.committed_size",

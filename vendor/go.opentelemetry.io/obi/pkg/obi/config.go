@@ -19,8 +19,6 @@ import (
 	"github.com/invopop/jsonschema"
 	"gopkg.in/yaml.v3"
 
-	"go.opentelemetry.io/collector/confmap"
-
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/config"
@@ -517,12 +515,11 @@ type HealthCheckConfig struct {
 	UnixSocketPath string `yaml:"unix_socket_path" env:"OTEL_EBPF_HEALTH_CHECK_UNIX_SOCKET_PATH"`
 }
 
-func (c *Config) Unmarshal(component *confmap.Conf) error {
-	if component == nil {
+// UnmarshalMap decodes an OBI configuration from a map of YAML field names.
+func (c *Config) UnmarshalMap(raw map[string]any) error {
+	if raw == nil {
 		return nil
 	}
-
-	raw := component.ToStringMap()
 
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		TagName:          "yaml",

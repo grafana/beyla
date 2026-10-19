@@ -64,6 +64,7 @@ const (
 	MessagingSystem        = Name(semconv.MessagingSystemKey)
 	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
 	MessagingConsumerGroup = Name(semconv.MessagingConsumerGroupNameKey)
+	MessagingSubscription  = Name(semconv.MessagingDestinationSubscriptionNameKey)
 	GraphQLDocument        = Name(semconv.GraphQLDocumentKey)
 	GraphQLOperationName   = Name(semconv.GraphQLOperationNameKey)
 	GraphQLOperationType   = Name(semconv.GraphQLOperationTypeKey)

@@ -92,15 +92,10 @@ func addHostInfoExporters(
 			Enabled: config.Prometheus.EndpointEnabled(),
 			TTL:     config.Prometheus.TTL,
 			Register: func(c prometheus.Collector) error {
-				if config.Prometheus.Registry != nil {
-					return config.Prometheus.Registry.Register(c)
-				}
 				ctxInfo.Prometheus.Register(config.Prometheus.Port, config.Prometheus.Path, c)
 				return nil
 			},
-		}
-		if config.Prometheus.Registry == nil {
-			promCfg.StartHTTP = ctxInfo.Prometheus.StartHTTP
+			StartHTTP: ctxInfo.Prometheus.StartHTTP,
 		}
 		swi.Add(hostinfo.PromExport(promCfg, ctxInfo.OverrideAppExportQueue, processEventsCh))
 	}

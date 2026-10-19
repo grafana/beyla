@@ -355,8 +355,9 @@ type MessagingInfo struct {
 	Partition int   `json:"partition"`
 	// HasPartition reports whether Partition and Offset were read from the wire. The
 	// consumer group can be known while the partition list was cut by the kernel buffer.
-	HasPartition  bool   `json:"hasPartition"`
-	ConsumerGroup string `json:"consumerGroup"`
+	HasPartition     bool   `json:"hasPartition"`
+	ConsumerGroup    string `json:"consumerGroup"`
+	SubscriptionName string `json:"subscriptionName"`
 }
 
 type GraphQL struct {
@@ -1776,6 +1777,9 @@ func spanAttributes(s *Span) SpanAttributes {
 			}
 			if s.MessagingInfo.ConsumerGroup != "" {
 				attrs["consumerGroup"] = s.MessagingInfo.ConsumerGroup
+			}
+			if s.MessagingInfo.SubscriptionName != "" {
+				attrs["subscriptionName"] = s.MessagingInfo.SubscriptionName
 			}
 		}
 		return attrs

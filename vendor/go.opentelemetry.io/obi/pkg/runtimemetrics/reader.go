@@ -82,10 +82,20 @@ type PythonGCGenerationMetrics struct {
 
 const DotnetGCGenerationCount = 3
 
+// DotnetHeapGenerationCount includes the large and pinned object heaps.
+const DotnetHeapGenerationCount = 5
+
+func DotnetHeapGenerations() [DotnetHeapGenerationCount]string {
+	return [DotnetHeapGenerationCount]string{"gen0", "gen1", "gen2", "loh", "poh"}
+}
+
 type DotnetRuntimeMetricSnapshot struct {
 	// GCCollections contains exclusive cumulative counts since the collector baseline.
 	// A nil entry means the count is unavailable.
 	GCCollections [DotnetGCGenerationCount]*uint64
+	// GCHeapSize contains last-collection bytes, including fragmentation.
+	// Entries follow DotnetHeapGenerations; nil means unavailable.
+	GCHeapSize [DotnetHeapGenerationCount]*int64
 
 	ProcessCPUCount *int64
 	// CPU times are cumulative process-lifetime seconds; nil means unavailable.

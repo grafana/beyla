@@ -247,22 +247,12 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
-				return semconv.MessagingDestinationName(span.Path)
+			destination := messagingDestination(span)
+			if destination == "" {
+				// a span that named no destination omits the attribute rather than emitting it empty
+				return attribute.KeyValue{}
 			}
-			if span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer {
-				return semconv.MessagingDestinationName(span.Path)
-			}
-			if span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer || span.Type == EventTypeAMQPClient {
-				return semconv.MessagingDestinationName(span.Path)
-			}
-			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
-				return semconv.MessagingDestinationName(span.AWS.SQS.Destination)
-			}
-			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSNS && span.AWS != nil {
-				return semconv.MessagingDestinationName(span.AWS.SNS.Destination)
-			}
-			return semconv.MessagingDestinationName("")
+			return semconv.MessagingDestinationName(destination)
 		}
 	case attr.MessagingOpName:
 		getter = func(span *Span) attribute.KeyValue {
@@ -319,6 +309,13 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return MessagingConsumerGroupName(mi.ConsumerGroup)
 			}
 			// only consumers of a group have one: omit rather than emit empty
+			return attribute.KeyValue{}
+		}
+	case attr.MessagingSubscription:
+		getter = func(span *Span) attribute.KeyValue {
+			if mi := span.MessagingInfo; mi != nil && mi.SubscriptionName != "" {
+				return semconv.MessagingDestinationSubscriptionName(mi.SubscriptionName)
+			}
 			return attribute.KeyValue{}
 		}
 	case attr.CudaMemcpyKind:
@@ -717,6 +714,27 @@ func spanPromGetters(attrName attr.Name) attributes.Getter[*Span, string] {
 	// unlike the OTEL getters, when the attribute is not found, we need to look for it
 	// in the metadata section
 	return func(s *Span) string { return s.Service.Metadata[attrName] }
+}
+
+func messagingDestination(span *Span) string {
+	switch span.Type {
+	case EventTypeKafkaClient, EventTypeKafkaServer,
+		EventTypeMQTTClient, EventTypeMQTTServer,
+		EventTypeNATSClient, EventTypeNATSServer,
+		EventTypeAMQPClient:
+		return span.Path
+	case EventTypeHTTPClient:
+		if span.AWS == nil {
+			return ""
+		}
+		switch span.SubType {
+		case HTTPSubtypeAWSSQS:
+			return span.AWS.SQS.Destination
+		case HTTPSubtypeAWSSNS:
+			return span.AWS.SNS.Destination
+		}
+	}
+	return ""
 }
 
 func dbResponseStatusCode(span *Span) string {

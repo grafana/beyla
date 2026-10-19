@@ -6,6 +6,7 @@ package ebpfcommon // import "go.opentelemetry.io/obi/pkg/ebpf/common"
 import (
 	"errors"
 	"log/slog"
+	"strings"
 	"unsafe"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
@@ -39,6 +40,10 @@ type MQTTInfo struct {
 	// PacketID is the packet identifier for QoS > 0.
 	PacketID uint16
 }
+
+// mqttSharedSubscriptionPrefix marks an MQTT v5 shared subscription filter:
+// $share/{ShareName}/{filter}.
+const mqttSharedSubscriptionPrefix = "$share/"
 
 // packetTypeToMethod converts an MQTT packet type to an OpenTelemetry messaging operation name.
 func packetTypeToMethod(packetType mqttparser.PacketType) string {
@@ -242,10 +247,18 @@ func TCPToMQTTToSpan(trace *TCPRequestInfo, data *MQTTInfo) request.Span {
 		reqType = request.EventTypeMQTTServer
 	}
 
+	// A SUBSCRIBE carries a topic filter, which names a subscription rather than a destination.
+	path := data.Topic
+	var messagingInfo *request.MessagingInfo
+	if data.PacketType == mqttparser.PacketTypeSUBSCRIBE {
+		path = ""
+		messagingInfo = mqttSubscriptionInfo(data.Topic)
+	}
+
 	return request.Span{
 		Type:          reqType,
 		Method:        packetTypeToMethod(data.PacketType),
-		Path:          data.Topic,
+		Path:          path,
 		Statement:     data.ClientID,
 		Peer:          peer,
 		PeerPort:      int(trace.ConnInfo.S_port),
@@ -265,5 +278,19 @@ func TCPToMQTTToSpan(trace *TCPRequestInfo, data *MQTTInfo) request.Span {
 			UserPID:   app.PID(trace.Pid.UserPid),
 			Namespace: trace.Pid.Ns,
 		},
+		MessagingInfo: messagingInfo,
 	}
+}
+
+func mqttSubscriptionInfo(filter string) *request.MessagingInfo {
+	if filter == "" {
+		return nil
+	}
+	info := &request.MessagingInfo{SubscriptionName: filter}
+	if rest, shared := strings.CutPrefix(filter, mqttSharedSubscriptionPrefix); shared {
+		if group, _, found := strings.Cut(rest, "/"); found {
+			info.ConsumerGroup = group
+		}
+	}
+	return info
 }

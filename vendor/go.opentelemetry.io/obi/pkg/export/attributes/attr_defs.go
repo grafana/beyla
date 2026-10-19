@@ -389,6 +389,7 @@ func getDefinitions(
 			attr.ServerAddr:             true,
 			attr.ErrorType:              true,
 			attr.MessagingConsumerGroup: true,
+			attr.MessagingSubscription:  true,
 		},
 		extraGroupAttributes[GroupMessaging],
 	)
@@ -465,6 +466,9 @@ func getDefinitions(
 		},
 		MessagingPublishDuration.Section: {
 			SubGroups: []*AttrReportGroup{&messagingAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.MessagingOpType: true,
+			},
 		},
 		MessagingProcessDuration.Section: {
 			SubGroups: []*AttrReportGroup{&messagingAttributes},
@@ -737,6 +741,12 @@ func getDefinitions(
 			SubGroups: []*AttrReportGroup{&appAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.CPUMode: true,
+			},
+		},
+		DotnetGCHeapSize.Section: {
+			SubGroups: []*AttrReportGroup{&appAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.DotnetGCHeapGeneration: true,
 			},
 		},
 		DotnetGCCollections.Section: {

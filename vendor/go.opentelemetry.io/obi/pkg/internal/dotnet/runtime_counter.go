@@ -46,7 +46,8 @@ func decodeRuntimeCounter(values map[string]any) (runtimeCounter, error) {
 		"threadpool-queue-length", "active-timer-count", "assembly-count",
 		"alloc-rate", "total-pause-time-by-gc", "il-bytes-jitted",
 		"methods-jitted-count", "time-in-jit", "threadpool-completed-items-count",
-		"monitor-lock-contention-count":
+		"monitor-lock-contention-count",
+		"gen-0-size", "gen-1-size", "gen-2-size", "loh-size", "poh-size":
 	default:
 		if _, ok := gcGeneration(name); !ok {
 			return runtimeCounter{}, nil

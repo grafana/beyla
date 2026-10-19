@@ -1698,6 +1698,12 @@ func GoH2OwnershipProbeSymbols() []string {
 }
 
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
+	grpcNewStream := &ebpfcommon.ProbeDesc{Start: p.bpfObjects.ObiUprobeTransportHttp2ClientNewStream}
+	if p.cfg != nil && p.cfg.ContextPropagation.HasHeaders() {
+		// the return probe only hands the stream to header injection
+		grpcNewStream.End = p.bpfObjects.ObiUprobeTransportHttp2ClientNewStreamReturns
+	}
+
 	m := map[string][]*ebpfcommon.ProbeDesc{
 		// Go runtime
 		"runtime.newproc1": {{
@@ -1879,15 +1885,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"google.golang.org/grpc.(*clientStream).CloseSend": {{
 			End: p.bpfObjects.ObiUprobeClientConnInvokeReturn,
 		}},
-		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {{
-			Start: p.bpfObjects.ObiUprobeTransportHttp2ClientNewStream,
-			End:   p.bpfObjects.ObiUprobeTransportHttp2ClientNewStreamReturns,
-		}},
-		// Bridges request state to the version-specific loopyWriter ownership
-		// probe selected atomically below.
-		"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut": {{
-			Start: p.bpfObjects.ObiUprobeGrpcControlBufferExecuteAndPut,
-		}},
+		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {grpcNewStream},
 		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {{
 			Start: p.bpfObjects.ObiUprobeHttp2ServerOperateHeaders,
 		}},
@@ -2177,6 +2175,11 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.ObiUprobeNetHttp2FramerWriteHeaders,
 			End:   p.bpfObjects.ObiUprobeHttp2FramerWriteHeadersReturns,
 		}}
+		// Bridges request state to the version-specific loopyWriter ownership
+		// probe selected atomically below.
+		m["google.golang.org/grpc/internal/transport.(*http2Client).createHeaderFields"] = []*ebpfcommon.ProbeDesc{{
+			End: p.bpfObjects.ObiUprobeGrpcHttp2ClientCreateHeaderFieldsReturns,
+		}}
 	}
 
 	return m
@@ -2188,8 +2191,11 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 		groups = append(groups, p.goH2OwnershipProbeGroups()...)
 		groups = append(groups,
 			ebpfcommon.GoProbeGroup{
-				Name:        "go_http2_xnet_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[0]},
+				Name: "go_http2_xnet_preflush",
+				RequiresAll: []string{
+					goHTTP2FlushProbeSymbols[0],
+					"golang.org/x/net/http2.(*ClientConn).writeHeaders",
+				},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[0],
@@ -2208,8 +2214,11 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 				},
 			},
 			ebpfcommon.GoProbeGroup{
-				Name:        "go_http2_stdlib_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[3]},
+				Name: "go_http2_stdlib_preflush",
+				RequiresAll: []string{
+					goHTTP2FlushProbeSymbols[3],
+					"net/http.(*http2ClientConn).writeHeaders",
+				},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[3],
@@ -2235,8 +2244,11 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 				},
 			},
 			ebpfcommon.GoProbeGroup{
-				Name:        "go_http2_internal_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[6]},
+				Name: "go_http2_internal_preflush",
+				RequiresAll: []string{
+					goHTTP2FlushProbeSymbols[6],
+					"net/http/internal/http2.(*ClientConn).writeHeaders",
+				},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[6],
@@ -2436,7 +2448,7 @@ func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 			Name: "go_grpc_current_ownership",
 			RequiresAll: []string{
 				"google.golang.org/grpc/internal/transport.(*http2Client).NewStream",
-				"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut",
+				"google.golang.org/grpc/internal/transport.(*http2Client).createHeaderFields",
 				"golang.org/x/net/http2.(*Framer).WriteHeaders",
 			},
 			Probes: []ebpfcommon.GoProbe{
@@ -2453,7 +2465,7 @@ func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 			Name: "go_grpc_legacy_ownership",
 			RequiresAll: []string{
 				"google.golang.org/grpc/internal/transport.(*http2Client).NewStream",
-				"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut",
+				"google.golang.org/grpc/internal/transport.(*http2Client).createHeaderFields",
 				"golang.org/x/net/http2.(*Framer).WriteHeaders",
 			},
 			ConflictsAny: []string{

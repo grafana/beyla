@@ -629,6 +629,20 @@ uncomment_bpfel_in_gitignore() {
     rm -f "${gitignore}.bak"
 }
 
+remove_tracked_beyla_bpf_artifacts() {
+    local repo_dir="$1"
+    local path
+
+    # Older release branches may already track generated Beyla BPF files.
+    # Remove these files from the index, not the worktree: make vendor-obi has
+    # regenerated them and the working copies are still needed to build.
+    while IFS= read -r -d '' path; do
+        case "$path" in
+            *_bpfel.*) run_write_cmd git -C "$repo_dir" rm --cached -f -- "$path" ;;
+        esac
+    done < <(git -C "$repo_dir" ls-files -z)
+}
+
 prepare_obi_branch() {
     local version="$1"
     local release_branch="$2"
@@ -692,10 +706,12 @@ prepare_beyla_branch() {
         log_info "No Beyla submodule pointer change to commit."
     fi
 
-    uncomment_bpfel_in_gitignore "$BEYLA_DIR"
-
+    # Keep generated Beyla BPF objects ignored on release branches. The release
+    # build regenerates them via `make vendor-obi`; Alloy now consumes published
+    # Beyla binaries rather than these committed source-tree artifacts.
     run_write_cmd make -C "$BEYLA_DIR" vendor-obi
     run_write_cmd make -C "$BEYLA_DIR" java-build
+    remove_tracked_beyla_bpf_artifacts "$BEYLA_DIR"
 
     run_write_cmd git -C "$BEYLA_DIR" add -A
     if ! git -C "$BEYLA_DIR" diff --cached --quiet; then

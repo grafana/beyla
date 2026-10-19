@@ -35,8 +35,8 @@ Set the bucket boundaries for metrics related to request duration. Specifically:
 
 - `http.server.request.duration` (OTEL) / `http_server_request_duration_seconds` (Prometheus)
 - `http.client.request.duration` (OTEL) / `http_client_request_duration_seconds` (Prometheus)
-- `rpc.server.duration` (OTEL) / `rpc_server_duration_seconds` (Prometheus)
-- `rpc.client.duration` (OTEL) / `rpc_client_duration_seconds` (Prometheus)
+- `rpc.server.call.duration` (OTEL) / `rpc_server_call_duration_seconds` (Prometheus)
+- `rpc.client.call.duration` (OTEL) / `rpc_client_call_duration_seconds` (Prometheus)
 
 If you leave the value unset, Beyla uses the default bucket boundaries from the [OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md):
 

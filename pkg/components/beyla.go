@@ -222,9 +222,6 @@ func internalMetrics(
 		// TODO: remove this dependency cycle and let prommgr to create and return the PrometheusReporter
 		promMgr.InstrumentWith(metrics)
 		return metrics, nil
-	case config.Prometheus.Registry != nil:
-		slog.Debug("reporting internal metrics with Prometheus Registry")
-		return imetrics.NewPrometheusReporter(&config.InternalMetrics, nil, config.Prometheus.Registry), nil
 	default:
 		slog.Debug("not reporting internal metrics")
 		return imetrics.NoopReporter{}, nil

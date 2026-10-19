@@ -31,7 +31,7 @@ type ProcPrometheusConfig struct {
 
 // nolint:gocritic
 func (p ProcPrometheusConfig) Enabled() bool {
-	return p.Metrics != nil && (p.Metrics.Port != 0 || p.Metrics.Registry != nil) &&
+	return p.Metrics != nil && p.Metrics.EndpointEnabled() &&
 		bexport.Has(p.CommonCfg.Features, bexport.FeatureProcess)
 }
 
@@ -50,9 +50,6 @@ func ProcPrometheusEndpoint(
 		reporter, err := newProcReporter(ctxInfo, cfg, procStatusInput)
 		if err != nil {
 			return nil, err
-		}
-		if cfg.Metrics.Registry != nil {
-			return reporter.collectMetrics, nil
 		}
 		return reporter.reportMetrics, nil
 	}
@@ -178,19 +175,11 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 		mr.netObserver = mr.observeAggregatedNet
 	}
 
-	if cfg.Metrics.Registry != nil {
-		cfg.Metrics.Registry.MustRegister(
-			mr.cpuUtilization, mr.cpuTime,
-			mr.memory, mr.memoryVirtual,
-			mr.disk, mr.net,
-		)
-	} else {
-		mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path,
-			mr.cpuUtilization, mr.cpuTime,
-			mr.memory, mr.memoryVirtual,
-			mr.disk,
-			mr.net)
-	}
+	mr.promConnect.Register(cfg.Metrics.Port, cfg.Metrics.Path,
+		mr.cpuUtilization, mr.cpuTime,
+		mr.memory, mr.memoryVirtual,
+		mr.disk,
+		mr.net)
 
 	return mr, nil
 }

@@ -1,6 +1,5 @@
 cloud.google.com/go/compute/metadata,https://github.com/grafana/beyla/blob/HEAD/vendor/cloud.google.com/go/compute/metadata/LICENSE,Apache-2.0
 github.com/AlessandroPomponio/go-gibberish,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/AlessandroPomponio/go-gibberish/LICENSE,MIT
-github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp/LICENSE,Apache-2.0
 github.com/andybalholm/brotli,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/andybalholm/brotli/LICENSE,MIT
 github.com/aws/aws-sdk-go-v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/config,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/config/LICENSE.txt,Apache-2.0
@@ -135,6 +134,7 @@ github.com/wk8/go-ordered-map/v2,https://github.com/grafana/beyla/blob/HEAD/vend
 github.com/x448/float16,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/x448/float16/LICENSE,MIT
 github.com/xwb1989/sqlparser,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/xwb1989/sqlparser/LICENSE.md,Apache-2.0
 github.com/yl2chen/cidranger,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/yl2chen/cidranger/LICENSE,MIT
+github.com/zeebo/xxh3,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/zeebo/xxh3/LICENSE,BSD-2-Clause
 k8s.io/api,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/api/LICENSE,Apache-2.0
 k8s.io/apimachinery/pkg,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/apimachinery/LICENSE,Apache-2.0
 k8s.io/apimachinery/third_party/forked/golang,https://github.com/grafana/beyla/blob/HEAD/vendor/k8s.io/apimachinery/third_party/forked/golang/LICENSE,BSD-3-Clause

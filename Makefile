@@ -499,7 +499,7 @@ k8s-integration-test-matrix-json:
 
 .PHONY: oats-integration-test-matrix-json
 oats-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats
+	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats /harness/
 
 .PHONY: beyla-integration-test-matrix-json
 beyla-integration-test-matrix-json:
@@ -602,6 +602,14 @@ oats-test-nats: oats-prereq
 oats-test-amqp: oats-prereq
 	mkdir -p internal/testgenerated/oats/amqp/$(TEST_OUTPUT)/run
 	cd internal/testgenerated/oats/amqp && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
+
+# The shared OATS harness is a library module (imported by the suite modules via
+# ../harness), not an OATS suite: it has plain Go unit tests and needs no Ginkgo,
+# Docker or vendored OBI. It is excluded from the OATS shard matrix on purpose and
+# runs in its own fast CI job. Mirrors OBI's "OATS harness unit tests" job.
+.PHONY: oats-test-harness
+oats-test-harness: generate-obi-tests
+	go test -C internal/testgenerated/oats/harness -race ./...
 
 .PHONY: oats-test
 oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai oats-test-nats oats-test-amqp

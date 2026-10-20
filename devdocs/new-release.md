@@ -117,12 +117,13 @@ git commit -m "Update obi submodule (v3.0.0)"
 
 make vendor-obi
 
-# Remove older tracked generated BPF artifacts from the index, keeping their
-# regenerated working copies available for building.
+# Stage vendored source and generated build inputs, then remove older tracked
+# generated BPF artifacts from the index. Keep their working copies available
+# for building; doing this after add also handles branches without ignore rules.
+git add -A
 git ls-files -z | while IFS= read -r -d '' f; do
   case "$f" in *_bpfel.*) git rm --cached -f -- "$f" ;; esac
 done
-git add -A
 # The Java agent jar is produced at binary-release time, not committed here.
 agent_jar=vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
 if git ls-files --error-unmatch "$agent_jar" >/dev/null 2>&1; then
@@ -338,11 +339,12 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
 
    make vendor-obi
 
-   # Keep generated Beyla *_bpfel.* files ignored (do not force-add them).
+   # Stage vendored source/build inputs, then remove generated BPF files from
+   # the index so old branches without ignore rules cannot re-stage them.
+   git add -A
    git ls-files -z | while IFS= read -r -d '' f; do
      case "$f" in *_bpfel.*) git rm --cached -f -- "$f" ;; esac
    done
-   git add -A
    agent_jar=vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
    if git ls-files --error-unmatch "$agent_jar" >/dev/null 2>&1; then
      git rm --cached -f -- "$agent_jar"

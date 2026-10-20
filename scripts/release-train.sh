@@ -634,8 +634,8 @@ remove_tracked_beyla_bpf_artifacts() {
     local path
 
     # Older release branches may already track generated Beyla BPF files.
-    # Remove these files from the index, not the worktree: make vendor-obi has
-    # regenerated them and the working copies are still needed to build.
+    # Remove them from the index after `git add -A`, not the worktree: the
+    # regenerated working copies are still needed to build.
     while IFS= read -r -d '' path; do
         case "$path" in
             *_bpfel.*) run_write_cmd git -C "$repo_dir" rm --cached -f -- "$path" ;;
@@ -725,9 +725,10 @@ prepare_beyla_branch() {
     # Java agent need to be committed by Beyla: the binary release build embeds
     # a freshly built Java agent instead.
     run_write_cmd make -C "$BEYLA_DIR" vendor-obi
-    remove_tracked_beyla_bpf_artifacts "$BEYLA_DIR"
-
     run_write_cmd git -C "$BEYLA_DIR" add -A
+    # Do this after add so old release branches without active ignore rules
+    # cannot accidentally re-stage the generated files.
+    remove_tracked_beyla_bpf_artifacts "$BEYLA_DIR"
     remove_beyla_java_agent_from_index "$BEYLA_DIR"
     if ! git -C "$BEYLA_DIR" diff --cached --quiet; then
         run_write_cmd git -C "$BEYLA_DIR" commit -m "Release ${version} artifacts"

@@ -60,10 +60,15 @@ work manually.
 Step outcome:
 
 This creates `release-3.0` in both OBI and Beyla. Both are based on the
-OBI SHA pinned by Beyla `main`. OBI commits its generated release artifacts;
-Beyla commits the Java agent artifact but keeps its generated BPF objects
-ignored. The BPF objects are regenerated locally by `make vendor-obi` for
-builds and are not needed by Alloy, which consumes published Beyla binaries.
+OBI SHA pinned by Beyla `main`. OBI commits its generated release artifacts.
+Beyla runs `make vendor-obi` to update vendored OBI and generate build inputs,
+but keeps generated `*_bpfel.*` files ignored: Alloy now downloads published
+Beyla binaries and does not consume these source-tree artifacts. Beyla also
+does not commit a rebuilt Java agent. The Java agent is embedded in Beyla's Go
+binary and is built at binary-release time. The binary workflow checks out
+recursive submodules, sets up Java 17, and runs `make artifact`; that target
+orders `make vendor-obi`, `make java-build`, and Go compilation so the fresh
+agent is present when the executable is built.
 
 First, inspect Beyla `main` and confirm the OBI SHA that it pins. For example, 
 Beyla `main` points to OBI commit `8634fc94ab21b86dd829fa92c87d8120790de337`.
@@ -111,13 +116,18 @@ git add .obi-src
 git commit -m "Update obi submodule (v3.0.0)"
 
 make vendor-obi
-make java-build
 
-# Do not commit generated Beyla *_bpfel.* files; they are build-time inputs.
+# Remove older tracked generated BPF artifacts from the index, keeping their
+# regenerated working copies available for building.
 git ls-files -z | while IFS= read -r -d '' f; do
   case "$f" in *_bpfel.*) git rm --cached -f -- "$f" ;; esac
 done
 git add -A
+# The Java agent jar is produced at binary-release time, not committed here.
+agent_jar=vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
+if git ls-files --error-unmatch "$agent_jar" >/dev/null 2>&1; then
+  git rm --cached -f -- "$agent_jar"
+fi
 git commit -m "Release v3.0.0 artifacts"
 git push -u origin release-3.0
 ```
@@ -271,11 +281,13 @@ If the fix is in Beyla only (no OBI changes):
    [`release-train-prepare.yml`](https://github.com/grafana/beyla/actions/workflows/release-train-prepare.yml)
    with `beyla_version=v3.0.1` (leave `obi_version` empty). The script
    detects that `PATCH != 0`, reuses the existing `release-3.0` branch
-   on both repos, reads the OBI submodule pointer from the Beyla release
-   branch, regenerates BPF build inputs via `make vendor-obi`, and rebuilds
-   the Java agent (`make java-build`). Only the Java agent artifact is
-   committed in Beyla; generated Beyla `*_bpfel.*` files remain ignored. The
-   OBI artifact regeneration steps
+   on both repos, and reads the OBI submodule pointer from the Beyla release
+   branch. Beyla's `make vendor-obi` updates vendored OBI and generates build
+   inputs, while generated Beyla `*_bpfel.*` files remain ignored (including
+   removing any already tracked files from the index). The generated Java
+   agent jar is also kept out of the Beyla release-train commit. Java-agent
+   generation is deferred to binary publishing, where the fresh agent is
+   embedded into the Go executable. The OBI artifact regeneration steps
    (`make docker-generate`, `make java-build`) also run but should be a
    no-op when OBI is unchanged.
 
@@ -325,13 +337,16 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
    git commit -m "Update obi submodule for v3.0.1"
 
    make vendor-obi
-   make java-build
 
    # Keep generated Beyla *_bpfel.* files ignored (do not force-add them).
    git ls-files -z | while IFS= read -r -d '' f; do
      case "$f" in *_bpfel.*) git rm --cached -f -- "$f" ;; esac
    done
    git add -A
+   agent_jar=vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
+   if git ls-files --error-unmatch "$agent_jar" >/dev/null 2>&1; then
+     git rm --cached -f -- "$agent_jar"
+   fi
    if ! git diff --cached --quiet; then
      git commit -m "Regenerate artifacts for v3.0.1"
    fi
@@ -345,9 +360,11 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
    (leave `obi_version` empty so OBI inherits the same version). The
    script reuses both existing `release-3.0` branches and regenerates
    artifacts (OBI: `make docker-generate`, `make java-build`; Beyla:
-   `make vendor-obi`, `make java-build`). On Beyla it commits the Java agent
-   artifact only; generated `*_bpfel.*` files stay ignored, including when
-   cleaning up files already tracked on an older release branch.
+   `make vendor-obi`). Beyla leaves generated `*_bpfel.*` files untracked,
+   removes older tracked files from its index, and excludes the generated
+   Java-agent jar from the release-train commit. Java-agent build is deferred
+   until the binary-release workflow, which initializes recursive submodules,
+   installs Java 17, and embeds the freshly built agent in the executable.
 
 4. **Tag**: Run `release-train-tag.yml` with `beyla_version=v3.0.1`
    (leave `obi_version` empty) after CI is green. Both `v3.0.1` tags are

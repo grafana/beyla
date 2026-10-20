@@ -35,6 +35,7 @@ beyla.sln
 *_bpfel.go
 *_bpfel.o
 *_bpfel.go.d
+vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
 
 # Generated OBI test suite (created by scripts/generate-obi-tests.sh)
 internal/testgenerated

@@ -48,6 +48,19 @@ jobs:
       - name: Rebuild BPF and vendor OBI
         run: make vendor-obi
 
+      - name: Restore generated Beyla artifacts
+        run: |
+          # Keep this updater focused on the OBI submodule pointer and vendored
+          # source changes. Generated outputs are handled by Beyla's release
+          # process, not by the weekly OBI update PR.
+          git ls-files -z -- vendor | while IFS= read -r -d '' path; do
+            case "$path" in
+              *_bpfel.*|vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar)
+                git restore --worktree -- "$path"
+                ;;
+            esac
+          done
+
       - name: Get GitHub App token
         id: get-github-app-token
         uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1

@@ -634,7 +634,11 @@ check-licenses: update-licenses
 	fi
 
 .PHONY: artifact
-artifact: vendor-obi compile
+# Keep these steps sequential (even under `make -j`): vendor-obi may refresh
+# the embedded package, so build the Java agent before compiling the binary.
+artifact: vendor-obi
+	$(MAKE) java-build
+	$(MAKE) compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin

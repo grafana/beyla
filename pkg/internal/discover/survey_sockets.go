@@ -25,11 +25,6 @@ import (
 
 type surveyMatch = obiDiscover.Event[obiDiscover.ProcessMatch]
 
-type socketProcesses interface {
-	Snapshot() surveywatcher.Snapshot
-	Changes() <-chan struct{}
-}
-
 type socketCandidate struct {
 	startTime uint64
 	namespace uint32
@@ -53,7 +48,7 @@ type surveyPIDRegistry interface {
 }
 
 type surveySocketFilter struct {
-	sockets   socketProcesses
+	sockets   surveywatcher.Snapshot
 	pids      surveyPIDRegistry
 	processes map[app.PID]socketCandidate
 	startTime func(app.PID) (uint64, error)
@@ -93,20 +88,39 @@ func processRealUID(pid app.PID) (uint32, error) {
 	return uint32(uids[0]), nil
 }
 
-func surveySocketFilterProvider(cfg *obi.Config, events *ebpfcommon.EBPFEventContext, input, output *msg.Queue[[]surveyMatch]) swarm.InstanceFunc {
-	// Subscribe while wiring the graph, before the mixed OBI pipeline can start.
-	in := input.Subscribe()
+// socketWatcherProvider broadcasts socket snapshots to all eligibility filters.
+func socketWatcherProvider(cfg *obi.Config, events *ebpfcommon.EBPFEventContext, output *msg.Queue[surveywatcher.Snapshot]) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
 		watchCtx, cancel := context.WithCancel(ctx)
-
 		sockets, err := surveywatcher.Start(watchCtx, cfg, events)
 		if err != nil {
 			cancel()
 			return nil, err
 		}
+		return func(ctx context.Context) {
+			defer cancel()
+			defer output.Close()
+			output.SendCtx(ctx, sockets.Snapshot())
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-sockets.Changes():
+					output.SendCtx(ctx, sockets.Snapshot())
+				}
+			}
+		}, nil
+	}
+}
 
+// surveySocketFilterProvider admits matching processes when socket evidence is available.
+func surveySocketFilterProvider(cfg *obi.Config, snapshots *msg.Queue[surveywatcher.Snapshot], input, output *msg.Queue[[]surveyMatch]) swarm.InstanceFunc {
+	// Subscribe before the mixed OBI pipeline can start.
+	in := input.Subscribe()
+	updates := snapshots.Subscribe()
+	return func(context.Context) (swarm.RunFunc, error) {
 		filter := &surveySocketFilter{
-			sockets: sockets, processes: map[app.PID]socketCandidate{},
+			processes: map[app.PID]socketCandidate{},
 			startTime: processStartTime, namespace: processNamespace, realUID: processRealUID,
 			// Register even held candidates: OBI supplies their namespace PID aliases
 			// without enabling instrumentation or sharing its instrumentation allowlist.
@@ -114,7 +128,6 @@ func surveySocketFilterProvider(cfg *obi.Config, events *ebpfcommon.EBPFEventCon
 		}
 
 		return func(ctx context.Context) {
-			defer cancel()
 			defer output.Close()
 			for {
 				var batch []surveyMatch
@@ -126,7 +139,11 @@ func surveySocketFilterProvider(cfg *obi.Config, events *ebpfcommon.EBPFEventCon
 						return
 					}
 					batch = filter.filter(events)
-				case <-sockets.Changes():
+				case snapshot, ok := <-updates:
+					if !ok {
+						return
+					}
+					filter.sockets = snapshot
 					batch = filter.promote()
 				}
 				if len(batch) > 0 {
@@ -244,7 +261,7 @@ func (f *surveySocketFilter) promote() []surveyMatch {
 	// All processes are deemed as kprobes, we always put them as kprobes, we are
 	// just reusing OBI's pid filter instead of creating our own.
 	aliases := f.pids.CurrentPIDs(ebpfcommon.PIDTypeKProbes)
-	for identity := range f.sockets.Snapshot() {
+	for identity := range f.sockets {
 		service, ok := aliases[identity.Namespace][app.PID(identity.PID)]
 		if !ok {
 			continue

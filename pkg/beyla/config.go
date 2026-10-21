@@ -317,6 +317,9 @@ func (e ConfigError) Error() string {
 
 // nolint:cyclop
 func (c *Config) Validate() error {
+	if err := c.validateInstrumentAllLocal(); err != nil {
+		return err
+	}
 	obiCfg := c.AsOBI()
 	if err := obiCfg.Discovery.Validate(); err != nil {
 		return ConfigError(err.Error())
@@ -493,6 +496,16 @@ func (c *Config) warnDeprecatedMetricsFeatures() {
 	}
 }
 
+// validateInstrumentAllLocal rejects competing instrumentation selectors.
+func (c *Config) validateInstrumentAllLocal() error {
+	if c.Discovery.InstrumentAllLocal && (c.Port.Len() > 0 || c.TargetPIDs.Len() > 0 || c.AutoTargetExe.IsSet() ||
+		c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
+		len(c.Discovery.Instrument) > 0 || len(c.Discovery.Services) > 0) {
+		return ConfigError("discovery.instrument_all_local is mutually exclusive with other instrumentation selectors")
+	}
+	return nil
+}
+
 func (c *Config) promNetO11yEnabled() bool {
 	return c.Prometheus.EndpointEnabled() && c.Metrics.Features.AnyNetwork()
 }
@@ -578,7 +591,7 @@ func LoadConfig(file io.Reader) (*Config, error) {
 // normalizeConfig normalizes user input to a common set of assumptions that are global to Beyla/OBI
 // TODO: this replicates a private function in OBI repo. We should make it public and invoke it here instead.
 func normalizeConfig(c *Config) {
-	if c.Discovery.SurveyEnabled() {
+	if c.Discovery.SurveyEnabled() || c.Discovery.InstrumentAllLocal {
 		c.Discovery.OverrideDefaultExcludeForSurvey()
 	}
 	c.Attributes.Select.Normalize()

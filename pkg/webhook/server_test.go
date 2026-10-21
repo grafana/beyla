@@ -517,6 +517,31 @@ func TestServer_AddMetadata(t *testing.T) {
 	}
 }
 
+func TestAddMetadataDoesNotMutateSharedProcessInfo(t *testing.T) {
+	shared := &ProcessInfo{pid: 123}
+	pod := &informer.ObjectMeta{
+		Name: "my-app-abc", Namespace: "production",
+		Pod: &informer.PodInfo{Owners: []*informer.Owner{
+			{Kind: "ReplicaSet", Name: "my-app-5d8f"},
+			{Kind: "Deployment", Name: "my-app"},
+		}},
+	}
+	expectedChain := []configmap.Owner{
+		{Name: "my-app-abc", Kind: "Pod"},
+		{Name: "my-app-5d8f", Kind: "ReplicaSet"},
+		{Name: "my-app", Kind: "Deployment"},
+	}
+
+	for range 3 {
+		result := addMetadata(shared, pod)
+		assert.NotSame(t, shared, result)
+		assert.Equal(t, int32(123), result.pid)
+		assert.Equal(t, expectedChain, result.ownerChain)
+	}
+	assert.Nil(t, shared.metadata)
+	assert.Nil(t, shared.ownerChain)
+}
+
 func TestServer_IsExternalWebhookEvent(t *testing.T) {
 	tests := []struct {
 		name            string

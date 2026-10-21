@@ -183,7 +183,7 @@ jobs:
             CODECOV_TOKEN=codecov:token
 
       - name: Report coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./testoutput/itest-covdata.txt
           flags: integration-test-arm
@@ -191,14 +191,14 @@ jobs:
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: go-integration-test-arm-reports-${{ matrix.id }}-${{ github.run_number }}
           path: /home/runner/reports/*.log
           retention-days: 5
 
       - name: Upload integration test logs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: go-integration-test-arm-logs-${{ matrix.id }}-${{ github.run_number }}

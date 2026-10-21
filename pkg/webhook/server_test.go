@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
+	"github.com/prometheus/procfs"
+	"github.com/shirou/gopsutil/v3/process"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -22,7 +25,10 @@ import (
 	clienttesting "k8s.io/client-go/testing"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
@@ -221,6 +227,102 @@ func TestEnrichProcessInfo(t *testing.T) {
 
 			assert.Len(t, result, tt.expected)
 		})
+	}
+}
+
+type testNotifier struct{ meta.BaseNotifier }
+
+type blockingObserver struct {
+	server  *Server
+	entered chan struct{}
+	proceed chan struct{}
+	once    sync.Once
+}
+
+func (o *blockingObserver) ID() string { return "blocking-observer" }
+
+func (o *blockingObserver) On(event *informer.Event) error {
+	o.once.Do(func() {
+		close(o.entered)
+		<-o.proceed
+	})
+	if event.GetResource().GetPod() != nil {
+		o.server.enrichProcessInfo(event.GetResource())
+	}
+	return nil
+}
+
+func TestRebuildEligibleDeploymentsDoesNotDeadlockWithStoreSubscribe(t *testing.T) {
+	origFetch, origContainerInfo, origNewProcess := fetchProcessesFunc, containerInfoFunc, newProcessFunc
+	origEnviron, origLibMaps := procEnvironFunc, findLibMapsFunc
+	t.Cleanup(func() {
+		fetchProcessesFunc, containerInfoFunc, newProcessFunc = origFetch, origContainerInfo, origNewProcess
+		procEnvironFunc, findLibMapsFunc = origEnviron, origLibMaps
+	})
+	fetchProcessesFunc = func() (map[int32]*ProcessInfo, error) {
+		return map[int32]*ProcessInfo{1: {pid: 1}}, nil
+	}
+	containerInfoFunc = func(uint32) (Info, error) { return Info{ContainerID: "cid-0"}, nil }
+	newProcessFunc = func(int32) (*process.Process, error) { return &process.Process{Pid: 1}, nil }
+	procEnvironFunc = func(*process.Process) ([]string, error) { return nil, nil }
+	findLibMapsFunc = func(int32) ([]*procfs.ProcMap, error) { return nil, nil }
+
+	podEvent := func(eventType informer.EventType, name, containerID string) *informer.Event {
+		return &informer.Event{Type: eventType, Resource: &informer.ObjectMeta{
+			Name: name, Namespace: "ns", Kind: "Pod",
+			Pod: &informer.PodInfo{NodeName: "node-1", Containers: []*informer.ContainerInfo{
+				{Id: containerID, Name: "c"},
+			}},
+		}}
+	}
+
+	store := kube.NewStore(&testNotifier{meta.NewBaseNotifier(slog.Default())}, nil, nil, imetrics.NoopReporter{})
+	require.NoError(t, store.On(podEvent(informer.EventType_CREATED, "pod-0", "cid-0")))
+
+	cfg := &beyla.Config{}
+	namespace := services.NewGlob("ns")
+	cfg.Injector.Instrument = services.GlobDefinitionCriteria{{
+		Metadata: map[string]*services.GlobAttr{services.AttrNamespace: &namespace},
+	}}
+	eligible, err := simplelru.NewLRU[string, *configmap.EligibleDeployment](maxEligibleDeployments, nil)
+	require.NoError(t, err)
+	server := &Server{
+		cfg: cfg, matcher: NewPodMatcher(cfg), logger: slog.Default(),
+		scanner:             NewInitialStateScanner(),
+		mutator:             &PodMutator{cfg: cfg, endpoint: "http://alloy:4318", proto: "http/protobuf"},
+		store:               store,
+		nodeName:            "node-1",
+		eligibleDeployments: eligible,
+	}
+
+	observer := &blockingObserver{server: server, entered: make(chan struct{}), proceed: make(chan struct{})}
+	subscribed := make(chan struct{})
+	go func() {
+		store.Subscribe(observer)
+		close(subscribed)
+	}()
+	<-observer.entered
+
+	go func() {
+		_ = store.On(podEvent(informer.EventType_UPDATED, "pod-1", "cid-1"))
+	}()
+	// A queued writer makes the store's RLock block for any new reader, including the rebuild.
+	time.Sleep(100 * time.Millisecond)
+
+	rebuilt := make(chan struct{})
+	go func() {
+		server.rebuildEligibleDeployments()
+		close(rebuilt)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	close(observer.proceed)
+
+	for name, done := range map[string]chan struct{}{"store.Subscribe": subscribed, "rebuildEligibleDeployments": rebuilt} {
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("deadlock: %s never returned", name)
+		}
 	}
 }
 

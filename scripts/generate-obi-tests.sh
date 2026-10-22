@@ -64,6 +64,9 @@ default_jobs() {
 #
 # Format: "obi_pattern|beyla_replacement" — order matters, specific before generic.
 BEHAVIORAL_TRANSFORMS=(
+    # Use AWS's Docker Hub mock to avoid ECR Public's anonymous data limits.
+    'public\.ecr\.aws/ecs-local/amazon-ecs-local-container-endpoints:latest@sha256:d0fb4c7d8ab2fde76252ff3bb87422de201a2a7a5494a19f5c72e5e90a1fe064|amazon/amazon-ecs-local-container-endpoints:latest@sha256:2f1be750a040f71540a1bca3c9fe3295030a022595a2fc8d3966623bd3f75bd2'
+
     # --- Env var renames (input config interface) ---
     'OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME'
     'JAVA_EXECUTABLE_PATH|JAVA_EXECUTABLE_NAME'

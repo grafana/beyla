@@ -385,6 +385,7 @@ func (inf *Informers) podToIndexableEntity(pod *v1.Pod) (any, error) {
 				Containers:   containers,
 				Owners:       ownersFrom(&pod.ObjectMeta),
 				HostIp:       pod.Status.HostIP,
+				Finished:     pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed,
 			},
 			StatusTimeEpoch: objLastUpdateTime(&pod.ObjectMeta, pod.Status.Conditions, nil),
 		},
@@ -429,6 +430,7 @@ func serviceToIndexableEntity(svc *v1.Service) (any, error) {
 			Ips:             ips,
 			Kind:            typeService,
 			Annotations:     svc.Annotations,
+			Selector:        svc.Spec.Selector,
 			StatusTimeEpoch: objLastUpdateTime(&svc.ObjectMeta, nil, nil),
 		},
 	}, nil
@@ -620,6 +622,7 @@ func podInfoEquals(p1, p2 *informer.PodInfo) bool {
 		p1.NodeName == p2.NodeName &&
 		p1.StartTimeStr == p2.StartTimeStr &&
 		p1.HostIp == p2.HostIp &&
+		p1.Finished == p2.Finished &&
 		slices.EqualFunc(p1.Containers, p2.Containers, containerInfoEquals)
 }
 
@@ -629,5 +632,6 @@ func unchanged(o, n *informer.ObjectMeta) bool {
 	return slices.Equal(o.Ips, n.Ips) &&
 		maps.Equal(o.Labels, n.Labels) &&
 		maps.Equal(o.Annotations, n.Annotations) &&
+		maps.Equal(o.Selector, n.Selector) &&
 		podInfoEquals(o.Pod, n.Pod)
 }

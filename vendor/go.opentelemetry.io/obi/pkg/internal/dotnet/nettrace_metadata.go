@@ -86,6 +86,35 @@ func readNetTraceFields(reader *bytes.Reader, depth int) ([]netTraceField, error
 	return fields, nil
 }
 
+// readNetTraceMetadataFields reads the field definitions following an event header.
+func readNetTraceMetadataFields(reader *bytes.Reader) ([]netTraceField, error) {
+	if reader.Len() == 0 {
+		return nil, nil
+	}
+	fields, err := readNetTraceFields(reader, 0)
+	if err != nil {
+		return nil, err
+	}
+	for reader.Len() > 0 {
+		var tag struct {
+			Size uint32
+			Kind byte
+		}
+		if err := binary.Read(reader, binary.LittleEndian, &tag); err != nil {
+			return nil, fmt.Errorf("reading NetTrace metadata tag: %w", err)
+		}
+		const opcodeTag byte = 1
+		if tag.Kind != opcodeTag || tag.Size != 1 {
+			return nil, fmt.Errorf("unsupported NetTrace metadata extension: kind %d, size %d", tag.Kind, tag.Size)
+		}
+		// The opcode describes event behavior and does not change its field layout.
+		if _, err := reader.ReadByte(); err != nil {
+			return nil, fmt.Errorf("reading NetTrace opcode: %w", err)
+		}
+	}
+	return fields, nil
+}
+
 // readNetTraceMetadataHeader reads the .NET event identity associated with a
 // metadata ID, leaving the reader at the event's field definitions.
 func readNetTraceMetadataHeader(reader *bytes.Reader) (netTraceMetadataHeader, error) {

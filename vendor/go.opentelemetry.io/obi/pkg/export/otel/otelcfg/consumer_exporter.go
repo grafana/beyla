@@ -62,6 +62,7 @@ func convertResourceMetrics(rm *metricdata.ResourceMetrics) pmetric.Metrics {
 	}
 
 	prm := pm.ResourceMetrics().AppendEmpty()
+	prm.SetSchemaUrl(rm.Resource.SchemaURL())
 
 	// Convert resource attributes
 	convertResource(rm.Resource, prm.Resource())
@@ -71,6 +72,7 @@ func convertResourceMetrics(rm *metricdata.ResourceMetrics) pmetric.Metrics {
 		psm := prm.ScopeMetrics().AppendEmpty()
 		psm.Scope().SetName(sm.Scope.Name)
 		psm.Scope().SetVersion(sm.Scope.Version)
+		psm.SetSchemaUrl(sm.Scope.SchemaURL)
 
 		// Convert metrics
 		for _, m := range sm.Metrics {

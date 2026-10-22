@@ -15,6 +15,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
 
@@ -210,7 +211,11 @@ func (p *goRuntimeHistogramProducer) Produce(ctx context.Context) ([]metricdata.
 	}
 
 	return []metricdata.ScopeMetrics{{
-		Scope:   instrumentation.Scope{Name: reporterName},
+		Scope: instrumentation.Scope{
+			Name:      reporterName,
+			Version:   attr.TelemetryDistroVersion(),
+			SchemaURL: attr.OBISchemaURL,
+		},
 		Metrics: metrics,
 	}}, nil
 }

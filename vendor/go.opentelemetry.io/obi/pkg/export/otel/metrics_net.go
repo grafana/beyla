@@ -126,7 +126,7 @@ func newMetricsExporter(
 		return nil, fmt.Errorf("network OTEL exporter attributes enable: %w", err)
 	}
 
-	ebpfEvents := provider.Meter("network_ebpf_events")
+	ebpfEvents := provider.Meter("network_ebpf_events", obiMeterOptions()...)
 
 	nme := &netMetricsExporter{
 		expireTTL: cfg.Metrics.TTL,

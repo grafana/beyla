@@ -28,17 +28,20 @@ type MetadataRefresher interface {
 // MetadataSnapshot keeps track of two kinds of cloud resources:
 //   - those that are identifiable by IP address (e.g. an ECS task endpoint).
 //     Useful for service graphs and peer address resolution.
-//   - those that are identifiable by a local ID (e.g. ECS container).
+//   - those that are identifiable by a local ID (e.g. ECS container or cloud VM).
 //     Useful for RED metrics decoration of services in the same host as OBI
 type MetadataSnapshot struct {
 	ServiceByIP          map[string]string
 	ServiceByContainerID map[string]string
+	ServiceByInstanceID  map[string]string
 }
 
-// ContainerChanges describes container metadata added, renamed, or removed by a renewal.
+// ContainerChanges describes container changes and signals VM membership updates.
 type ContainerChanges struct {
 	Changed map[string]string
 	Removed map[string]string
+	// InstancesChanged signals that local VM membership needs to be checked again.
+	InstancesChanged bool
 }
 
 type Inventory struct {
@@ -81,6 +84,13 @@ func (i *Inventory) ServiceNameForContainerID(id string) (string, bool) {
 	return name, ok
 }
 
+func (i *Inventory) ServiceNameForInstanceID(id string) (string, bool) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	name, ok := i.snapshot.ServiceByInstanceID[id]
+	return name, ok
+}
+
 func (i *Inventory) refresh(ctx context.Context) {
 	for index := range i.refreshers {
 		i.refreshSource(ctx, index)
@@ -88,7 +98,7 @@ func (i *Inventory) refresh(ctx context.Context) {
 }
 
 func (i *Inventory) refreshSource(ctx context.Context, index int) {
-	next := MetadataSnapshot{ServiceByIP: map[string]string{}, ServiceByContainerID: map[string]string{}}
+	next := MetadataSnapshot{ServiceByIP: map[string]string{}, ServiceByContainerID: map[string]string{}, ServiceByInstanceID: map[string]string{}}
 	r := i.refreshers[index]
 	if err := r.Refresh(ctx, &next); err != nil {
 		i.log.Warn("can't refresh cloud metadata", "source", r.Name(), "error", err)
@@ -98,14 +108,16 @@ func (i *Inventory) refreshSource(ctx context.Context, index int) {
 	i.publishMu.Lock()
 	defer i.publishMu.Unlock()
 	i.sources[index] = next
-	snapshot := MetadataSnapshot{ServiceByIP: map[string]string{}, ServiceByContainerID: map[string]string{}}
+	snapshot := MetadataSnapshot{ServiceByIP: map[string]string{}, ServiceByContainerID: map[string]string{}, ServiceByInstanceID: map[string]string{}}
 	for _, source := range i.sources {
 		maps.Copy(snapshot.ServiceByIP, source.ServiceByIP)
 		maps.Copy(snapshot.ServiceByContainerID, source.ServiceByContainerID)
+		maps.Copy(snapshot.ServiceByInstanceID, source.ServiceByInstanceID)
 	}
 	i.mu.Lock()
 	changes := ContainerChanges{
 		Changed: map[string]string{}, Removed: map[string]string{},
+		InstancesChanged: !maps.Equal(i.snapshot.ServiceByInstanceID, snapshot.ServiceByInstanceID),
 	}
 	for id, name := range snapshot.ServiceByContainerID {
 		if previous, ok := i.snapshot.ServiceByContainerID[id]; !ok || previous != name {
@@ -118,7 +130,7 @@ func (i *Inventory) refreshSource(ctx context.Context, index int) {
 		}
 	}
 	i.snapshot = snapshot
-	hasChanges := len(changes.Changed)+len(changes.Removed) > 0
+	hasChanges := len(changes.Changed)+len(changes.Removed) > 0 || changes.InstancesChanged
 	i.mu.Unlock()
 	if hasChanges {
 		i.changes.SendCtx(ctx, changes)

@@ -75,6 +75,7 @@ type dotnetRuntimeMetrics struct {
 	jitCompilationTime      instrument.Float64Counter
 	threadPoolWorkItemCount instrument.Int64Counter
 	monitorLockContentions  instrument.Int64Counter
+	exceptions              instrument.Int64Counter
 	processMemoryWorkingSet instrument.Int64UpDownCounter
 	gcHeapSize              instrument.Int64UpDownCounter
 	gcCommittedMemory       instrument.Int64UpDownCounter
@@ -114,6 +115,7 @@ type dotnetRuntimeMetricValues struct {
 	jitCompilationTime      *float64
 	threadPoolWorkItemCount runtimeCounterValue
 	monitorLockContentions  runtimeCounterValue
+	exceptions              map[string]runtimeCounterValue
 	processMemoryWorkingSet *int64
 	gcHeapSize              [runtimemetrics.DotnetHeapGenerationCount]*int64
 	gcCommittedMemory       *int64
@@ -272,7 +274,7 @@ func (r *RuntimeMetricsReporter) newMetricsInstance(service *svc.Attrs) RuntimeM
 
 func (r *RuntimeMetricsReporter) newMetricSet(service *svc.Attrs) (*RuntimeMetrics, error) {
 	metrics := r.newMetricsInstance(service)
-	meter := metrics.provider.Meter(reporterName)
+	meter := metrics.provider.Meter(reporterName, obiMeterOptions()...)
 	if err := setupRuntimeMeters(&metrics, meter, r.cfg.TTL, r.runtimeEnabled, r.cfg.Buckets); err != nil {
 		return nil, err
 	}
@@ -328,6 +330,7 @@ func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Me
 		{attributes.DotnetJITCompiledMethods, &metrics.jitCompiledMethods},
 		{attributes.DotnetThreadPoolWorkItemCount, &metrics.threadPoolWorkItemCount},
 		{attributes.DotnetMonitorLockContentions, &metrics.monitorLockContentions},
+		{attributes.DotnetExceptions, &metrics.exceptions},
 	} {
 		*counter.metric, err = meter.Int64Counter(counter.name.OTEL, instrument.WithUnit(counter.name.Unit))
 		if err != nil {
@@ -636,6 +639,15 @@ func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 	}
 	previous.lastSeen = metrics.clock()
 	recordDotnetCurrentMetrics(ctx, metrics, previous, snapshot.Dotnet)
+	if len(snapshot.Dotnet.Exceptions) > 0 && previous.exceptions == nil {
+		previous.exceptions = make(map[string]runtimeCounterValue)
+	}
+	for label, count := range snapshot.Dotnet.Exceptions {
+		baseline := previous.exceptions[label]
+		recordRuntimeCounterWithAttributes(ctx, metrics.exceptions, &baseline, count,
+			attribute.String(string(attr.ErrorType), label))
+		previous.exceptions[label] = baseline
+	}
 	for generation, count := range snapshot.Dotnet.GCCollections {
 		if count == nil {
 			continue

@@ -458,6 +458,12 @@ var (
 		Unit:    "{contention}",
 		Type:    InstrumentCounter,
 	})
+	DotnetExceptions = metric(Name{
+		Section: "dotnet.exceptions",
+		OTEL:    "dotnet.exceptions",
+		Unit:    "{exception}",
+		Type:    InstrumentCounter,
+	})
 	DotnetTimerCount = metric(Name{
 		Section: "dotnet.timer.count",
 		OTEL:    "dotnet.timer.count",

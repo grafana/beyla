@@ -5,17 +5,19 @@ package transform // import "go.opentelemetry.io/obi/pkg/transform"
 
 import (
 	"context"
+	"errors"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
-func CloudProcessEventDecoratorProvider(ctxInfo *global.ContextInfo,
+func CloudProcessEventDecoratorProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig,
 	input, output *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(context.Context) (swarm.RunFunc, error) {
@@ -23,6 +25,7 @@ func CloudProcessEventDecoratorProvider(ctxInfo *global.ContextInfo,
 			return swarm.Bypass(input, output)
 		}
 		d := cloudProcessDecorator{
+			instanceID:    localCloudInstanceID(&ctxInfo.NodeMeta, cfg),
 			inventory:     ctxInfo.CloudMetaInventory,
 			changes:       ctxInfo.CloudMetaInventory.SubscribeContainerChanges(),
 			input:         input.Subscribe(msg.SubscriberName("CloudProcessEventDecorator")),
@@ -33,6 +36,20 @@ func CloudProcessEventDecoratorProvider(ctxInfo *global.ContextInfo,
 	}
 }
 
+// localCloudInstanceID selects the detected VM identity for both process and span
+// decoration. Each provider checks that the configured scope matches this host.
+func localCloudInstanceID(node *metadata.NodeMeta, cfg *NameResolverConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	if resolverSources(cfg.Sources).Has(ResolverGCE) {
+		if id := gceLocalInstanceID(*node, cfg.GCE); id != "" {
+			return id
+		}
+	}
+	return localAzureInstanceID(node, cfg)
+}
+
 type cloudProcessDecorator struct {
 	inventory     *cloud.Inventory
 	changes       <-chan cloud.ContainerChanges
@@ -40,6 +57,7 @@ type cloudProcessDecorator struct {
 	input         <-chan exec.ProcessEvent
 	output        *msg.Queue[exec.ProcessEvent]
 	containerInfo func(app.PID) (container.Info, error)
+	instanceID    string
 }
 
 type cloudProcess struct {
@@ -61,7 +79,8 @@ func (d *cloudProcessDecorator) run(ctx context.Context) {
 				id := event.ServiceFile().ServiceAttrs().RuntimeContainerID
 				_, changed := changes.Changed[id]
 				_, removed := changes.Removed[id]
-				if (changed || removed) && d.decorate(event, process.fallbackName) {
+				instanceChanged := d.instanceID != "" && changes.InstancesChanged
+				if (changed || removed || instanceChanged) && d.decorate(event, process.fallbackName) {
 					d.output.SendCtx(ctx, event)
 				}
 			}
@@ -109,13 +128,19 @@ func (d *cloudProcessDecorator) decorate(event exec.ProcessEvent, fallbackName s
 	id := service.RuntimeContainerID
 	if id == "" {
 		info, err := d.containerInfo(file.Pid())
-		if err != nil {
+		switch {
+		case err == nil:
+			id = info.ContainerID
+			file.SetRuntimeContainerID(id)
+		case !errors.Is(err, container.ErrContainerNotFound):
 			return false
 		}
-		id = info.ContainerID
-		file.SetRuntimeContainerID(id)
 	}
 	name, ok := d.inventory.ServiceNameForContainerID(id)
+	// Container identity takes priority; host processes can use VM membership.
+	if !ok && d.instanceID != "" {
+		name, ok = d.inventory.ServiceNameForInstanceID(d.instanceID)
+	}
 	if !ok {
 		name = fallbackName
 	}

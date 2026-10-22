@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -172,6 +173,7 @@ var DefaultConfig = Config{
 					EndpointPatterns: []string{
 						"/query/service",
 					},
+					PreparedStatementsCacheSize: 1024,
 				},
 				GenAI: config.GenAIConfig{
 					OpenAI: config.OpenAIConfig{
@@ -540,7 +542,11 @@ func (c *Config) UnmarshalMap(raw map[string]any) error {
 		return err
 	}
 
-	return dec.Decode(raw)
+	if err := dec.Decode(raw); err != nil {
+		return err
+	}
+	c.normalizeV1ResolverSources()
+	return nil
 }
 
 func cidrDefinitionsHookFunc() mapstructure.DecodeHookFunc {
@@ -1118,9 +1124,23 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
 
+	cfg.normalizeV1ResolverSources()
 	cfg.normalize()
 
 	return &cfg, nil
+}
+
+func (c *Config) normalizeV1ResolverSources() {
+	if c.NameResolver == nil {
+		return
+	}
+	// Legacy configurations retain the pre-GCE set of resolver sources.
+	resolver := *c.NameResolver
+	resolver.Sources = slices.DeleteFunc(slices.Clone(resolver.Sources), func(source transform.Source) bool {
+		return strings.EqualFold(string(source), string(transform.SourceGCE)) ||
+			strings.EqualFold(string(source), string(transform.SourceAzure))
+	})
+	c.NameResolver = &resolver
 }
 
 func registerCustomValidations(validate *validator.Validate, customValidations CustomValidations) error {

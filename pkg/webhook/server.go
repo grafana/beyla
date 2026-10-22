@@ -480,10 +480,6 @@ func (s *Server) enrichProcessInfo(pod *informer.ObjectMeta) []*ProcessInfo {
 	s.initialStateMux.Lock()
 	defer s.initialStateMux.Unlock()
 
-	return s.enrichProcessInfoLocked(pod)
-}
-
-func (s *Server) enrichProcessInfoLocked(pod *informer.ObjectMeta) []*ProcessInfo {
 	var res []*ProcessInfo
 
 	for _, cnt := range pod.Pod.Containers {
@@ -551,16 +547,19 @@ func (s *Server) rebuildEligibleDeployments() {
 	s.eligibleDeploymentsMux.Unlock()
 
 	s.initialStateMux.Lock()
-	defer s.initialStateMux.Unlock()
-
+	containerIDs := make([]string, 0, len(s.initialState))
 	for cid := range s.initialState {
+		containerIDs = append(containerIDs, cid)
+	}
+	s.initialStateMux.Unlock()
+
+	// Store calls must happen without initialStateMux: Store.Subscribe holds the store lock while calling Server.On, which takes initialStateMux.
+	for _, cid := range containerIDs {
 		if pod := s.store.PodByContainerID(cid); pod != nil {
-			if attrs := s.enrichProcessInfoLocked(pod.Meta); attrs != nil {
-				for _, a := range attrs {
-					// handleNewProcessEvent will request a config map
-					// update if any changes are needed
-					s.handleNewProcessEvent(a)
-				}
+			for _, a := range s.enrichProcessInfo(pod.Meta) {
+				// handleNewProcessEvent will request a config map
+				// update if any changes are needed
+				s.handleNewProcessEvent(a)
 			}
 		}
 	}

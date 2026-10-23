@@ -116,6 +116,9 @@ type DotnetRuntimeMetricSnapshot struct {
 	JITCompilationTime      *float64
 	ThreadPoolWorkItemCount *uint64
 	MonitorLockContentions  *uint64
+	// Exceptions contains cumulative counts since attachment, keyed by error.type.
+	// Nil means unavailable; a published map must not be mutated.
+	Exceptions map[string]uint64
 }
 
 type GoRuntimeMetricSnapshot struct {

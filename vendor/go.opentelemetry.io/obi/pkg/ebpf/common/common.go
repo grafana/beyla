@@ -315,6 +315,7 @@ type EBPFParseContext struct {
 	kafkaConsumerGroups         *KafkaConsumerGroups
 	payloadExtraction           config.PayloadExtraction
 	httpEnricher                *ebpfhttp.HTTPEnricher
+	sqlppPreparedStatements     *ebpfhttp.SQLPPPreparedStatements
 	dnsEvents                   *expirable.LRU[dnsparser.DNSId, *request.Span]
 	pendingSpanLinks            *pendingSpanLinks
 	pendingGoHTTPClientRequests *expirable.LRU[pendingGoHTTPClientKey, *pendingGoHTTPClientRequest]
@@ -485,6 +486,14 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		httpEnricher = ebpfhttp.NewHTTPEnricher(payloadExtraction.HTTP.Enrichment)
 	}
 
+	var sqlppPreparedStatements *ebpfhttp.SQLPPPreparedStatements
+	if payloadExtraction.HTTP.SQLPP.Enabled {
+		sqlppPreparedStatements, err = ebpfhttp.NewSQLPPPreparedStatements(payloadExtraction.HTTP.SQLPP.PreparedStatementsCacheSize)
+		if err != nil {
+			ptlog().Error("failed to create SQL++ prepared statements cache", "error", err)
+		}
+	}
+
 	parseCtx := &EBPFParseContext{
 		protocolDebug:              protocolDebug,
 		h2c:                        h2c,
@@ -501,6 +510,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		kafkaConsumerGroups:        kafkaConsumerGroups,
 		payloadExtraction:          payloadExtraction,
 		httpEnricher:               httpEnricher,
+		sqlppPreparedStatements:    sqlppPreparedStatements,
 		dnsEvents:                  dnsEvents,
 		emitSpans:                  emitSpans,
 		stopEmitting:               stopEmitting,

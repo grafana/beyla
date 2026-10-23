@@ -243,7 +243,7 @@ func postProcessHTTPSpan(parseCtx *EBPFParseContext, httpSpan *request.Span, req
 	}
 
 	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.SQLPP.Enabled {
-		span, ok := ebpfhttp.SQLPPSpan(httpSpan, req, resp, parseCtx.payloadExtraction.HTTP.SQLPP.EndpointPatterns)
+		span, ok := ebpfhttp.SQLPPSpan(httpSpan, req, resp, parseCtx.payloadExtraction.HTTP.SQLPP.EndpointPatterns, parseCtx.sqlppPreparedStatements)
 		if ok {
 			return span
 		}

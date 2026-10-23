@@ -139,7 +139,7 @@ func newStatMetricsExporter(
 		return nil, fmt.Errorf("stats OTEL exporter attributes enable: %w", err)
 	}
 
-	ebpfEvents := provider.Meter(statScopeName)
+	ebpfEvents := provider.Meter(statScopeName, obiMeterOptions()...)
 
 	nme := &statMetricsExporter{
 		expireTTL: cfg.Metrics.TTL,

@@ -18,9 +18,23 @@ YAML section: `nodejs`
 
 | YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
-| `enabled`<p>`BEYLA_NODEJS_ENABLED`</p>                    | Enable dynamic injection of the `NodeJS` agent.                 | boolean | (true)  |
+| `enabled`<p>`BEYLA_NODEJS_ENABLED`</p>                    | Enable agent injection for context propagation and runtime metrics. | boolean | `true` |
+| `manual_spans`<p>`BEYLA_NODEJS_MANUAL_SPANS`</p>          | Capture API spans when no SDK is registered. Requires the Node.js agent and trace export or the trace printer. | boolean | `false` |
 
-The `NodeJS` agent is used only for context propagation, since NodeJS uses `libssl` for TLS encryption and decryption. This agent is injected via the debugger interface. You should disable the `NodeJS` agent support if your program has a handler attached on `SIGUSR1`.
+The `NodeJS` agent is injected through the debugger interface. Node.js uses `libssl` for TLS encryption and decryption, so the agent is used for context propagation and runtime metrics rather than TLS capture. Injection requires the Node.js inspector to be reachable, and the target process must not have a custom handler attached to `SIGUSR1`.
+
+Set `manual_spans` to `true` to capture spans created with the OpenTelemetry API when the application has not registered an SDK. The bridge stays inactive if an SDK is already registered. If the application registers an SDK after injection, the bridge yields to it so the application's SDK remains in control.
+
+For example, enable Node.js manual span capture and send traces to an OTLP endpoint:
+
+```yaml
+nodejs:
+  enabled: true
+  manual_spans: true
+
+otel_traces_export:
+  endpoint: http://localhost:4318
+```
 
 YAML section: `javaagent`
 

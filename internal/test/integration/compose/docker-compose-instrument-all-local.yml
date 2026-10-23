@@ -1,0 +1,99 @@
+x-testserver: &testserver
+  image: ghcr.io/open-telemetry/obi-testimg:go-0.1.1@sha256:ba91df37cecce4f22df1408c16ec5920df2da1fa9dad79a011c6fde5174ebdd8
+
+x-local-process: &local-process
+  build:
+    context: ../../../..
+    dockerfile: internal/test/integration/components/local-process/Dockerfile
+  image: beyla-local-process
+  user: "1000:1000"
+
+services:
+  nonroot:
+    <<: *testserver
+    user: "1000:1000"
+    environment:
+      OTEL_SERVICE_NAME: local-nonroot
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+    ports:
+      - "127.0.0.1::8080"
+
+  root-1023:
+    <<: *testserver
+    user: "0:0"
+    environment:
+      STD_PORT: "1023"
+      OTEL_SERVICE_NAME: local-root-1023
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+    ports:
+      - "127.0.0.1::1023"
+
+  root-1024:
+    <<: *testserver
+    user: "0:0"
+    environment:
+      STD_PORT: "1024"
+      OTEL_SERVICE_NAME: local-root-1024
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+    ports:
+      - "127.0.0.1::1024"
+
+  python-workers:
+    <<: *local-process
+    environment:
+      OTEL_SERVICE_NAME: local-python-workers
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+    ports:
+      - "127.0.0.1::8080"
+
+  idle-nonroot:
+    <<: *local-process
+    command: ["--idle"]
+    environment:
+      OTEL_SERVICE_NAME: local-idle-nonroot
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+
+  idle-root:
+    <<: *local-process
+    user: "0:0"
+    command: ["--idle"]
+    environment:
+      OTEL_SERVICE_NAME: local-idle-root
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+
+  beyla:
+    build:
+      context: ../../../..
+      dockerfile: internal/test/integration/components/beyla/Dockerfile
+    image: beyla-instrument-all-local
+    command: ["--config=/configs/${BEYLA_TEST_CONFIG:-beyla-config-instrument-all-local.yml}"]
+    privileged: true
+    pid: host
+    volumes:
+      - ../configs:/configs:ro
+      - ../system/sys/kernel/security:/sys/kernel/security:ro
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - ../../../../testoutput:/coverage
+    environment:
+      GOCOVERDIR: /coverage
+      BEYLA_DISCOVERY_POLL_INTERVAL: 500ms
+      BEYLA_MIN_PROCESS_AGE: 0s
+      BEYLA_LOG_LEVEL: DEBUG
+      BEYLA_ENFORCE_SYS_CAPS: "false"
+      BEYLA_SERVICE_NAMESPACE: instrument-all-local
+    depends_on:
+      - nonroot
+      - root-1023
+      - root-1024
+      - python-workers
+      - idle-nonroot
+      - idle-root
+
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    command: [--config.file=/etc/prometheus/prometheus.yml]
+    volumes:
+      - ../configs/prometheus-config-instrument-all-local.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1::9090"

@@ -197,6 +197,11 @@
           "$ref": "#/$defs/GlobDefinitionCriteria",
           "description": "Instrument selects the services to instrument via Globs. If this section is set, both the Services and ExcludeServices section is ignored. If the user defined the BEYLA_AUTO_TARGET_EXE or BEYLA_OPEN_PORT variables, they will be automatically added to the instrument criteria, with the lowest preference."
         },
+        "instrument_all_local": {
+          "type": "boolean",
+          "description": "InstrumentAllLocal selects socket-using applications with survey's non-root policy.",
+          "x-env-var": "BEYLA_DISCOVERY_INSTRUMENT_ALL_LOCAL"
+        },
         "min_process_age": {
           "type": "string",
           "pattern": "^[0-9]+(ms|s|m)$",

@@ -144,7 +144,7 @@ You should be able to query traces and metrics in your Grafana board.
 ### Development environment requirements
 
 #### Minimum requirements
-- go 1.25
+- go 1.26
 - docker
 - GNU make
 #### Optional requirements

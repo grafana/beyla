@@ -136,6 +136,9 @@ BEHAVIORAL_TRANSFORMS=(
     # Cloud resolver tests use Beyla's configuration format.
     '"obi-config-gce-v2\.yml"|"obi-config-gce.yml"'
     '"obi-config-azure-v2\.yml"|"obi-config-azure.yml"'
+    # Clear the helper's legacy feature defaults so the resolver YAML applies.
+    'o\.instrument(t, network, "obi-config-gce\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-gce.yml")'
+    'o\.instrument(t, network, "obi-config-azure\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-azure.yml")'
 
     # --- K8s component paths ---
     'DockerfileOBI|DockerfileBeyla'
@@ -244,6 +247,8 @@ CODE_INJECTIONS=(
     '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
     # The server can answer before instrumentation attaches on slower VM kernels.
     't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL, "testserver")'
+    # Manual spans can reach Jaeger before the automatic outgoing client span.
+    'if len[(]traces[[]i[]][.]FindByOperationName[(]"checkout", "internal"[)][)] > 0 [{]|if len(traces[i].FindByOperationName("GET /", "client")) == 0 { continue }'
 )
 
 # =============================================================================
@@ -661,6 +666,15 @@ ensure_multiexec_local_image_reuse() {
             in_unused && /^  [a-zA-Z0-9_-]+:$/ && $0 !~ /^  testserver-unused:$/ { in_unused=0 }
             { print }
         ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    done
+}
+
+ensure_multiexec_collector_memory() {
+    # The Weaver tap adds a second export pipeline. At 125M the collector is
+    # OOM-killed during the host-network context propagation tests.
+    for file in "$OBI_DEST/docker-compose-multiexec.yml" "$OBI_DEST/docker-compose-multiexec-host.yml"; do
+        [[ -f "$file" ]] || continue
+        sed_i -e 's/memory: 125M/memory: 512M/' "$file"
     done
 }
 
@@ -1481,24 +1495,21 @@ EOF
     # validates the OTLP tap, so prom_survey.go's gauge is irrelevant here.
     #
     # GetAppResourceAttrs/ResourceAttrsFromEnv provide the same resource
-    # attributes as target.info. Inherit that contract so cloud, host, and
-    # Kubernetes attributes stay aligned with the upstream declaration.
-    #
-    # Group id is x.beyla.survey so it sorts last, consistent with x.obi.cpu.
+    # attributes as target.info. Declare them on this standalone metric:
+    # extending target.info creates a refinement rather than a new metric.
+    # Resource metadata is optional for surveyed, uninstrumented processes.
     #
     # NOTE: injected by scripts/generate-obi-tests.sh (apply_schema_injections).
     # Unlike x_obi_cpu there is NO durable upstream fix for this one: survey is
     # a Beyla-only feature, so the declaration cannot flow back into OBI's
     # schemas/obi/groups/ and this injection is permanent.
     cat > "$SCHEMAS_DEST/obi/groups/x_beyla_survey.yaml" <<'EOF'
-groups:
+file_format: definition/2
+metrics:
   # Beyla-only `survey_info` meta-metric. See scripts/generate-obi-tests.sh
   # (apply_schema_injections) for why this is injected rather than inherited
   # from OBI's registry.
-  - id: x.beyla.survey
-    type: metric
-    extends: metric.target.info
-    metric_name: survey_info
+  - name: survey_info
     instrument: updowncounter
     unit: ""
     stability: development
@@ -1512,6 +1523,82 @@ groups:
       - ref: service.name
         requirement_level: opt_in
       - ref: service.namespace
+        requirement_level: opt_in
+      - ref: service.instance.id
+        requirement_level: opt_in
+      - ref: service.version
+        requirement_level: opt_in
+      - ref: telemetry.sdk.language
+        requirement_level: opt_in
+      - ref: telemetry.sdk.name
+        requirement_level: opt_in
+      - ref: telemetry.sdk.version
+        requirement_level: opt_in
+      - ref: telemetry.distro.name
+        requirement_level: opt_in
+      - ref: telemetry.distro.version
+        requirement_level: opt_in
+      - ref: host.name
+        requirement_level: opt_in
+      - ref: host.id
+        requirement_level: opt_in
+      - ref: host.type
+        requirement_level: opt_in
+      - ref: host.image.id
+        requirement_level: opt_in
+      - ref: os.type
+        requirement_level: opt_in
+      - ref: os.version
+        requirement_level: opt_in
+      - ref: cloud.provider
+        requirement_level: opt_in
+      - ref: cloud.platform
+        requirement_level: opt_in
+      - ref: cloud.region
+        requirement_level: opt_in
+      - ref: cloud.availability_zone
+        requirement_level: opt_in
+      - ref: cloud.account.id
+        requirement_level: opt_in
+      - ref: cloud.resource_id
+        requirement_level: opt_in
+      - ref: gcp.gce.instance.name
+        requirement_level: opt_in
+      - ref: gcp.gce.instance.hostname
+        requirement_level: opt_in
+      - ref: container.id
+        requirement_level: opt_in
+      - ref: container.name
+        requirement_level: opt_in
+      - ref: k8s.cluster.name
+        requirement_level: opt_in
+      - ref: k8s.container.name
+        requirement_level: opt_in
+      - ref: k8s.cronjob.name
+        requirement_level: opt_in
+      - ref: k8s.daemonset.name
+        requirement_level: opt_in
+      - ref: k8s.deployment.name
+        requirement_level: opt_in
+      - ref: k8s.job.name
+        requirement_level: opt_in
+      - ref: k8s.kind
+        requirement_level: opt_in
+      - ref: k8s.namespace.name
+        requirement_level: opt_in
+      - ref: k8s.node.name
+        requirement_level: opt_in
+      - ref: k8s.owner.name
+        requirement_level: opt_in
+      - ref: k8s.pod.name
+        requirement_level: opt_in
+      - ref: k8s.pod.start_time
+        requirement_level: opt_in
+      - ref: k8s.pod.uid
+        requirement_level: opt_in
+      - ref: k8s.replicaset.name
+        requirement_level: opt_in
+      - ref: k8s.statefulset.name
         requirement_level: opt_in
 EOF
 
@@ -1538,6 +1625,7 @@ generate() {
     apply_component_consolidation
     adjust_docker_compose_paths
     ensure_multiexec_local_image_reuse
+    ensure_multiexec_collector_memory
     split_docker_build_contexts
     apply_behavioral_transforms "$jobs"
     restore_weaver_registry_mount_paths   # ← restore /obi-registry after BEHAVIORAL_TRANSFORMS

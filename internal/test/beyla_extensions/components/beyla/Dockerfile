@@ -22,10 +22,15 @@ COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wra
 # Build
 RUN make compile-for-coverage
 
+# The enrollment tests inspect BPF maps and exercise seccomp fallbacks.
+COPY .obi-src/internal/test/integration/components/obi/testtool/ internal/test/obitesttool/
+RUN go build -mod=vendor -buildvcs=false -o bin/obitesttool ./internal/test/obitesttool/
+
 # Create final image from minimal + built binary
 FROM ubuntu@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03
 
 COPY --from=builder /src/bin/beyla /beyla
+COPY --from=builder /src/bin/obitesttool /obitesttool
 # Wrap the executable in a script that waits for the processes to end
 # in order to avoid issues when tearing down the container on kernels 6.14+.
 # https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/781

@@ -75,8 +75,10 @@ type dotnetRuntimeMetrics struct {
 	jitCompilationTime      instrument.Float64Counter
 	threadPoolWorkItemCount instrument.Int64Counter
 	monitorLockContentions  instrument.Int64Counter
+	exceptions              instrument.Int64Counter
 	processMemoryWorkingSet instrument.Int64UpDownCounter
 	gcHeapSize              instrument.Int64UpDownCounter
+	gcHeapFragmentation     instrument.Int64UpDownCounter
 	gcCommittedMemory       instrument.Int64UpDownCounter
 	threadPoolThreadCount   instrument.Int64UpDownCounter
 	threadPoolQueueLength   instrument.Int64UpDownCounter
@@ -93,6 +95,7 @@ type dotnetRuntimeMetricCounts struct {
 	processCPUCount         int
 	processMemoryWorkingSet int
 	gcHeapSize              [runtimemetrics.DotnetHeapGenerationCount]int
+	gcHeapFragmentation     [runtimemetrics.DotnetHeapGenerationCount]int
 	gcCommittedMemory       int
 	threadPoolThreadCount   int
 	threadPoolQueueLength   int
@@ -114,8 +117,10 @@ type dotnetRuntimeMetricValues struct {
 	jitCompilationTime      *float64
 	threadPoolWorkItemCount runtimeCounterValue
 	monitorLockContentions  runtimeCounterValue
+	exceptions              map[string]runtimeCounterValue
 	processMemoryWorkingSet *int64
 	gcHeapSize              [runtimemetrics.DotnetHeapGenerationCount]*int64
+	gcHeapFragmentation     [runtimemetrics.DotnetHeapGenerationCount]*int64
 	gcCommittedMemory       *int64
 	threadPoolThreadCount   *int64
 	threadPoolQueueLength   *int64
@@ -272,7 +277,7 @@ func (r *RuntimeMetricsReporter) newMetricsInstance(service *svc.Attrs) RuntimeM
 
 func (r *RuntimeMetricsReporter) newMetricSet(service *svc.Attrs) (*RuntimeMetrics, error) {
 	metrics := r.newMetricsInstance(service)
-	meter := metrics.provider.Meter(reporterName)
+	meter := metrics.provider.Meter(reporterName, obiMeterOptions()...)
 	if err := setupRuntimeMeters(&metrics, meter, r.cfg.TTL, r.runtimeEnabled, r.cfg.Buckets); err != nil {
 		return nil, err
 	}
@@ -328,6 +333,7 @@ func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Me
 		{attributes.DotnetJITCompiledMethods, &metrics.jitCompiledMethods},
 		{attributes.DotnetThreadPoolWorkItemCount, &metrics.threadPoolWorkItemCount},
 		{attributes.DotnetMonitorLockContentions, &metrics.monitorLockContentions},
+		{attributes.DotnetExceptions, &metrics.exceptions},
 	} {
 		*counter.metric, err = meter.Int64Counter(counter.name.OTEL, instrument.WithUnit(counter.name.Unit))
 		if err != nil {
@@ -355,6 +361,7 @@ func setupDotnetRuntimeMeters(metrics *dotnetRuntimeMetrics, meter instrument.Me
 		{attributes.DotnetProcessCPUCount, &metrics.processCPUCount},
 		{attributes.DotnetGCCommittedMemory, &metrics.gcCommittedMemory},
 		{attributes.DotnetGCHeapSize, &metrics.gcHeapSize},
+		{attributes.DotnetGCHeapFragmentation, &metrics.gcHeapFragmentation},
 		{attributes.DotnetThreadPoolThreadCount, &metrics.threadPoolThreadCount},
 		{attributes.DotnetThreadPoolQueueLength, &metrics.threadPoolQueueLength},
 		{attributes.DotnetTimerCount, &metrics.timerCount},
@@ -636,6 +643,15 @@ func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 	}
 	previous.lastSeen = metrics.clock()
 	recordDotnetCurrentMetrics(ctx, metrics, previous, snapshot.Dotnet)
+	if len(snapshot.Dotnet.Exceptions) > 0 && previous.exceptions == nil {
+		previous.exceptions = make(map[string]runtimeCounterValue)
+	}
+	for label, count := range snapshot.Dotnet.Exceptions {
+		baseline := previous.exceptions[label]
+		recordRuntimeCounterWithAttributes(ctx, metrics.exceptions, &baseline, count,
+			attribute.String(string(attr.ErrorType), label))
+		previous.exceptions[label] = baseline
+	}
 	for generation, count := range snapshot.Dotnet.GCCollections {
 		if count == nil {
 			continue
@@ -727,6 +743,8 @@ func recordDotnetCurrentMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 	for generation, name := range runtimemetrics.DotnetHeapGenerations() {
 		recordDotnetCurrentMetric(ctx, metrics.gcHeapSize, &previous.gcHeapSize[generation], values.GCHeapSize[generation],
 			&metrics.activeCurrent.gcHeapSize[generation], attribute.String(string(attr.DotnetGCHeapGeneration), name))
+		recordDotnetCurrentMetric(ctx, metrics.gcHeapFragmentation, &previous.gcHeapFragmentation[generation], values.GCHeapFragmentation[generation],
+			&metrics.activeCurrent.gcHeapFragmentation[generation], attribute.String(string(attr.DotnetGCHeapGeneration), name))
 	}
 }
 

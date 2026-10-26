@@ -235,7 +235,6 @@ func generateTracesWithAttributes(
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrs = otelcfg.FilterResourceAttrs(resourceAttrs, attrSelector)
 	resourceAttrsMap := AttrsToMap(resourceAttrs)
-	resourceAttrsMap.PutStr(string(semconv.OTelScopeNameKey), reporterName)
 	extraResAttrs = otelcfg.FilterResourceAttrs(extraResAttrs, attrSelector)
 	addAttrsToMap(extraResAttrs, resourceAttrsMap)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
@@ -252,6 +251,9 @@ func generateTracesWithAttributes(
 		}
 
 		ss := rs.ScopeSpans().AppendEmpty()
+		ss.SetSchemaUrl(attr.OBISchemaURL)
+		ss.Scope().SetName(reporterName)
+		ss.Scope().SetVersion(attr.TelemetryDistroVersion())
 
 		t := span.Timings()
 		start := spanStartTime(t)
@@ -849,13 +851,10 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		if span.FullPath != "" {
 			urlPath = span.FullPath
 		}
-		// Scrub sensitive query parameters from url.full. The scrubbed query is always
-		// included in url.full when present; the selector only gates the separate url.query attribute.
-		var scrubbedQS string
+		// Scrub sensitive query parameters from url.full.
 		if idx := strings.IndexByte(urlPath, '?'); idx >= 0 {
 			if qs := scrubQuery(urlPath[idx+1:], redactSet); qs != "" {
 				urlPath = urlPath[:idx+1] + qs
-				scrubbedQS = qs
 			} else {
 				urlPath = urlPath[:idx]
 			}
@@ -884,11 +883,6 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendURLTemplate(attrs, span, optionalAttrs)
 			attrs = appendHTTPRequestBodySize(attrs, span, optionalAttrs)
 			attrs = appendHTTPResponseBodySize(attrs, span, optionalAttrs)
-			if scrubbedQS != "" {
-				if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok {
-					attrs = append(attrs, request.HTTPUrlQuery(scrubbedQS))
-				}
-			}
 		}
 
 		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {

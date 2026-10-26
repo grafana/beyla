@@ -376,7 +376,7 @@ network:
 			WildcardChar:              "*",
 			MaxPathSegmentCardinality: 10,
 		},
-		NameResolver: &transform.NameResolverConfig{
+		NameResolver: &NameResolverConfig{
 			Sources:  []transform.Source{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,

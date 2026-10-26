@@ -16,7 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
-	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	servicesextra "github.com/grafana/beyla/v3/pkg/services"
@@ -391,7 +390,7 @@ func TestBuildInjectConfig(t *testing.T) {
 					Instrument:        services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
 					ExcludeInstrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDaemonSetName: &test}}},
 				},
-				NameResolver: &transform.NameResolverConfig{},
+				NameResolver: &beyla.NameResolverConfig{},
 			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
@@ -408,7 +407,7 @@ func TestBuildInjectConfig(t *testing.T) {
 		},
 		{
 			name:     "empty instrument yields empty config",
-			cfg:      beyla.Config{Injector: beyla.SDKInject{}, NameResolver: &transform.NameResolverConfig{}},
+			cfg:      beyla.Config{Injector: beyla.SDKInject{}, NameResolver: &beyla.NameResolverConfig{}},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
 			want:     configmap.InjectConfig{},
@@ -419,7 +418,7 @@ func TestBuildInjectConfig(t *testing.T) {
 				Injector: beyla.SDKInject{
 					Instrument: services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
 				},
-				NameResolver: &transform.NameResolverConfig{},
+				NameResolver: &beyla.NameResolverConfig{},
 			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
@@ -437,7 +436,7 @@ func TestBuildInjectConfig(t *testing.T) {
 						{Metadata: services.MetadataGlobMap{services.AttrStatefulSetName: &test}},
 					},
 				},
-				NameResolver: &transform.NameResolverConfig{},
+				NameResolver: &beyla.NameResolverConfig{},
 			},
 			endpoint: "http://otel:4318",
 			protocol: "grpc",
@@ -453,7 +452,7 @@ func TestBuildInjectConfig(t *testing.T) {
 					ImageVersion: "ghcr.io/grafana/beyla/inject-sdk-image:v1.2.3",
 					Instrument:   services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
 				},
-				NameResolver: &transform.NameResolverConfig{},
+				NameResolver: &beyla.NameResolverConfig{},
 			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",
@@ -472,7 +471,7 @@ func TestBuildInjectConfig(t *testing.T) {
 					Instrument:  services.GlobDefinitionCriteria{{Metadata: services.MetadataGlobMap{services.AttrDeploymentName: &test}}},
 					Propagators: []string{"tracecontext", "baggage"},
 				},
-				NameResolver: &transform.NameResolverConfig{},
+				NameResolver: &beyla.NameResolverConfig{},
 			},
 			endpoint: "http://otel:4318",
 			protocol: "http/protobuf",

@@ -133,6 +133,10 @@ BEHAVIORAL_TRANSFORMS=(
     # Instrumentation scopes identify OBI's instrumentation library.
     'Value: "opentelemetry"|Value: "beyla"'
 
+    # Cloud resolver tests use Beyla's configuration format.
+    '"obi-config-gce-v2\.yml"|"obi-config-gce.yml"'
+    '"obi-config-azure-v2\.yml"|"obi-config-azure.yml"'
+
     # --- K8s component paths ---
     'DockerfileOBI|DockerfileBeyla'
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
@@ -238,10 +242,8 @@ CODE_INJECTIONS=(
     'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
     # Temporarily skip flaky traceparent extraction test
     '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
-    # Resolver scope settings require OBI's Config v2 converter. Enable these
-    # tests when Beyla supports that loader.
-    '^func TestGCEServiceResolution[(]|t.Skip("unsupported in Beyla: OBI Config v2 service-resolution settings")'
-    '^func TestAzureServiceResolution[(]|t.Skip("unsupported in Beyla: OBI Config v2 service-resolution settings")'
+    # The server can answer before instrumentation attaches on slower VM kernels.
+    't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL, "testserver")'
 )
 
 # =============================================================================
@@ -1478,10 +1480,9 @@ EOF
     # comment on metric.target.info in OBI's own obi_internal.yaml. Weaver only
     # validates the OTLP tap, so prom_survey.go's gauge is irrelevant here.
     #
-    # The attribute set is whatever GetAppResourceAttrs/ResourceAttrsFromEnv
-    # produce (service.*, k8s.*, host.*, …), all already declared by upstream
-    # semconv; only the service.* refs are declared here, opt_in, mirroring how
-    # metric.target.info declares a subset of what it carries.
+    # GetAppResourceAttrs/ResourceAttrsFromEnv provide the same resource
+    # attributes as target.info. Inherit that contract so cloud, host, and
+    # Kubernetes attributes stay aligned with the upstream declaration.
     #
     # Group id is x.beyla.survey so it sorts last, consistent with x.obi.cpu.
     #
@@ -1496,6 +1497,7 @@ groups:
   # from OBI's registry.
   - id: x.beyla.survey
     type: metric
+    extends: metric.target.info
     metric_name: survey_info
     instrument: updowncounter
     unit: ""

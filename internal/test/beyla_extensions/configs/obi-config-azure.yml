@@ -1,0 +1,42 @@
+# Beyla configuration for the upstream azure service-resolution test.
+log_level: debug
+service_namespace: integration-test
+discovery:
+  poll_interval: 500ms
+  instrument:
+    - open_ports: 8080
+ebpf:
+  batch_timeout: 10ms
+metrics:
+  features: [application, application_span_otel, application_service_graph]
+prometheus_export:
+  port: 8999
+otel_metrics_export:
+  endpoint: http://otelcol:4318
+  histogram_aggregation: explicit_bucket_histogram
+otel_traces_export:
+  endpoint: http://otelcol:4318
+name_resolver:
+  sources: [azure]
+  azure:
+    subscription_id: "${AZURE_TEST_SUBSCRIPTION_ID:-}"
+    resource_group: "${AZURE_TEST_RESOURCE_GROUP:-}"
+cloud_metadata:
+  refresh_interval: 1s
+attributes:
+  host_id:
+    override: custom-exported-host
+  instance_id:
+    override_hostname: beyla
+  kubernetes:
+    enable: false
+  select:
+    "*":
+      include: ["*"]
+routes:
+  patterns: [/basic/:rnd]
+  unmatched: path
+  ignored_patterns: [/metrics]
+  ignore_mode: traces
+trace_printer: text
+shutdown_timeout: 2s

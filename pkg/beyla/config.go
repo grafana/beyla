@@ -102,10 +102,10 @@ type Config struct {
 	Attributes    Attributes                    `yaml:"attributes"`
 	CloudMetadata transform.CloudMetadataConfig `yaml:"cloud_metadata"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes       *transform.RoutesConfig       `yaml:"routes"`
-	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
-	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
-	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
+	Routes       *transform.RoutesConfig `yaml:"routes"`
+	NameResolver *NameResolverConfig     `yaml:"name_resolver"`
+	OTELMetrics  otelcfg.MetricsConfig   `yaml:"otel_metrics_export"`
+	Traces       otelcfg.TracesConfig    `yaml:"otel_traces_export"`
 	// Same as the otel_traces_export option, except all environment variables
 	// are prefixed with BEYLA_GRAFANA_AI_
 	SigilExport  otelcfg.TracesConfig       `yaml:"sigil_export" envPrefix:"BEYLA_GRAFANA_AI_"`

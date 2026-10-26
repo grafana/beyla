@@ -91,6 +91,7 @@ BEHAVIORAL_TRANSFORMS=(
     '`\^obi:\\d+\$\$`|`\^beyla:\\d+\$\$`'
     '/var/run/obi|/var/run/beyla'
     '"source":[ ]*"obi"|"source": "beyla"'
+    'source="obi"|source="beyla"'
 
     # --- Binary name (entrypoint overrides in compose files) ---
     '^/obi$|/beyla'

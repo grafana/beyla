@@ -93,8 +93,10 @@ BEHAVIORAL_TRANSFORMS=(
     '"source":[ ]*"obi"|"source": "beyla"'
 
     # --- Binary name (entrypoint overrides in compose files) ---
-    '^/obi|/beyla'
-    '\([^.a-zA-Z0-9/_-]\)/obi|\1/beyla'
+    '^/obi$|/beyla'
+    '^/obi\([^.a-zA-Z0-9/_-]\)|/beyla\1'
+    '\([^.a-zA-Z0-9/_-]\)/obi$|\1/beyla'
+    '\([^.a-zA-Z0-9/_-]\)/obi\([^.a-zA-Z0-9/_-]\)|\1/beyla\2'
 
     # --- Metric name prefixes (exported output) ---
     'obi_|beyla_'
@@ -127,9 +129,8 @@ BEHAVIORAL_TRANSFORMS=(
     'obi\.revision|beyla.revision'
     'obi\.stat\.tcp\.|beyla.stat.tcp.'
 
-    # --- Telemetry SDK/scope identity ---
-    'Value: "go\.opentelemetry\.io/obi"|Value: "github.com/grafana/beyla"'
-    '"value":"go\.opentelemetry\.io/obi"|"value":"github.com/grafana/beyla"'
+    # --- Telemetry SDK identity ---
+    # Instrumentation scopes identify OBI's instrumentation library.
     'Value: "opentelemetry"|Value: "beyla"'
 
     # --- K8s component paths ---
@@ -237,6 +238,10 @@ CODE_INJECTIONS=(
     'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
     # Temporarily skip flaky traceparent extraction test
     '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
+    # Resolver scope settings require OBI's Config v2 converter. Enable these
+    # tests when Beyla supports that loader.
+    '^func TestGCEServiceResolution[(]|t.Skip("unsupported in Beyla: OBI Config v2 service-resolution settings")'
+    '^func TestAzureServiceResolution[(]|t.Skip("unsupported in Beyla: OBI Config v2 service-resolution settings")'
 )
 
 # =============================================================================
@@ -542,7 +547,11 @@ transform_go_imports_and_paths() {
     # go_otel BuildImage: use .obi-src as context (go_otel Dockerfile expects
     # internal/test/integration/components/go_otel/ relative to context).
     if [[ -f "$OBI_DEST/http_go_otel_test.go" ]]; then
-        sed_i -e 's|buildDockerImage(t\.Context(), t\.Output(), "hatest-testserver", "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")|buildDockerImageWithContext(t.Context(), t.Output(), "hatest-testserver", pathObiSrc, "internal/test/integration/components/go_otel/Dockerfile")|' \
+        if ! grep -q 'buildDockerImage(t\.Context(), t\.Output(), goOTelTestServerImage, "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")' "$OBI_DEST/http_go_otel_test.go"; then
+            echo "ERROR: http_go_otel_test.go no longer builds goOTelTestServerImage as expected; update the go_otel transform" >&2
+            exit 1
+        fi
+        sed_i -e 's|buildDockerImage(t\.Context(), t\.Output(), goOTelTestServerImage, "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")|buildDockerImageWithContext(t.Context(), t.Output(), goOTelTestServerImage, pathObiSrc, "internal/test/integration/components/go_otel/Dockerfile")|' \
             "$OBI_DEST/http_go_otel_test.go"
     fi
 
@@ -1576,7 +1585,7 @@ generate() {
 apply_component_path_transform() {
     local file="$1"
     sed_i -e 's|path\.Join(pathRoot, "internal", "test", "integration", "components",|path.Join(pathObiSrc, "internal", "test", "integration", "components",|g' \
-        -e 's|pathRoot + "/internal/test/|pathObiSrc + "/internal/test/|g' \
+        -e 's|pathRoot[[:space:]]*+[[:space:]]*"/internal/test/|pathObiSrc + "/internal/test/|g' \
         "$file"
 }
 

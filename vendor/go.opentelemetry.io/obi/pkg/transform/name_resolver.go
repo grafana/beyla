@@ -40,6 +40,8 @@ const (
 	SourceRDNS       Source = "rdns"
 	SourceECS        Source = "ecs"
 	SourceRoute53    Source = "route53"
+	SourceGCE        Source = "gce"
+	SourceAzure      Source = "azure"
 )
 
 const (
@@ -48,6 +50,8 @@ const (
 	ResolverRDNS
 	ResolverECS
 	ResolverRoute53
+	ResolverGCE
+	ResolverAzure
 )
 
 func resolverSources(src []Source) maps.Bits {
@@ -59,6 +63,8 @@ func resolverSources(src []Source) maps.Bits {
 		SourceRDNS:       ResolverRDNS,
 		SourceECS:        ResolverECS,
 		SourceRoute53:    ResolverRoute53,
+		SourceGCE:        ResolverGCE,
+		SourceAzure:      ResolverAzure,
 	}, maps.WithTransform(func(s Source) Source {
 		return Source(strings.ToLower(string(s)))
 	}))
@@ -69,6 +75,8 @@ type NameResolverConfig struct {
 	// The "ecs" source requires ecs:ListTasks and ecs:DescribeTasks permissions.
 	// The "route53" source requires route53:ListResourceRecordSets on the configured hosted zones.
 	Sources []Source `yaml:"sources" env:"OTEL_EBPF_NAME_RESOLVER_SOURCES" envSeparator:","`
+	// GCE holds service name enrichment settings loaded from Config v2.
+	GCE GCENameResolverConfig `yaml:"-" env:"-"`
 	// CacheLen specifies the max size of the LRU cache that is checked before
 	// performing the name lookup. Default: 256
 	CacheLen int `yaml:"cache_len" env:"OTEL_EBPF_NAME_RESOLVER_CACHE_LEN" validate:"gt=0"`
@@ -76,6 +84,14 @@ type NameResolverConfig struct {
 	// cached entry becomes older than this time, the IP->hostname entry will be looked
 	// up again.
 	CacheTTL time.Duration `yaml:"cache_expiry" env:"OTEL_EBPF_NAME_RESOLVER_CACHE_TTL" validate:"gt=0"`
+	// Azure holds service name enrichment settings loaded from Config v2.
+	Azure AzureNameResolverConfig `yaml:"-" env:"-"`
+}
+
+// AzureNameResolverConfig configures the discovery scope for Uniform and Flexible scale sets.
+type AzureNameResolverConfig struct {
+	SubscriptionID string
+	ResourceGroup  string
 }
 
 // CloudMetadataConfig configures overrides for detected cloud metadata.
@@ -91,12 +107,24 @@ type CloudMetadataConfig struct {
 	Route53 Route53MetadataConfig `yaml:"route53"`
 }
 
+// GCENameResolverConfig configures service resolution for zonal managed instance groups.
+type GCENameResolverConfig struct {
+	// ProjectID defaults to the project detected from cloud metadata.
+	ProjectID string `yaml:"project_id"`
+	// Zone defaults to the availability zone detected from cloud metadata.
+	Zone string `yaml:"zone"`
+	// Endpoint overrides the Compute API base URL for an emulator or API proxy.
+	// Empty uses the Google Compute API endpoint.
+	Endpoint string `yaml:"endpoint"`
+}
+
 type NameResolver struct {
 	cache          *expirable.LRU[string, string]
 	cfg            *NameResolverConfig
 	store          *kube.Store
 	dnsCache       *memorystore.InMemory
 	cloudInventory *cloud.Inventory
+	instanceID     string
 	logger         *slog.Logger
 
 	sources maps.Bits
@@ -142,6 +170,7 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 		store:          store,
 		dnsCache:       dnsCache,
 		cloudInventory: ctxInfo.CloudMetaInventory,
+		instanceID:     localCloudInstanceID(&ctxInfo.NodeMeta, cfg),
 		cache:          expirable.NewLRU[string, string](cfg.CacheLen, nil, cfg.CacheTTL),
 		sources:        sources,
 		logger:         logger,
@@ -255,6 +284,12 @@ func (nr *NameResolver) resolveLocalCloudInventory(span *request.Span) {
 	}
 	if name, ok := nr.cloudInventory.ServiceNameForContainerID(span.Service.RuntimeContainerID); ok {
 		span.Service.UID.Name = name
+		return
+	}
+	if nr.instanceID != "" {
+		if name, ok := nr.cloudInventory.ServiceNameForInstanceID(nr.instanceID); ok {
+			span.Service.UID.Name = name
+		}
 	}
 }
 

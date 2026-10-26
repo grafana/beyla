@@ -2211,6 +2211,17 @@ func dbServerTarget(address string, port int) string {
 	return net.JoinHostPort(host, strconv.Itoa(port))
 }
 
+// sqlppSpanName names a SQL++ span after its collection or bucket. Couchbase
+// falls back to the server, as the other Couchbase spans do; any other SQL++
+// server reports other_sql and follows the SQL spans, which never use it.
+func sqlppSpanName(s *Span) string {
+	target := cmp.Or(s.Route, s.DBNamespace)
+	if target == "" && s.DBSystem == semconv.DBSystemNameCouchbase.Value.AsString() {
+		target = dbServerTarget(HostAsServer(s), s.HostPort)
+	}
+	return dbSpanName(s.Method, target, s.DBSystem)
+}
+
 func elasticsearchSpanName(s *Span) string {
 	target := cmp.Or(
 		s.Elasticsearch.DBCollectionName,
@@ -2257,8 +2268,7 @@ func (s *Span) TraceName() string {
 		}
 
 		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeSQLPP {
-			target := cmp.Or(s.Route, s.DBNamespace, dbServerTarget(HostAsServer(s), s.HostPort))
-			return dbSpanName(s.Method, target, s.DBSystem)
+			return sqlppSpanName(s)
 		}
 
 		if s.Type == EventTypeHTTPClient && IsGenAISubtype(s.SubType) && s.GenAI != nil {

@@ -80,7 +80,8 @@ type SQLPPConfig struct {
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_SQLPP_ENABLED" validate:"boolean"`
 	// EndpointPatterns specifies URL path patterns to detect SQL++ endpoints
 	// Example: ["/query/service", "/query"]
-	EndpointPatterns []string `yaml:"endpoint_patterns" env:"OTEL_EBPF_HTTP_SQLPP_ENDPOINT_PATTERNS"`
+	EndpointPatterns            []string `yaml:"endpoint_patterns" env:"OTEL_EBPF_HTTP_SQLPP_ENDPOINT_PATTERNS"`
+	PreparedStatementsCacheSize int      `yaml:"-" json:"-" validate:"gt=0"`
 }
 
 type GenAIConfig struct {

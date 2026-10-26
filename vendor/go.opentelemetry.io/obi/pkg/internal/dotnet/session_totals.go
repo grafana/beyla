@@ -5,6 +5,7 @@ package dotnet // import "go.opentelemetry.io/obi/pkg/internal/dotnet"
 
 import (
 	"errors"
+	"maps"
 	"math"
 
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
@@ -17,6 +18,22 @@ type cumulativeSessionTotals struct {
 	jitTime     float64
 	workItems   uint64
 	contentions uint64
+	// Published exception totals are replaced on merge to preserve session baselines.
+	exceptions map[string]uint64
+}
+
+func mergeExceptionCounts(base, session map[string]uint64) (map[string]uint64, error) {
+	totals := maps.Clone(base)
+	if totals == nil {
+		totals = make(map[string]uint64, len(session))
+	}
+	for label, count := range session {
+		if count > math.MaxInt64-base[label] {
+			return nil, errors.New(".NET exception count exceeds exporter integer range")
+		}
+		totals[label] = base[label] + count
+	}
+	return totals, nil
 }
 
 // merge applies the session's fixed baseline and retains the resulting totals.
@@ -57,6 +74,14 @@ func (t *cumulativeSessionTotals) merge(base cumulativeSessionTotals, snapshot *
 		}
 		*counter.value = seconds
 		*counter.total = seconds
+	}
+	if snapshot.Exceptions != nil {
+		totals, err := mergeExceptionCounts(base.exceptions, snapshot.Exceptions)
+		if err != nil {
+			return err
+		}
+		snapshot.Exceptions = totals
+		next.exceptions = totals
 	}
 	*t = next
 	return nil

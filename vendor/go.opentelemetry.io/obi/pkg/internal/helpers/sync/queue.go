@@ -22,7 +22,6 @@ type Queue[T any] struct {
 
 type node[T any] struct {
 	value T
-	next  *node[T]
 	prev  *node[T]
 }
 
@@ -51,6 +50,19 @@ func (q *Queue[T]) Dequeue() T {
 	item := q.remove()
 	q.mutex.Unlock()
 	return item
+}
+
+// TryDequeue retrieves the first element in the queue without blocking. The returned boolean
+// is false if the queue is empty.
+func (q *Queue[T]) TryDequeue() (T, bool) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	if q.head == nil {
+		var zero T
+		return zero, false
+	}
+	return q.remove(), true
 }
 
 // DequeueContext retrieves the first element in the queue. If the queue is empty, DequeueContext
@@ -85,7 +97,6 @@ func (q *Queue[T]) append(item T) {
 		q.head = &n
 	} else {
 		q.tail.prev = &n
-		n.next = q.tail
 		q.tail = &n
 	}
 }

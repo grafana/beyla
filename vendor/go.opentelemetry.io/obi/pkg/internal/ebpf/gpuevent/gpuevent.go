@@ -164,7 +164,15 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Start: p.bpfObjects.ObiCudaLaunch,
 				End:   p.bpfObjects.ObiCudaLaunchRet,
 			}},
+			"cudaLaunchKernel_ptsz": {{
+				Start: p.bpfObjects.ObiCudaLaunch,
+				End:   p.bpfObjects.ObiCudaLaunchRet,
+			}},
 			"cudaGraphLaunch": {{
+				Start: p.bpfObjects.ObiGraphLaunch,
+				End:   p.bpfObjects.ObiGraphLaunchRet,
+			}},
+			"cudaGraphLaunch_ptsz": {{
 				Start: p.bpfObjects.ObiGraphLaunch,
 				End:   p.bpfObjects.ObiGraphLaunchRet,
 			}},
@@ -179,10 +187,19 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cudaMemcpy": {{
 				Start: p.bpfObjects.ObiCudaMemcpy,
 			}},
+			"cudaMemcpy_ptds": {{
+				Start: p.bpfObjects.ObiCudaMemcpy,
+			}},
 			"cudaMemcpyAsync": {{
 				Start: p.bpfObjects.ObiCudaMemcpy,
 			}},
+			"cudaMemcpyAsync_ptsz": {{
+				Start: p.bpfObjects.ObiCudaMemcpy,
+			}},
 			"cudaMemset": {{
+				Start: p.bpfObjects.ObiCudaMemset,
+			}},
+			"cudaMemset_ptds": {{
 				Start: p.bpfObjects.ObiCudaMemset,
 			}},
 			"cudaStreamCreate": {{
@@ -200,13 +217,22 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cudaEventRecord": {{
 				Start: p.bpfObjects.ObiCudaEventRecord,
 			}},
+			"cudaEventRecord_ptsz": {{
+				Start: p.bpfObjects.ObiCudaEventRecord,
+			}},
 			"cudaEventRecordWithFlags": {{
+				Start: p.bpfObjects.ObiCudaEventRecordWithFlags,
+			}},
+			"cudaEventRecordWithFlags_ptsz": {{
 				Start: p.bpfObjects.ObiCudaEventRecordWithFlags,
 			}},
 			"cudaEventSynchronize": {{
 				Start: p.bpfObjects.ObiCudaEventSynchronize,
 			}},
 			"cudaStreamSynchronize": {{
+				Start: p.bpfObjects.ObiCudaStreamSynchronize,
+			}},
+			"cudaStreamSynchronize_ptsz": {{
 				Start: p.bpfObjects.ObiCudaStreamSynchronize,
 			}},
 			"cudaDeviceSynchronize": {{
@@ -236,10 +262,19 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cuLaunchKernel": {{
 				Start: p.bpfObjects.ObiCuLaunch,
 			}},
+			"cuLaunchKernel_ptsz": {{
+				Start: p.bpfObjects.ObiCuLaunch,
+			}},
 			"cuLaunchKernelEx": {{
 				Start: p.bpfObjects.ObiCuLaunchEx,
 			}},
+			"cuLaunchKernelEx_ptsz": {{
+				Start: p.bpfObjects.ObiCuLaunchEx,
+			}},
 			"cuGraphLaunch": {{
+				Start: p.bpfObjects.ObiCuGraphLaunch,
+			}},
+			"cuGraphLaunch_ptsz": {{
 				Start: p.bpfObjects.ObiCuGraphLaunch,
 			}},
 			"cuDeviceGetUuid": {{

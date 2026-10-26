@@ -60,8 +60,7 @@ type Tracer struct {
 	iters              []*ebpfcommon.Iter
 	iterMu             sync.Mutex
 	// the valid_pids words as last written to the BPF map
-	validPids      []uint64
-	validPidsMu    sync.Mutex
+	validPids      ebpfcommon.PIDBitmap
 	seenNetns      *expirable.LRU[uint64, struct{}]
 	eventCtx       *ebpfcommon.EBPFEventContext
 	jvmUSDTManager ebpfcommon.USDTSpecManager
@@ -76,7 +75,7 @@ const (
 	seenNetnsCacheLen = 1024
 	seenNetnsTTL      = 5 * time.Minute
 
-	validPidsWords = uint32(ebpfcommon.BpfValidPidsSizeK_validPidsWords)
+	validPidsWords = ebpfcommon.PIDBitmapWords
 )
 
 func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.Reporter) *Tracer {
@@ -116,43 +115,8 @@ func (p *Tracer) rebuildValidPids() error {
 		return nil
 	}
 
-	p.validPidsMu.Lock()
-	defer p.validPidsMu.Unlock()
-
-	if p.validPids == nil {
-		p.validPids = make([]uint64, validPidsWords)
-	}
-
-	pids := p.pidsFilter.ProcPIDs(ebpfcommon.PIDTypeKProbes)
-	want := map[uint32]uint64{}
-	for _, pid := range pids {
-		if uint64(pid) >= uint64(validPidsWords)*64 {
-			p.log.Warn("pid beyond the BPF PID filter, it won't be instrumented", "pid", pid)
-			continue
-		}
-		want[uint32(pid/64)] |= 1 << (pid % 64)
-	}
-
-	for word, bits := range p.validPids {
-		if _, ok := want[uint32(word)]; bits != 0 && !ok {
-			want[uint32(word)] = 0
-		}
-	}
-
-	written := 0
-	for word, bits := range want {
-		if p.validPids[word] == bits {
-			continue
-		}
-		if err := p.bpfObjects.ValidPids.Put(word, bits); err != nil {
-			return fmt.Errorf("writing word %d of the BPF PID filter: %w", word, err)
-		}
-		p.validPids[word] = bits
-		written++
-	}
-	p.log.Debug("BPF PID filter rebuilt", "pids", len(pids), "wordsWritten", written)
-
-	return nil
+	_, err := p.validPids.Rebuild(p.bpfObjects.ValidPids, p.pidsFilter, ebpfcommon.PIDTypeKProbes, p.log)
+	return err
 }
 
 func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {

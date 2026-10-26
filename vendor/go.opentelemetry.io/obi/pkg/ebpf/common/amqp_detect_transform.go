@@ -107,6 +107,10 @@ func amqpOperation(direction uint8) string {
 }
 
 func amqpSpanEndpoints(trace *TCPRequestInfo, direction uint8) (peer string, peerPort int, host string, hostPort int) {
+	if trace.ConnInfo.S_port == 0 && trace.ConnInfo.D_port == 0 {
+		return "", 0, "", 0
+	}
+
 	connInfo := trace.ConnInfo
 	if trace.Direction != direction {
 		connInfo = reverseTCPConnInfo(connInfo)

@@ -26,13 +26,13 @@ func unresolvedValue(value, replacement string) string {
 	return value
 }
 
-// otelUnresolvedHostGetters wraps spanOTELGetters but replacing client and server address
+// otelUnresolvedHostGetters wraps spanOTELGetters but replacing client and server names
 // unresolved metrics by a user-provided tag (usually "unresolved")
 func otelUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
 	return func(name attr.Name) (attributes.Getter[*Span, attribute.KeyValue], bool) {
 		getter, ok := spanOTELGetters(name)
 		switch name {
-		case attr.Client, attr.ClientAddr:
+		case attr.Client:
 			return func(s *Span) attribute.KeyValue {
 				kv := getter(s)
 				if s.IsClientSpan() {
@@ -42,7 +42,7 @@ func otelUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) 
 				}
 				return kv
 			}, true
-		case attr.Server, attr.ServerAddr:
+		case attr.Server:
 			return func(s *Span) attribute.KeyValue {
 				kv := getter(s)
 				if s.IsClientSpan() {
@@ -80,13 +80,13 @@ func otelUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) 
 	}
 }
 
-// promUnresolvedHostGetters wraps spanPromGetters but replacing client and server address
+// promUnresolvedHostGetters wraps spanPromGetters but replacing client and server names
 // unresolved metrics by a user-provided tag (usually "unresolved")
 func promUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) (attributes.Getter[*Span, string], bool) {
 	return func(name attr.Name) (attributes.Getter[*Span, string], bool) {
 		getter := spanPromGetters(name)
 		switch name {
-		case attr.Client, attr.ClientAddr:
+		case attr.Client:
 			return func(span *Span) string {
 				val := getter(span)
 				if span.IsClientSpan() {
@@ -94,7 +94,7 @@ func promUnresolvedHostGetters(unresolved UnresolvedNames) func(name attr.Name) 
 				}
 				return unresolvedValue(val, unresolved.Incoming)
 			}, true
-		case attr.Server, attr.ServerAddr:
+		case attr.Server:
 			return func(span *Span) string {
 				val := getter(span)
 				if span.IsClientSpan() {

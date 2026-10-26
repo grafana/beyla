@@ -404,6 +404,12 @@ var (
 		Unit:    "By",
 		Type:    InstrumentUpDownCounter,
 	})
+	DotnetGCHeapFragmentation = metric(Name{
+		Section: "dotnet.gc.last_collection.heap.fragmentation.size",
+		OTEL:    "dotnet.gc.last_collection.heap.fragmentation.size",
+		Unit:    "By",
+		Type:    InstrumentUpDownCounter,
+	})
 	DotnetGCCommittedMemory = metric(Name{
 		Section: "dotnet.gc.last_collection.memory.committed_size",
 		OTEL:    "dotnet.gc.last_collection.memory.committed_size",
@@ -456,6 +462,12 @@ var (
 		Section: "dotnet.monitor.lock_contentions",
 		OTEL:    "dotnet.monitor.lock_contentions",
 		Unit:    "{contention}",
+		Type:    InstrumentCounter,
+	})
+	DotnetExceptions = metric(Name{
+		Section: "dotnet.exceptions",
+		OTEL:    "dotnet.exceptions",
+		Unit:    "{exception}",
 		Type:    InstrumentCounter,
 	})
 	DotnetTimerCount = metric(Name{

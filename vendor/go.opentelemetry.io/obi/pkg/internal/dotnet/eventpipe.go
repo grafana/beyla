@@ -22,49 +22,88 @@ const (
 	ipcCommandCollectTracing2 uint8  = 0x03
 	eventPipeBufferSizeMB     uint32 = 16
 	eventPipeFormatNetTrace   uint32 = 1
-	eventPipeProviderCount    uint32 = 1
 	// .NET ProcessorCount keyword; EventCounterIntervalSec enables counter polling.
 	systemRuntimeKeywords   uint64 = 0x2
 	eventLevelInformational uint32 = 4
+	clrGCKeywords           uint64 = 0x1
+	// Microsoft-Windows-DotNETRuntime ExceptionKeyword includes exception throws.
+	clrExceptionKeywords uint64 = 0x8000
 )
 
-// encodeEventPipeStart encodes a CollectTracing2 request for System.Runtime EventCounters.
+type eventPipeProvider struct {
+	name      string
+	keywords  uint64
+	level     uint32
+	arguments string
+}
+
+// encodeEventPipeStart requests runtime counters, CLR GC events, and an optional exception source.
 // This is the .NET metrics source.
 // https://github.com/dotnet/diagnostics/blob/f09edf7ea9a17a86b236b91eb4c458d0469546b6/documentation/design-docs/ipc-protocol.md#collecttracing2
-func encodeEventPipeStart(samplingInterval time.Duration) ([]byte, error) {
+func encodeEventPipeStart(samplingInterval time.Duration, exceptions bool, metricsSessionID string) ([]byte, error) {
 	if samplingInterval <= 0 {
 		return nil, errors.New("EventPipe sampling interval must be greater than 0")
 	}
 
+	interval := strconv.FormatFloat(samplingInterval.Seconds(), 'f', -1, 64)
+	provider := eventPipeProvider{
+		name:      "System.Runtime",
+		keywords:  systemRuntimeKeywords,
+		level:     eventLevelInformational,
+		arguments: "EventCounterIntervalSec=" + interval,
+	}
+	clrProvider := eventPipeProvider{
+		name:     "Microsoft-Windows-DotNETRuntime",
+		keywords: clrGCKeywords,
+		level:    eventLevelInformational,
+	}
+	if metricsSessionID != "" {
+		return encodeCollectTracing2(provider, clrProvider, eventPipeProvider{
+			name:     "System.Diagnostics.Metrics",
+			keywords: 0x2, // TimeSeriesValues.
+			level:    eventLevelInformational,
+			arguments: "SessionId=" + metricsSessionID + ";Metrics=System.Runtime\\dotnet.exceptions;RefreshInterval=" + interval +
+				";MaxTimeSeries=" + strconv.Itoa(maximumExceptionTypes) + ";MaxHistograms=0",
+		})
+	}
+	if exceptions {
+		clrProvider.keywords |= clrExceptionKeywords
+	}
+	return encodeCollectTracing2(provider, clrProvider)
+}
+
+// encodeCollectTracing2 enables the supplied providers in one EventPipe session.
+func encodeCollectTracing2(providers ...eventPipeProvider) ([]byte, error) {
 	payload := binary.LittleEndian.AppendUint32(nil, eventPipeBufferSizeMB)
 	payload = binary.LittleEndian.AppendUint32(payload, eventPipeFormatNetTrace)
 	payload = append(payload, 0) // requestRundown is false for this metrics session.
-	payload = binary.LittleEndian.AppendUint32(payload, eventPipeProviderCount)
-	payload = binary.LittleEndian.AppendUint64(payload, systemRuntimeKeywords)
-	payload = binary.LittleEndian.AppendUint32(payload, eventLevelInformational)
-
-	interval := strconv.FormatFloat(samplingInterval.Seconds(), 'f', -1, 64)
-	for _, value := range []string{"System.Runtime", "EventCounterIntervalSec=" + interval} {
-		units := utf16.Encode([]rune(value))
-		payload = binary.LittleEndian.AppendUint32(payload, uint32(len(units)+1))
-		for _, unit := range units {
-			payload = binary.LittleEndian.AppendUint16(payload, unit)
+	payload = binary.LittleEndian.AppendUint32(payload, uint32(len(providers)))
+	for _, provider := range providers {
+		payload = binary.LittleEndian.AppendUint64(payload, provider.keywords)
+		payload = binary.LittleEndian.AppendUint32(payload, provider.level)
+		for _, value := range []string{provider.name, provider.arguments} {
+			units := utf16.Encode([]rune(value))
+			payload = binary.LittleEndian.AppendUint32(payload, uint32(len(units)+1))
+			for _, unit := range units {
+				payload = binary.LittleEndian.AppendUint16(payload, unit)
+			}
+			payload = binary.LittleEndian.AppendUint16(payload, 0)
 		}
-		payload = binary.LittleEndian.AppendUint16(payload, 0)
 	}
 	return encodeIPCMessage(ipcCommandSetEventPipe, ipcCommandCollectTracing2, payload)
 }
 
 type eventPipeSession struct {
-	id         uint64
-	socketPath string
-	stream     net.Conn
+	id               uint64
+	socketPath       string
+	stream           net.Conn
+	metricsSessionID string
 }
 
-// startEventPipe starts a .NET System.Runtime EventCounter session and retains its stream.
+// startEventPipe starts a .NET runtime metrics session and retains its stream.
 // The context bounds setup; after success, the caller owns the session's lifetime.
-func startEventPipe(ctx context.Context, socketPath string, samplingInterval time.Duration) (*eventPipeSession, error) {
-	request, err := encodeEventPipeStart(samplingInterval)
+func startEventPipe(ctx context.Context, socketPath string, samplingInterval time.Duration, exceptions bool, metricsSessionID string) (*eventPipeSession, error) {
+	request, err := encodeEventPipeStart(samplingInterval, exceptions, metricsSessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,9 +146,10 @@ func startEventPipe(ctx context.Context, socketPath string, samplingInterval tim
 
 	keepStream = true
 	return &eventPipeSession{
-		id:         binary.LittleEndian.Uint64(payload),
-		socketPath: socketPath,
-		stream:     conn,
+		id:               binary.LittleEndian.Uint64(payload),
+		socketPath:       socketPath,
+		stream:           conn,
+		metricsSessionID: metricsSessionID,
 	}, nil
 }
 

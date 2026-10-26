@@ -82,7 +82,10 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		exporter.Temporality(metric.InstrumentKindHistogram),
 	)
 	provider := newInternalMeterProvider(res, &exporter, metrics.Interval, bpfProbeLatency)
-	meter := provider.Meter(internalMetricsMeterName)
+	meter := provider.Meter(internalMetricsMeterName,
+		instrument.WithInstrumentationVersion(attr.TelemetryDistroVersion()),
+		instrument.WithSchemaURL(attr.OBISchemaURL),
+	)
 	tracerFlushes, err := meter.Float64Histogram(
 		internalNames.TracerFlushes.OTEL,
 		instrument.WithDescription("Length of the groups of traces flushed from the eBPF tracer to the next pipeline stage"),

@@ -52,7 +52,7 @@ func TestAsOBINameResolver(t *testing.T) {
 	})
 
 	t.Run("explicit sources are preserved", func(t *testing.T) {
-		config := &Config{NameResolver: &transform.NameResolverConfig{
+		config := &Config{NameResolver: &NameResolverConfig{
 			Sources: []transform.Source{transform.SourceDNS},
 		}}
 		assert.Equal(t, []transform.Source{transform.SourceDNS}, config.AsOBI().NameResolver.Sources)

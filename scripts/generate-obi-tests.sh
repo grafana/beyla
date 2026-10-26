@@ -1240,6 +1240,26 @@ apply_schema_transforms() {
 apply_schema_injections() {
     echo "  Applying schema injections..."
 
+    # Beyla adds default resource attributes to every span-metric family.
+    # Keep these declarations aligned with appendDefaultResourceLabels.
+    local span_metrics_schema="$SCHEMAS_DEST/obi/groups/spanmetrics/metrics.yaml"
+    awk '
+        /^  - name:/ {
+            span_metric = ($3 ~ /^traces_spanmetrics_/ || $3 ~ /^traces[.]span[.]metrics[.]/)
+        }
+        { print }
+        span_metric && /^    attributes:$/ {
+            print "      - ref: k8s.cluster.name\n        requirement_level: opt_in"
+            print "      - ref: k8s.namespace.name\n        requirement_level: opt_in"
+            print "      - ref: k8s.node.name\n        requirement_level: opt_in"
+            print "      - ref: service.version\n        requirement_level: opt_in"
+            print "      - ref: deployment.environment.name\n        requirement_level: opt_in"
+            print "      - ref: cloud.availability_zone\n        requirement_level: opt_in"
+            print "      - ref: cloud.region\n        requirement_level: opt_in"
+        }
+    ' "$span_metrics_schema" > "$span_metrics_schema.tmp"
+    mv "$span_metrics_schema.tmp" "$span_metrics_schema"
+
     # Beyla owns this metric, including its schema after OBI PR #3556 removes it.
     # Drop the inherited definition while generating from older OBI revisions.
     local host_info_schema="$SCHEMAS_DEST/obi/groups/obi_internal/metrics.yaml"

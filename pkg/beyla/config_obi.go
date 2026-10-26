@@ -23,14 +23,15 @@ func FromOBI(c *obi.Config) *Config {
 	cfgutil.Convert(c, cfg, map[string]string{
 		// Fields that do not exist in OBI Config are marked for skipping,
 		// to avoid that convert panics,
-		".obi":              cfgutil.SkipConversion,
-		".TracesReceiver":   cfgutil.SkipConversion,
-		".SigilExport":      cfgutil.SkipConversion,
-		".Processes":        cfgutil.SkipConversion,
-		".Grafana":          cfgutil.SkipConversion,
-		".Topology":         cfgutil.SkipConversion,
-		".Discovery.Survey": cfgutil.SkipConversion,
-		".Injector":         cfgutil.SkipConversion,
+		".obi":                          cfgutil.SkipConversion,
+		".TracesReceiver":               cfgutil.SkipConversion,
+		".SigilExport":                  cfgutil.SkipConversion,
+		".Processes":                    cfgutil.SkipConversion,
+		".Grafana":                      cfgutil.SkipConversion,
+		".Topology":                     cfgutil.SkipConversion,
+		".Discovery.Survey":             cfgutil.SkipConversion,
+		".Discovery.InstrumentAllLocal": cfgutil.SkipConversion,
+		".Injector":                     cfgutil.SkipConversion,
 	})
 	return cfg
 }

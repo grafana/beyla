@@ -64,6 +64,13 @@ default_jobs() {
 #
 # Format: "obi_pattern|beyla_replacement" — order matters, specific before generic.
 BEHAVIORAL_TRANSFORMS=(
+    # Use AWS's Docker Hub mock to avoid ECR Public's anonymous data limits.
+    'public\.ecr\.aws/ecs-local/amazon-ecs-local-container-endpoints:latest@sha256:d0fb4c7d8ab2fde76252ff3bb87422de201a2a7a5494a19f5c72e5e90a1fe064|amazon/amazon-ecs-local-container-endpoints:latest@sha256:2f1be750a040f71540a1bca3c9fe3295030a022595a2fc8d3966623bd3f75bd2'
+
+    # MongoDB 9.0.4 fixes Ubuntu kernel detection on the newer CI runners (SERVER-131779).
+    '\.obi-src/internal/test/integration/components/mongo/|internal/test/beyla_extensions/components/mongo/'
+    'mongo:9\.0\.2@sha256:c73153413b453d7d31199be36e101ab51195a4e6cff7bee8a2aa52a9769e4e11|mongo:9.0.4@sha256:dc28ed5a9d0fc616903c3f463bb1e53b92b49f441721b91926e87d90bf957ce8'
+
     # --- Env var renames (input config interface) ---
     'OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME'
     'JAVA_EXECUTABLE_PATH|JAVA_EXECUTABLE_NAME'

@@ -205,6 +205,9 @@ type BeylaDiscoveryConfig struct {
 	// automatically added to the instrument criteria, with the lowest preference.
 	Instrument services.GlobDefinitionCriteria `yaml:"instrument"`
 
+	// InstrumentAllLocal selects socket-using applications with survey's non-root policy.
+	InstrumentAllLocal bool `yaml:"instrument_all_local" env:"BEYLA_DISCOVERY_INSTRUMENT_ALL_LOCAL"`
+
 	// ExcludeInstrument works analogously to Instrument, but the applications matching this section won't be instrumented
 	// even if they match the Instrument selection.
 	ExcludeInstrument services.GlobDefinitionCriteria `yaml:"exclude_instrument"`
@@ -270,5 +273,5 @@ func (d *BeylaDiscoveryConfig) OverrideDefaultExcludeForSurvey() {
 }
 
 func (d *BeylaDiscoveryConfig) AppDiscoveryEnabled() bool {
-	return len(d.Services) > 0 || len(d.Instrument) > 0
+	return d.InstrumentAllLocal || len(d.Services) > 0 || len(d.Instrument) > 0
 }

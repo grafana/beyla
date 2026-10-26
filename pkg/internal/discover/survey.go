@@ -24,13 +24,23 @@ func SurveyCriteriaMatcherProvider(
 	input *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]],
 	output *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessMatch]],
 ) swarm.InstanceFunc {
+	return criteriaMatcherProvider(cfg, surveyCriteria(cfg), input, output)
+}
+
+// criteriaMatcherProvider applies selection criteria and Beyla's configured exclusions.
+func criteriaMatcherProvider(
+	cfg *beyla.Config,
+	criteria []services.Selector,
+	input *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]],
+	output *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessMatch]],
+) swarm.InstanceFunc {
 	beylaNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	m := &obiDiscover.Matcher{
-		Log:              slog.With("component", "obiDiscover.SurveyCriteriaMatcher"),
-		Criteria:         surveyCriteria(cfg),
+		Log:              slog.With("component", "discover.CriteriaMatcher"),
+		Criteria:         criteria,
 		ExcludeCriteria:  surveyExcludingCriteria(cfg),
 		ProcessHistory:   map[app.PID]obiDiscover.ProcessMatch{},
-		Input:            input.Subscribe(msg.SubscriberName("surveyInput")),
+		Input:            input.Subscribe(),
 		Output:           output,
 		Namespace:        beylaNamespace,
 		HasHostPidAccess: hasHostPidAccess(),

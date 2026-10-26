@@ -21,9 +21,6 @@ import (
 
 type fakeSocketProcesses struct{ snapshot surveywatcher.Snapshot }
 
-func (s *fakeSocketProcesses) Snapshot() surveywatcher.Snapshot { return s.snapshot }
-func (*fakeSocketProcesses) Changes() <-chan struct{}           { return nil }
-
 type fakeSurveyPIDRegistry struct {
 	aliases map[app.PID][]app.PID
 	current map[uint32]map[app.PID]svc.Attrs
@@ -72,7 +69,7 @@ func newTestSocketFilter() (*surveySocketFilter, *fakeSocketProcesses, map[app.P
 	sockets := &fakeSocketProcesses{snapshot: surveywatcher.Snapshot{}}
 	lifetimes := map[app.PID]uint64{10: 100, 20: 200}
 	f := &surveySocketFilter{
-		sockets: sockets, processes: map[app.PID]socketCandidate{},
+		sockets: sockets.snapshot, processes: map[app.PID]socketCandidate{},
 		pids:      &fakeSurveyPIDRegistry{aliases: map[app.PID][]app.PID{}, current: map[uint32]map[app.PID]svc.Attrs{}},
 		namespace: func(app.PID) (uint32, error) { return 0, nil },
 		realUID:   func(app.PID) (uint32, error) { return 1000, nil },
@@ -326,7 +323,7 @@ func TestSurveySocketFilterUsesOBIPIDRegistry(t *testing.T) {
 	registry := ebpfcommon.NewPIDsFilter(&services.DiscoveryConfig{}, slog.Default(), nil)
 	sockets := &fakeSocketProcesses{snapshot: surveywatcher.Snapshot{}}
 	f := &surveySocketFilter{
-		sockets: sockets, pids: registry, processes: map[app.PID]socketCandidate{},
+		sockets: sockets.snapshot, pids: registry, processes: map[app.PID]socketCandidate{},
 		startTime: processStartTime, namespace: processNamespace,
 	}
 	created := socketMatch(pid, obiDiscover.EventCreated)

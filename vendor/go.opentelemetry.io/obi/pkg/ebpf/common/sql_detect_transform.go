@@ -116,6 +116,9 @@ func detectSQLPayload(useHeuristics bool, b *largebuf.LargeBuffer) (string, []st
 	}
 
 	view := b.UnsafeView()
+	if sqlKind == request.DBMySQL {
+		view = mysqlFirstPacket(view)
+	}
 
 	op, tables, sql := detectSQL(view)
 

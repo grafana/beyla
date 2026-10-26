@@ -15,7 +15,9 @@ type Observer interface {
 	ID() string
 	// On new event. If the observer returns an error, it will be assumed as invalid and will be automatically
 	// unsubscribed from the notifier. The Observer implementation should free its occupied resources and finish
-	// its execution
+	// its execution.
+	// On is invoked synchronously by the Notifier, so it must never block and should return quickly:
+	// any slow or blocking work must be handed off to another goroutine.
 	On(event *informer.Event) error
 }
 

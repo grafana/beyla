@@ -197,6 +197,7 @@ network:
 						EndpointPatterns: []string{
 							"/query/service",
 						},
+						PreparedStatementsCacheSize: 1024,
 					},
 					Enrichment: obiconfig.EnrichmentConfig{
 						Policy: obiconfig.HTTPParsingPolicy{

@@ -159,7 +159,11 @@ func (p *bpfProbeLatencyProducer) Produce(ctx context.Context) ([]metricdata.Sco
 	}
 
 	return []metricdata.ScopeMetrics{{
-		Scope: instrumentation.Scope{Name: internalMetricsMeterName},
+		Scope: instrumentation.Scope{
+			Name:      internalMetricsMeterName,
+			Version:   attr.TelemetryDistroVersion(),
+			SchemaURL: attr.OBISchemaURL,
+		},
 		Metrics: []metricdata.Metrics{{
 			Name:        p.name.OTEL,
 			Description: "Latency distribution of the eBPF probe in seconds",

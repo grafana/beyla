@@ -90,7 +90,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 
 	processEventsCloudDecorated := msg2.QueueFromConfig[exec.ProcessEvent](obiCfg, "processEventsCloudDecorated")
 	swi.Add(transform.CloudProcessEventDecoratorProvider(
-		ctxInfo, processEventsDockerDecorated, processEventsCloudDecorated,
+		ctxInfo, config.NameResolver, processEventsDockerDecorated, processEventsCloudDecorated,
 	), swarm.WithID("CloudProcessEventDecorator"))
 
 	runtimeMetrics := newRuntimeMetricsQueue(config.AsOBI())

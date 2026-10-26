@@ -1718,8 +1718,10 @@
           "items": {
             "type": "string",
             "enum": [
+              "azure",
               "dns",
               "ecs",
+              "gce",
               "k8s",
               "kube",
               "kubernetes",

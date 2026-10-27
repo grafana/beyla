@@ -1,0 +1,57 @@
+Template: grafana-beyla-sdk/mode
+Type: select
+Choices: beyla-only, sdk
+Default: beyla-only
+Description: Select the instrumentation mode
+ Choose beyla-only to run the Alloy Beyla component without SDK injection, or
+ choose sdk to opt in selected controlled systemd services to SDK injection.
+
+Template: grafana-beyla-sdk/otlp-endpoint
+Type: string
+Description: Grafana Cloud OTLP endpoint
+ Enter the full OTLP HTTP endpoint URL.
+
+Template: grafana-beyla-sdk/otlp-tenant
+Type: string
+Description: Grafana Cloud OTLP tenant or instance ID
+
+Template: grafana-beyla-sdk/otlp-token
+Type: password
+Description: Grafana Cloud OTLP token
+
+Template: grafana-beyla-sdk/metrics-endpoint
+Type: string
+Description: Grafana Cloud Prometheus remote-write endpoint
+
+Template: grafana-beyla-sdk/metrics-tenant
+Type: string
+Description: Grafana Cloud metrics tenant or instance ID
+
+Template: grafana-beyla-sdk/metrics-token
+Type: password
+Description: Grafana Cloud metrics token
+
+Template: grafana-beyla-sdk/profiles-endpoint
+Type: string
+Description: Grafana Cloud profiles endpoint
+
+Template: grafana-beyla-sdk/profiles-tenant
+Type: string
+Description: Grafana Cloud profiles tenant or instance ID
+
+Template: grafana-beyla-sdk/profiles-token
+Type: password
+Description: Grafana Cloud profiles token
+
+Template: grafana-beyla-sdk/services
+Type: string
+Description: Controlled systemd service units to instrument
+ Enter a comma-separated list of controlled service unit names (for example,
+ demo.service). Only these services receive SDK injection. Do not select
+ production services in this PoC.
+
+Template: grafana-beyla-sdk/open-ports
+Type: string
+Description: Comma-separated ports of application services to instrument
+ Enter only the ports of services that should be instrumented by Beyla, for
+ example 8080 or 8080,8081. Port ranges are accepted.

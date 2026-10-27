@@ -81,6 +81,10 @@ type MetricsConfig struct {
 	// removed from the metrics set.
 	TTL time.Duration `yaml:"ttl" env:"OTEL_EBPF_METRICS_TTL"`
 
+	// ConnectionInfoTTL specifies how long observed connection-info edges remain active.
+	// It is set by Config v2 and is not part of the frozen Config v1 surface.
+	ConnectionInfoTTL time.Duration `yaml:"-" env:"-" validate:"gt=0"`
+
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 
 	// OTLPEndpointProvider allows overriding the OTLP Endpoint. It needs to return an endpoint and

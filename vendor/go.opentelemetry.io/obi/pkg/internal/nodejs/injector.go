@@ -324,5 +324,7 @@ func (i *NodeInjector) injectViaConn(conn net.Conn, closeInspector bool) error {
 		return fmt.Errorf("failed to connect to inspector WebSocket: %w", err)
 	}
 
+	defer wsConn.Close()
+
 	return i.injectFileWS(wsConn, payload, closeInspector)
 }

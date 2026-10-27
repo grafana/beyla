@@ -53,10 +53,11 @@ var (
 	TracesTargetInfo         = attributes.TracesTargetInfo.Prom
 	TargetInfo               = attributes.TargetInfo.Prom
 
-	ServiceGraphClient = attributes.ServiceGraphClient.Prom
-	ServiceGraphServer = attributes.ServiceGraphServer.Prom
-	ServiceGraphFailed = attributes.ServiceGraphFailed.Prom
-	ServiceGraphTotal  = attributes.ServiceGraphTotal.Prom
+	ServiceGraphClient         = attributes.ServiceGraphClient.Prom
+	ServiceGraphServer         = attributes.ServiceGraphServer.Prom
+	ServiceGraphFailed         = attributes.ServiceGraphFailed.Prom
+	ServiceGraphTotal          = attributes.ServiceGraphTotal.Prom
+	ServiceGraphConnectionInfo = attributes.ServiceGraphConnectionInfo.Prom
 )
 
 const (
@@ -119,7 +120,9 @@ type PrometheusConfig struct {
 
 	// TTL specifies the time since a metric was updated for the last time until it is
 	// removed from the metrics set.
-	TTL                         time.Duration `yaml:"ttl" env:"OTEL_EBPF_PROMETHEUS_TTL"`
+	TTL time.Duration `yaml:"ttl" env:"OTEL_EBPF_PROMETHEUS_TTL"`
+	// ConnectionInfoTTL is configured through Config v2 and is not part of the frozen Config v1 surface.
+	ConnectionInfoTTL           time.Duration `yaml:"-" env:"-" validate:"gt=0"`
 	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size" validate:"gt=0"`
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"OTEL_EBPF_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
@@ -223,10 +226,11 @@ type metricsReporter struct {
 	tracesTargetInfo             *prometheus.GaugeVec
 
 	// trace service graph
-	serviceGraphClient *Expirer[prometheus.Histogram]
-	serviceGraphServer *Expirer[prometheus.Histogram]
-	serviceGraphFailed *Expirer[prometheus.Counter]
-	serviceGraphTotal  *Expirer[prometheus.Counter]
+	serviceGraphClient         *Expirer[prometheus.Histogram]
+	serviceGraphServer         *Expirer[prometheus.Histogram]
+	serviceGraphFailed         *Expirer[prometheus.Counter]
+	serviceGraphTotal          *Expirer[prometheus.Counter]
+	serviceGraphConnectionInfo *Expirer[prometheus.Gauge]
 
 	// gpu related metrics
 	cudaKernelCallsTotal            *Expirer[prometheus.Counter]
@@ -494,13 +498,14 @@ func newReporter(
 	kubeEnabled := ctxInfo.K8sInformer.IsKubeEnabled()
 	dockerEnabled := ctxInfo.DockerMetadata.IsEnabled(ctx)
 
-	if jointMetricsConfig.Features.ServiceGraph() {
+	if jointMetricsConfig.Features.ServiceTopology() {
 		attrs := []attr.Name{attr.Client, attr.ClientNamespace, attr.Server, attr.ServerNamespace, attr.Source}
 		if kubeEnabled {
 			attrs = append(attrs, attr.K8SClientCluster, attr.K8SServerCluster, attr.K8SClientNamespace, attr.K8SServerNamespace)
 		}
 		attrSvcGraph = attributes.PrometheusGetters(attributeGetters, attrs)
 	}
+	connectionInfoExpireTTL := export.ConnectionInfoTTLOrDefault(cfg.ConnectionInfoTTL)
 
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
@@ -768,6 +773,12 @@ func newReporter(
 				Name: ServiceGraphTotal,
 				Help: "number of service calls in trace service graph metrics format",
 			}, labelNamesSvcGraph(attrSvcGraph)).MetricVec, timeNow, cfg.TTL)
+		}),
+		serviceGraphConnectionInfo: optionalGaugeProvider(jointMetricsConfig.Features.ConnectionInfo(), func() *Expirer[prometheus.Gauge] {
+			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: ServiceGraphConnectionInfo,
+				Help: "whether a client-to-server connection has been observed recently",
+			}, labelNamesSvcGraph(attrSvcGraph)).MetricVec, timeNow, connectionInfoExpireTTL)
 		}),
 		targetInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: TargetInfo,
@@ -1049,6 +1060,9 @@ func newReporter(
 			mr.serviceGraphTotal,
 		)
 	}
+	if jointMetricsConfig.Features.ConnectionInfo() {
+		registeredMetrics = append(registeredMetrics, mr.serviceGraphConnectionInfo)
+	}
 
 	if jointMetricsConfig.Features.AnySpanMetrics() {
 		registeredMetrics = append(registeredMetrics, mr.tracesTargetInfo)
@@ -1127,6 +1141,14 @@ func optionalHistogramProvider(enable bool, provider func() *Expirer[prometheus.
 }
 
 func optionalCounterProvider(enable bool, provider func() *Expirer[prometheus.Counter]) *Expirer[prometheus.Counter] {
+	if !enable {
+		return nil
+	}
+
+	return provider()
+}
+
+func optionalGaugeProvider(enable bool, provider func() *Expirer[prometheus.Gauge]) *Expirer[prometheus.Gauge] {
 	if !enable {
 		return nil
 	}
@@ -1234,7 +1256,8 @@ func (r *metricsReporter) otelMetricsObserved(span *request.Span) bool {
 }
 
 func (r *metricsReporter) otelSpanMetricsObserved(span *request.Span) bool {
-	return span.Service.Features.AnySpanMetrics() && !span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
+	return (span.Service.Features.AnySpanMetrics() || span.Service.Features.ConnectionInfo()) &&
+		!span.Service.ExportsOTelMetricsSpan() && !span.IsDNSSpan()
 }
 
 func (r *metricsReporter) otelSpanFiltered(span *request.Span) bool {
@@ -1564,6 +1587,10 @@ func (r *metricsReporter) observe(span *request.Span) {
 				}
 			}
 		}
+		if span.Service.Features.ConnectionInfo() && request.HasConnectionInfoEdge(span) {
+			labels := labelValuesConnectionInfo(span, r.attrSvcGraph, &r.pidsTracker)
+			r.serviceGraphConnectionInfo.WithLabelValues(labels...).Metric.Set(1)
+		}
 	}
 }
 
@@ -1752,6 +1779,24 @@ func labelNamesSvcGraph(getters []attributes.Field[*request.Span, string]) []str
 
 func labelValuesSvcGraph(span *request.Span, getters []attributes.Field[*request.Span, string], tracker *otel.PidServiceTracker) []string {
 	return append(labelValues(span, getters), otel.ConnectionTypeForSpan(span, tracker))
+}
+
+func labelValuesConnectionInfo(span *request.Span, getters []attributes.Field[*request.Span, string], tracker *otel.PidServiceTracker) []string {
+	values := labelValues(span, getters)
+	for i, getter := range getters {
+		switch getter.ExposedName {
+		case attr.Client.Prom():
+			values[i] = span.Service.UID.Name
+		case attr.ClientNamespace.Prom():
+			values[i] = span.Service.UID.Namespace
+		case attr.Server.Prom():
+			values[i] = span.HostName
+		case attr.ServerNamespace.Prom():
+			values[i] = span.OtherNamespace
+		}
+	}
+	values = sanitizeValues(values)
+	return append(values, otel.ConnectionTypeForSpan(span, tracker))
 }
 
 func labelValues[T any](s T, getters []attributes.Field[T, string]) []string {

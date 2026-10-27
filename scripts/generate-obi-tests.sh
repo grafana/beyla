@@ -141,6 +141,9 @@ BEHAVIORAL_TRANSFORMS=(
     'o\.instrument(t, network, "obi-config-gce\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-gce.yml")'
     'o\.instrument(t, network, "obi-config-azure\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-azure.yml")'
 
+    # Let the connection-info test select only its opt-in feature.
+    '`MULTI_TEST_MODE=-connectioninfo`|`MULTI_TEST_MODE=-connectioninfo`, `MULTI_TEST_METRICS_FEATURES=application_service_graph_connection_info`'
+
     # --- K8s component paths ---
     'DockerfileOBI|DockerfileBeyla'
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
@@ -828,6 +831,24 @@ routes:
 EOF
     fi
 
+    file="$OBI_DEST/configs/obi-config-multiexec-connectioninfo.yml"
+    if [[ -f "$file" ]] && ! grep -q '^metrics:' "$file"; then
+        cat >>"$file" <<'EOF'
+# --- Beyla-only: v1 equivalent for the connection-info integration test --------
+# Beyla loads this Config v2 fixture through its v1 loader. The keys below enable
+# the equivalent metrics exporter, selected services, and opt-in metric feature.
+otel_metrics_export:
+  endpoint: http://otelcol:4018
+metrics:
+  features:
+    - application_service_graph_connection_info
+discovery:
+  instrument:
+    - open_ports: "8080,8088"
+    - open_ports: "7773"
+EOF
+    fi
+
     file="$OBI_DEST/configs/obi-config-log-enricher-v2.yml"
     if [[ -f "$file" ]] && ! grep -q '^ebpf:' "$file"; then
         printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
@@ -839,6 +860,13 @@ EOF
         printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
         cat "$OBI_DEST/configs/obi-config-log-enricher-unselected.yml" >>"$file"
     fi
+}
+
+ensure_multiexec_connectioninfo_feature_override() {
+    local file="$OBI_DEST/docker-compose-multiexec.yml"
+    [[ -f "$file" ]] || return 0
+
+    sed -i 's|BEYLA_OTEL_METRICS_FEATURES: "application,application_span_otel"|BEYLA_OTEL_METRICS_FEATURES: "${MULTI_TEST_METRICS_FEATURES-application,application_span_otel}"|' "$file"
 }
 
 ensure_client_trace_waits_for_complete_attachment() {
@@ -1655,6 +1683,7 @@ generate() {
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports
     ensure_config_v2_v1_equivalents
+    ensure_multiexec_connectioninfo_feature_override
     ensure_client_trace_waits_for_complete_attachment
     ensure_malicious_ioctl_local_downstream
     ensure_weaver_tap_survives_weavercol_startup

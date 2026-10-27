@@ -1,0 +1,110 @@
+// Companion-owned complete Alloy config. No existing /etc/alloy config is
+// included or overwritten by the package.
+otelcol.auth.basic "otlp" {
+  username = sys.env("GRAFANA_CLOUD_OTLP_TENANT_ID")
+  password = sys.env("GRAFANA_CLOUD_OTLP_TOKEN")
+}
+
+otelcol.exporter.otlphttp "cloud" {
+  client {
+    endpoint = sys.env("GRAFANA_CLOUD_OTLP_ENDPOINT")
+    auth     = otelcol.auth.basic.otlp.handler
+  }
+}
+
+// SDK-enrolled services send to this loopback-only receiver. Cloud credentials
+// remain in Alloy's root-only environment file.
+otelcol.receiver.otlp "sdk" {
+  http {
+    endpoint = "127.0.0.1:14318"
+  }
+
+  output {
+    traces  = [otelcol.exporter.otlphttp.cloud.input]
+    metrics = [otelcol.exporter.otlphttp.cloud.input]
+  }
+}
+
+beyla.ebpf "host" {
+  discovery {
+    instrument {
+      open_ports = sys.env("BEYLA_OPEN_PORTS")
+    }
+  }
+
+  metrics {
+    features = ["application", "network"]
+  }
+
+  ebpf {
+    bpf_fs_path = "/sys/fs/bpf"
+  }
+
+  output {
+    traces = [otelcol.exporter.otlphttp.cloud.input]
+  }
+}
+
+prometheus.scrape "beyla" {
+  targets    = beyla.ebpf.host.targets
+  forward_to = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.exporter.unix "host" {}
+
+prometheus.scrape "host" {
+  targets    = prometheus.exporter.unix.host.targets
+  forward_to = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.remote_write "cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_METRICS_ENDPOINT")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_METRICS_TENANT_ID")
+      password = sys.env("GRAFANA_CLOUD_METRICS_TOKEN")
+    }
+  }
+}
+
+discovery.process "host" {
+  discover_config {
+    exe          = true
+    cgroup_path  = true
+    container_id = true
+  }
+}
+
+// Give host profiles a meaningful process name instead of the default
+// "unspecified" label. The executable path is discovered from /proc and
+// reduced to its basename before it reaches Pyroscope.
+discovery.relabel "profiled_processes" {
+  targets = discovery.process.host.targets
+
+  rule {
+    action        = "replace"
+    source_labels = ["__meta_process_exe"]
+    regex         = ".*/([^/]+)$"
+    replacement   = "$1"
+    target_label  = "service_name"
+  }
+}
+
+pyroscope.ebpf "host" {
+  targets                     = discovery.relabel.profiled_processes.output
+  bpf_fs_root = "/sys/fs/bpf"
+  obi_process_context_enabled = true
+  forward_to = [pyroscope.write.cloud.receiver]
+}
+
+pyroscope.write "cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROFILES_ENDPOINT")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROFILES_TENANT_ID")
+      password = sys.env("GRAFANA_CLOUD_PROFILES_TOKEN")
+    }
+  }
+}

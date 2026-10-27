@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+PACKAGE_DIR="$ROOT_DIR/packaging/deb"
+OUTPUT_DIR=${OUTPUT_DIR:-"$ROOT_DIR/dist"}
+ARTIFACTS_DIR=${1:-}
+CONTAINER_ENGINE=${CONTAINER_ENGINE:-docker}
+ARCH=$(dpkg --print-architecture)
+
+if [[ "$ARCH" != amd64 ]]; then
+  echo "This PoC only supports Ubuntu amd64 (found $ARCH)." >&2
+  exit 1
+fi
+
+tmp=$(mktemp -d)
+unique_id=${tmp##*/}
+image="beyla-sdk-poc:$unique_id"
+container="beyla-sdk-poc-$unique_id"
+BUILT_IMAGE=0
+CREATED_CONTAINER=0
+cleanup() {
+  if [[ "$BUILT_IMAGE" = 1 ]]; then
+    if [[ "$CREATED_CONTAINER" = 1 ]]; then
+      "$CONTAINER_ENGINE" rm -f "$container" >/dev/null 2>&1 || true
+    fi
+    "$CONTAINER_ENGINE" rmi "$image" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
+
+if [[ -z "$ARTIFACTS_DIR" ]]; then
+  command -v "$CONTAINER_ENGINE" >/dev/null || {
+    echo "Container engine '$CONTAINER_ENGINE' is required to build the canonical SDK artifact image" >&2
+    exit 1
+  }
+  # Podman-based Docker-compatible CLIs may not enable unqualified image
+  # searches. Qualify the existing official-library base images in a
+  # temporary Containerfile, leaving the canonical recipe untouched.
+  containerfile="$tmp/Dockerfile"
+  sed -E 's/^FROM (alpine|ruby|python|node):/FROM docker.io\/library\/\1:/' \
+    "$ROOT_DIR/pkg/webhook/image/Dockerfile" > "$containerfile"
+  "$CONTAINER_ENGINE" build --platform linux/amd64 --build-arg TARGETARCH=amd64 --tag "$image" \
+    -f "$containerfile" "$ROOT_DIR/pkg/webhook/image"
+  BUILT_IMAGE=1
+  "$CONTAINER_ENGINE" create --name "$container" "$image" >/dev/null
+  CREATED_CONTAINER=1
+  "$CONTAINER_ENGINE" cp "$container:/dist" "$tmp/dist"
+  ARTIFACTS_DIR="$tmp/dist"
+fi
+
+for artifact in \
+  injector/libotelinject.so \
+  agents/jvm/opentelemetry-javaagent.jar \
+  agents/dotnet/glibc \
+  agents/node.js/register.js \
+  agents/python/glibc \
+  agents/ruby/glibc; do
+  [[ -e "$ARTIFACTS_DIR/$artifact" ]] || { echo "Missing canonical SDK artifact: $artifact" >&2; exit 1; }
+done
+
+stage="$tmp/package"
+install -d "$stage/DEBIAN" "$stage/opt/grafana/beyla-sdk/dist" \
+  "$stage/usr/share/grafana-beyla-sdk" "$stage/usr/lib/grafana-beyla-sdk"
+cp -a "$ARTIFACTS_DIR/." "$stage/opt/grafana/beyla-sdk/dist/"
+sed 's|/__otel_sdk_auto_instrumentation__/dist|/opt/grafana/beyla-sdk/dist|g' \
+  "$stage/opt/grafana/beyla-sdk/dist/injector/otelinject.conf" \
+  > "$stage/opt/grafana/beyla-sdk/dist/injector/otelinject.conf.tmp"
+mv "$stage/opt/grafana/beyla-sdk/dist/injector/otelinject.conf.tmp" \
+  "$stage/opt/grafana/beyla-sdk/dist/injector/otelinject.conf"
+install -m 0644 "$PACKAGE_DIR/alloy-config.alloy" "$stage/usr/share/grafana-beyla-sdk/config.alloy"
+install -m 0644 "$PACKAGE_DIR/alloy-dropin.conf" \
+  "$stage/usr/share/grafana-beyla-sdk/alloy-service-dropin.conf"
+install -m 0644 "$PACKAGE_DIR/configure.py" "$stage/usr/lib/grafana-beyla-sdk/configure.py"
+install -m 0644 "$PACKAGE_DIR/validate-alloy.py" "$stage/usr/lib/grafana-beyla-sdk/validate-alloy.py"
+install -m 0644 "$PACKAGE_DIR/templates" "$stage/DEBIAN/templates"
+install -m 0644 "$PACKAGE_DIR/control" "$stage/DEBIAN/control"
+install -m 0755 "$PACKAGE_DIR/config" "$stage/DEBIAN/config"
+install -m 0755 "$PACKAGE_DIR/postinst" "$stage/DEBIAN/postinst"
+install -m 0755 "$PACKAGE_DIR/postrm" "$stage/DEBIAN/postrm"
+
+install -d "$OUTPUT_DIR"
+dpkg-deb --build --root-owner-group "$stage" \
+  "$OUTPUT_DIR/grafana-beyla-sdk_0.1.0~poc1_amd64.deb"
+echo "Built unpublished PoC package: $OUTPUT_DIR/grafana-beyla-sdk_0.1.0~poc1_amd64.deb"

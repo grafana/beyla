@@ -128,10 +128,10 @@ The Beyla metrics exporter can export the following metrics data groups for proc
     port: 8999
   ```
 
-  This metric serves a similar topology-discovery purpose to [Tempo's
+  This metric serves a similar topology-discovery purpose to [the Tempo
   connection information metric](/docs/tempo/latest/metrics-from-traces/service_graphs/#connection-information-metric),
   but Beyla derives it from observed client traffic. Beyla exports the metric
-  directly; it does not require enabling Tempo's
+  directly; it does not require enabling the Tempo
   `service-graphs-connection-info` processor.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.

@@ -18,10 +18,11 @@ This page explains what eBPF is, how Beyla uses it to instrument your services, 
 
 eBPF lets you attach programs to different points of the Linux kernel.
 eBPF programs run in privileged mode and can inspect runtime information from the kernel, such as system calls and the network stack.
-eBPF programs can also insert probes into user space applications.
+eBPF programs can also attach to functions in user space applications through user space probes, also known as `uprobes`.
 
-An ordinary application running in user space loads the eBPF code into the kernel.
-The kernel and the user space application share information through communication mechanisms that the eBPF specification provides, such as ring buffers, arrays, and hash maps.
+A user space application loads eBPF programs into the kernel.
+Beyla is that user space application.
+The kernel and Beyla share information through communication mechanisms that the eBPF specification provides, such as ring buffers, arrays, and hash maps.
 
 ![Beyla eBPF architecture](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
 
@@ -40,8 +41,13 @@ Beyla follows these steps:
    Kernel probes capture network activity, such as connections, reads, and writes.
    User space probes capture function calls in the language runtime or in libraries, for example in Go applications.
 1. When the application receives or sends a request, the probes capture events about the request and pass them to Beyla.
-1. Beyla converts the events into metrics and trace spans, and adds metadata, such as Kubernetes Pod and namespace names.
+1. Beyla converts the events into metrics and trace spans, and adds metadata.
+   For example, when Beyla runs in Kubernetes, it adds Pod and namespace names.
 1. Beyla exports the metrics and traces in the OpenTelemetry format, as native Prometheus metrics, or both.
+
+For Java and Node.js applications, Beyla also loads a small language agent into the application process by default.
+These agents provide features that eBPF alone can't, such as context propagation.
+For details, refer to [Configure Beyla language specific agents][language-agents].
 
 Beyla can also [propagate trace context][distributed-traces] between services, so spans from different services join the same distributed trace.
 
@@ -55,6 +61,9 @@ Beyla exports data in open formats, so you can choose your backend:
 - Send OpenTelemetry metrics and traces to Grafana Alloy or an OpenTelemetry Collector for processing and routing.
 - Send OpenTelemetry metrics and traces directly to an OTLP endpoint, such as Grafana Cloud.
 - Expose a Prometheus endpoint that Prometheus or Grafana Alloy can scrape.
+
+In Grafana Cloud, Application Observability and Knowledge Graph use Beyla metrics and traces.
+To set up Beyla for Grafana Cloud, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-grafana-cloud].
 
 To configure exports, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].
 
@@ -85,9 +94,11 @@ To learn about the differences, refer to [Using OpenTelemetry eBPF Instrumentati
 
 [instruction-set]: https://docs.kernel.org/bpf/standardization/instruction-set.html
 [service-discovery]: ../../configure/service-discovery/
+[language-agents]: ../../configure/language-agents/
 [distributed-traces]: ../../traces/
 [requesttime]: ../../traces/requesttime/
 [export-data]: ../../configure/export-data/
+[helm-grafana-cloud]: ../../setup/kubernetes-helm-appolly/
 [setup]: ../../setup/
 [obi]: ../obi/
 [compare]: ../beyla-and-opentelemetry-sdks/

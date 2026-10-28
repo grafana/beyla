@@ -12,7 +12,7 @@ keywords:
 # Why use Grafana Beyla
 
 To get metrics and traces from an application, you usually add a language agent or SDK to the application deployment or packages.
-For some compiled languages, such as Go and Rust, you must also add tracepoints to the code by hand.
+For compiled languages, such as Go and Rust, you often add tracing calls to the code by hand.
 You repeat this work for every service and every language you run.
 
 Beyla takes a different approach.
@@ -37,7 +37,7 @@ Beyla offers the following features:
 
 The kernel verifies each eBPF program before it loads it.
 The verifier checks that the program accesses memory safely and finishes in a finite time.
-Unlike a kernel module, a faulty eBPF probe can't cause the Linux kernel to hang.
+A faulty kernel module can cause the Linux kernel to hang, but a faulty eBPF program can't.
 To learn more about eBPF, refer to [How Beyla works][how].
 
 ## eBPF instrumentation improves security
@@ -45,38 +45,43 @@ To learn more about eBPF, refer to [How Beyla works][how].
 Language SDKs and instrumentation agents become dependencies of your application.
 Any vulnerability in an instrumentation library becomes a vulnerability in your application.
 
-Beyla doesn't add anything to your application as a dependency.
-The code that extracts and generates telemetry runs in a separate process, outside your application process memory.
-A vulnerability in Beyla affects only telemetry collection and generation.
+Beyla doesn't add a dependency to your application.
+Beyla runs as a separate process, and its eBPF programs run in the kernel, outside your application process memory.
+A vulnerability in the eBPF instrumentation affects only telemetry collection and generation.
+
+For Java and Node.js applications, Beyla also loads a small language agent into the application process by default.
+These agents provide features that eBPF alone can't, such as context propagation.
+You can turn the agents off.
+For details, refer to [Configure Beyla language specific agents][language-agents].
 
 Beyla runs separately from your application, so you can apply strict access policies to it.
 For example, you can configure Beyla to push telemetry and not open any ports.
-That isn't possible when your application includes an SDK or agent.
+An SDK or agent inside your application has the same permissions and network access as your application.
 
 Beyla is also safer than proxy-based instrumentation.
 A proxy runs outside your application, but it handles all of your application traffic and exposes ports.
 If the proxy has a security vulnerability, an attacker can gain access to all of your application traffic.
 
-## eBPF instrumentation doesn't change your applications
+## eBPF instrumentation needs no application changes
 
-Beyla attaches its probes to your applications from outside.
+Beyla attaches to your applications while they run.
 You can add, remove, or upgrade Beyla without changes to your application code, packages, or deployment.
 
 When you upgrade Beyla, the upgrade applies to all of your instrumented services at once.
 You don't need to rebuild or redeploy each service.
 
-## eBPF instrumentation measures latency as clients see it
+## eBPF instrumentation measures latency closer to what clients see
 
-Library and agent instrumentation measure service time.
+Library and agent instrumentation usually measure service time.
 Service time is the time a request handler takes to process a request.
 Before a handler starts, a request can wait in an internal framework queue, for example when all threads in the application thread pool are busy.
-Library instrumentation doesn't count this wait time.
+This instrumentation starts timing when the handler starts, so it misses the wait time.
 
 As a result, library or agent telemetry can report low request durations while clients experience high latency.
 This usually happens when a service receives more requests than it can handle, which is when you're most likely to breach a service level objective (SLO) on response time and need to scale.
 
-Beyla observes requests at the kernel network level, outside the application.
-The latency that Beyla reports matches what the client sees, including queue time.
+Beyla observes requests at the kernel network level.
+The latency that Beyla reports includes queue time, so it's closer to what the client sees.
 When an application can't keep up with incoming requests, queue time can be much larger than service time.
 To learn more, refer to [Measuring total request times, instead of service times][requesttime].
 
@@ -87,6 +92,7 @@ To learn more, refer to [Measuring total request times, instead of service times
 - [Beyla requirements and limitations][requirements]
 
 [distributed-traces]: ../../traces/
+[language-agents]: ../../configure/language-agents/
 [network]: ../../network/
 [requesttime]: ../../traces/requesttime/
 [how]: ../how-beyla-works/

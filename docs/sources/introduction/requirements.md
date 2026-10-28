@@ -53,7 +53,7 @@ For application observability, Beyla requires the following capabilities:
 Some features and kernels need more capabilities:
 
 - Trace context propagation, and network observability with Linux Traffic Control, require `CAP_NET_ADMIN`.
-- Kernels earlier than 5.11 require `CAP_SYS_RESOURCE`.
+- Kernels earlier than 5.11 also require `CAP_SYS_RESOURCE`.
 - Kernels earlier than 5.8, such as the RHEL 8 kernel 4.18, require `CAP_SYS_ADMIN` instead of the individual capabilities.
 
 `CAP_SYS_ADMIN` grants all the capabilities that Beyla needs.
@@ -62,9 +62,9 @@ For the full list of capabilities, the capabilities each feature needs, and exam
 
 ## Limitations
 
-Beyla provides generic metrics and transaction-level trace spans.
-It doesn't create spans for the internal operations of your code.
-To choose the granularity of instrumentation and focus on your critical operations, use language agents or manual instrumentation.
+Beyla creates metrics and spans for the requests that your services receive and send, such as HTTP, gRPC, and database calls.
+It doesn't create spans for internal functions in your code.
+To instrument specific parts of your code, such as critical operations, use OpenTelemetry SDKs or manual instrumentation.
 
 Beyla trace support varies by language and framework.
 For example, Beyla may not correlate spans correctly for reactive Java frameworks.

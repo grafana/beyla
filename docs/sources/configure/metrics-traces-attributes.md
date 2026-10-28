@@ -2,7 +2,7 @@
 title: Configure Beyla metrics and traces attributes
 menuTitle: Metrics attributes
 description: Configure the metrics and traces attributes component that controls the attributes reported, including instance ID decoration and metadata of instrumented Kubernetes pods.
-weight: 30
+weight: 500
 keywords:
   - Beyla
   - eBPF

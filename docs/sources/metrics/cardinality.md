@@ -4,16 +4,18 @@ menuTitle: Metrics cardinality
 
 description: Overview of how to calculate the cardinality of metrics produced by a default Beyla installation, considering the size and complexity of the instrumented environment.
 
-weight: 24
+weight: 200
 keywords:
   - Beyla
   - eBPF
   - cardinality
+aliases:
+  - ../cardinality/ # /docs/beyla/<BEYLA_VERSION>/cardinality/
 ---
 
 # Beyla metrics cardinality
 
-The cardinality of [Beyla metrics](../metrics/) highly depends on the size and complexity
+The cardinality of [Beyla metrics](../) highly depends on the size and complexity
 of the instrumented environment, so there is no way to provide a simple and accurate formula.
 
 This document tries to provide an approximation of the metrics cardinality that might

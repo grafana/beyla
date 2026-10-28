@@ -2,7 +2,7 @@
 title: Network metrics
 menuTitle: Network
 description: Configuring Beyla to observe point-to-point network metrics.
-weight: 3
+weight: 500
 keywords:
   - Beyla
   - eBPF

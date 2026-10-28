@@ -2,7 +2,7 @@
 title: Configure Beyla language specific agents
 menuTitle: Language specific agents
 description: Configure the options related to Beyla's use of language specific agents
-weight: 33
+weight: 800
 keywords:
   - Beyla
   - eBPF

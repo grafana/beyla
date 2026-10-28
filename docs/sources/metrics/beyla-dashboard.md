@@ -2,13 +2,15 @@
 title: Beyla RED metrics dashboard
 menuTitle: RED metrics dashboard
 description: Learn how to use the Beyla RED metrics dashboard.
-weight: 23
+weight: 100
 keywords:
   - Beyla
   - eBPF
   - Grafana Cloud
   - RED metrics
   - dashboard
+aliases:
+  - ../beyla-dashboard/ # /docs/beyla/<BEYLA_VERSION>/beyla-dashboard/
 ---
 
 # Beyla RED metrics dashboard
@@ -37,7 +39,7 @@ The dashboard contains the following components:
 
 - A list with the slowest HTTP routes for all instrumented services. Since you only
   have a single service, only one entry appears. If you configure Beyla to
-  [report the HTTP routes](../configure/routes-decorator/),
+  [report the HTTP routes](../../configure/routes-decorator/),
   many entries could appear there, one for each HTTP path seen by the server.
 - A list with the slowest GRPC methods. Since the test service in this tutorial only
   serves HTTP, this table is empty.

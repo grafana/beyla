@@ -2,7 +2,7 @@
 title: Beyla global configuration properties
 menuTitle: Global properties
 description: Configure global configuration properties that apply to Beyla core.
-weight: 2
+weight: 200
 keywords:
   - Beyla
   - eBPF

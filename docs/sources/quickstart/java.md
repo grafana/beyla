@@ -2,7 +2,7 @@
 title: "Quickstart: instrument a Java service with Beyla"
 menuTitle: Java quickstart
 description: Learn how to quickly set up and run Beyla to instrument a Java service
-weight: 2
+weight: 300
 keywords:
   - Beyla
   - eBPF

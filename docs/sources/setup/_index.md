@@ -2,7 +2,7 @@
 title: Set up Beyla
 menuTitle: Set up
 description: Learn how to set up and run Beyla.
-weight: 1
+weight: 300
 keywords:
   - Beyla
   - eBPF

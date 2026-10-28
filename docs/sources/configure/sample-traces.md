@@ -2,7 +2,7 @@
 title: Configure Beyla OpenTelemetry trace sampling
 menuTitle: Sample traces
 description: Configure how to sample OpenTelemetry traces.
-weight: 70
+weight: 1200
 keywords:
   - Beyla
   - eBPF

@@ -2,7 +2,7 @@
 title: "Quickstart: instrument a C/C++ service with Beyla"
 menuTitle: C/C++ quickstart
 description: Learn how to quickly set up and run Beyla to instrument a C/C++ service
-weight: 2
+weight: 100
 keywords:
   - Beyla
   - eBPF

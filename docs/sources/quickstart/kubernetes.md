@@ -2,7 +2,7 @@
 title: Beyla and Kubernetes quickstart
 menuTitle: Kubernetes quickstart
 description: Learn how to instrument an application export data with Prometheus to Grafana Cloud.
-weight: 99
+weight: 800
 keywords:
   - Beyla
   - eBPF

@@ -2,7 +2,7 @@
 title: Configure Beyla Prometheus and OpenTelemetry metrics histograms
 menuTitle: Metrics histograms
 description: Configure metrics histograms for Prometheus and OpenTelemetry, and whether to use native histograms and exponential histograms.
-weight: 60
+weight: 1100
 keywords:
   - Beyla
   - eBPF

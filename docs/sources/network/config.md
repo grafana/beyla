@@ -2,7 +2,7 @@
 title: Beyla Network Metrics configuration options
 menuTitle: Configuration
 description: Learn about the configuration options available for Beyla network metrics
-weight: 3
+weight: 400
 keywords:
   - Beyla
   - eBPF

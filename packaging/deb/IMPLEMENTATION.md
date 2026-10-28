@@ -35,6 +35,14 @@ atomically as root-only mode `0600`. Configuration input is checked for
 required values and unsafe/missing service names before these durable secrets
 or the state marker are created. Password values are cleared from debconf
 after successful initial configuration.
+Optional Fleet Management enrollment defaults off. When enabled,
+`configure.py` appends a package-marked root-level `remotecfg` block and stores
+its URL and opaque instance ID in the same root-only Alloy environment file.
+The supplied ID is used as the basic-auth username; Alloy generates and
+persists the remote-config client UUID because the block does not set `id`.
+The existing OTLP runtime token is the password and must have Fleet read
+permission. Do not use pipeline-write credentials. Fleet URL and ID are not
+written or referenced when enrollment is disabled.
 
 ## SDK payload and enrollment
 
@@ -46,6 +54,13 @@ Java, .NET, Node.js, Python, and Ruby payload paths before building. It rewrites
 the injector config's build-container path to the installed
 `/opt/grafana/beyla-sdk/dist` path. `test-package.sh` can also use a synthetic
 payload fixture; that verifies packaging/staging, not the SDK binaries.
+
+The package version is supplied to `build-deb.sh` through `VERSION`; release
+tags are converted to Debian ordering (for example, `v1.2.3-rc.1` becomes
+`1.2.3~rc.1`). Local builds without an explicit version use
+`0.1.0~local1`. The release workflow builds the real image payload for amd64
+and attaches the resulting DEB to the GitHub Release. Publication to an APT
+repository is a separate integration.
 
 In `beyla-only` mode, no application service drop-ins are created. In `sdk`
 mode, `configure.py` requires an explicit unique list of existing systemd
@@ -103,7 +118,7 @@ switch is why changing between modes through `dpkg-reconfigure` is unsupported.
 - `control`, `templates`, `config`: package metadata and debconf input
   declarations/prompting.
 - `postinst`, `postrm`: configure and removal lifecycle.
-- `configure.py`: value validation, credentials, mode selection, and SDK
+- `configure.py`: value validation, credentials, mode selection, Fleet opt-in, and SDK
   service opt-ins.
 - `alloy-config.alloy`, `alloy-dropin.conf`, `validate-alloy.py`: Alloy
   configuration and validation.
@@ -117,6 +132,6 @@ Run the local packaging checks with:
 packaging/deb/test-package.sh
 ```
 
-The package is an unpublished PoC. End-to-end smoke evidence, runtime matrix
+The package remains experimental. End-to-end smoke evidence, runtime matrix
 results, and release qualification claims belong with the specific change or
 PR that produced them; they are not guarantees of this implementation guide.

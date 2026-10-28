@@ -37,6 +37,7 @@ def inputs(root: Path, mode: str = "sdk") -> dict[str, str]:
         "GRAFANA_CLOUD_PROFILES_ENDPOINT": "https://profiles.example/pyroscope",
         "GRAFANA_CLOUD_PROFILES_TENANT_ID": "profiles-tenant",
         "GRAFANA_CLOUD_PROFILES_TOKEN": "profiles-secret",
+        "BEYLA_FLEET_ENABLED": "false",
     }
 
 
@@ -102,6 +103,118 @@ class ConfigureTests(unittest.TestCase):
         self.assertEqual((self.root / "var/lib/grafana-beyla-sdk/mode").read_text().strip(), "beyla-only")
         self.assertFalse((self.root / "etc/systemd/system/demo.service.d").exists())
         self.assertFalse((self.root / "etc/grafana/beyla-sdk/sdk.env").exists())
+
+    def test_fleet_is_absent_by_default(self) -> None:
+        with mock.patch.dict(os.environ, inputs(self.root), clear=True):
+            CONFIGURE.main()
+        config = (CONFIGURE.ETC / "config.alloy").read_text()
+        env = (CONFIGURE.ETC / "alloy.env").read_text()
+        self.assertNotIn("remotecfg", config)
+        self.assertNotIn("FLEET", env)
+
+    def test_enabled_fleet_adds_root_block_and_root_only_inputs(self) -> None:
+        env = inputs(self.root)
+        env.update(
+            {
+                "BEYLA_FLEET_ENABLED": "true",
+                "GRAFANA_CLOUD_FLEET_URL": "https://fleet.example/api/v1/remotecfg",
+                # Opaque IDs are not parsed as URLs or constrained to a numeric tenant.
+                "GRAFANA_CLOUD_FLEET_INSTANCE_ID": "opaque / instance:01",
+            }
+        )
+        with mock.patch.dict(os.environ, env, clear=True):
+            CONFIGURE.main()
+        config = (CONFIGURE.ETC / "config.alloy").read_text()
+        alloy_env = CONFIGURE.ETC / "alloy.env"
+        self.assertIn("remotecfg {", config)
+        self.assertIn('url = sys.env("GRAFANA_CLOUD_FLEET_URL")', config)
+        self.assertIn('username = sys.env("GRAFANA_CLOUD_FLEET_INSTANCE_ID")', config)
+        self.assertIn('password = sys.env("GRAFANA_CLOUD_OTLP_TOKEN")', config)
+        self.assertNotIn('id = sys.env("GRAFANA_CLOUD_FLEET_INSTANCE_ID")', config)
+        self.assertIn('GRAFANA_CLOUD_FLEET_URL="https://fleet.example/api/v1/remotecfg"', alloy_env.read_text())
+        self.assertIn('GRAFANA_CLOUD_FLEET_INSTANCE_ID="opaque / instance:01"', alloy_env.read_text())
+        self.assertEqual(alloy_env.stat().st_mode & 0o777, 0o600)
+
+    def test_fleet_fields_are_required_only_when_enabled(self) -> None:
+        for missing_name in ("GRAFANA_CLOUD_FLEET_URL", "GRAFANA_CLOUD_FLEET_INSTANCE_ID"):
+            env = inputs(self.root)
+            env["BEYLA_FLEET_ENABLED"] = "true"
+            env["GRAFANA_CLOUD_FLEET_URL"] = "https://fleet.example/api/v1/remotecfg"
+            env["GRAFANA_CLOUD_FLEET_INSTANCE_ID"] = "opaque-id"
+            env.pop(missing_name)
+            with mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ValueError, "missing or invalid"):
+                    CONFIGURE.main()
+            self.assertFalse((CONFIGURE.ETC / "alloy.env").exists())
+            env[missing_name] = ""
+            with mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ValueError, "missing or invalid"):
+                    CONFIGURE.main()
+
+    def test_fleet_injection_is_idempotent(self) -> None:
+        env = inputs(self.root)
+        env.update(
+            {
+                "BEYLA_FLEET_ENABLED": "true",
+                "GRAFANA_CLOUD_FLEET_URL": "https://fleet.example/api/v1/remotecfg",
+                "GRAFANA_CLOUD_FLEET_INSTANCE_ID": "opaque-id",
+            }
+        )
+        with mock.patch.dict(os.environ, env, clear=True):
+            CONFIGURE.main()
+            CONFIGURE.configure_mode("sdk", fleet_enabled=True)
+        config = (CONFIGURE.ETC / "config.alloy").read_text()
+        self.assertEqual(config.count("remotecfg {"), 1)
+
+    def test_enabled_to_disabled_rerun_preserves_install_time_fleet_state(self) -> None:
+        enabled = inputs(self.root)
+        enabled.update(
+            {
+                "BEYLA_FLEET_ENABLED": "true",
+                "GRAFANA_CLOUD_FLEET_URL": "https://fleet.example/api/v1/remotecfg",
+                "GRAFANA_CLOUD_FLEET_INSTANCE_ID": "opaque-id",
+            }
+        )
+        with mock.patch.dict(os.environ, enabled, clear=True):
+            CONFIGURE.main()
+        config_path = CONFIGURE.ETC / "config.alloy"
+        env_path = CONFIGURE.ETC / "alloy.env"
+        config_before = config_path.read_text()
+        env_before = env_path.read_text()
+
+        disabled = inputs(self.root)
+        disabled["BEYLA_FLEET_ENABLED"] = "false"
+        # Even if debconf was changed after installation, the existing config
+        # and matching root-only environment stay as the install-time choice.
+        with mock.patch.dict(os.environ, disabled, clear=True):
+            CONFIGURE.main()
+        self.assertEqual(config_path.read_text(), config_before)
+        self.assertEqual(env_path.read_text(), env_before)
+        self.assertIn("remotecfg {", config_path.read_text())
+        self.assertIn("GRAFANA_CLOUD_FLEET_URL=", env_path.read_text())
+
+    def test_rerun_does_not_upgrade_disabled_fleet_state_from_ambient_values(self) -> None:
+        disabled = inputs(self.root)
+        with mock.patch.dict(os.environ, disabled, clear=True):
+            CONFIGURE.main()
+        config_path = CONFIGURE.ETC / "config.alloy"
+        env_path = CONFIGURE.ETC / "alloy.env"
+        config_before = config_path.read_text()
+        env_before = env_path.read_text()
+        rerun = inputs(self.root)
+        rerun.update(
+            {
+                "BEYLA_FLEET_ENABLED": "true",
+                "GRAFANA_CLOUD_FLEET_URL": "https://ambient.example/remotecfg",
+                "GRAFANA_CLOUD_FLEET_INSTANCE_ID": "ambient-id",
+            }
+        )
+        with mock.patch.dict(os.environ, rerun, clear=True):
+            CONFIGURE.main()
+        self.assertEqual(config_path.read_text(), config_before)
+        self.assertEqual(env_path.read_text(), env_before)
+        self.assertNotIn("remotecfg", config_path.read_text())
+        self.assertNotIn("FLEET", env_path.read_text())
 
     def test_refuses_foreign_dropin_before_writing_credentials(self) -> None:
         foreign = self.root / "etc/systemd/system/demo.service.d/90-grafana-beyla-sdk.conf"

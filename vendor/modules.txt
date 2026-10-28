@@ -846,7 +846,7 @@ go.opentelemetry.io/ebpf-profiler/process/processcontext
 go.opentelemetry.io/ebpf-profiler/remotememory
 go.opentelemetry.io/ebpf-profiler/stringutil
 go.opentelemetry.io/ebpf-profiler/support
-# go.opentelemetry.io/obi v0.14.0 => ./.obi-src
+# go.opentelemetry.io/obi v0.15.2 => ./.obi-src
 ## explicit; go 1.26.0
 go.opentelemetry.io/obi/internal/goabi
 go.opentelemetry.io/obi/internal/goversion

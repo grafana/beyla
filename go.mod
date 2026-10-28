@@ -38,7 +38,7 @@ require (
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.161.0
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.161.0
 	go.opentelemetry.io/collector/pdata v1.67.0
-	go.opentelemetry.io/obi v0.14.0
+	go.opentelemetry.io/obi v0.15.2
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/metric v1.46.0
 	go.opentelemetry.io/otel/sdk v1.46.0

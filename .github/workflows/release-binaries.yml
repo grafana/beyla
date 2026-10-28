@@ -32,12 +32,3 @@ jobs:
       packages: write
     with:
       beyla_version: ${{ github.event.release.tag_name }}
-
-  deploy-alloy-beyla-dev:
-    needs: build-alloy-beyla
-    uses: ./.github/workflows/deploy-alloy-beyla-dev.yml
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      beyla_version: ${{ github.event.release.tag_name }}

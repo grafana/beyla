@@ -71,6 +71,19 @@ This option does not affect Go applications, where the `Traceparent` field is al
 
 Enabling this option may increase performance overhead in high request volume scenarios. This option is only useful when generating Beyla traces; it does not affect metrics.
 
+### Populate the trace-context map
+
+Set `ebpf.populate_trace_context` (`BEYLA_BPF_POPULATE_TRACE_CONTEXT`) to `true` when an external reader, such as a profiler, needs the active trace and span IDs for each OS thread from the pinned `traces_ctx_v1` map. The default is `false`.
+
+```yaml
+ebpf:
+  populate_trace_context: true
+```
+
+An enabled `ebpf.log_enricher` also activates map population, independently of this setting. Maintaining current context adds work when the runtime switches execution contexts; Node.js uses an asynchronous callback hook for this purpose.
+
+Go channel-link correlation can use this map as a fallback when the sending goroutine cannot be resolved through protocol maps. That fallback requires population to be enabled. This setting controls the local context map; cross-service propagation uses the [context propagation settings](#context-propagation).
+
 ## Payload extraction
 
 Various cloud and database protocols are implemented on top of HTTP. For example, all AWS S3 (Amazon Web Services) requests are in fact HTTP requests. To create better traces and metrics, Beyla has custom protocol detectors which run on top of HTTP, by performing HTTP payload extraction. You can configure which payload extractors are enabled by default with the following options:

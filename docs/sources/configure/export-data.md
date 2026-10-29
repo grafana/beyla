@@ -326,6 +326,26 @@ If you don't set a protocol Beyla sets the protocol as follows:
 - `grpc`: if the port ends in `4317`, for example `4317`, `14317`, or `24317`.
 - `http/protobuf`: if the port ends in `4318`, for example `4318`, `14318`, or `24318`.
 
+### Traces export compression
+
+Set `otel_traces_export.compression` to `gzip` to compress OTLP trace payloads, or `none` to send them uncompressed. The default is uncompressed. Gzip reduces transfer size at the cost of compression CPU time and is supported by the HTTP and gRPC exporters.
+
+```yaml
+otel_traces_export:
+  endpoint: http://collector:4317
+  protocol: grpc
+  compression: gzip
+```
+
+`OTEL_EXPORTER_OTLP_TRACES_COMPRESSION` sets the traces-specific value and overrides YAML. When no traces-specific value is set, `OTEL_EXPORTER_OTLP_COMPRESSION` supplies the shared value. Both accept `none` and `gzip`.
+
+For example, compress traces while keeping the shared setting uncompressed:
+
+```sh
+export OTEL_EXPORTER_OTLP_COMPRESSION=none
+export OTEL_EXPORTER_OTLP_TRACES_COMPRESSION=gzip
+```
+
 ### Traces instrumentation
 
 The list of instrumentation areas Beyla can collection data from:

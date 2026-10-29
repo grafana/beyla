@@ -2,7 +2,7 @@
 title: "Quickstart: instrument a Python service with Beyla"
 menuTitle: Python quickstart
 description: Learn how to quickly set up and run Beyla to instrument a Python service
-weight: 2
+weight: 500
 keywords:
   - Beyla
   - eBPF

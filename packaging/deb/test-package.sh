@@ -28,9 +28,20 @@ cp "$ROOT_DIR/pkg/webhook/image/opentelemetry-injector/otelinject.conf" "$fixtur
 touch "$fixture/injector/libotelinject.so" "$fixture/agents/jvm/opentelemetry-javaagent.jar" \
   "$fixture/agents/dotnet/glibc/fixture" "$fixture/agents/node.js/register.js" \
   "$fixture/agents/python/glibc/fixture" "$fixture/agents/ruby/glibc/fixture"
-OUTPUT_DIR="$tmp/out" "$PACKAGE_DIR/build-deb.sh" "$fixture"
-deb="$tmp/out/grafana-beyla-sdk_0.1.0~poc1_amd64.deb"
-test "$(dpkg-deb --field "$deb" Package)" = grafana-beyla-sdk
+VERSION=v1.2.3-rc.1 GITHUB_OUTPUT="$tmp/github-output" OUTPUT_DIR="$tmp/out" \
+  "$PACKAGE_DIR/build-deb.sh" "$fixture"
+deb="$tmp/out/beyla_1.2.3~rc.1_amd64.deb"
+grep -Fxq 'version=1.2.3~rc.1' "$tmp/github-output"
+test "$(dpkg-deb --field "$deb" Package)" = beyla
+test "$(dpkg-deb --field "$deb" Version)" = 1.2.3~rc.1
+dpkg --compare-versions "$(dpkg-deb --field "$deb" Version)" lt 1.2.3
+dpkg-deb --control "$deb" "$tmp/control"
+grep -Fxq "Template: beyla/mode" "$tmp/control/templates"
+grep -Fxq "Template: beyla/fleet-enabled" "$tmp/control/templates"
+grep -Fxq "Default: false" "$tmp/control/templates"
+grep -Fxq "Template: beyla/fleet-url" "$tmp/control/templates"
+grep -Fxq "Template: beyla/fleet-instance-id" "$tmp/control/templates"
+! grep -q "Template: grafana-beyla-sdk/" "$tmp/control/templates"
 dpkg-deb --field "$deb" Depends | grep -q 'alloy'
 contents=$(dpkg-deb --contents "$deb")
 for path in \
@@ -51,6 +62,12 @@ grep -Fxq 'jvm_auto_instrumentation_agent_path=/opt/grafana/beyla-sdk/dist/agent
   "$tmp/extracted/opt/grafana/beyla-sdk/dist/injector/otelinject.conf"
 grep -q '127.0.0.1:14318' "$tmp/extracted/usr/share/grafana-beyla-sdk/config.alloy"
 echo "Package fixture tests passed (SDK payload binaries were synthetic)."
+
+if VERSION='not a version' OUTPUT_DIR="$tmp/invalid-version" "$PACKAGE_DIR/build-deb.sh" "$fixture" 2>/dev/null; then
+  echo "Invalid package version unexpectedly succeeded" >&2
+  exit 1
+fi
+test ! -e "$tmp/invalid-version/beyla_not a version_amd64.deb"
 
 # Exercise the portable engine protocol without invoking a real build. The
 # Dockerfile adapter may qualify base images, but must preserve every other

@@ -1,6 +1,6 @@
 # Ubuntu amd64 companion package PoC
 
-This experimental, unpublished DEB configures Grafana Alloy 1.21.0 or newer to
+This experimental Ubuntu amd64 DEB configures Grafana Alloy 1.21.0 or newer to
 collect application telemetry with Beyla, host metrics, and profiles. It is for
 Ubuntu amd64 and does not install a separate Beyla executable or service.
 Alloy runs as root so it can use eBPF. The package keeps its Alloy config
@@ -11,11 +11,18 @@ For package internals and lifecycle ownership, see [the maintainer guide](IMPLEM
 
 ## Build the local package
 
-This PoC package is not published. Build a local DEB from the repository root:
+Build a local DEB from the repository root:
 
 ```sh
 packaging/deb/build-deb.sh
 ```
+
+Set `VERSION` to choose the package version. A leading `v` is removed, and
+SemVer prerelease tags such as `v1.2.3-rc.1` become Debian versions such as
+`1.2.3~rc.1`, which sort before `1.2.3`. Without `VERSION`, local builds use
+`0.1.0~local1`. The release workflow builds the package from the published
+release tag and attaches it as a release asset; package-repository publication
+is separate.
 
 The build uses the existing multi-stage SDK image recipe and requires a
 Docker-compatible container engine, `dpkg-deb`, and network access. The
@@ -27,11 +34,10 @@ the default `docker`. The generated package is written under `dist/`.
 Ensure APT can provide Alloy 1.21.0 or newer, then install the local package:
 
 ```sh
-sudo apt install ./dist/grafana-beyla-sdk_*.deb
+sudo apt install ./dist/beyla_*.deb
 ```
 
-The companion package does not configure an APT source, and it is not
-available from a public package repository.
+The companion package does not configure an APT source.
 
 The interactive debconf setup asks for an instrumentation mode and the
 following inputs:
@@ -42,6 +48,7 @@ following inputs:
 | OTLP traces and SDK metrics | Grafana Cloud OTLP/HTTP endpoint, tenant or instance ID, and token |
 | Prometheus metrics | Grafana Cloud remote-write endpoint, tenant or instance ID, and token |
 | Profiles | Grafana Cloud profiles endpoint, tenant or instance ID, and token |
+| Fleet Management | Disabled by default; when enabled: remote configuration URL and an opaque instance ID |
 | SDK services | In `sdk` mode only: comma-separated names of controlled systemd service units, such as `demo.service` |
 
 Choose `beyla-only` to collect native Beyla telemetry, or `sdk` to opt selected
@@ -61,6 +68,15 @@ installation, debconf can be preseeded through a protected input file instead
 of entering values interactively. The package starts or restarts Alloy to
 apply its configuration. It does not overwrite Alloy's existing vendor config
 or adopt an existing customized Alloy setup.
+
+Fleet Management enrollment is optional and defaults to off. When enabled,
+the package adds a root-level Alloy `remotecfg` block using the supplied Fleet
+URL and opaque instance ID; the instance ID is also used as the basic-auth
+username, and the existing OTLP token is used as its password. The URL and ID
+are required only when enrollment is enabled. Disabling Fleet leaves the
+Fleet block and Fleet-specific environment values out of the package config.
+The reused runtime token must have Fleet read permission; do not use
+pipeline-write credentials.
 
 ## Safety
 

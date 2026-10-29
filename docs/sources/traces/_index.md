@@ -2,13 +2,14 @@
 title: Distributed traces with Beyla
 menuTitle: Distributed traces
 description: Learn about Beyla's distributed traces support.
-weight: 22
+weight: 800
 keywords:
   - Beyla
   - eBPF
   - distributed traces
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/distributed-traces/
+  - ./distributed-traces/ # /docs/beyla/<BEYLA_VERSION>/distributed-traces/
 ---
 
 # Distributed traces with Beyla

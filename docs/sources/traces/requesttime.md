@@ -2,7 +2,7 @@
 title: Measuring total request times, instead of service times
 menuTitle: Measuring request times
 description: Measure request time instead of service time, for your server-side application code.
-weight: 24
+weight: 100
 keywords:
   - Beyla
   - eBPF
@@ -10,6 +10,7 @@ keywords:
   - service time
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/requesttime/
+  - ../requesttime/ # /docs/beyla/<BEYLA_VERSION>/requesttime/
 ---
 
 # Measuring total request times, instead of service times

@@ -2,7 +2,7 @@
 title: "Quickstart: instrument a Node.js service with Beyla"
 menuTitle: Node.js quickstart
 description: Learn how to quickly set up and run Beyla to instrument a Node.js service
-weight: 2
+weight: 400
 keywords:
   - Beyla
   - eBPF

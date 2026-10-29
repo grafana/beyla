@@ -7,16 +7,19 @@ if [ -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
 fi
 . /usr/share/debconf/confmodule
 
-db_input high grafana-beyla-sdk/mode || true
-db_input high grafana-beyla-sdk/otlp-endpoint || true
-db_input high grafana-beyla-sdk/otlp-tenant || true
-db_input high grafana-beyla-sdk/otlp-token || true
-db_input high grafana-beyla-sdk/metrics-endpoint || true
-db_input high grafana-beyla-sdk/metrics-tenant || true
-db_input high grafana-beyla-sdk/metrics-token || true
-db_input high grafana-beyla-sdk/profiles-endpoint || true
-db_input high grafana-beyla-sdk/profiles-tenant || true
-db_input high grafana-beyla-sdk/profiles-token || true
-db_input high grafana-beyla-sdk/services || true
-db_input high grafana-beyla-sdk/open-ports || true
+db_input high beyla/mode || true
+db_input high beyla/fleet-enabled || true
+db_input high beyla/fleet-url || true
+db_input high beyla/fleet-instance-id || true
+db_input high beyla/otlp-endpoint || true
+db_input high beyla/otlp-tenant || true
+db_input high beyla/otlp-token || true
+db_input high beyla/metrics-endpoint || true
+db_input high beyla/metrics-tenant || true
+db_input high beyla/metrics-token || true
+db_input high beyla/profiles-endpoint || true
+db_input high beyla/profiles-tenant || true
+db_input high beyla/profiles-token || true
+db_input high beyla/services || true
+db_input high beyla/open-ports || true
 db_go || true

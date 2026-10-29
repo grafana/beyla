@@ -5,35 +5,52 @@ case "$1" in
   configure)
     if [ "${BEYLA_TEST_NO_DEBCONF:-0}" != 1 ]; then
       . "$P/usr/share/debconf/confmodule"
-      db_get grafana-beyla-sdk/mode; export BEYLA_SDK_MODE="$RET"
-      db_get grafana-beyla-sdk/otlp-endpoint; export GRAFANA_CLOUD_OTLP_ENDPOINT="$RET"
-      db_get grafana-beyla-sdk/otlp-tenant; export GRAFANA_CLOUD_OTLP_TENANT_ID="$RET"
-      db_get grafana-beyla-sdk/otlp-token; export GRAFANA_CLOUD_OTLP_TOKEN="$RET"
-      db_get grafana-beyla-sdk/metrics-endpoint; export GRAFANA_CLOUD_METRICS_ENDPOINT="$RET"
-      db_get grafana-beyla-sdk/metrics-tenant; export GRAFANA_CLOUD_METRICS_TENANT_ID="$RET"
-      db_get grafana-beyla-sdk/metrics-token; export GRAFANA_CLOUD_METRICS_TOKEN="$RET"
-      db_get grafana-beyla-sdk/profiles-endpoint; export GRAFANA_CLOUD_PROFILES_ENDPOINT="$RET"
-      db_get grafana-beyla-sdk/profiles-tenant; export GRAFANA_CLOUD_PROFILES_TENANT_ID="$RET"
-      db_get grafana-beyla-sdk/profiles-token; export GRAFANA_CLOUD_PROFILES_TOKEN="$RET"
-      db_get grafana-beyla-sdk/services; export BEYLA_SDK_SERVICES="$RET"
-      db_get grafana-beyla-sdk/open-ports; export BEYLA_OPEN_PORTS="$RET"
+      db_get beyla/mode; export BEYLA_SDK_MODE="$RET"
+      db_get beyla/fleet-enabled; export BEYLA_FLEET_ENABLED="$RET"
+      case "$BEYLA_FLEET_ENABLED" in
+        true|yes|1)
+          db_get beyla/fleet-url; export GRAFANA_CLOUD_FLEET_URL="$RET"
+          db_get beyla/fleet-instance-id; export GRAFANA_CLOUD_FLEET_INSTANCE_ID="$RET"
+          ;;
+        *)
+          unset GRAFANA_CLOUD_FLEET_URL GRAFANA_CLOUD_FLEET_INSTANCE_ID
+          ;;
+      esac
+      db_get beyla/otlp-endpoint; export GRAFANA_CLOUD_OTLP_ENDPOINT="$RET"
+      db_get beyla/otlp-tenant; export GRAFANA_CLOUD_OTLP_TENANT_ID="$RET"
+      db_get beyla/otlp-token; export GRAFANA_CLOUD_OTLP_TOKEN="$RET"
+      db_get beyla/metrics-endpoint; export GRAFANA_CLOUD_METRICS_ENDPOINT="$RET"
+      db_get beyla/metrics-tenant; export GRAFANA_CLOUD_METRICS_TENANT_ID="$RET"
+      db_get beyla/metrics-token; export GRAFANA_CLOUD_METRICS_TOKEN="$RET"
+      db_get beyla/profiles-endpoint; export GRAFANA_CLOUD_PROFILES_ENDPOINT="$RET"
+      db_get beyla/profiles-tenant; export GRAFANA_CLOUD_PROFILES_TENANT_ID="$RET"
+      db_get beyla/profiles-token; export GRAFANA_CLOUD_PROFILES_TOKEN="$RET"
+      db_get beyla/services; export BEYLA_SDK_SERVICES="$RET"
+      db_get beyla/open-ports; export BEYLA_OPEN_PORTS="$RET"
     fi
+    case "${BEYLA_FLEET_ENABLED:-false}" in
+      true|yes|1) ;;
+      *)
+        BEYLA_FLEET_ENABLED=false
+        unset GRAFANA_CLOUD_FLEET_URL GRAFANA_CLOUD_FLEET_INSTANCE_ID
+        ;;
+    esac
 
     # Preserve a prior companion install as well as customer-owned config.
     # Only accept the pristine Alloy package defaults on first installation.
     if [ ! -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
       if [ -f "$P/etc/default/alloy" ] && grep -Ev '^[[:space:]]*(#.*)?$|^(CONFIG_FILE="/etc/alloy/config.alloy"|OTEL_CONFIG_FILE="/etc/alloy/config.yaml"|CUSTOM_ARGS=""|OTEL_CUSTOM_ARGS=""|ALLOY_OTEL_MODE=""|RESTART_ON_UPGRADE=true)$' "$P/etc/default/alloy" | grep -q .; then
-        echo "grafana-beyla-sdk: custom Alloy settings in /etc/default/alloy are unsupported; refusing to replace them" >&2
+        echo "beyla: custom Alloy settings in /etc/default/alloy are unsupported; refusing to replace them" >&2
         exit 1
       fi
       installed_hash=$(dpkg-query -W -f='${Conffiles}\n' alloy 2>/dev/null | awk '$1 == "/etc/alloy/config.alloy" {print $2}')
       actual_hash=$(md5sum "$P/etc/alloy/config.alloy" 2>/dev/null | awk '{print $1}')
       if [ -z "$installed_hash" ] || [ "$installed_hash" != "$actual_hash" ]; then
-        echo "grafana-beyla-sdk: /etc/alloy/config.alloy differs from the installed Alloy default; refusing to replace it" >&2
+        echo "beyla: /etc/alloy/config.alloy differs from the installed Alloy default; refusing to replace it" >&2
         exit 1
       fi
       if [ -d "$P/etc/systemd/system/alloy.service.d" ] && find "$P/etc/systemd/system/alloy.service.d" -type f -print -quit | grep -q .; then
-        echo "grafana-beyla-sdk: existing Alloy drop-ins are unsupported; refusing to override them" >&2
+        echo "beyla: existing Alloy drop-ins are unsupported; refusing to override them" >&2
         exit 1
       fi
     fi
@@ -45,7 +62,7 @@ case "$1" in
         install -d -o root -g root -m 0755 /etc/grafana/beyla-sdk /var/lib/grafana-beyla-sdk
       fi
       if [ -e "$P/etc/grafana/beyla-sdk/alloy.env" ] || [ -e "$P/etc/grafana/beyla-sdk/config.alloy" ]; then
-        echo "grafana-beyla-sdk: unmarked pre-existing config found; refusing to overwrite it" >&2
+        echo "beyla: unmarked pre-existing config found; refusing to overwrite it" >&2
         exit 1
       fi
       install -m 0644 "$P/usr/share/grafana-beyla-sdk/config.alloy" "$P/etc/grafana/beyla-sdk/config.alloy"
@@ -64,13 +81,13 @@ case "$1" in
       # Password fields are no longer needed after the durable 0600 files have
       # been written. Do not keep a second plaintext token copy in debconf.
       if [ "${BEYLA_TEST_NO_DEBCONF:-0}" != 1 ]; then
-        db_set grafana-beyla-sdk/otlp-token ""
-        db_set grafana-beyla-sdk/metrics-token ""
-        db_set grafana-beyla-sdk/profiles-token ""
+        db_set beyla/otlp-token ""
+        db_set beyla/metrics-token ""
+        db_set beyla/profiles-token ""
       fi
     else
       if [ "$(cat "$P/var/lib/grafana-beyla-sdk/mode")" != "$BEYLA_SDK_MODE" ]; then
-        echo "grafana-beyla-sdk: changing instrumentation mode after install is unsupported; preserving existing configuration" >&2
+        echo "beyla: changing instrumentation mode after install is unsupported; preserving existing configuration" >&2
         exit 1
       fi
     fi
@@ -78,7 +95,7 @@ case "$1" in
     alloy_dropin="$P/etc/systemd/system/alloy.service.d/50-grafana-beyla-sdk.conf"
     if [ -e "$alloy_dropin" ]; then
       if ! cmp -s "$P/usr/share/grafana-beyla-sdk/alloy-service-dropin.conf" "$alloy_dropin"; then
-        echo "grafana-beyla-sdk: preserving modified Alloy drop-in; refusing to overwrite it" >&2
+        echo "beyla: preserving modified Alloy drop-in; refusing to overwrite it" >&2
         exit 1
       fi
     else

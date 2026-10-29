@@ -2,7 +2,7 @@
 title: Configure Beyla service discovery
 menuTitle: Service discovery
 description: Configure how the Beyla service discovery component searches for processes to instrument.
-weight: 20
+weight: 400
 keywords:
   - Beyla
   - eBPF

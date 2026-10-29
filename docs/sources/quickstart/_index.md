@@ -2,7 +2,7 @@
 title: Beyla quickstart guides
 menuTitle: Quickstart
 description: Learn how to set up and run Beyla to instrument multiple languages.
-weight: 2
+weight: 400
 keywords:
   - Beyla
   - eBPF

@@ -15,7 +15,7 @@ case "$1" in
         if [ -f "$dropin" ] && printf '[Service]\n# grafana-beyla-sdk managed\nEnvironmentFile=%s/etc/grafana/beyla-sdk/sdk.env\nEnvironment=OTEL_INJECTOR_SERVICE_NAME=%s\n' "$P" "$service" | cmp -s - "$dropin"; then
           rm -f "$dropin"
         elif [ -e "$dropin" ]; then
-          echo "grafana-beyla-sdk: preserving modified service drop-in $dropin" >&2
+          echo "beyla: preserving modified service drop-in $dropin" >&2
           preserve=1
         fi
       done < "$P/var/lib/grafana-beyla-sdk/services"
@@ -24,7 +24,7 @@ case "$1" in
     if [ -f "$alloy_dropin" ] && printf '[Service]\n# grafana-beyla-sdk managed\nUser=root\nEnvironmentFile=/etc/grafana/beyla-sdk/alloy.env\n' | cmp -s - "$alloy_dropin"; then
       rm -f "$alloy_dropin"
     elif [ -e "$alloy_dropin" ]; then
-      echo "grafana-beyla-sdk: preserving modified Alloy drop-in $alloy_dropin" >&2
+      echo "beyla: preserving modified Alloy drop-in $alloy_dropin" >&2
       preserve=1
     fi
     if command -v systemctl >/dev/null 2>&1; then

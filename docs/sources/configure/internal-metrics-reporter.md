@@ -2,7 +2,7 @@
 title: Configure the Beyla internal metrics reporter
 menuTitle: Internal metrics reporter
 description: Configure how the optional internal metrics reporter component reports metrics on the internal behavior of the auto-instrumentation tool in Prometheus format.
-weight: 80
+weight: 1300
 keywords:
   - Beyla
   - eBPF

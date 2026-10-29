@@ -1,6 +1,6 @@
 ---
-title: Choose between Beyla and OpenTelemetry SDKs
-menuTitle: Beyla and OpenTelemetry SDKs
+title: Compare Beyla and OpenTelemetry SDKs
+menuTitle: Beyla and SDKs
 description: Compare Grafana Beyla eBPF auto-instrumentation with OpenTelemetry SDKs by language and framework, and decide when to use Beyla, SDKs, or both.
 weight: 300
 keywords:
@@ -10,41 +10,14 @@ keywords:
   - SDK
 ---
 
-# Choose between Beyla and OpenTelemetry SDKs
+# Compare Beyla and OpenTelemetry SDKs
 
 Beyla and OpenTelemetry SDKs both produce metrics and traces for your services, but they work in different ways.
-Beyla instruments services from outside the application process, with no code changes.
-OpenTelemetry SDKs and language agents run inside your application and can capture internal, framework, and business detail.
-Many teams use both.
+Beyla uses eBPF to instrument services without code changes.
+OpenTelemetry SDKs and agents run inside your application and can capture internal, framework, and business detail.
+You can also use both.
 
-Use the compatibility matrix and guidance on this page to decide which approach fits each of your services.
-
-## Compatibility matrix
-
-The matrix uses the following ratings:
-
-- _Recommended_: Best default choice
-- _Supported with limitations_: Works, but has important limitations
-- _Not recommended_: Use another approach
-
-{{< fixed-table >}}
-
-| Technology | Beyla: RED metrics | Beyla: traces | OpenTelemetry SDKs: traces | Notes |
-| --- | --- | --- | --- | --- |
-| **Baseline (any service)** | Recommended | Supported with limitations | Recommended | Beyla is strongest as a zero-code baseline layer for RED metrics and service graphs. SDKs remain the default recommendation for detailed distributed tracing. |
-| **Service already using an OpenTelemetry SDK** | Recommended | Not recommended | Recommended | By default, Beyla detects services that export OpenTelemetry traces or metrics, and stops generating that signal for them. If Beyla also generates span metrics or service graphs, set `span.metrics.skip=true` in `OTEL_RESOURCE_ATTRIBUTES` on the SDK service to prevent the Collector or Tempo from generating duplicate metrics from the SDK traces. Beyla adds this attribute to its own traces when it also exports span metrics. |
-| **Go HTTP / HTTP2 / HTTPS** | Recommended | Recommended | Supported with limitations | Go is a first-class case for eBPF tracing. Beyla provides zero-code instrumentation for Go HTTP, HTTP2, and gRPC. You can also add the Go OpenTelemetry SDK for deeper application-level detail. |
-| **Go gRPC** | Recommended | Recommended | Supported with limitations | Go gRPC is one of the strongest Beyla tracing cases. |
-| **Java HTTP (standard servlet / thread-pool)** | Recommended | Supported with limitations | Recommended | Beyla tracing can work for Java in standard thread-pool models, but SDK traces are still the more robust default. |
-| **Java reactive / thread-switching** | Recommended | Not recommended | Recommended | Reactive Java isn't a good fit for eBPF trace correlation. Beyla may emit stand-alone spans that aren't attached to the correct trace. |
-| **Node.js HTTP** | Recommended | Supported with limitations | Recommended | Beyla tracing works reasonably well for Node.js, but SDKs still provide richer spans and stronger log and runtime correlation. |
-| **Python HTTP** | Recommended | Supported with limitations | Recommended | Python tracing support is reasonable, but asynchronous context propagation has framework-specific limitations. |
-| **Python asynchronous** | Recommended | Supported with limitations | Recommended | Beyla supports Python `asyncio`. Use Beyla for zero-code coverage, and add the Python OpenTelemetry SDK for richer spans and stronger runtime correlation. |
-| **Ruby** | Recommended | Supported with limitations | Recommended | Ruby support is reasonable, but asynchronous and framework coverage is narrower than with SDK tracing. |
-| **.NET** | Recommended | Supported with limitations | Recommended | Beyla tracing works well when the .NET service isn't the first in the call chain. If it's the entry point, tracing may not work correctly. Validate behavior before you rely on Beyla traces for .NET in production. |
-| **Mixed polyglot environment** | Recommended | Supported with limitations | Recommended where available | A practical pattern is Beyla everywhere for baseline metrics and service graphs, then SDKs on the services where you need deep tracing, log correlation, runtime metrics, or custom telemetry. |
-
-{{< /fixed-table >}}
+To decide what to use for each service, review when each option fits, then check how well Beyla supports your language.
 
 ## When to use Beyla
 
@@ -61,35 +34,72 @@ Use OpenTelemetry SDKs or agents when you need:
 
 - The most reliable distributed tracing
 - Internal spans and framework or library detail
-- Trace-to-log correlation.
+- Trace-to-log correlation through your logging framework.
   Beyla also supports trace-to-log correlation, including for SDK-instrumented services where the SDK doesn't provide it.
 - Runtime metrics
 - Custom span attributes, events, and business telemetry
 
 ## When to use Beyla and SDKs together
 
+In environments with many languages, a practical pattern is to run Beyla on every service, and add SDKs where you need more detail.
 Use Beyla and SDKs together when you want:
 
 - Beyla to provide baseline metrics and service graphs
-- SDKs to provide deep traces
+- SDKs to provide deep traces, log correlation, runtime metrics, or custom telemetry on the services that need them
 
-## Considerations
+For a service that already uses an OpenTelemetry SDK, use the SDK for traces.
+By default, Beyla detects services that export OpenTelemetry traces or metrics, and stops generating that signal for them.
+If the SDK exports only traces, Beyla still generates RED metrics for the service.
+If you change this default, verify the behavior before you run Beyla tracing and SDK tracing for the same service.
+For details, refer to [Configure Beyla service discovery][exclude-otel].
 
-Keep the following in mind when you plan your instrumentation:
+If Beyla also generates span metrics or service graphs, set `span.metrics.skip=true` in `OTEL_RESOURCE_ATTRIBUTES` on the SDK service to prevent the Collector or Tempo from generating duplicate metrics from the SDK traces.
+Beyla adds this attribute to its own traces when it also exports span metrics.
 
-- For services not written in Go, especially asynchronous or reactive frameworks, validate Beyla trace support before you deploy to production.
-  The same applies to OpenTelemetry SDKs.
-  SDK coverage varies by language and framework, and if no SDK instrumentation exists for your framework, the SDK collects no data.
-- Don't run Beyla tracing and SDK tracing in parallel for the same service unless you have verified the behavior.
-  To control how Beyla handles services that already export OpenTelemetry data, refer to [Exclude instrumented services][exclude-otel].
+## Language and framework support
+
+Use Beyla RED metrics for all of the following languages and frameworks.
+The choice between Beyla and an OpenTelemetry SDK depends on how well Beyla traces your language.
+
+### Beyla traces recommended
+
+Beyla tracing is the recommended default for Go:
+
+- **Go (HTTP, HTTP/2, HTTPS, and gRPC)**: Go is the strongest case for eBPF tracing, and Beyla provides zero-code tracing for Go HTTP, HTTP/2, and gRPC.
+  OpenTelemetry SDK tracing for Go has more limitations than Beyla tracing.
+  You can add the Go OpenTelemetry SDK for deeper application-level detail.
+
+### Beyla traces supported with limitations
+
+For these languages, OpenTelemetry SDKs are the recommended default for traces.
+Validate Beyla traces before you rely on them in production, especially for asynchronous frameworks.
+Validate SDK traces too: SDK coverage varies by language and framework, and if no SDK instrumentation exists for your framework, the SDK collects no data.
+
+- **Java (standard servlet or thread-pool models)**: Beyla tracing can work, but SDK traces are more robust.
+- **Node.js HTTP**: Beyla tracing works reasonably well, but SDKs provide richer spans and stronger log and runtime correlation.
+- **Python HTTP and `asyncio`**: Beyla supports Python `asyncio`, but asynchronous context propagation has framework-specific limitations.
+  Add the Python OpenTelemetry SDK for richer spans and stronger runtime correlation.
+- **Ruby**: Beyla support is reasonable, but asynchronous and framework coverage is narrower than with SDK tracing.
+- **.NET**: Beyla tracing works well when the .NET service isn't the first service in the call chain.
+  If it's the entry point, tracing may not work correctly.
+
+### Beyla traces not recommended
+
+Don't use Beyla traces for the following frameworks:
+
+- **Java reactive or thread-switching frameworks**: Reactive Java isn't a good fit for eBPF trace correlation.
+  Beyla may emit stand-alone spans that aren't attached to the correct trace.
+  Use an OpenTelemetry SDK for traces.
 
 ## Next steps
 
+- [Compare Beyla and OpenTelemetry eBPF Instrumentation][obi]
 - [Beyla requirements and limitations][requirements]
 - [Set up Beyla][setup]
-- [Language quickstart guides][quickstart]
+- [Beyla quickstart guides][quickstart]
 
 [exclude-otel]: ../../configure/service-discovery/#exclude-otel-instrumented-services
+[obi]: ../obi/
 [requirements]: ../requirements/
 [setup]: ../../setup/
 [quickstart]: ../../quickstart/

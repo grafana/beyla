@@ -2,7 +2,7 @@
 title: Beyla requirements and limitations
 menuTitle: Requirements
 description: Check the Linux kernel, Go version, and Linux capability requirements for Grafana Beyla, and learn what eBPF-based auto-instrumentation can and can't capture.
-weight: 400
+weight: 500
 keywords:
   - Beyla
   - eBPF
@@ -19,7 +19,6 @@ Before you set up Beyla, check that your hosts meet the following requirements, 
 Beyla runs on Linux and requires eBPF support in the host kernel.
 
 Beyla requires Linux kernel 5.8 or later, with BPF Type Format ([BTF][btf]) enabled.
-Most Linux distributions enable BTF by default with kernel 5.14 or later.
 To check whether your kernel has BTF enabled, verify that `/sys/kernel/btf/vmlinux` exists.
 If you need to recompile your kernel to enable BTF, set the `CONFIG_DEBUG_INFO_BTF=y` configuration option.
 
@@ -53,7 +52,7 @@ For application observability, Beyla requires the following capabilities:
 Some features and kernels need more capabilities:
 
 - Trace context propagation, and network observability with Linux Traffic Control, require `CAP_NET_ADMIN`.
-- Kernels earlier than 5.11 require `CAP_SYS_RESOURCE`.
+- Kernels earlier than 5.11 also require `CAP_SYS_RESOURCE`.
 - Kernels earlier than 5.8, such as the RHEL 8 kernel 4.18, require `CAP_SYS_ADMIN` instead of the individual capabilities.
 
 `CAP_SYS_ADMIN` grants all the capabilities that Beyla needs.
@@ -62,19 +61,19 @@ For the full list of capabilities, the capabilities each feature needs, and exam
 
 ## Limitations
 
-Beyla provides generic metrics and transaction-level trace spans.
-It doesn't create spans for the internal operations of your code.
-To choose the granularity of instrumentation and focus on your critical operations, use language agents or manual instrumentation.
+Beyla creates metrics and spans for the requests that your services receive and send, such as HTTP, gRPC, and database calls.
+It doesn't create spans for internal functions in your code.
+To instrument specific parts of your code, such as critical operations, add spans with an OpenTelemetry SDK.
 
 Beyla trace support varies by language and framework.
 For example, Beyla may not correlate spans correctly for reactive Java frameworks.
-To compare Beyla and SDK support for your languages and frameworks, refer to [Choose between Beyla and OpenTelemetry SDKs][compare].
+To compare Beyla and SDK support for your languages and frameworks, refer to [Compare Beyla and OpenTelemetry SDKs][compare].
 
 ## Next steps
 
 - [Set up Beyla][setup]
 - [Beyla security, permissions, and capabilities][security]
-- [Language quickstart guides][quickstart]
+- [Beyla quickstart guides][quickstart]
 
 [btf]: https://www.kernel.org/doc/html/latest/bpf/btf.html
 [distributed-traces]: ../../traces/

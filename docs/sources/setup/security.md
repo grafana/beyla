@@ -2,7 +2,7 @@
 title: Beyla security, permissions, and capabilities
 menuTitle: Security
 description: Privileges and capabilities required by Beyla
-weight: 700
+weight: 800
 keywords:
   - Beyla
   - eBPF

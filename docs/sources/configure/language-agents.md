@@ -21,7 +21,7 @@ YAML section: `nodejs`
 | `enabled`<p>`BEYLA_NODEJS_ENABLED`</p> | Inject the Node.js agent for context propagation, runtime metrics, and manual spans. | boolean | `true` |
 | `manual_spans`<p>`BEYLA_NODEJS_MANUAL_SPANS`</p> | Capture spans created through the OpenTelemetry API when no SDK is registered. Requires agent injection and Node.js 14 or later. | boolean | `false` |
 
-Beyla injects the Node.js agent through the inspector interface. It connects to `127.0.0.1:9229`, opening the inspector with `SIGUSR1` when necessary. Injection is skipped if the signal would terminate the process or if Beyla detects a custom `SIGUSR1` handler. Set `enabled` to `false` if your application uses that signal.
+Beyla injects the Node.js agent through the inspector interface. It connects to `127.0.0.1:9229`, opening the inspector with `SIGUSR1` when necessary. Before sending the signal, Beyla checks whether it would stop the process or invoke a custom handler. If so, it skips that injection path. Set `enabled` to `false` if your application uses that signal.
 
 Node.js uses `libssl` for TLS traffic, which Beyla captures with eBPF. The agent provides context propagation and runtime metrics. Disabling injection also disables those agent features.
 

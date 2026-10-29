@@ -181,7 +181,7 @@ attributes:
 
 The `beyla_stat_tcp_successful_connections` selector accepts `network.tcp.handshake.role`, also spelled `network_tcp_handshake_role`. This attribute is opt-in. Values are `client` for the endpoint that initiated the connection, `server` for the accepting endpoint, and `unknown` when the role is unavailable.
 
-To add the role to the default attributes:
+To export all available attributes, including the role:
 
 ```yaml
 attributes:
@@ -401,7 +401,7 @@ To use this feature, specify the group name and the list of attributes you want 
 The following groups accept lists of attribute names:
 
 - `k8s_app_meta`: Kubernetes-specific metadata such as Pod name, namespace, container name, Pod UID, and more.
-- `app`: attributes shared by application metrics, including HTTP, RPC, database, messaging, DNS, GenAI, MCP, runtime, and GPU metrics. Network-flow and process metrics use separate groups.
+- `app`: attributes shared by application metrics, including HTTP, RPC, database, messaging, DNS, GenAI, MCP, and GPU metrics. Network-flow and process metrics use separate groups.
 
 Example configuration:
 

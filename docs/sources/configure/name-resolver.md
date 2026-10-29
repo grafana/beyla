@@ -29,7 +29,6 @@ The possible values for the name resolver sources are:
 - `rdns`. Beyla tracks DNS requests for instrumentation purposes. This option uses that information to build internal cache of DNS resolved names.
 - `ecs`. Resolve ECS task IP addresses through the ECS inventory. Requires detected ECS metadata and AWS credentials with `ecs:ListTasks` and `ecs:DescribeTasks` permissions.
 - `route53`. Resolve IP addresses from configured Route53 hosted zones. Requires detected EC2 metadata and `route53:ListResourceRecordSets` permission for those zones.
-
 - `gce`. Resolve Compute Engine VM addresses to managed instance group names. Requires detected GCE metadata and read access to the Compute Engine inventory.
 - `azure`. Resolve Azure VM addresses to scale-set names. Requires detected Azure VM metadata and read access to VM, scale-set, and network-interface inventories.
 
@@ -72,7 +71,7 @@ cloud_metadata:
     refresh_interval: 5m
 ```
 
-Beyla reads A and AAAA records containing IP addresses from the specified zones. Names use lowercase and exported without the trailing dot. Alias records, CNAME records, and wildcard names are skipped. Choose zones that describe the services you want Beyla to resolve.
+Beyla reads A and AAAA records containing IP addresses from the specified zones. Names use lowercase and are exported without the trailing dot. Alias records, CNAME records, and wildcard names are skipped. Choose zones that describe the services you want Beyla to resolve.
 
 Route53 polling uses its own refresh interval, with jitter to spread requests and backoff when AWS throttles the client.
 
@@ -98,7 +97,7 @@ name_resolver:
     zone: europe-west3-a
 ```
 
-The Google client uses application default credentials. The Compute Viewer role provides read access to the inventory. Scope discovery covers managed instance groups in the configured zone.
+The Google client uses application default credentials. The [Compute Viewer role](https://docs.cloud.google.com/iam/docs/roles-permissions/compute#compute.viewer) provides read access to the inventory. Scope discovery covers managed instance groups in the configured zone.
 
 For Azure scale sets:
 
@@ -110,4 +109,4 @@ name_resolver:
     resource_group: production
 ```
 
-The Azure client uses the default Azure credential chain. The Reader role at the relevant scope provides the required read access. Both Uniform and Flexible scale sets are supported. The cloud inventory refresh interval is controlled by `cloud_metadata.refresh_interval`.
+The Azure client uses the default Azure credential chain. The [Reader role](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/general#reader) at the relevant scope provides the required read access. Both Uniform and Flexible scale sets are supported. The cloud inventory refresh interval is controlled by `cloud_metadata.refresh_interval`.

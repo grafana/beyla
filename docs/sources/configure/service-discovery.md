@@ -516,10 +516,10 @@ The additional harvesters read application files accessible through the target p
 | --- | --- | --- |
 | `dotnet` | ASP.NET controller attributes and minimal API route registrations | Readable managed entry assembly with route metadata or IL |
 | `python` | Flask, Django, and FastAPI declarations | Readable application Python source files |
-| `php` | Laravel, Symfony, and Slim declarations | Readable project source and configuration files |
+| `php` | `Laravel`, `Symfony`, and `Slim` declarations | Readable project source and configuration files |
 | `ruby` | Rails route declarations | Readable application route files |
 
-Harvested routes supplement Beyla's route detection. Dynamically constructed routes might not be recoverable from static files.
+Harvested routes supplement route detection in Beyla. Dynamically constructed routes might not be recoverable from static files.
 
 For example, disable the Python and Ruby harvesters and give Java more time to initialize:
 

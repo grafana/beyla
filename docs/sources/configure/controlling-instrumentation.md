@@ -88,7 +88,7 @@ Go channel-link correlation can use this map as a fallback when the sending goro
 
 Various cloud and database protocols are implemented on top of HTTP. For example, all AWS S3 (Amazon Web Services) requests are in fact HTTP requests. To create better traces and metrics, Beyla has custom protocol detectors which run on top of HTTP, by performing HTTP payload extraction. You can configure which payload extractors are enabled by default with the following options:
 
-### GraphQL detection
+### Detect GraphQL operations
 
 YAML section: `ebpf.payload_extraction.http.graphql`
 
@@ -112,17 +112,11 @@ ebpf:
 
 Detected operations add `graphql.operation.type` (`query`, `mutation`, or `subscription`) and, for a named operation, `graphql.operation.name` to the span. To export the captured query document, include `graphql.document` through [trace attribute selection](../metrics-traces-attributes/#select-trace-attributes). The document is opt-in and is exported without redaction.
 
-YAML section:
-
-```
-ebpf:
-  http:
-    elasticsearch:
-```
+YAML section: `ebpf.payload_extraction.http.elasticsearch`
 
 | YAML option<p>Environment variable</p>                    | Description                                                         | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------------- | ------- | ------- |
-| `enabled`<p>`BEYLA_HTTP_HTTP_ELASTICSEARCH_ENABLED`</p>   | Enable Elasticsearch protocol detection in HTTP payload processing. See below for details. | boolean | (true)  |
+| `enabled`<p>`BEYLA_HTTP_ELASTICSEARCH_ENABLED`</p>   | Enable Elasticsearch protocol detection in HTTP payload processing. See below for details. | boolean | (false)  |
 
 `Opensearch` is a fork of `Elasticsearch` and therefore also supported.
 
@@ -132,17 +126,11 @@ ebpf:
 | `Opensearch`        | /_search, /_msearch, /_bulk, /_doc                                                       | 3.0.0+   |
 
 
-YAML section:
-
-```
-ebpf:
-  http:
-    aws:
-```
+YAML section: `ebpf.payload_extraction.http.aws`
 
 | YAML option<p>Environment variable</p>          | Description                                                        | Type    | Default |
 | ----------------------------------------------- | ------------------------------------------------------------------ | ------- | ------- |
-| `enabled`<p>`BEYLA_HTTP_HTTP_AWS_ENABLED`</p>   | Enable AWS services protocol detection in HTTP payload processing. See below for list of AWS supported protocols. | boolean | (true)  |
+| `enabled`<p>`BEYLA_HTTP_AWS_ENABLED`</p>   | Enable AWS services protocol detection in HTTP payload processing. See below for list of AWS supported protocols. | boolean | (false)  |
 
 List of supported AWS services protocol detectors:
 
@@ -351,10 +339,9 @@ ebpf:
 
 | YAML option<p>Environment variable</p>            | Description                                                         | Type    | Default | Maximum |
 | ------------------------------------------------- | ------------------------------------------------------------------- | ------- | ------- | ------- |
-| `aerospike`<p>`BEYLA_BPF_BUFFER_SIZE_AEROSPIKE`</p> | Auxiliary buffer size (in bytes) for Aerospike protocol capture.  | int     | (0)     | 8192    |
-| `http`<p>`BEYLA_BPF_BUFFER_SIZE_HTTP`</p>         | Auxiliary buffer size (in bytes) for HTTP protocol capture.         | int     | (0)     | 8192    |
-| `mysql`<p>`BEYLA_BPF_BUFFER_SIZE_MYSQL`</p>       | Auxiliary buffer size (in bytes) for MYSQL protocol capture.        | int     | (0)     | 8192    |
-| `postgres`<p>`BEYLA_BPF_BUFFER_SIZE_POSTGRES`</p> | Auxiliary buffer size (in bytes) for POSTGRESQL protocol capture.   | int     | (0)     | 8192    |
+| `http`<p>`BEYLA_BPF_BUFFER_SIZE_HTTP`</p>         | Auxiliary buffer size (in bytes) for HTTP protocol capture.         | int     | (0)     | 262144    |
+| `mysql`<p>`BEYLA_BPF_BUFFER_SIZE_MYSQL`</p>       | Auxiliary buffer size (in bytes) for MYSQL protocol capture.        | int     | (0)     | 65536    |
+| `postgres`<p>`BEYLA_BPF_BUFFER_SIZE_POSTGRES`</p> | Auxiliary buffer size (in bytes) for POSTGRESQL protocol capture.   | int     | (0)     | 65536    |
 | `aerospike`<p>`BEYLA_BPF_BUFFER_SIZE_AEROSPIKE`</p> | Auxiliary buffer size (in bytes) for Aerospike capture and response reassembly. | int | (0) | 65536 |
 | `kafka`<p>`BEYLA_BPF_BUFFER_SIZE_KAFKA`</p>       | Auxiliary buffer size (in bytes) for Kafka protocol capture.        | int     | (0)     | 65536   |
 | `mssql`<p>`BEYLA_BPF_BUFFER_SIZE_MSSQL`</p>       | Auxiliary buffer size (in bytes) for MSSQL protocol capture.        | int     | (0)     | 65536   |
@@ -373,9 +360,9 @@ YAML section: `ebpf`
 | `kafka_consumer_group_cache_size`<p>`OTEL_KAFKA_CONSUMER_GROUP_CACHE_SIZE`</p> | Maximum number of processes whose membership is retained. Must be greater than `0`. | integer | `4096` |
 | `kafka_consumer_group_ttl`<p>`BEYLA_BPF_KAFKA_CONSUMER_GROUP_TTL`</p> | Membership lifetime after the last group request and observation period before attributing fetches. Must be greater than `0`. | Duration | `2m` |
 
-Keep the TTL above the heartbeat interval and the longest expected rebalance. For classic consumers sharing a process across groups, a rebalance longer than the TTL can cause fetches to be attributed to another group. A longer TTL delays attribution for newly observed processes.
+Keep the TTL above the heartbeat interval and the longest expected consumer group reassignment. For classic consumers sharing a process across groups, a group reassignment longer than the TTL can cause fetches to be attributed to another group. A longer TTL delays attribution for newly observed processes.
 
-For example, allow for rebalances lasting up to five minutes:
+For example, allow for group reassignments lasting up to five minutes:
 
 ```yaml
 ebpf:

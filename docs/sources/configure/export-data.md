@@ -535,7 +535,7 @@ To enable `application_runtime` only for a specific process, use the per-service
 discovery:
   instrument:
     - name: my-java-service
-      exe_path: ".*/java"
+      exe_path: "*/java"
       metrics:
         features:
           - application_runtime

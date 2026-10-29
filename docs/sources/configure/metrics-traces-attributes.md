@@ -117,6 +117,21 @@ In the previous example, all metrics with a name starting with `http_` or `http.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
+### Select messaging metric attributes
+
+Both `messaging_client_operation_duration` and `messaging_process_duration` include `messaging.consumer.group.name`, `messaging.destination.subscription.name`, and `error.type` by default when available. The client-operation metric also includes `messaging.operation.type`. Underscore spellings, such as `messaging_consumer_group_name`, are accepted.
+
+Group names depend on [Kafka membership attribution](../controlling-instrumentation/#kafka-consumer-group-attribution). To remove group and subscription dimensions while retaining other defaults:
+
+```yaml
+attributes:
+  select:
+    messaging_client_operation_duration:
+      exclude: ["messaging.consumer.group.name", "messaging.destination.subscription.name"]
+    messaging_process_duration:
+      exclude: ["messaging_consumer_group_name", "messaging_destination_subscription_name"]
+```
+
 ### Select TCP handshake roles
 
 The `beyla_stat_tcp_successful_connections` selector accepts `network.tcp.handshake.role`, also spelled `network_tcp_handshake_role`. This attribute is opt-in. Values are `client` for the endpoint that initiated the connection, `server` for the accepting endpoint, and `unknown` when the role is unavailable.

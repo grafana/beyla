@@ -349,6 +349,29 @@ ebpf:
 
 For all buffer size options, `0` disables the auxiliary buffer. The Aerospike buffer enables kernel-side reassembly of the first response frame. This improves status code capture for clients that read the response header and body separately.
 
+## Kafka consumer-group attribution
+
+Beyla learns Kafka consumer-group membership from group-coordination traffic and uses a bounded cache to attribute consumer operations to groups.
+
+YAML section: `ebpf`
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `kafka_consumer_group_cache_size`<p>`OTEL_KAFKA_CONSUMER_GROUP_CACHE_SIZE`</p> | Maximum number of processes whose membership is retained. Must be greater than `0`. | integer | `4096` |
+| `kafka_consumer_group_ttl`<p>`BEYLA_BPF_KAFKA_CONSUMER_GROUP_TTL`</p> | Membership lifetime after the last group request and observation period before attributing fetches. Must be greater than `0`. | Duration | `2m` |
+
+Keep the TTL above the heartbeat interval and the longest expected rebalance. For classic consumers sharing a process across groups, a rebalance longer than the TTL can cause fetches to be attributed to another group. A longer TTL delays attribution for newly observed processes.
+
+For example, allow for rebalances lasting up to five minutes:
+
+```yaml
+ebpf:
+  kafka_consumer_group_cache_size: 4096
+  kafka_consumer_group_ttl: 6m
+```
+
+The [messaging metric selectors](../metrics-traces-attributes/#select-messaging-metric-attributes) control which learned group attributes appear on metrics.
+
 ## Other attributes
 
 YAML section: `ebpf`

@@ -34,6 +34,7 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/config"
 	botel "github.com/grafana/beyla/v3/pkg/export/otel"
+	_ "github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
 	maps2 "github.com/grafana/beyla/v3/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"

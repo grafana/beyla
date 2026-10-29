@@ -257,7 +257,8 @@ var DefaultConfig = Config{
 		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
-		TTL: defaultMetricsTTL,
+		TTL:               defaultMetricsTTL,
+		ConnectionInfoTTL: export.DefaultConnectionInfoTTL,
 	},
 	Traces: otelcfg.TracesConfig{
 		Protocol:          otelcfg.ProtocolUnset,
@@ -291,6 +292,7 @@ var DefaultConfig = Config{
 			instrumentations.InstrumentationALL,
 		},
 		TTL:                         defaultMetricsTTL,
+		ConnectionInfoTTL:           export.DefaultConnectionInfoTTL,
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	TracePrinter: debug.TracePrinterDisabled,

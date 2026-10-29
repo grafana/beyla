@@ -9,12 +9,24 @@ import (
 	"math/bits"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/invopop/jsonschema"
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 )
+
+// DefaultConnectionInfoTTL is the retention period for observed connection-info edges.
+const DefaultConnectionInfoTTL = 15 * time.Minute
+
+// ConnectionInfoTTLOrDefault returns ttl when positive, otherwise the default retention period.
+func ConnectionInfoTTLOrDefault(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		return DefaultConnectionInfoTTL
+	}
+	return ttl
+}
 
 // Features is a bitmask of enabled metric features.
 // Each Features value can contain data about a single feature or a combination of OR-ed features.
@@ -56,7 +68,9 @@ const (
 	FeatureGraph
 	FeatureApplicationRuntime
 	FeatureEBPF
-	FeatureAll = Features(^uint(0)) // all bits to 1
+	FeatureConnectionInfo
+	// FeatureAll preserves the legacy all-features behavior while keeping connection info opt-in.
+	FeatureAll = Features(^uint(0)) &^ FeatureConnectionInfo
 )
 
 // FeatureStats enables all stat metrics, including TCP IO.
@@ -228,6 +242,9 @@ func (f Features) Names() []string {
 			remaining = Features(maps.Bits(remaining) &^ maps.Bits(feature))
 		}
 	}
+	if remaining.has(FeatureConnectionInfo) {
+		names = append(names, "application_service_graph_connection_info")
+	}
 	return names
 }
 
@@ -246,20 +263,37 @@ func (f Features) MarshalYAML() (any, error) {
 }
 
 func LoadFeatures(features []string) (Features, error) {
+	return loadFeatures(features, false)
+}
+
+// LoadV2Features loads Config v2 metric features, including v2-only opt-ins.
+func LoadV2Features(features []string) (Features, error) {
+	return loadFeatures(features, true)
+}
+
+func loadFeatures(features []string, allowV2 bool) (Features, error) {
 	if len(features) == 0 {
 		return FeatureEmpty, nil
 	}
 	// convert the public data type to the internal representation
 	feats := Features(0)
+	validNames := validFeatureNames()
+	if allowV2 {
+		validNames = append(validNames, "application_service_graph_connection_info")
+	}
 	for _, f := range features {
 		name := strings.TrimSpace(f)
 		if name == "" {
 			continue
 		}
+		if allowV2 && name == "application_service_graph_connection_info" {
+			feats |= FeatureConnectionInfo
+			continue
+		}
 		feature, ok := FeatureMapper[name]
 		if !ok {
 			return Features(0), fmt.Errorf("unknown metrics feature %q (valid features: %s)",
-				name, strings.Join(validFeatureNames(), ", "))
+				name, strings.Join(validNames, ", "))
 		}
 		feats |= feature
 	}
@@ -312,7 +346,7 @@ func (f Features) Empty() bool {
 }
 
 func (f Features) AnyAppO11yMetric() bool {
-	return f.any(AppO11yFeatures | FeatureApplicationRuntime)
+	return f.any(AppO11yFeatures | FeatureApplicationRuntime | FeatureConnectionInfo)
 }
 
 func (f Features) SpanMetrics() bool {
@@ -346,6 +380,15 @@ func (f Features) LegacySpanMetrics() bool {
 
 func (f Features) ServiceGraph() bool {
 	return f.any(FeatureGraph)
+}
+
+func (f Features) ConnectionInfo() bool {
+	return f.any(FeatureConnectionInfo)
+}
+
+// ServiceTopology reports whether service-graph or connection-info metrics are enabled.
+func (f Features) ServiceTopology() bool {
+	return f.ServiceGraph() || f.ConnectionInfo()
 }
 
 func (f Features) AppRuntime() bool {

@@ -108,6 +108,31 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 - `application_service_graph`: Application-level service graph metrics.
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
+- `application_service_graph_connection_info`: An opt-in presence gauge named
+  `traces_service_graph_connection_info`. It is independent of service graph
+  request and latency metrics, is not enabled by default, and is not included in
+  `application`, `application_service_graph`, or `all`.
+
+  Beyla sets the gauge to `1` for an observed client-to-destination edge when
+  the client service and destination identities are available. A matching
+  server span is not required. The gauge remains active for 15 minutes after the
+  last observation.
+
+  Enable it in the global `metrics.features` list:
+
+  ```yaml
+  metrics:
+    features:
+      - application_service_graph_connection_info
+  prometheus_export:
+    port: 8999
+  ```
+
+  This metric serves a similar topology-discovery purpose to [the Tempo
+  connection information metric](/docs/tempo/latest/metrics-from-traces/service_graphs/#connection-information-metric),
+  but Beyla derives it from observed client traffic. Beyla exports the metric
+  directly; it does not require enabling the Tempo
+  `service-graphs-connection-info` processor.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more

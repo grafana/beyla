@@ -151,6 +151,12 @@ func (ex *Expirer[Record, Metric, ValType]) removeOutdated(ctx context.Context) 
 	}
 }
 
+// Expire removes expired data points regardless of when the last record was seen.
+func (ex *Expirer[Record, Metric, ValType]) Expire() {
+	ex.removeOutdated(ex.ctx)
+	ex.lastExpiration = ex.clock()
+}
+
 func (ex *Expirer[Record, Metric, ValType]) deleteMetricInstance(ctx context.Context, attrs attribute.Set) {
 	if ex.log.Enabled(ex.ctx, slog.LevelDebug) {
 		ex.logger(attrs).Debug("deleting old OTEL metric")

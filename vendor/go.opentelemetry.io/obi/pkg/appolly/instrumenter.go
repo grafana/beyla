@@ -218,7 +218,7 @@ func setupMetricsSubPipeline(
 	}
 
 	var spanNameAggregatedMetrics *msg.Queue[[]request.Span]
-	if jointMetricsConfig.Features.AppOrSpan() || jointMetricsConfig.Features.ServiceGraph() {
+	if jointMetricsConfig.Features.AppOrSpan() || jointMetricsConfig.Features.ServiceTopology() {
 		spanNameAggregatedMetrics = msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "spanNameAggregatedMetrics")
 
 		swi.Add(transform.SpanNameLimiter(transform.SpanNameLimiterConfig{
@@ -260,7 +260,7 @@ func setupMetricsSubPipeline(
 	}
 
 	if jointMetricsConfig.Features.AppOrSpan() ||
-		jointMetricsConfig.Features.ServiceGraph() ||
+		jointMetricsConfig.Features.ServiceTopology() ||
 		runtimeMetricsEnabled.Any() {
 		swi.Add(prom.PrometheusEndpoint(
 			ctxInfo,

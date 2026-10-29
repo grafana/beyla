@@ -75,17 +75,29 @@ Enabling this option may increase performance overhead in high request volume sc
 
 Various cloud and database protocols are implemented on top of HTTP. For example, all AWS S3 (Amazon Web Services) requests are in fact HTTP requests. To create better traces and metrics, Beyla has custom protocol detectors which run on top of HTTP, by performing HTTP payload extraction. You can configure which payload extractors are enabled by default with the following options:
 
-YAML section:
+### GraphQL detection
 
-```
+YAML section: `ebpf.payload_extraction.http.graphql`
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `enabled`<p>`BEYLA_HTTP_GRAPHQL_ENABLED`</p> | Detect GraphQL operations in HTTP request bodies. | boolean | `false` |
+
+Beyla detects GraphQL in inbound HTTP `POST` requests by parsing their JSON bodies. Detection is independent of the URL path. The HTTP capture buffer must contain enough of the request to parse its body. Set `ebpf.buffer_sizes.http` (`BEYLA_BPF_BUFFER_SIZE_HTTP`) in bytes; its default is `0`, which disables the auxiliary HTTP buffer, and its maximum is `262144`.
+
+For example:
+
+```yaml
 ebpf:
-  http:
-    graphql:
+  buffer_sizes:
+    http: 16384
+  payload_extraction:
+    http:
+      graphql:
+        enabled: true
 ```
 
-| YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
-| --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
-| `enabled`<p>`BEYLA_HTTP_GRAPHQL_ENABLED`</p>              | Enable GraphQL protocol detection in HTTP payload processing. | boolean | (true)  |
+Detected operations add `graphql.operation.type` (`query`, `mutation`, or `subscription`) and, for a named operation, `graphql.operation.name` to the span. To export the captured query document, include `graphql.document` through [trace attribute selection](../metrics-traces-attributes/#select-trace-attributes). The document is opt-in and is exported without redaction.
 
 YAML section:
 

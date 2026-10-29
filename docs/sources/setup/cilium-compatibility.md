@@ -2,13 +2,14 @@
 title: Cilium compatibility
 menuTitle: Cilium compatibility
 description: Compatibility notes when running Beyla alongside Cilium
-weight: 22
+weight: 800
 keywords:
   - Beyla
   - eBPF
   - distributed traces
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/cilium-compatibility/
+  - ../cilium-compatibility/ # /docs/beyla/<BEYLA_VERSION>/cilium-compatibility/
 ---
 
 # Cilium compatibility

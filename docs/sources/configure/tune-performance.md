@@ -2,7 +2,7 @@
 title: Configure Beyla performance
 menuTitle: Tune performance
 description: Configure how the eBPF tracer component instruments HTTP and GRPC services of external processes and creates traces to forward to the next stage of the pipeline.
-weight: 90
+weight: 1400
 keywords:
   - Beyla
   - eBPF

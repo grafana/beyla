@@ -2,7 +2,7 @@
 title: "Quickstart: instrument a Ruby service with Beyla"
 menuTitle: Ruby quickstart
 description: Learn how to quickly set up and run Beyla to instrument a Ruby service
-weight: 2
+weight: 600
 keywords:
   - Beyla
   - eBPF

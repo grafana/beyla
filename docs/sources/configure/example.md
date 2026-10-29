@@ -2,7 +2,7 @@
 title: Beyla configuration YAML example
 menuTitle: YAML example
 description: Example Beyla configuration YAML example.
-weight: 100
+weight: 1500
 keywords:
   - Beyla
   - eBPF

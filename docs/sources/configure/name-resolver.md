@@ -2,7 +2,7 @@
 title: Configure Beyla host name resolution
 menuTitle: Name Resolver
 description: Configure Beyla service host and peer name resolution
-weight: 31
+weight: 600
 keywords:
   - Beyla
   - eBPF

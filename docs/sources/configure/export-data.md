@@ -2,7 +2,7 @@
 title: Configure Beyla Prometheus and OpenTelemetry data export
 menuTitle: Export data
 description: Configure the Beyla components to export Prometheus and OpenTelemetry metrics and OpenTelemetry traces, including exporting to Grafana Cloud Prometheus and OTLP endpoints.
-weight: 10
+weight: 300
 keywords:
   - Beyla
   - eBPF

@@ -2,7 +2,7 @@
 title: Beyla exported metrics
 menuTitle: Exported metrics
 description: Learn about the HTTP/gRPC metrics Beyla can export.
-weight: 21
+weight: 700
 keywords:
   - Beyla
   - eBPF

@@ -2,7 +2,7 @@
 title: Beyla security, permissions, and capabilities
 menuTitle: Security
 description: Privileges and capabilities required by Beyla
-weight: 22
+weight: 700
 keywords:
   - Beyla
   - eBPF
@@ -10,6 +10,7 @@ keywords:
   - capabilities
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/security/
+  - ../security/ # /docs/beyla/<BEYLA_VERSION>/security/
 ---
 
 # Beyla security, permissions, and capabilities

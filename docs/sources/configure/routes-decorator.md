@@ -2,7 +2,7 @@
 title: Configure Beyla routes decorator
 menuTitle: Routes decorator
 description: Configure the routes decorator component before Beyla sends data to the next stage of the pipeline.
-weight: 50
+weight: 1000
 keywords:
   - Beyla
   - eBPF

@@ -2,7 +2,7 @@
 title: Deploy Beyla in Kubernetes
 menuTitle: Kubernetes
 description: Learn how to deploy Beyla in Kubernetes.
-weight: 3
+weight: 400
 keywords:
   - Beyla
   - eBPF

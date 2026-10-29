@@ -2,7 +2,7 @@
 title: Run Beyla in Kubernetes using Grafana Alloy Helm's chart
 menuTitle: Grafana Alloy Helm chart
 description: Learn how to instrument an application export data with Prometheus to Grafana Cloud
-weight: 4
+weight: 600
 keywords:
   - Beyla
   - eBPF

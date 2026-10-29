@@ -4,11 +4,13 @@ menuTitle: OpenTelemetry eBPF Instrumentation instead of Beyla
 
 description: How to use upstream OpenTelemetry eBPF instrumentation as a replacement for Beyla
 
-weight: 24
+weight: 500
 keywords:
   - Beyla
   - eBPF
   - OpenTelemetry eBPF Instrumentation
+aliases:
+  - ../obi/ # /docs/beyla/<BEYLA_VERSION>/obi/
 ---
 
 # Using OpenTelemetry eBPF Instrumentation instead of Beyla

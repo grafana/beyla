@@ -123,40 +123,60 @@ Besides metric names, the `select` subsection accepts the special key `traces`, 
 
 Keys are matched as globs against the section name, and spans use the section name `traces`. A key like `http_*` therefore never reaches these attributes, while a catch-all `*` does match them along with every metric.
 
-Most of these attributes carry request payloads, so they're opt-in: they're only exported when listed in `include`. The exceptions are `dns.question.name` and `url.query`, which are exported by default and can be turned off with `exclude`.
+The selector includes semantic attributes by default when Beyla has a value. Payload attributes require an explicit `include` list. Setting `include` replaces the default set, and `exclude` removes attributes from the selected set.
 
-| Attribute | Exported by default |
-| --------- | ------------------- |
-| `dns.question.name` | yes |
-| `url.query` | yes |
-| `db.query.text` | no |
-| `db.response.error` | no |
-| `graphql.document` | no |
-| `gen_ai.input.messages` | no |
-| `gen_ai.output.messages` | no |
-| `gen_ai.system_instructions` | no |
-| `gen_ai.metadata` | no |
-| `gen_ai.tool.definitions` | no |
-| `gen_ai.tool.call.arguments` | no |
-| `gen_ai.tool.call.result` | no |
-| `gen_ai.response.error` | no |
+| Attribute | Exported by default | Availability |
+| --- | --- | --- |
+| `dns.question.name` | yes | Captured DNS question |
+| `url.query` | yes | Query string, with known-sensitive parameter values redacted |
+| `error.type` | yes | Failed spans or an error code extracted by a protocol parser, including SQLSTATE, JSON-RPC, and MCP codes |
+| `http.request.method_original` | yes | Captured HTTP method when it differs from the normalized `http.request.method` |
+| `db.query.summary` | yes | Database query summary when the parser provides one |
+| `user_agent.original` | yes | Captured HTTP user agent |
+| `network.peer.address` | yes | Remote IP address: client peer on server spans, server host on client spans |
+| `network.peer.port` | yes | Remote port greater than `0`, emitted with `network.peer.address` |
+| `network.protocol.version` | yes | Observed HTTP version: `1.0`, `1.1`, or `2`; omitted on SQL++ spans |
+| `service.peer.name` | no | Resolved peer service name |
+| `http.request.body.size` | no | HTTP request body size in bytes |
+| `http.response.body.size` | no | HTTP response body size in bytes |
+| `obi.http.response.observed` | no | `false` when Beyla did not parse an HTTP response |
+| `url.template` | no | Detected HTTP route template |
+| `db.query.text` | no | Captured database query |
+| `db.response.error` | no | Captured database error message |
+| `graphql.document` | no | Captured GraphQL document |
+| `gen_ai.input.messages` | no | Captured GenAI input |
+| `gen_ai.output.messages` | no | Captured GenAI output |
+| `gen_ai.system_instructions` | no | Captured system instructions |
+| `gen_ai.metadata` | no | Captured GenAI metadata |
+| `gen_ai.tool.definitions` | no | Captured tool definitions |
+| `gen_ai.tool.call.arguments` | no | Captured tool call arguments |
+| `gen_ai.tool.call.result` | no | Captured tool call result |
+| `gen_ai.response.error` | no | Captured GenAI error message |
 
-Example:
+A protocol parser can supply `error.type` even when the span status is successful. `network.peer.address` contains an IP address; hostnames remain on `server.address` or `client.address`.
+
+To keep the default attributes while excluding remote socket details:
 
 ```yaml
 attributes:
   select:
     traces:
-      # export the SQL statement and the GraphQL query on spans
-      include:
-        - db.query.text
-        - graphql.document
-      # stop exporting the query string
-      exclude:
-        - url.query
+      exclude: ["network.peer.address", "network.peer.port"]
 ```
 
-Values of known-sensitive query parameters are redacted inside `url.query` before export. The other attributes in this table are exported as captured, so enable them only when the payloads they carry are safe to store.
+To export only selected optional attributes, including captured queries:
+
+```yaml
+attributes:
+  select:
+    traces:
+      include:
+        - error.type
+        - db.query.text
+        - graphql.document
+```
+
+Values of known-sensitive query parameters are redacted inside `url.query` before export. The opt-in payload attributes (`db.query.text`, `db.response.error`, `graphql.document`, and `gen_ai.*`) are exported as captured. Include them only when those payloads are safe to store. Body sizes describe byte counts; they do not include body contents.
 
 ## Instance ID decoration
 

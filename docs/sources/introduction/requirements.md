@@ -19,7 +19,6 @@ Before you set up Beyla, check that your hosts meet the following requirements, 
 Beyla runs on Linux and requires eBPF support in the host kernel.
 
 Beyla requires Linux kernel 5.8 or later, with BPF Type Format ([BTF][btf]) enabled.
-Most Linux distributions enable BTF by default with kernel 5.14 or later.
 To check whether your kernel has BTF enabled, verify that `/sys/kernel/btf/vmlinux` exists.
 If you need to recompile your kernel to enable BTF, set the `CONFIG_DEBUG_INFO_BTF=y` configuration option.
 

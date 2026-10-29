@@ -1,7 +1,7 @@
 ---
 title: Why use Grafana Beyla
 menuTitle: Why Beyla
-description: Learn why eBPF-based auto-instrumentation with Grafana Beyla is safe, doesn't change your applications, and measures request latency the way your clients experience it.
+description: Learn why eBPF-based auto-instrumentation with Grafana Beyla protects kernel stability, needs no application changes, and measures request latency closer to what your clients experience.
 weight: 100
 keywords:
   - Beyla
@@ -23,7 +23,7 @@ You get application observability without changes to application code or configu
 
 Beyla offers the following features:
 
-- Automatic instrumentation for applications written in Go, C/C++, Rust, Python, Ruby, Java, Node.js, .NET, and more.
+- Automatic instrumentation for applications written in Go, C/C++, Rust, Python, Ruby, Java, Node.js, .NET, and more, including services that don't have an OpenTelemetry or Prometheus SDK.
   Java support includes GraalVM Native applications.
 - RED metrics and trace spans for HTTP/S and gRPC services, and for database and messaging clients such as SQL, Redis, Kafka, and MongoDB
 - Low-overhead data capture with natively compiled code, even for interpreted languages
@@ -62,7 +62,7 @@ For details, refer to [Configure Beyla language specific agents][language-agents
 ## eBPF instrumentation needs no application changes
 
 Beyla attaches to your applications while they run.
-You can add, remove, or upgrade Beyla without changes to your application code, packages, or deployment.
+You can add, remove, or upgrade Beyla without changes to your application code or packages.
 
 When you upgrade Beyla, the upgrade applies to all of your instrumented services at once.
 You don't need to rebuild or redeploy each service.
@@ -77,7 +77,7 @@ This instrumentation starts timing when the handler starts, so it misses the wai
 As a result, library or agent telemetry can report low request durations while clients experience high latency.
 This usually happens when a service receives more requests than it can handle, which is when you're most likely to breach a service level objective (SLO) on response time and need to scale.
 
-Beyla observes requests at the kernel network level.
+Beyla observes requests at the kernel network level, and in the Go runtime for Go applications.
 The latency that Beyla reports includes queue time, so it's closer to what the client sees.
 When an application can't keep up with incoming requests, queue time can be much larger than service time.
 To learn more, refer to [Measuring total request times, instead of service times][requesttime].

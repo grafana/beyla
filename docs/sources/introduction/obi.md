@@ -19,10 +19,7 @@ Grafana Beyla is the Grafana Labs distribution of
 Grafana Labs [donated the Beyla code to the OpenTelemetry project][donation-blog] in 2025 as OBI.
 A community of contributors, including Grafana Labs, maintains OBI.
 
-This page compares Beyla and OBI.
 OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry or Prometheus collector.
-Some Beyla features aren't available in OBI.
-OBI works in the Grafana ecosystem without them, but you might need other OpenTelemetry projects to replace them.
 
 [obi-docs]: https://opentelemetry.io/docs/zero-code/obi/
 [donation-blog]: https://grafana.com/blog/opentelemetry-ebpf-instrumentation-beyla-donation/
@@ -50,7 +47,7 @@ For example, Beyla reports the network-level flow bytes metric as `beyla_network
 ### Configuration
 
 Beyla and OBI use the same YAML configuration schema.
-Most configuration examples in this documentation also work with OBI, except for the Beyla features in the next section.
+Most Beyla configuration examples also work with OBI, except for the features in [Beyla features that are missing in OBI][missing-features].
 
 The OpenTelemetry documentation also describes
 [how to configure OBI from a YAML configuration file][obi-configure].
@@ -68,6 +65,7 @@ for example `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_PROTOCOL`.
 
 [obi-configure]: https://opentelemetry.io/docs/zero-code/obi/configure/
 [otel-env-vars]: https://opentelemetry.io/docs/languages/sdk-configuration/otlp-exporter/
+[missing-features]: #beyla-features-that-are-missing-in-obi
 
 ## Beyla features that are missing in OBI
 

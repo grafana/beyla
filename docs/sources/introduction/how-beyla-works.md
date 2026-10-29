@@ -12,23 +12,20 @@ keywords:
 # How Grafana Beyla works
 
 Beyla uses eBPF to capture metrics and traces from your applications.
-This page explains what eBPF is, how Beyla uses it to instrument your services, and where the data goes.
 
 ## eBPF overview
 
-eBPF lets you attach programs to different points of the Linux kernel.
-eBPF programs run in privileged mode and can inspect runtime information from the kernel, such as system calls and the network stack.
-eBPF programs can also attach to functions in user space applications through user space probes, also known as `uprobes`.
+eBPF is a Linux kernel technology that runs small, sandboxed programs inside the kernel.
+These programs can observe system calls and the network stack, and can attach to functions inside running applications through user space probes, also known as `uprobes`.
 
-A user space application loads eBPF programs into the kernel.
-Beyla is that user space application.
-The kernel and Beyla share information through communication mechanisms that the eBPF specification provides, such as ring buffers, arrays, and hash maps.
+Beyla is the user space program that loads its eBPF programs into the kernel and collects the data they produce.
+Beyla and its eBPF programs exchange data through eBPF maps, such as ring buffers and hash maps.
 
 ![Beyla eBPF architecture](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/ebpf-arch.svg)
 
-eBPF programs compile to their own [virtual machine instruction set][instruction-set] and run in a sandbox.
-Before the kernel loads a program, it verifies that the program accesses memory safely and finishes in a finite time.
-After verification, a just-in-time (JIT) compiler compiles the program for the native host architecture, such as x86-64 or ARM64, so it runs efficiently.
+eBPF programs use their own [virtual machine instruction set][instruction-set].
+The kernel checks every program before it runs and rejects any program that could access memory unsafely or run forever.
+The kernel then compiles the program to native machine code for the host CPU, so it runs efficiently.
 
 ## How Beyla instruments an application
 
@@ -60,6 +57,7 @@ Beyla exports data in open formats, so you can choose your backend:
 - Expose a Prometheus endpoint that Prometheus or Grafana Alloy can scrape.
 
 In Grafana Cloud, Application Observability and Knowledge Graph use Beyla metrics and traces.
+In Grafana, you can correlate Beyla metrics and traces with your logs and infrastructure data.
 To set up Beyla for Grafana Cloud, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-grafana-cloud].
 
 To configure exports, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].

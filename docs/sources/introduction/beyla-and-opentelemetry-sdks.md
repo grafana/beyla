@@ -13,11 +13,11 @@ keywords:
 # Compare Beyla and OpenTelemetry SDKs
 
 Beyla and OpenTelemetry SDKs both produce metrics and traces for your services, but they work in different ways.
-Beyla instruments services from outside the application process, with no code changes.
+Beyla instruments services with eBPF, with no code changes.
 OpenTelemetry SDKs and language agents run inside your application and can capture internal, framework, and business detail.
 You can also use both.
 
-Use the guidance and language support on this page to decide which approach fits each of your services.
+To decide which approach fits each service, start with when to use each approach, then check how well Beyla supports your language.
 
 ## When to use Beyla
 
@@ -58,7 +58,7 @@ Beyla adds this attribute to its own traces when it also exports span metrics.
 
 ## Language and framework support
 
-Use Beyla RED metrics for every language and framework on this page.
+Use Beyla RED metrics for all of the following languages and frameworks.
 The choice between Beyla and an OpenTelemetry SDK depends on how well Beyla traces your language.
 
 ### Beyla traces recommended

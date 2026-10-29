@@ -74,6 +74,7 @@ common_env=(
   "BEYLA_PACKAGE_ROOT=$root"
   "BEYLA_TEST_NO_DEBCONF=1"
   "BEYLA_SDK_MODE=sdk"
+  "BEYLA_FLEET_ENABLED=false"
   "BEYLA_SDK_SERVICES=demo.service"
   "BEYLA_OPEN_PORTS=18080"
   "GRAFANA_CLOUD_OTLP_ENDPOINT=https://otlp.example/otlp"
@@ -95,15 +96,58 @@ env "${common_env[@]}" "$PACKAGE_DIR/postinst" configure
 [[ $(stat -c '%a' "$root/etc/grafana/beyla-sdk/alloy.env") == 600 ]]
 grep -q 'CONFIG_FILE=".*/etc/grafana/beyla-sdk/config.alloy"' "$root/etc/grafana/beyla-sdk/alloy.env"
 grep -q 'trace-secret' "$root/etc/grafana/beyla-sdk/alloy.env"
+! grep -q 'FLEET' "$root/etc/grafana/beyla-sdk/alloy.env"
+! grep -q 'remotecfg' "$root/etc/grafana/beyla-sdk/config.alloy"
 grep -q '127.0.0.1:14318' "$root/etc/grafana/beyla-sdk/sdk.env"
 cmp -s "$PACKAGE_DIR/alloy-dropin.conf" "$root/etc/systemd/system/alloy.service.d/50-grafana-beyla-sdk.conf"
 grep -q 'start alloy.service' "$tmp/commands"
 ! grep -q 'restart demo.service' "$tmp/commands"
 
+# The normal debconf path must not read optional Fleet fields while disabled,
+# nor inherit Fleet values supplied by the caller's environment.
+root_debconf="$tmp/debconf-root"
+cp -a "$root" "$root_debconf"
+rm -rf "$root_debconf/etc/grafana/beyla-sdk" \
+  "$root_debconf/var/lib/grafana-beyla-sdk" \
+  "$root_debconf/etc/systemd/system/alloy.service.d" \
+  "$root_debconf/etc/systemd/system/demo.service.d"
+mkdir -p "$root_debconf/usr/share/debconf"
+cat > "$root_debconf/usr/share/debconf/confmodule" <<'DEBCONF'
+db_get() {
+  printf '%s\n' "$1" >> "$DEBCONF_LOG"
+  case "$1" in
+    beyla/mode) RET=sdk ;;
+    beyla/fleet-enabled) RET=false ;;
+    beyla/otlp-endpoint) RET=https://otlp.example/otlp ;;
+    beyla/otlp-tenant) RET=trace-tenant ;;
+    beyla/otlp-token) RET=trace-secret ;;
+    beyla/metrics-endpoint) RET=https://metrics.example/api/v1/push ;;
+    beyla/metrics-tenant) RET=metrics-tenant ;;
+    beyla/metrics-token) RET=metrics-secret ;;
+    beyla/profiles-endpoint) RET=https://profiles.example/pyroscope ;;
+    beyla/profiles-tenant) RET=profiles-tenant ;;
+    beyla/profiles-token) RET=profiles-secret ;;
+    beyla/services) RET=demo.service ;;
+    beyla/open-ports) RET=18080 ;;
+    *) echo "unexpected debconf key: $1" >&2; return 1 ;;
+  esac
+}
+db_set() { :; }
+DEBCONF
+debconf_env=("${common_env[@]}" "BEYLA_PACKAGE_ROOT=$root_debconf" \
+  "BEYLA_TEST_NO_DEBCONF=0" "DEBCONF_LOG=$tmp/debconf.log" \
+  "GRAFANA_CLOUD_FLEET_URL=https://ambient.example/remotecfg" \
+  "GRAFANA_CLOUD_FLEET_INSTANCE_ID=ambient-id")
+env "${debconf_env[@]}" "$PACKAGE_DIR/postinst" configure
+! grep -q '^beyla/fleet-url$' "$tmp/debconf.log"
+! grep -q '^beyla/fleet-instance-id$' "$tmp/debconf.log"
+! grep -q 'FLEET' "$root_debconf/etc/grafana/beyla-sdk/alloy.env"
+! grep -q 'remotecfg' "$root_debconf/etc/grafana/beyla-sdk/config.alloy"
+
 # An upgrade preserves edits/credentials and restarts only the companion-owned
 # collector. The mode remains install-time-only.
 printf '# retained customer change\n' >> "$root/etc/grafana/beyla-sdk/alloy.env"
-env "${common_env[@]}" "$PACKAGE_DIR/postinst" configure 0.1.0~poc1
+env "${common_env[@]}" "$PACKAGE_DIR/postinst" configure 1.2.3
 grep -q '# retained customer change' "$root/etc/grafana/beyla-sdk/alloy.env"
 grep -q 'restart alloy.service' "$tmp/commands"
 

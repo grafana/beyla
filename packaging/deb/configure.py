@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Write root-only Alloy credentials and explicit SDK service opt-ins."""
+"""Write root-only Alloy credentials and explicit opt-ins."""
 
 import os
 from pathlib import Path
@@ -48,7 +48,26 @@ def atomic_secret(path: Path, contents: str) -> None:
             os.unlink(temp_name)
 
 
-def configure_mode(mode: str) -> None:
+FLEET_BEGIN = "// grafana-beyla-sdk fleet-managed begin"
+FLEET_END = "// grafana-beyla-sdk fleet-managed end"
+
+
+def fleet_block() -> str:
+    return (
+        f"{FLEET_BEGIN}\n"
+        "remotecfg {\n"
+        '  url = sys.env("GRAFANA_CLOUD_FLEET_URL")\n'
+        "  basic_auth {\n"
+        '    username = sys.env("GRAFANA_CLOUD_FLEET_INSTANCE_ID")\n'
+        '    password = sys.env("GRAFANA_CLOUD_OTLP_TOKEN")\n'
+        "  }\n"
+        '  poll_frequency = "5m"\n'
+        "}\n"
+        f"{FLEET_END}"
+    )
+
+
+def configure_mode(mode: str, fleet_enabled: bool = False) -> None:
     config = ETC / "config.alloy"
     if not config.exists():
         return
@@ -62,6 +81,17 @@ def configure_mode(mode: str) -> None:
             raise ValueError("cannot safely select SDK mode in the owned Alloy config")
     elif disabled_traces in contents:
         raise ValueError("switching an existing SDK-mode config back to Beyla-only is unsupported")
+
+    begin_count = contents.count(FLEET_BEGIN)
+    end_count = contents.count(FLEET_END)
+    if begin_count != end_count or begin_count > 1:
+        raise ValueError("cannot safely update Fleet configuration in the owned Alloy config")
+    if begin_count:
+        start = contents.index(FLEET_BEGIN)
+        end = contents.index(FLEET_END, start) + len(FLEET_END)
+        contents = contents[:start].rstrip() + contents[end:]
+    if fleet_enabled:
+        contents = contents.rstrip() + "\n\n" + fleet_block() + "\n"
     fd, temp_name = tempfile.mkstemp(prefix=".config-", dir=config.parent)
     try:
         os.fchmod(fd, 0o644)
@@ -80,6 +110,20 @@ def main() -> None:
     if mode not in {"beyla-only", "sdk"}:
         raise ValueError("mode must be beyla-only or sdk")
 
+    state_mode = STATE / "mode"
+    initial_config = not state_mode.exists()
+    if not initial_config:
+        installed_mode = state_mode.read_text(encoding="utf-8").strip()
+        if installed_mode != mode:
+            raise ValueError("changing instrumentation mode after install is unsupported")
+        if not (ETC / "alloy.env").exists() or not (ETC / "config.alloy").exists():
+            raise ValueError("existing Alloy configuration is incomplete; refusing to recreate it")
+
+    fleet_raw = os.environ.get("BEYLA_FLEET_ENABLED", "false").strip().lower()
+    if fleet_raw not in {"true", "false", "yes", "no", "1", "0"}:
+        raise ValueError("Fleet enabled must be true or false")
+    fleet_enabled = fleet_raw in {"true", "yes", "1"}
+
     required_values = {
         "BEYLA_SDK_MODE": mode,
         "GRAFANA_CLOUD_OTLP_ENDPOINT": required("GRAFANA_CLOUD_OTLP_ENDPOINT"),
@@ -93,6 +137,11 @@ def main() -> None:
         "GRAFANA_CLOUD_PROFILES_TOKEN": required("GRAFANA_CLOUD_PROFILES_TOKEN"),
         "BEYLA_OPEN_PORTS": required("BEYLA_OPEN_PORTS"),
     }
+    if fleet_enabled and initial_config:
+        required_values["GRAFANA_CLOUD_FLEET_URL"] = required("GRAFANA_CLOUD_FLEET_URL")
+        required_values["GRAFANA_CLOUD_FLEET_INSTANCE_ID"] = required(
+            "GRAFANA_CLOUD_FLEET_INSTANCE_ID"
+        )
 
     services = []
     raw_services = os.environ.get("BEYLA_SDK_SERVICES", "")
@@ -139,7 +188,8 @@ def main() -> None:
 
     # Validate all selected targets before writing any state to avoid partial
     # enrollment when a later unit collides.
-    configure_mode(mode)
+    if initial_config:
+        configure_mode(mode, fleet_enabled=fleet_enabled)
     if not (ETC / "alloy.env").exists():
         atomic_secret(ETC / "alloy.env", alloy_env)
     if mode == "sdk":

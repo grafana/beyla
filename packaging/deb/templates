@@ -1,4 +1,4 @@
-Template: grafana-beyla-sdk/mode
+Template: beyla/mode
 Type: select
 Choices: beyla-only, sdk
 Default: beyla-only
@@ -6,51 +6,68 @@ Description: Select the instrumentation mode
  Choose beyla-only to run the Alloy Beyla component without SDK injection, or
  choose sdk to opt in selected controlled systemd services to SDK injection.
 
-Template: grafana-beyla-sdk/otlp-endpoint
+Template: beyla/fleet-enabled
+Type: boolean
+Default: false
+Description: Enroll Alloy in Grafana Cloud Fleet Management
+ Enable remote configuration only if this Alloy instance should be managed
+ through Grafana Cloud Fleet Management.
+
+Template: beyla/fleet-url
+Type: string
+Description: Grafana Cloud Fleet Management remote configuration URL
+ Enter the remote configuration API URL when Fleet enrollment is enabled.
+
+Template: beyla/fleet-instance-id
+Type: string
+Description: Grafana Cloud Fleet Management instance ID
+ Enter the opaque, non-empty instance ID when Fleet enrollment is enabled.
+
+Template: beyla/otlp-endpoint
 Type: string
 Description: Grafana Cloud OTLP endpoint
  Enter the full OTLP HTTP endpoint URL.
 
-Template: grafana-beyla-sdk/otlp-tenant
+Template: beyla/otlp-tenant
 Type: string
 Description: Grafana Cloud OTLP tenant or instance ID
 
-Template: grafana-beyla-sdk/otlp-token
+Template: beyla/otlp-token
 Type: password
 Description: Grafana Cloud OTLP token
 
-Template: grafana-beyla-sdk/metrics-endpoint
+Template: beyla/metrics-endpoint
 Type: string
 Description: Grafana Cloud Prometheus remote-write endpoint
 
-Template: grafana-beyla-sdk/metrics-tenant
+Template: beyla/metrics-tenant
 Type: string
 Description: Grafana Cloud metrics tenant or instance ID
 
-Template: grafana-beyla-sdk/metrics-token
+Template: beyla/metrics-token
 Type: password
 Description: Grafana Cloud metrics token
 
-Template: grafana-beyla-sdk/profiles-endpoint
+Template: beyla/profiles-endpoint
 Type: string
 Description: Grafana Cloud profiles endpoint
 
-Template: grafana-beyla-sdk/profiles-tenant
+Template: beyla/profiles-tenant
 Type: string
 Description: Grafana Cloud profiles tenant or instance ID
 
-Template: grafana-beyla-sdk/profiles-token
+Template: beyla/profiles-token
 Type: password
 Description: Grafana Cloud profiles token
 
-Template: grafana-beyla-sdk/services
+Template: beyla/services
 Type: string
 Description: Controlled systemd service units to instrument
  Enter a comma-separated list of controlled service unit names (for example,
  demo.service). Only these services receive SDK injection. Do not select
  production services in this PoC.
 
-Template: grafana-beyla-sdk/open-ports
+Template: beyla/open-ports
 Type: string
 Description: Comma-separated ports of application services to instrument
  Enter only the ports of services that should be instrumented by Beyla, for

@@ -7,6 +7,27 @@ OUTPUT_DIR=${OUTPUT_DIR:-"$ROOT_DIR/dist"}
 ARTIFACTS_DIR=${1:-}
 CONTAINER_ENGINE=${CONTAINER_ENGINE:-docker}
 ARCH=$(dpkg --print-architecture)
+VERSION=${VERSION:-0.1.0~local1}
+
+# Release tags are normally prefixed with "v"; Debian package versions are not.
+VERSION=${VERSION#v}
+# Debian treats a hyphenated suffix as a revision, which would sort a SemVer
+# prerelease after its final release. Map SemVer prerelease separators to '~'.
+if [[ "$VERSION" =~ ^([0-9]+(\.[0-9]+)*)(-([0-9A-Za-z][0-9A-Za-z.-]*))?(\+([0-9A-Za-z.-]+))?$ ]] &&
+  [[ -n "${BASH_REMATCH[4]:-}" ]]; then
+  version_base=${BASH_REMATCH[1]}
+  version_prerelease=${BASH_REMATCH[4]}
+  version_metadata=${BASH_REMATCH[6]:-}
+  VERSION="${version_base}~${version_prerelease}"
+  [[ -z "$version_metadata" ]] || VERSION+="+${version_metadata}"
+fi
+if [[ -z "$VERSION" ]] || ! dpkg --validate-version "$VERSION" >/dev/null 2>&1; then
+  echo "Invalid Debian package version: $VERSION" >&2
+  exit 1
+fi
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+fi
 
 if [[ "$ARCH" != amd64 ]]; then
   echo "This PoC only supports Ubuntu amd64 (found $ARCH)." >&2
@@ -75,12 +96,12 @@ install -m 0644 "$PACKAGE_DIR/alloy-dropin.conf" \
 install -m 0644 "$PACKAGE_DIR/configure.py" "$stage/usr/lib/grafana-beyla-sdk/configure.py"
 install -m 0644 "$PACKAGE_DIR/validate-alloy.py" "$stage/usr/lib/grafana-beyla-sdk/validate-alloy.py"
 install -m 0644 "$PACKAGE_DIR/templates" "$stage/DEBIAN/templates"
-install -m 0644 "$PACKAGE_DIR/control" "$stage/DEBIAN/control"
+sed "s/^Version: .*/Version: $VERSION/" "$PACKAGE_DIR/control" > "$stage/DEBIAN/control"
 install -m 0755 "$PACKAGE_DIR/config" "$stage/DEBIAN/config"
 install -m 0755 "$PACKAGE_DIR/postinst" "$stage/DEBIAN/postinst"
 install -m 0755 "$PACKAGE_DIR/postrm" "$stage/DEBIAN/postrm"
 
 install -d "$OUTPUT_DIR"
 dpkg-deb --build --root-owner-group "$stage" \
-  "$OUTPUT_DIR/grafana-beyla-sdk_0.1.0~poc1_amd64.deb"
-echo "Built unpublished PoC package: $OUTPUT_DIR/grafana-beyla-sdk_0.1.0~poc1_amd64.deb"
+  "$OUTPUT_DIR/beyla_${VERSION}_amd64.deb"
+echo "Built Beyla package: $OUTPUT_DIR/beyla_${VERSION}_amd64.deb"

@@ -24,6 +24,29 @@ jobs:
       arch: arm64
       runner: ubuntu-24.04-arm
 
+  release-deb-amd64:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build amd64 Debian package
+        id: package-build
+        run: packaging/deb/build-deb.sh
+        env:
+          VERSION: ${{ github.event.release.tag_name }}
+      - name: Upload Debian package release asset
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./dist/beyla_${{ steps.package-build.outputs.version }}_amd64.deb
+          asset_name: beyla_${{ steps.package-build.outputs.version }}_amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
+
   build-alloy-beyla:
     needs: [release-amd64, release-arm64]
     uses: ./.github/workflows/build-alloy-beyla-image.yml

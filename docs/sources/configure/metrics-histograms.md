@@ -95,6 +95,73 @@ otel_metrics_export:
 
 ## Use native histograms and exponential histograms
 
-For Prometheus, you enable [native histograms](https://prometheus.io/docs/specs/native_histograms/) with the `--enable-feature=native-histograms` feature flag (Prometheus <= 3.8.0) or with the `scrape_native_histograms` configuration setting (Prometheus >= 3.8.0).
+Histogram resolution controls the balance between detail, memory use, and export payload size.
 
-For OpenTelemetry, you can use [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram) for the predefined histograms instead of defining the buckets manually. Set the standard [OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION](https://opentelemetry.io/docs/specs/otel/metrics/sdk_exporters/otlp/#additional-configuration) environment variable. See the `histogram_aggregation` section in the [OTEL metrics exporter](../export-data/) section for more information.
+### OpenTelemetry exponential histograms
+
+Set `otel_metrics_export.histogram_aggregation` to `base2_exponential_bucket_histogram`, or set `OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION` to that value. Configure resolution under `otel_metrics_export.exponential_histogram`:
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `max_scale`<p>`BEYLA_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SCALE`</p> | Maximum resolution scale, from `-10` to `20`. Higher values provide narrower buckets. | integer | `20` |
+| `max_size`<p>`BEYLA_METRICS_EXPONENTIAL_HISTOGRAM_MAX_SIZE`</p> | Maximum bucket capacity. Must be greater than `0`. Higher values preserve more detail before reducing resolution. | integer | `160` |
+
+For example:
+
+```yaml
+otel_metrics_export:
+  histogram_aggregation: base2_exponential_bucket_histogram
+  exponential_histogram:
+    max_scale: 12
+    max_size: 80
+```
+
+These settings apply to histograms configured through OpenTelemetry views, including HTTP, RPC, database, messaging, GenAI, service graph, and TCP round-trip time histograms. Exponential aggregation replaces their explicit bucket boundaries. Runtime GC histograms retain their explicit boundaries.
+
+### Prometheus native histograms
+
+Configure native histograms under `prometheus_export.native_histogram`. A compatible Prometheus server can scrape native histograms alongside classic histograms. Enable native histogram scraping with `--enable-feature=native-histograms` on Prometheus versions before 3.8.0, or `scrape_native_histograms` on Prometheus 3.8.0 or later. Refer to the [Prometheus native histogram specification](https://prometheus.io/docs/specs/native_histograms/) for server configuration.
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `bucket_factor`<p>`BEYLA_PROMETHEUS_NATIVE_HISTOGRAM_BUCKET_FACTOR`</p> | Upper bound on the growth factor between buckets. Must be greater than `1`. Values closer to `1` provide finer resolution and use more buckets. | float | `1.1` |
+| `max_bucket_number`<p>`BEYLA_PROMETHEUS_NATIVE_HISTOGRAM_MAX_BUCKET_NUMBER`</p> | Maximum populated native buckets. Must be greater than `0`. Exceeding the limit triggers a reset or a reduction in resolution. | integer | `100` |
+| `min_reset_duration`<p>`BEYLA_PROMETHEUS_NATIVE_HISTOGRAM_MIN_RESET_DURATION`</p> | Minimum time between resets. Must be greater than `0`. Before this interval elapses, the histogram reduces resolution instead of resetting. | Duration | `1h` |
+
+For example:
+
+```yaml
+prometheus_export:
+  port: 9090
+  native_histogram:
+    bucket_factor: 1.2
+    max_bucket_number: 80
+    min_reset_duration: 30m
+```
+
+These controls tune the native histograms created by the application and TCP statistics exporters. They leave the classic boundaries under `prometheus_export.buckets` unchanged.
+
+### Generative AI histogram buckets
+
+Both exporters accept the following fields under their `buckets` section:
+
+| Field | Metric | Unit | Default boundaries |
+| --- | --- | --- | --- |
+| `gen_ai_client_operation_duration_histogram` | `gen_ai.client.operation.duration` | seconds | `[0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92]` |
+| `gen_ai_client_token_usage_histogram` | `gen_ai.client.token.usage` | tokens | `[1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864]` |
+
+For example:
+
+```yaml
+otel_metrics_export:
+  buckets:
+    gen_ai_client_operation_duration_histogram: [0.1, 0.5, 1, 5, 10, 30, 60]
+    gen_ai_client_token_usage_histogram: [16, 64, 256, 1024, 4096, 16384]
+prometheus_export:
+  port: 9090
+  buckets:
+    gen_ai_client_operation_duration_histogram: [0.1, 0.5, 1, 5, 10, 30, 60]
+    gen_ai_client_token_usage_histogram: [16, 64, 256, 1024, 4096, 16384]
+```
+
+These metrics require the relevant [GenAI instrumentation](../controlling-instrumentation/#generative-ai-instrumentation). OpenTelemetry exponential aggregation replaces the explicit GenAI boundaries.

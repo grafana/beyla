@@ -560,7 +560,7 @@ jvm_runtime_metrics:
 
 ## Collect .NET runtime metrics
 
-Enable `application_runtime` for the target service. Beyla connects to the .NET diagnostic socket in the process's temporary directory, using `TMPDIR` when configured or `/tmp` otherwise. Diagnostics must be enabled and the socket must be accessible to Beyla.
+This collection requires .NET 8 or later. Enable `application_runtime` for the target service. Beyla connects to the .NET diagnostic socket in the process's temporary directory, using `TMPDIR` when configured or `/tmp` otherwise. Diagnostics must be enabled and the socket must be accessible to Beyla.
 
 | YAML option<p>Environment variable</p> | Description | Type | Default |
 | --- | --- | --- | --- |

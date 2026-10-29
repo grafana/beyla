@@ -37,9 +37,9 @@ Beyla follows these steps:
 
 1. Beyla finds the processes to instrument, based on your [service discovery][service-discovery] configuration.
 1. Beyla inspects the executable of each process to identify the language and runtime it uses.
-1. Beyla attaches eBPF probes to the process.
-   Kernel probes capture network activity, such as connections, reads, and writes.
-   User space probes capture function calls in the language runtime or in libraries, for example in Go applications.
+1. Beyla attaches eBPF probes.
+   Kernel probes capture network activity, such as connections, reads, and writes, and Beyla filters the events by process.
+   User space probes attach to functions in the language runtime or libraries of the process, for example in Go applications.
 1. When the application receives or sends a request, the probes capture events about the request and pass them to Beyla.
 1. Beyla converts the events into metrics and trace spans, and adds metadata.
    For example, when Beyla runs in Kubernetes, it adds Pod and namespace names.
@@ -49,10 +49,7 @@ For Java and Node.js applications, Beyla also loads a small language agent into 
 These agents provide features that eBPF alone can't, such as context propagation.
 For details, refer to [Configure Beyla language specific agents][language-agents].
 
-Beyla can also [propagate trace context][distributed-traces] between services, so spans from different services join the same distributed trace.
-
-Beyla captures requests at the kernel level, so it measures the full time a request spends on the server, including time in internal queues.
-To learn more, refer to [Measuring total request times, instead of service times][requesttime].
+When you enable it, Beyla can also [propagate trace context][distributed-traces] between services, so spans from different services join the same distributed trace.
 
 ## Where Beyla sends data
 
@@ -78,17 +75,9 @@ You can run Beyla in the following ways:
 
 To choose a deployment method, refer to [Set up Beyla][setup].
 
-## Beyla and OpenTelemetry eBPF Instrumentation
-
-Beyla is the Grafana Labs distribution of OpenTelemetry eBPF Instrumentation (OBI).
-The eBPF instrumentation code lives in the OBI project, and Beyla imports it as a library.
-Every OBI feature is available in Beyla.
-Beyla adds features for the Grafana ecosystem, such as process metrics.
-To learn about the differences, refer to [Using OpenTelemetry eBPF Instrumentation instead of Beyla][obi].
-
 ## Next steps
 
-- [Choose between Beyla and OpenTelemetry SDKs][compare]
+- [Compare Beyla and OpenTelemetry SDKs][compare]
 - [Beyla requirements and limitations][requirements]
 - [Set up Beyla][setup]
 
@@ -96,10 +85,8 @@ To learn about the differences, refer to [Using OpenTelemetry eBPF Instrumentati
 [service-discovery]: ../../configure/service-discovery/
 [language-agents]: ../../configure/language-agents/
 [distributed-traces]: ../../traces/
-[requesttime]: ../../traces/requesttime/
 [export-data]: ../../configure/export-data/
 [helm-grafana-cloud]: ../../setup/kubernetes-helm-appolly/
 [setup]: ../../setup/
-[obi]: ../obi/
 [compare]: ../beyla-and-opentelemetry-sdks/
 [requirements]: ../requirements/

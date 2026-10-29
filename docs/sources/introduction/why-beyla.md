@@ -28,17 +28,16 @@ Beyla offers the following features:
 - RED metrics and trace spans for HTTP/S and gRPC services, and for database and messaging clients such as SQL, Redis, Kafka, and MongoDB
 - Low-overhead data capture with natively compiled code, even for interpreted languages
 - Vendor-neutral data export in the OpenTelemetry format and as native Prometheus metrics
-- [Distributed traces][distributed-traces] through automatic trace context propagation
+- [Distributed traces][distributed-traces] through trace context propagation, which you can enable
 - [Network metrics][network] between endpoints such as nodes, containers, Pods, and Services
 - Kubernetes metadata, such as Pod and namespace names, on your metrics and traces
 - Integration with Grafana Alloy
 
-## eBPF instrumentation is safe
+## eBPF instrumentation protects kernel stability
 
-The kernel verifies each eBPF program before it loads it.
-The verifier checks that the program accesses memory safely and finishes in a finite time.
-A faulty kernel module can cause the Linux kernel to hang, but a faulty eBPF program can't.
-To learn more about eBPF, refer to [How Beyla works][how].
+A faulty kernel module can cause the Linux kernel to hang.
+The kernel verifies every eBPF program before it runs, so a faulty eBPF program can't.
+To learn how the verifier works, refer to [How Beyla works][how].
 
 ## eBPF instrumentation improves security
 
@@ -49,11 +48,6 @@ Beyla doesn't add a dependency to your application.
 Beyla runs as a separate process, and its eBPF programs run in the kernel, outside your application process memory.
 A vulnerability in the eBPF instrumentation affects only telemetry collection and generation.
 
-For Java and Node.js applications, Beyla also loads a small language agent into the application process by default.
-These agents provide features that eBPF alone can't, such as context propagation.
-You can turn the agents off.
-For details, refer to [Configure Beyla language specific agents][language-agents].
-
 Beyla runs separately from your application, so you can apply strict access policies to it.
 For example, you can configure Beyla to push telemetry and not open any ports.
 An SDK or agent inside your application has the same permissions and network access as your application.
@@ -61,6 +55,9 @@ An SDK or agent inside your application has the same permissions and network acc
 Beyla is also safer than proxy-based instrumentation.
 A proxy runs outside your application, but it handles all of your application traffic and exposes ports.
 If the proxy has a security vulnerability, an attacker can gain access to all of your application traffic.
+
+For Java and Node.js applications, Beyla loads a small language agent into the application process by default, and you can turn it off.
+For details, refer to [Configure Beyla language specific agents][language-agents].
 
 ## eBPF instrumentation needs no application changes
 
@@ -88,7 +85,7 @@ To learn more, refer to [Measuring total request times, instead of service times
 ## Next steps
 
 - [How Beyla works][how]
-- [Choose between Beyla and OpenTelemetry SDKs][compare]
+- [Compare Beyla and OpenTelemetry SDKs][compare]
 - [Beyla requirements and limitations][requirements]
 
 [distributed-traces]: ../../traces/

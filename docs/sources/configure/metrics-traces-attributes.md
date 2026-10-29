@@ -50,6 +50,21 @@ their `include` and `exclude` lists:
 | --- | --- | --- |
 | `db.namespace` | `db_namespace` | Included when available |
 | `db.response.status_code` | `db_response_status_code` | Included when available |
+| `db.collection.name` | `db_collection_name` | Included when available |
+| `error.type` | `error_type` | Included when available |
+
+`db.collection.name` identifies a collection or equivalent protocol entity when the parser can determine one. Database server metrics also accept `client.address` (`client_address`), which is opt-in. Client addresses and collection names can add many distinct time series.
+
+To retain default database attributes while dropping collection names:
+
+```yaml
+attributes:
+  select:
+    db_client_operation_duration:
+      exclude: ["db.collection.name"]
+    db_server_operation_duration:
+      exclude: ["db_collection_name"]
+```
 
 The `db.namespace` attribute identifies the database namespace, such as a
 database or bucket. Whether Beyla can report it depends on the database
@@ -116,6 +131,36 @@ attributes:
 In the previous example, all metrics with a name starting with `http_` or `http.` include all possible attributes except `http_path` and `http_route` or `http.path`/`http.route`. The `http_client_*` and `http_server_*` sections override the base configuration, enabling the `http_path` attribute for HTTP client metrics and `http_route` for HTTP server metrics.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
+
+### Select HTTP and RPC metric attributes
+
+HTTP and RPC metrics include `error.type` (`error_type`) by default when available. RPC duration metrics also include `rpc.response.status_code` (`rpc_response_status_code`). Use `exclude` to remove a dimension while retaining the other defaults:
+
+```yaml
+attributes:
+  select:
+    http_*:
+      exclude: ["error.type"]
+    rpc_*:
+      exclude: ["error_type", "rpc_response_status_code"]
+```
+
+HTTP client duration and body-size metrics accept `url.template` (`url_template`) when route detection provides a value. The attribute is opt-in for `http_client_request_duration` and included by default for `http_client_request_body_size` and `http_client_response_body_size`.
+
+For example, explicitly select a small set of duration attributes including the route template, and remove templates from body-size metrics:
+
+```yaml
+attributes:
+  select:
+    http_client_request_duration:
+      include: ["http.request.method", "http.response.status_code", "url.template"]
+    http_client_request_body_size:
+      exclude: ["url_template"]
+    http_client_response_body_size:
+      exclude: ["url_template"]
+```
+
+An explicit duration `include` list replaces its default attribute set. Choose route dimensions that fit the cardinality of your services.
 
 ### Select messaging metric attributes
 

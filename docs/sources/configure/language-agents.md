@@ -18,9 +18,22 @@ YAML section: `nodejs`
 
 | YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
-| `enabled`<p>`BEYLA_NODEJS_ENABLED`</p>                    | Enable dynamic injection of the `NodeJS` agent.                 | boolean | (true)  |
+| `enabled`<p>`BEYLA_NODEJS_ENABLED`</p> | Inject the Node.js agent for context propagation, runtime metrics, and manual spans. | boolean | `true` |
+| `manual_spans`<p>`BEYLA_NODEJS_MANUAL_SPANS`</p> | Capture spans created through the OpenTelemetry API when no SDK is registered. Requires agent injection and Node.js 14 or later. | boolean | `false` |
 
-The `NodeJS` agent is used only for context propagation, since NodeJS uses `libssl` for TLS encryption and decryption. This agent is injected via the debugger interface. You should disable the `NodeJS` agent support if your program has a handler attached on `SIGUSR1`.
+Beyla injects the Node.js agent through the inspector interface. It connects to `127.0.0.1:9229`, opening the inspector with `SIGUSR1` when necessary. Injection is skipped if the signal would terminate the process or if Beyla detects a custom `SIGUSR1` handler. Set `enabled` to `false` if your application uses that signal.
+
+Node.js uses `libssl` for TLS traffic, which Beyla captures with eBPF. The agent provides context propagation and runtime metrics. Disabling injection also disables those agent features.
+
+Set `manual_spans` to `true` to capture spans that the application creates with the OpenTelemetry API before registering an SDK:
+
+```yaml
+nodejs:
+  enabled: true
+  manual_spans: true
+```
+
+The manual-span bridge requires Node.js 14 or later. Enabling it on an older runtime causes Beyla to skip the entire Node.js agent, including context propagation and runtime metric collection. The bridge stays inactive when an SDK is already registered. If the application registers an SDK later, the bridge yields to it.
 
 YAML section: `javaagent`
 

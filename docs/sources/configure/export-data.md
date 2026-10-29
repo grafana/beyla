@@ -134,7 +134,7 @@ The Beyla metrics exporter can export the following metrics data groups for proc
   directly; it does not require enabling the Tempo
   `service-graphs-connection-info` processor.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
-- `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
+- `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts. Enables `beyla.network.flow.packets` (`beyla_network_flow_packets_total` in Prometheus)
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
@@ -148,7 +148,9 @@ The `stats` feature enables every TCP statistics group. The `stats_tcp_io` probe
 
 ### Application runtime metrics
 
-When `application_runtime` is enabled, Beyla collects language runtime metrics for instrumented Go and Java processes.
+Enable `application_runtime` to collect runtime metrics for instrumented Go, Java, Node.js, Python, and .NET processes. It is disabled by default. Configure it globally or per service through [metrics features](#global-metrics-features).
+
+Go and Python metrics use eBPF collection. Node.js metrics require the injected Node.js agent. JVM memory metrics use HotSpot USDT probes; the Java agent supplies class, thread, CPU, and GC duration metrics. .NET metrics use the runtime diagnostic socket and EventPipe.
 
 **Go runtime metrics**
 
@@ -169,7 +171,7 @@ When `application_runtime` is enabled, Beyla collects language runtime metrics f
 
 **JVM runtime metrics**
 
-JVM runtime metrics are collected via eBPF USDT probes on `libjvm.so` (`hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end`) without requiring any bytecode agent.
+JVM memory pool metrics use eBPF USDT probes on `libjvm.so` (`hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end`). They remain available when `javaagent.enabled` is `false`. The other JVM metrics require the Java agent.
 
 | Metric | Description |
 | ------ | ----------- |
@@ -177,10 +179,74 @@ JVM runtime metrics are collected via eBPF USDT probes on `libjvm.so` (`hotspot:
 | `jvm.memory.committed` | Bytes committed (reserved) for the JVM memory pool |
 | `jvm.memory.limit` | Maximum bytes the memory pool can use |
 | `jvm.memory.used_after_last_gc` | Bytes used in the pool immediately after the last GC cycle |
+| `jvm.class.loaded` | Classes loaded |
+| `jvm.class.unloaded` | Classes unloaded |
+| `jvm.class.count` | Current loaded classes |
+| `jvm.thread.count` | Live platform threads, split by daemon status |
+| `jvm.cpu.time` | Process CPU time in seconds |
+| `jvm.cpu.count` | Available processors |
+| `jvm.cpu.recent_utilization` | Recent process CPU utilization |
+| `jvm.gc.duration` | GC action duration in seconds |
 
-All JVM metrics carry the attributes `jvm.memory.type` (for example, `heap`, `non_heap`) and `jvm.memory.pool.name` (for example, `G1 Eden Space`).
+JVM memory metrics carry the attributes `jvm.memory.type` (for example, `heap`, `non_heap`) and `jvm.memory.pool.name` (for example, `G1 Eden Space`).
 
 To control how frequently JVM GC events are sampled, refer to [JVM runtime metrics](#jvm-runtime-metrics).
+
+**Node.js runtime metrics**
+
+Set `nodejs.enabled` to `true` and enable `application_runtime` to collect these metrics. Disabling the agent disables their collection.
+
+| Metric | Description |
+| --- | --- |
+| `nodejs.eventloop.time` | Active and idle event loop time in seconds |
+| `nodejs.eventloop.utilization` | Event loop utilization |
+| `nodejs.eventloop.delay.min` | Minimum event loop delay in seconds |
+| `nodejs.eventloop.delay.max` | Maximum event loop delay in seconds |
+| `nodejs.eventloop.delay.mean` | Mean event loop delay in seconds |
+| `nodejs.eventloop.delay.stddev` | Standard deviation of event loop delay in seconds |
+| `nodejs.eventloop.delay.p50` | 50th percentile event loop delay in seconds |
+| `nodejs.eventloop.delay.p90` | 90th percentile event loop delay in seconds |
+| `nodejs.eventloop.delay.p99` | 99th percentile event loop delay in seconds |
+| `v8js.gc.duration` | GC duration in seconds |
+| `v8js.memory.heap.limit` | Heap limit in bytes, per space |
+| `v8js.memory.heap.used` | Used heap bytes, per space |
+| `v8js.memory.heap.space.available_size` | Available bytes per heap space |
+| `v8js.memory.heap.space.physical_size` | Committed bytes per heap space |
+| `v8js.resource.active` | Active resources, grouped by resource type |
+
+**Python runtime metrics**
+
+| Metric | Description |
+| --- | --- |
+| `cpython.gc.collections` | GC collections by generation |
+| `cpython.gc.collected_objects` | Collected objects by generation |
+| `cpython.gc.uncollectable_objects` | Uncollectable objects by generation |
+
+**.NET runtime metrics**
+
+| Metric | Description |
+| --- | --- |
+| `dotnet.process.cpu.count` | Available processors |
+| `dotnet.process.cpu.time` | Process CPU time in seconds, split by user and system mode |
+| `dotnet.process.memory.working_set` | Physical memory mapped to the process, in bytes |
+| `dotnet.gc.collections` | Collections since the collector baseline, exclusive per generation |
+| `dotnet.gc.heap.total_allocated` | Allocated heap bytes observed by the collector |
+| `dotnet.gc.last_collection.heap.size` | Heap size in bytes at the latest collection, per generation |
+| `dotnet.gc.last_collection.heap.fragmentation.size` | Heap fragmentation in bytes at the latest collection, per generation |
+| `dotnet.gc.last_collection.memory.committed_size` | Committed GC memory in bytes at the latest collection |
+| `dotnet.gc.pause.time` | GC pause time in seconds observed by the collector |
+| `dotnet.jit.compiled_il.size` | Compiled IL bytes |
+| `dotnet.jit.compiled_methods` | Compiled methods |
+| `dotnet.jit.compilation.time` | JIT compilation time in seconds observed by the collector |
+| `dotnet.thread_pool.thread.count` | Current thread-pool threads |
+| `dotnet.thread_pool.work_item.count` | Completed thread-pool work items observed by the collector |
+| `dotnet.thread_pool.queue.length` | Queued thread-pool work items |
+| `dotnet.monitor.lock_contentions` | Lock contentions observed by the collector |
+| `dotnet.exceptions` | Exceptions by error type observed by the collector |
+| `dotnet.timer.count` | Active timers |
+| `dotnet.assembly.count` | Loaded assemblies |
+
+Refer to [.NET runtime collection](#net-runtime-collection) for prerequisites and timing controls, and [runtime GC buckets](../metrics-histograms/#runtime-garbage-collection-buckets) for JVM and V8 histograms.
 
 ### Span metrics formats
 
@@ -331,7 +397,7 @@ The Prometheus metrics exporter can export the following metrics data groups:
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
-- `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
+- `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
@@ -371,9 +437,16 @@ For example, setting the `instrumentations` option to: `http,grpc` enables the c
 
 You can set the default `features` list for all exporters at once using the global `metrics` configuration block, rather than repeating it under each exporter. The global setting is overridden by any per-exporter `features` value.
 
-The `metrics.features` option (environment variable: `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
+The `metrics.features` option (environment variable: `BEYLA_METRICS_FEATURES`, also accepted as `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
 
 You can also override the global features for one discovered service with `discovery.instrument[].metrics.features`. The deprecated `otel_metrics_export.features` and `prometheus_export.features` options override the global list for their respective exporters. Use `metrics.features` for new configurations.
+
+To collect application and runtime metrics for all instrumented services:
+
+```yaml
+metrics:
+  features: ["application", "application_runtime"]
+```
 
 To enable selected network and TCP statistics globally for all processes:
 
@@ -393,6 +466,7 @@ To enable `application_runtime` only for a specific process, use the per-service
 discovery:
   instrument:
     - name: my-java-service
+      exe_path: ".*/java"
       metrics:
         features:
           - application_runtime
@@ -400,9 +474,9 @@ discovery:
 
 ## JVM runtime metrics
 
-When the `application_runtime` feature is enabled for Java services, Beyla collects JVM memory pool metrics by attaching eBPF USDT probes to `hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end` in `libjvm.so`.
+When `application_runtime` is enabled for Java services, Beyla collects memory pool metrics from HotSpot USDT probes and other JVM metrics through the Java agent. Set `javaagent.enabled` to `false` to disable agent collection while keeping HotSpot memory metrics.
 
-To prevent excessive data collection on JVMs with high GC frequency, Beyla throttles the collection with a configurable sampling interval.
+The sampling interval controls HotSpot memory event sampling and Java agent class, thread, and CPU snapshots. It limits collection frequency for JVMs with frequent GC events.
 
 | YAML<p>environment variable</p> | Description | Type | Default |
 | -------------------------------- | ----------- | ---- | ------- |
@@ -414,3 +488,24 @@ Example:
 jvm_runtime_metrics:
   sampling_interval: 1s
 ```
+
+## .NET runtime collection
+
+Enable `application_runtime` for the target service. Beyla connects to the .NET diagnostic socket in the process's temporary directory, using `TMPDIR` when configured or `/tmp` otherwise. Diagnostics must be enabled and the socket must be accessible to Beyla.
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `dotnet_runtime_metrics.sampling_interval`<p>`OBI_DOTNET_RUNTIME_METRICS_SAMPLING_INTERVAL`</p> | Requested `System.Runtime` EventCounter interval and delay before reconnecting after a collection session ends. Must be greater than `0`. | Duration | `1s` |
+| `dotnet_runtime_metrics.timeout`<p>`OBI_DOTNET_RUNTIME_METRICS_TIMEOUT`</p> | Timeout for diagnostic IPC setup and EventPipe session shutdown. Must be greater than `0`. | Duration | `10s` |
+
+For example:
+
+```yaml
+metrics:
+  features: ["application", "application_runtime"]
+dotnet_runtime_metrics:
+  sampling_interval: 2s
+  timeout: 15s
+```
+
+Processes with the same service identity contribute to shared runtime series. Beyla tracks counter baselines per process; exported counters describe the observations available to the collector.

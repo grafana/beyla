@@ -93,6 +93,31 @@ otel_metrics_export:
     stat_tcp_rtt_histogram: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1]
 ```
 
+### Runtime garbage collection buckets
+
+Configure JVM and V8 GC duration boundaries under `otel_metrics_export.buckets` or `prometheus_export.buckets`. Values are seconds.
+
+| Field | Metric | Default boundaries |
+| --- | --- | --- |
+| `jvm_gc_duration_histogram` | `jvm.gc.duration` | `[0.01, 0.1, 1, 10]` |
+| `v8js_gc_duration_histogram` | `v8js.gc.duration` | `[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]` |
+
+For example:
+
+```yaml
+otel_metrics_export:
+  buckets:
+    jvm_gc_duration_histogram: [0.01, 0.1, 0.5, 1, 5]
+    v8js_gc_duration_histogram: [0.005, 0.01, 0.05, 0.1, 0.5, 1]
+prometheus_export:
+  port: 9090
+  buckets:
+    jvm_gc_duration_histogram: [0.01, 0.1, 0.5, 1, 5]
+    v8js_gc_duration_histogram: [0.005, 0.01, 0.05, 0.1, 0.5, 1]
+```
+
+The exporters use their own bucket configuration. These runtime histograms retain explicit boundaries when `otel_metrics_export.histogram_aggregation` selects exponential histograms.
+
 ## Use native histograms and exponential histograms
 
 Histogram resolution controls the balance between detail, memory use, and export payload size.

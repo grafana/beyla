@@ -249,6 +249,9 @@ CODE_INJECTIONS=(
     'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
     # Temporarily skip flaky traceparent extraction test
     '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
+    # The upstream test edits a Config v2 document, which Beyla can't load. TestConfigReloadV1
+    # (internal/test/beyla_extensions/config_reload_beyla.go) runs the same flow on Config v1.
+    '^func TestConfigReload[(]|t.Skip("Beyla loads Config v1 only: TestConfigReloadV1 covers this flow")'
     # The server can answer before instrumentation attaches on slower VM kernels.
     't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL, "testserver")'
     # Manual spans can reach Jaeger before the automatic outgoing client span.

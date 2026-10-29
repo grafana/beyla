@@ -280,6 +280,13 @@ func postProcessHTTPSpan(parseCtx *EBPFParseContext, httpSpan *request.Span, req
 		}
 	}
 
+	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.Cohere.Enabled {
+		span, ok := ebpfhttp.CohereSpan(httpSpan, req, resp)
+		if ok {
+			return span
+		}
+	}
+
 	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.GenAI.OpenAI.Enabled {
 		span, ok := ebpfhttp.OpenAISpan(httpSpan, req, resp)
 		if ok {

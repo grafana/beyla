@@ -17,7 +17,7 @@ type DNSEntry struct {
 // TODO: invalidate IPs when its owner (e.g. Pod is removed), or after long time without being
 // used/updated
 type InMemory struct {
-	access sync.RWMutex
+	access sync.Mutex
 	// key: IP address, values: hostname
 	// TODO: address scenarios where different hostnames point to a same IP
 	entries *simplelru.LRU[string, []string]
@@ -49,8 +49,8 @@ func (im *InMemory) StorePair(ip, name string) {
 }
 
 func (im *InMemory) GetHostnames(ip string) ([]string, error) {
-	im.access.RLock()
-	defer im.access.RUnlock()
+	im.access.Lock()
+	defer im.access.Unlock()
 	r, _ := im.entries.Get(ip)
 	return r, nil
 }

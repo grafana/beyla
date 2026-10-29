@@ -13,14 +13,22 @@
   }
 
   const orig = global[STORE];
+  // Older injections did not save the socket teardown method.
+  if (!orig.socketDestroy) {
+    orig.socketDestroy = net.Socket.prototype._destroy;
+  }
   net.Server.prototype.emit = orig.serverEmit;
   net.Socket.prototype.connect = orig.socketConnect;
   net.Socket.prototype.write = orig.socketWrite;
+  net.Socket.prototype._destroy = orig.socketDestroy;
   if (orig.ctxHook) {
     orig.ctxHook.disable();
     orig.ctxHook = undefined;
   }
   orig.requestFd = undefined;
+  if (orig.fdCache) {
+    orig.fdCache.clear();
+  }
 
   const { AsyncLocalStorage, createHook, executionAsyncResource } = require('async_hooks');
   const {
@@ -32,6 +40,14 @@
   const v8 = require('v8');
 
   const debug_enabled = false;
+  const MAX_FD_CACHE_ENTRIES = 10000;
+  const DEFAULT_FD_REFRESH_INTERVAL_MS = 1000;
+  const configuredFdRefreshIntervalMs = Number(
+    process.env.OBI_FD_CACHE_REFRESH_INTERVAL_MS || DEFAULT_FD_REFRESH_INTERVAL_MS,
+  );
+  const FD_REFRESH_INTERVAL_MS = Number.isFinite(configuredFdRefreshIntervalMs) && configuredFdRefreshIntervalMs >= 0
+    ? configuredFdRefreshIntervalMs
+    : DEFAULT_FD_REFRESH_INTERVAL_MS;
 
   // Substituted by the injector: trace-context propagation machinery is
   // per-async-operation cost (net prototype wraps + an async_hooks before
@@ -54,6 +70,9 @@
 
   if (TRACES_ENABLED) {
     const als = new AsyncLocalStorage();
+    const fdCache = orig.fdCache || new Map();
+    orig.fdCache = fdCache;
+
     const pad4 = n => String(n).padStart(4, '0');
 
     orig.requestFd = () => {
@@ -106,8 +125,21 @@
     };
 
     function correlate(incomingFd, outFd, socket) {
-      if (incomingFd < 0 || outFd < 0 || incomingFd === outFd) {
-        return Promise.resolve();
+      if (
+        !orig.requestFd ||
+        socket.destroyed ||
+        incomingFd == null || outFd == null ||
+        incomingFd < 0 || outFd < 0 || incomingFd === outFd
+      ) {
+        return;
+      }
+
+      const now = performance.now();
+      const cached = fdCache.get(outFd);
+      const hit = cached && cached.socket === socket && cached.incomingFd === incomingFd;
+
+      if (hit && now - cached.lastSentMs < FD_REFRESH_INTERVAL_MS) {
+        return;
       }
 
       if (debug_enabled) {
@@ -120,10 +152,23 @@
       }
 
       try {
-        fs.existsSync(`/dev/null/obi/${pad4(incomingFd)}${pad4(outFd)}`)
+        fs.existsSync(`/dev/null/obi/${pad4(incomingFd)}${pad4(outFd)}`);
+        if (!cached && fdCache.size >= MAX_FD_CACHE_ENTRIES) {
+          fdCache.delete(fdCache.keys().next().value);
+        }
+        fdCache.set(outFd, { incomingFd, socket, lastSentMs: now });
       } catch (err) {
       }
     }
+
+    net.Socket.prototype._destroy = function (err, callback) {
+      const outFd = this._handle && this._handle.fd;
+      const entry = fdCache.get(outFd);
+      if (entry && entry.socket === this) {
+        fdCache.delete(outFd);
+      }
+      return orig.socketDestroy.call(this, err, callback);
+    };
 
     net.Socket.prototype.connect = function (...args) {
       const store = als.getStore();
@@ -133,6 +178,7 @@
       if (store) {
         sock.once('connect', () => {
           const outFd = sock._handle && sock._handle.fd;
+          fdCache.delete(outFd);
           correlate(store.incomingFd, outFd, sock);
         });
       }

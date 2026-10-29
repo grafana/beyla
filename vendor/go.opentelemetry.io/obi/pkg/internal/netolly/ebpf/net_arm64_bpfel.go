@@ -103,6 +103,7 @@ const (
 	NetProgObiIngressFlowParse       = "obi_ingress_flow_parse"
 	NetVarG_bpfDebug                 = "g_bpf_debug"
 	NetVarG_bpfHeaderPropagation     = "g_bpf_header_propagation"
+	NetVarG_bpfJavaHttp1Enabled      = "g_bpf_java_http1_enabled"
 	NetVarG_bpfLoopEnabled           = "g_bpf_loop_enabled"
 	NetVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
 	NetVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
@@ -181,6 +182,7 @@ type NetMapSpecs struct {
 type NetVariableSpecs struct {
 	G_bpfDebug                 *ebpf.VariableSpec `ebpf:"g_bpf_debug"`
 	G_bpfHeaderPropagation     *ebpf.VariableSpec `ebpf:"g_bpf_header_propagation"`
+	G_bpfJavaHttp1Enabled      *ebpf.VariableSpec `ebpf:"g_bpf_java_http1_enabled"`
 	G_bpfLoopEnabled           *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.VariableSpec `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
@@ -240,6 +242,7 @@ func (m *NetMaps) Close() error {
 type NetVariables struct {
 	G_bpfDebug                 *ebpf.Variable `ebpf:"g_bpf_debug"`
 	G_bpfHeaderPropagation     *ebpf.Variable `ebpf:"g_bpf_header_propagation"`
+	G_bpfJavaHttp1Enabled      *ebpf.Variable `ebpf:"g_bpf_java_http1_enabled"`
 	G_bpfLoopEnabled           *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.Variable `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`

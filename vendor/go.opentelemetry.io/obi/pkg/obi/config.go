@@ -780,6 +780,13 @@ func (c *Config) ValidateStatic() error {
 	return c.validate(validationContext{})
 }
 
+// ValidateStaticForApplicationRefresh validates a selection refresh for an already
+// initialized application pipeline without inspecting host state. The pipeline
+// may become idle when all include rules are removed.
+func (c *Config) ValidateStaticForApplicationRefresh() error {
+	return c.validate(validationContext{applicationPipelineInitialized: true})
+}
+
 // ValidateForReceiver validates an OBI configuration whose signal consumers
 // are supplied by a Collector receiver.
 func (c *Config) ValidateForReceiver() error {
@@ -797,9 +804,10 @@ func (c *Config) ValidateStaticForReceiver() error {
 }
 
 type validationContext struct {
-	hostTracesSink           bool
-	hostMetricsSink          bool
-	checkCiliumCompatibility func(config.TCBackend) error
+	applicationPipelineInitialized bool
+	hostTracesSink                 bool
+	hostMetricsSink                bool
+	checkCiliumCompatibility       func(config.TCBackend) error
 }
 
 //nolint:cyclop
@@ -864,7 +872,7 @@ func (c *Config) validate(context validationContext) error {
 	}
 
 	networkEnabled := c.enabledForValidation(FeatureNetO11y, context)
-	applicationEnabled := c.enabledForValidation(FeatureAppO11y, context)
+	applicationEnabled := context.applicationPipelineInitialized || c.enabledForValidation(FeatureAppO11y, context)
 	statsEnabled := c.enabledForValidation(FeatureStatsO11y, context)
 	if !networkEnabled && !applicationEnabled && !statsEnabled {
 		return ConfigError("at least one of 'network', 'application' or 'stats' features must be enabled. " +

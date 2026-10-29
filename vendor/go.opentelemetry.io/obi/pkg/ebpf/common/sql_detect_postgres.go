@@ -23,6 +23,11 @@ type postgresPreparedStatementsKey struct {
 	stmtName string
 }
 
+type postgresPreparedStatement struct {
+	query            string
+	searchPathChange postgresSearchPathChange
+}
+
 type postgresPortalsKey struct {
 	connInfo   BpfConnectionInfoT
 	portalName string
@@ -33,13 +38,16 @@ const (
 	kPostgresQuery   = byte('Q')
 	kPostgresCommand = byte('C')
 	kPostgresParse   = byte('P')
+	kPostgresSync    = byte('S')
 
+	kPostgresParseComplete      = byte('1')
 	kPostgresBindComplete       = byte('2')
 	kPostgresCommandComplete    = byte('C')
 	kPostgresDataRow            = byte('D')
 	kPostgresEmptyQueryResponse = byte('I')
 	kPostgresErrorResponse      = byte('E')
 	kPostgresPortalSuspended    = byte('s')
+	kPostgresReadyForQuery      = byte('Z')
 
 	// pgHeaderLen is the size of the Postgres message header:
 	// 1 byte type + 4 bytes length field.
@@ -323,17 +331,17 @@ func postgresPreparedStatements(b *largebuf.LargeBuffer) (string, string, string
 }
 
 // StartupMessage: Int32 length, Int32 protocol, then null-terminated key/value pairs
-func parsePostgresStartup(b *largebuf.LargeBuffer) (string, bool) {
+func parsePostgresStartup(b *largebuf.LargeBuffer) (postgresNamespace, bool) {
 	r := b.NewReader()
 	// BPF drops 1-byte reads, so a refused SSL/GSSENC negotiation ('N') glues its request to the startup
 	for range 3 {
 		msgLen, err := r.ReadI32BE()
 		if err != nil || msgLen < 8 || msgLen > pgStartupMaxLen {
-			return "", false
+			return postgresNamespace{}, false
 		}
 		code, err := r.ReadI32BE()
 		if err != nil {
-			return "", false
+			return postgresNamespace{}, false
 		}
 		if (code == pgSSLRequestCode || code == pgGSSENCRequestCode) && msgLen == 8 {
 			continue
@@ -341,15 +349,16 @@ func parsePostgresStartup(b *largebuf.LargeBuffer) (string, bool) {
 		// trailing bytes past the startup's own length = some other length-prefixed protocol
 		if code>>16 != pgStartupProtocolMajor || msgLen < pgStartupMinLen ||
 			int(msgLen)-8 < r.Remaining() {
-			return "", false
+			return postgresNamespace{}, false
 		}
 		return parsePostgresStartupParams(&r, r.Remaining() == int(msgLen)-8)
 	}
-	return "", false
+	return postgresNamespace{}, false
 }
 
-func parsePostgresStartupParams(r *largebuf.LargeBufferReader, complete bool) (string, bool) {
-	var db, user string
+func parsePostgresStartupParams(r *largebuf.LargeBufferReader, complete bool) (postgresNamespace, bool) {
+	var db, user, searchPath, optionsSearchPath string
+	hasSearchPath, hasOptionsSearchPath := false, false
 	for {
 		key, err := r.ReadCStr()
 		if err != nil || len(key) == 0 {
@@ -366,29 +375,28 @@ func parsePostgresStartupParams(r *largebuf.LargeBufferReader, complete bool) (s
 			db = string(val)
 		case "user":
 			user = string(val)
+		case pgSearchPathParam:
+			searchPath, hasSearchPath = string(val), true
+		case pgOptionsParam:
+			optionsSearchPath, hasOptionsSearchPath = searchPathFromStartupOptions(string(val))
 		}
 	}
 	if db == "" && complete {
 		// the database name defaults to the user name, but a truncated capture may hide an explicit database param
 		db = user
 	}
-	return db, db != ""
-}
-
-func postgresDBForConn(parseCtx *EBPFParseContext, connInfo BpfConnectionInfoT) string {
-	if parseCtx.postgresDBNames == nil {
-		return ""
+	if !hasSearchPath && hasOptionsSearchPath {
+		searchPath = optionsSearchPath
 	}
-	if db, ok := parseCtx.postgresDBNames.Get(connInfo); ok {
-		return db
-	}
-	return ""
+	schema := firstSearchPathSchema(searchPath)
+	return postgresNamespace{db: db, startupSchema: schema, schema: schema}, db != ""
 }
 
 type postgresMessage struct {
 	typ     string
 	data    []byte
 	partial bool
+	sync    bool
 }
 
 func parsePostgresBindNames(data []byte) (portalName, statementName string, ok bool) {
@@ -464,17 +472,23 @@ func (it *postgresMessageIterator) next() (msg postgresMessage) {
 		}
 	}
 
-	msg = postgresMessage{typ: msgType, data: data, partial: partial}
+	msg = postgresMessage{typ: msgType, data: data, partial: partial, sync: hdrBuf[0] == kPostgresSync}
 	return
 }
 
 type postgresResponse struct {
 	executed bool
 	sqlError *request.SQLError
+
+	parsesCompleted []int
+}
+
+func (r postgresResponse) parseCompleted(syncIndex, parseIndex int) bool {
+	return syncIndex < len(r.parsesCompleted) && parseIndex < r.parsesCompleted[syncIndex]
 }
 
 func parsePostgresResponse(response []byte) postgresResponse {
-	var result postgresResponse
+	result := postgresResponse{parsesCompleted: []int{0}}
 	bound := false
 
 	for len(response) >= sqlprune.PostgresHdrSize {
@@ -486,6 +500,10 @@ func parsePostgresResponse(response []byte) postgresResponse {
 
 		message := response[:messageSize]
 		switch message[0] {
+		case kPostgresParseComplete:
+			result.parsesCompleted[len(result.parsesCompleted)-1]++
+		case kPostgresReadyForQuery:
+			result.parsesCompleted = append(result.parsesCompleted, 0)
 		case kPostgresBindComplete:
 			bound = true
 		case kPostgresCommandComplete, kPostgresDataRow, kPostgresEmptyQueryResponse, kPostgresPortalSuspended:
@@ -503,10 +521,11 @@ func parsePostgresResponse(response []byte) postgresResponse {
 
 func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, error) {
 	var (
-		hasSpan  bool
-		op, stmt string
-		tables   []string
-		span     request.Span
+		hasSpan          bool
+		op, stmt         string
+		tables           []string
+		span             request.Span
+		searchPathChange postgresSearchPathChange
 	)
 
 	reqR := requestBuffer.NewReader()
@@ -529,6 +548,9 @@ func handlePostgres(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBu
 		msg      postgresMessage
 		it       = postgresMessageIterator{r: reqR}
 		sqlError = response.sqlError
+
+		syncIndex, parseIndex int
+		rejectedParses        map[string]postgresPreparedStatement
 	)
 
 Loop:
@@ -541,8 +563,15 @@ Loop:
 			return span, errFallback
 		}
 
+		if msg.sync {
+			syncIndex++
+			parseIndex = 0
+			continue
+		}
+
 		switch msg.typ {
 		case "QUERY":
+			searchPathChange = parsePostgresSearchPathChange(msg.data)
 			op, tables, stmt = detectSQL(msg.data)
 			hasSpan = true
 			break Loop
@@ -555,10 +584,23 @@ Loop:
 			stmtNameLen := len(stmtName)
 			_, _, stmt = detectSQL(msg.data[stmtNameLen:])
 
-			parseCtx.postgresPreparedStatements.Add(postgresPreparedStatementsKey{
-				connInfo: event.ConnInfo,
-				stmtName: stmtName,
-			}, stmt)
+			prepared := postgresPreparedStatement{query: stmt}
+			if !msg.partial && stmtNameLen < len(msg.data) {
+				prepared.searchPathChange = parsePostgresSearchPathChange(msg.data[stmtNameLen+1:])
+			}
+
+			if response.parseCompleted(syncIndex, parseIndex) {
+				parseCtx.postgresPreparedStatements.Add(postgresPreparedStatementsKey{
+					connInfo: event.ConnInfo,
+					stmtName: stmtName,
+				}, prepared)
+			} else {
+				if rejectedParses == nil {
+					rejectedParses = map[string]postgresPreparedStatement{}
+				}
+				rejectedParses[stmtName] = postgresPreparedStatement{query: stmt}
+			}
+			parseIndex++
 
 			if !msg.partial || !response.executed {
 				continue
@@ -592,16 +634,20 @@ Loop:
 				continue
 			}
 
-			preparedStmtKey := postgresPreparedStatementsKey{
-				connInfo: event.ConnInfo,
-				stmtName: stmtName,
+			prepared, found := rejectedParses[stmtName]
+			if !found {
+				prepared, found = parseCtx.postgresPreparedStatements.Get(postgresPreparedStatementsKey{
+					connInfo: event.ConnInfo,
+					stmtName: stmtName,
+				})
 			}
-
-			stmt, found = parseCtx.postgresPreparedStatements.Get(preparedStmtKey)
 			if !found {
 				slog.Debug("Postgres EXECUTE command with unknown statement", "stmtName", stmtName)
 				continue
 			}
+
+			stmt = prepared.query
+			searchPathChange = prepared.searchPathChange
 
 			op, tables = sqlprune.SQLParseOperationAndTables(stmt)
 			hasSpan = true
@@ -609,6 +655,10 @@ Loop:
 		default:
 			continue
 		}
+	}
+
+	if sqlError == nil && response.executed {
+		applyPostgresSearchPathChange(parseCtx, event.ConnInfo, searchPathChange)
 	}
 
 	if !hasSpan {
@@ -622,6 +672,6 @@ Loop:
 	}
 
 	span = TCPToSQLToSpan(event, op, tables, stmt, request.DBPostgres, msg.typ, sqlError)
-	span.DBNamespace = postgresDBForConn(parseCtx, event.ConnInfo)
+	span.DBNamespace = postgresNamespaceForConn(parseCtx, event.ConnInfo)
 	return span, nil
 }

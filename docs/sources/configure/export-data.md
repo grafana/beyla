@@ -98,7 +98,9 @@ If you don't set a protocol Beyla sets the protocol as follows:
 
 The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery](./) configuration.
 
-- `application`: Application-level metrics
+- `application`: Application RED metrics and HTTP body-size histograms
+- `application_red`: Application RED metrics without HTTP body-size histograms
+- `application_sizes`: HTTP request and response body-size histograms
 - `application_span`: Application-level trace span metrics using legacy naming conventions.
   Deprecated: use `application_span_otel` instead. The name keeps working, but Beyla logs a deprecation warning at startup and the feature is removed in a future release
 - `application_span_otel`: Application-level trace span metrics using OpenTelemetry naming conventions. Refer to [span metrics formats](#span-metrics-formats) for differences between `application_span` and `application_span_otel`
@@ -390,7 +392,9 @@ To make `deployment_environment` visible in Prometheus, you need to add it to th
 
 The Prometheus metrics exporter can export the following metrics data groups:
 
-- `application`: Application-level metrics
+- `application`: Application RED metrics and HTTP body-size histograms
+- `application_red`: Application RED metrics without HTTP body-size histograms
+- `application_sizes`: HTTP request and response body-size histograms
 - `application_span`: Application-level trace span metrics
 - `application_host` Application-level host metrics for host based pricing
 - `application_service_graph`: Application-level service graph metrics.
@@ -435,11 +439,27 @@ For example, setting the `instrumentations` option to: `http,grpc` enables the c
 
 ## Global metrics features
 
-You can set the default `features` list for all exporters at once using the global `metrics` configuration block, rather than repeating it under each exporter. The global setting is overridden by any per-exporter `features` value.
+You can set the default `features` list for all exporters at once using the global `metrics` configuration block, rather than repeating it under each exporter. Deprecated exporter feature settings can override this global setting for both exporters.
 
 The `metrics.features` option (environment variable: `BEYLA_METRICS_FEATURES`, also accepted as `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
 
-You can also override the global features for one discovered service with `discovery.instrument[].metrics.features`. The deprecated `otel_metrics_export.features` and `prometheus_export.features` options override the global list for their respective exporters. Use `metrics.features` for new configurations.
+You can also override the global features for one discovered service with `discovery.instrument[].metrics.features`. The deprecated exporter-specific options also override the global list. When the OTLP metrics endpoint is enabled and `otel_metrics_export.features` is configured, that list wins. Otherwise, an enabled Prometheus endpoint with `prometheus_export.features` supplies the list. This normalized list applies to both exporters. Use `metrics.features` for new configurations.
+
+`application` enables both `application_red` and `application_sizes`. The size group exports `http.server.request.body.size`, `http.server.response.body.size`, `http.client.request.body.size`, and `http.client.response.body.size`. To collect RED metrics without these four histograms:
+
+```yaml
+metrics:
+  features: ["application_red"]
+```
+
+To collect both groups explicitly:
+
+```yaml
+metrics:
+  features: ["application_red", "application_sizes"]
+```
+
+The same values are accepted in `discovery.instrument[].metrics.features` and the deprecated exporter lists. Per-service lists replace the global selection for the matching process. The exporter environment variables are `BEYLA_OTEL_METRICS_FEATURES` and `BEYLA_PROMETHEUS_FEATURES`.
 
 To collect application and runtime metrics for all instrumented services:
 

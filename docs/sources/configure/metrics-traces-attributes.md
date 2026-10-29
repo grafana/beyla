@@ -117,6 +117,21 @@ In the previous example, all metrics with a name starting with `http_` or `http.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
+### Select TCP handshake roles
+
+The `beyla_stat_tcp_successful_connections` selector accepts `network.tcp.handshake.role`, also spelled `network_tcp_handshake_role`. This attribute is opt-in. Values are `client` for the endpoint that initiated the connection, `server` for the accepting endpoint, and `unknown` when the role is unavailable.
+
+To add the role to the default attributes:
+
+```yaml
+attributes:
+  select:
+    beyla_stat_tcp_successful_connections:
+      include: ["*", "network.tcp.handshake.role"]
+```
+
+An explicit `include` list replaces the defaults. The wildcard retains all available attributes; use a narrower list when you need fewer dimensions. To keep only the existing defaults, leave `include` unset.
+
 ## Select trace attributes
 
 Besides metric names, the `select` subsection accepts the special key `traces`, which controls the optional attributes exported on OTLP spans.

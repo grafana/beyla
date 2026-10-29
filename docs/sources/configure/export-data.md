@@ -141,12 +141,24 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 - `network_flow_packets`: Network packet counts. Enables `beyla.network.flow.packets` (`beyla_network_flow_packets_total` in Prometheus)
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `stats`: All TCP statistics metrics, including the higher-frequency `stats_tcp_io` probes
+- `stats_tcp_successful_connections`: Successful TCP connection counts
 - `stats_tcp_failed_connections`: Failed TCP connection counts. Enables `beyla.stat.tcp.failed.connections` (`beyla_stat_tcp_failed_connections_total` in Prometheus)
 - `stats_tcp_io`: Bytes sent and received at the TCP socket layer. Enables `beyla.stat.tcp.io` (`beyla_stat_tcp_io_bytes_total` in Prometheus)
 - `stats_tcp_retransmits`: TCP retransmission counts. Enables `beyla.stat.tcp.retransmits` (`beyla_stat_tcp_retransmits_total` in Prometheus)
 - `stats_tcp_rtt`: Smoothed TCP round-trip time. Enables the `beyla.stat.tcp.rtt` histogram (`beyla_stat_tcp_rtt_seconds` in Prometheus)
 
 The `stats` feature enables every TCP statistics group. The `stats_tcp_io` probes run for every `tcp_sendmsg` and `tcp_cleanup_rbuf` call, so their overhead grows with TCP send and receive activity. If you don't need TCP I/O byte counts, select the lower-frequency TCP statistics individually instead of using `stats`.
+
+### Successful TCP connections
+
+Select `stats_tcp_successful_connections` to export `beyla.stat.tcp.successful.connections` (`beyla_stat_tcp_successful_connections_total` in Prometheus). The `stats` bundle includes this counter.
+
+```yaml
+metrics:
+  features: ["application", "stats_tcp_successful_connections"]
+```
+
+The counter records successful TCP handshakes rather than application requests. The same feature is accepted in per-service and deprecated exporter feature lists. Use [attribute selection](../metrics-traces-attributes/#select-tcp-handshake-roles) to split connections by handshake role.
 
 ### Application runtime metrics
 
@@ -406,6 +418,7 @@ The Prometheus metrics exporter can export the following metrics data groups:
 - `network_flow_packets`: Network packet counts
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `stats`: All TCP statistics metrics
+- `stats_tcp_successful_connections`: Successful TCP connection counts
 - `stats_tcp_failed_connections`: Failed TCP connection counts
 - `stats_tcp_io`: Bytes sent and received at the TCP socket layer
 - `stats_tcp_retransmits`: TCP retransmission counts

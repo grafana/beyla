@@ -63,7 +63,7 @@ For the full list of capabilities, the capabilities each feature needs, and exam
 
 Beyla creates metrics and spans for the requests that your services receive and send, such as HTTP, gRPC, and database calls.
 It doesn't create spans for internal functions in your code.
-To instrument specific parts of your code, such as critical operations, use OpenTelemetry SDKs or manual instrumentation.
+To instrument specific parts of your code, such as critical operations, add spans with an OpenTelemetry SDK.
 
 Beyla trace support varies by language and framework.
 For example, Beyla may not correlate spans correctly for reactive Java frameworks.
@@ -73,7 +73,7 @@ To compare Beyla and SDK support for your languages and frameworks, refer to [Co
 
 - [Set up Beyla][setup]
 - [Beyla security, permissions, and capabilities][security]
-- [Language quickstart guides][quickstart]
+- [Beyla quickstart guides][quickstart]
 
 [btf]: https://www.kernel.org/doc/html/latest/bpf/btf.html
 [distributed-traces]: ../../traces/

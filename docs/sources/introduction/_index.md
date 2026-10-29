@@ -37,12 +37,12 @@ To start using Beyla, complete the following steps:
 
 Learn more about Beyla with the following topics:
 
-- [Why use Beyla][why]: Understand the benefits of eBPF-based instrumentation
-- [How Beyla works][how]: Learn how Beyla uses eBPF to capture metrics and traces
+- [Why use Grafana Beyla][why]: Understand the benefits of eBPF-based instrumentation
+- [How Grafana Beyla works][how]: Learn how Beyla uses eBPF to capture metrics and traces
 - [Compare Beyla and OpenTelemetry SDKs][compare]: Decide when to use Beyla, SDKs, or both
-- [Compare Beyla and OpenTelemetry eBPF Instrumentation][obi]: Compare Beyla with the upstream OBI project
-- [Requirements and limitations][requirements]: Check the kernel, Go version, and permission requirements
-- [Security, permissions, and capabilities][security]: Run Beyla with the minimum Linux capabilities
+- [Compare Beyla and OpenTelemetry eBPF Instrumentation][obi]: Understand how Beyla relates to the upstream OBI project
+- [Beyla requirements and limitations][requirements]: Check the kernel, Go version, and permission requirements
+- [Beyla security, permissions, and capabilities][security]: Run Beyla with the minimum Linux capabilities
 
 [obi-upstream]: https://opentelemetry.io/docs/zero-code/obi/
 [obi]: ./obi/

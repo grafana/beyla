@@ -16,8 +16,7 @@ For compiled languages, such as Go and Rust, you often add tracing calls to the 
 You repeat this work for every service and every language you run.
 
 Beyla takes a different approach.
-It uses eBPF to observe your applications from outside the application process.
-You get application observability without changes to application code or configuration.
+It uses eBPF to observe your applications, so you get application observability without changes to application code or configuration.
 
 ## What Beyla provides
 
@@ -37,7 +36,7 @@ Beyla offers the following features:
 
 A faulty kernel module can cause the Linux kernel to hang.
 The kernel verifies every eBPF program before it runs, so a faulty eBPF program can't.
-To learn how the verifier works, refer to [How Beyla works][how].
+To learn how the verifier works, refer to [How Grafana Beyla works][how].
 
 ## eBPF instrumentation improves security
 
@@ -48,7 +47,7 @@ Beyla doesn't add a dependency to your application.
 Beyla runs as a separate process, and its eBPF programs run in the kernel, outside your application process memory.
 A vulnerability in the eBPF instrumentation affects only telemetry collection and generation.
 
-Beyla runs separately from your application, so you can apply strict access policies to it.
+You can also apply strict access policies to the Beyla process.
 For example, you can configure Beyla to push telemetry and not open any ports.
 An SDK or agent inside your application has the same permissions and network access as your application.
 
@@ -84,7 +83,7 @@ To learn more, refer to [Measuring total request times, instead of service times
 
 ## Next steps
 
-- [How Beyla works][how]
+- [How Grafana Beyla works][how]
 - [Compare Beyla and OpenTelemetry SDKs][compare]
 - [Beyla requirements and limitations][requirements]
 

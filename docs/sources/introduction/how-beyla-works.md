@@ -56,11 +56,11 @@ Beyla exports data in open formats, so you can choose your backend:
 - Send OpenTelemetry metrics and traces directly to an OTLP endpoint, such as Grafana Cloud.
 - Expose a Prometheus endpoint that Prometheus or Grafana Alloy can scrape.
 
-In Grafana Cloud, Application Observability and Knowledge Graph use Beyla metrics and traces.
-In Grafana, you can correlate Beyla metrics and traces with your logs and infrastructure data.
-To set up Beyla for Grafana Cloud, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-grafana-cloud].
-
 To configure exports, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].
+
+In Grafana, you can correlate Beyla metrics and traces with your logs and infrastructure data.
+In Grafana Cloud, Application Observability and Knowledge Graph use Beyla metrics and traces.
+To set up Beyla for Grafana Cloud, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-grafana-cloud].
 
 ## Where Beyla runs
 

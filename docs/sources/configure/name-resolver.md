@@ -30,7 +30,7 @@ The possible values for the name resolver sources are:
 - `ecs`. Resolve ECS task IP addresses through the ECS inventory. Requires detected ECS metadata and AWS credentials with `ecs:ListTasks` and `ecs:DescribeTasks` permissions.
 - `route53`. Resolve IP addresses from configured Route53 hosted zones. Requires detected EC2 metadata and `route53:ListResourceRecordSets` permission for those zones.
 - `gce`. Resolve Compute Engine VM addresses to managed instance group names. Requires detected GCE metadata and read access to the Compute Engine inventory.
-- `azure`. Resolve Azure VM addresses to scale-set names. Requires detected Azure VM metadata and read access to VM, scale-set, and network-interface inventories.
+- `azure`. Resolve Azure VM addresses to scale-set names. Requires detected Azure VM metadata outside Kubernetes and read access to VM, scale-set, and network-interface inventories. This source is not activated when Beyla detects Kubernetes.
 
 Setting `sources` replaces the default `["k8s", "rdns"]` list. Include those entries explicitly if you want to keep them alongside cloud sources. ECS names take precedence over Route53 names for the same IP.
 

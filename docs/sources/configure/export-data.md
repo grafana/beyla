@@ -100,7 +100,7 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 
 - `application`: Application RED metrics and HTTP body-size histograms
 - `application_red`: Application RED metrics without HTTP body-size histograms
-- `application_sizes`: HTTP request and response body-size histograms
+- `application_sizes`: HTTP request and response body-size histograms. Requires `application_red` in the same feature list; use `application` to enable both
 - `application_span`: Application-level trace span metrics using legacy naming conventions.
   Deprecated: use `application_span_otel` instead. The name keeps working, but Beyla logs a deprecation warning at startup and the feature is removed in a future release
 - `application_span_otel`: Application-level trace span metrics using OpenTelemetry naming conventions. Refer to [span metrics formats](#span-metrics-formats) for differences between `application_span` and `application_span_otel`

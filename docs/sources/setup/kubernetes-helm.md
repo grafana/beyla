@@ -20,16 +20,6 @@ For more details about the diverse Helm configuration options, check out the
 document.
 {{% /admonition %}}
 
-Contents:
-
-<!-- TOC -->
-
-- [Deploy Beyla with helm](#deploy-beyla-from-helm)
-- [Configure Beyla](#configure-beyla)
-- [Scrape metrics with the Prometheus Operator](#scrape-metrics-with-the-prometheus-operator)
-- [Provide secrets to the Helm configuration](#provide-secrets-to-the-helm-configuration)
-<!-- TOC -->
-
 ## Deploy Beyla with helm
 
 First, you need to add the Grafana helm repository to Helm:

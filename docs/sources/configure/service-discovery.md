@@ -245,7 +245,7 @@ For an export signal to function, you must configure the corresponding exporter 
 Additionally to configuring custom export modes per discovery instrumentation criteria, Beyla allows you to override the global metrics export features
 for each discovery criteria by adding `metrics > features` as a property to individual `discovery > instrument` entries.
 
-Accepted values for `features` are: `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_service_graph_connection_info`, `application_process`, `application_runtime`, `network`, `network_flow_packets`, `network_inter_zone`, `stats`, `stats_tcp_failed_connections`, `stats_tcp_io`, `stats_tcp_retransmits`, and `stats_tcp_rtt`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
+Accepted values for `features` are: `application`, `application_red`, `application_sizes`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_service_graph_connection_info`, `application_process`, `application_runtime`, `network`, `network_flow_packets`, `network_inter_zone`, `stats`, `stats_tcp_successful_connections`, `stats_tcp_failed_connections`, `stats_tcp_io`, `stats_tcp_retransmits`, and `stats_tcp_rtt`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
 
 For example:
 
@@ -500,19 +500,33 @@ The `min_process_age` (environment variable `BEYLA_MIN_PROCESS_AGE`) option sets
 
 Since Beyla instruments at the protocol level, for HTTP requests we see the actual URL path, while the OpenTelemetry specification requires that we provide a low-cardinality URL route. Beyla has purpose built route detector, which uses heuristics and cardinality reduction logic to automatically determine the low-cardinality route from the protocol provided URL path (for more information on this refer to [Routes Decorator](../routes-decorator/)). However, for certain programming languages, Beyla can process the application symbols and extract the actual routes set in the application.
 
-Currently the route harvesting is supported for `Java`, `Go` and `NodeJS`.
+Route harvesting supports `java`, `nodejs`, `go`, `dotnet`, `python`, `php`, and `ruby`. An empty disabled list enables all eligible harvesters.
 
-| YAML<p>environment variable</p>               | Description                                                                                               | Type    | Default |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |
-| `route_harvester_timeout`<p>`BEYLA_ROUTE_HARVESTER_TIMEOUT`</p> | A timeout to abandon the route harvesting if it takes too long | string    | "10s" |
-| `disabled_route_harvesters` | A list of disabled route harvesters. Available choices: ["`java`", "`nodejs`", "`go`"]                | list of strings    | (empty) |
+YAML section: `discovery`
 
-The route harvesting for `Java` applications works by communicating with the JVM at runtime. `Java` application typically load after a bit of time, which may result in incomplete route
-information, if Beyla harvests the Java application routes immediately as it instruments the process. Therefore, Beyla performs Java route harvesting on Java applications which have been
-running for at least 60 seconds. This value can be modified by setting the environment variable `BEYLA_JAVA_ROUTE_HARVEST_DELAY` or by setting the configuration file option:
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `route_harvester_timeout`<p>`BEYLA_ROUTE_HARVESTER_TIMEOUT`</p> | Maximum time allowed for route harvesting. Must be greater than `0`. | Duration | `10s` |
+| `disabled_route_harvesters` | Languages to skip: `java`, `nodejs`, `go`, `dotnet`, `python`, `php`, or `ruby`. | list of strings | `[]` |
+| `route_harvester_advanced.java_harvest_delay`<p>`BEYLA_JAVA_ROUTE_HARVEST_DELAY`</p> | Minimum Java process age before harvesting routes, allowing the application to initialize. | Duration | `5s` |
 
-```
+The additional harvesters read application files accessible through the target process:
+
+| Language | Route sources | Prerequisites |
+| --- | --- | --- |
+| `dotnet` | ASP.NET controller attributes and minimal API route registrations | Readable managed entry assembly with route metadata or IL |
+| `python` | Flask, Django, and FastAPI declarations | Readable application Python source files |
+| `php` | `Laravel`, `Symfony`, and `Slim` declarations | Readable project source and configuration files |
+| `ruby` | Rails route declarations | Readable application route files |
+
+Harvested routes supplement route detection in Beyla. Dynamically constructed routes might not be recoverable from static files.
+
+For example, disable the Python and Ruby harvesters and give Java more time to initialize:
+
+```yaml
 discovery:
+  disabled_route_harvesters: ["python", "ruby"]
+  route_harvester_timeout: 15s
   route_harvester_advanced:
     java_harvest_delay: 30s
 ```

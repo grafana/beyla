@@ -81,7 +81,7 @@ otel_metrics_export:
 | `OTEL_EXPORTER_OTLP_PROTOCOL`                                                                | Similar to the shared endpoint, the protocol for metrics and traces.                                                                                                                                                                                                                                                                                           | string          | Inferred from port usage    |
 | `insecure_skip_verify`<p>`BEYLA_OTEL_INSECURE_SKIP_VERIFY`</p>                               | If `true`, Beyla skips verifying and accepts any server certificate. Only override this setting for non-production environments.                                                                                                                                                                                                                               | boolean         | `false`                     |
 | `interval`<p>`BEYLA_METRICS_INTERVAL`</p>                                                    | The duration between exports.                                                                                                                                                                                                                                                                                                                                  | Duration        | `60s`                       |
-| `features`<p>`BEYLA_OTEL_METRICS_FEATURES`</p>                                               | The list of metric groups Beyla exports data for, refer to [metrics export features](#metrics-export-features).                                                                                                                                                                                                                                                                                                                        | list of strings | `["application"]`           |
+| `features` | Deprecated YAML override for the global metric feature list. Use `metrics.features` for new configurations. `BEYLA_OTEL_METRICS_FEATURES` sets the global list. | list of strings | Unset; inherits `metrics.features` |
 | `allow_service_graph_self_references`<p>`BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES`</p> | Controls if Beyla includes self-referencing services in service graph generation, for example a service that calls itself. Self referencing reduces service graph usefulness and increases data cardinality.                                                                                                                                                   | boolean         | `false`                     |
 | `instrumentations`<p>`BEYLA_OTEL_METRICS_INSTRUMENTATIONS`</p>                               | The list of metrics instrumentation Beyla collects data for, refer to [metrics instrumentation](#metrics-instrumentation) section.                                                                                                                                                                                                                             | list of strings | `["*"]`                     |
 | `buckets`                                                                                    | Sets how you can override bucket boundaries of diverse histograms, refer to [override histogram buckets](../metrics-histograms/).                                                                                                                                                                                                                              | (n/a)           | Object                      |
@@ -98,7 +98,9 @@ If you don't set a protocol Beyla sets the protocol as follows:
 
 The Beyla metrics exporter can export the following metrics data groups for processes matching entries in the [metrics discovery](./) configuration.
 
-- `application`: Application-level metrics
+- `application`: Application RED metrics and HTTP body-size histograms
+- `application_red`: Application RED metrics without HTTP body-size histograms
+- `application_sizes`: HTTP request and response body-size histograms. Requires `application_red` in the same feature list; use `application` to enable both
 - `application_span`: Application-level trace span metrics using legacy naming conventions.
   Deprecated: use `application_span_otel` instead. The name keeps working, but Beyla logs a deprecation warning at startup and the feature is removed in a future release
 - `application_span_otel`: Application-level trace span metrics using OpenTelemetry naming conventions. Refer to [span metrics formats](#span-metrics-formats) for differences between `application_span` and `application_span_otel`
@@ -134,11 +136,12 @@ The Beyla metrics exporter can export the following metrics data groups for proc
   directly; it does not require enabling the Tempo
   `service-graphs-connection-info` processor.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
-- `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
+- `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for collection requirements and metric descriptions.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts. Enables `beyla.network.flow.packets` (`beyla_network_flow_packets_total` in Prometheus)
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `stats`: All TCP statistics metrics, including the higher-frequency `stats_tcp_io` probes
+- `stats_tcp_successful_connections`: Successful TCP connection counts
 - `stats_tcp_failed_connections`: Failed TCP connection counts. Enables `beyla.stat.tcp.failed.connections` (`beyla_stat_tcp_failed_connections_total` in Prometheus)
 - `stats_tcp_io`: Bytes sent and received at the TCP socket layer. Enables `beyla.stat.tcp.io` (`beyla_stat_tcp_io_bytes_total` in Prometheus)
 - `stats_tcp_retransmits`: TCP retransmission counts. Enables `beyla.stat.tcp.retransmits` (`beyla_stat_tcp_retransmits_total` in Prometheus)
@@ -146,9 +149,22 @@ The Beyla metrics exporter can export the following metrics data groups for proc
 
 The `stats` feature enables every TCP statistics group. The `stats_tcp_io` probes run for every `tcp_sendmsg` and `tcp_cleanup_rbuf` call, so their overhead grows with TCP send and receive activity. If you don't need TCP I/O byte counts, select the lower-frequency TCP statistics individually instead of using `stats`.
 
+### Successful TCP connections
+
+Select `stats_tcp_successful_connections` to export `beyla.stat.tcp.successful.connections` (`beyla_stat_tcp_successful_connections_total` in Prometheus). The `stats` bundle includes this counter.
+
+```yaml
+metrics:
+  features: ["application", "stats_tcp_successful_connections"]
+```
+
+The counter records successful TCP handshakes rather than application requests. The same feature is accepted in per-service and deprecated exporter feature lists. Use [attribute selection](../metrics-traces-attributes/#select-tcp-handshake-roles) to split connections by handshake role.
+
 ### Application runtime metrics
 
-When `application_runtime` is enabled, Beyla collects language runtime metrics for instrumented Go and Java processes.
+Enable `application_runtime` to collect runtime metrics for instrumented Go, Java, Node.js, Python, and .NET processes. It is disabled by default. Configure it globally or per service through [metrics features](#global-metrics-features).
+
+Go and Python metrics use eBPF collection. Node.js metrics require the injected Node.js agent. JVM memory metrics use HotSpot USDT probes; the Java agent supplies class, thread, CPU, and GC duration metrics. .NET metrics use the runtime diagnostic socket and EventPipe.
 
 **Go runtime metrics**
 
@@ -169,7 +185,7 @@ When `application_runtime` is enabled, Beyla collects language runtime metrics f
 
 **JVM runtime metrics**
 
-JVM runtime metrics are collected via eBPF USDT probes on `libjvm.so` (`hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end`) without requiring any bytecode agent.
+JVM memory pool metrics use eBPF USDT probes on `libjvm.so` (`hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end`). They remain available when `javaagent.enabled` is `false`. The other JVM metrics require the Java agent.
 
 | Metric | Description |
 | ------ | ----------- |
@@ -177,10 +193,90 @@ JVM runtime metrics are collected via eBPF USDT probes on `libjvm.so` (`hotspot:
 | `jvm.memory.committed` | Bytes committed (reserved) for the JVM memory pool |
 | `jvm.memory.limit` | Maximum bytes the memory pool can use |
 | `jvm.memory.used_after_last_gc` | Bytes used in the pool immediately after the last GC cycle |
+| `jvm.class.loaded` | Classes loaded |
+| `jvm.class.unloaded` | Classes unloaded |
+| `jvm.class.count` | Current loaded classes |
+| `jvm.thread.count` | Live platform threads, split by daemon status |
+| `jvm.cpu.time` | Process CPU time in seconds |
+| `jvm.cpu.count` | Available processors |
+| `jvm.cpu.recent_utilization` | Recent process CPU utilization |
+| `jvm.gc.duration` | GC action duration in seconds |
 
-All JVM metrics carry the attributes `jvm.memory.type` (for example, `heap`, `non_heap`) and `jvm.memory.pool.name` (for example, `G1 Eden Space`).
+JVM memory metrics carry the attributes `jvm.memory.type` (for example, `heap`, `non_heap`) and `jvm.memory.pool.name` (for example, `G1 Eden Space`).
 
 To control how frequently JVM GC events are sampled, refer to [JVM runtime metrics](#jvm-runtime-metrics).
+
+**Node.js runtime metrics**
+
+Set `nodejs.enabled` to `true` and enable `application_runtime` to collect these metrics. Disabling the agent disables their collection.
+
+| Metric | Description |
+| --- | --- |
+| `nodejs.eventloop.time` | Active and idle event loop time in seconds |
+| `nodejs.eventloop.utilization` | Event loop utilization |
+| `nodejs.eventloop.delay.min` | Minimum event loop delay in seconds |
+| `nodejs.eventloop.delay.max` | Maximum event loop delay in seconds |
+| `nodejs.eventloop.delay.mean` | Mean event loop delay in seconds |
+| `nodejs.eventloop.delay.stddev` | Standard deviation of event loop delay in seconds |
+| `nodejs.eventloop.delay.p50` | 50th percentile event loop delay in seconds |
+| `nodejs.eventloop.delay.p90` | 90th percentile event loop delay in seconds |
+| `nodejs.eventloop.delay.p99` | 99th percentile event loop delay in seconds |
+| `v8js.gc.duration` | GC duration in seconds |
+| `v8js.memory.heap.limit` | Heap limit in bytes, per space |
+| `v8js.memory.heap.used` | Used heap bytes, per space |
+| `v8js.memory.heap.space.available_size` | Available bytes per heap space |
+| `v8js.memory.heap.space.physical_size` | Committed bytes per heap space |
+| `v8js.resource.active` | Active resources, grouped by resource type |
+
+**Python runtime metrics**
+
+| Metric | Description |
+| --- | --- |
+| `cpython.gc.collections` | GC collections by generation |
+| `cpython.gc.collected_objects` | Collected objects by generation |
+| `cpython.gc.uncollectable_objects` | Objects that GC could not collect, by generation |
+
+**.NET runtime metrics**
+
+| Metric | Description |
+| --- | --- |
+| `dotnet.process.cpu.count` | Available processors |
+| `dotnet.process.cpu.time` | Process CPU time in seconds, split by user and system mode |
+| `dotnet.process.memory.working_set` | Physical memory mapped to the process, in bytes |
+| `dotnet.gc.collections` | Collections since the collector baseline, exclusive per generation |
+| `dotnet.gc.heap.total_allocated` | Allocated heap bytes observed by the collector |
+| `dotnet.gc.last_collection.heap.size` | Heap size in bytes at the latest collection, per generation |
+| `dotnet.gc.last_collection.heap.fragmentation.size` | Heap fragmentation in bytes at the latest collection, per generation |
+| `dotnet.gc.last_collection.memory.committed_size` | Committed GC memory in bytes at the latest collection |
+| `dotnet.gc.pause.time` | GC pause time in seconds observed by the collector |
+| `dotnet.jit.compiled_il.size` | Compiled IL bytes |
+| `dotnet.jit.compiled_methods` | Compiled methods |
+| `dotnet.jit.compilation.time` | JIT compilation time in seconds observed by the collector |
+| `dotnet.thread_pool.thread.count` | Current thread-pool threads |
+| `dotnet.thread_pool.work_item.count` | Completed thread-pool work items observed by the collector |
+| `dotnet.thread_pool.queue.length` | Queued thread-pool work items |
+| `dotnet.monitor.lock_contentions` | Lock contentions observed by the collector |
+| `dotnet.exceptions` | Exceptions by error type observed by the collector |
+| `dotnet.timer.count` | Active timers |
+| `dotnet.assembly.count` | Loaded assemblies |
+
+Refer to [.NET runtime collection](#collect-net-runtime-metrics) for prerequisites and timing controls, and [runtime GC buckets](../metrics-histograms/#runtime-garbage-collection-buckets) for JVM and V8 histograms.
+
+Runtime exporters use fixed language-specific dimensions, including the following:
+
+| Metric group | Dimensions |
+| --- | --- |
+| JVM memory | `jvm.memory.type`, `jvm.memory.pool.name` |
+| JVM threads | `jvm.thread.daemon` |
+| JVM GC | `jvm.gc.name`, `jvm.gc.action` |
+| Node.js event loop time | `nodejs.eventloop.state` |
+| V8 GC and heap | `v8js.gc.type`, `v8js.heap.space.name` on their respective metrics |
+| V8 active resources | `v8js.resource.type` |
+| .NET GC | `dotnet.gc.heap.generation` |
+| .NET CPU | `cpu.mode` |
+| .NET exceptions | `error.type` |
+
+These runtime dimensions are fixed by the collectors. Per-metric `attributes.select` lists apply to the application, network, and TCP metrics described in [attribute selection](../metrics-traces-attributes/).
 
 ### Span metrics formats
 
@@ -245,6 +341,26 @@ If you don't set a protocol Beyla sets the protocol as follows:
 
 - `grpc`: if the port ends in `4317`, for example `4317`, `14317`, or `24317`.
 - `http/protobuf`: if the port ends in `4318`, for example `4318`, `14318`, or `24318`.
+
+### Traces export compression
+
+Set `otel_traces_export.compression` to `gzip` to compress OTLP trace payloads, or `none` to send them uncompressed. The default is uncompressed. Gzip reduces transfer size at the cost of compression CPU time and is supported by the HTTP and gRPC exporters.
+
+```yaml
+otel_traces_export:
+  endpoint: http://collector:4317
+  protocol: grpc
+  compression: gzip
+```
+
+`OTEL_EXPORTER_OTLP_TRACES_COMPRESSION` sets the traces-specific value and overrides YAML. When no traces-specific value is set, `OTEL_EXPORTER_OTLP_COMPRESSION` supplies the shared value. Both accept `none` and `gzip`.
+
+For example, compress traces while keeping the shared setting uncompressed:
+
+```sh
+export OTEL_EXPORTER_OTLP_COMPRESSION=none
+export OTEL_EXPORTER_OTLP_TRACES_COMPRESSION=gzip
+```
 
 ### Traces instrumentation
 
@@ -324,18 +440,21 @@ To make `deployment_environment` visible in Prometheus, you need to add it to th
 
 The Prometheus metrics exporter can export the following metrics data groups:
 
-- `application`: Application-level metrics
+- `application`: Application RED metrics and HTTP body-size histograms
+- `application_red`: Application RED metrics without HTTP body-size histograms
+- `application_sizes`: HTTP request and response body-size histograms
 - `application_span`: Application-level trace span metrics
 - `application_host` Application-level host metrics for host based pricing
 - `application_service_graph`: Application-level service graph metrics.
   It's recommended to use a DNS for service discovery and to ensure the DNS names match the OpenTelemetry service names Beyla uses.
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
-- `application_runtime`: Go and JVM language runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for the full list of exported metrics.
+- `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for collection requirements and metric descriptions.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `stats`: All TCP statistics metrics
+- `stats_tcp_successful_connections`: Successful TCP connection counts
 - `stats_tcp_failed_connections`: Failed TCP connection counts
 - `stats_tcp_io`: Bytes sent and received at the TCP socket layer
 - `stats_tcp_retransmits`: TCP retransmission counts
@@ -369,11 +488,34 @@ For example, setting the `instrumentations` option to: `http,grpc` enables the c
 
 ## Global metrics features
 
-You can set the default `features` list for all exporters at once using the global `metrics` configuration block, rather than repeating it under each exporter. The global setting is overridden by any per-exporter `features` value.
+You can set the default `features` list for all exporters at once using the global `metrics` configuration block, rather than repeating it under each exporter. Deprecated exporter feature settings can override this global setting for both exporters.
 
-The `metrics.features` option (environment variable: `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
+The `metrics.features` option (environment variable: `BEYLA_METRICS_FEATURES`, also accepted as `OTEL_EBPF_METRICS_FEATURES`) accepts a list of feature group names. The default is `["application"]`.
 
-You can also override the global features for one discovered service with `discovery.instrument[].metrics.features`. The deprecated `otel_metrics_export.features` and `prometheus_export.features` options override the global list for their respective exporters. Use `metrics.features` for new configurations.
+You can also override the global features for one discovered service with `discovery.instrument[].metrics.features`. The deprecated exporter-specific options also override the global list. When the OTLP metrics endpoint is enabled and `otel_metrics_export.features` is configured, that list wins. Otherwise, an enabled Prometheus endpoint with `prometheus_export.features` supplies the list. This normalized list applies to both exporters. Use `metrics.features` for new configurations.
+
+`application` enables both `application_red` and `application_sizes`. The size group exports `http.server.request.body.size`, `http.server.response.body.size`, `http.client.request.body.size`, and `http.client.response.body.size`. To collect RED metrics without these four histograms:
+
+```yaml
+metrics:
+  features: ["application_red"]
+```
+
+To collect both groups explicitly:
+
+```yaml
+metrics:
+  features: ["application_red", "application_sizes"]
+```
+
+The same values are accepted in `discovery.instrument[].metrics.features` and the deprecated exporter lists. Per-service lists replace the global selection for the matching process. Use `BEYLA_PROMETHEUS_FEATURES` for the legacy Prometheus override. `BEYLA_OTEL_METRICS_FEATURES` is a compatibility alias for global `metrics.features`; the legacy OTLP exporter override is configured through YAML.
+
+To collect application and runtime metrics for all instrumented services:
+
+```yaml
+metrics:
+  features: ["application", "application_runtime"]
+```
 
 To enable selected network and TCP statistics globally for all processes:
 
@@ -393,6 +535,7 @@ To enable `application_runtime` only for a specific process, use the per-service
 discovery:
   instrument:
     - name: my-java-service
+      exe_path: "*/java"
       metrics:
         features:
           - application_runtime
@@ -400,9 +543,9 @@ discovery:
 
 ## JVM runtime metrics
 
-When the `application_runtime` feature is enabled for Java services, Beyla collects JVM memory pool metrics by attaching eBPF USDT probes to `hotspot:mem__pool__gc__begin` and `hotspot:mem__pool__gc__end` in `libjvm.so`.
+When `application_runtime` is enabled for Java services, Beyla collects memory pool metrics from HotSpot USDT probes and other JVM metrics through the Java agent. Set `javaagent.enabled` to `false` to disable agent collection while keeping HotSpot memory metrics.
 
-To prevent excessive data collection on JVMs with high GC frequency, Beyla throttles the collection with a configurable sampling interval.
+The sampling interval controls HotSpot memory event sampling and Java agent class, thread, and CPU snapshots. It limits collection frequency for JVM processes with frequent GC events.
 
 | YAML<p>environment variable</p> | Description | Type | Default |
 | -------------------------------- | ----------- | ---- | ------- |
@@ -414,3 +557,24 @@ Example:
 jvm_runtime_metrics:
   sampling_interval: 1s
 ```
+
+## Collect .NET runtime metrics
+
+This collection requires .NET 8 or later. Enable `application_runtime` for the target service. Beyla connects to the .NET diagnostic socket in the process's temporary directory, using `TMPDIR` when configured or `/tmp` otherwise. Diagnostics must be enabled and the socket must be accessible to Beyla.
+
+| YAML option<p>Environment variable</p> | Description | Type | Default |
+| --- | --- | --- | --- |
+| `dotnet_runtime_metrics.sampling_interval`<p>`OBI_DOTNET_RUNTIME_METRICS_SAMPLING_INTERVAL`</p> | Requested `System.Runtime` EventCounter interval and delay before reconnecting after a collection session ends. Must be greater than `0`. | Duration | `1s` |
+| `dotnet_runtime_metrics.timeout`<p>`OBI_DOTNET_RUNTIME_METRICS_TIMEOUT`</p> | Timeout for diagnostic IPC setup and EventPipe session shutdown. Must be greater than `0`. | Duration | `10s` |
+
+For example:
+
+```yaml
+metrics:
+  features: ["application", "application_runtime"]
+dotnet_runtime_metrics:
+  sampling_interval: 2s
+  timeout: 15s
+```
+
+Processes with the same service identity contribute to shared runtime series. Beyla tracks counter baselines per process; exported counters describe the observations available to the collector.

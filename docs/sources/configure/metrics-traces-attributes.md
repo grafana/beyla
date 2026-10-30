@@ -50,6 +50,21 @@ their `include` and `exclude` lists:
 | --- | --- | --- |
 | `db.namespace` | `db_namespace` | Included when available |
 | `db.response.status_code` | `db_response_status_code` | Included when available |
+| `db.collection.name` | `db_collection_name` | Included when available |
+| `error.type` | `error_type` | Included when available |
+
+`db.collection.name` identifies a collection or equivalent protocol entity when the parser can determine one. Database server metrics also accept `client.address` (`client_address`), which is opt-in. Client addresses and collection names can add many distinct time series.
+
+To retain default database attributes while dropping collection names:
+
+```yaml
+attributes:
+  select:
+    db_client_operation_duration:
+      exclude: ["db.collection.name"]
+    db_server_operation_duration:
+      exclude: ["db_collection_name"]
+```
 
 The `db.namespace` attribute identifies the database namespace, such as a
 database or bucket. Whether Beyla can report it depends on the database
@@ -117,46 +132,126 @@ In the previous example, all metrics with a name starting with `http_` or `http.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
+### Select HTTP and RPC metric attributes
+
+HTTP and RPC metrics include `error.type` (`error_type`) by default when available. RPC duration metrics also include `rpc.response.status_code` (`rpc_response_status_code`). Use `exclude` to remove a dimension while retaining the other defaults:
+
+```yaml
+attributes:
+  select:
+    http_*:
+      exclude: ["error.type"]
+    rpc_*:
+      exclude: ["error_type", "rpc_response_status_code"]
+```
+
+HTTP client duration and body-size metrics accept `url.template` (`url_template`) when route detection provides a value. The attribute is opt-in for `http_client_request_duration` and included by default for `http_client_request_body_size` and `http_client_response_body_size`.
+
+For example, explicitly select a small set of duration attributes including the route template, and remove templates from body-size metrics:
+
+```yaml
+attributes:
+  select:
+    http_client_request_duration:
+      include: ["http.request.method", "http.response.status_code", "url.template"]
+    http_client_request_body_size:
+      exclude: ["url_template"]
+    http_client_response_body_size:
+      exclude: ["url_template"]
+```
+
+An explicit duration `include` list replaces its default attribute set. Choose route dimensions that fit the cardinality of your services.
+
+### Select messaging metric attributes
+
+Both `messaging_client_operation_duration` and `messaging_process_duration` include `messaging.consumer.group.name`, `messaging.destination.subscription.name`, and `error.type` by default when available. The client-operation metric also includes `messaging.operation.type`. Underscore spellings, such as `messaging_consumer_group_name`, are accepted.
+
+Group names depend on [Kafka membership attribution](../controlling-instrumentation/#kafka-consumer-group-attribution). To remove group and subscription dimensions while retaining other defaults:
+
+```yaml
+attributes:
+  select:
+    messaging_client_operation_duration:
+      exclude: ["messaging.consumer.group.name", "messaging.destination.subscription.name"]
+    messaging_process_duration:
+      exclude: ["messaging_consumer_group_name", "messaging_destination_subscription_name"]
+```
+
+### Select TCP handshake roles
+
+The `beyla_stat_tcp_successful_connections` selector accepts `network.tcp.handshake.role`, also spelled `network_tcp_handshake_role`. This attribute is opt-in. Values are `client` for the endpoint that initiated the connection, `server` for the accepting endpoint, and `unknown` when the role is unavailable.
+
+To export all available attributes, including the role:
+
+```yaml
+attributes:
+  select:
+    beyla_stat_tcp_successful_connections:
+      include: ["*", "network.tcp.handshake.role"]
+```
+
+An explicit `include` list replaces the defaults. The wildcard retains all available attributes; use a narrower list when you need fewer dimensions. To keep only the existing defaults, leave `include` unset.
+
 ## Select trace attributes
 
 Besides metric names, the `select` subsection accepts the special key `traces`, which controls the optional attributes exported on OTLP spans.
 
 Keys are matched as globs against the section name, and spans use the section name `traces`. A key like `http_*` therefore never reaches these attributes, while a catch-all `*` does match them along with every metric.
 
-Most of these attributes carry request payloads, so they're opt-in: they're only exported when listed in `include`. The exceptions are `dns.question.name` and `url.query`, which are exported by default and can be turned off with `exclude`.
+The selector includes semantic attributes by default when Beyla has a value. Payload attributes require an explicit `include` list. Setting `include` replaces the default set, and `exclude` removes attributes from the selected set.
 
-| Attribute | Exported by default |
-| --------- | ------------------- |
-| `dns.question.name` | yes |
-| `url.query` | yes |
-| `db.query.text` | no |
-| `db.response.error` | no |
-| `graphql.document` | no |
-| `gen_ai.input.messages` | no |
-| `gen_ai.output.messages` | no |
-| `gen_ai.system_instructions` | no |
-| `gen_ai.metadata` | no |
-| `gen_ai.tool.definitions` | no |
-| `gen_ai.tool.call.arguments` | no |
-| `gen_ai.tool.call.result` | no |
-| `gen_ai.response.error` | no |
+| Attribute | Exported by default | Availability |
+| --- | --- | --- |
+| `dns.question.name` | yes | Captured DNS question |
+| `url.query` | yes | Query string, with known-sensitive parameter values redacted |
+| `error.type` | yes | Failed spans or an error code extracted by a protocol parser, including SQLSTATE, JSON-RPC, and MCP codes |
+| `http.request.method_original` | yes | Captured HTTP method when it differs from the normalized `http.request.method` |
+| `db.query.summary` | yes | Database query summary when the parser provides one |
+| `user_agent.original` | yes | Captured HTTP user agent |
+| `network.peer.address` | yes | Remote IP address: client peer on server spans, server host on client spans |
+| `network.peer.port` | yes | Remote port greater than `0`, emitted with `network.peer.address` |
+| `network.protocol.version` | yes | Observed HTTP version: `1.0`, `1.1`, or `2`; omitted on SQL++ spans |
+| `service.peer.name` | no | Resolved peer service name |
+| `http.request.body.size` | no | HTTP request body size in bytes |
+| `http.response.body.size` | no | HTTP response body size in bytes |
+| `obi.http.response.observed` | no | `false` when Beyla did not parse an HTTP response |
+| `url.template` | no | Detected HTTP route template |
+| `db.query.text` | no | Captured database query |
+| `db.response.error` | no | Captured database error message |
+| `graphql.document` | no | Captured GraphQL document |
+| `gen_ai.input.messages` | no | Captured GenAI input |
+| `gen_ai.output.messages` | no | Captured GenAI output |
+| `gen_ai.system_instructions` | no | Captured system instructions |
+| `gen_ai.metadata` | no | Captured GenAI metadata |
+| `gen_ai.tool.definitions` | no | Captured tool definitions |
+| `gen_ai.tool.call.arguments` | no | Captured tool call arguments |
+| `gen_ai.tool.call.result` | no | Captured tool call result |
+| `gen_ai.response.error` | no | Captured GenAI error message |
 
-Example:
+A protocol parser can supply `error.type` even when the span status is successful. `network.peer.address` contains an IP address; hostnames remain on `server.address` or `client.address`.
+
+To keep the default attributes while excluding remote socket details:
 
 ```yaml
 attributes:
   select:
     traces:
-      # export the SQL statement and the GraphQL query on spans
-      include:
-        - db.query.text
-        - graphql.document
-      # stop exporting the query string
-      exclude:
-        - url.query
+      exclude: ["network.peer.address", "network.peer.port"]
 ```
 
-Values of known-sensitive query parameters are redacted inside `url.query` before export. The other attributes in this table are exported as captured, so enable them only when the payloads they carry are safe to store.
+To export only selected optional attributes, including captured queries:
+
+```yaml
+attributes:
+  select:
+    traces:
+      include:
+        - error.type
+        - db.query.text
+        - graphql.document
+```
+
+Values of known-sensitive query parameters are redacted inside `url.query` before export. The opt-in payload attributes (`db.query.text`, `db.response.error`, `graphql.document`, and `gen_ai.*`) are exported as captured. Include them only when those payloads are safe to store. Body sizes describe byte counts; they do not include body contents.
 
 ## Instance ID decoration
 
@@ -303,10 +398,10 @@ Beyla allows you to enhance your metrics with custom attributes using the `extra
 
 To use this feature, specify the group name and the list of attributes you want to include in that group.
 
-The following groups are supported:
+The following groups accept lists of attribute names:
 
 - `k8s_app_meta`: Kubernetes-specific metadata such as Pod name, namespace, container name, Pod UID, and more.
-- `app`: application-level attributes shared by most application metrics, such as `service.name` and `service.namespace`.
+- `app`: attributes shared by application metrics, including HTTP, RPC, database, messaging, DNS, GenAI, MCP, and GPU metrics. Network-flow and process metrics use separate groups.
 
 Example configuration:
 
@@ -323,7 +418,36 @@ In this example:
 - Adding `k8s.app.version` to the `extra_group_attributes > k8s_app_meta` block causes the `k8s.app.version` label to appear in the metrics.
 - You can also define annotations with the prefix `resource.opentelemetry.io/` and suffix `k8s.app.version` in your Kubernetes manifests, these annotations are automatically included in the metrics.
 
-By default, Beyla sets `extra_group_attributes > app` to `["service.name", "service.namespace"]`, so these two attributes are reported both as OTEL resource attributes and as metric-level attributes. If you set `extra_group_attributes > app` yourself, your list replaces this default entirely.
+Beyla includes `service.name` and `service.namespace` as metric-level attributes in the `app` group by default. A configured `app` list replaces that default, including an empty list. The list controls metric attributes; service identity remains on the OpenTelemetry resource and on the Prometheus `target_info` metric.
+
+To keep only `service.name` from this group's defaults:
+
+```yaml
+attributes:
+  extra_group_attributes:
+    app: ["service.name"]
+```
+
+To add an attribute to this group while retaining both service identity attributes, list all three names:
+
+```yaml
+attributes:
+  extra_group_attributes:
+    app: ["service.name", "service.namespace", "deployment.environment.name"]
+```
+
+The attribute must also be available in the service's metadata to produce a value.
+
+Individual metric selectors accept dotted names and their underscore spellings, such as `service_name` and `service_namespace`. For example, to remove service identity attributes from the HTTP server duration series:
+
+```yaml
+attributes:
+  select:
+    http_server_request_duration:
+      exclude: ["service_name", "service_namespace"]
+```
+
+This exclusion preserves other default attributes and leaves the resource attributes and `target_info` unchanged.
 
 The following table describes the default group attributes.
 

@@ -18,9 +18,22 @@ YAML section: `nodejs`
 
 | YAML option<p>Environment variable</p>                    | Description                                                   | Type    | Default |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------- | ------- |
-| `enabled`<p>`BEYLA_NODEJS_ENABLED`</p>                    | Enable dynamic injection of the `NodeJS` agent.                 | boolean | (true)  |
+| `enabled`<p>`BEYLA_NODEJS_ENABLED`</p> | Inject the Node.js agent for context propagation, runtime metrics, and manual spans. | boolean | `true` |
+| `manual_spans`<p>`BEYLA_NODEJS_MANUAL_SPANS`</p> | Capture spans created through the OpenTelemetry API when no SDK is registered. Requires agent injection and Node.js 14 or later. | boolean | `false` |
 
-The `NodeJS` agent is used only for context propagation, since NodeJS uses `libssl` for TLS encryption and decryption. This agent is injected via the debugger interface. You should disable the `NodeJS` agent support if your program has a handler attached on `SIGUSR1`.
+Beyla injects the Node.js agent through the inspector interface. It connects to `127.0.0.1:9229`, opening the inspector with `SIGUSR1` when necessary. Before sending the signal, Beyla checks whether it would stop the process or invoke a custom handler. If so, it skips that injection path. Set `enabled` to `false` if your application uses that signal.
+
+Node.js uses `libssl` for TLS traffic, which Beyla captures with eBPF. The agent provides context propagation and runtime metrics. Disabling injection also disables those agent features.
+
+Set `manual_spans` to `true` to capture spans that the application creates with the OpenTelemetry API before registering an SDK:
+
+```yaml
+nodejs:
+  enabled: true
+  manual_spans: true
+```
+
+The manual-span bridge requires Node.js 14 or later. Enabling it on an older runtime causes Beyla to skip the entire Node.js agent, including context propagation and runtime metric collection. The bridge stays inactive when an SDK is already registered. If the application registers an SDK later, the bridge yields to it.
 
 YAML section: `javaagent`
 
@@ -29,6 +42,6 @@ YAML section: `javaagent`
 | `enabled`<p>`BEYLA_JAVAAGENT_ENABLED`</p>                 | Enable dynamic injection of the Java agent.                   | boolean | (true)  |
 | `attach_timeout`<p>`BEYLA_JAVAAGENT_ATTACH_TIMEOUT`</p>   | Timeout for waiting on dynamic attach to succeed.             | string  | "10s"   |
 
-The `Java` agent is used for both context propagation and for TLS traffic capture. The dynamic injection of the agent is supported for `OpenJDK Hotspot` JVM (and derivatives) and for `OpenJ9`. Minimum `Java` version supported is `Java 8`. If the JVM is busy during the agent attach process, the attach process may take longer than 10 seconds. You can use the `attach_timeout` option to increase the time Beyla waits for the dynamic attach to successfully complete.
+The `Java` agent provides context propagation, TLS traffic capture, and JVM class, thread, CPU, and GC duration metrics. Disabling it leaves HotSpot USDT memory metrics available. The dynamic injection of the agent is supported for `OpenJDK Hotspot` JVM (and derivatives) and for `OpenJ9`. Minimum `Java` version supported is `Java 8`. If the JVM is busy during the agent attach process, the attach process may take longer than 10 seconds. You can use the `attach_timeout` option to increase the time Beyla waits for the dynamic attach to successfully complete.
 
 Injection of the `Java` agent requires that the target process has writeable file system, for example, the injection process doesn't work for containers with read-only file systems.

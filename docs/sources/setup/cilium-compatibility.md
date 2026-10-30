@@ -2,7 +2,7 @@
 title: Cilium compatibility
 menuTitle: Cilium compatibility
 description: Compatibility notes when running Beyla alongside Cilium
-weight: 800
+weight: 900
 keywords:
   - Beyla
   - eBPF

@@ -116,26 +116,32 @@ OpenTelemetry Endpoint, you need to provide the credentials via the
 The recommended way is to store such value in a Kubernetes Secret and then
 specify the environment variable referring to it from the Helm configuration.
 
-For example, deploy the following secret:
+For example, deploy the following secret in the namespace where Beyla runs:
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
   name: grafana-secret
+  namespace: beyla
 type: Opaque
 stringData:
-  otlp-headers: "Authorization=Basic ...."
+  otlp-headers: "Authorization=Basic <BASE64_CREDENTIALS>"
 ```
 
-Then refer to it from the `helm-config.yml` file via the `envValueFrom` section:
+Then refer to it from the `helm-beyla.yml` file via the `envValueFrom` section:
 
 ```yaml
 env:
-  OTEL_EXPORTER_OTLP_ENDPOINT: "<...your Grafana Cloud OTLP endpoint URL...>"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "<OTLP_ENDPOINT>"
 envValueFrom:
   OTEL_EXPORTER_OTLP_HEADERS:
     secretKeyRef:
       key: otlp-headers
       name: grafana-secret
 ```
+
+Replace the following:
+
+- _`<BASE64_CREDENTIALS>`_: The Base64-encoded credentials for your OTLP endpoint. For Grafana Cloud, generate them from the **OpenTelemetry** tile of your stack, as described in [Send data to the Grafana Cloud OTLP endpoint](https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users).
+- _`<OTLP_ENDPOINT>`_: The base URL of your OTLP endpoint.

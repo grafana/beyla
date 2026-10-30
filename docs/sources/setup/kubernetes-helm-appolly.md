@@ -1,7 +1,7 @@
 ---
-title: Deploy Beyla in Kubernetes with Helm for Grafana Cloud
-menuTitle: Helm chart for Grafana Cloud
-description: Learn how to deploy Beyla with a Helm chart in Kubernetes for Knowledge Graph and Application Observability in Grafana Cloud.
+title: Deploy Beyla with the Beyla Helm chart for Grafana Cloud
+menuTitle: Beyla Helm chart for Grafana Cloud
+description: Deploy Grafana Beyla with the Beyla Helm chart and send span metrics, service graph metrics, and traces directly to the Grafana Cloud OTLP endpoint for Application Observability and Knowledge Graph, with no collector in between.
 weight: 400
 keywords:
   - Beyla
@@ -15,7 +15,7 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/setup/kubernetes-helm-appolly/
 ---
 
-# Deploy Beyla in Kubernetes with Helm for Grafana Cloud Knowledge Graph and Application Observability
+# Deploy Beyla with the Beyla Helm chart for Grafana Cloud
 
 This documentation section explains the best practices for deploying Beyla using the Helm chart, but specifically for
 [Grafana Cloud Knowledge Graph](https://grafana.com/docs/grafana-cloud/knowledge-graph/) and [Application Observability](https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/). 

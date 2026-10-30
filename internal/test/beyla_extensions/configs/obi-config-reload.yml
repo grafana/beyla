@@ -1,0 +1,17 @@
+# Beyla v1 equivalent of OBI's configs/obi-config-reload-v2.yml, for TestConfigReloadV1.
+log_level: info
+shutdown_timeout: 2s
+otel_traces_export:
+  endpoint: http://jaeger:4318
+  sampler:
+    name: always_on
+ebpf:
+  batch_timeout: 10ms
+attributes:
+  kubernetes:
+    enable: "false"
+discovery:
+  poll_interval: 200ms
+  min_process_age: 0s
+  instrument:
+    - open_ports: 18060

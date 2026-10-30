@@ -55,7 +55,7 @@ To deploy Beyla for Grafana Cloud, complete the following steps:
    ```
 
    Replace _`<BASE64_CREDENTIALS>`_ with your instance ID and token, joined by a colon and Base64-encoded.
-   For example, run `echo -n '<INSTANCE_ID>:<TOKEN>' | base64`.
+   For example, run `echo -n '<INSTANCE_ID>:<TOKEN>' | base64 | tr -d '\n'`.
 
 1. Create a `helm-beyla.yml` file:
 

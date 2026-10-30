@@ -26,7 +26,7 @@ Contents:
 
 - [Deploy Beyla with helm](#deploy-beyla-from-helm)
 - [Configure Beyla](#configure-beyla)
-- [Configure Beyla metadata](#configure-beyla-metadata)
+- [Scrape metrics with the Prometheus Operator](#scrape-metrics-with-the-prometheus-operator)
 - [Provide secrets to the Helm configuration](#provide-secrets-to-the-helm-configuration)
 <!-- TOC -->
 
@@ -85,10 +85,10 @@ Apply the file to a new or existing release:
 helm upgrade --install beyla grafana/beyla --namespace beyla --create-namespace -f helm-beyla.yml
 ```
 
-## Configure Beyla metadata
+## Scrape metrics with the Prometheus Operator
 
-If Beyla exports the data using the Prometheus exporter, you can expose its metrics 
-by creating a Kubernetes Service and configuring a ServiceMonitor, allowing your Prometheus scraper to discover it. 
+If you run the Prometheus Operator, the chart can create a Service and a ServiceMonitor so Prometheus discovers the Beyla metrics endpoint.
+The chart creates the ServiceMonitor only when `config.data.prometheus_export` is set, which it is by default.
 To enable this feature, edit your `helm-beyla.yml` file to include the following configuration:
 
 ```yaml
@@ -97,17 +97,15 @@ service:
 
 serviceMonitor:
   enabled: true
+  endpoint:
+    honorLabels: true
 ```
 
-{{< admonition type="note" >}}
-Configure your Prometheus scraper with [`honor_labels: true`](../../configure/export-data/#prometheus-exporter-component) to preserve the per-process instance identifiers set by Beyla.
-{{< /admonition >}}
+The `honorLabels` setting keeps the `instance` and `job` labels that Beyla sets for each instrumented process.
+For more information, refer to [Prometheus exporter component](../../configure/export-data/#prometheus-exporter-component).
 
-Analogously, the Helm chart allows overriding names, labels, and annotations for
-multiple resources involved in the deployment of Beyla, such as service
-accounts, cluster roles, security contexts, etc. The
-[Beyla Helm chart documentation](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
-describes the diverse configuration options.
+The chart also has values for resource names, Pod labels and annotations, the service account, RBAC rules, security contexts, scheduling, and resource limits.
+For the full list, refer to the [Beyla Helm chart README](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md).
 
 ## Provide secrets to the Helm configuration
 

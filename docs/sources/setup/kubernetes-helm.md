@@ -41,7 +41,7 @@ helm repo add grafana https://grafana.github.io/helm-charts
 The following command deploys a Beyla DaemonSet with a default configuration in the `beyla` namespace:
 
 ```sh
-helm install beyla -n beyla --create-namespace  grafana/beyla
+helm upgrade --install beyla grafana/beyla --namespace beyla --create-namespace
 ```
 
 The default Beyla configuration:
@@ -75,16 +75,10 @@ config:
 The `config.data` section contains a Beyla configuration file, documented in the
 [Beyla configuration options documentation](../../configure/options/).
 
-Then pass the overridden configuration to the `helm` command with the `-f` flag. For example:
+Apply the file to a new or existing release:
 
 ```sh
-helm install beyla grafana/beyla -f helm-beyla.yml
-```
-
-or, if the Beyla chart was previously deployed:
-
-```sh
-helm upgrade beyla grafana/beyla -f helm-beyla.yml
+helm upgrade --install beyla grafana/beyla --namespace beyla --create-namespace -f helm-beyla.yml
 ```
 
 ## Configure Beyla metadata

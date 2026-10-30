@@ -17,6 +17,7 @@ import (
 // parent submits configuration refreshes. The parent keeps the other end, so no other process
 // can connect to it.
 const ControlFDEnv = "BEYLA_CONFIG_CONTROL_FD"
+const ControlFDEnvOBI = "OTEL_EBPF_CONFIG_CONTROL_FD"
 
 // controlRequest asks the running Beyla to refresh from a complete YAML configuration.
 type controlRequest struct {
@@ -35,6 +36,11 @@ func ControlConn() (net.Conn, error) {
 	if value == "" {
 		return nil, nil
 	}
+	// We clean the control environment, in case we launch any subprocess, to avoid the child
+	// from inheriting this env.
+	os.Unsetenv(ControlFDEnv)
+	// We clone all environment variables to have the OBI prefix, we need to clean that one up too.
+	os.Unsetenv(ControlFDEnvOBI)
 
 	fd, err := strconv.Atoi(value)
 	if err != nil || fd < 0 {

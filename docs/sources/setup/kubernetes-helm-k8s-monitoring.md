@@ -17,18 +17,23 @@ aliases:
 
 # Deploy Beyla with the Kubernetes Monitoring Helm Chart 
 
-This documentation section explains the best practices for deploying Beyla using the [Kubernetes Monitoring Helm chart](https://github.com/grafana/k8s-monitoring-helm/), but specifically for
-[Grafana Cloud Knowledge Graph](https://grafana.com/docs/grafana-cloud/knowledge-graph/) and [Application Observability](https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/). For documentation on how to deploy Beyla using the Beyla standalone
-Helm chart, refer to the [Deploy Beyla in Kubernetes with Helm for Grafana Cloud Application Observability](./kubernetes-helm-appolly.md)
-documentation section.
+The [Kubernetes Monitoring Helm chart][k8s-monitoring-helm] deploys Beyla as its auto-instrumentation feature, alongside cluster monitoring, for Grafana Cloud [Knowledge Graph][knowledge-graph] and [Application Observability][app-o11y].
+The chart deploys Beyla as a DaemonSet, together with a Beyla Kubernetes metadata cache.
+Grafana Alloy, which the chart also deploys, scrapes Beyla's Prometheus metrics and sends them to your metrics destinations.
+If you enable the chart's Application Observability feature with an OTLP receiver, Beyla also sends traces to Alloy over OTLP.
 
-Contents:
+To deploy Beyla on its own and send data directly to Grafana Cloud, refer to [Deploy Beyla with the Beyla Helm chart for Grafana Cloud][appolly].
 
-<!-- TOC -->
+## Before you begin
 
-- [Deploy Beyla](#deploy-beyla)
-- [Configure Beyla](#configure-beyla)
-<!-- TOC -->
+Before you deploy Beyla, make sure you have the following:
+
+- A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations][requirements]
+- Helm and `kubectl`, configured for the cluster
+- Permission to create cluster-scoped resources and privileged Pods
+- A Grafana Cloud stack with Kubernetes Monitoring
+
+With the default chart values, Beyla runs as a privileged DaemonSet in the host process ID (PID) and network namespaces of each node.
 
 ## Deploy Beyla
 
@@ -69,6 +74,15 @@ The Beyla configuration above:
 - exposes Prometheus metrics, including span and service graph metrics, which the chart's Alloy instance scrapes and sends to your metrics destinations
 - doesn't send traces, because `deliverTracesToApplicationObservability` is `false`
 - instruments applications in every namespace, except Kubernetes system namespaces and other namespaces that Beyla [excludes by default][default-exclude]
+
+To check that Beyla is running, list the Beyla Pods:
+
+```sh
+kubectl get pods --namespace <NAMESPACE> --selector app.kubernetes.io/name=beyla
+```
+
+Replace _`<NAMESPACE>`_ with the namespace you installed the chart in, for example `default`.
+If a Pod isn't running, check its logs with `kubectl logs --namespace <NAMESPACE> <POD_NAME>`, where _`<POD_NAME>`_ is the Pod name from the previous command.
 
 ## Configure Beyla
 
@@ -118,4 +132,17 @@ In the example above the configuration is modified to:
 1. Instrument only three namespaces: `alpha`, `bravo`, and `delta`.
 1. Use the Beyla _`<BEYLA_VERSION>`_ image instead of the version that the chart pins.
 
+## Next steps
+
+- [Configure Beyla][configure]
+- [Configure Beyla service discovery][service-discovery]
+- [Kubernetes Monitoring Helm chart][k8s-monitoring-helm]
+
+[app-o11y]: https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/
+[appolly]: ../kubernetes-helm-appolly/
+[configure]: ../../configure/
 [default-exclude]: ../../configure/service-discovery/#default-exclude-services-from-instrumentation
+[k8s-monitoring-helm]: https://github.com/grafana/k8s-monitoring-helm/
+[knowledge-graph]: https://grafana.com/docs/grafana-cloud/knowledge-graph/
+[requirements]: ../../introduction/requirements/
+[service-discovery]: ../../configure/service-discovery/

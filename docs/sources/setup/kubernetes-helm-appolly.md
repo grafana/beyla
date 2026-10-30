@@ -28,22 +28,6 @@ generation completely, and still generate correct Request-Error-Duration(RED) me
 If you are familiar with the Grafana Cloud Application Observability configuration for the Tempo span metric generator, this component
 is not needed, nor needs to be configured/enabled for Beyla span and service graph metrics generation.
 
-{{< admonition type="note" >}}
-For more details about the diverse Helm configuration options, check out the
-[Beyla Helm chart options](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
-document.
-{{< /admonition >}}
-
-Contents:
-
-<!-- TOC -->
-
-- [Deploy Beyla with Helm for Grafana Cloud](#deploy-beyla-from-helm)
-- [Configure Beyla](#configure-beyla)
-- [Configure Beyla metadata](#configure-beyla-metadata)
-- [Provide secrets to the Helm configuration](#provide-secrets-to-the-helm-configuration)
-<!-- TOC -->
-
 ## Deploy Beyla with Helm for Grafana Cloud
 
 First, you need to add the Grafana helm repository to Helm:

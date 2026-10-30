@@ -20,12 +20,22 @@ For more details about the diverse Helm configuration options, check out the
 document.
 {{% /admonition %}}
 
+## Before you begin
+
+Before you install the chart, make sure you have the following:
+
+- A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations](../../introduction/requirements/)
+- Helm and `kubectl`, configured for the cluster
+- Permission to create cluster-scoped resources and privileged Pods
+- The Prometheus Operator, if you want the chart to create a ServiceMonitor
+
 ## Deploy Beyla with helm
 
 First, you need to add the Grafana helm repository to Helm:
 
 ```sh
 helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
 ```
 
 The following command deploys a Beyla DaemonSet with a default configuration in the `beyla` namespace:
@@ -34,12 +44,32 @@ The following command deploys a Beyla DaemonSet with a default configuration in 
 helm upgrade --install beyla grafana/beyla --namespace beyla --create-namespace
 ```
 
+Check that a Beyla Pod runs on each node:
+
+```sh
+kubectl get pods --namespace beyla
+```
+
 With the default values, the chart configures Beyla to do the following:
 
 - exports the metrics as Prometheus metrics in the Pod HTTP port `9090`, `/metrics` path.
 - instruments applications in every namespace, except Kubernetes system namespaces and other namespaces that Beyla [excludes by default](../../configure/service-discovery/#default-exclude-services-from-instrumentation).
 - only provides application-level metrics and excludes [network-level metrics](../../network/) by default
 - decorates the metrics with Kubernetes metadata labels, for example `k8s_namespace_name` or `k8s_pod_name`
+
+To collect [network metrics](../../network/) instead of application metrics, set `preset: network`.
+
+By default, the chart runs Beyla as a privileged container in the host PID namespace.
+To run Beyla with a list of Linux capabilities instead, set `privileged: false`.
+For the capabilities, refer to [Beyla security, permissions, and capabilities](../security/).
+
+The chart also sets `contextPropagation.enabled: true` by default.
+This value grants the Pod the access that [network-level context propagation](../../traces/#context-propagation-at-network-level) needs: the host network namespace, the host `/sys/fs/cgroup` and `/sys/kernel/tracing` directories, and, when `privileged: false`, the `NET_ADMIN` capability.
+It doesn't turn on context propagation in Beyla.
+To turn it on, set `ebpf.context_propagation` under `config.data`.
+
+If you don't use network-level context propagation, set `contextPropagation.enabled: false` to remove this access.
+The `network` preset still runs Beyla in the host network namespace.
 
 ## Configure Beyla
 

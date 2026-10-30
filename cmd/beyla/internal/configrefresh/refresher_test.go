@@ -3,6 +3,7 @@ package configrefresh
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,6 +92,28 @@ func TestRefresher_IgnoresEnvironmentSetByThePipeline(t *testing.T) {
 		"loading from the current environment must see the variable")
 
 	require.NoError(t, refresher.Refresh(t.Context(), testConfig(portSelection(9090))))
+}
+
+func TestRefresher_ExpandsTheYAMLWithTheStartupEnvironment(t *testing.T) {
+	const protocolEnv = "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
+	withProtocol := func(port int) []byte {
+		return bytes.Replace(testConfig(portSelection(port)), []byte("endpoint: http://localhost:4318"),
+			[]byte("endpoint: http://localhost:4318\n  protocol: ${"+protocolEnv+"}"), 1)
+	}
+	t.Setenv(protocolEnv, "")
+	require.NoError(t, os.Unsetenv(protocolEnv))
+
+	initial := withProtocol(8080)
+	refresher := newAcceptingRefresher(t, initial)
+
+	// The OTLP exporters set the protocol they guess for the endpoint once they start.
+	t.Setenv(protocolEnv, "http/protobuf")
+	reloaded, err := beyla.LoadRefreshConfig(initial, nil)
+	require.NoError(t, err)
+	require.Contains(t, refresher.startup.ChangedSettings(reloaded), "otel_traces_export.protocol",
+		"expanding the YAML with the current environment must see the variable")
+
+	require.NoError(t, refresher.Refresh(t.Context(), withProtocol(9090)))
 }
 
 func TestRefresher_RejectsOtherChanges(t *testing.T) {

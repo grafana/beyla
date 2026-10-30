@@ -12,8 +12,9 @@ import (
 // Beyla. Unlike LoadConfig, it does not override the OBI process-wide settings again, as the
 // running pipeline reads them concurrently and the startup load already set them.
 //
-// The environment variables are read from environment, a snapshot taken before the pipeline
-// started: the OTLP exporters set some at runtime, which the startup load didn't see.
+// The environment variables, both those in the YAML and those overriding it, are read from
+// environment, a snapshot taken before the pipeline started: the OTLP exporters set some at
+// runtime, which the startup load didn't see.
 // A nil environment reads them from the process.
 func LoadRefreshConfig(data []byte, environment map[string]string) (*Config, error) {
 	cfg, err := loadConfigFile(bytes.NewReader(data), environment)

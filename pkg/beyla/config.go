@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"os"
 	"slices"
 	"time"
 
@@ -602,7 +603,11 @@ func loadConfigFile(file io.Reader, environment map[string]string) (*Config, err
 			return nil, fmt.Errorf("reading YAML configuration: %w", err)
 		}
 		// replaces environment variables in YAML file
-		cfgBuf = config.ReplaceEnv(cfgBuf)
+		getenv := os.Getenv
+		if environment != nil {
+			getenv = func(name string) string { return environment[name] }
+		}
+		cfgBuf = config.ReplaceEnvFrom(cfgBuf, getenv)
 		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}

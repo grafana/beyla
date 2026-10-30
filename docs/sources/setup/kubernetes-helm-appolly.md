@@ -17,16 +17,11 @@ aliases:
 
 # Deploy Beyla with the Beyla Helm chart for Grafana Cloud
 
-This documentation section explains the best practices for deploying Beyla using the Helm chart, but specifically for
-[Grafana Cloud Knowledge Graph](https://grafana.com/docs/grafana-cloud/knowledge-graph/) and [Application Observability](https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/). 
+Grafana Cloud [Application Observability][app-o11y] and [Knowledge Graph][knowledge-graph] use span metrics and service graph metrics.
+Other instrumentation usually derives these metrics from traces.
+Beyla generates them directly, so you can [sample traces][sample-traces] or turn traces off and still get complete request rate, error, and duration (RED) metrics.
 
-Knowledge Graph and Application Observability in Grafana Cloud rely on OpenTelemetry span and service graph metrics, 
-which are typically produced from traces. Beyla can directly generate span and service graph metrics, without having to generate traces, 
-which means that we can configure head sampling for OpenTelemetry traces, or disable trace
-generation completely, and still generate correct Request-Error-Duration(RED) metrics. 
-
-If you are familiar with the Grafana Cloud Application Observability configuration for the Tempo span metric generator, this component
-is not needed, nor needs to be configured/enabled for Beyla span and service graph metrics generation.
+With the [Beyla Helm chart][beyla-helm], Beyla sends these metrics and traces directly to the Grafana Cloud OTLP endpoint, with no collector in between.
 
 ## Deploy Beyla with Helm for Grafana Cloud
 
@@ -178,3 +173,8 @@ envValueFrom:
       key: otlp-headers
       name: grafana-secret
 ```
+
+[app-o11y]: https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/
+[beyla-helm]: ../kubernetes-helm/
+[knowledge-graph]: https://grafana.com/docs/grafana-cloud/knowledge-graph/
+[sample-traces]: ../../configure/sample-traces/

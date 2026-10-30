@@ -1,8 +1,8 @@
-# Ubuntu amd64 companion package PoC
+# Beyla Ubuntu DEB package
 
-This experimental Ubuntu amd64 DEB configures Grafana Alloy 1.21.0 or newer to
-collect application telemetry with Beyla, host metrics, and profiles. It is for
-Ubuntu amd64 and does not install a separate Beyla executable or service.
+This initially experimental Ubuntu amd64 DEB configures Grafana Alloy 1.21.0
+or newer to collect application telemetry with Beyla, host metrics, and
+profiles. It does not install a separate Beyla executable or service.
 Alloy runs as root so it can use eBPF. The package keeps its Alloy config
 separate from Alloy's vendor config and refuses to take over an existing
 customized Alloy installation.
@@ -37,7 +37,12 @@ Ensure APT can provide Alloy 1.21.0 or newer, then install the local package:
 sudo apt install ./dist/beyla_*.deb
 ```
 
-The companion package does not configure an APT source.
+The package does not configure an APT source.
+
+Earlier experimental packages used Grafana-prefixed state and SDK paths. This
+package stops before unpacking over such an installation; it does not migrate
+or remove the existing configuration or payload. Manually migrate the old
+installation before retrying.
 
 The interactive debconf setup asks for an instrumentation mode and the
 following inputs:
@@ -80,6 +85,6 @@ pipeline-write credentials.
 
 ## Safety
 
-This is an experimental PoC, not a production-ready package. Use a disposable
-Ubuntu amd64 system and select only controlled test services for SDK injection.
-Do not use global preload or enroll production services.
+The package is initially experimental. Use a disposable Ubuntu amd64 system
+and select only controlled test services for SDK injection. Do not use global
+preload or enroll production services.

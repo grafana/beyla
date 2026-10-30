@@ -3,6 +3,10 @@ set -e
 P=${BEYLA_PACKAGE_ROOT:-}
 case "$1" in
   configure)
+    if [ -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
+      echo "beyla: prior experimental package state found in /var/lib/grafana-beyla-sdk; automatic migration is unsupported, and the existing configuration has been left untouched" >&2
+      exit 1
+    fi
     if [ "${BEYLA_TEST_NO_DEBCONF:-0}" != 1 ]; then
       . "$P/usr/share/debconf/confmodule"
       db_get beyla/mode; export BEYLA_SDK_MODE="$RET"
@@ -36,9 +40,9 @@ case "$1" in
         ;;
     esac
 
-    # Preserve a prior companion install as well as customer-owned config.
-    # Only accept the pristine Alloy package defaults on first installation.
-    if [ ! -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
+    # Preserve customer-owned config. Only accept the pristine Alloy package
+    # defaults on first installation.
+    if [ ! -f "$P/var/lib/beyla/mode" ]; then
       if [ -f "$P/etc/default/alloy" ] && grep -Ev '^[[:space:]]*(#.*)?$|^(CONFIG_FILE="/etc/alloy/config.alloy"|OTEL_CONFIG_FILE="/etc/alloy/config.yaml"|CUSTOM_ARGS=""|OTEL_CUSTOM_ARGS=""|ALLOY_OTEL_MODE=""|RESTART_ON_UPGRADE=true)$' "$P/etc/default/alloy" | grep -q .; then
         echo "beyla: custom Alloy settings in /etc/default/alloy are unsupported; refusing to replace them" >&2
         exit 1
@@ -55,26 +59,26 @@ case "$1" in
       fi
     fi
 
-    if [ ! -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
+    if [ ! -f "$P/var/lib/beyla/mode" ]; then
       if [ -n "$P" ]; then
-        install -d -m 0755 "$P/etc/grafana/beyla-sdk" "$P/var/lib/grafana-beyla-sdk"
+        install -d -m 0755 "$P/etc/beyla" "$P/var/lib/beyla"
       else
-        install -d -o root -g root -m 0755 /etc/grafana/beyla-sdk /var/lib/grafana-beyla-sdk
+        install -d -o root -g root -m 0755 /etc/beyla /var/lib/beyla
       fi
-      if [ -e "$P/etc/grafana/beyla-sdk/alloy.env" ] || [ -e "$P/etc/grafana/beyla-sdk/config.alloy" ]; then
+      if [ -e "$P/etc/beyla/alloy.env" ] || [ -e "$P/etc/beyla/config.alloy" ]; then
         echo "beyla: unmarked pre-existing config found; refusing to overwrite it" >&2
         exit 1
       fi
-      install -m 0644 "$P/usr/share/grafana-beyla-sdk/config.alloy" "$P/etc/grafana/beyla-sdk/config.alloy"
-      if ! BEYLA_PACKAGE_ROOT="$P" python3 "$P/usr/lib/grafana-beyla-sdk/configure.py"; then
+      install -m 0644 "$P/usr/share/beyla/config.alloy" "$P/etc/beyla/config.alloy"
+      if ! BEYLA_PACKAGE_ROOT="$P" python3 "$P/usr/lib/beyla/configure.py"; then
         # configure.py checks the complete input and selected service units
         # before creating the durable 0600 environment file or state marker.
         # Remove only the exact template copied by this postinst so a corrected
         # retry can proceed; never delete a user-modified config.
-        if [ ! -e "$P/var/lib/grafana-beyla-sdk/mode" ] && \
-          [ ! -e "$P/etc/grafana/beyla-sdk/alloy.env" ] && \
-          cmp -s "$P/usr/share/grafana-beyla-sdk/config.alloy" "$P/etc/grafana/beyla-sdk/config.alloy"; then
-          rm -f "$P/etc/grafana/beyla-sdk/config.alloy"
+        if [ ! -e "$P/var/lib/beyla/mode" ] && \
+          [ ! -e "$P/etc/beyla/alloy.env" ] && \
+          cmp -s "$P/usr/share/beyla/config.alloy" "$P/etc/beyla/config.alloy"; then
+          rm -f "$P/etc/beyla/config.alloy"
         fi
         exit 1
       fi
@@ -86,15 +90,15 @@ case "$1" in
         db_set beyla/profiles-token ""
       fi
     else
-      if [ "$(cat "$P/var/lib/grafana-beyla-sdk/mode")" != "$BEYLA_SDK_MODE" ]; then
+      if [ "$(cat "$P/var/lib/beyla/mode")" != "$BEYLA_SDK_MODE" ]; then
         echo "beyla: changing instrumentation mode after install is unsupported; preserving existing configuration" >&2
         exit 1
       fi
     fi
-    BEYLA_PACKAGE_ROOT="$P" python3 "$P/usr/lib/grafana-beyla-sdk/validate-alloy.py"
-    alloy_dropin="$P/etc/systemd/system/alloy.service.d/50-grafana-beyla-sdk.conf"
+    BEYLA_PACKAGE_ROOT="$P" python3 "$P/usr/lib/beyla/validate-alloy.py"
+    alloy_dropin="$P/etc/systemd/system/alloy.service.d/50-beyla.conf"
     if [ -e "$alloy_dropin" ]; then
-      if ! cmp -s "$P/usr/share/grafana-beyla-sdk/alloy-service-dropin.conf" "$alloy_dropin"; then
+      if ! cmp -s "$P/usr/share/beyla/alloy-service-dropin.conf" "$alloy_dropin"; then
         echo "beyla: preserving modified Alloy drop-in; refusing to overwrite it" >&2
         exit 1
       fi
@@ -104,7 +108,7 @@ case "$1" in
       else
         install -d -o root -g root -m 0755 /etc/systemd/system/alloy.service.d
       fi
-      install -m 0644 "$P/usr/share/grafana-beyla-sdk/alloy-service-dropin.conf" "$alloy_dropin"
+      install -m 0644 "$P/usr/share/beyla/alloy-service-dropin.conf" "$alloy_dropin"
     fi
     systemctl daemon-reload
     systemctl enable alloy.service

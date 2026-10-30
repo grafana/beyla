@@ -12,8 +12,8 @@ def package_root() -> Path:
 
 
 ROOT = package_root()
-ETC = ROOT / "etc/grafana/beyla-sdk"
-STATE = ROOT / "var/lib/grafana-beyla-sdk"
+ETC = ROOT / "etc/beyla"
+STATE = ROOT / "var/lib/beyla"
 DROPINS = ROOT / "etc/systemd/system"
 UNIT_NAME = re.compile(r"^[A-Za-z0-9_.@:-]+\.service$")
 
@@ -48,8 +48,8 @@ def atomic_secret(path: Path, contents: str) -> None:
             os.unlink(temp_name)
 
 
-FLEET_BEGIN = "// grafana-beyla-sdk fleet-managed begin"
-FLEET_END = "// grafana-beyla-sdk fleet-managed end"
+FLEET_BEGIN = "// beyla fleet-managed begin"
+FLEET_END = "// beyla fleet-managed end"
 
 
 def fleet_block() -> str:
@@ -157,10 +157,10 @@ def main() -> None:
                 for base in ("lib/systemd/system", "usr/lib/systemd/system")
             ):
                 raise ValueError(f"selected systemd service does not exist: {unit}")
-            dropin = DROPINS / f"{unit}.d/90-grafana-beyla-sdk.conf"
+            dropin = DROPINS / f"{unit}.d/90-beyla.conf"
             expected = (
                 "[Service]\n"
-                "# grafana-beyla-sdk managed\n"
+                "# beyla managed\n"
                 f"EnvironmentFile={ETC / 'sdk.env'}\n"
                 f"Environment=OTEL_INJECTOR_SERVICE_NAME={unit[:-len('.service')]}\n"
             )
@@ -180,9 +180,9 @@ def main() -> None:
             "OTEL_METRICS_EXPORTER=otlp",
             "OTEL_LOGS_EXPORTER=none",
             "OTEL_INJECTOR_CONFIG_FILE=" + systemd_value(
-                "/opt/grafana/beyla-sdk/dist/injector/otelinject.conf"
+                "/opt/beyla/sdk/dist/injector/otelinject.conf"
             ),
-            "LD_PRELOAD=" + systemd_value("/opt/grafana/beyla-sdk/dist/injector/libotelinject.so"),
+            "LD_PRELOAD=" + systemd_value("/opt/beyla/sdk/dist/injector/libotelinject.so"),
         ]
     ) + "\n"
 
@@ -197,11 +197,11 @@ def main() -> None:
             atomic_secret(ETC / "sdk.env", sdk_env)
         enrolled = []
         for unit in services:
-            dropin = DROPINS / f"{unit}.d/90-grafana-beyla-sdk.conf"
+            dropin = DROPINS / f"{unit}.d/90-beyla.conf"
             dropin.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
             contents = (
                 "[Service]\n"
-                "# grafana-beyla-sdk managed\n"
+                "# beyla managed\n"
                 f"EnvironmentFile={ETC / 'sdk.env'}\n"
                 f"Environment=OTEL_INJECTOR_SERVICE_NAME={unit[:-len('.service')]}\n"
             )

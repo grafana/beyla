@@ -1,6 +1,6 @@
 # Debian package implementation notes
 
-This guide is for maintainers of the experimental Ubuntu amd64 companion
+This guide is for maintainers of the initially experimental Ubuntu amd64 DEB
 package. User-facing installation and configuration instructions are in
 [README.md](README.md). The package configures Alloy; it does not install a
 standalone Beyla service.
@@ -12,11 +12,11 @@ Alloy's vendor configuration:
 
 | Source in this repository | Installed path | Purpose |
 | --- | --- | --- |
-| `alloy-config.alloy` | `/usr/share/grafana-beyla-sdk/config.alloy` (package-owned template) and, on first configure, `/etc/grafana/beyla-sdk/config.alloy` (active copy) | Complete package-owned Alloy config selected by the package service drop-in |
-| `alloy-dropin.conf` | `/usr/share/grafana-beyla-sdk/alloy-service-dropin.conf` | Source for `/etc/systemd/system/alloy.service.d/50-grafana-beyla-sdk.conf`; sets `User=root` and `EnvironmentFile=/etc/grafana/beyla-sdk/alloy.env` |
-| `configure.py` | `/usr/lib/grafana-beyla-sdk/configure.py` | Validates debconf values and selected units, writes persistent settings and optional service drop-ins |
-| `validate-alloy.py` | `/usr/lib/grafana-beyla-sdk/validate-alloy.py` | Validates the active complete Alloy config before starting or restarting Alloy |
-| SDK image `/dist` tree | `/opt/grafana/beyla-sdk/dist/` | Bundled injection library and language agents/configuration |
+| `alloy-config.alloy` | `/usr/share/beyla/config.alloy` (package-owned template) and, on first configure, `/etc/beyla/config.alloy` (active copy) | Complete package-owned Alloy config selected by the package service drop-in |
+| `alloy-dropin.conf` | `/usr/share/beyla/alloy-service-dropin.conf` | Source for `/etc/systemd/system/alloy.service.d/50-beyla.conf`; sets `User=root` and `EnvironmentFile=/etc/beyla/alloy.env` |
+| `configure.py` | `/usr/lib/beyla/configure.py` | Validates debconf values and selected units, writes persistent settings and optional service drop-ins |
+| `validate-alloy.py` | `/usr/lib/beyla/validate-alloy.py` | Validates the active complete Alloy config before starting or restarting Alloy |
+| SDK image `/dist` tree | `/opt/beyla/sdk/dist/` | Bundled injection library and language agents/configuration |
 
 The active Alloy drop-in is the only package-owned Alloy service override. It
 selects the complete package config through `CONFIG_FILE` in `alloy.env`; it
@@ -27,10 +27,15 @@ the pristine `/etc/default/alloy`, the checksum-matching vendor
 customized Alloy installation is rejected rather than adopted. The package
 also refuses unmarked pre-existing files at its config destination.
 
-The package owns `/var/lib/grafana-beyla-sdk/mode` and, in SDK mode,
-`/var/lib/grafana-beyla-sdk/services` as its configuration state markers. The
-persistent Alloy environment is `/etc/grafana/beyla-sdk/alloy.env`; SDK
-enrollment settings are in `/etc/grafana/beyla-sdk/sdk.env`. Both are written
+The previous experimental package layout used Grafana-prefixed state and SDK
+paths. `preinst` refuses an installation or upgrade when its legacy state
+marker is present, before unpacking can replace the prior payload. Migration
+and cleanup of that layout are manual; the package does not remove old files.
+
+The package owns `/var/lib/beyla/mode` and, in SDK mode,
+`/var/lib/beyla/services` as its configuration state markers. The
+persistent Alloy environment is `/etc/beyla/alloy.env`; SDK
+enrollment settings are in `/etc/beyla/sdk.env`. Both are written
 atomically as root-only mode `0600`. Configuration input is checked for
 required values and unsafe/missing service names before these durable secrets
 or the state marker are created. Password values are cleared from debconf
@@ -52,7 +57,7 @@ downloads/build steps in that existing image recipe rather than duplicating
 them in packaging code. The package checks for the injector library and the
 Java, .NET, Node.js, Python, and Ruby payload paths before building. It rewrites
 the injector config's build-container path to the installed
-`/opt/grafana/beyla-sdk/dist` path. `test-package.sh` can also use a synthetic
+`/opt/beyla/sdk/dist` path. `test-package.sh` can also use a synthetic
 payload fixture; that verifies packaging/staging, not the SDK binaries.
 
 The package version is supplied to `build-deb.sh` through `VERSION`; release
@@ -65,7 +70,7 @@ repository is a separate integration.
 In `beyla-only` mode, no application service drop-ins are created. In `sdk`
 mode, `configure.py` requires an explicit unique list of existing systemd
 `.service` units. For each, it writes only
-`/etc/systemd/system/<unit>.d/90-grafana-beyla-sdk.conf`, with an
+`/etc/systemd/system/<unit>.d/90-beyla.conf`, with an
 `EnvironmentFile` reference to `sdk.env` plus that unit's injector service
 name. The environment file supplies `LD_PRELOAD` and
 `OTEL_INJECTOR_CONFIG_FILE`; this is unit-scoped opt-in, not host-wide
@@ -93,7 +98,7 @@ switch is why changing between modes through `dpkg-reconfigure` is unsupported.
 - A subsequent configure must retain the recorded mode. A requested mode
   change fails and preserves the existing configuration. Endpoint/credential
   rotation is currently manual: edit the persistent root-only
-  `/etc/grafana/beyla-sdk/alloy.env` carefully, then deliberately restart
+  `/etc/beyla/alloy.env` carefully, then deliberately restart
   Alloy to apply it. Avoid putting tokens in command arguments or shell
   history.
 - On `remove` or `purge`, `postrm` removes only service and Alloy drop-ins
@@ -104,10 +109,10 @@ switch is why changing between modes through `dpkg-reconfigure` is unsupported.
   application units.
 - When no modified package drop-in has to be preserved, both `remove` and
   `purge` clear the package's `mode` and `services` state markers. `remove`
-  leaves `/etc/grafana/beyla-sdk` (credentials and active config) in place;
+  leaves `/etc/beyla` (credentials and active config) in place;
   `purge` removes that directory too. If a modified package drop-in remains,
   the scripts preserve the state markers on either action, and `purge` also
-  leaves `/etc/grafana/beyla-sdk` in place. Because a later first configure
+  leaves `/etc/beyla` in place. Because a later first configure
   may reject those unmarked pre-existing config files, retention on `remove`
   does not guarantee that reinstall or reconfiguration will adopt them. These
   behaviors describe the current maintainer scripts, not a promise to manage

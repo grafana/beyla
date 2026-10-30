@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+P=${BEYLA_PACKAGE_ROOT:-}
+case "${1:-}" in
+  install|upgrade)
+    if [ -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
+      echo "beyla: prior experimental package state found in /var/lib/grafana-beyla-sdk; manual migration is required before installation, and the existing files have been left untouched" >&2
+      exit 1
+    fi
+    ;;
+esac
+exit 0

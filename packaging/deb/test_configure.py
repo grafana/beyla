@@ -46,8 +46,8 @@ class ConfigureTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         CONFIGURE.ROOT = self.root
-        CONFIGURE.ETC = self.root / "etc/grafana/beyla-sdk"
-        CONFIGURE.STATE = self.root / "var/lib/grafana-beyla-sdk"
+        CONFIGURE.ETC = self.root / "etc/beyla"
+        CONFIGURE.STATE = self.root / "var/lib/beyla"
         CONFIGURE.DROPINS = self.root / "etc/systemd/system"
         CONFIGURE.ETC.mkdir(mode=0o755, parents=True)
         (CONFIGURE.ETC / "config.alloy").write_text(
@@ -72,7 +72,7 @@ class ConfigureTests(unittest.TestCase):
         etc = CONFIGURE.ETC
         alloy_env = etc / "alloy.env"
         sdk_env = etc / "sdk.env"
-        dropin = self.root / "etc/systemd/system/demo.service.d/90-grafana-beyla-sdk.conf"
+        dropin = self.root / "etc/systemd/system/demo.service.d/90-beyla.conf"
         self.assertEqual(alloy_env.stat().st_mode & 0o777, 0o600)
         self.assertEqual(sdk_env.stat().st_mode & 0o777, 0o600)
         self.assertIn('CONFIG_FILE="' + str(etc / "config.alloy") + '"', alloy_env.read_text())
@@ -100,9 +100,9 @@ class ConfigureTests(unittest.TestCase):
             "traces = [otelcol.exporter.otlphttp.cloud.input]",
             (CONFIGURE.ETC / "config.alloy").read_text(),
         )
-        self.assertEqual((self.root / "var/lib/grafana-beyla-sdk/mode").read_text().strip(), "beyla-only")
+        self.assertEqual((self.root / "var/lib/beyla/mode").read_text().strip(), "beyla-only")
         self.assertFalse((self.root / "etc/systemd/system/demo.service.d").exists())
-        self.assertFalse((self.root / "etc/grafana/beyla-sdk/sdk.env").exists())
+        self.assertFalse((self.root / "etc/beyla/sdk.env").exists())
 
     def test_fleet_is_absent_by_default(self) -> None:
         with mock.patch.dict(os.environ, inputs(self.root), clear=True):
@@ -217,13 +217,13 @@ class ConfigureTests(unittest.TestCase):
         self.assertNotIn("FLEET", env_path.read_text())
 
     def test_refuses_foreign_dropin_before_writing_credentials(self) -> None:
-        foreign = self.root / "etc/systemd/system/demo.service.d/90-grafana-beyla-sdk.conf"
+        foreign = self.root / "etc/systemd/system/demo.service.d/90-beyla.conf"
         foreign.parent.mkdir(parents=True)
         foreign.write_text("[Service]\nEnvironment=LD_PRELOAD=/other.so\n", encoding="utf-8")
         with mock.patch.dict(os.environ, inputs(self.root), clear=True):
             with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
                 CONFIGURE.main()
-        self.assertFalse((self.root / "etc/grafana/beyla-sdk/alloy.env").exists())
+        self.assertFalse((self.root / "etc/beyla/alloy.env").exists())
 
     def test_refuses_invalid_unit_and_missing_service(self) -> None:
         for service in ("../../outside.service", "missing.service"):
@@ -232,7 +232,7 @@ class ConfigureTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env, clear=True):
                 with self.assertRaises(ValueError):
                     CONFIGURE.main()
-        self.assertFalse((self.root / "etc/grafana/beyla-sdk/alloy.env").exists())
+        self.assertFalse((self.root / "etc/beyla/alloy.env").exists())
 
     def test_validator_reads_quoted_env_without_logging_credentials(self) -> None:
         envfile = self.root / "alloy.env"

@@ -126,11 +126,21 @@ If you omit `image.tag`, the chart uses the Beyla version that it pins.
 The `autoInstrumentation.beyla.config.data` section contains a Beyla configuration file, documented in the
 [Beyla configuration options documentation](../../configure/options/).
 
+The chart sets `attributes.kubernetes.enable`, sets `attributes.kubernetes.cluster_name` from `cluster.name`, and sets `internal_metrics.prometheus.port` and `prometheus_export.port` from `autoInstrumentation.beyla.service.targetPort`.
+Values you set for these keys in `config.data` have no effect.
+
+To change the exported metric features, set `prometheus_export.features`.
+The chart sets `prometheus_export.features`, and Beyla gives that list precedence over `metrics.features`, so a `metrics.features` list has no effect.
+
 In the example above the configuration is modified to:
 1. Send traces to the Application Observability feature's OTLP receiver.
    Beyla sends traces only when `applicationObservability` is enabled with an OTLP receiver.
 1. Instrument only three namespaces: `alpha`, `bravo`, and `delta`.
 1. Use the Beyla _`<BEYLA_VERSION>`_ image instead of the version that the chart pins.
+
+Your `instrument` list replaces the chart's default selection of every namespace.
+Unless you set `exclude_instrument`, the chart still excludes Alloy, OpenTelemetry Collector, and Beyla processes.
+Beyla also applies its [default exclusions][default-exclude].
 
 ## Next steps
 

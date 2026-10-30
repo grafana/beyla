@@ -2,7 +2,7 @@
 title: Run Beyla in a Docker container
 menuTitle: Docker
 description: Run Grafana Beyla in a Docker container to instrument a service in another container, with the Docker CLI or Docker Compose.
-weight: 300
+weight: 200
 keywords:
   - Beyla
   - eBPF

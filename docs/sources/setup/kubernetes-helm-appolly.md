@@ -33,11 +33,13 @@ Before you deploy Beyla, make sure you have the following:
 - A Grafana Cloud stack, and the OTLP endpoint and credentials for it.
   To find them, follow the procedure in [Send data to the Grafana Cloud OTLP endpoint][cloud-otlp].
 
+With the default chart values, Beyla runs as a privileged DaemonSet in the host process ID (PID) and network namespaces of each node.
+
 ## Deploy Beyla for Grafana Cloud
 
 To deploy Beyla for Grafana Cloud, complete the following steps:
 
-1. Create the `beyla` namespace with `kubectl create namespace beyla`.
+1. If the `beyla` namespace doesn't exist, create it with `kubectl create namespace beyla`.
 
 1. Save the following Secret as `grafana-secret.yml`, and create it with `kubectl apply -f grafana-secret.yml`:
 
@@ -52,7 +54,8 @@ To deploy Beyla for Grafana Cloud, complete the following steps:
      otlp-headers: "Authorization=Basic <BASE64_CREDENTIALS>"
    ```
 
-   Replace _`<BASE64_CREDENTIALS>`_ with the Base64-encoded instance ID and token for your stack.
+   Replace _`<BASE64_CREDENTIALS>`_ with your instance ID and token, joined by a colon and Base64-encoded.
+   For example, run `echo -n '<INSTANCE_ID>:<TOKEN>' | base64`.
 
 1. Create a `helm-beyla.yml` file:
 
@@ -74,7 +77,7 @@ To deploy Beyla for Grafana Cloud, complete the following steps:
          name: grafana-secret
    ```
 
-   Replace _`<OTLP_ENDPOINT>`_ with the OTLP endpoint of your stack, for example `https://otlp-gateway-<ZONE>.grafana.net/otlp`.
+   Replace _`<OTLP_ENDPOINT>`_ with the OTLP endpoint that you copied from your stack, for example `https://otlp-gateway-prod-eu-west-0.grafana.net/otlp`.
    Beyla appends `/v1/metrics` and `/v1/traces`.
 
 1. Add the Grafana Helm repository and update your local chart index:
@@ -96,6 +99,10 @@ To deploy Beyla for Grafana Cloud, complete the following steps:
    kubectl get pods --namespace beyla
    ```
 
+   If a Pod isn't running, check its logs with `kubectl logs --namespace beyla <POD_NAME>`, where _`<POD_NAME>`_ is the Pod name from the previous command.
+
+After your applications receive requests, their services appear in [Application Observability][app-o11y] in your Grafana Cloud stack.
+
 With this configuration, Beyla does the following:
 
 - Instruments applications in every namespace, except Kubernetes system namespaces and other namespaces that Beyla [excludes by default][default-exclude]
@@ -108,8 +115,7 @@ The `features` list replaces the default Beyla `application` feature, so Beyla e
 
 ## Customize the deployment
 
-With the default chart values, Beyla runs as a privileged DaemonSet in the host process ID (PID) and network namespaces of each node.
-To change the defaults, add chart values or Beyla options to your `helm-beyla.yml` file and run the `helm upgrade --install` command again.
+To change the chart defaults, add chart values or Beyla options to your `helm-beyla.yml` file and run the `helm upgrade --install` command again.
 Keep the `metrics.features` list and the OTLP settings in the file.
 
 - To review each chart default and what it grants, refer to [Review the chart defaults][helm-defaults].

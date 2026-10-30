@@ -14,11 +14,8 @@ aliases:
 
 # Deploy Beyla with the Beyla Helm chart
 
-{{% admonition type="note" %}}
-For more details about the diverse Helm configuration options, check out the
-[Beyla Helm chart options](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
-document.
-{{% /admonition %}}
+The Beyla Helm chart deploys Grafana Beyla as a DaemonSet, so one Beyla Pod runs on each node and instruments the applications on that node.
+To configure the chart for Grafana Cloud Application Observability and Knowledge Graph, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud](../kubernetes-helm-appolly/).
 
 ## Before you begin
 
@@ -172,3 +169,9 @@ Replace the following:
 - _`<OTLP_ENDPOINT>`_: The base URL of your OTLP endpoint.
 
 Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` command.
+
+## Next steps
+
+- [Beyla Helm chart README](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md)
+- [Configure Beyla](../../configure/)
+- [Deploy Beyla in Kubernetes with Helm for Grafana Cloud](../kubernetes-helm-appolly/)

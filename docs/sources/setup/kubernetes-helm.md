@@ -1,7 +1,7 @@
 ---
-title: Deploy Beyla in Kubernetes with Helm
-menuTitle: Helm chart for other use cases
-description: Learn how to deploy Beyla as a Helm chart in Kubernetes.
+title: Deploy Beyla with the Beyla Helm chart
+menuTitle: Beyla Helm chart
+description: Install Grafana Beyla in Kubernetes with the Beyla Helm chart, customize its configuration, scrape its metrics with the Prometheus Operator, and pass OTLP credentials from a Secret.
 weight: 300
 keywords:
   - Beyla
@@ -12,7 +12,7 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/setup/kubernetes-helm/
 ---
 
-# Deploy Beyla in Kubernetes with Helm
+# Deploy Beyla with the Beyla Helm chart
 
 {{% admonition type="note" %}}
 For more details about the diverse Helm configuration options, check out the
@@ -29,7 +29,7 @@ Before you install the chart, make sure you have the following:
 - Permission to create cluster-scoped resources and privileged Pods
 - The Prometheus Operator, if you want the chart to create a ServiceMonitor
 
-## Deploy Beyla with helm
+## Install the chart
 
 First, you need to add the Grafana helm repository to Helm:
 
@@ -71,7 +71,7 @@ To turn it on, set `ebpf.context_propagation` under `config.data`.
 If you don't use network-level context propagation, set `contextPropagation.enabled: false` to remove this access.
 The `network` preset still runs Beyla in the host network namespace.
 
-## Configure Beyla
+## Customize the Beyla configuration
 
 You might want to override the default configuration of Beyla. For example, to export metrics and traces
 with OpenTelemetry, or to restrict the number of services to instrument.
@@ -132,7 +132,7 @@ For more information, refer to [Prometheus exporter component](../../configure/e
 The chart also has values for resource names, Pod labels and annotations, the service account, RBAC rules, security contexts, scheduling, and resource limits.
 For the full list, refer to the [Beyla Helm chart README](https://github.com/grafana/beyla/blob/main/charts/beyla/README.md).
 
-## Provide secrets to the Helm configuration
+## Pass OTLP credentials from a Kubernetes Secret
 
 If you are submitting directly the metrics and traces to Grafana Cloud via the
 OpenTelemetry Endpoint, you need to provide the credentials via the

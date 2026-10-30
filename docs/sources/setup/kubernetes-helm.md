@@ -1,7 +1,7 @@
 ---
 title: Deploy Beyla with the Beyla Helm chart
 menuTitle: Beyla Helm chart
-description: Install Grafana Beyla in Kubernetes with the Beyla Helm chart, customize its configuration, scrape its metrics with the Prometheus Operator, and pass OTLP credentials from a Secret.
+description: Install Grafana Beyla in Kubernetes with the Beyla Helm chart, customize its configuration, reduce its privileges, scrape its metrics with the Prometheus Operator, and pass OTLP credentials from a Secret.
 weight: 300
 keywords:
   - Beyla
@@ -14,7 +14,7 @@ aliases:
 
 # Deploy Beyla with the Beyla Helm chart
 
-The Beyla Helm chart deploys Grafana Beyla as a DaemonSet, which runs a Beyla Pod on each node and instruments the applications on that node.
+The Beyla Helm chart deploys Grafana Beyla as a DaemonSet, which runs a Beyla Pod on your cluster nodes and instruments the applications on each node.
 To configure the chart for Grafana Cloud Application Observability and Knowledge Graph, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-cloud].
 
 ## Before you begin
@@ -28,32 +28,27 @@ Before you install the chart, make sure you have the following:
 
 ## Review the chart defaults
 
-With the default values, the chart configures Beyla to do the following:
+With the default values, Beyla does the following:
 
-- Exports metrics in Prometheus format on port `9090` of each node, at the `/metrics` path
 - Instruments applications in every namespace, except Kubernetes system namespaces and other namespaces that Beyla [excludes by default][default-exclude]
 - Collects application-level metrics, not [network-level metrics][network]
-- Decorates the metrics with Kubernetes metadata labels, for example `k8s_namespace_name` or `k8s_pod_name`
+- Adds Kubernetes metadata labels to metrics, for example `k8s_namespace_name` and `k8s_pod_name`
+- Exports metrics in Prometheus format on port `9090` of each node, at the `/metrics` path
 
-To collect network metrics instead of application metrics, set the chart value `preset: network`.
+The following chart values control what Beyla collects, where it runs, and what access its Pods get on each node:
 
-The DaemonSet doesn't tolerate any node taints by default, so tainted nodes, such as control-plane nodes, don't run a Beyla Pod.
-To run Beyla on tainted nodes, set the chart value `tolerations`.
+| Chart value                  | Default       | Effect                                                                                                                                   |
+| ---------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `preset`                     | `application` | Instruments all namespaces and runs Beyla in the host process ID (PID) namespace. Set `network` to collect network metrics instead.      |
+| `privileged`                 | `true`        | Runs Beyla as a privileged container.                                                                                                    |
+| `contextPropagation.enabled` | `true`        | Gives the Pod host network access, the host `/sys/fs/cgroup` and `/sys/kernel/tracing` directories, and, when unprivileged, `NET_ADMIN`. |
+| `tolerations`                | `[]`          | Skips nodes with taints that the DaemonSet doesn't tolerate, such as control-plane nodes.                                                |
 
-By default, the chart runs Beyla as a privileged container in the host process ID (PID) namespace.
-The chart also sets `contextPropagation.enabled: true`, which grants the Pod the access that [network-level context propagation][context-propagation] needs:
+The `contextPropagation.enabled` value grants the access that [network-level context propagation][context-propagation] needs, but doesn't turn it on in Beyla.
 
-- The host network namespace
-- The host `/sys/fs/cgroup` and `/sys/kernel/tracing` directories
-- The `NET_ADMIN` capability, when `privileged: false`
+If another process on the node uses port `9090`, change `config.data.prometheus_export.port`.
 
-This value doesn't turn on context propagation in Beyla.
-To turn it on, set `ebpf.context_propagation` to `all`, `headers`, or `tcp` under `config.data`.
-
-With host networking, Beyla listens on port `9090` of the node.
-If another process on the node uses that port, set `config.data.prometheus_export.port` to a free port.
-
-To change these defaults, refer to [Customize the Beyla configuration](#customize-the-beyla-configuration) and [Reduce Beyla privileges](#reduce-beyla-privileges).
+To change these defaults, refer to [Customize the Beyla configuration][customize] and [Reduce Beyla privileges][reduce].
 
 ## Install the chart
 
@@ -83,8 +78,10 @@ To install the chart with its default values, complete the following steps:
 To change what Beyla instruments or where it sends data, override the chart values in a values file.
 Your values file has two kinds of settings:
 
-- Top-level chart values, such as `privileged` and `preset`, control the Kubernetes resources that the chart creates
+- Top-level chart values, such as `privileged` and `tolerations`, control the Kubernetes resources that the chart creates
 - Values under `config.data` form the Beyla configuration file, which the chart renders into a ConfigMap
+
+The `preset` chart value changes both the Kubernetes resources and the Beyla configuration.
 
 For the Beyla configuration options, refer to [Configure Beyla][configure].
 The chart also has values for resource names, Pod labels and annotations, the service account, RBAC rules, security contexts, scheduling, and resource limits.
@@ -119,11 +116,20 @@ helm upgrade --install beyla grafana/beyla --namespace beyla --create-namespace 
 
 ## Reduce Beyla privileges
 
-To run Beyla with a list of Linux capabilities instead of a privileged container, set the chart value `privileged: false` in your `helm-beyla.yml` file.
+To reduce the access that Beyla gets on each node, add one or both of the following chart values to your `helm-beyla.yml` file:
+
+```yaml
+privileged: false
+contextPropagation:
+  enabled: false
+```
+
+The `privileged: false` value runs Beyla with a list of Linux capabilities instead of a privileged container.
 For the capabilities, refer to [Beyla security, permissions, and capabilities][security].
 The chart still runs Beyla in the host PID namespace.
 
-If you don't use network-level context propagation, set the chart value `contextPropagation.enabled: false` to remove the access that it needs.
+The `contextPropagation.enabled: false` value removes the access that network-level context propagation needs.
+If you set `ebpf.context_propagation` under `config.data`, keep `contextPropagation.enabled: true`.
 The `network` preset still runs Beyla in the host network namespace.
 
 Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` command.
@@ -147,6 +153,8 @@ serviceMonitor:
 The `honorLabels` setting keeps the `instance` and `job` labels that Beyla sets for each instrumented process.
 For more information, refer to [Prometheus exporter component][prometheus-exporter].
 
+If your Prometheus selects ServiceMonitors by label, add that label with the chart value `serviceMonitor.additionalLabels`.
+
 Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` command.
 
 ## Pass OTLP credentials from a Kubernetes Secret
@@ -154,6 +162,7 @@ Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` c
 Some OTLP endpoints, such as Grafana Cloud, require an authentication header.
 Pass it to Beyla in the `OTEL_EXPORTER_OTLP_HEADERS` environment variable.
 Store the header in a Kubernetes Secret, and reference the Secret from your Helm values.
+The `OTEL_EXPORTER_OTLP_ENDPOINT` variable sends both metrics and traces to the endpoint.
 
 Create a Secret in the namespace where Beyla runs:
 
@@ -192,6 +201,33 @@ To export only through OTLP, set `prometheus_export: null` under `config.data`.
 
 Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` command.
 
+## Use your own ConfigMap
+
+To manage the Beyla configuration file outside the chart, store it in a ConfigMap in the Beyla namespace.
+If you haven't installed the chart yet, create the namespace first with `kubectl create namespace beyla`.
+Use the `beyla-config.yml` key, because Beyla reads its configuration from `/etc/beyla/config/beyla-config.yml`:
+
+```sh
+kubectl create configmap beyla-config --namespace beyla --from-file=beyla-config.yml=<CONFIG_FILE>
+```
+
+Replace _`<CONFIG_FILE>`_ with the path to your Beyla configuration file.
+
+Then set the chart value `config.name` to the ConfigMap name in your `helm-beyla.yml` file:
+
+```yaml
+config:
+  name: beyla-config
+```
+
+With `config.name` set, the chart doesn't create its own ConfigMap or render `config.data` into one.
+The chart still reads `config.data.prometheus_export` to set the container port, the Service, and the ServiceMonitor.
+Keep that value consistent with the `prometheus_export` section of your file.
+The `preset` value doesn't add its defaults to your file, so include a `discovery` or `network` section.
+
+The chart doesn't restart the Beyla Pods when your ConfigMap changes.
+To restart them on the next upgrade, set the chart value `config.checksum` to a value that changes with your ConfigMap.
+
 ## Next steps
 
 - [Beyla Helm chart README][chart-readme]
@@ -202,10 +238,12 @@ Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` c
 [cloud-otlp]: https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users
 [configure]: ../../configure/
 [context-propagation]: ../../traces/#context-propagation-at-network-level
+[customize]: #customize-the-beyla-configuration
 [default-exclude]: ../../configure/service-discovery/#default-exclude-services-from-instrumentation
 [helm-cloud]: ../kubernetes-helm-appolly/
 [network]: ../../network/
 [prometheus-exporter]: ../../configure/export-data/#prometheus-exporter-component
+[reduce]: #reduce-beyla-privileges
 [requirements]: ../../introduction/requirements/
 [routes]: ../../configure/routes-decorator/
 [security]: ../security/

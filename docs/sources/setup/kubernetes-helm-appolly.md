@@ -23,50 +23,77 @@ Beyla generates them directly, so you can [sample traces][sample-traces] or turn
 
 With the [Beyla Helm chart][beyla-helm], Beyla sends these metrics and traces directly to the Grafana Cloud OTLP endpoint, with no collector in between.
 
-## Deploy Beyla with Helm for Grafana Cloud
+## Before you begin
 
-First, you need to add the Grafana helm repository to Helm:
+Before you deploy Beyla, make sure you have the following:
 
-```sh
-helm repo add grafana https://grafana.github.io/helm-charts
-```
+- A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations][requirements]
+- Helm and `kubectl`, configured for the cluster
+- Permission to create cluster-scoped resources and privileged Pods
+- A Grafana Cloud stack, and the OTLP endpoint and credentials for it.
+  To find them, follow the procedure in [Send data to the Grafana Cloud OTLP endpoint][cloud-otlp].
 
-If you have previously added the Grafana Helm repository, run the update command to refresh the helm repository information:
+## Deploy Beyla for Grafana Cloud
 
-```sh
-helm repo update
-```
+To deploy Beyla for Grafana Cloud, complete the following steps:
 
-The following command deploys a Beyla DaemonSet with a default configuration for Grafana Cloud in the `beyla` namespace:
+1. Create the `beyla` namespace with `kubectl create namespace beyla`.
 
-```sh
-helm upgrade --install --atomic --timeout 300s beyla grafana/beyla --namespace "beyla" --create-namespace --values - <<EOF
-config:
-  data:
-    discovery:
-      instrument:
-        - k8s_namespace: "*"
-    otel_metrics_export:
-      endpoint: <Your Grafana Cloud tenant Mimir endpoint> e.g. "https://otlp-gateway-ops-eu-south-0.grafana-ops.net/otlp/v1/metrics"
-      features:
-        - application_span
-        - application_service_graph
-        - application_host
-    otel_traces_export:
-      endpoint: <Your Grafana Cloud tenant Tempo endpoint> e.g. "https://otlp-gateway-ops-eu-south-0.grafana-ops.net/otlp/v1/traces"
-env:
-  OTEL_EXPORTER_OTLP_METRICS_HEADERS: "Authorization=Basic <Your Grafana Cloud Mimir auth token>"
-  OTEL_EXPORTER_OTLP_TRACES_HEADERS: "Authorization=Basic <Your Grafana Cloud Tempo auth token>"
-EOF
-```
+1. Create a Secret with your Grafana Cloud credentials:
 
-The Beyla configuration above:
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: grafana-secret
+     namespace: beyla
+   type: Opaque
+   stringData:
+     otlp-headers: "Authorization=Basic <BASE64_CREDENTIALS>"
+   ```
 
-- exports metrics and traces in a format that can be consumed by Grafana Cloud Knowledge Graph and Application Observability.
-- exports host information metrics `application_host` which are needed for the host based pricing model of the Grafana Cloud products.
-- tries to instrument all the applications in your cluster.
-- only provides application-level metrics (span and service graph) and excludes [network-level metrics](../../network/) by default
-- configures Beyla to decorate the metrics with Kubernetes metadata labels, for example `k8s.namespace.name` or `k8s.pod.name`
+1. Create a `helm-beyla.yml` file:
+
+   ```yaml
+   config:
+     data:
+       metrics:
+         features:
+           - application_span
+           - application_service_graph
+           - application_host
+       prometheus_export: null
+   env:
+     OTEL_EXPORTER_OTLP_ENDPOINT: "<OTLP_ENDPOINT>"
+   envValueFrom:
+     OTEL_EXPORTER_OTLP_HEADERS:
+       secretKeyRef:
+         key: otlp-headers
+         name: grafana-secret
+   ```
+
+1. Add the Grafana Helm repository, as described in [Install the chart][helm-install], and install the chart:
+
+   ```sh
+   helm upgrade --install beyla grafana/beyla --namespace beyla --create-namespace -f helm-beyla.yml
+   ```
+
+Replace the following:
+
+- _`<BASE64_CREDENTIALS>`_: The Base64-encoded instance ID and token for your stack.
+  For the steps, refer to [Send data to the Grafana Cloud OTLP endpoint][cloud-otlp].
+- _`<OTLP_ENDPOINT>`_: The OTLP endpoint of your stack, for example `https://otlp-gateway-<ZONE>.grafana.net/otlp`.
+  Beyla appends `/v1/metrics` and `/v1/traces`.
+
+With this configuration, Beyla does the following:
+
+- Instruments applications in every namespace, except Kubernetes system namespaces and other namespaces that Beyla [excludes by default][default-exclude]
+- Exports span metrics, service graph metrics, and traces to Grafana Cloud
+- Exports the `application_host` metric, which Grafana Cloud uses for host-based pricing
+- Adds Kubernetes metadata attributes, for example `k8s.namespace.name` and `k8s.pod.name`
+- Doesn't export [network-level metrics][network] or Prometheus metrics
+
+The `features` list replaces Beyla's default `application` feature, so Beyla exports span metrics instead of OpenTelemetry semantic-convention RED metrics.
 
 ## Configure Beyla
 
@@ -176,5 +203,10 @@ envValueFrom:
 
 [app-o11y]: https://grafana.com/docs/grafana-cloud/monitor-applications/application-observability/
 [beyla-helm]: ../kubernetes-helm/
+[cloud-otlp]: https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users
+[default-exclude]: ../../configure/service-discovery/#default-exclude-services-from-instrumentation
+[helm-install]: ../kubernetes-helm/#install-the-chart
 [knowledge-graph]: https://grafana.com/docs/grafana-cloud/knowledge-graph/
+[network]: ../../network/
+[requirements]: ../../introduction/requirements/
 [sample-traces]: ../../configure/sample-traces/

@@ -136,8 +136,10 @@ Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` c
 
 ## Scrape metrics with the Prometheus Operator
 
-If you run the Prometheus Operator, the chart can create a Service and a ServiceMonitor so Prometheus discovers the Beyla metrics endpoint.
-The chart creates the ServiceMonitor only when `config.data.prometheus_export` has a value, as it does by default.
+If you run the Prometheus Operator, the chart can create a Service and a ServiceMonitor for Beyla.
+The ServiceMonitor points Prometheus at the metrics endpoint that Beyla opens when `config.data.prometheus_export` is set.
+The default chart values set this section to port `9090` and path `/metrics`.
+If you remove the section, for example with `prometheus_export: null` under `config.data`, Beyla has no Prometheus endpoint and the chart doesn't create a ServiceMonitor.
 Add the following to your `helm-beyla.yml` file:
 
 ```yaml

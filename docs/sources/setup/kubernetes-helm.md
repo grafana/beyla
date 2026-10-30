@@ -44,12 +44,12 @@ The following command deploys a Beyla DaemonSet with a default configuration in 
 helm upgrade --install beyla grafana/beyla --namespace beyla --create-namespace
 ```
 
-The default Beyla configuration:
+With the default values, the chart configures Beyla to do the following:
 
 - exports the metrics as Prometheus metrics in the Pod HTTP port `9090`, `/metrics` path.
-- tries to instrument all the applications in your cluster.
+- instruments applications in every namespace, except Kubernetes system namespaces and other namespaces that Beyla [excludes by default](../../configure/service-discovery/#default-exclude-services-from-instrumentation).
 - only provides application-level metrics and excludes [network-level metrics](../../network/) by default
-- configures Beyla to decorate the metrics with Kubernetes metadata labels, for example `k8s.namespace.name` or `k8s.pod.name`
+- decorates the metrics with Kubernetes metadata labels, for example `k8s_namespace_name` or `k8s_pod_name`
 
 ## Configure Beyla
 

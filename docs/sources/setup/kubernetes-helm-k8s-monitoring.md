@@ -49,26 +49,16 @@ In the **Containerized application monitoring** section, enable **Auto Instrumen
 To also generate OpenTelemetry traces from Beyla, enable **Forward traces to application receivers**.
 
 After you choose your other options, the Kubernetes Monitoring UI generates a Helm deployment script with the settings you need.
-The script contains the Beyla settings in the `autoInstrumentation` section.
+The script contains the Beyla settings in the `autoInstrumentation` section, for example:
 
-The following example shows a generated script with the `autoInstrumentation` section:
-
-```sh
-helm repo add grafana https://grafana.github.io/helm-charts &&
-  helm repo update &&
-  helm upgrade --install --atomic --timeout 300s grafana-k8s-monitoring grafana/k8s-monitoring \
-    --namespace "default" --create-namespace --values - <<'EOF'
-cluster:
-  name: my-cluster
-destinations:
-# ...
+```yaml
 autoInstrumentation:
   enabled: true
   beyla:
     deliverTracesToApplicationObservability: false
-# ...
-EOF
 ```
+
+Run the script to install the chart.
 
 With this configuration, Beyla does the following:
 
@@ -91,15 +81,7 @@ You can override the default [Beyla configuration options][configure] with your 
 
 To override the defaults, modify the `autoInstrumentation` section of the generated script and run the script again, for example:
 
-```sh
-helm repo add grafana https://grafana.github.io/helm-charts &&
-  helm repo update &&
-  helm upgrade --install --atomic --timeout 300s grafana-k8s-monitoring grafana/k8s-monitoring \
-    --namespace "default" --create-namespace --values - <<'EOF'
-cluster:
-  name: my-cluster
-destinations:
-# ...
+```yaml
 autoInstrumentation:
   enabled: true
   beyla:
@@ -113,8 +95,6 @@ autoInstrumentation:
             - k8s_namespace: alpha
             - k8s_namespace: bravo
             - k8s_namespace: delta
-# ...
-EOF
 ```
 
 Replace _`<BEYLA_VERSION>`_ with a Beyla release version, for example `3.25.0`.

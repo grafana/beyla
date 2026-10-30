@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"slices"
 	"time"
 
@@ -57,6 +58,8 @@ const (
 // overriding here any value that differs from the OBI defaults
 func DefaultConfig() *Config {
 	def := FromOBI(&obi.DefaultConfig)
+	def.Routes = def.Routes.Clone()
+	def.Attributes.Kubernetes.ResourceLabels = maps.Clone(def.Attributes.Kubernetes.ResourceLabels)
 	def.Grafana = botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
 			// by default we will only submit traces, assuming span2metrics will do the metrics conversion
@@ -316,8 +319,20 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
-// nolint:cyclop
 func (c *Config) Validate() error {
+	return c.validate(validationContext{})
+}
+
+func (c *Config) ValidateForRefresh() error {
+	return c.validate(validationContext{applicationPipelineInitialized: true})
+}
+
+type validationContext struct {
+	applicationPipelineInitialized bool
+}
+
+// nolint:cyclop
+func (c *Config) validate(context validationContext) error {
 	if err := c.validateInstrumentAllLocal(); err != nil {
 		return err
 	}
@@ -326,7 +341,9 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) &&
+	appEnabled := context.applicationPipelineInitialized || c.Enabled(FeatureAppO11y)
+
+	if !c.Enabled(FeatureNetO11y) && !appEnabled &&
 		!c.Enabled(FeatureStatsO11y) && !c.Injector.Webhook.Enabled() {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
@@ -337,7 +354,7 @@ func (c *Config) Validate() error {
 		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
 	}
 
-	if c.willUseTC() {
+	if !context.applicationPipelineInitialized && c.willUseTC() {
 		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
 			return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
 		}
@@ -369,7 +386,7 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("invalid value for trace_printer: '%s'", c.TracePrinter))
 	}
 
-	if c.Enabled(FeatureAppO11y) && !c.TracePrinter.Enabled() &&
+	if appEnabled && !c.TracePrinter.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
 		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() &&
 		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
@@ -377,7 +394,7 @@ func (c *Config) Validate() error {
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
 	}
 
-	if c.Enabled(FeatureAppO11y) &&
+	if appEnabled &&
 		(c.Prometheus.EndpointEnabled() && c.OTELMetrics.EndpointEnabled()) {
 		if err := c.resolveSpanMetricsFormats(); err != nil {
 			return err
@@ -533,8 +550,12 @@ func (c *Config) willUseTC() bool {
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration
 func (c *Config) appO11yEnabled() bool {
+	return c.InstrumentationEnabled() || c.Discovery.SurveyEnabled()
+}
+
+func (c *Config) InstrumentationEnabled() bool {
 	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
-		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
+		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled()
 }
 
 func (c *Config) Enabled(feature Feature) bool {
@@ -570,6 +591,10 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
 	OverrideOBIGlobalConfig()
+	return loadConfigFile(file, nil)
+}
+
+func loadConfigFile(file io.Reader, environment map[string]string) (*Config, error) {
 	cfg := *DefaultConfig()
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
@@ -582,7 +607,7 @@ func LoadConfig(file io.Reader) (*Config, error) {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}
 	}
-	if err := env.Parse(&cfg); err != nil {
+	if err := env.ParseWithOptions(&cfg, env.Options{Environment: environment}); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
 	normalizeConfig(&cfg)
@@ -635,8 +660,9 @@ func defaultServiceNameMetricAttributes(c *Config) {
 }
 
 func appendDefaultResourceLabels(dst []string) []string {
-	// appends mandatory resource labels to a slice and deduplicates it
-	return maps2.SetToSlice(maps2.SliceToSet(append(dst,
+	// appends mandatory resource labels to a slice and deduplicates it. Sorting keeps the
+	// result stable, so reloading an unchanged configuration yields an equal one.
+	labels := maps2.SetToSlice(maps2.SliceToSet(append(dst,
 		string(attr.K8sClusterName),
 		string(attr.K8sNamespaceName),
 		string(attr.K8sNodeName),
@@ -644,4 +670,6 @@ func appendDefaultResourceLabels(dst []string) []string {
 		string(semconv.DeploymentEnvironmentNameKey),
 		string(semconv.CloudAvailabilityZoneKey),
 		string(semconv.CloudRegionKey))))
+	slices.Sort(labels)
+	return labels
 }

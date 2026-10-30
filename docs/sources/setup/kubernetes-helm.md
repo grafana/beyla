@@ -99,6 +99,9 @@ config:
 
 The `config.data` section contains a Beyla configuration file, documented in [Configure Beyla](../../configure/).
 
+If you set any `discovery` option, the chart doesn't add its default `instrument` selector.
+Include an `instrument` selector, or Beyla exits at startup with a `missing application discovery section` error.
+
 Apply the file to a new or existing release:
 
 ```sh
@@ -120,6 +123,8 @@ serviceMonitor:
   endpoint:
     honorLabels: true
 ```
+
+Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` command.
 
 The `honorLabels` setting keeps the `instance` and `job` labels that Beyla sets for each instrumented process.
 For more information, refer to [Prometheus exporter component](../../configure/export-data/#prometheus-exporter-component).
@@ -165,3 +170,5 @@ Replace the following:
 
 - _`<BASE64_CREDENTIALS>`_: The Base64-encoded credentials for your OTLP endpoint. For Grafana Cloud, generate them from the **OpenTelemetry** tile of your stack, as described in [Send data to the Grafana Cloud OTLP endpoint](https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users).
 - _`<OTLP_ENDPOINT>`_: The base URL of your OTLP endpoint.
+
+Apply the updated `helm-beyla.yml` file with the same `helm upgrade --install` command.

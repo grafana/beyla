@@ -169,13 +169,13 @@ func AnthropicSpan(baseSpan *request.Span, req *http.Request, resp *http.Respons
 //
 // The endpoint is matched as a path suffix so a deployment mounted under a
 // prefix still resolves, while the sub-resources of the Messages API
-// (/v1/messages/count_tokens, /v1/messages/batches) stay out of `message`:
+// (/v1/messages/count_tokens, /v1/messages/batches) stay out of `chat`:
 // they are endpoints of their own, not a Messages API call, and semconv has no
 // operation for them.
 func anthropicOperation(req *http.Request) string {
 	switch path := strings.TrimSuffix(requestPath(req), "/"); {
 	case strings.HasSuffix(path, anthropicMessagesPath):
-		return request.MessageOperationName
+		return request.ChatOperationName
 	case strings.HasSuffix(path, anthropicCompletePath):
 		return request.CompletionOperationName
 	}

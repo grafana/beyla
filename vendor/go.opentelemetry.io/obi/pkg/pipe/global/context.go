@@ -7,12 +7,13 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/docker"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
-	"go.opentelemetry.io/obi/pkg/internal/ecs"
 	netebpf "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	statsebpf "go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
@@ -44,8 +45,8 @@ type ContextInfo struct {
 	// DockerMetadata stores per-PID information of docker containers
 	DockerMetadata *docker.ContainerStore
 	// ECSInventory is shared by endpoint resolution and process metadata enrichment.
-	// TODO: add ECS name resolution features to network metrics
-	ECSInventory *ecs.Inventory
+	// TODO: add AWS name resolution features to network metrics
+	CloudMetaInventory *cloud.Inventory
 
 	// OverrideAppExportQueue allows overriding the output queue of the application exporter
 	// to connect your own application exporters outside the OBI code base. If left unset, OBI will
@@ -80,4 +81,6 @@ type ContextInfo struct {
 type AppO11y struct {
 	// ReportRoutes sets whether the metrics should set the http.route attribute
 	ReportRoutes bool
+	// EBPFEventContext provides shared eBPF maps to application observability nodes.
+	EBPFEventContext *ebpfcommon.EBPFEventContext
 }

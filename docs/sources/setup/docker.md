@@ -2,7 +2,7 @@
 title: Run Beyla as a Docker container
 menuTitle: Docker
 description: Learn how to set up and run Beyla as a standalone Docker container that instruments another container.
-weight: 2
+weight: 200
 keywords:
   - Beyla
   - eBPF

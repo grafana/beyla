@@ -1,0 +1,34 @@
+name: Debian package tests
+
+on:
+  push:
+    branches: ["main", "release-*"]
+    paths:
+      - "packaging/deb/**"
+      - "pkg/webhook/image/**"
+      - ".github/workflows/pull_request_deb_package.yml"
+  pull_request:
+    branches: ["main", "release-*"]
+    paths:
+      - "packaging/deb/**"
+      - "pkg/webhook/image/**"
+      - ".github/workflows/pull_request_deb_package.yml"
+
+concurrency:
+  group: deb-package-tests-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package-tests:
+    name: Debian package tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test Debian package fixtures
+        run: bash packaging/deb/test-package.sh

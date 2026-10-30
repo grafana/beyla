@@ -197,6 +197,7 @@ network:
 						EndpointPatterns: []string{
 							"/query/service",
 						},
+						PreparedStatementsCacheSize: 1024,
 					},
 					Enrichment: obiconfig.EnrichmentConfig{
 						Policy: obiconfig.HTTPParsingPolicy{
@@ -262,7 +263,8 @@ network:
 				MaxSize:  160,
 				MaxScale: 20,
 			},
-			TTL: 5 * time.Minute,
+			TTL:               5 * time.Minute,
+			ConnectionInfoTTL: 15 * time.Minute,
 			ExtraSpanResourceLabels: []string{
 				"cloud.availability_zone",
 				"cloud.region",
@@ -306,6 +308,7 @@ network:
 			},
 			NativeHistogram:             prom.DefaultNativeHistogramConfig,
 			TTL:                         time.Second,
+			ConnectionInfoTTL:           15 * time.Minute,
 			SpanMetricsServiceCacheSize: 10000,
 			Buckets: export.Buckets{
 				DurationHistogram:            export.DefaultBuckets.DurationHistogram,
@@ -375,12 +378,12 @@ network:
 			WildcardChar:              "*",
 			MaxPathSegmentCardinality: 10,
 		},
-		NameResolver: &transform.NameResolverConfig{
+		NameResolver: &NameResolverConfig{
 			Sources:  []transform.Source{"k8s", "dns"},
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
-			ECS:      transform.ECSNameResolverConfig{RefreshInterval: 30 * time.Second},
 		},
+		CloudMetadata: obi.DefaultConfig.CloudMetadata,
 		Processes: process.CollectConfig{
 			RunMode:  process.RunModePrivileged,
 			Interval: 5 * time.Second,
@@ -466,6 +469,55 @@ attributes:
 `))
 	require.NoError(t, err)
 	assert.Equal(t, []attr.Name{"k8s.pod.uid"}, cfg.Attributes.ExtraGroupAttributes["app"])
+}
+
+func TestConnectionInfoFeatureConfig(t *testing.T) {
+	t.Run("YAML top-level features reach OBI", func(t *testing.T) {
+		cfg, err := LoadConfig(bytes.NewBufferString(`
+metrics:
+  features: [application_service_graph_connection_info]
+`))
+		require.NoError(t, err)
+		assert.Equal(t, export.FeatureConnectionInfo, cfg.Metrics.Features)
+		assert.True(t, cfg.AsOBI().JoinMetricsConfig().Features.ConnectionInfo())
+	})
+
+	t.Run("environment features reach OBI", func(t *testing.T) {
+		cfg := loadConfig(t, envMap{
+			"BEYLA_METRICS_FEATURES": "application_service_graph_connection_info",
+		})
+		assert.Equal(t, export.FeatureConnectionInfo, cfg.Metrics.Features)
+		assert.True(t, cfg.AsOBI().JoinMetricsConfig().Features.ConnectionInfo())
+	})
+
+	t.Run("per-service features reach OBI", func(t *testing.T) {
+		cfg, err := LoadConfig(bytes.NewBufferString(`
+metrics:
+  features: [application]
+discovery:
+  instrument:
+    - exe_path: server
+      metrics:
+        features: [application_service_graph_connection_info]
+`))
+		require.NoError(t, err)
+		require.Len(t, cfg.Discovery.Instrument, 1)
+		assert.Equal(t, export.FeatureConnectionInfo, cfg.Discovery.Instrument[0].Metrics.Features)
+		assert.Equal(t, export.FeatureApplicationRED|export.FeatureApplicationSizes, cfg.Metrics.Features)
+		assert.Equal(t, export.FeatureConnectionInfo, cfg.AsOBI().Discovery.Instrument[0].Metrics.Features)
+		assert.True(t, cfg.AsOBI().JoinMetricsConfig().Features.ConnectionInfo())
+	})
+
+	t.Run("defaults and all remain opt-in", func(t *testing.T) {
+		defaults := DefaultConfig().AsOBI().JoinMetricsConfig().Features
+		assert.False(t, defaults.ConnectionInfo())
+
+		cfg, err := LoadConfig(bytes.NewBufferString(`metrics:
+  features: [all]
+`))
+		require.NoError(t, err)
+		assert.False(t, cfg.AsOBI().JoinMetricsConfig().Features.ConnectionInfo())
+	})
 }
 
 func TestConfig_ShutdownTimeout(t *testing.T) {
@@ -1016,7 +1068,7 @@ otel_traces_export:
 	require.Error(t, cfg.Validate())
 }
 
-func TestConfigRunsWithJustInjectorButNotWithoutTraces(t *testing.T) {
+func TestConfigRunsWithJustInjectorButNotWithoutOTLPEndpoint(t *testing.T) {
 	userConfig := bytes.NewBufferString(`
 injector:
   webhook:
@@ -1029,6 +1081,18 @@ injector:
 	cfg, err := LoadConfig(userConfig)
 	require.NoError(t, err)
 	require.Error(t, cfg.Validate())
+}
+
+func TestConfigRunsWithInjectorAndMetricsWithoutTraces(t *testing.T) {
+	cfg := DefaultConfig()
+	tracesEnabled := false
+	metricsEnabled := true
+	cfg.Injector.Webhook.ExternalWebhook = "foo/bar"
+	cfg.Injector.ImageVersion = "v1.0.0"
+	cfg.Injector.ExportedSignals.Traces = &tracesEnabled
+	cfg.Injector.ExportedSignals.Metrics = &metricsEnabled
+	cfg.OTELMetrics.MetricsEndpoint = "http://localhost:4318/v1/metrics"
+	require.NoError(t, cfg.Validate())
 }
 
 func loadConfig(t *testing.T, env envMap) *Config {

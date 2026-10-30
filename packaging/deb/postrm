@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+P=${BEYLA_PACKAGE_ROOT:-}
+case "$1" in
+  remove|purge)
+    owned=0
+    preserve=0
+    [ -f "$P/var/lib/grafana-beyla-sdk/mode" ] && owned=1
+    if [ -f "$P/var/lib/grafana-beyla-sdk/services" ]; then
+      while IFS= read -r unit; do
+        case "$unit" in *.service) ;; *) continue ;; esac
+        case "$unit" in *[!A-Za-z0-9_.@:-]*) continue ;; esac
+        service=${unit%.service}
+        dropin="$P/etc/systemd/system/$unit.d/90-grafana-beyla-sdk.conf"
+        if [ -f "$dropin" ] && printf '[Service]\n# grafana-beyla-sdk managed\nEnvironmentFile=%s/etc/grafana/beyla-sdk/sdk.env\nEnvironment=OTEL_INJECTOR_SERVICE_NAME=%s\n' "$P" "$service" | cmp -s - "$dropin"; then
+          rm -f "$dropin"
+        elif [ -e "$dropin" ]; then
+          echo "beyla: preserving modified service drop-in $dropin" >&2
+          preserve=1
+        fi
+      done < "$P/var/lib/grafana-beyla-sdk/services"
+    fi
+    alloy_dropin="$P/etc/systemd/system/alloy.service.d/50-grafana-beyla-sdk.conf"
+    if [ -f "$alloy_dropin" ] && printf '[Service]\n# grafana-beyla-sdk managed\nUser=root\nEnvironmentFile=/etc/grafana/beyla-sdk/alloy.env\n' | cmp -s - "$alloy_dropin"; then
+      rm -f "$alloy_dropin"
+    elif [ -e "$alloy_dropin" ]; then
+      echo "beyla: preserving modified Alloy drop-in $alloy_dropin" >&2
+      preserve=1
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload || true
+      if [ "$owned" = 1 ] && systemctl is-active --quiet alloy.service; then
+        systemctl restart alloy.service || true
+      fi
+    fi
+    if [ "$preserve" = 0 ]; then
+      rm -f "$P/var/lib/grafana-beyla-sdk/services" "$P/var/lib/grafana-beyla-sdk/mode"
+    fi
+    if [ "$1" = purge ] && [ "$preserve" = 0 ]; then
+      rm -rf "$P/etc/grafana/beyla-sdk" "$P/var/lib/grafana-beyla-sdk"
+    fi
+    ;;
+esac
+exit 0

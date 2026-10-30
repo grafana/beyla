@@ -67,9 +67,6 @@ func NetPrometheusEndpoint(
 		if err != nil {
 			return nil, err
 		}
-		if cfg.Config.Registry != nil {
-			return reporter.collectMetrics, nil
-		}
 		return reporter.reportMetrics, nil
 	}
 }
@@ -139,11 +136,7 @@ func newNetReporter(
 		register = append(register, mr.interZone)
 	}
 
-	if cfg.Config.Registry != nil {
-		cfg.Config.Registry.MustRegister(register...)
-	} else {
-		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
-	}
+	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
 
 	mr.input = input.Subscribe(msg.SubscriberName("prom.NetReporterInput"))
 	return mr, nil

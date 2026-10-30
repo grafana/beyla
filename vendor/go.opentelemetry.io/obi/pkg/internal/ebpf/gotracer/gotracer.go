@@ -49,7 +49,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
 
 type runtimeMetricTargetKey struct {
 	pid app.PID
@@ -82,21 +82,25 @@ type goAutoSDKTargetState struct {
 	ino                uint64
 	startTime          uint64
 	activated          bool
+	embeddedActivated  bool
 }
 
 type goAutoSDKActivationLinkKey struct {
 	pid        app.PID
 	generation uint64
+	sdk        uint8
 }
 
 type goAutoSDKActivationProbe struct {
 	program *ebpf.Program
 	offset  uint64
+	offsets []uint64
 }
 
 type goAutoSDKExecutableKey struct {
 	dev uint64
 	ino uint64
+	sdk uint8
 }
 
 func normalizeDeviceID[T ~int32 | ~uint64](dev T) uint64 {
@@ -125,7 +129,8 @@ func (c *onceCloser) Close() error {
 
 type goAutoSDKActivationEvent struct {
 	Type       uint8
-	Pad        [3]uint8
+	SDK        uint8
+	Pad        [2]uint8
 	Pid        uint32
 	Generation uint64
 }
@@ -133,6 +138,12 @@ type goAutoSDKActivationEvent struct {
 const missingGoOffset = ^uint64(0)
 
 const goAutoSDKActivationMaxAttempts = 3
+
+const (
+	goExternalSDK uint8 = iota
+	goEmbeddedSDK
+	goSDKCount
+)
 
 // Mirrors go_runtime_metric_valid_t in bpf/gotracer/maps/runtime.h. Scalar
 // bits also mirror the raw snapshot masks in pkg/runtimemetrics/reader.go.
@@ -188,10 +199,13 @@ var goAutoSDKSpanContextOffsetFields = [...]goexec.GoOffset{
 	goexec.SpanContextTraceFlagsPos,
 	goexec.AutoSDKSpanContextPos,
 	goexec.AutoSDKActivationSupported,
+	goexec.EmbeddedSDKSpanContextPos,
+	goexec.EmbeddedSDKActivationSupported,
 }
 
 var goGRPCBufWriterOffsetFields = [...]goexec.GoOffset{
 	goexec.GrpcTransportBufWriterBufPos,
+	goexec.GrpcTransportBufWriterBufHandlePos,
 	goexec.GrpcTransportBufWriterOffsetPos,
 	goexec.GrpcTransportBufWriterConnPos,
 }
@@ -311,6 +325,7 @@ type Tracer struct {
 	goRuntimeGCGoalSourceByExecutable map[executableIdentity]goRuntimeGCGoalSource
 	currentBinary                     executableIdentity
 	goAutoSDKActivationByExecutable   map[executableIdentity]bool
+	embeddedSDKActivationByExecutable map[executableIdentity]bool
 	goAutoSDKTargetsMu                sync.Mutex
 	goAutoSDKTargets                  map[app.PID]goAutoSDKTargetState
 	goAutoSDKActivationProbes         map[goAutoSDKExecutableKey]goAutoSDKActivationProbe
@@ -460,6 +475,7 @@ func (p *Tracer) constants() map[string]any {
 		"g_bpf_probe_write_user_enabled": p.supportsContextPropagation(),
 		"g_go_h2_write_fail_step":        goH2WriteFailStepForTest,
 		"wakeup_data_bytes":              uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"ringbuf_metrics_enabled":        p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics),
 		"disable_black_box_cp":           blackBoxCP,
 		"attr_type_invalid":              uint64(attribute.INVALID),
 		"attr_type_bool":                 uint64(attribute.BOOL),
@@ -559,6 +575,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.GrpcTSchemePos,
 		goexec.GrpcTransportStreamIDPos,
 		goexec.GrpcTransportBufWriterBufPos,
+		goexec.GrpcTransportBufWriterBufHandlePos,
 		goexec.GrpcTransportBufWriterOffsetPos,
 		goexec.GrpcTransportBufWriterConnPos,
 		// redis
@@ -596,6 +613,9 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.MongoOpNamePos,
 		goexec.MongoOpDBPos,
 		goexec.MongoOneThirteenOne,
+		goexec.MongoTopologyConnectionPos,
+		goexec.MongoConnectionAddrPos,
+		goexec.MongoMnetDescriberPos,
 		// database/sql stdlib
 		goexec.DriverConnCiPos,
 		// lib/pq driver
@@ -661,6 +681,14 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 			field:  goexec.PqConnTypeOffset,
 		},
 		{
+			symbol: "*go.mongodb.org/mongo-driver/x/mongo/driver/topology.Connection",
+			field:  goexec.MongoV1TopologyConnectionTypeAddress,
+		},
+		{
+			symbol: "*go.mongodb.org/mongo-driver/v2/x/mongo/driver/topology.Connection",
+			field:  goexec.MongoV2TopologyConnectionTypeAddress,
+		},
+		{
 			symbol: "*google.golang.org/grpc/internal/credentials.syscallConn",
 			field:  goexec.GrpcSyscallConnTypeAddress,
 		},
@@ -682,6 +710,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 			"ino", ino,
 			"error", err)
 		delete(p.goAutoSDKActivationByExecutable, identity)
+		delete(p.embeddedSDKActivationByExecutable, identity)
 		delete(p.goRuntimeMetricMaskByExecutable, identity)
 		p.deleteRuntimeMetricTarget(fileInfo.Pid(), fileInfo.Ns())
 		return
@@ -758,19 +787,22 @@ func resetGoAutoSDKActivationAttempts(
 	}
 
 	var cleanupErrors []error
-	for attempt := range uint8(goAutoSDKActivationMaxAttempts) {
-		key := BpfGoAutoActivationAttemptKeyT{
-			Generation: generation,
-			Pid:        uint32(pid),
-			Attempt:    attempt,
-		}
-		if err := attempts.Delete(&key); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
-			if log != nil {
-				log.Warn("resetting Go Auto SDK activation attempt failed",
-					"pid", pid, "attempt", attempt, "error", err)
+	for sdk := range goSDKCount {
+		for attempt := range uint8(goAutoSDKActivationMaxAttempts) {
+			key := BpfGoAutoActivationAttemptKeyT{
+				Generation: generation,
+				Pid:        uint32(pid),
+				Attempt:    attempt,
+				Sdk:        sdk,
 			}
-			cleanupErrors = append(cleanupErrors,
-				fmt.Errorf("delete activation attempt %d for PID %d: %w", attempt, pid, err))
+			if err := attempts.Delete(&key); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+				if log != nil {
+					log.Warn("resetting Go Auto SDK activation attempt failed",
+						"pid", pid, "attempt", attempt, "error", err)
+				}
+				cleanupErrors = append(cleanupErrors,
+					fmt.Errorf("delete activation attempt %d for PID %d: %w", attempt, pid, err))
+			}
 		}
 	}
 	return errors.Join(cleanupErrors...)
@@ -1051,7 +1083,7 @@ func goAutoSDKActivationUprobeOptions(
 	pid app.PID,
 ) uprobe.Options {
 	return uprobe.Options{
-		Addresses: []uint64{probe.offset},
+		Addresses: append([]uint64{probe.offset}, probe.offsets...),
 		PID:       uint32(pid),
 	}
 }
@@ -1072,11 +1104,22 @@ func (p *Tracer) RegisterProcessScopedGoProbe(
 	if p.goAutoSDKActivationProbes == nil {
 		p.goAutoSDKActivationProbes = map[goAutoSDKExecutableKey]goAutoSDKActivationProbe{}
 	}
-	executable := goAutoSDKExecutableKey{dev: dev, ino: ino}
-	p.goAutoSDKActivationProbes[executable] = goAutoSDKActivationProbe{
-		program: candidate.Probe.Start,
-		offset:  candidate.Probe.StartOffset,
+	executable := goAutoSDKExecutableKey{dev: dev, ino: ino, sdk: goExternalSDK}
+	if candidate.Symbol == embeddedSDKActivationProbeSymbols[3] {
+		executable.sdk = goEmbeddedSDK
 	}
+	probe, exists := p.goAutoSDKActivationProbes[executable]
+	if exists && probe.program != nil {
+		if probe.offset != candidate.Probe.StartOffset && !slices.Contains(probe.offsets, candidate.Probe.StartOffset) {
+			probe.offsets = append(probe.offsets, candidate.Probe.StartOffset)
+			p.closeGoAutoSDKActivationLinksLocked(func(_ goAutoSDKActivationLinkKey, activationLink goAutoSDKActivationLink) bool {
+				return activationLink.executable == executable
+			})
+		}
+	} else {
+		probe = goAutoSDKActivationProbe{program: candidate.Probe.Start, offset: candidate.Probe.StartOffset}
+	}
+	p.goAutoSDKActivationProbes[executable] = probe
 	for pid, state := range p.goAutoSDKTargets {
 		if state.dev != dev || state.ino != ino {
 			continue
@@ -1097,10 +1140,11 @@ func (p *Tracer) UnregisterProcessScopedGoProbes(dev, ino uint64) {
 	p.goAutoSDKTargetsMu.Lock()
 	defer p.goAutoSDKTargetsMu.Unlock()
 
-	executable := goAutoSDKExecutableKey{dev: dev, ino: ino}
-	delete(p.goAutoSDKActivationProbes, executable)
+	for sdk := range goSDKCount {
+		delete(p.goAutoSDKActivationProbes, goAutoSDKExecutableKey{dev: dev, ino: ino, sdk: sdk})
+	}
 	p.closeGoAutoSDKActivationLinksLocked(func(_ goAutoSDKActivationLinkKey, activationLink goAutoSDKActivationLink) bool {
-		return activationLink.executable == executable
+		return activationLink.executable.dev == dev && activationLink.executable.ino == ino
 	})
 }
 
@@ -1109,21 +1153,33 @@ func (p *Tracer) ensureGoAutoSDKActivationLinkLocked(
 	ino uint64,
 	generation uint64,
 ) error {
+	var attachErrors []error
+	for sdk := range goSDKCount {
+		attachErrors = append(attachErrors, p.ensureGoSDKActivationLinkLocked(pid, ino, generation, sdk))
+	}
+	return errors.Join(attachErrors...)
+}
+
+func (p *Tracer) ensureGoSDKActivationLinkLocked(pid app.PID, ino, generation uint64, sdk uint8) error {
 	if generation == 0 {
 		return nil
 	}
 
 	state, ok := p.goAutoSDKTargets[pid]
-	if !ok || state.generation != generation || state.ino != ino || state.activated {
+	activated := state.activated
+	if sdk == goEmbeddedSDK {
+		activated = state.embeddedActivated
+	}
+	if !ok || state.generation != generation || state.ino != ino || activated {
 		return nil
 	}
 
-	key := goAutoSDKActivationLinkKey{pid: pid, generation: generation}
+	key := goAutoSDKActivationLinkKey{pid: pid, generation: generation, sdk: sdk}
 	if _, ok := p.goAutoSDKActivationLinks[key]; ok {
 		return nil
 	}
 
-	executable := goAutoSDKExecutableKey{dev: state.dev, ino: ino}
+	executable := goAutoSDKExecutableKey{dev: state.dev, ino: ino, sdk: sdk}
 	probe, ok := p.goAutoSDKActivationProbes[executable]
 	if !ok {
 		return nil
@@ -1195,6 +1251,7 @@ func (p *Tracer) handleGoAutoSDKActivationEvent(record *ringbuf.Record) (bool, e
 	key := goAutoSDKActivationLinkKey{
 		pid:        app.PID(event.Pid),
 		generation: event.Generation,
+		sdk:        event.SDK,
 	}
 
 	p.goAutoSDKTargetsMu.Lock()
@@ -1209,7 +1266,11 @@ func (p *Tracer) handleGoAutoSDKActivationEvent(record *ringbuf.Record) (bool, e
 		return true, nil
 	}
 
-	state.activated = true
+	if key.sdk == goEmbeddedSDK {
+		state.embeddedActivated = true
+	} else {
+		state.activated = true
+	}
 	p.goAutoSDKTargets[key.pid] = state
 	delete(p.goAutoSDKActivationLinks, key)
 	if err := activationLink.link.Close(); err != nil && p.log != nil {
@@ -1323,6 +1384,10 @@ func (p *Tracer) recordGoAutoSDKActivationSupport(fileInfo *exec.FileInfo, offse
 
 	identity := goOffsetsMapKey(fileInfo)
 	p.goAutoSDKActivationByExecutable[identity] = offsets.SupportsGoAutoSDKActivation()
+	if p.embeddedSDKActivationByExecutable == nil {
+		p.embeddedSDKActivationByExecutable = map[executableIdentity]bool{}
+	}
+	p.embeddedSDKActivationByExecutable[identity] = offsets.SupportsEmbeddedSDKActivation()
 }
 
 func selectGoRuntimeGCGoalSource(
@@ -1579,6 +1644,13 @@ var goAutoSDKActivationProbeSymbols = []string{
 	"go.opentelemetry.io/otel/internal/global.(*tracer).newSpan",
 }
 
+var embeddedSDKActivationProbeSymbols = []string{
+	"go.opentelemetry.io/otel/trace.(*autoTracer).start",
+	"context.WithValue",
+	"go.opentelemetry.io/otel/trace.(*autoSpan).ended",
+	"go.opentelemetry.io/otel/trace.noopSpan.tracerProvider",
+}
+
 var goAutoSDKActivationPrerequisiteSymbols = []string{
 	"go.opentelemetry.io/otel/internal/global.(*tracer).Start",
 	"go.opentelemetry.io/auto/sdk.(*tracer).Start",
@@ -1623,7 +1695,7 @@ func GoRuntimeMetricProbeSymbols() []string {
 
 // GoAutoSDKActivationProbeSymbols returns the symbols in activation-safe attachment order.
 func GoAutoSDKActivationProbeSymbols() []string {
-	return append([]string(nil), goAutoSDKActivationProbeSymbols...)
+	return append(append([]string(nil), goAutoSDKActivationProbeSymbols...), embeddedSDKActivationProbeSymbols...)
 }
 
 // GoHTTP2FlushProbeSymbols returns the symbols needed by the atomic pre-flush probe groups.
@@ -1637,6 +1709,12 @@ func GoH2OwnershipProbeSymbols() []string {
 }
 
 func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
+	grpcNewStream := &ebpfcommon.ProbeDesc{Start: p.bpfObjects.ObiUprobeTransportHttp2ClientNewStream}
+	if p.cfg != nil && p.cfg.ContextPropagation.HasHeaders() {
+		// the return probe only hands the stream to header injection
+		grpcNewStream.End = p.bpfObjects.ObiUprobeTransportHttp2ClientNewStreamReturns
+	}
+
 	m := map[string][]*ebpfcommon.ProbeDesc{
 		// Go runtime
 		"runtime.newproc1": {{
@@ -1818,15 +1896,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"google.golang.org/grpc.(*clientStream).CloseSend": {{
 			End: p.bpfObjects.ObiUprobeClientConnInvokeReturn,
 		}},
-		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {{
-			Start: p.bpfObjects.ObiUprobeTransportHttp2ClientNewStream,
-			End:   p.bpfObjects.ObiUprobeTransportHttp2ClientNewStreamReturns,
-		}},
-		// Bridges request state to the version-specific loopyWriter ownership
-		// probe selected atomically below.
-		"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut": {{
-			Start: p.bpfObjects.ObiUprobeGrpcControlBufferExecuteAndPut,
-		}},
+		"google.golang.org/grpc/internal/transport.(*http2Client).NewStream": {grpcNewStream},
 		"google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders": {{
 			Start: p.bpfObjects.ObiUprobeHttp2ServerOperateHeaders,
 		}},
@@ -1938,6 +2008,12 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		"go.mongodb.org/mongo-driver/v2/x/mongo/driver.Operation.Execute": {{
 			Start: p.bpfObjects.ObiUprobeMongoOpExecute,
 			End:   p.bpfObjects.ObiUprobeMongoOpExecuteRet,
+		}},
+		"go.mongodb.org/mongo-driver/x/mongo/driver.Operation.getServerAndConnection": {{
+			End: p.bpfObjects.ObiUretprobeMongoV1GetServerAndConnection,
+		}},
+		"go.mongodb.org/mongo-driver/v2/x/mongo/driver.Operation.getServerAndConnection": {{
+			End: p.bpfObjects.ObiUretprobeMongoV2GetServerAndConnection,
 		}},
 		// all of these point to the same probe, we just use it to find start time and collection name
 		"go.mongodb.org/mongo-driver/mongo.(*Collection).insert": {{
@@ -2116,6 +2192,11 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 			Start: p.bpfObjects.ObiUprobeNetHttp2FramerWriteHeaders,
 			End:   p.bpfObjects.ObiUprobeHttp2FramerWriteHeadersReturns,
 		}}
+		// Bridges request state to the version-specific loopyWriter ownership
+		// probe selected atomically below.
+		m["google.golang.org/grpc/internal/transport.(*http2Client).createHeaderFields"] = []*ebpfcommon.ProbeDesc{{
+			End: p.bpfObjects.ObiUprobeGrpcHttp2ClientCreateHeaderFieldsReturns,
+		}}
 	}
 
 	return m
@@ -2127,8 +2208,11 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 		groups = append(groups, p.goH2OwnershipProbeGroups()...)
 		groups = append(groups,
 			ebpfcommon.GoProbeGroup{
-				Name:        "go_http2_xnet_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[0]},
+				Name: "go_http2_xnet_preflush",
+				RequiresAll: []string{
+					goHTTP2FlushProbeSymbols[0],
+					"golang.org/x/net/http2.(*ClientConn).writeHeaders",
+				},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[0],
@@ -2147,8 +2231,11 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 				},
 			},
 			ebpfcommon.GoProbeGroup{
-				Name:        "go_http2_stdlib_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[3]},
+				Name: "go_http2_stdlib_preflush",
+				RequiresAll: []string{
+					goHTTP2FlushProbeSymbols[3],
+					"net/http.(*http2ClientConn).writeHeaders",
+				},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[3],
@@ -2174,8 +2261,11 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 				},
 			},
 			ebpfcommon.GoProbeGroup{
-				Name:        "go_http2_internal_preflush",
-				RequiresAll: []string{goHTTP2FlushProbeSymbols[6]},
+				Name: "go_http2_internal_preflush",
+				RequiresAll: []string{
+					goHTTP2FlushProbeSymbols[6],
+					"net/http/internal/http2.(*ClientConn).writeHeaders",
+				},
 				Probes: []ebpfcommon.GoProbe{
 					{
 						Symbol: goHTTP2FlushProbeSymbols[6],
@@ -2231,6 +2321,32 @@ func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
 					Probe: &ebpfcommon.ProbeDesc{
 						Start: p.bpfObjects.ObiUprobeTracerNewSpan,
 					},
+					ProcessScoped: true,
+				},
+			},
+		})
+	}
+
+	if p.currentBinary.Ino != 0 && p.embeddedSDKActivationByExecutable[p.currentBinary] &&
+		p.supportsContextPropagation() {
+		groups = append(groups, ebpfcommon.GoProbeGroup{
+			Name: "go_embedded_sdk_activation",
+			Probes: []ebpfcommon.GoProbe{
+				{
+					Symbol: embeddedSDKActivationProbeSymbols[0],
+					Probe:  &ebpfcommon.ProbeDesc{Start: p.bpfObjects.ObiUprobeEmbeddedSdkTracerStart},
+				},
+				{
+					Symbol: embeddedSDKActivationProbeSymbols[1],
+					Probe:  &ebpfcommon.ProbeDesc{Start: p.bpfObjects.ObiUprobeAutoSdkContextWithValue},
+				},
+				{
+					Symbol: embeddedSDKActivationProbeSymbols[2],
+					Probe:  &ebpfcommon.ProbeDesc{Start: p.bpfObjects.ObiUprobeAutoSdkSpanEnded},
+				},
+				{
+					Symbol:        embeddedSDKActivationProbeSymbols[3],
+					Probe:         &ebpfcommon.ProbeDesc{Start: p.bpfObjects.ObiUprobeEmbeddedTracerProvider},
 					ProcessScoped: true,
 				},
 			},
@@ -2349,7 +2465,7 @@ func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 			Name: "go_grpc_current_ownership",
 			RequiresAll: []string{
 				"google.golang.org/grpc/internal/transport.(*http2Client).NewStream",
-				"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut",
+				"google.golang.org/grpc/internal/transport.(*http2Client).createHeaderFields",
 				"golang.org/x/net/http2.(*Framer).WriteHeaders",
 			},
 			Probes: []ebpfcommon.GoProbe{
@@ -2366,7 +2482,7 @@ func (p *Tracer) goH2OwnershipProbeGroups() []ebpfcommon.GoProbeGroup {
 			Name: "go_grpc_legacy_ownership",
 			RequiresAll: []string{
 				"google.golang.org/grpc/internal/transport.(*http2Client).NewStream",
-				"google.golang.org/grpc/internal/transport.(*controlBuffer).executeAndPut",
+				"google.golang.org/grpc/internal/transport.(*http2Client).createHeaderFields",
 				"golang.org/x/net/http2.(*Framer).WriteHeaders",
 			},
 			ConflictsAny: []string{

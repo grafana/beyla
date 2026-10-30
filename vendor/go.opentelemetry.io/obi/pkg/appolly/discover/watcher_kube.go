@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
+	isync "go.opentelemetry.io/obi/pkg/internal/helpers/sync"
 	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
@@ -25,6 +26,12 @@ import (
 var (
 	containerInfoForPID = container.InfoForPID
 )
+
+var errWatcherKubeEnricherStopped = errors.New("watcher kube enricher stopped")
+
+// podEventsBatchSize limits how many pod events are enriched before the enrich loop
+// gets back to its other sources.
+const podEventsBatchSize = 64
 
 // watcherKubeEnricher keeps an update relational snapshot of the in-host process-pods-deployments,
 // which is continuously updated from two sources: the input from the ProcessWatcher and the kube.Store.
@@ -42,9 +49,13 @@ type watcherKubeEnricher struct {
 	// PIDs already reported for running in an unrecognized kubelet cgroup format
 	unknownCgroupWarned map[app.PID]struct{}
 
-	podsInfoCh chan Event[*informer.ObjectMeta]
-	output     *msg.Queue[[]Event[ProcessAttrs]]
-	input      <-chan []Event[ProcessAttrs]
+	podEvents *isync.Queue[Event[*informer.ObjectMeta]]
+	// podEventsReady signals enrich that podEvents has new events
+	podEventsReady chan struct{}
+	// done is closed when enrich returns, so On stops accepting events
+	done   chan struct{}
+	output *msg.Queue[[]Event[ProcessAttrs]]
+	input  <-chan []Event[ProcessAttrs]
 }
 
 // kubeMetadataProvider abstracts kube.MetadataProvider for easier dependency
@@ -82,7 +93,9 @@ func newWatcherKubeEnricher(
 		containerByPID:      map[app.PID]container.Info{},
 		processByContainer:  map[string][]ProcessAttrs{},
 		unknownCgroupWarned: map[app.PID]struct{}{},
-		podsInfoCh:          make(chan Event[*informer.ObjectMeta], 10),
+		podEvents:           isync.NewQueue[Event[*informer.ObjectMeta]](),
+		podEventsReady:      make(chan struct{}, 1),
+		done:                make(chan struct{}),
 		input:               input,
 		output:              output,
 	}
@@ -91,22 +104,40 @@ func newWatcherKubeEnricher(
 func (wk *watcherKubeEnricher) ID() string { return "unique-watcher-kube-enricher-id" }
 
 // On is invoked every time an object metadata instance is stored or deleted in the
-// kube.Store. It will just forward the event via the channel for proper asynchronous
-// handling in the enrich main loop
+// kube.Store. It just enqueues the event for asynchronous handling in the enrich main loop,
+// so it never blocks the notifier.
 func (wk *watcherKubeEnricher) On(event *informer.Event) error {
+	select {
+	case <-wk.done:
+		return errWatcherKubeEnricherStopped
+	default:
+	}
+
 	// ignoring updates on non-pod resources
 	if event.Resource == nil || event.GetResource().GetPod() == nil {
 		return nil
 	}
 	switch event.Type {
 	case informer.EventType_CREATED, informer.EventType_UPDATED:
-		wk.podsInfoCh <- Event[*informer.ObjectMeta]{Type: EventCreated, Obj: event.Resource}
+		wk.enqueuePodEvent(Event[*informer.ObjectMeta]{Type: EventCreated, Obj: event.Resource})
 	case informer.EventType_DELETED:
-		wk.podsInfoCh <- Event[*informer.ObjectMeta]{Type: EventDeleted, Obj: event.Resource}
+		wk.enqueuePodEvent(Event[*informer.ObjectMeta]{Type: EventDeleted, Obj: event.Resource})
 	default:
 		wk.log.Debug("ignoring unknown event type", "event", event)
 	}
 	return nil
+}
+
+func (wk *watcherKubeEnricher) enqueuePodEvent(podEvent Event[*informer.ObjectMeta]) {
+	wk.podEvents.Enqueue(podEvent)
+	wk.signalPodEvents()
+}
+
+func (wk *watcherKubeEnricher) signalPodEvents() {
+	select {
+	case wk.podEventsReady <- struct{}{}:
+	default:
+	}
 }
 
 // enrich listens for any potential instrumentable process from three asynchronous sources:
@@ -114,20 +145,18 @@ func (wk *watcherKubeEnricher) On(event *informer.Event) error {
 // We can't assume any order in the reception of the events, so we always keep an in-memory
 // snapshot of the process-pod tuple that is updated as long as each event
 // is received from different sources.
-func (wk *watcherKubeEnricher) enrich(_ context.Context) {
+func (wk *watcherKubeEnricher) enrich(ctx context.Context) {
 	defer wk.output.Close()
+	defer wk.store.Unsubscribe(wk)
+	defer close(wk.done)
 
 	wk.log.Debug("starting watcherKubeEnricher")
-	// the initialization needs to go in a different thread,
-	// as the subscription "welcome message" would otherwise be blocked
-	// trying to send events to the wk.podsInfoCh channel
-	// before the enrich loop has the chance to receive them
-	go wk.store.Subscribe(wk)
+	wk.store.Subscribe(wk)
 
 	for {
 		select {
-		case podEvent := <-wk.podsInfoCh:
-			wk.enrichPodEvent(podEvent)
+		case <-wk.podEventsReady:
+			wk.drainPodEvents(ctx)
 		case processEvents, ok := <-wk.input:
 			if !ok {
 				wk.log.Debug("input channel closed. Stopping")
@@ -138,14 +167,27 @@ func (wk *watcherKubeEnricher) enrich(_ context.Context) {
 	}
 }
 
-func (wk *watcherKubeEnricher) enrichPodEvent(podEvent Event[*informer.ObjectMeta]) {
+// drainPodEvents enriches up to podEventsBatchSize queued pod events. If there might be more,
+// it signals podEventsReady so the enrich loop serves its other sources before coming back.
+func (wk *watcherKubeEnricher) drainPodEvents(ctx context.Context) {
+	for range podEventsBatchSize {
+		podEvent, ok := wk.podEvents.TryDequeue()
+		if !ok {
+			return
+		}
+		wk.enrichPodEvent(ctx, podEvent)
+	}
+	wk.signalPodEvents()
+}
+
+func (wk *watcherKubeEnricher) enrichPodEvent(ctx context.Context, podEvent Event[*informer.ObjectMeta]) {
 	switch podEvent.Type {
 	case EventCreated:
 		wk.log.Debug("Pod added",
 			"namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name,
 			"containers", podEvent.Obj.Pod.Containers)
 		if events := wk.onNewPod(podEvent.Obj); len(events) > 0 {
-			wk.output.Send(events)
+			wk.output.SendCtx(ctx, events)
 		}
 	case EventDeleted:
 		wk.log.Debug("Pod deleted", "namespace", podEvent.Obj.Namespace, "name", podEvent.Obj.Name)

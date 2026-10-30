@@ -87,8 +87,10 @@ type ObjectMeta struct {
 	// Timestamp of the last status: creation/update/deletion, in Unix seconds
 	// We don't need more precision as Kubernetes events are timestamped in seconds
 	StatusTimeEpoch int64 `protobuf:"varint,7,opt,name=status_time_epoch,json=statusTimeEpoch,proto3" json:"status_time_epoch,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// If the Kube object is not a Service, this field will be empty.
+	Selector      map[string]string `protobuf:"bytes,9,rep,name=selector,proto3" json:"selector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ObjectMeta) Reset() {
@@ -177,14 +179,23 @@ func (x *ObjectMeta) GetStatusTimeEpoch() int64 {
 	return 0
 }
 
+func (x *ObjectMeta) GetSelector() map[string]string {
+	if x != nil {
+		return x.Selector
+	}
+	return nil
+}
+
 type PodInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	NodeName      string                 `protobuf:"bytes,2,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
-	StartTimeStr  string                 `protobuf:"bytes,3,opt,name=start_time_str,json=startTimeStr,proto3" json:"start_time_str,omitempty"`
-	HostIp        string                 `protobuf:"bytes,4,opt,name=host_ip,json=hostIp,proto3" json:"host_ip,omitempty"`
-	Containers    []*ContainerInfo       `protobuf:"bytes,5,rep,name=containers,proto3" json:"containers,omitempty"`
-	Owners        []*Owner               `protobuf:"bytes,6,rep,name=owners,proto3" json:"owners,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Uid          string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
+	NodeName     string                 `protobuf:"bytes,2,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	StartTimeStr string                 `protobuf:"bytes,3,opt,name=start_time_str,json=startTimeStr,proto3" json:"start_time_str,omitempty"`
+	HostIp       string                 `protobuf:"bytes,4,opt,name=host_ip,json=hostIp,proto3" json:"host_ip,omitempty"`
+	Containers   []*ContainerInfo       `protobuf:"bytes,5,rep,name=containers,proto3" json:"containers,omitempty"`
+	Owners       []*Owner               `protobuf:"bytes,6,rep,name=owners,proto3" json:"owners,omitempty"`
+	// The Pod phase is Succeeded or Failed. Its IP may already belong to another Pod.
+	Finished      bool `protobuf:"varint,7,opt,name=finished,proto3" json:"finished,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -259,6 +270,13 @@ func (x *PodInfo) GetOwners() []*Owner {
 		return x.Owners
 	}
 	return nil
+}
+
+func (x *PodInfo) GetFinished() bool {
+	if x != nil {
+		return x.Finished
+	}
+	return false
 }
 
 type ContainerInfo struct {
@@ -477,7 +495,7 @@ var File_proto_informer_proto protoreflect.FileDescriptor
 
 const file_proto_informer_proto_rawDesc = "" +
 	"\n" +
-	"\x14proto/informer.proto\x12\binformer\"\xc0\x03\n" +
+	"\x14proto/informer.proto\x12\binformer\"\xbd\x04\n" +
 	"\n" +
 	"ObjectMeta\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
@@ -487,14 +505,18 @@ const file_proto_informer_proto_rawDesc = "" +
 	"\x03ips\x18\x04 \x03(\tR\x03ips\x12\x12\n" +
 	"\x04kind\x18\x05 \x01(\tR\x04kind\x12(\n" +
 	"\x03pod\x18\x06 \x01(\v2\x11.informer.PodInfoH\x00R\x03pod\x88\x01\x01\x12*\n" +
-	"\x11status_time_epoch\x18\a \x01(\x03R\x0fstatusTimeEpoch\x1a9\n" +
+	"\x11status_time_epoch\x18\a \x01(\x03R\x0fstatusTimeEpoch\x12>\n" +
+	"\bselector\x18\t \x03(\v2\".informer.ObjectMeta.SelectorEntryR\bselector\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a>\n" +
 	"\x10AnnotationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
+	"\rSelectorEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x06\n" +
-	"\x04_pod\"\xd9\x01\n" +
+	"\x04_pod\"\xf5\x01\n" +
 	"\aPodInfo\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x1b\n" +
 	"\tnode_name\x18\x02 \x01(\tR\bnodeName\x12$\n" +
@@ -503,7 +525,8 @@ const file_proto_informer_proto_rawDesc = "" +
 	"\n" +
 	"containers\x18\x05 \x03(\v2\x17.informer.ContainerInfoR\n" +
 	"containers\x12'\n" +
-	"\x06owners\x18\x06 \x03(\v2\x0f.informer.OwnerR\x06owners\"\x9f\x01\n" +
+	"\x06owners\x18\x06 \x03(\v2\x0f.informer.OwnerR\x06owners\x12\x1a\n" +
+	"\bfinished\x18\a \x01(\bR\bfinished\"\x9f\x01\n" +
 	"\rContainerInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x122\n" +
@@ -542,7 +565,7 @@ func file_proto_informer_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_informer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_informer_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_informer_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_proto_informer_proto_goTypes = []any{
 	(EventType)(0),           // 0: informer.EventType
 	(*ObjectMeta)(nil),       // 1: informer.ObjectMeta
@@ -553,24 +576,26 @@ var file_proto_informer_proto_goTypes = []any{
 	(*SubscribeMessage)(nil), // 6: informer.SubscribeMessage
 	nil,                      // 7: informer.ObjectMeta.LabelsEntry
 	nil,                      // 8: informer.ObjectMeta.AnnotationsEntry
-	nil,                      // 9: informer.ContainerInfo.EnvEntry
+	nil,                      // 9: informer.ObjectMeta.SelectorEntry
+	nil,                      // 10: informer.ContainerInfo.EnvEntry
 }
 var file_proto_informer_proto_depIdxs = []int32{
-	7, // 0: informer.ObjectMeta.labels:type_name -> informer.ObjectMeta.LabelsEntry
-	8, // 1: informer.ObjectMeta.annotations:type_name -> informer.ObjectMeta.AnnotationsEntry
-	2, // 2: informer.ObjectMeta.pod:type_name -> informer.PodInfo
-	3, // 3: informer.PodInfo.containers:type_name -> informer.ContainerInfo
-	4, // 4: informer.PodInfo.owners:type_name -> informer.Owner
-	9, // 5: informer.ContainerInfo.env:type_name -> informer.ContainerInfo.EnvEntry
-	0, // 6: informer.Event.type:type_name -> informer.EventType
-	1, // 7: informer.Event.resource:type_name -> informer.ObjectMeta
-	6, // 8: informer.EventStreamService.Subscribe:input_type -> informer.SubscribeMessage
-	5, // 9: informer.EventStreamService.Subscribe:output_type -> informer.Event
-	9, // [9:10] is the sub-list for method output_type
-	8, // [8:9] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	7,  // 0: informer.ObjectMeta.labels:type_name -> informer.ObjectMeta.LabelsEntry
+	8,  // 1: informer.ObjectMeta.annotations:type_name -> informer.ObjectMeta.AnnotationsEntry
+	2,  // 2: informer.ObjectMeta.pod:type_name -> informer.PodInfo
+	9,  // 3: informer.ObjectMeta.selector:type_name -> informer.ObjectMeta.SelectorEntry
+	3,  // 4: informer.PodInfo.containers:type_name -> informer.ContainerInfo
+	4,  // 5: informer.PodInfo.owners:type_name -> informer.Owner
+	10, // 6: informer.ContainerInfo.env:type_name -> informer.ContainerInfo.EnvEntry
+	0,  // 7: informer.Event.type:type_name -> informer.EventType
+	1,  // 8: informer.Event.resource:type_name -> informer.ObjectMeta
+	6,  // 9: informer.EventStreamService.Subscribe:input_type -> informer.SubscribeMessage
+	5,  // 10: informer.EventStreamService.Subscribe:output_type -> informer.Event
+	10, // [10:11] is the sub-list for method output_type
+	9,  // [9:10] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_proto_informer_proto_init() }
@@ -586,7 +611,7 @@ func file_proto_informer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_informer_proto_rawDesc), len(file_proto_informer_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -35,10 +35,10 @@ func (i *MetricsExporterInstancer) Instantiate(ctx context.Context) (sdkmetric.E
 		return i.instance, nil
 	}
 
-	// If a MetricsConsumer is configured, use the ConsumerExporter
-	if i.Cfg.MetricsConsumer != nil {
-		meilog().Debug("instantiating Consumer MetricsReporter")
-		i.instance = NewConsumerExporter(i.Cfg.MetricsConsumer)
+	// If a metrics export callback is configured, use the OTLP exporter.
+	if i.Cfg.MetricsExport != nil {
+		meilog().Debug("instantiating OTLP MetricsReporter")
+		i.instance = NewOTLPConsumerExporter(i.Cfg.MetricsExport)
 		return i.instance, nil
 	}
 
@@ -46,6 +46,11 @@ func (i *MetricsExporterInstancer) Instantiate(ctx context.Context) (sdkmetric.E
 	switch proto := i.Cfg.GetProtocol(); proto {
 	case ProtocolHTTPJSON, ProtocolHTTPProtobuf, "": // zero value defaults to HTTP for backwards-compatibility
 		meilog().Debug("instantiating HTTP MetricsReporter", "protocol", proto)
+		if proto == ProtocolHTTPJSON {
+			// http/json is optional for SDKs: https://github.com/open-telemetry/opentelemetry-specification/blob/v1.49.0/specification/protocol/exporter.md#specify-protocol
+			// Remove this fallback once otlpmetrichttp supports it: https://github.com/open-telemetry/opentelemetry-go/issues/7803
+			meilog().Warn("OTLP metrics exporter does not support JSON encoding, sending metrics as http/protobuf", "protocol", proto)
+		}
 		if i.instance, err = i.httpMetricsExporter(ctx); err != nil {
 			return nil, fmt.Errorf("can't instantiate OTEL HTTP metrics exporter: %w", err)
 		}

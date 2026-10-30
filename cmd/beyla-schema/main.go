@@ -469,6 +469,8 @@ func callJSONSchemaMethod(t reflect.Type) *jsonschema.Schema {
 }
 
 // processInlineFields merges properties from inline field types into their parent schemas.
+//
+//nolint:cyclop
 func (g *SchemaGenerator) processInlineFields(schema *jsonschema.Schema) {
 	if schema == nil {
 		return
@@ -476,13 +478,22 @@ func (g *SchemaGenerator) processInlineFields(schema *jsonschema.Schema) {
 
 	inlineTypeSchemas := buildInlineTypeSchemas(reflect.TypeOf(beyla.Config{}))
 
-	for typeName, inlineTypes := range g.inlineFields {
+	processed := make(map[string]bool)
+	var mergeInlineFields func(string)
+	mergeInlineFields = func(typeName string) {
+		if processed[typeName] {
+			return
+		}
+		processed[typeName] = true
 		defSchema, ok := schema.Definitions[typeName]
 		if !ok {
-			continue
+			return
 		}
 
-		for _, inlineTypeName := range inlineTypes {
+		for _, inlineTypeName := range g.inlineFields[typeName] {
+			// Merge nested inline fields first, independent of map iteration order.
+			// SurveySelector embeds GlobAttributes, which embeds MetadataGlobMap.
+			mergeInlineFields(inlineTypeName)
 			inlineSchema, ok := schema.Definitions[inlineTypeName]
 			if !ok {
 				if schemaFunc, found := inlineTypeSchemas[inlineTypeName]; found {
@@ -502,6 +513,9 @@ func (g *SchemaGenerator) processInlineFields(schema *jsonschema.Schema) {
 				}
 			}
 		}
+	}
+	for typeName := range g.inlineFields {
+		mergeInlineFields(typeName)
 	}
 }
 

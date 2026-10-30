@@ -60,9 +60,6 @@ func SurveyPrometheusEndpoint(
 		if err != nil {
 			return nil, fmt.Errorf("instantiating Prometheus endpoint: %w", err)
 		}
-		if cfg.Registry != nil {
-			return reporter.watchForProcessEvents, nil
-		}
 		return reporter.reportMetrics, nil
 	}
 }
@@ -99,11 +96,7 @@ func newSurveyReporter(
 	mr.deleteEventMetrics = mr.deleteSurveyInfo
 	mr.createEventMetrics = mr.createSurveyInfo
 
-	if cfg.Registry != nil {
-		cfg.Registry.MustRegister(mr.surveyInfo)
-	} else {
-		mr.promConnect.Register(cfg.Port, cfg.Path, mr.surveyInfo)
-	}
+	mr.promConnect.Register(cfg.Port, cfg.Path, mr.surveyInfo)
 
 	return mr, nil
 }

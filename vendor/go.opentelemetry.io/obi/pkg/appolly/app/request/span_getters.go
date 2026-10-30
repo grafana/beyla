@@ -61,6 +61,8 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		getter = func(s *Span) attribute.KeyValue { return HTTPResponseStatusCode(s.Status) }
 	case attr.HTTPRoute:
 		getter = func(s *Span) attribute.KeyValue { return semconv.HTTPRoute(s.Route) }
+	case attr.HTTPUrlTemplate:
+		getter = func(s *Span) attribute.KeyValue { return semconv.URLTemplate(s.Route) }
 	case attr.HTTPUrlPath:
 		getter = func(s *Span) attribute.KeyValue { return HTTPUrlPath(s.Path) }
 	case attr.HTTPURLScheme:
@@ -70,7 +72,7 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.ServerAddr:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeHTTPClient {
-				return ServerAddr(HTTPClientHost(s))
+				return ServerAddr(HTTPClientServerAddr(s))
 			}
 			return ServerAddr(HostAsServer(s))
 		}
@@ -79,10 +81,10 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.RPCMethod:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeSunRPCClient || s.Type == EventTypeSunRPCServer {
-				if s.Route != "" {
-					return semconv.RPCMethod(s.Route)
+				if method := s.SunRPCMethodForExport(); method != "" {
+					return semconv.RPCMethod(method)
 				}
-				return semconv.RPCMethod(s.Method)
+				return attribute.KeyValue{}
 			}
 			if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
 				return semconv.RPCMethod(s.JSONRPC.QualifiedMethod())
@@ -90,18 +92,22 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
 				return semconv.RPCMethod(S3RPCMethod(s.AWS.S3.Method))
 			}
+			if s.Type == EventTypeGRPC || s.Type == EventTypeGRPCClient {
+				method, _ := GRPCMethod(s)
+				return semconv.RPCMethod(method)
+			}
 			return semconv.RPCMethod(s.Path)
 		}
 	case attr.RPCSystem:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeSunRPCClient || s.Type == EventTypeSunRPCServer {
-				return RPCSystem("onc_rpc")
+				return RPCSystem(RPCSystemONCRPC)
 			}
 			if s.SubType == HTTPSubtypeJSONRPC {
 				return semconv.RPCSystemNameJSONRPC
 			}
 			if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 {
-				return RPCSystem("aws-api")
+				return RPCSystem(RPCSystemAWSAPI)
 			}
 			return semconv.RPCSystemNameGRPC
 		}
@@ -243,22 +249,12 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.MessagingDestination:
 		getter = func(span *Span) attribute.KeyValue {
-			if span.Type == EventTypeKafkaClient || span.Type == EventTypeKafkaServer {
-				return semconv.MessagingDestinationName(span.Path)
+			destination := messagingDestination(span)
+			if destination == "" {
+				// a span that named no destination omits the attribute rather than emitting it empty
+				return attribute.KeyValue{}
 			}
-			if span.Type == EventTypeMQTTClient || span.Type == EventTypeMQTTServer {
-				return semconv.MessagingDestinationName(span.Path)
-			}
-			if span.Type == EventTypeNATSClient || span.Type == EventTypeNATSServer || span.Type == EventTypeAMQPClient {
-				return semconv.MessagingDestinationName(span.Path)
-			}
-			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSQS && span.AWS != nil {
-				return semconv.MessagingDestinationName(span.AWS.SQS.Destination)
-			}
-			if span.Type == EventTypeHTTPClient && span.SubType == HTTPSubtypeAWSSNS && span.AWS != nil {
-				return semconv.MessagingDestinationName(span.AWS.SNS.Destination)
-			}
-			return semconv.MessagingDestinationName("")
+			return semconv.MessagingDestinationName(destination)
 		}
 	case attr.MessagingOpName:
 		getter = func(span *Span) attribute.KeyValue {
@@ -315,6 +311,13 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return MessagingConsumerGroupName(mi.ConsumerGroup)
 			}
 			// only consumers of a group have one: omit rather than emit empty
+			return attribute.KeyValue{}
+		}
+	case attr.MessagingSubscription:
+		getter = func(span *Span) attribute.KeyValue {
+			if mi := span.MessagingInfo; mi != nil && mi.SubscriptionName != "" {
+				return semconv.MessagingDestinationSubscriptionName(mi.SubscriptionName)
+			}
 			return attribute.KeyValue{}
 		}
 	case attr.CudaMemcpyKind:
@@ -378,17 +381,10 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.DBCollectionName:
 		getter = func(s *Span) attribute.KeyValue {
-			switch s.Type {
-			case EventTypeHTTPClient:
-				if s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
-					return DBCollectionName(s.Elasticsearch.DBCollectionName)
-				} else if s.SubType == HTTPSubtypeSQLPP {
-					return DBCollectionName(s.Route)
-				}
-			case EventTypeSQLClient, EventTypeSQLServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeAerospikeClient, EventTypeAerospikeServer:
-				return DBCollectionName(s.Path)
+			if collection := dbCollectionName(s); collection != "" {
+				return DBCollectionName(collection)
 			}
-			return DBCollectionName("")
+			return attribute.KeyValue{}
 		}
 	case attr.DBQueryText:
 		getter = func(s *Span) attribute.KeyValue {
@@ -607,7 +603,10 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 		}
 	case attr.GenAIRequestModel:
 		getter = func(s *Span) attribute.KeyValue {
-			return semconv.GenAIRequestModelKey.String(s.GenAIRequestModel())
+			if model := s.GenAIRequestModel(); model != "" {
+				return semconv.GenAIRequestModelKey.String(model)
+			}
+			return attribute.KeyValue{}
 		}
 	case attr.GenAIResponseModel:
 		getter = func(s *Span) attribute.KeyValue {
@@ -665,6 +664,9 @@ func spanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.RPCResponseStatusCode:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.Type == EventTypeSunRPCClient || s.Type == EventTypeSunRPCServer {
+				if s.ResponseObservation != ResponseParsed {
+					return attribute.KeyValue{}
+				}
 				return semconv.RPCResponseStatusCode(SunRPCResponseStatusCode(s.Status))
 			}
 			if mcp := s.MCP(); mcp != nil && mcp.ErrorCode != 0 {
@@ -716,6 +718,27 @@ func spanPromGetters(attrName attr.Name) attributes.Getter[*Span, string] {
 	return func(s *Span) string { return s.Service.Metadata[attrName] }
 }
 
+func messagingDestination(span *Span) string {
+	switch span.Type {
+	case EventTypeKafkaClient, EventTypeKafkaServer,
+		EventTypeMQTTClient, EventTypeMQTTServer,
+		EventTypeNATSClient, EventTypeNATSServer,
+		EventTypeAMQPClient:
+		return span.Path
+	case EventTypeHTTPClient:
+		if span.AWS == nil {
+			return ""
+		}
+		switch span.SubType {
+		case HTTPSubtypeAWSSQS:
+			return span.AWS.SQS.Destination
+		case HTTPSubtypeAWSSNS:
+			return span.AWS.SNS.Destination
+		}
+	}
+	return ""
+}
+
 func dbResponseStatusCode(span *Span) string {
 	// semconv defines db.response.status_code for Elasticsearch as the HTTP
 	// response code, reported whenever a response was received
@@ -730,6 +753,21 @@ func dbResponseStatusCode(span *Span) string {
 	}
 	if span.Status == 1 && span.SQLError != nil {
 		return span.SQLError.ResponseStatusCode()
+	}
+	return ""
+}
+
+func dbCollectionName(span *Span) string {
+	switch span.Type {
+	case EventTypeHTTPClient:
+		if span.SubType == HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
+			return span.Elasticsearch.DBCollectionName
+		}
+		if span.SubType == HTTPSubtypeSQLPP {
+			return span.Route
+		}
+	case EventTypeSQLClient, EventTypeSQLServer, EventTypeMongoClient, EventTypeCouchbaseClient, EventTypeAerospikeClient, EventTypeAerospikeServer:
+		return span.Path
 	}
 	return ""
 }

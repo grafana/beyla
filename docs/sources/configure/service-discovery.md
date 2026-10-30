@@ -2,7 +2,7 @@
 title: Configure Beyla service discovery
 menuTitle: Service discovery
 description: Configure how the Beyla service discovery component searches for processes to instrument.
-weight: 20
+weight: 400
 keywords:
   - Beyla
   - eBPF
@@ -17,12 +17,30 @@ In some scenarios, Beyla instruments many services. For example, as a [Kubernete
 | YAML<p>environment variable</p>                                                                                 | Description                                                                                                                                                                                                                                                                                                | Type            | Default                                                                                                                                                            |
 | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------      |
 | `instrument`                                                                                                    | Specify different selection criteria for different services, and override their reported name or namespace. Refer to the [discovery services](#discovery-services) section for details. .                                                                                                                  | list of objects | (unset)                                                                                                                                                            |
+| `instrument_all_local`<p>`BEYLA_DISCOVERY_INSTRUMENT_ALL_LOCAL`</p>                                                | Discover socket-using applications with the local eligibility policy. Refer to [instrument all local services](#instrument-all-local-services).                                                                                                                                                     | boolean         | false                                                                                                                                                              |
 | `survey`                                                                                                        | specifying different selection criteria for Beyla survey mode. Refer to the [survey mode](#survey-mode) section for details.                                                                                                                                                                               | List of objects | (unset)                                                                                                                                                            |
 | `exclude_instrument`                                                                                            | Specify selection criteria for excluding services from being instrumented. Useful for avoiding instrumentation of services typically found in observability environments. Refer to the [exclude services from instrumentation](#exclude-services-from-instrumentation) section for details. .              | list of objects | (unset)                                                                                                                                                            |
 | `default_exclude_instrument`                                                                                    | Disables instrumentation of Beyla itself, Grafana Alloy, and the OpenTelemetry Collector. Set to empty to allow Beyla to instrument itself and these other components. Refer to the [default exclude services from instrumentation](#default-exclude-services-from-instrumentation) section for details. . | list of objects | Path: `{*beyla,*alloy,*prometheus-config-reloader,*ebpf-instrument,*obi,*otelcol,*otelcol-contrib,*otelcol-contrib[!/]*}` and certain Kubernetes system namespaces |
 | `skip_go_specific_tracers`<p>`BEYLA_SKIP_GO_SPECIFIC_TRACERS`</p>                                               | Disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented. The tracer falls back to using generic instrumentation, which is generally less efficient. Refer to the [skip go specific tracers](#skip-go-specific-tracers) section for details. .              | boolean         | false                                                                                                                                                              |
 | `exclude_otel_instrumented_services`<p>`BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES`</p>                           | Disables Beyla instrumentation of services already instrumented with OpenTelemetry. Refer to the [exclude instrumented services](#exclude-otel-instrumented-services) section for details.                                                                                                                 | boolean         | true                                                                                                                                                               |
 | `exclude_otel_instrumented_services_span_metrics`<p>`BEYLA_EXCLUDE_OTEL_INSTRUMENTED_SERVICES_SPAN_METRICS`</p> | Disables Beyla span metric/service graph metric generation of services already instrumented with OpenTelemetry. Refer to the [exclude instrumented services](#exclude-otel-instrumented-services) section for details.                                                                                     | boolean         | false                                                                                                                                                              |
+
+## Instrument all local services (Experimental)
+
+Enable `instrument_all_local` to discover and instrument services without configuring individual service selectors:
+
+```yaml
+discovery:
+  instrument_all_local: true
+```
+
+A process becomes eligible when socket activity is observed, including sockets already open when Beyla starts. Non-root processes qualify through socket activity; root processes (real UID 0) require a listener on a port below 1024. Once admitted, a process remains eligible until it exits, even if its sockets close.
+
+This mode uses the same default system-process exclusions as survey mode and honors configured discovery exclusions. It is mutually exclusive with `discovery.instrument`, `discovery.services`, and executable, language, port, or PID instrumentation selectors.
+
+The mode selects applications for traces and application metrics using the configured exporters and features. Network metrics and TCP stats retain their existing configuration. Survey reporting is independent: configure `discovery.survey` explicitly to emit `survey_info`.
+
+Worker instrumentation follows the existing OBI behavior. Short-lived processes can exit before discovery and instrumentation complete.
 
 ## Discovery services
 
@@ -227,7 +245,7 @@ For an export signal to function, you must configure the corresponding exporter 
 Additionally to configuring custom export modes per discovery instrumentation criteria, Beyla allows you to override the global metrics export features
 for each discovery criteria by adding `metrics > features` as a property to individual `discovery > instrument` entries.
 
-Accepted values for `features` are: `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_process`, `application_runtime`, `network`, `network_flow_packets`, `network_inter_zone`, `stats`, `stats_tcp_failed_connections`, `stats_tcp_io`, `stats_tcp_retransmits`, and `stats_tcp_rtt`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
+Accepted values for `features` are: `application`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_service_graph_connection_info`, `application_process`, `application_runtime`, `network`, `network_flow_packets`, `network_inter_zone`, `stats`, `stats_tcp_failed_connections`, `stats_tcp_io`, `stats_tcp_retransmits`, and `stats_tcp_rtt`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
 
 For example:
 
@@ -320,6 +338,65 @@ In survey mode, Beyla only performs service discovery and detects the programmin
 Beyla writes the discovered information from survey mode to a metric called `survey_info`, which uses the same attributes as the `target_info` metric. The Prometheus exporter creates this metric based on the OpenTelemetry metric resource attributes. You can use survey mode to build external automated instrumentation solutions. For example, you can use the `survey_info` metric to list available instrumentation targets and choose which ones to instrument.
 
 Configure the `survey` section exactly like the `instrument` section. For more details, see the [discovery services section](#discovery-services) of this document.
+
+### Survey only applications with sockets
+
+Set `socket_apps.enabled: true` on a `discovery.survey` entry to hold back matching
+survey candidates until Beyla observes socket activity. It defaults to `false` per
+entry and it doesn't affect instrumentation selection, including when instrumentation
+and survey are enabled together.
+
+```yaml
+discovery:
+  survey:
+    - exe_path: "*"
+      socket_apps:
+        enabled: true
+    - exe_path: "/opt/batch/*"
+```
+
+Criteria within an entry are combined with AND, while entries are combined with OR.
+In this example, processes under `/opt/batch/` qualify without socket activity, while
+all other processes must use sockets. You can also use `socket_apps.enabled: true` alone
+in an entry to select any process with socket activity. The socket watcher starts
+only if at least one survey entry enables it.
+
+A Beyla-specific eBPF watcher observes `connect` and `listen` attempts on valid
+sockets, including failed or non-blocking connections and Unix sockets. A listening
+port isn't required, meaning, client-only applications qualify too. At startup, a kernel
+task/file iterator also records processes already holding sockets, including
+inherited listeners and established keepalive connections across network namespaces.
+
+Previously held candidates are promoted automatically to `survey_info`. 
+After being admitted, a process stays admitted until it exits, even if it closes
+all sockets. PID reuse doesn't inherit admission.
+
+#### Exclude root-owned services
+
+Set `socket_apps.non_root: true` to additionally exclude processes running as
+root (real UID 0), unless they listen on a privileged port below 1024. This is
+useful for surveying user-deployed application services while skipping the
+system daemons commonly found on a host, such as SSH or cron. System services
+that legitimately serve privileged ports, for example a web server on port 443,
+are still reported.
+
+```yaml
+discovery:
+  survey:
+    - exe_path: "*"
+      socket_apps:
+        enabled: true
+        non_root: true
+```
+
+`non_root` requires `enabled: true` on the same entry and has no effect on its
+own. The eBPF socket watcher records the ports a process listens on, so the
+privileged-port check doesn't add per-process overhead. A root process that
+starts listening on a privileged port later is promoted at that point.
+
+Survey entries remain alternatives: a root process can qualify through another
+matching entry without `non_root`, and an entry with socket filtering disabled
+can admit it without socket activity.
 
 ## Exclude services from instrumentation
 

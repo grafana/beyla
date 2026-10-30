@@ -2,7 +2,7 @@
 title: Configure Beyla export modes
 menuTitle: Export modes
 description: Configure Beyla to export data directly to an OTLP endpoint or through Alloy.
-weight: 1
+weight: 100
 keywords:
   - Beyla
   - eBPF

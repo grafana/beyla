@@ -17,6 +17,7 @@ func init() {
 	export.AppO11yFeatures |= FeatureProcess | FeatureHostInfo
 	export.FeatureMapper["application_process"] = FeatureProcess
 	export.FeatureMapper["application_host"] = FeatureHostInfo
+	export.FeatureMapper["application_service_graph_connection_info"] = export.FeatureConnectionInfo
 }
 
 // Has is added here for convenience, as features.Feature has already a Has

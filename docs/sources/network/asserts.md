@@ -2,7 +2,7 @@
 title: Set up Beyla network metrics in Kubernetes with Helm for Asserts
 menuTitle: Set up Asserts network
 description: A guide to install Beyla network metrics in Kubernetes with Helm for Asserts.
-weight: 1
+weight: 300
 keywords:
   - Beyla
   - eBPF

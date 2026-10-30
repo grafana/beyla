@@ -49,3 +49,13 @@ func (s *Span) SunRPCProcedureNameForExport() string {
 	}
 	return s.Method
 }
+
+func (s *Span) SunRPCMethodForExport() string {
+	if s.Type != EventTypeSunRPCClient && s.Type != EventTypeSunRPCServer {
+		return ""
+	}
+	if s.Path == "" || s.Method == "" || s.Method == SunRPCSyntheticReplyMethod {
+		return ""
+	}
+	return s.Path + "/" + s.Method
+}

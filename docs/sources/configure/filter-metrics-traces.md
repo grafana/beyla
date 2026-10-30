@@ -2,7 +2,7 @@
 title: Filter metrics and traces by attribute values
 menuTitle: Filter data
 description: Configure Beyla to filter metrics and traces by attribute values.
-weight: 40
+weight: 900
 keywords:
   - Beyla
   - eBPF

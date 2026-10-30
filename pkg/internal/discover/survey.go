@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	servicesextra "github.com/grafana/beyla/v3/pkg/services"
 )
 
 var namespaceFetcherFunc = ebpfcommon.FindNetworkNamespace
@@ -23,13 +24,23 @@ func SurveyCriteriaMatcherProvider(
 	input *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]],
 	output *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessMatch]],
 ) swarm.InstanceFunc {
+	return criteriaMatcherProvider(cfg, surveyCriteria(cfg), input, output)
+}
+
+// criteriaMatcherProvider applies selection criteria and Beyla's configured exclusions.
+func criteriaMatcherProvider(
+	cfg *beyla.Config,
+	criteria []services.Selector,
+	input *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessAttrs]],
+	output *msg.Queue[[]obiDiscover.Event[obiDiscover.ProcessMatch]],
+) swarm.InstanceFunc {
 	beylaNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	m := &obiDiscover.Matcher{
-		Log:              slog.With("component", "obiDiscover.SurveyCriteriaMatcher"),
-		Criteria:         surveyCriteria(cfg),
+		Log:              slog.With("component", "discover.CriteriaMatcher"),
+		Criteria:         criteria,
 		ExcludeCriteria:  surveyExcludingCriteria(cfg),
 		ProcessHistory:   map[app.PID]obiDiscover.ProcessMatch{},
-		Input:            input.Subscribe(msg.SubscriberName("surveyInput")),
+		Input:            input.Subscribe(),
 		Output:           output,
 		Namespace:        beylaNamespace,
 		HasHostPidAccess: hasHostPidAccess(),
@@ -38,16 +49,29 @@ func SurveyCriteriaMatcherProvider(
 }
 
 func surveyCriteria(cfg *beyla.Config) []services.Selector {
-	finderCriteria := cfg.Discovery.Survey
-	return obiDiscover.NormalizeGlobCriteria(finderCriteria)
+	survey := cfg.Discovery.Survey
+	globs := make(services.GlobDefinitionCriteria, len(survey))
+
+	for i := range survey {
+		globs[i] = survey[i].GlobAttributes
+		// Socket activity can also be the only selection criterion.
+		if survey[i].SocketApps.Enabled && !globs[i].Path.IsSet() {
+			globs[i].Path = services.NewGlob("*")
+		}
+	}
+
+	criteria := obiDiscover.NormalizeGlobCriteria(globs)
+	for i := range criteria {
+		// Keep the survey extension on the selectors carried in ProcessMatch,
+		// including matches inherited from a parent process.
+		criteria[i] = &servicesextra.SurveySelector{
+			GlobAttributes: globs[i], SocketApps: survey[i].SocketApps,
+		}
+	}
+
+	return criteria
 }
 
 func surveyExcludingCriteria(cfg *beyla.Config) []services.Selector {
-	// deprecated options: supporting them only if the user neither defines
-	// the instrument nor exclude_instrument sections
-	obiCfg := cfg.AsOBI()
-	if obiDiscover.OnlyDefinesDeprecatedServiceSelection(obiCfg) {
-		return obiDiscover.RegexAsSelector(cfg.Discovery.DefaultExcludeServices)
-	}
-	return obiDiscover.GlobsAsSelector(cfg.Discovery.DefaultExcludeInstrument)
+	return obiDiscover.ExcludingCriteria(cfg.AsOBI())
 }

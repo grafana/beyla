@@ -21,6 +21,16 @@ func observePollingCounter(snapshot *runtimemetrics.DotnetRuntimeMetricSnapshot,
 	case "gc-committed":
 		destination = &snapshot.GCCommittedMemory
 		value *= bytesPerMegabyte
+	case "gen-0-size":
+		destination = &snapshot.GCHeapSize[0]
+	case "gen-1-size":
+		destination = &snapshot.GCHeapSize[1]
+	case "gen-2-size":
+		destination = &snapshot.GCHeapSize[2]
+	case "loh-size":
+		destination = &snapshot.GCHeapSize[3]
+	case "poh-size":
+		destination = &snapshot.GCHeapSize[4]
 	case "threadpool-thread-count":
 		destination = &snapshot.ThreadPoolThreadCount
 	case "threadpool-queue-length":

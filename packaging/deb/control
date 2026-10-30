@@ -1,0 +1,11 @@
+Package: beyla
+Version: 0.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: alloy (>= 1.21.0), systemd, debconf, python3
+Maintainer: Gregor Zeitlinger <gregor.zeitlinger@grafana.com>
+Description: Experimental Beyla SDK instrumentation companion for Alloy
+ Experimental Ubuntu amd64 companion package. Configures the
+ Alloy service with embedded beyla.ebpf, host metrics and profiling, and
+ optionally enrolls explicitly selected systemd services for SDK injection.

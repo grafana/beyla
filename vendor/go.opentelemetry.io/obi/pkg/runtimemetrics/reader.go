@@ -82,10 +82,28 @@ type PythonGCGenerationMetrics struct {
 
 const DotnetGCGenerationCount = 3
 
+// DotnetHeapGenerationCount includes the large and pinned object heaps.
+const DotnetHeapGenerationCount = 5
+
+func DotnetHeapGenerations() [DotnetHeapGenerationCount]string {
+	return [DotnetHeapGenerationCount]string{"gen0", "gen1", "gen2", "loh", "poh"}
+}
+
 type DotnetRuntimeMetricSnapshot struct {
 	// GCCollections contains exclusive cumulative counts since the collector baseline.
 	// A nil entry means the count is unavailable.
 	GCCollections [DotnetGCGenerationCount]*uint64
+	// GCHeapSize contains last-collection bytes, including fragmentation.
+	// Entries follow DotnetHeapGenerations; nil means unavailable.
+	GCHeapSize [DotnetHeapGenerationCount]*int64
+	// GCHeapFragmentation contains fragmented bytes after the last completed collection.
+	// Entries follow DotnetHeapGenerations; nil means unavailable.
+	GCHeapFragmentation [DotnetHeapGenerationCount]*int64
+
+	ProcessCPUCount *int64
+	// CPU times are cumulative process-lifetime seconds; nil means unavailable.
+	ProcessCPUTimeUser   *float64
+	ProcessCPUTimeSystem *float64
 
 	ProcessMemoryWorkingSet *int64
 	GCCommittedMemory       *int64
@@ -101,6 +119,9 @@ type DotnetRuntimeMetricSnapshot struct {
 	JITCompilationTime      *float64
 	ThreadPoolWorkItemCount *uint64
 	MonitorLockContentions  *uint64
+	// Exceptions contains cumulative counts since attachment, keyed by error.type.
+	// Nil means unavailable; a published map must not be mutated.
+	Exceptions map[string]uint64
 }
 
 type GoRuntimeMetricSnapshot struct {

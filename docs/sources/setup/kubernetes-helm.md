@@ -2,7 +2,7 @@
 title: Deploy Beyla in Kubernetes with Helm
 menuTitle: Helm chart for other use cases
 description: Learn how to deploy Beyla as a Helm chart in Kubernetes.
-weight: 3
+weight: 300
 keywords:
   - Beyla
   - eBPF

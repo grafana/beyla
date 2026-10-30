@@ -39,7 +39,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type protocol_type -type event_type -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t -type node_span_event_t Bpf ../../../bpf/common/common.c -- -I../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS -type protocol_type -type event_type -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t -type node_span_event_t -type pid_namespace_mode -type valid_pids_size -type ringbuf_write_stats_t -type ringbuf_id Bpf ../../../bpf/common/common.c -- -I../../../bpf
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
@@ -131,13 +131,6 @@ var IntegrityModeOverride = false
 
 type TracerCapability uint64
 
-type SymbolMatcher uint8
-
-const (
-	SymbolMatcherExact SymbolMatcher = iota
-	SymbolMatcherContains
-)
-
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
 type ProbeDesc struct {
@@ -162,10 +155,6 @@ type ProbeDesc struct {
 	// UsePadStart attaches Start after WriteHeaders has spilled PadLength to
 	// its stack slot and before the value is first consumed.
 	UsePadStart bool
-
-	// SymbolMatcher controls how the map key for this probe is matched against
-	// executable symbols. The zero value preserves exact symbol matching.
-	SymbolMatcher SymbolMatcher
 
 	// Skip is set when an optional uprobe symbol was not resolved.
 	Skip bool
@@ -326,6 +315,7 @@ type EBPFParseContext struct {
 	kafkaConsumerGroups         *KafkaConsumerGroups
 	payloadExtraction           config.PayloadExtraction
 	httpEnricher                *ebpfhttp.HTTPEnricher
+	sqlppPreparedStatements     *ebpfhttp.SQLPPPreparedStatements
 	dnsEvents                   *expirable.LRU[dnsparser.DNSId, *request.Span]
 	pendingSpanLinks            *pendingSpanLinks
 	pendingGoHTTPClientRequests *expirable.LRU[pendingGoHTTPClientKey, *pendingGoHTTPClientRequest]
@@ -496,6 +486,14 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		httpEnricher = ebpfhttp.NewHTTPEnricher(payloadExtraction.HTTP.Enrichment)
 	}
 
+	var sqlppPreparedStatements *ebpfhttp.SQLPPPreparedStatements
+	if payloadExtraction.HTTP.SQLPP.Enabled {
+		sqlppPreparedStatements, err = ebpfhttp.NewSQLPPPreparedStatements(payloadExtraction.HTTP.SQLPP.PreparedStatementsCacheSize)
+		if err != nil {
+			ptlog().Error("failed to create SQL++ prepared statements cache", "error", err)
+		}
+	}
+
 	parseCtx := &EBPFParseContext{
 		protocolDebug:              protocolDebug,
 		h2c:                        h2c,
@@ -512,6 +510,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		kafkaConsumerGroups:        kafkaConsumerGroups,
 		payloadExtraction:          payloadExtraction,
 		httpEnricher:               httpEnricher,
+		sqlppPreparedStatements:    sqlppPreparedStatements,
 		dnsEvents:                  dnsEvents,
 		emitSpans:                  emitSpans,
 		stopEmitting:               stopEmitting,

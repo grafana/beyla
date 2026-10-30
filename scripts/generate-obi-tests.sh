@@ -64,6 +64,13 @@ default_jobs() {
 #
 # Format: "obi_pattern|beyla_replacement" — order matters, specific before generic.
 BEHAVIORAL_TRANSFORMS=(
+    # Use AWS's Docker Hub mock to avoid ECR Public's anonymous data limits.
+    'public\.ecr\.aws/ecs-local/amazon-ecs-local-container-endpoints:latest@sha256:d0fb4c7d8ab2fde76252ff3bb87422de201a2a7a5494a19f5c72e5e90a1fe064|amazon/amazon-ecs-local-container-endpoints:latest@sha256:2f1be750a040f71540a1bca3c9fe3295030a022595a2fc8d3966623bd3f75bd2'
+
+    # MongoDB 9.0.4 fixes Ubuntu kernel detection on the newer CI runners (SERVER-131779).
+    '\.obi-src/internal/test/integration/components/mongo/|internal/test/beyla_extensions/components/mongo/'
+    'mongo:9\.0\.2@sha256:c73153413b453d7d31199be36e101ab51195a4e6cff7bee8a2aa52a9769e4e11|mongo:9.0.4@sha256:dc28ed5a9d0fc616903c3f463bb1e53b92b49f441721b91926e87d90bf957ce8'
+
     # --- Env var renames (input config interface) ---
     'OTEL_EBPF_EXECUTABLE_PATH|BEYLA_EXECUTABLE_NAME'
     'JAVA_EXECUTABLE_PATH|JAVA_EXECUTABLE_NAME'
@@ -84,10 +91,13 @@ BEHAVIORAL_TRANSFORMS=(
     '`\^obi:\\d+\$\$`|`\^beyla:\\d+\$\$`'
     '/var/run/obi|/var/run/beyla'
     '"source":[ ]*"obi"|"source": "beyla"'
+    'source="obi"|source="beyla"'
 
     # --- Binary name (entrypoint overrides in compose files) ---
-    '^/obi|/beyla'
-    '\([^.a-zA-Z0-9/_-]\)/obi|\1/beyla'
+    '^/obi$|/beyla'
+    '^/obi\([^.a-zA-Z0-9/_-]\)|/beyla\1'
+    '\([^.a-zA-Z0-9/_-]\)/obi$|\1/beyla'
+    '\([^.a-zA-Z0-9/_-]\)/obi\([^.a-zA-Z0-9/_-]\)|\1/beyla\2'
 
     # --- Metric name prefixes (exported output) ---
     'obi_|beyla_'
@@ -120,10 +130,19 @@ BEHAVIORAL_TRANSFORMS=(
     'obi\.revision|beyla.revision'
     'obi\.stat\.tcp\.|beyla.stat.tcp.'
 
-    # --- Telemetry SDK/scope identity ---
-    'Value: "go\.opentelemetry\.io/obi"|Value: "github.com/grafana/beyla"'
-    '"value":"go\.opentelemetry\.io/obi"|"value":"github.com/grafana/beyla"'
+    # --- Telemetry SDK identity ---
+    # Instrumentation scopes identify OBI's instrumentation library.
     'Value: "opentelemetry"|Value: "beyla"'
+
+    # Cloud resolver tests use Beyla's configuration format.
+    '"obi-config-gce-v2\.yml"|"obi-config-gce.yml"'
+    '"obi-config-azure-v2\.yml"|"obi-config-azure.yml"'
+    # Clear the helper's legacy feature defaults so the resolver YAML applies.
+    'o\.instrument(t, network, "obi-config-gce\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-gce.yml")'
+    'o\.instrument(t, network, "obi-config-azure\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-azure.yml")'
+
+    # Let the connection-info test select only its opt-in feature.
+    '`MULTI_TEST_MODE=-connectioninfo`|`MULTI_TEST_MODE=-connectioninfo`, `MULTI_TEST_METRICS_FEATURES=application_service_graph_connection_info`'
 
     # --- K8s component paths ---
     'DockerfileOBI|DockerfileBeyla'
@@ -198,6 +217,9 @@ SCHEMA_TRANSFORMS=(
     # them as obi.* because attr.VendorPrefix defaults to "obi" upstream.
     'metric_name: obi\.|metric_name: beyla.'
     'id: metric\.obi\.|id: metric.beyla.'
+    # Same rename for OBI's definition/2 registry files, where metrics are
+    # identified by `name:` instead of `metric_name:`/`id:`.
+    '^\(  - name: \)obi\.|\1beyla.'
 
     # OBI's internal build-info attributes are all derived from
     # attr.VendorPrefix. The behavioral transforms above already rename version
@@ -227,6 +249,10 @@ CODE_INJECTIONS=(
     'config := ti\.DefaultOBIConfig()|config.MetricPrefix = "beyla"'
     # Temporarily skip flaky traceparent extraction test
     '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
+    # The server can answer before instrumentation attaches on slower VM kernels.
+    't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL, "testserver")'
+    # Manual spans can reach Jaeger before the automatic outgoing client span.
+    'if len[(]traces[[]i[]][.]FindByOperationName[(]"checkout", "internal"[)][)] > 0 [{]|if len(traces[i].FindByOperationName("GET /", "client")) == 0 { continue }'
 )
 
 # =============================================================================
@@ -515,12 +541,28 @@ transform_go_imports_and_paths() {
     if [[ -f "$OBI_DEST/dockerutil_test.go" ]]; then
         sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
             "$OBI_DEST/dockerutil_test.go"
+
+        # obi.instrument() mounts the instrumenter configs as /configs. Mount the
+        # generated copy instead of .obi-src, so the Beyla overrides copied by
+        # copy_beyla_extensions (e.g. the v1 obi-config-route53.yml) take effect,
+        # as they already do for the docker compose suites.
+        local obi_configs_mount='bindMount(filepath.Join(pathRoot, ".obi-src/internal/test/integration/configs"), "/configs")'
+        if ! grep -qF "$obi_configs_mount" "$OBI_DEST/dockerutil_test.go"; then
+            echo "ERROR: dockerutil_test.go no longer mounts /configs as expected; update the obi.instrument() configs transform" >&2
+            exit 1
+        fi
+        sed_i -e 's|bindMount(filepath.Join(pathRoot, "\.obi-src/internal/test/integration/configs"), "/configs")|bindMount(filepath.Join(pathRoot, "internal/testgenerated/integration/configs"), "/configs")|' \
+            "$OBI_DEST/dockerutil_test.go"
     fi
 
     # go_otel BuildImage: use .obi-src as context (go_otel Dockerfile expects
     # internal/test/integration/components/go_otel/ relative to context).
     if [[ -f "$OBI_DEST/http_go_otel_test.go" ]]; then
-        sed_i -e 's|buildDockerImage(t\.Context(), t\.Output(), "hatest-testserver", "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")|buildDockerImageWithContext(t.Context(), t.Output(), "hatest-testserver", pathObiSrc, "internal/test/integration/components/go_otel/Dockerfile")|' \
+        if ! grep -q 'buildDockerImage(t\.Context(), t\.Output(), goOTelTestServerImage, "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")' "$OBI_DEST/http_go_otel_test.go"; then
+            echo "ERROR: http_go_otel_test.go no longer builds goOTelTestServerImage as expected; update the go_otel transform" >&2
+            exit 1
+        fi
+        sed_i -e 's|buildDockerImage(t\.Context(), t\.Output(), goOTelTestServerImage, "\.obi-src/internal/test/integration/components/go_otel/Dockerfile")|buildDockerImageWithContext(t.Context(), t.Output(), goOTelTestServerImage, pathObiSrc, "internal/test/integration/components/go_otel/Dockerfile")|' \
             "$OBI_DEST/http_go_otel_test.go"
     fi
 
@@ -529,11 +571,14 @@ transform_go_imports_and_paths() {
     # only resolves inside .obi-src, so the build context must be pathObiSrc
     # and the dockerfile literals must stay relative to that context (undo the
     # ".obi-src/…" rewrite apply_go_import_path_transforms just applied).
-    if [[ -f "$OBI_DEST/go_auto_sdk_test.go" ]] \
-        && grep -q 'buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile)' "$OBI_DEST/go_auto_sdk_test.go"; then
+    if [[ -f "$OBI_DEST/go_auto_sdk_test.go" ]]; then
+        if ! grep -q 'buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile[,)]' "$OBI_DEST/go_auto_sdk_test.go"; then
+            echo "ERROR: go_auto_sdk_test.go no longer calls buildDockerImage as expected; update the goautosdk transform" >&2
+            exit 1
+        fi
         sed_i \
             -e 's|dockerfile: "\.obi-src/internal/test/integration/components/goautosdk/|dockerfile: "internal/test/integration/components/goautosdk/|g' \
-            -e 's|buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile)|buildDockerImageWithContext(t.Context(), t.Output(), version.image, pathObiSrc, version.dockerfile)|g' \
+            -e 's|buildDockerImage(t\.Context(), t\.Output(), version\.image, version\.dockerfile\([,)]\)|buildDockerImageWithContext(t.Context(), t.Output(), version.image, pathObiSrc, version.dockerfile\1|g' \
             "$OBI_DEST/go_auto_sdk_test.go"
     fi
 
@@ -625,6 +670,15 @@ ensure_multiexec_local_image_reuse() {
             in_unused && /^  [a-zA-Z0-9_-]+:$/ && $0 !~ /^  testserver-unused:$/ { in_unused=0 }
             { print }
         ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    done
+}
+
+ensure_multiexec_collector_memory() {
+    # The Weaver tap adds a second export pipeline. At 125M the collector is
+    # OOM-killed during the host-network context propagation tests.
+    for file in "$OBI_DEST/docker-compose-multiexec.yml" "$OBI_DEST/docker-compose-multiexec-host.yml"; do
+        [[ -f "$file" ]] || continue
+        sed_i -e 's/memory: 125M/memory: 512M/' "$file"
     done
 }
 
@@ -777,6 +831,24 @@ routes:
 EOF
     fi
 
+    file="$OBI_DEST/configs/obi-config-multiexec-connectioninfo.yml"
+    if [[ -f "$file" ]] && ! grep -q '^metrics:' "$file"; then
+        cat >>"$file" <<'EOF'
+# --- Beyla-only: v1 equivalent for the connection-info integration test --------
+# Beyla loads this Config v2 fixture through its v1 loader. The keys below enable
+# the equivalent metrics exporter, selected services, and opt-in metric feature.
+otel_metrics_export:
+  endpoint: http://otelcol:4018
+metrics:
+  features:
+    - application_service_graph_connection_info
+discovery:
+  instrument:
+    - open_ports: "8080,8088"
+    - open_ports: "7773"
+EOF
+    fi
+
     file="$OBI_DEST/configs/obi-config-log-enricher-v2.yml"
     if [[ -f "$file" ]] && ! grep -q '^ebpf:' "$file"; then
         printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
@@ -788,6 +860,13 @@ EOF
         printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
         cat "$OBI_DEST/configs/obi-config-log-enricher-unselected.yml" >>"$file"
     fi
+}
+
+ensure_multiexec_connectioninfo_feature_override() {
+    local file="$OBI_DEST/docker-compose-multiexec.yml"
+    [[ -f "$file" ]] || return 0
+
+    sed -i 's|BEYLA_OTEL_METRICS_FEATURES: "application,application_span_otel"|BEYLA_OTEL_METRICS_FEATURES: "${MULTI_TEST_METRICS_FEATURES-application,application_span_otel}"|' "$file"
 }
 
 ensure_client_trace_waits_for_complete_attachment() {
@@ -807,6 +886,26 @@ ensure_client_trace_waits_for_complete_attachment() {
         /^[[:space:]]*trace = traces\[0\]$/ { next }
         { print }
     ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+
+    # Keep the helper with its untagged caller. Beyla extension helpers carry
+    # the integration tag, so placing it there breaks ordinary builds and the
+    # go get step used to vendor the generated test dependencies.
+    cat >> "$file" <<'EOF'
+
+func clientTraceWithServerPort(traces []jaeger.Trace, operation string, serverPort int) (jaeger.Trace, bool) {
+	for _, trace := range traces {
+		for _, span := range trace.FindByOperationName(operation, "") {
+			port, ok := jaeger.FindIn(span.Tags, "server.port")
+			value, numeric := port.Value.(float64)
+			if ok && numeric && value == float64(serverPort) {
+				return trace, true
+			}
+		}
+	}
+
+	return jaeger.Trace{}, false
+}
+EOF
 }
 
 ensure_malicious_ioctl_local_downstream() {
@@ -1169,6 +1268,26 @@ apply_schema_transforms() {
 apply_schema_injections() {
     echo "  Applying schema injections..."
 
+    # Beyla adds default resource attributes to every span-metric family.
+    # Keep these declarations aligned with appendDefaultResourceLabels.
+    local span_metrics_schema="$SCHEMAS_DEST/obi/groups/spanmetrics/metrics.yaml"
+    awk '
+        /^  - name:/ {
+            span_metric = ($3 ~ /^traces_spanmetrics_/ || $3 ~ /^traces[.]span[.]metrics[.]/)
+        }
+        { print }
+        span_metric && /^    attributes:$/ {
+            print "      - ref: k8s.cluster.name\n        requirement_level: opt_in"
+            print "      - ref: k8s.namespace.name\n        requirement_level: opt_in"
+            print "      - ref: k8s.node.name\n        requirement_level: opt_in"
+            print "      - ref: service.version\n        requirement_level: opt_in"
+            print "      - ref: deployment.environment.name\n        requirement_level: opt_in"
+            print "      - ref: cloud.availability_zone\n        requirement_level: opt_in"
+            print "      - ref: cloud.region\n        requirement_level: opt_in"
+        }
+    ' "$span_metrics_schema" > "$span_metrics_schema.tmp"
+    mv "$span_metrics_schema.tmp" "$span_metrics_schema"
+
     # Beyla owns this metric, including its schema after OBI PR #3556 removes it.
     # Drop the inherited definition while generating from older OBI revisions.
     local host_info_schema="$SCHEMAS_DEST/obi/groups/obi_internal/metrics.yaml"
@@ -1424,25 +1543,22 @@ EOF
     # comment on metric.target.info in OBI's own obi_internal.yaml. Weaver only
     # validates the OTLP tap, so prom_survey.go's gauge is irrelevant here.
     #
-    # The attribute set is whatever GetAppResourceAttrs/ResourceAttrsFromEnv
-    # produce (service.*, k8s.*, host.*, …), all already declared by upstream
-    # semconv; only the service.* refs are declared here, opt_in, mirroring how
-    # metric.target.info declares a subset of what it carries.
-    #
-    # Group id is x.beyla.survey so it sorts last, consistent with x.obi.cpu.
+    # GetAppResourceAttrs/ResourceAttrsFromEnv provide the same resource
+    # attributes as target.info. Declare them on this standalone metric:
+    # extending target.info creates a refinement rather than a new metric.
+    # Resource metadata is optional for surveyed, uninstrumented processes.
     #
     # NOTE: injected by scripts/generate-obi-tests.sh (apply_schema_injections).
     # Unlike x_obi_cpu there is NO durable upstream fix for this one: survey is
     # a Beyla-only feature, so the declaration cannot flow back into OBI's
     # schemas/obi/groups/ and this injection is permanent.
     cat > "$SCHEMAS_DEST/obi/groups/x_beyla_survey.yaml" <<'EOF'
-groups:
+file_format: definition/2
+metrics:
   # Beyla-only `survey_info` meta-metric. See scripts/generate-obi-tests.sh
   # (apply_schema_injections) for why this is injected rather than inherited
   # from OBI's registry.
-  - id: x.beyla.survey
-    type: metric
-    metric_name: survey_info
+  - name: survey_info
     instrument: updowncounter
     unit: ""
     stability: development
@@ -1456,6 +1572,82 @@ groups:
       - ref: service.name
         requirement_level: opt_in
       - ref: service.namespace
+        requirement_level: opt_in
+      - ref: service.instance.id
+        requirement_level: opt_in
+      - ref: service.version
+        requirement_level: opt_in
+      - ref: telemetry.sdk.language
+        requirement_level: opt_in
+      - ref: telemetry.sdk.name
+        requirement_level: opt_in
+      - ref: telemetry.sdk.version
+        requirement_level: opt_in
+      - ref: telemetry.distro.name
+        requirement_level: opt_in
+      - ref: telemetry.distro.version
+        requirement_level: opt_in
+      - ref: host.name
+        requirement_level: opt_in
+      - ref: host.id
+        requirement_level: opt_in
+      - ref: host.type
+        requirement_level: opt_in
+      - ref: host.image.id
+        requirement_level: opt_in
+      - ref: os.type
+        requirement_level: opt_in
+      - ref: os.version
+        requirement_level: opt_in
+      - ref: cloud.provider
+        requirement_level: opt_in
+      - ref: cloud.platform
+        requirement_level: opt_in
+      - ref: cloud.region
+        requirement_level: opt_in
+      - ref: cloud.availability_zone
+        requirement_level: opt_in
+      - ref: cloud.account.id
+        requirement_level: opt_in
+      - ref: cloud.resource_id
+        requirement_level: opt_in
+      - ref: gcp.gce.instance.name
+        requirement_level: opt_in
+      - ref: gcp.gce.instance.hostname
+        requirement_level: opt_in
+      - ref: container.id
+        requirement_level: opt_in
+      - ref: container.name
+        requirement_level: opt_in
+      - ref: k8s.cluster.name
+        requirement_level: opt_in
+      - ref: k8s.container.name
+        requirement_level: opt_in
+      - ref: k8s.cronjob.name
+        requirement_level: opt_in
+      - ref: k8s.daemonset.name
+        requirement_level: opt_in
+      - ref: k8s.deployment.name
+        requirement_level: opt_in
+      - ref: k8s.job.name
+        requirement_level: opt_in
+      - ref: k8s.kind
+        requirement_level: opt_in
+      - ref: k8s.namespace.name
+        requirement_level: opt_in
+      - ref: k8s.node.name
+        requirement_level: opt_in
+      - ref: k8s.owner.name
+        requirement_level: opt_in
+      - ref: k8s.pod.name
+        requirement_level: opt_in
+      - ref: k8s.pod.start_time
+        requirement_level: opt_in
+      - ref: k8s.pod.uid
+        requirement_level: opt_in
+      - ref: k8s.replicaset.name
+        requirement_level: opt_in
+      - ref: k8s.statefulset.name
         requirement_level: opt_in
 EOF
 
@@ -1482,6 +1674,7 @@ generate() {
     apply_component_consolidation
     adjust_docker_compose_paths
     ensure_multiexec_local_image_reuse
+    ensure_multiexec_collector_memory
     split_docker_build_contexts
     apply_behavioral_transforms "$jobs"
     restore_weaver_registry_mount_paths   # ← restore /obi-registry after BEHAVIORAL_TRANSFORMS
@@ -1490,6 +1683,7 @@ generate() {
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports
     ensure_config_v2_v1_equivalents
+    ensure_multiexec_connectioninfo_feature_override
     ensure_client_trace_waits_for_complete_attachment
     ensure_malicious_ioctl_local_downstream
     ensure_weaver_tap_survives_weavercol_startup
@@ -1531,7 +1725,7 @@ generate() {
 apply_component_path_transform() {
     local file="$1"
     sed_i -e 's|path\.Join(pathRoot, "internal", "test", "integration", "components",|path.Join(pathObiSrc, "internal", "test", "integration", "components",|g' \
-        -e 's|pathRoot + "/internal/test/|pathObiSrc + "/internal/test/|g' \
+        -e 's|pathRoot[[:space:]]*+[[:space:]]*"/internal/test/|pathObiSrc + "/internal/test/|g' \
         "$file"
 }
 

@@ -29,4 +29,8 @@ var (
 		OTEL: "traces_service_graph_request_total",
 		Type: InstrumentCounter,
 	})
+	ServiceGraphConnectionInfo = metric(Name{
+		OTEL: "traces_service_graph_connection_info",
+		Type: InstrumentGauge,
+	})
 )

@@ -38,7 +38,10 @@ func addMetadata(pp *ProcessInfo, info *informer.ObjectMeta) *ProcessInfo {
 		}
 	}
 
-	ret := pp
+	// pp is shared through initialState, so enrich a copy instead of mutating it.
+	cp := *pp
+	ret := &cp
+	ret.ownerChain = nil
 
 	ret.metadata = map[string]string{
 		services.AttrNamespace: info.Namespace,

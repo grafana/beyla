@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+P=${BEYLA_PACKAGE_ROOT:-}
+if [ -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
+  # Mode changes are not supported by this PoC; retain the install-time choice.
+  exit 0
+fi
+. /usr/share/debconf/confmodule
+
+db_input high beyla/mode || true
+db_input high beyla/fleet-enabled || true
+db_input high beyla/fleet-url || true
+db_input high beyla/fleet-instance-id || true
+db_input high beyla/otlp-endpoint || true
+db_input high beyla/otlp-tenant || true
+db_input high beyla/otlp-token || true
+db_input high beyla/metrics-endpoint || true
+db_input high beyla/metrics-tenant || true
+db_input high beyla/metrics-token || true
+db_input high beyla/profiles-endpoint || true
+db_input high beyla/profiles-tenant || true
+db_input high beyla/profiles-token || true
+db_input high beyla/services || true
+db_input high beyla/open-ports || true
+db_go || true

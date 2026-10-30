@@ -51,9 +51,7 @@ func userAgentAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{
 		return nil
 	}
 
-	// SQL++ replaces the HTTP attribute set with a DB-only one; every other
-	// subtype keeps its HTTP attributes and is still an HTTP span.
-	if span.SubType == request.HTTPSubtypeSQLPP {
+	if httpTransportScopeOf(span) != httpTransportAll {
 		return nil
 	}
 
@@ -237,7 +235,6 @@ func generateTracesWithAttributes(
 	resourceAttrs = append(resourceAttrs, envResourceAttrs...)
 	resourceAttrs = otelcfg.FilterResourceAttrs(resourceAttrs, attrSelector)
 	resourceAttrsMap := AttrsToMap(resourceAttrs)
-	resourceAttrsMap.PutStr(string(semconv.OTelScopeNameKey), reporterName)
 	extraResAttrs = otelcfg.FilterResourceAttrs(extraResAttrs, attrSelector)
 	addAttrsToMap(extraResAttrs, resourceAttrsMap)
 	resourceAttrsMap.MoveTo(rs.Resource().Attributes())
@@ -254,6 +251,9 @@ func generateTracesWithAttributes(
 		}
 
 		ss := rs.ScopeSpans().AppendEmpty()
+		ss.SetSchemaUrl(attr.OBISchemaURL)
+		ss.Scope().SetName(reporterName)
+		ss.Scope().SetVersion(attr.TelemetryDistroVersion())
 
 		t := span.Timings()
 		start := spanStartTime(t)
@@ -561,6 +561,13 @@ func genAIOperationName(name string) string {
 	return name
 }
 
+func grpcMethodAttributes(span *request.Span) []attribute.KeyValue {
+	method, original := request.GRPCMethod(span)
+	attrs := []attribute.KeyValue{semconv.RPCMethod(method)}
+
+	return appendIfSet(attrs, semconv.RPCMethodOriginal, original)
+}
+
 // jsonRPCAttributes returns JSON-RPC span attributes following the OTEL RPC semantic conventions.
 func jsonRPCAttributes(span *request.Span) []attribute.KeyValue {
 	if span.SubType != request.HTTPSubtypeJSONRPC || span.JSONRPC == nil {
@@ -585,8 +592,8 @@ func jsonRPCAttributes(span *request.Span) []attribute.KeyValue {
 	return attrs
 }
 
-// httpEnrichmentAttributes converts extracted HTTP headers and body content to OTel span attributes.
-func httpEnrichmentAttributes(span *request.Span) []attribute.KeyValue {
+// httpHeaderAttributes converts extracted HTTP headers to OTel span attributes.
+func httpHeaderAttributes(span *request.Span) []attribute.KeyValue {
 	attrs := make([]attribute.KeyValue, 0, len(span.RequestHeaders)+len(span.ResponseHeaders))
 	for name, values := range span.RequestHeaders {
 		attrs = append(attrs, attribute.StringSlice(attr.HTTPRequestHeaderKey(name), values))
@@ -594,6 +601,12 @@ func httpEnrichmentAttributes(span *request.Span) []attribute.KeyValue {
 	for name, values := range span.ResponseHeaders {
 		attrs = append(attrs, attribute.StringSlice(attr.HTTPResponseHeaderKey(name), values))
 	}
+	return attrs
+}
+
+// httpBodyContentAttributes converts extracted HTTP body content to OTel span attributes.
+func httpBodyContentAttributes(span *request.Span) []attribute.KeyValue {
+	var attrs []attribute.KeyValue
 	if span.RequestBodyContent != "" {
 		attrs = append(attrs, attribute.String(string(attr.HTTPRequestBodyContent), span.RequestBodyContent))
 	}
@@ -631,6 +644,14 @@ func messagingOperationAttrs(method string) []attribute.KeyValue {
 	}
 }
 
+func appendMessagingSubscription(attrs []attribute.KeyValue, span *request.Span) []attribute.KeyValue {
+	if span.MessagingInfo == nil {
+		return attrs
+	}
+	attrs = appendIfSet(attrs, semconv.MessagingDestinationSubscriptionName, span.MessagingInfo.SubscriptionName)
+	return appendIfSet(attrs, request.MessagingConsumerGroupName, span.MessagingInfo.ConsumerGroup)
+}
+
 type httpTransportScope int
 
 const (
@@ -656,6 +677,30 @@ func httpClientTransportScope(subType int) httpTransportScope {
 	}
 }
 
+// httpServerTransportScope is the server counterpart of
+// httpClientTransportScope, equally default-deny: only a plain HTTP server span
+// describes the HTTP exchange.
+func httpServerTransportScope(subType int) httpTransportScope {
+	if subType == request.HTTPSubtypeNone {
+		return httpTransportAll
+	}
+
+	return httpTransportNone
+}
+
+// httpTransportScopeOf reports the transport scope of an HTTP span, and
+// httpTransportNone for any other span.
+func httpTransportScopeOf(span *request.Span) httpTransportScope {
+	switch span.Type {
+	case request.EventTypeHTTP:
+		return httpServerTransportScope(span.SubType)
+	case request.EventTypeHTTPClient:
+		return httpClientTransportScope(span.SubType)
+	default:
+		return httpTransportNone
+	}
+}
+
 // appendIfSet reports an attribute only when the parser determined a value for
 // it. OTLP has no absent value, so emitting the key with an empty string would
 // assert that the value is empty rather than unknown. It takes a string
@@ -667,6 +712,19 @@ func appendIfSet(attrs []attribute.KeyValue, f func(string) attribute.KeyValue, 
 	}
 
 	return append(attrs, f(val))
+}
+
+// appendElasticsearchPathParameters records the URL path parameters OBI maps,
+// keyed by their Elasticsearch API specification names. The index parameter
+// carries the same value as db.collection.name.
+func appendElasticsearchPathParameters(attrs []attribute.KeyValue, es *request.Elasticsearch) []attribute.KeyValue {
+	if es.DBCollectionName != "" {
+		attrs = append(attrs, semconv.DBOperationParameter("index", es.DBCollectionName))
+	}
+	if es.DocumentID != "" {
+		attrs = append(attrs, semconv.DBOperationParameter("id", es.DocumentID))
+	}
+	return attrs
 }
 
 // appendHTTPResponseStatus reports the status only when one was seen: semconv requires
@@ -699,6 +757,14 @@ func appendHTTPResponseBodySize(attrs []attribute.KeyValue, span *request.Span, 
 	return append(attrs, request.HTTPResponseBodySize(span.ResponseBodyLength()))
 }
 
+func appendURLTemplate(attrs []attribute.KeyValue, span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
+	if _, ok := optionalAttrs[attr.HTTPUrlTemplate]; !ok {
+		return attrs
+	}
+
+	return appendIfSet(attrs, semconv.URLTemplate, span.Route)
+}
+
 func appendPeerService(attrs []attribute.KeyValue, span *request.Span, optionalAttrs map[attr.Name]struct{}) []attribute.KeyValue {
 	if _, ok := optionalAttrs[attr.ServicePeerName]; !ok {
 		return attrs
@@ -718,14 +784,23 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		}
 		attrs = appendIfSet(attrs, request.ClientAddr, request.PeerAsClient(span))
 		attrs = appendIfSet(attrs, request.ServerAddr, request.SpanHost(span))
-		attrs = appendHTTPRequestBodySize(attrs, span, optionalAttrs)
-		attrs = appendHTTPResponseBodySize(attrs, span, optionalAttrs)
-		attrs = appendHTTPResponseStatus(attrs, span, optionalAttrs)
-		attrs = append(attrs, httpMethodAttributes(span.Method, optionalAttrs)...)
-		attrs = appendIfSet(attrs, request.HTTPUrlPath, span.Path)
-		scheme := request.HTTPScheme(span)
-		attrs = appendIfSet(attrs, semconv.URLScheme, scheme)
-		attrs = appendIfSet(attrs, semconv.HTTPRoute, span.Route)
+
+		if httpServerTransportScope(span.SubType) == httpTransportAll {
+			attrs = appendHTTPRequestBodySize(attrs, span, optionalAttrs)
+			attrs = appendHTTPResponseBodySize(attrs, span, optionalAttrs)
+			attrs = appendHTTPResponseStatus(attrs, span, optionalAttrs)
+			attrs = append(attrs, httpMethodAttributes(span.Method, optionalAttrs)...)
+			attrs = appendIfSet(attrs, request.HTTPUrlPath, span.Path)
+			attrs = appendIfSet(attrs, semconv.URLScheme, request.HTTPScheme(span))
+			attrs = appendIfSet(attrs, semconv.HTTPRoute, span.Route)
+			if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok {
+				if idx := strings.IndexByte(span.FullPath, '?'); idx >= 0 {
+					attrs = appendIfSet(attrs, request.HTTPUrlQuery, scrubQuery(span.FullPath[idx+1:], redactSet))
+				}
+			}
+			attrs = append(attrs, httpHeaderAttributes(span)...)
+		}
+
 		if span.SubType == request.HTTPSubtypeGraphQL && span.GraphQL != nil {
 			if _, ok := optionalAttrs[attr.GraphQLDocument]; ok {
 				attrs = appendIfSet(attrs, semconv.GraphQLDocument, span.GraphQL.Document)
@@ -733,20 +808,15 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendIfSet(attrs, semconv.GraphQLOperationName, span.GraphQL.OperationName)
 			attrs = appendIfSet(attrs, request.GraphqlOperationType, span.GraphQL.OperationType)
 		}
-		if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok {
-			if idx := strings.IndexByte(span.FullPath, '?'); idx >= 0 {
-				attrs = appendIfSet(attrs, request.HTTPUrlQuery, scrubQuery(span.FullPath[idx+1:], redactSet))
-			}
-		}
 		attrs = append(attrs, mcpAttributes(span, optionalAttrs)...)
 		attrs = append(attrs, jsonRPCAttributes(span)...)
-		attrs = append(attrs, httpEnrichmentAttributes(span)...)
+		attrs = append(attrs, httpBodyContentAttributes(span)...)
 	case request.EventTypeGRPC:
-		attrs = []attribute.KeyValue{
-			semconv.RPCMethod(span.Path),
+		attrs = grpcMethodAttributes(span)
+		attrs = append(attrs,
 			semconv.RPCSystemNameGRPC,
 			request.ServerPort(span.HostPort),
-		}
+		)
 		attrs = appendIfSet(attrs, request.ClientAddr, request.PeerAsClient(span))
 		attrs = appendIfSet(attrs, request.ServerAddr, request.SpanHost(span))
 		// GRPCStatusCodeString returns "" for statuses outside the gRPC enum
@@ -781,13 +851,10 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		if span.FullPath != "" {
 			urlPath = span.FullPath
 		}
-		// Scrub sensitive query parameters from url.full. The scrubbed query is always
-		// included in url.full when present; the selector only gates the separate url.query attribute.
-		var scrubbedQS string
+		// Scrub sensitive query parameters from url.full.
 		if idx := strings.IndexByte(urlPath, '?'); idx >= 0 {
 			if qs := scrubQuery(urlPath[idx+1:], redactSet); qs != "" {
 				urlPath = urlPath[:idx+1] + qs
-				scrubbedQS = qs
 			} else {
 				urlPath = urlPath[:idx]
 			}
@@ -802,7 +869,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		attrs = []attribute.KeyValue{
 			request.ServerPort(span.HostPort),
 		}
-		attrs = appendIfSet(attrs, request.ServerAddr, host)
+		attrs = appendIfSet(attrs, request.ServerAddr, request.HostWithoutPort(host))
 		attrs = appendPeerService(attrs, span, optionalAttrs)
 
 		if transport != httpTransportNone {
@@ -813,17 +880,14 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		if transport == httpTransportAll {
 			attrs = appendHTTPResponseStatus(attrs, span, optionalAttrs)
 			attrs = appendIfSet(attrs, semconv.URLScheme, scheme)
+			attrs = appendURLTemplate(attrs, span, optionalAttrs)
 			attrs = appendHTTPRequestBodySize(attrs, span, optionalAttrs)
 			attrs = appendHTTPResponseBodySize(attrs, span, optionalAttrs)
-			if scrubbedQS != "" {
-				if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok {
-					attrs = append(attrs, request.HTTPUrlQuery(scrubbedQS))
-				}
-			}
 		}
 
 		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
 			attrs = appendIfSet(attrs, request.DBCollectionName, span.Elasticsearch.DBCollectionName)
+			attrs = appendElasticsearchPathParameters(attrs, span.Elasticsearch)
 			attrs = appendIfSet(attrs, request.ElasticsearchNodeName, span.Elasticsearch.NodeName)
 			attrs = appendIfSet(attrs, request.DBNamespace, span.DBNamespace)
 			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
@@ -841,7 +905,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 
 		if span.SubType == request.HTTPSubtypeAWSS3 && span.AWS != nil {
 			s3 := span.AWS.S3
-			attrs = append(attrs, request.RPCSystem("aws-api"))
+			attrs = append(attrs, request.RPCSystem(request.RPCSystemAWSAPI))
 			attrs = appendIfSet(attrs, semconv.RPCMethod, request.S3RPCMethod(s3.Method))
 			attrs = appendIfSet(attrs, semconv.CloudRegion, s3.Meta.Region)
 			attrs = appendIfSet(attrs, semconv.AWSRequestID, s3.Meta.RequestID)
@@ -866,11 +930,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 
 		if span.SubType == request.HTTPSubtypeAWSSNS && span.AWS != nil {
 			sns := span.AWS.SNS
-			attrs = append(attrs,
-				request.RPCSystem("aws-api"),
-				semconv.MessagingSystemAWSSNS,
-			)
-			attrs = appendIfSet(attrs, semconv.RPCMethod, request.SNSRPCMethod(sns.OperationName))
+			attrs = append(attrs, semconv.MessagingSystemAWSSNS)
 			attrs = appendIfSet(attrs, request.MessagingOperationName, sns.OperationName)
 			attrs = appendIfSet(attrs, request.MessagingOperationType, sns.OperationType)
 			if sns.TopicARN != "" {
@@ -1441,13 +1501,16 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			}
 		}
 		attrs = append(attrs, jsonRPCAttributes(span)...)
-		attrs = append(attrs, httpEnrichmentAttributes(span)...)
+		if transport == httpTransportAll {
+			attrs = append(attrs, httpHeaderAttributes(span)...)
+		}
+		attrs = append(attrs, httpBodyContentAttributes(span)...)
 	case request.EventTypeGRPCClient:
-		attrs = []attribute.KeyValue{
-			semconv.RPCMethod(span.Path),
+		attrs = grpcMethodAttributes(span)
+		attrs = append(attrs,
 			semconv.RPCSystemNameGRPC,
 			request.ServerPort(span.HostPort),
-		}
+		)
 		attrs = appendIfSet(attrs, request.ServerAddr, request.HostAsServer(span))
 		attrs = appendPeerService(attrs, span, optionalAttrs)
 		// See the EventTypeGRPC case: omit the status code attribute when the
@@ -1535,6 +1598,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		attrs = appendIfSet(attrs, semconv.MessagingClientID, span.Statement)
 		attrs = appendIfSet(attrs, request.ServerAddr, request.HostAsServer(span))
 		attrs = append(attrs, messagingOperationAttrs(span.Method)...)
+		attrs = appendMessagingSubscription(attrs, span)
 
 		if span.Type == request.EventTypeMQTTClient {
 			attrs = appendPeerService(attrs, span, optionalAttrs)
@@ -1566,9 +1630,13 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		// https://opentelemetry.io/docs/specs/semconv/registry/attributes/onc-rpc/
 		attrs = []attribute.KeyValue{
 			request.ServerPort(span.HostPort),
-			request.RPCSystem("onc_rpc"),
+			request.RPCSystem(request.RPCSystemONCRPC),
+		}
+		if span.ResponseObservation == request.ResponseParsed {
+			attrs = append(attrs, semconv.RPCResponseStatusCode(request.SunRPCResponseStatusCode(span.Status)))
 		}
 		attrs = appendIfSet(attrs, request.ServerAddr, request.HostAsServer(span))
+		attrs = appendIfSet(attrs, semconv.RPCMethod, span.SunRPCMethodForExport())
 		attrs = appendIfSet(attrs, semconv.OncRPCProgramName, span.Path)
 		if span.Route != "" {
 			if proc, err := strconv.Atoi(span.Route); err == nil {
@@ -1686,9 +1754,9 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 	attrs = append(attrs, userAgentAttributes(span, optionalAttrs)...)
 	attrs = append(attrs, networkPeerAttributes(span, optionalAttrs)...)
 
-	// SQL++ is the one subtype that replaces the HTTP attribute set with a
-	// DB-only one, so HTTP transport attributes do not belong on its span. Every
-	// other subtype keeps its HTTP attributes and is still an HTTP span.
+	// The protocol version describes the connection rather than the HTTP
+	// exchange, so it stays on every subtype except SQL++, whose span carries
+	// database attributes only.
 	if span.SubType != request.HTTPSubtypeSQLPP {
 		if _, ok := optionalAttrs[attr.NetworkProtocolVersion]; ok {
 			attrs = appendIfSet(attrs, semconv.NetworkProtocolVersion, span.ProtoVersion.String())

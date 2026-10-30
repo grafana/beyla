@@ -2,7 +2,7 @@
 title: Beyla network metrics quickstart
 menuTitle: Quickstart
 description: A quickstart guide to produce Network Metrics from Grafana Beyla
-weight: 1
+weight: 100
 keywords:
   - Beyla
   - eBPF

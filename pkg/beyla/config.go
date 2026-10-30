@@ -34,6 +34,7 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/config"
 	botel "github.com/grafana/beyla/v3/pkg/export/otel"
+	_ "github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
 	maps2 "github.com/grafana/beyla/v3/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
@@ -102,10 +103,10 @@ type Config struct {
 	Attributes    Attributes                    `yaml:"attributes"`
 	CloudMetadata transform.CloudMetadataConfig `yaml:"cloud_metadata"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
-	Routes       *transform.RoutesConfig       `yaml:"routes"`
-	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
-	OTELMetrics  otelcfg.MetricsConfig         `yaml:"otel_metrics_export"`
-	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
+	Routes       *transform.RoutesConfig `yaml:"routes"`
+	NameResolver *NameResolverConfig     `yaml:"name_resolver"`
+	OTELMetrics  otelcfg.MetricsConfig   `yaml:"otel_metrics_export"`
+	Traces       otelcfg.TracesConfig    `yaml:"otel_traces_export"`
 	// Same as the otel_traces_export option, except all environment variables
 	// are prefixed with BEYLA_GRAFANA_AI_
 	SigilExport  otelcfg.TracesConfig       `yaml:"sigil_export" envPrefix:"BEYLA_GRAFANA_AI_"`
@@ -317,6 +318,9 @@ func (e ConfigError) Error() string {
 
 // nolint:cyclop
 func (c *Config) Validate() error {
+	if err := c.validateInstrumentAllLocal(); err != nil {
+		return err
+	}
 	obiCfg := c.AsOBI()
 	if err := obiCfg.Discovery.Validate(); err != nil {
 		return ConfigError(err.Error())
@@ -395,10 +399,19 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Injector.Webhook.Enabled() {
-		if !c.Traces.Enabled() {
-			return ConfigError("you can't enable OTEL SDK instrumentation injection without enabling OTEL traces")
+		proto := c.Injector.Protocol
+		hasEndpoint := c.Injector.Endpoint != ""
+		if !hasEndpoint && c.Injector.ExportedSignals.TracesEnabled() && c.Traces.Enabled() {
+			proto = c.Traces.GetProtocol()
+			hasEndpoint = true
 		}
-		proto := c.Traces.GetProtocol()
+		if !hasEndpoint && c.Injector.ExportedSignals.MetricsEnabled() && c.OTELMetrics.EndpointEnabled() {
+			proto = c.OTELMetrics.GetProtocol()
+			hasEndpoint = true
+		}
+		if !hasEndpoint {
+			return ConfigError("working with OTEL SDK injection requires defining an OTLP endpoint")
+		}
 		pos := slices.IndexFunc([]otelcfg.Protocol{otelcfg.ProtocolHTTPJSON, otelcfg.ProtocolHTTPProtobuf, otelcfg.ProtocolGRPC, ""}, func(p otelcfg.Protocol) bool {
 			return p == proto
 		})
@@ -482,6 +495,16 @@ func (c *Config) warnDeprecatedMetricsFeatures() {
 		slog.Warn("metrics feature is deprecated and will be removed in a future release",
 			"feature", deprecated.Name, "use", deprecated.Replacement)
 	}
+}
+
+// validateInstrumentAllLocal rejects competing instrumentation selectors.
+func (c *Config) validateInstrumentAllLocal() error {
+	if c.Discovery.InstrumentAllLocal && (c.Port.Len() > 0 || c.TargetPIDs.Len() > 0 || c.AutoTargetExe.IsSet() ||
+		c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
+		len(c.Discovery.Instrument) > 0 || len(c.Discovery.Services) > 0) {
+		return ConfigError("discovery.instrument_all_local is mutually exclusive with other instrumentation selectors")
+	}
+	return nil
 }
 
 func (c *Config) promNetO11yEnabled() bool {
@@ -569,7 +592,7 @@ func LoadConfig(file io.Reader) (*Config, error) {
 // normalizeConfig normalizes user input to a common set of assumptions that are global to Beyla/OBI
 // TODO: this replicates a private function in OBI repo. We should make it public and invoke it here instead.
 func normalizeConfig(c *Config) {
-	if c.Discovery.SurveyEnabled() {
+	if c.Discovery.SurveyEnabled() || c.Discovery.InstrumentAllLocal {
 		c.Discovery.OverrideDefaultExcludeForSurvey()
 	}
 	c.Attributes.Select.Normalize()

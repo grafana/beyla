@@ -28,5 +28,6 @@ func DoHTTPGet(t require.TestingT, path string, status int) {
 
 	r, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
+	defer r.Body.Close()
 	require.Equal(t, status, r.StatusCode)
 }

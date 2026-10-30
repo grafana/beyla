@@ -2,7 +2,7 @@
 title: Set up Beyla
 menuTitle: Set up
 description: Learn how to set up and run Beyla.
-weight: 1
+weight: 300
 keywords:
   - Beyla
   - eBPF
@@ -10,23 +10,17 @@ aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/setup/
 ---
 
-![Grafana Beyla Logo](https://grafana.com/media/docs/grafana-cloud/beyla/beyla-logo-2.png)
-
 # Set up Beyla
 
-There are different options to set up and run Beyla:
+You can run Grafana Beyla as a Docker container, or in Kubernetes with a Helm chart or your own manifests.
+Before you set up Beyla, check the [requirements and limitations][requirements].
 
-1. [With Docker to instrument a process running in a container](docker/).
-1. [As a Kubernetes DaemonSet with Helm for Grafana Cloud](kubernetes-helm-appolly/)
-1. [As a Kubernetes DaemonSet with the Kubernetes Monitoring Helm chart](kubernetes-helm-k8s-monitoring/)
-1. [As a Kubernetes DaemonSet with Helm](kubernetes-helm/)
-1. [As a Kubernetes DaemonSet the Grafana Alloy Helm chart](helm-alloy/)
-1. [As a Kubernetes DaemonSet or as a sidecar container (manual process)](kubernetes/)
+{{< section menuTitle="true" withDescriptions="true" >}}
 
-For information on configuration options and data export modes, see the [Configure Beyla](../configure/) documentation.
+For configuration options and data export modes, refer to [Configure Beyla][configure].
+By default, Beyla groups URL paths into routes with the `low-cardinality` routes decorator.
+To define route patterns for your application, refer to [Configure Beyla routes decorator][routes].
 
-You can run Beyla as a standalone process. This approach is suitable for running with bare metal installations, in virtual machines, for local development, or advanced use cases. Consult the documentation in the [Git repository](https://github.com/grafana/beyla/blob/main/docs/sources/setup/standalone.md) to learn how to set up Beyla as a standalone process.
-
-**Note**: If you will be using Beyla to generate traces, please make sure you've read our documentation section on configuring
-the [Routes Decorator](../configure/routes-decorator/). Since Beyla is auto-instrumenting your application without any
-special language level support, configuring the low cardinality routes decorator is very important for optimal results.
+[requirements]: ../introduction/requirements/
+[configure]: ../configure/
+[routes]: ../configure/routes-decorator/

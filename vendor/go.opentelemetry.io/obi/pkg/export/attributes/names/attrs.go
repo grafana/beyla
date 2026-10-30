@@ -35,6 +35,7 @@ const (
 	HTTPUrlPath            = Name(semconv.URLPathKey)
 	HTTPUrlFull            = Name(semconv.URLFullKey)
 	HTTPUrlQuery           = Name(semconv.URLQueryKey)
+	HTTPUrlTemplate        = Name(semconv.URLTemplateKey)
 	ClientAddr             = Name(semconv.ClientAddressKey)
 	ServerAddr             = Name(semconv.ServerAddressKey)
 	ServerPort             = Name(semconv.ServerPortKey)
@@ -63,6 +64,7 @@ const (
 	MessagingSystem        = Name(semconv.MessagingSystemKey)
 	MessagingDestination   = Name(semconv.MessagingDestinationNameKey)
 	MessagingConsumerGroup = Name(semconv.MessagingConsumerGroupNameKey)
+	MessagingSubscription  = Name(semconv.MessagingDestinationSubscriptionNameKey)
 	GraphQLDocument        = Name(semconv.GraphQLDocumentKey)
 	GraphQLOperationName   = Name(semconv.GraphQLOperationNameKey)
 	GraphQLOperationType   = Name(semconv.GraphQLOperationTypeKey)
@@ -232,6 +234,7 @@ const (
 	JVMGCAction            = Name("jvm.gc.action")
 	CPythonGCGeneration    = Name("cpython.gc.generation")
 	DotnetGCHeapGeneration = Name("dotnet.gc.heap.generation")
+	CPUMode                = Name("cpu.mode")
 
 	NodejsEventLoopState = Name("nodejs.eventloop.state")
 

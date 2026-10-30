@@ -104,8 +104,8 @@ func protoEndpoint(cfg *beyla.Config) (otelcfg.Protocol, string, error) {
 		}
 	}
 
-	// fallback to the metrics endpoint
-	if endpoint == "" {
+	// fallback to the metrics endpoint when the injected SDK exports metrics
+	if endpoint == "" && cfg.Injector.ExportedSignals.MetricsEnabled() {
 		protocol = cfg.OTELMetrics.GetProtocol()
 		var common bool
 		if endpoint, common = cfg.OTELMetrics.OTLPMetricsEndpoint(); !common {

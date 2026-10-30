@@ -4,9 +4,11 @@
 package request // import "go.opentelemetry.io/obi/pkg/appolly/app/request"
 
 import (
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -353,8 +355,9 @@ type MessagingInfo struct {
 	Partition int   `json:"partition"`
 	// HasPartition reports whether Partition and Offset were read from the wire. The
 	// consumer group can be known while the partition list was cut by the kernel buffer.
-	HasPartition  bool   `json:"hasPartition"`
-	ConsumerGroup string `json:"consumerGroup"`
+	HasPartition     bool   `json:"hasPartition"`
+	ConsumerGroup    string `json:"consumerGroup"`
+	SubscriptionName string `json:"subscriptionName"`
 }
 
 type GraphQL struct {
@@ -365,6 +368,7 @@ type GraphQL struct {
 
 type Elasticsearch struct {
 	DBCollectionName string `json:"dbCollectionName"`
+	DocumentID       string `json:"documentId"`
 	NodeName         string `json:"nodeName"`
 	DBOperationName  string `json:"dbOperationName"`
 	DBQueryText      string `json:"dbQueryText"`
@@ -1117,7 +1121,6 @@ const (
 	ResponseOperationName       = "response"
 	ConversationOperationName   = "conversation"
 	ExecuteToolOperationName    = "execute_tool"
-	MessageOperationName        = "message"
 	ChatKitSessionOperationName = "chatkit.session"
 	ChatKitThreadOperationName  = "chatkit.thread"
 	OtherOperationName          = "_OTHER"
@@ -1653,6 +1656,7 @@ func spanAttributes(s *Span) SpanAttributes {
 		}
 		if s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
 			attrs["dbCollectionName"] = s.Elasticsearch.DBCollectionName
+			attrs["documentID"] = s.Elasticsearch.DocumentID
 			attrs["nodeName"] = s.Elasticsearch.NodeName
 			attrs["dbNamespace"] = s.DBNamespace
 			attrs["dbOperationName"] = s.Elasticsearch.DBOperationName
@@ -1708,20 +1712,22 @@ func spanAttributes(s *Span) SpanAttributes {
 		addHeaderAttributes(attrs, s)
 		return attrs
 	case EventTypeGRPC:
-		return SpanAttributes{
-			"method":     s.Path,
+		attrs := SpanAttributes{
 			"status":     strconv.Itoa(s.Status),
 			"clientAddr": SpanPeer(s),
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
 		}
+		addGRPCMethodAttributes(attrs, s)
+		return attrs
 	case EventTypeGRPCClient:
-		return SpanAttributes{
-			"method":     s.Path,
+		attrs := SpanAttributes{
 			"status":     strconv.Itoa(s.Status),
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
 		}
+		addGRPCMethodAttributes(attrs, s)
+		return attrs
 	case EventTypeSQLClient, EventTypeSQLServer:
 		var (
 			code              uint16
@@ -1771,6 +1777,9 @@ func spanAttributes(s *Span) SpanAttributes {
 			}
 			if s.MessagingInfo.ConsumerGroup != "" {
 				attrs["consumerGroup"] = s.MessagingInfo.ConsumerGroup
+			}
+			if s.MessagingInfo.SubscriptionName != "" {
+				attrs["subscriptionName"] = s.MessagingInfo.SubscriptionName
 			}
 		}
 		return attrs
@@ -1845,6 +1854,14 @@ func spanAttributes(s *Span) SpanAttributes {
 	}
 
 	return SpanAttributes{}
+}
+
+func addGRPCMethodAttributes(attrs SpanAttributes, s *Span) {
+	method, original := GRPCMethod(s)
+	attrs["method"] = method
+	if original != "" {
+		attrs["methodOriginal"] = original
+	}
 }
 
 func addHeaderAttributes(attrs SpanAttributes, s *Span) {
@@ -2171,6 +2188,56 @@ func (s *Span) ServiceGraphConnectionType() string {
 	return ""
 }
 
+// dbSpanName follows the database span name convention:
+// https://opentelemetry.io/docs/specs/semconv/database/database-spans/#name
+func dbSpanName(operation, target, system string) string {
+	switch {
+	case operation != "" && target != "":
+		return operation + " " + target
+	case operation != "":
+		return operation
+	case target != "":
+		return target
+	default:
+		return system
+	}
+}
+
+func dbServerTarget(address string, port int) string {
+	if address == "" || port == 0 {
+		return ""
+	}
+	host := strings.TrimSuffix(strings.TrimPrefix(address, "["), "]")
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+// sqlppSpanName names a SQL++ span after its collection or bucket. Couchbase
+// falls back to the server, as the other Couchbase spans do; any other SQL++
+// server reports other_sql and follows the SQL spans, which never use it.
+func sqlppSpanName(s *Span) string {
+	target := cmp.Or(s.Route, s.DBNamespace)
+	if target == "" && s.DBSystem == semconv.DBSystemNameCouchbase.Value.AsString() {
+		target = dbServerTarget(HostAsServer(s), s.HostPort)
+	}
+	return dbSpanName(s.Method, target, s.DBSystem)
+}
+
+func elasticsearchSpanName(s *Span) string {
+	target := cmp.Or(
+		s.Elasticsearch.DBCollectionName,
+		s.DBNamespace,
+		dbServerTarget(HTTPClientServerAddr(s), s.HostPort),
+	)
+	return dbSpanName(s.Elasticsearch.DBOperationName, target, s.Elasticsearch.DBSystemName)
+}
+
+func awsTraceName(service, operation string) string {
+	if operation == "" {
+		return RPCSystemAWSAPI
+	}
+	return service + "." + operation
+}
+
 func (s *Span) TraceName() string {
 	if s.OverrideTraceName != "" {
 		return s.OverrideTraceName
@@ -2179,173 +2246,37 @@ func (s *Span) TraceName() string {
 	case EventTypeHTTP, EventTypeHTTPClient:
 		if s.Type == EventTypeHTTP && s.SubType == HTTPSubtypeGraphQL && s.GraphQL != nil {
 			if s.GraphQL.OperationType != "" {
-				return "GraphQL " + s.GraphQL.OperationType
+				return s.GraphQL.OperationType
 			} else {
 				return "GraphQL Operation"
 			}
 		}
 		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeElasticsearch && s.Elasticsearch != nil {
-			dbOperationName := s.Elasticsearch.DBOperationName
-			// https://opentelemetry.io/docs/specs/semconv/database/database-spans/#name
-			if dbOperationName == "" {
-				return "elasticsearch"
-			}
-			switch {
-			case s.Elasticsearch.DBCollectionName != "":
-				return dbOperationName + " " + s.Elasticsearch.DBCollectionName
-			case s.DBNamespace != "":
-				return dbOperationName + " " + s.DBNamespace
-			case s.Host != "" && s.HostPort != 0:
-				return dbOperationName + " " + s.Host + ":" + strconv.Itoa(s.HostPort)
-			default:
-				return dbOperationName
-			}
+			return elasticsearchSpanName(s)
 		}
 
 		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSS3 && s.AWS != nil {
-			if s.AWS.S3.Method != "" {
-				return "s3." + s.AWS.S3.Method
-			} else {
-				return "s3.Operation"
-			}
+			return awsTraceName(awsServiceS3, s.AWS.S3.Method)
 		}
 
 		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSSQS && s.AWS != nil {
-			if s.AWS.SQS.OperationName != "" {
-				return "sqs." + s.AWS.SQS.OperationName
-			} else {
-				return "sqs.Operation"
-			}
+			return awsTraceName(awsServiceSQS, s.AWS.SQS.OperationName)
 		}
 
 		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSSNS && s.AWS != nil {
-			return "SNS." + s.AWS.SNS.OperationName
+			return awsServiceSNS + "." + s.AWS.SNS.OperationName
 		}
 
 		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeSQLPP {
-			dbOperationName := s.Method
-			if dbOperationName == "" {
-				return s.DBSystem
-			}
-			switch {
-			case s.Route != "":
-				return dbOperationName + " " + s.Route
-			case s.DBNamespace != "":
-				return dbOperationName + " " + s.DBNamespace
-			case s.Host != "" && s.HostPort != 0:
-				return dbOperationName + " " + s.Host + ":" + strconv.Itoa(s.HostPort)
-			default:
-				return dbOperationName
-			}
+			return sqlppSpanName(s)
 		}
 
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOpenAI && s.GenAI != nil && s.GenAI.OpenAI != nil {
-			name := s.GenAI.OpenAI.OperationName
-			if name != "" {
-				switch {
-				case s.GenAI.OpenAI.Request.Model != "":
-					return name + " " + s.GenAI.OpenAI.Request.Model
-				case s.GenAI.OpenAI.ResponseModel != "":
-					return name + " " + s.GenAI.OpenAI.ResponseModel
-				default:
-					return name
-				}
-			}
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAnthropic && s.GenAI != nil && s.GenAI.Anthropic != nil {
-			name := s.GenAI.Anthropic.Output.Type
-			if name != "" {
-				switch {
-				case s.GenAI.Anthropic.Input.Model != "":
-					return name + " " + s.GenAI.Anthropic.Input.Model
-				case s.GenAI.Anthropic.Output.Model != "":
-					return name + " " + s.GenAI.Anthropic.Output.Model
-				default:
-					return name
-				}
-			}
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeGemini && s.GenAI != nil && s.GenAI.Gemini != nil {
-			op := s.GenAI.Gemini.OperationName()
-			model := s.GenAI.Gemini.Model
-			if model != "" {
-				return op + " " + model
-			}
-			return op
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeQwen && s.GenAI != nil && s.GenAI.Qwen != nil {
-			name := s.GenAI.Qwen.OperationName
-			if name != "" {
-				switch {
-				case s.GenAI.Qwen.Request.Model != "":
-					return name + " " + s.GenAI.Qwen.Request.Model
-				case s.GenAI.Qwen.ResponseModel != "":
-					return name + " " + s.GenAI.Qwen.ResponseModel
-				default:
-					return name
-				}
-			}
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeAWSBedrock && s.GenAI != nil && s.GenAI.Bedrock != nil {
-			if s.GenAI.Bedrock.Model != "" {
-				return InvokeModelOperationName + " " + s.GenAI.Bedrock.Model
-			}
-			return InvokeModelOperationName
+		if s.Type == EventTypeHTTPClient && IsGenAISubtype(s.SubType) && s.GenAI != nil {
+			return s.genAISpanName()
 		}
 
 		if mcp := s.MCP(); mcp != nil {
 			return mcp.SpanName()
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeEmbedding && s.GenAI != nil && s.GenAI.Embedding != nil {
-			op := s.GenAI.Embedding.OperationName()
-			model := s.GenAI.Embedding.Model
-			if s.GenAI.Embedding.Input.Model != "" {
-				model = s.GenAI.Embedding.Input.Model
-			}
-			if model != "" {
-				return op + " " + model
-			}
-			return op
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeRerank && s.GenAI != nil && s.GenAI.Rerank != nil {
-			model := s.GenAI.Rerank.Input.Model
-			if model == "" {
-				model = s.GenAI.Rerank.Output.Model
-			}
-			if model != "" {
-				return "rerank " + model
-			}
-			return "rerank"
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeOllama && s.GenAI != nil && s.GenAI.Ollama != nil {
-			name := s.GenAI.Ollama.OperationName
-			if name != "" {
-				switch {
-				case s.GenAI.Ollama.Request.Model != "":
-					return name + " " + s.GenAI.Ollama.Request.Model
-				case s.GenAI.Ollama.ResponseModel != "":
-					return name + " " + s.GenAI.Ollama.ResponseModel
-				default:
-					return name
-				}
-			}
-		}
-
-		if s.Type == EventTypeHTTPClient && s.SubType == HTTPSubtypeRetrieval && s.GenAI != nil && s.GenAI.Retrieval != nil {
-			if name := s.GenAI.Retrieval.GetCollection(); name != "" {
-				return RetrievalOperationName + " " + name
-			}
-			if s.GenAI.Retrieval.Provider != "" {
-				return RetrievalOperationName + " " + s.GenAI.Retrieval.Provider
-			}
-			return RetrievalOperationName
 		}
 
 		if s.SubType == HTTPSubtypeJSONRPC && s.JSONRPC != nil {
@@ -2366,55 +2297,30 @@ func (s *Span) TraceName() string {
 		}
 		return name
 	case EventTypeGRPC, EventTypeGRPCClient:
-		return s.Path
+		return grpcSpanName(s)
 	case EventTypeSQLClient, EventTypeSQLServer:
-		operation := s.Method
-		if operation == "" {
-			return "SQL"
-		}
-		// semconv: db.query.summary when available, else
-		// {db.operation.name} {target} with target = collection then namespace
-		switch {
-		case s.DBQuerySummary != "":
+		if s.Method != "" && s.DBQuerySummary != "" {
 			return s.DBQuerySummary
-		case s.Path != "":
-			return operation + " " + s.Path
-		case s.DBNamespace != "":
-			return operation + " " + s.DBNamespace
 		}
-		return operation
-	case EventTypeRedisClient, EventTypeRedisServer:
-		if s.Method == "" {
-			return "REDIS"
+		collection := ""
+		if s.Method != "" {
+			collection = s.Path
 		}
-		return s.Method
-	case EventTypeMemcachedClient, EventTypeMemcachedServer:
-		if s.Method == "" {
-			return "MEMCACHED"
-		}
-		return s.Method
+		return dbSpanName(s.Method, cmp.Or(collection, s.DBNamespace), dbSystemNameForSpan(s))
+	case EventTypeRedisClient, EventTypeRedisServer, EventTypeMemcachedClient, EventTypeMemcachedServer:
+		return dbSpanName(s.Method, "", dbSystemNameForSpan(s))
 	case EventTypeKafkaClient, EventTypeKafkaServer, EventTypeMQTTClient, EventTypeMQTTServer, EventTypeNATSClient, EventTypeNATSServer, EventTypeAMQPClient:
 		if s.Path == "" {
 			return s.Method
 		}
 		return s.Method + " " + s.Path
 	case EventTypeSunRPCClient, EventTypeSunRPCServer:
-		if s.Path == "" {
-			return "sunrpc/" + s.Method
+		if method := s.SunRPCMethodForExport(); method != "" {
+			return method
 		}
-		return s.Path + "/" + s.Method
-	case EventTypeMongoClient:
-		if s.Path != "" && s.Method != "" {
-			// TODO for database operations like listCollections, we need to use s.DbNamespace instead of s.Path
-			return s.Method + " " + s.Path
-		}
-		if s.Path != "" {
-			return s.Path
-		}
-		if s.Method != "" {
-			return s.Method
-		}
-		return semconv.DBSystemNameMongoDB.Value.AsString()
+		return RPCSystemONCRPC
+	case EventTypeMongoClient, EventTypeCouchbaseClient:
+		return dbSpanName(s.Method, cmp.Or(s.Path, s.DBNamespace), dbSystemNameForSpan(s))
 	case EventTypeManualSpan:
 		return s.Method
 	case EventTypeFailedConnect:
@@ -2427,19 +2333,8 @@ func (s *Span) TraceName() string {
 			return s.Method
 		}
 		return s.Method + " " + s.Path
-	case EventTypeCouchbaseClient:
-		if s.Method == "" {
-			return "COUCHBASE"
-		}
-		if s.Path != "" {
-			return s.Method + " " + s.Path
-		}
-		return s.Method
 	case EventTypeAerospikeClient, EventTypeAerospikeServer:
-		if s.Method == "" {
-			return "AEROSPIKE"
-		}
-		// {operation} {namespace}.{set}, dropping any missing component.
+		// The target is {namespace}.{set}, dropping any missing component.
 		target := s.DBNamespace
 		if s.Path != "" {
 			if target != "" {
@@ -2448,10 +2343,7 @@ func (s *Span) TraceName() string {
 				target = s.Path
 			}
 		}
-		if target != "" {
-			return s.Method + " " + target
-		}
-		return s.Method
+		return dbSpanName(s.Method, target, dbSystemNameForSpan(s))
 	}
 	return ""
 }
@@ -2707,6 +2599,23 @@ func (s *Span) GenAIOutputTokenCount() (int, bool) {
 	}
 
 	return 0, false
+}
+
+func (s *Span) genAISpanName() string {
+	operation := s.GenAIOperationName()
+	if operation == "" {
+		operation = OtherOperationName
+	}
+
+	target := s.GenAIRequestModel()
+	if s.GenAI.Retrieval != nil {
+		target = s.GenAI.Retrieval.GetCollection()
+	}
+
+	if target == "" {
+		return operation
+	}
+	return operation + " " + target
 }
 
 func (s *Span) GenAIOperationName() string {

@@ -1,0 +1,4 @@
+-target
+bpf
+-D__TARGET_ARCH_x86
+-I../.obi-src/bpf

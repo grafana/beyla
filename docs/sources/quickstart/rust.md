@@ -2,7 +2,7 @@
 title: "Quickstart: instrument a Rust service with Beyla"
 menuTitle: Rust quickstart
 description: Learn how to quickly set up and run Beyla to instrument a Rust service
-weight: 2
+weight: 700
 keywords:
   - Beyla
   - eBPF

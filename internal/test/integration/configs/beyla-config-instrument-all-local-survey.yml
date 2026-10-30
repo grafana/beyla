@@ -1,0 +1,15 @@
+discovery:
+  instrument_all_local: true
+  # Fixture executables live at /testserver and /python.
+  exclude_instrument:
+    - exe_path: "/*/*"
+  survey:
+    - exe_path: "{/testserver,/python}"
+      socket_apps:
+        enabled: true
+
+prometheus_export:
+  port: 8999
+
+metrics:
+  features: [application]

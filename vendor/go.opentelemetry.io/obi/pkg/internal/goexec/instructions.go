@@ -69,12 +69,22 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string][]Fun
 	type functionCandidate struct {
 		requestedName string
 		function      gosym.Func
+		inlineSDKHook bool
+	}
+	available := map[string]bool{}
+	for _, f := range symTab.Funcs {
+		available[f.Name] = true
 	}
 	candidates := make([]functionCandidate, 0)
 	for _, f := range symTab.Funcs {
 		requestedName, _, ok := requestedFunctionName(f.Name, functions)
+		alias := embeddedSDKActivationAlias(f.Name)
+		inlineSDKHook := !ok && alias != "" && !available[alias]
+		if inlineSDKHook {
+			requestedName, _, ok = requestedFunctionName(alias, functions)
+		}
 		if ok {
-			candidates = append(candidates, functionCandidate{requestedName: requestedName, function: f})
+			candidates = append(candidates, functionCandidate{requestedName: requestedName, function: f, inlineSDKHook: inlineSDKHook})
 		}
 	}
 
@@ -98,7 +108,7 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string][]Fun
 		// when we don't have a Go symbol table, the executable is statically linked, we don't look for offsets
 		// using the gosym tab, we lookup offsets just like a regular elf file.
 		// we still need to find the return statements, since go linkage is non-standard we can't use uretprobe
-		if gosyms == nil && len(allSyms) > 0 {
+		if gosyms == nil && len(allSyms) > 0 && !candidate.inlineSDKHook {
 			offs, found = staticSymbolOffsets(f.Name, allSyms, ilog)
 		}
 		if !found {
@@ -110,6 +120,10 @@ func instrumentationPoints(elfF *elf.File, funcNames []string) (map[string][]Fun
 		}
 		if found {
 			offs.Symbol = f.Name
+			if candidate.inlineSDKHook {
+				// Preserve the SDK group namespace while probing its inlined flag read.
+				offs.Symbol = embeddedSDKActivationAlias(f.Name)
+			}
 			ilog.Debug("found relevant function for instrumentation", "function", candidate.requestedName,
 				"matched_symbol", f.Name, "offsets", offs)
 			storeFunctionOffset(allOffsets, candidate.requestedName, offs)
@@ -234,6 +248,13 @@ func findFuncOffset(f *gosym.Func, elfF *elf.File) (FuncOffsets, bool, error) {
 			offs, err := analyzeFunctionOffsets(off, data)
 			if err != nil {
 				return FuncOffsets{}, false, err
+			}
+			if embeddedSDKActivationAlias(f.Name) != "" {
+				flagRead := embeddedSDKFlagReadOffset(elfF.Machine, data)
+				if flagRead == 0 {
+					return FuncOffsets{}, false, nil
+				}
+				offs.Start += flagRead
 			}
 			return offs, true, nil
 		}

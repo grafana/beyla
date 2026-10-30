@@ -28,14 +28,28 @@ type netTraceMetadata struct {
 	Fields []netTraceField
 }
 
-type netTraceDecoder struct {
-	metadata  map[uint32]netTraceMetadata
-	sequences map[uint64]uint32
+// netTraceRuntimeEvent holds a counter, GC event, exception count, or subscription diagnostic.
+// Events share one sequence so collection boundaries retain stream order.
+type netTraceRuntimeEvent struct {
+	gc                    *gcRuntimeEvent
+	counter               runtimeCounter
+	exceptionType         string
+	exceptionCount        uint64
+	exceptionWarning      string
+	exceptionsUnavailable bool
 }
 
-// readRuntimeCounters reads a .NET stream and delivers counters synchronously.
+type netTraceDecoder struct {
+	pointerSize      int32
+	metricsSessionID string
+	metadata         map[uint32]netTraceMetadata
+	sequences        map[uint64]uint32
+	gcOrder          gcEventOrder
+}
+
+// readRuntimeEvents delivers decoded counters, exception counts, and diagnostics in stream order.
 // The caller owns the stream and closes it to interrupt a blocked read.
-func readRuntimeCounters(stream io.Reader, expectedPID uint64, consume func(runtimeCounter) error) error {
+func readRuntimeEvents(stream io.Reader, expectedPID uint64, metricsSessionID string, consume func(netTraceRuntimeEvent) error) error {
 	reader := newNetTraceReader(stream)
 	info, err := readNetTracePreamble(reader)
 	if err != nil {
@@ -44,39 +58,58 @@ func readRuntimeCounters(stream io.Reader, expectedPID uint64, consume func(runt
 	if info.ProcessID <= 0 || uint64(info.ProcessID) != expectedPID {
 		return fmt.Errorf("NetTrace process ID %d does not match expected PID %d", info.ProcessID, expectedPID)
 	}
-	var decoder netTraceDecoder
+	decoder := netTraceDecoder{pointerSize: info.PointerSize, metricsSessionID: metricsSessionID}
 	for {
 		header, payload, err := readNetTraceBlock(reader)
 		if err != nil {
 			return err
 		}
 		if header.EndOfStream {
+			ordered, err := decoder.gcOrder.finish()
+			if err != nil {
+				return err
+			}
+			for i := range ordered {
+				if err := consume(netTraceRuntimeEvent{gc: &ordered[i]}); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 		if header.Name == "SPBlock" {
 			if err := decoder.checkSequencePoint(payload); err != nil {
 				return err
 			}
+			watermark := int64(binary.LittleEndian.Uint64(payload))
+			ordered, err := decoder.gcOrder.releaseBefore(watermark)
+			if err != nil {
+				return err
+			}
+			for i := range ordered {
+				if err := consume(netTraceRuntimeEvent{gc: &ordered[i]}); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		if header.Name != "EventBlock" && header.Name != "MetadataBlock" {
 			continue
 		}
-		counters, err := decoder.decodeEventBlock(header.Name, payload)
+		events, err := decoder.decodeEventBlock(header.Name, payload)
 		if err != nil {
 			return err
 		}
-		for _, counter := range counters {
-			if err := consume(counter); err != nil {
-				return fmt.Errorf("consuming runtime counter %q: %w", counter.Name, err)
+		for _, event := range events {
+			if err := consume(event); err != nil {
+				return err
 			}
 		}
 	}
 }
 
-// decodeEventBlock retains metadata definitions and decodes System.Runtime
-// counters from .NET event blocks. Calls must follow stream order.
-func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]runtimeCounter, error) {
+// decodeEventBlock retains metadata definitions and decodes runtime counters
+// and CLR or Meter exception events. Calls must follow stream order.
+func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]netTraceRuntimeEvent, error) {
 	if name != "MetadataBlock" && name != "EventBlock" {
 		return nil, fmt.Errorf("expected NetTrace event or metadata block, got %q", name)
 	}
@@ -89,7 +122,7 @@ func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]runti
 		return nil, errors.New("uncompressed NetTrace event blocks are unsupported")
 	}
 	var previous netTraceEventHeader
-	var counters []runtimeCounter
+	var events []netTraceRuntimeEvent
 	for reader.Len() > 0 {
 		event, err := readNetTraceCompressedEventHeader(reader, previous)
 		if err != nil {
@@ -115,15 +148,9 @@ func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]runti
 			if len(d.metadata) >= maximumMetadataDefinitions {
 				return nil, errors.New("NetTrace metadata exceeds decoder limit")
 			}
-			var fields []netTraceField
-			if valuesReader.Len() > 0 {
-				fields, err = readNetTraceFields(valuesReader, 0)
-				if err != nil {
-					return nil, err
-				}
-			}
-			if valuesReader.Len() != 0 {
-				return nil, errors.New("unsupported NetTrace metadata extension")
+			fields, err := readNetTraceMetadataFields(valuesReader)
+			if err != nil {
+				return nil, err
 			}
 			if d.metadata == nil {
 				d.metadata = make(map[uint32]netTraceMetadata)
@@ -138,7 +165,45 @@ func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]runti
 		if err := d.checkSequence(event.CaptureThreadID, event.SequenceNumber, true); err != nil {
 			return nil, err
 		}
-		if definition.Header.ProviderName != "System.Runtime" || definition.Header.EventName != "EventCounters" {
+		// Ignored events can also establish a timestamp watermark for GC events.
+		if event.Sorted {
+			ordered, err := d.gcOrder.releaseBefore(event.Timestamp)
+			if err != nil {
+				return nil, err
+			}
+			for i := range ordered {
+				events = append(events, netTraceRuntimeEvent{gc: &ordered[i]})
+			}
+		}
+		gc, err := decodeCLRGCEvent(definition.Header, event, valuesReader, d.pointerSize)
+		if err != nil {
+			return nil, err
+		}
+		if gc != nil {
+			if err := d.gcOrder.add(*gc); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		eventName := definition.Header.EventName
+		isException := isCLRExceptionThrown(definition.Header)
+		isMeter := d.metricsSessionID != "" && definition.Header.ProviderName == "System.Diagnostics.Metrics" &&
+			(eventName == "CounterRateValuePublished" || eventName == "TimeSeriesLimitReached" || eventName == "Error" || eventName == "MultipleSessionsNotSupportedError")
+		isCounter := definition.Header.ProviderName == "System.Runtime" &&
+			(eventName == "EventCounters" || eventName == "ProcessorCount")
+		if !isException && !isMeter && !isCounter {
+			continue
+		}
+		if isException {
+			typeName, err := decodeCLRExceptionType(valuesReader, d.pointerSize)
+			if err != nil {
+				return nil, err
+			}
+			typeName = shortCLRExceptionType(typeName)
+			if typeName == "" {
+				return nil, errors.New("CLR exception type normalizes to an empty name")
+			}
+			events = append(events, netTraceRuntimeEvent{exceptionType: typeName, exceptionCount: 1})
 			continue
 		}
 		values, err := readNetTraceValues(valuesReader, definition.Fields)
@@ -146,18 +211,33 @@ func (d *netTraceDecoder) decodeEventBlock(name string, payload []byte) ([]runti
 			return nil, err
 		}
 		if valuesReader.Len() != 0 {
-			return nil, errors.New("trailing bytes in NetTrace counter payload")
+			return nil, errors.New("trailing bytes in NetTrace event payload")
 		}
-		counter, err := decodeRuntimeCounter(values)
+		if isMeter {
+			update, err := decodeExceptionMetric(eventName, values, d.metricsSessionID)
+			if err != nil {
+				return nil, err
+			}
+			if update.exceptionType != "" || update.exceptionWarning != "" {
+				events = append(events, update)
+			}
+			continue
+		}
+		var counter runtimeCounter
+		if eventName == "ProcessorCount" {
+			counter, err = decodeProcessorCount(values)
+		} else {
+			counter, err = decodeRuntimeCounter(values)
+		}
 		if err != nil {
 			return nil, err
 		}
 		if counter.Name == "" {
 			continue
 		}
-		counters = append(counters, counter)
+		events = append(events, netTraceRuntimeEvent{counter: counter})
 	}
-	return counters, nil
+	return events, nil
 }
 
 // checkSequence rejects dropped events before their counter deltas are used.

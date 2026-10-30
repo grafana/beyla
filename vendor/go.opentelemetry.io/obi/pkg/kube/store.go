@@ -14,6 +14,8 @@ import (
 	"text/template"
 	"time"
 
+	"k8s.io/apimachinery/pkg/labels"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
@@ -48,6 +50,14 @@ type qualifiedName struct {
 
 func qName(om *informer.ObjectMeta) qualifiedName {
 	return qualifiedName{name: om.Name, namespace: om.Namespace, kind: om.Kind}
+}
+
+// keepsIP reports whether current keeps an IP that other also reports. A finished Pod still reports its IP,
+// which the CNI may already have given to a running Pod.
+func keepsIP(current, other *informer.ObjectMeta) bool {
+	return qName(current) != qName(other) &&
+		current.Pod != nil && !current.Pod.Finished &&
+		other.Pod != nil && other.Pod.Finished
 }
 
 // Deprecated: MetaSourceLabels allow overriding some metadata from kubernetes labels,
@@ -309,6 +319,9 @@ func (s *Store) unlockedAddObjectMeta(meta *informer.ObjectMeta) {
 	s.objectMetaByQName[qn] = cmeta
 
 	for _, ip := range meta.Ips {
+		if current, ok := s.objectMetaByIP[ip]; ok && keepsIP(current.Meta, meta) {
+			continue
+		}
 		s.objectMetaByIP[ip] = cmeta
 	}
 
@@ -352,7 +365,10 @@ func (s *Store) deleteObjectMeta(meta *informer.ObjectMeta) {
 func (s *Store) unlockedDeleteObjectMeta(meta *informer.ObjectMeta) {
 	delete(s.objectMetaByQName, qName(meta))
 	for _, ip := range meta.Ips {
-		delete(s.objectMetaByIP, ip)
+		// the IP may belong to another object by now, e.g. a Pod that reused the IP of a finished one
+		if current, ok := s.objectMetaByIP[ip]; ok && qName(current.Meta) == qName(meta) {
+			delete(s.objectMetaByIP, ip)
+		}
 	}
 	if meta.Pod != nil {
 		oID := fetchOwnerID(meta)
@@ -524,9 +540,11 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, containerNa
 	// ownerName can be the top Owner name, or om.Name in case it's a pod without owner
 	serviceName := om.Name
 	serviceNamespace := om.Namespace
+	podMeta := s.serviceMetadata(om)
+	containers := s.containersFor(om, podMeta)
 	// OTEL_SERVICE_NAME and OTEL_SERVICE_NAMESPACE variables take precedence over user-configured annotations
 	// and labels
-	if envName, ok := s.serviceNameFromEnv(om, containerName); ok {
+	if envName, ok := s.serviceNameFromEnv(containers, containerName); ok {
 		serviceName = envName
 	} else if s.serviceNameTemplate != nil {
 		// defining a serviceNameTemplate disables the resolution via annotation + label (this can be implemented in the template)
@@ -551,7 +569,7 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, containerNa
 			}
 		}
 
-	} else if nameFromMeta := s.valueFromMetadata(om,
+	} else if nameFromMeta := s.valueFromMetadata(podMeta,
 		ServiceNameAnnotation,
 		s.resourceLabels["service.name"],
 	); nameFromMeta != "" {
@@ -559,9 +577,9 @@ func (s *Store) serviceNameNamespaceOwnerID(om *informer.ObjectMeta, containerNa
 	} else if own := kube.TopOwner(om.Pod); own != nil {
 		serviceName = own.Name
 	}
-	if envName, ok := s.serviceNamespaceFromEnv(om, containerName); ok {
+	if envName, ok := s.serviceNamespaceFromEnv(containers, containerName); ok {
 		serviceNamespace = envName
-	} else if nsFromMeta := s.valueFromMetadata(s.namespaceMeta(om),
+	} else if nsFromMeta := s.valueFromMetadata(podMeta,
 		ServiceNamespaceAnnotation,
 		s.resourceLabels["service.namespace"],
 	); nsFromMeta != "" {
@@ -599,15 +617,14 @@ func isValidServiceName(name string) bool {
 	return name != "" && !strings.HasPrefix(name, "$(")
 }
 
-// if the object is not a pod, we would need to dig into the internal owner:containers store
-func (s *Store) containersFor(om *informer.ObjectMeta) iter.Seq[*informer.ContainerInfo] {
-	if om.Pod != nil {
-		return slices.Values(om.Pod.Containers)
+func (s *Store) containersFor(om, podMeta *informer.ObjectMeta) iter.Seq[*informer.ContainerInfo] {
+	if om.Pod == nil && len(om.Selector) == 0 {
+		return gomaps.Values(s.containersByOwner[ownerID(om.Namespace, om.Name)])
 	}
-	return gomaps.Values(s.containersByOwner[ownerID(om.Namespace, om.Name)])
+	return slices.Values(podMeta.GetPod().GetContainers())
 }
 
-func (s *Store) serviceNameFromEnv(om *informer.ObjectMeta, containerName string) (string, bool) {
+func (s *Store) serviceNameFromEnv(containers iter.Seq[*informer.ContainerInfo], containerName string) (string, bool) {
 	// for eBPF application data, we know the container name.
 	// However, when we only know the IP address (e.g. when we are checking the Peer address), we still
 	// need to override the service name from the environment variables; otherwise service graph metrics
@@ -617,7 +634,7 @@ func (s *Store) serviceNameFromEnv(om *informer.ObjectMeta, containerName string
 	// There is a known limitation with this approach: if a pod has multiple containers defining
 	// OTEL_SERVICE_NAME with different values, we might get the wrong service name.
 	// However, this looks as an edge case that shouldn't happen in practice.
-	for c := range s.containersFor(om) {
+	for c := range containers {
 		if containerName == "" || c.Name == containerName {
 			if serviceName, ok := c.Env[meta.EnvServiceName]; ok {
 				return serviceName, isValidServiceName(serviceName)
@@ -630,9 +647,9 @@ func (s *Store) serviceNameFromEnv(om *informer.ObjectMeta, containerName string
 	return "", false
 }
 
-func (s *Store) serviceNamespaceFromEnv(om *informer.ObjectMeta, containerName string) (string, bool) {
+func (s *Store) serviceNamespaceFromEnv(containers iter.Seq[*informer.ContainerInfo], containerName string) (string, bool) {
 	// when containerName is empty, we will follow the same assumption as serviceNameFromEnv
-	for c := range s.containersFor(om) {
+	for c := range containers {
 		if containerName == "" || c.Name == containerName {
 			if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
 				return namespace, isValidServiceName(namespace)
@@ -707,14 +724,45 @@ func (s *Store) PodIPsForWorkloads(owners []WorkloadOwner) map[WorkloadOwner][]s
 	return out
 }
 
-func (s *Store) namespaceMeta(om *informer.ObjectMeta) *informer.ObjectMeta {
+func (s *Store) serviceMetadata(om *informer.ObjectMeta) *informer.ObjectMeta {
 	if om == nil || om.Pod != nil {
 		return om
 	}
-	if ownerPod := s.ownerPodMeta(om); ownerPod != nil {
-		return ownerPod
+	if pod := s.podMetadataForObject(om); pod != nil {
+		return pod
 	}
 	return om
+}
+
+func (s *Store) podMetadataForObject(om *informer.ObjectMeta) *informer.ObjectMeta {
+	if len(om.Selector) > 0 {
+		return s.selectedPodMeta(om)
+	}
+	return s.ownerPodMeta(om)
+}
+
+func (s *Store) selectedPodMeta(om *informer.ObjectMeta) *informer.ObjectMeta {
+	selector := labels.SelectorFromValidatedSet(om.Selector)
+	var fallback *informer.ObjectMeta
+
+	for _, cmeta := range s.objectMetaByQName {
+		pod := cmeta.Meta
+		if pod == nil || pod.Pod == nil || pod.Namespace != om.Namespace {
+			continue
+		}
+		if !selector.Matches(labels.Set(pod.Labels)) {
+			continue
+		}
+		// Prefer a Pod whose environment overrides are available.
+		if len(pod.Pod.Containers) > 0 {
+			return pod
+		}
+		// Keep annotation and label metadata available while containers arrive.
+		if fallback == nil {
+			fallback = pod
+		}
+	}
+	return fallback
 }
 
 // ownerPodMeta returns any pod metadata associated with the given non-pod object.

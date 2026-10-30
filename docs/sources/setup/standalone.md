@@ -3,7 +3,7 @@ title: Run Beyla as a standalone process
 menuTitle: Standalone
 description: Learn how to setup and run Beyla as a standalone Linux process.
 Draft: true
-weight: 1
+weight: 100
 keywords:
   - Beyla
   - eBPF

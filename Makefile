@@ -149,7 +149,9 @@ install-hooks:
 		echo "Pre-commit hook installed."; \
 	fi
 
-$(BPF2GO): $(TOOLS_MOD)
+# An explicitly supplied bpf2go (for example the generator image's binary) is
+# managed by its caller. Don't try to overwrite it when local manifests are newer.
+$(BPF2GO): $(if $(filter $(TOOLS_DIR)/bpf2go,$(BPF2GO)),$(TOOLS_MOD))
 	$(call go-install-tool,$@,github.com/cilium/ebpf/cmd/bpf2go)
 
 $(GOLANGCI_LINT): $(TOOLS_MOD)
@@ -218,11 +220,26 @@ lint: prereqs checkfmt
 generate: obi-submodule
 	@echo "### Generating files..."
 	@cd $(OBI_MODULE) && make generate
+	@$(MAKE) generate-beyla
+
+# Beyla-owned BPF programs use OBI's headers, but never write into OBI or vendor.
+.PHONY: generate-beyla
+generate-beyla: export BPF_CLANG := $(CLANG)
+generate-beyla: export BPF_CFLAGS := $(CFLAGS)
+generate-beyla: export BPF2GO := $(BPF2GO)
+generate-beyla: export OBI_BPF_INCLUDE := $(abspath $(OBI_MODULE))/bpf
+generate-beyla: $(BPF2GO)
+	GOOS=linux go generate ./pkg/internal/ebpf/surveywatcher
 
 .PHONY: docker-generate
 docker-generate: obi-submodule
 	@echo "### Generating files (submodule:  $(OBI_MODULE))"
 	@cd $(OBI_MODULE) && make docker-generate
+	$(OCI_BIN) run --rm -u "$$(id -u):$$(id -g)" \
+		-v "$(PROJECT_DIR):/src:z" -w /src -e GOCACHE=/tmp/go-build \
+		--entrypoint /bin/sh $(GEN_IMG) -c \
+		'for llvm_bin in /usr/lib/llvm*/bin; do PATH="$$llvm_bin:$$PATH"; done; \
+		export PATH; make generate-beyla BPF2GO=/go/bin/bpf2go'
 
 .PHONY: copy-obi-vendor
 copy-obi-vendor: vendor-obi-tests
@@ -482,7 +499,7 @@ k8s-integration-test-matrix-json:
 
 .PHONY: oats-integration-test-matrix-json
 oats-integration-test-matrix-json:
-	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats
+	@./scripts/generate-dir-matrix.sh internal/testgenerated/oats /harness/
 
 .PHONY: beyla-integration-test-matrix-json
 beyla-integration-test-matrix-json:
@@ -586,6 +603,14 @@ oats-test-amqp: oats-prereq
 	mkdir -p internal/testgenerated/oats/amqp/$(TEST_OUTPUT)/run
 	cd internal/testgenerated/oats/amqp && TESTCASE_TIMEOUT=5m TESTCASE_BASE_PATH=./yaml $(GINKGO) -v -r
 
+# The shared OATS harness is a library module (imported by the suite modules via
+# ../harness), not an OATS suite: it has plain Go unit tests and needs no Ginkgo,
+# Docker or vendored OBI. It is excluded from the OATS shard matrix on purpose and
+# runs in its own fast CI job. Mirrors OBI's "OATS harness unit tests" job.
+.PHONY: oats-test-harness
+oats-test-harness: generate-obi-tests
+	go test -C internal/testgenerated/oats/harness -race ./...
+
 .PHONY: oats-test
 oats-test: oats-test-sql oats-test-mongo oats-test-redis oats-test-kafka oats-test-http oats-test-memcached oats-test-ai oats-test-nats oats-test-amqp
 	$(MAKE) itest-coverage-data
@@ -609,7 +634,11 @@ check-licenses: update-licenses
 	fi
 
 .PHONY: artifact
-artifact: vendor-obi compile
+# Keep these steps sequential (even under `make -j`): vendor-obi may refresh
+# the embedded package, so build the Java agent before compiling the binary.
+artifact: vendor-obi
+	$(MAKE) java-build
+	$(MAKE) compile
 	@echo "### Packing generated artifact"
 	cp LICENSE ./bin
 	cp NOTICE ./bin

@@ -629,6 +629,33 @@ uncomment_bpfel_in_gitignore() {
     rm -f "${gitignore}.bak"
 }
 
+remove_tracked_beyla_bpf_artifacts() {
+    local repo_dir="$1"
+    local path
+
+    # Older release branches may already track generated Beyla BPF files.
+    # Remove them from the index after `git add -A`, not the worktree: the
+    # regenerated working copies are still needed to build.
+    while IFS= read -r -d '' path; do
+        case "$path" in
+            *_bpfel.*) run_write_cmd git -C "$repo_dir" rm --cached -f -- "$path" ;;
+        esac
+    done < <(git -C "$repo_dir" ls-files -z)
+}
+
+remove_beyla_java_agent_from_index() {
+    local repo_dir="$1"
+    local path="vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar"
+
+    # The Java agent is generated from the release branch at binary-publish
+    # time, not committed as a Beyla source-tree artifact. Run after git add so
+    # the refreshed jar (whether previously tracked or newly generated) cannot
+    # be included in the release-train commit. Keep its working copy intact.
+    if git -C "$repo_dir" ls-files --error-unmatch "$path" >/dev/null 2>&1; then
+        run_write_cmd git -C "$repo_dir" rm --cached -f -- "$path"
+    fi
+}
+
 prepare_obi_branch() {
     local version="$1"
     local release_branch="$2"
@@ -692,12 +719,17 @@ prepare_beyla_branch() {
         log_info "No Beyla submodule pointer change to commit."
     fi
 
-    uncomment_bpfel_in_gitignore "$BEYLA_DIR"
-
+    # Keep generated Beyla BPF objects ignored on release branches. `make
+    # vendor-obi` still updates vendored OBI and generates build inputs. Alloy
+    # downloads published Beyla binaries, so neither these BPF files nor the
+    # Java agent need to be committed by Beyla: the binary release build embeds
+    # a freshly built Java agent instead.
     run_write_cmd make -C "$BEYLA_DIR" vendor-obi
-    run_write_cmd make -C "$BEYLA_DIR" java-build
-
     run_write_cmd git -C "$BEYLA_DIR" add -A
+    # Do this after add so old release branches without active ignore rules
+    # cannot accidentally re-stage the generated files.
+    remove_tracked_beyla_bpf_artifacts "$BEYLA_DIR"
+    remove_beyla_java_agent_from_index "$BEYLA_DIR"
     if ! git -C "$BEYLA_DIR" diff --cached --quiet; then
         run_write_cmd git -C "$BEYLA_DIR" commit -m "Release ${version} artifacts"
     else

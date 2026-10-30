@@ -185,12 +185,12 @@ func newCommonTracersGroup(cfg *obi.Config, metrics imetrics.Reporter, pidFilter
 
 	// Enables tpinjector which handles context propagation via both HTTP headers (sk_msg) and TCP options (BPF_SOCK_OPS)
 	if cfg.EBPF.ContextPropagation.HasHeaders() || cfg.EBPF.ContextPropagation.HasTCP() {
-		tracers = append(tracers, tpinjector.New(cfg))
+		tracers = append(tracers, tpinjector.New(cfg, pidFilter))
 	}
 
 	// Enables log enricher which handles trace-log correlation
 	if cfg.EBPF.LogEnricher.Enabled() {
-		logEnricher := logenricher.New(cfg)
+		logEnricher := logenricher.New(cfg, metrics)
 		if logEnricher != nil {
 			tracers = append(tracers, logEnricher)
 		}

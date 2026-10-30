@@ -2,7 +2,7 @@
 title: "Quickstart: instrument a Go service with Beyla"
 menuTitle: Go quickstart
 description: Learn how to quickly set up and run Beyla to instrument a Go service
-weight: 2
+weight: 200
 keywords:
   - Beyla
   - eBPF

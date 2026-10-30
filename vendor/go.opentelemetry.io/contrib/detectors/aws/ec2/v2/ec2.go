@@ -10,17 +10,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	aws "github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/smithy-go/logging"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 )
-
-var errClient = errors.New("EC2 Client Error")
 
 var (
 	loadDefaultConfig = awsconfig.LoadDefaultConfig
@@ -37,7 +37,10 @@ type client interface {
 
 // resource detector collects resource information from EC2 environment.
 type resourceDetector struct {
-	c client
+	cfg config
+
+	mu sync.Mutex
+	c  client
 }
 
 // compile time assertion that imds.Client implements client.
@@ -48,19 +51,60 @@ var _ resource.Detector = (*resourceDetector)(nil)
 
 // NewResourceDetector returns a resource detector that will detect AWS EC2 resources.
 func NewResourceDetector() resource.Detector {
-	return &resourceDetector{c: newClient()}
+	return &resourceDetector{}
 }
 
-func (detector *resourceDetector) getClient() client {
-	return detector.c
+// NewResourceDetectorWithOptions returns a resource detector that will detect
+// AWS EC2 resources. The options configure the AWS SDK client.
+func NewResourceDetectorWithOptions(opts ...Option) resource.Detector {
+	var c config
+	for _, opt := range opts {
+		opt.apply(&c)
+	}
+	return &resourceDetector{cfg: c}
+}
+
+// WithAWSLogger passes the AWS SDK [logging.Logger] to the AWS SDK client.
+// Note this is the AWS SDK's logger, not an OpenTelemetry logger.
+func WithAWSLogger(logger logging.Logger) Option {
+	return optionFunc(func(c *config) {
+		c.logger = logger
+	})
+}
+
+// Option configures an AWS SDK client.
+type Option interface {
+	apply(*config)
+}
+
+type optionFunc func(*config)
+
+func (f optionFunc) apply(c *config) { f(c) }
+
+type config struct {
+	logger logging.Logger
+}
+
+func (detector *resourceDetector) getClient(ctx context.Context) (client, error) {
+	detector.mu.Lock()
+	defer detector.mu.Unlock()
+	if detector.c != nil {
+		return detector.c, nil
+	}
+
+	c, err := newClient(ctx, detector.cfg)
+	if err != nil {
+		return nil, err
+	}
+	detector.c = c
+	return c, nil
 }
 
 // Detect detects associated resources when running in AWS environment.
 func (detector *resourceDetector) Detect(ctx context.Context) (*resource.Resource, error) {
-	// Return nil if not able to establish valid client
-	client := detector.getClient()
-	if client == nil {
-		return nil, errClient
+	client, err := detector.getClient(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Available method removed in aws-sdk-go-v2, return empty resource if client returns error
@@ -92,13 +136,18 @@ func (detector *resourceDetector) Detect(ctx context.Context) (*resource.Resourc
 	return resource.NewWithAttributes(semconv.SchemaURL, attributes...), err
 }
 
-func newClient() client {
-	cfg, err := loadDefaultConfig(context.Background())
-	if err != nil {
-		return nil
+func newClient(ctx context.Context, c config) (client, error) {
+	var optFns []func(*awsconfig.LoadOptions) error
+	if c.logger != nil {
+		optFns = append(optFns, awsconfig.WithLogger(c.logger))
 	}
 
-	return newIMDSClient(cfg)
+	cfg, err := loadDefaultConfig(ctx, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	return newIMDSClient(cfg), nil
 }
 
 type metadata struct {

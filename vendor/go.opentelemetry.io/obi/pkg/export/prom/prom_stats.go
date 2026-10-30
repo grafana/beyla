@@ -67,9 +67,6 @@ func StatsPrometheusEndpoint(
 		if err != nil {
 			return nil, err
 		}
-		if cfg.Config.Registry != nil {
-			return reporter.collectMetrics, nil
-		}
 		return reporter.reportMetrics, nil
 	}
 }
@@ -176,11 +173,7 @@ func newStatsReporter(
 		register = append(register, mr.tcpSuccessfulConnections)
 	}
 
-	if cfg.Config.Registry != nil {
-		cfg.Config.Registry.MustRegister(register...)
-	} else {
-		mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
-	}
+	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
 
 	mr.input = input.Subscribe(msg.SubscriberName("prom.StatsReporterInput"))
 	return mr, nil

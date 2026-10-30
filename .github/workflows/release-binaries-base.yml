@@ -22,12 +22,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: recursive
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           cache: false # Disable caching to avoid extraction conflicts
           go-version-file: "go.mod"
-      - name: Build Go release for linux/${{inputs.arch}}
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build Java agent and Go release for linux/${{inputs.arch}}
         run: make artifact
         env:
           GOOS: linux

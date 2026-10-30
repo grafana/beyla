@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,9 +20,8 @@ import (
 	"github.com/invopop/jsonschema"
 	"gopkg.in/yaml.v3"
 
-	"go.opentelemetry.io/collector/confmap"
-
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
 	"go.opentelemetry.io/obi/pkg/export"
@@ -173,6 +173,7 @@ var DefaultConfig = Config{
 					EndpointPatterns: []string{
 						"/query/service",
 					},
+					PreparedStatementsCacheSize: 1024,
 				},
 				GenAI: config.GenAIConfig{
 					OpenAI: config.OpenAIConfig{
@@ -226,6 +227,10 @@ var DefaultConfig = Config{
 		BPFFSPath:      "/sys/fs/bpf/",
 		InstrumentCuda: config.CudaModeAuto,
 	},
+	CloudMetadata: transform.CloudMetadataConfig{
+		RefreshInterval: 30 * time.Second,
+		Route53:         transform.Route53MetadataConfig{RefreshInterval: cloud.DefaultRoute53RefreshInterval},
+	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources: []transform.Source{
 			transform.SourceK8s,
@@ -233,9 +238,6 @@ var DefaultConfig = Config{
 		},
 		CacheLen: 1024,
 		CacheTTL: 5 * time.Minute,
-		ECS: transform.ECSNameResolverConfig{
-			RefreshInterval: 30 * time.Second,
-		},
 	},
 	Metrics: perapp.GlobalMetricsConfig{
 		Features: export.FeatureApplicationRED | export.FeatureApplicationSizes,
@@ -255,7 +257,8 @@ var DefaultConfig = Config{
 		Instrumentations: []instrumentations.Instrumentation{
 			instrumentations.InstrumentationALL,
 		},
-		TTL: defaultMetricsTTL,
+		TTL:               defaultMetricsTTL,
+		ConnectionInfoTTL: export.DefaultConnectionInfoTTL,
 	},
 	Traces: otelcfg.TracesConfig{
 		Protocol:          otelcfg.ProtocolUnset,
@@ -289,6 +292,7 @@ var DefaultConfig = Config{
 			instrumentations.InstrumentationALL,
 		},
 		TTL:                         defaultMetricsTTL,
+		ConnectionInfoTTL:           export.DefaultConnectionInfoTTL,
 		SpanMetricsServiceCacheSize: 10000,
 	},
 	TracePrinter: debug.TracePrinterDisabled,
@@ -515,12 +519,11 @@ type HealthCheckConfig struct {
 	UnixSocketPath string `yaml:"unix_socket_path" env:"OTEL_EBPF_HEALTH_CHECK_UNIX_SOCKET_PATH"`
 }
 
-func (c *Config) Unmarshal(component *confmap.Conf) error {
-	if component == nil {
+// UnmarshalMap decodes an OBI configuration from a map of YAML field names.
+func (c *Config) UnmarshalMap(raw map[string]any) error {
+	if raw == nil {
 		return nil
 	}
-
-	raw := component.ToStringMap()
 
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		TagName:          "yaml",
@@ -541,7 +544,11 @@ func (c *Config) Unmarshal(component *confmap.Conf) error {
 		return err
 	}
 
-	return dec.Decode(raw)
+	if err := dec.Decode(raw); err != nil {
+		return err
+	}
+	c.normalizeV1ResolverSources()
+	return nil
 }
 
 func cidrDefinitionsHookFunc() mapstructure.DecodeHookFunc {
@@ -810,6 +817,17 @@ func (c *Config) validate(context validationContext) error {
 
 	if err := validate.Struct(c); err != nil {
 		return ConfigError(err.Error())
+	}
+
+	if c.NameResolver != nil {
+		for _, source := range c.NameResolver.Sources {
+			if strings.EqualFold(string(source), string(transform.SourceRoute53)) {
+				if err := c.CloudMetadata.Route53.Validate(); err != nil {
+					return ConfigError(err.Error())
+				}
+				break
+			}
+		}
 	}
 
 	if err := c.EBPF.LogEnricher.Validate(); err != nil {
@@ -1108,9 +1126,23 @@ func LoadConfig(file io.Reader) (*Config, error) {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
 
+	cfg.normalizeV1ResolverSources()
 	cfg.normalize()
 
 	return &cfg, nil
+}
+
+func (c *Config) normalizeV1ResolverSources() {
+	if c.NameResolver == nil {
+		return
+	}
+	// Legacy configurations retain the pre-GCE set of resolver sources.
+	resolver := *c.NameResolver
+	resolver.Sources = slices.DeleteFunc(slices.Clone(resolver.Sources), func(source transform.Source) bool {
+		return strings.EqualFold(string(source), string(transform.SourceGCE)) ||
+			strings.EqualFold(string(source), string(transform.SourceAzure))
+	})
+	c.NameResolver = &resolver
 }
 
 func registerCustomValidations(validate *validator.Validate, customValidations CustomValidations) error {

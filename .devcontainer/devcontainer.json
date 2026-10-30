@@ -1,0 +1,42 @@
+{
+    "name": "Beyla development",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "."
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind",
+    "workspaceFolder": "${localWorkspaceFolder}",
+    "mounts": [
+        "source=${localEnv:DOCKER_SOCKET_PATH:/var/run/docker.sock},target=/var/run/docker.sock,type=bind"
+    ],
+    "remoteUser": "vscode",
+    "remoteEnv": {
+        "GOPATH": "/home/vscode/go",
+        "GOMODCACHE": "/home/vscode/go/pkg/mod",
+        "GOCACHE": "/home/vscode/.cache/go-build"
+    },
+    "updateRemoteUserUID": true,
+    "postStartCommand": ["sudo", "/usr/local/bin/devcontainer-setup-docker"],
+    "waitFor": "postStartCommand",
+    "postCreateCommand": [
+        "git",
+        "config",
+        "--global",
+        "--add",
+        "safe.directory",
+        "${containerWorkspaceFolder}"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "golang.go"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        },
+        "jetbrains": {
+            "backend": "IntelliJ"
+        }
+    }
+}

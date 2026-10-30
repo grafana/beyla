@@ -6,7 +6,6 @@ package otelcfg // import "go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 import (
 	"context"
 
-	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/otel/attribute"
@@ -15,44 +14,43 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-// ConsumerExporter is an sdkmetric.Exporter that sends metrics to a collector consumer.
-// It converts SDK metric data to collector pmetric format.
-type ConsumerExporter struct {
-	consumer consumer.Metrics
+// OTLPConsumerExporter converts SDK metrics to pdata for an in-process consumer.
+type OTLPConsumerExporter struct {
+	export MetricsExportFunc
 }
 
-// NewConsumerExporter creates a new ConsumerExporter that wraps the given consumer.
-func NewConsumerExporter(c consumer.Metrics) *ConsumerExporter {
-	return &ConsumerExporter{consumer: c}
+// NewOTLPConsumerExporter creates an exporter for an in-process consumer.
+func NewOTLPConsumerExporter(export MetricsExportFunc) *OTLPConsumerExporter {
+	return &OTLPConsumerExporter{export: export}
 }
 
 // Temporality returns the temporality to use for the given instrument kind.
-func (e *ConsumerExporter) Temporality(_ sdkmetric.InstrumentKind) metricdata.Temporality {
+func (e *OTLPConsumerExporter) Temporality(_ sdkmetric.InstrumentKind) metricdata.Temporality {
 	// Default to cumulative temporality for all instrument kinds
 	return metricdata.CumulativeTemporality
 }
 
 // Aggregation returns the aggregation to use for the given instrument kind.
-func (e *ConsumerExporter) Aggregation(kind sdkmetric.InstrumentKind) sdkmetric.Aggregation {
+func (e *OTLPConsumerExporter) Aggregation(kind sdkmetric.InstrumentKind) sdkmetric.Aggregation {
 	return sdkmetric.DefaultAggregationSelector(kind)
 }
 
 // Export converts SDK metrics to pmetric and sends to the consumer.
-func (e *ConsumerExporter) Export(ctx context.Context, rm *metricdata.ResourceMetrics) error {
-	if e.consumer == nil {
+func (e *OTLPConsumerExporter) Export(ctx context.Context, rm *metricdata.ResourceMetrics) error {
+	if e.export == nil {
 		return nil
 	}
 	pm := convertResourceMetrics(rm)
-	return e.consumer.ConsumeMetrics(ctx, pm)
+	return e.export(ctx, pm)
 }
 
 // ForceFlush is a no-op for this exporter.
-func (e *ConsumerExporter) ForceFlush(_ context.Context) error {
+func (e *OTLPConsumerExporter) ForceFlush(_ context.Context) error {
 	return nil
 }
 
 // Shutdown is a no-op for this exporter.
-func (e *ConsumerExporter) Shutdown(_ context.Context) error {
+func (e *OTLPConsumerExporter) Shutdown(_ context.Context) error {
 	return nil
 }
 
@@ -64,6 +62,7 @@ func convertResourceMetrics(rm *metricdata.ResourceMetrics) pmetric.Metrics {
 	}
 
 	prm := pm.ResourceMetrics().AppendEmpty()
+	prm.SetSchemaUrl(rm.Resource.SchemaURL())
 
 	// Convert resource attributes
 	convertResource(rm.Resource, prm.Resource())
@@ -73,6 +72,7 @@ func convertResourceMetrics(rm *metricdata.ResourceMetrics) pmetric.Metrics {
 		psm := prm.ScopeMetrics().AppendEmpty()
 		psm.Scope().SetName(sm.Scope.Name)
 		psm.Scope().SetVersion(sm.Scope.Version)
+		psm.SetSchemaUrl(sm.Scope.SchemaURL)
 
 		// Convert metrics
 		for _, m := range sm.Metrics {
@@ -367,5 +367,5 @@ func convertTemporality(t metricdata.Temporality) pmetric.AggregationTemporality
 	}
 }
 
-// Ensure ConsumerExporter implements sdkmetric.Exporter
-var _ sdkmetric.Exporter = (*ConsumerExporter)(nil)
+// Ensure OTLPConsumerExporter implements sdkmetric.Exporter
+var _ sdkmetric.Exporter = (*OTLPConsumerExporter)(nil)

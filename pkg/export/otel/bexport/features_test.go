@@ -28,6 +28,7 @@ func TestNoBitRangeCollision(t *testing.T) {
 				export.FeatureSpanOTel|
 				export.FeatureSpanSizes|
 				export.FeatureGraph|
+				export.FeatureConnectionInfo|
 				export.FeatureEBPF))
 }
 
@@ -120,4 +121,15 @@ func TestHostInfoFeatureRegistration(t *testing.T) {
 	for _, name := range []string{"all", "*"} {
 		assert.True(t, Has(mustLoadFeatures(t, name), FeatureHostInfo))
 	}
+}
+
+func TestConnectionInfoFeatureRegistration(t *testing.T) {
+	features := mustLoadFeatures(t, "application_service_graph_connection_info")
+	assert.Equal(t, export.FeatureConnectionInfo, features)
+	assert.True(t, features.ConnectionInfo())
+	assert.Equal(t, []string{"application_service_graph_connection_info"}, features.Names())
+
+	assert.False(t, export.Features(export.FeatureAll).ConnectionInfo(), "all must not enable connection info")
+	assert.False(t, export.AppO11yFeatures.ConnectionInfo(), "default application metrics must not enable connection info")
+	assert.False(t, mustLoadFeatures(t, "all").ConnectionInfo(), "the all feature must not enable connection info")
 }

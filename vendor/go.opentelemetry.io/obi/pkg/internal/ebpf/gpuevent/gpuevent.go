@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -24,7 +25,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type cuda_kernel_launch_t -type cuda_memcpy_t -type cuda_size_event_t -type cuda_call_event_t -type cuda_device_t -type cuda_device_event_t -target amd64,arm64 Bpf ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type cuda_kernel_launch_t -type cuda_memcpy_t -type cuda_size_event_t -type cuda_call_event_t -type cuda_device_t -type cuda_device_event_t -target $BPF_TARGETS Bpf ../../../../bpf/gpuevent/gpuevent.c -- -I../../../../bpf
 
 const (
 	EventTypeKernelLaunch      = 1  // EVENT_CUDA_KERNEL_LAUNCH
@@ -122,10 +123,14 @@ func (p *Tracer) constants() map[string]any {
 		filterPids = int32(0)
 	}
 
-	return map[string]any{
-		"filter_pids": filterPids,
-		"g_bpf_debug": p.cfg.EBPF.BpfDebug,
+	m := map[string]any{
+		"filter_pids":             filterPids,
+		"g_bpf_debug":             p.cfg.EBPF.BpfDebug,
+		"ringbuf_metrics_enabled": p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics),
 	}
+	maps.Copy(m, ebpfcommon.PIDFilterConstants())
+
+	return m
 }
 
 func (p *Tracer) RegisterOffsets(_ *exec.FileInfo, _ *goexec.Offsets) {}
@@ -159,7 +164,15 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 				Start: p.bpfObjects.ObiCudaLaunch,
 				End:   p.bpfObjects.ObiCudaLaunchRet,
 			}},
+			"cudaLaunchKernel_ptsz": {{
+				Start: p.bpfObjects.ObiCudaLaunch,
+				End:   p.bpfObjects.ObiCudaLaunchRet,
+			}},
 			"cudaGraphLaunch": {{
+				Start: p.bpfObjects.ObiGraphLaunch,
+				End:   p.bpfObjects.ObiGraphLaunchRet,
+			}},
+			"cudaGraphLaunch_ptsz": {{
 				Start: p.bpfObjects.ObiGraphLaunch,
 				End:   p.bpfObjects.ObiGraphLaunchRet,
 			}},
@@ -174,10 +187,19 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cudaMemcpy": {{
 				Start: p.bpfObjects.ObiCudaMemcpy,
 			}},
+			"cudaMemcpy_ptds": {{
+				Start: p.bpfObjects.ObiCudaMemcpy,
+			}},
 			"cudaMemcpyAsync": {{
 				Start: p.bpfObjects.ObiCudaMemcpy,
 			}},
+			"cudaMemcpyAsync_ptsz": {{
+				Start: p.bpfObjects.ObiCudaMemcpy,
+			}},
 			"cudaMemset": {{
+				Start: p.bpfObjects.ObiCudaMemset,
+			}},
+			"cudaMemset_ptds": {{
 				Start: p.bpfObjects.ObiCudaMemset,
 			}},
 			"cudaStreamCreate": {{
@@ -195,13 +217,22 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cudaEventRecord": {{
 				Start: p.bpfObjects.ObiCudaEventRecord,
 			}},
+			"cudaEventRecord_ptsz": {{
+				Start: p.bpfObjects.ObiCudaEventRecord,
+			}},
 			"cudaEventRecordWithFlags": {{
+				Start: p.bpfObjects.ObiCudaEventRecordWithFlags,
+			}},
+			"cudaEventRecordWithFlags_ptsz": {{
 				Start: p.bpfObjects.ObiCudaEventRecordWithFlags,
 			}},
 			"cudaEventSynchronize": {{
 				Start: p.bpfObjects.ObiCudaEventSynchronize,
 			}},
 			"cudaStreamSynchronize": {{
+				Start: p.bpfObjects.ObiCudaStreamSynchronize,
+			}},
+			"cudaStreamSynchronize_ptsz": {{
 				Start: p.bpfObjects.ObiCudaStreamSynchronize,
 			}},
 			"cudaDeviceSynchronize": {{
@@ -231,10 +262,19 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 			"cuLaunchKernel": {{
 				Start: p.bpfObjects.ObiCuLaunch,
 			}},
+			"cuLaunchKernel_ptsz": {{
+				Start: p.bpfObjects.ObiCuLaunch,
+			}},
 			"cuLaunchKernelEx": {{
 				Start: p.bpfObjects.ObiCuLaunchEx,
 			}},
+			"cuLaunchKernelEx_ptsz": {{
+				Start: p.bpfObjects.ObiCuLaunchEx,
+			}},
 			"cuGraphLaunch": {{
+				Start: p.bpfObjects.ObiCuGraphLaunch,
+			}},
+			"cuGraphLaunch_ptsz": {{
 				Start: p.bpfObjects.ObiCuGraphLaunch,
 			}},
 			"cuDeviceGetUuid": {{

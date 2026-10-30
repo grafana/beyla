@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -20,6 +21,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/otel"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -34,7 +36,9 @@ cloud_metadata:
   region: eu-west-1
 `))
 	require.NoError(t, err)
-	want := transform.CloudMetadataConfig{ClusterName: "test-cluster", Region: "eu-west-1"}
+	want := obi.DefaultConfig.CloudMetadata
+	want.ClusterName = "test-cluster"
+	want.Region = "eu-west-1"
 	assert.Equal(t, want, cfg.AsOBI().CloudMetadata)
 	assert.Equal(t, want, FromOBI(cfg.AsOBI()).CloudMetadata)
 }
@@ -48,11 +52,46 @@ func TestAsOBINameResolver(t *testing.T) {
 	})
 
 	t.Run("explicit sources are preserved", func(t *testing.T) {
-		config := &Config{NameResolver: &transform.NameResolverConfig{
+		config := &Config{NameResolver: &NameResolverConfig{
 			Sources: []transform.Source{transform.SourceDNS},
 		}}
 		assert.Equal(t, []transform.Source{transform.SourceDNS}, config.AsOBI().NameResolver.Sources)
 	})
+}
+
+func TestCloudMetadataConfigRoundTrip(t *testing.T) {
+	defaults := obi.DefaultConfig.CloudMetadata
+	overrides := defaults
+	overrides.ClusterName = "test-cluster"
+	overrides.Region = "test-region"
+
+	for _, tc := range []struct {
+		name string
+		yaml string
+		want transform.CloudMetadataConfig
+	}{
+		{name: "defaults", yaml: "{}", want: defaults},
+		{
+			name: "configured overrides",
+			yaml: `
+cloud_metadata:
+  cluster_name: test-cluster
+  region: test-region
+`,
+			want: overrides,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			require.NoError(t, yaml.Unmarshal([]byte(tc.yaml), cfg))
+
+			converted := cfg.AsOBI()
+			require.Equal(t, tc.want, converted.CloudMetadata)
+
+			restored := FromOBI(converted)
+			assert.Equal(t, tc.want, restored.AsOBI().CloudMetadata)
+		})
+	}
 }
 
 // TestOverrideOBIGlobalConfig_MetricNames pins the Beyla-renamed metric definitions. The

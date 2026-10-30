@@ -838,6 +838,16 @@
         "bedrock": {
           "$ref": "#/$defs/BedrockConfig"
         },
+        "cohere": {
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable Cohere native chat API payload extraction and parsing",
+              "default": false
+            }
+          },
+          "type": "object"
+        },
         "embedding": {
           "$ref": "#/$defs/EmbeddingProviderConfig"
         },

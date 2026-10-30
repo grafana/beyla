@@ -159,6 +159,7 @@ ebpf:
 | `gemini.enabled`<p>`BEYLA_HTTP_GEMINI_ENABLED`</p>                       | Enable Google AI Studio (Gemini) payload extraction and parsing.                                 | boolean | false   |
 | `qwen.enabled`<p>`BEYLA_HTTP_QWEN_ENABLED`</p>                           | Enable `Qwen` (`DashScope`) payload extraction and parsing.                                      | boolean | false   |
 | `bedrock.enabled`<p>`BEYLA_HTTP_BEDROCK_ENABLED`</p>                     | Enable AWS Bedrock payload extraction and parsing.                                               | boolean | false   |
+| `cohere.enabled`                                                        | Enable Cohere native chat API payload extraction and parsing.                                    | boolean | false   |
 | `mcp.enabled`<p>`BEYLA_HTTP_MCP_ENABLED`</p>                             | Enable Model Context Protocol (MCP) payload extraction and parsing.                              | boolean | false   |
 | `embedding.enabled`<p>`BEYLA_HTTP_GENAI_EMBEDDING_ENABLED`</p>           | Enable generic embedding provider (`Voyage AI`, `Cohere`, `Jina AI`) payload extraction and parsing. | boolean | false   |
 | `rerank.enabled`<p>`BEYLA_HTTP_RERANK_ENABLED`</p>                       | Enable `rerank` (`Cohere`, `Jina AI`, `Voyage AI`, etc.) payload extraction and parsing.          | boolean | false   |

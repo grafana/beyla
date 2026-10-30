@@ -53,10 +53,15 @@ With the default values, the chart configures Beyla to do the following:
 
 ## Configure Beyla
 
-You might want to override the default configuration of Beyla. For example, to export the metrics and/or spans
-as OpenTelemetry instead of Prometheus, or to restrict the number of services to instrument.
+You might want to override the default configuration of Beyla. For example, to export metrics and traces
+with OpenTelemetry, or to restrict the number of services to instrument.
 
 You can override the default [Beyla configuration options](../../configure/) with your own values.
+
+Helm merges the values you supply with the chart defaults.
+It merges maps key by key and replaces lists.
+To remove a chart default, set it to `null`.
+For example, the chart keeps exporting Prometheus metrics after you add an OpenTelemetry exporter, unless you set `prometheus_export: null` under `config.data`.
 
 For example, create a `helm-beyla.yml` file with a custom configuration:
 
@@ -72,8 +77,7 @@ config:
       unmatched: heuristic
 ```
 
-The `config.data` section contains a Beyla configuration file, documented in the
-[Beyla configuration options documentation](../../configure/options/).
+The `config.data` section contains a Beyla configuration file, documented in [Configure Beyla](../../configure/).
 
 Apply the file to a new or existing release:
 

@@ -65,7 +65,7 @@ Type: string
 Description: Controlled systemd service units to instrument
  Enter a comma-separated list of controlled service unit names (for example,
  demo.service). Only these services receive SDK injection. Do not select
- production services in this PoC.
+ production services.
 
 Template: beyla/open-ports
 Type: string

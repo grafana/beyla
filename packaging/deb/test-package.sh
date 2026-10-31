@@ -10,6 +10,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$PACKAGE_DIR" -p 'tes
 "$PACKAGE_DIR/test-maintainer-scripts.sh"
 bash -n "$PACKAGE_DIR/build-deb.sh"
 sh -n "$PACKAGE_DIR/config" "$PACKAGE_DIR/postinst" "$PACKAGE_DIR/postrm"
+sh -n "$PACKAGE_DIR/preinst"
 python3 - "$PACKAGE_DIR/configure.py" "$PACKAGE_DIR/validate-alloy.py" "$PACKAGE_DIR/test_configure.py" <<'PY'
 import pathlib
 import sys
@@ -34,8 +35,11 @@ deb="$tmp/out/beyla_1.2.3~rc.1_amd64.deb"
 grep -Fxq 'version=1.2.3~rc.1' "$tmp/github-output"
 test "$(dpkg-deb --field "$deb" Package)" = beyla
 test "$(dpkg-deb --field "$deb" Version)" = 1.2.3~rc.1
+dpkg-deb --field "$deb" Description | grep -q '^Experimental Beyla instrumentation package for Ubuntu$'
+! dpkg-deb --field "$deb" Description | grep -qi 'companion\|poc'
 dpkg --compare-versions "$(dpkg-deb --field "$deb" Version)" lt 1.2.3
 dpkg-deb --control "$deb" "$tmp/control"
+test -x "$tmp/control/preinst"
 grep -Fxq "Template: beyla/mode" "$tmp/control/templates"
 grep -Fxq "Template: beyla/fleet-enabled" "$tmp/control/templates"
 grep -Fxq "Default: false" "$tmp/control/templates"
@@ -45,22 +49,23 @@ grep -Fxq "Template: beyla/fleet-instance-id" "$tmp/control/templates"
 dpkg-deb --field "$deb" Depends | grep -q 'alloy'
 contents=$(dpkg-deb --contents "$deb")
 for path in \
-  opt/grafana/beyla-sdk/dist/injector/libotelinject.so \
-  opt/grafana/beyla-sdk/dist/agents/jvm/opentelemetry-javaagent.jar \
-  opt/grafana/beyla-sdk/dist/agents/dotnet/glibc/fixture \
-  opt/grafana/beyla-sdk/dist/agents/node.js/register.js \
-  opt/grafana/beyla-sdk/dist/agents/python/glibc/fixture \
-  opt/grafana/beyla-sdk/dist/agents/ruby/glibc/fixture \
-  usr/share/grafana-beyla-sdk/alloy-service-dropin.conf \
-  usr/share/grafana-beyla-sdk/config.alloy; do
+  opt/beyla/sdk/dist/injector/libotelinject.so \
+  opt/beyla/sdk/dist/agents/jvm/opentelemetry-javaagent.jar \
+  opt/beyla/sdk/dist/agents/dotnet/glibc/fixture \
+  opt/beyla/sdk/dist/agents/node.js/register.js \
+  opt/beyla/sdk/dist/agents/python/glibc/fixture \
+  opt/beyla/sdk/dist/agents/ruby/glibc/fixture \
+  usr/share/beyla/alloy-service-dropin.conf \
+  usr/share/beyla/config.alloy; do
   grep -Fq "$path" <<<"$contents"
 done
+! grep -qE 'grafana-beyla-sdk|grafana/beyla-sdk' <<<"$contents"
 dpkg-deb --extract "$deb" "$tmp/extracted"
-grep -Fxq 'jvm_auto_instrumentation_agent_path=/opt/grafana/beyla-sdk/dist/agents/jvm/opentelemetry-javaagent.jar' \
-  "$tmp/extracted/opt/grafana/beyla-sdk/dist/injector/otelinject.conf"
+grep -Fxq 'jvm_auto_instrumentation_agent_path=/opt/beyla/sdk/dist/agents/jvm/opentelemetry-javaagent.jar' \
+  "$tmp/extracted/opt/beyla/sdk/dist/injector/otelinject.conf"
 ! grep -q '/__otel_sdk_auto_instrumentation__' \
-  "$tmp/extracted/opt/grafana/beyla-sdk/dist/injector/otelinject.conf"
-grep -q '127.0.0.1:14318' "$tmp/extracted/usr/share/grafana-beyla-sdk/config.alloy"
+  "$tmp/extracted/opt/beyla/sdk/dist/injector/otelinject.conf"
+grep -q '127.0.0.1:14318' "$tmp/extracted/usr/share/beyla/config.alloy"
 echo "Package fixture tests passed (SDK payload binaries were synthetic)."
 
 if VERSION='not a version' OUTPUT_DIR="$tmp/invalid-version" "$PACKAGE_DIR/build-deb.sh" "$fixture" 2>/dev/null; then

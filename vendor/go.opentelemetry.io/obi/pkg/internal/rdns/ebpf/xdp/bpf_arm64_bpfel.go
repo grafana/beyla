@@ -24,6 +24,7 @@ const (
 	BpfProgParseDnsResponse          = "parse_dns_response"
 	BpfVarG_bpfDebug                 = "g_bpf_debug"
 	BpfVarG_bpfHeaderPropagation     = "g_bpf_header_propagation"
+	BpfVarG_bpfJavaHttp1Enabled      = "g_bpf_java_http1_enabled"
 	BpfVarG_bpfLoopEnabled           = "g_bpf_loop_enabled"
 	BpfVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
 	BpfVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
@@ -93,6 +94,7 @@ type BpfMapSpecs struct {
 type BpfVariableSpecs struct {
 	G_bpfDebug                 *ebpf.VariableSpec `ebpf:"g_bpf_debug"`
 	G_bpfHeaderPropagation     *ebpf.VariableSpec `ebpf:"g_bpf_header_propagation"`
+	G_bpfJavaHttp1Enabled      *ebpf.VariableSpec `ebpf:"g_bpf_java_http1_enabled"`
 	G_bpfLoopEnabled           *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.VariableSpec `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
@@ -141,6 +143,7 @@ func (m *BpfMaps) Close() error {
 type BpfVariables struct {
 	G_bpfDebug                 *ebpf.Variable `ebpf:"g_bpf_debug"`
 	G_bpfHeaderPropagation     *ebpf.Variable `ebpf:"g_bpf_header_propagation"`
+	G_bpfJavaHttp1Enabled      *ebpf.Variable `ebpf:"g_bpf_java_http1_enabled"`
 	G_bpfLoopEnabled           *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.Variable `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`

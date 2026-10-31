@@ -5,6 +5,7 @@ package cloud // import "go.opentelemetry.io/obi/pkg/cloud"
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"maps"
 	"net/netip"
@@ -14,6 +15,9 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
+
+// ErrMetadataUnavailable stops polling a source until the inventory is recreated.
+var ErrMetadataUnavailable = errors.New("cloud metadata unavailable")
 
 // scheduledRefresher controls polling independently of the shared cloud interval.
 type scheduledRefresher interface {
@@ -45,21 +49,23 @@ type ContainerChanges struct {
 }
 
 type Inventory struct {
-	changes    *msg.Queue[ContainerChanges]
-	log        *slog.Logger
-	refreshers []MetadataRefresher
-	mu         sync.RWMutex
-	snapshot   MetadataSnapshot
-	sources    []MetadataSnapshot
-	publishMu  sync.Mutex
+	changes     *msg.Queue[ContainerChanges]
+	log         *slog.Logger
+	refreshers  []MetadataRefresher
+	mu          sync.RWMutex
+	snapshot    MetadataSnapshot
+	sources     []MetadataSnapshot
+	unavailable []bool
+	publishMu   sync.Mutex
 }
 
 func NewInventory(refreshers []MetadataRefresher) *Inventory {
 	return &Inventory{
-		changes:    msg.NewQueue[ContainerChanges](),
-		log:        slog.With("component", "cloud.Inventory"),
-		refreshers: refreshers,
-		sources:    make([]MetadataSnapshot, len(refreshers)),
+		changes:     msg.NewQueue[ContainerChanges](),
+		log:         slog.With("component", "cloud.Inventory"),
+		refreshers:  refreshers,
+		sources:     make([]MetadataSnapshot, len(refreshers)),
+		unavailable: make([]bool, len(refreshers)),
 	}
 }
 
@@ -97,12 +103,20 @@ func (i *Inventory) refresh(ctx context.Context) {
 	}
 }
 
-func (i *Inventory) refreshSource(ctx context.Context, index int) {
+func (i *Inventory) refreshSource(ctx context.Context, index int) bool {
+	if i.unavailable[index] {
+		return false
+	}
 	next := MetadataSnapshot{ServiceByIP: map[string]string{}, ServiceByContainerID: map[string]string{}, ServiceByInstanceID: map[string]string{}}
 	r := i.refreshers[index]
 	if err := r.Refresh(ctx, &next); err != nil {
+		if errors.Is(err, ErrMetadataUnavailable) {
+			i.unavailable[index] = true
+			i.log.Warn("cloud metadata source unavailable; polling stopped", "source", r.Name(), "error", err)
+			return false
+		}
 		i.log.Warn("can't refresh cloud metadata", "source", r.Name(), "error", err)
-		return
+		return true
 	}
 	// Serialize publication so container changes are delivered in snapshot order.
 	i.publishMu.Lock()
@@ -135,6 +149,7 @@ func (i *Inventory) refreshSource(ctx context.Context, index int) {
 	if hasChanges {
 		i.changes.SendCtx(ctx, changes)
 	}
+	return true
 }
 
 func InventoryRefresherNode(i *Inventory, refreshInterval time.Duration) swarm.InstanceFunc {
@@ -150,6 +165,9 @@ func InventoryRefresherNode(i *Inventory, refreshInterval time.Duration) swarm.I
 		return func(ctx context.Context) {
 			var workers sync.WaitGroup
 			for index, r := range i.refreshers {
+				if i.unavailable[index] {
+					continue
+				}
 				workers.Go(func() {
 					delay := refreshInterval
 					scheduled, independent := r.(scheduledRefresher)
@@ -166,7 +184,9 @@ func InventoryRefresherNode(i *Inventory, refreshInterval time.Duration) swarm.I
 							if ctx.Err() != nil {
 								return
 							}
-							i.refreshSource(ctx, index)
+							if !i.refreshSource(ctx, index) {
+								return
+							}
 							delay = refreshInterval
 							if independent {
 								delay = scheduled.RefreshDelay(false)

@@ -439,6 +439,29 @@ Change this option to allow Beyla to instrument itself or some of the other excl
 Note: to enable such self-instrumentation, you still need to include them in the `instrument` section, or these components need to be
 a part of a encompassing inclusion criteria.
 
+## Change the discovery criteria without restarting
+
+When Beyla starts with a configuration file, through `-config` or `BEYLA_CONFIG_PATH`, it reads the file every second and applies changes to the discovery selection criteria without restarting.
+Beyla also detects files replaced by editors and Kubernetes ConfigMap updates. In containers, mount the directory that contains the file, so Beyla sees the replaced files.
+A change applies once two consecutive reads return the same contents, so Beyla doesn't apply a file in the middle of a write.
+
+You can change the following settings at runtime:
+
+- The `instrument`, `exclude_instrument`, and `default_exclude_instrument` sections of `discovery`, and their deprecated `services`, `exclude_services`, and `default_exclude_services` equivalents.
+- The deprecated `open_port`, `executable_name`, and `target_pids` settings.
+
+Beyla re-evaluates the running processes: it instruments the newly selected processes and stops instrumenting the processes that are no longer selected. Processes that remain selected keep their instrumentation.
+
+Beyla logs an error that names the changed settings, and keeps running the previous configuration, when an edit:
+
+- Changes any other setting, including exporters, `survey`, and `instrument_all_local`.
+- Changes the name, namespace, sampler, routes, exports, or metric features of an existing definition, or gives an already selected process different service settings.
+- Adds a definition that requires metric features that weren't enabled at startup.
+
+A later compatible edit still applies. Beyla logs `discovery criteria refreshed` after each applied edit.
+
+Beyla doesn't watch its configuration file when it starts with `instrument_all_local`, or without instrumentation criteria, for example in survey-only mode.
+
 ## Skip go specific tracers
 
 The `skip_go_specific_tracers` option disables the detection of Go specifics when the **ebpf** tracer inspects executables to be instrumented. The tracer falls back to using generic instrumentation, which is generally less efficient.

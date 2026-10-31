@@ -50,7 +50,7 @@ func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDisc
 
 	obiCfg := pf.cfg.AsOBI()
 
-	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents, obiDiscover.FindingCriteria(obiCfg), obiDiscover.ProcessWatcherRescan{})),
+	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents, obiDiscover.FindingCriteria(obiCfg), obiDiscover.ProcessWatcherRescan{}, nil)),
 		swarm.WithID("ProcessWatcher"))
 
 	enrichedProcessEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](
@@ -127,10 +127,7 @@ func (pf *ProcessFinder) Start(ctx context.Context) (<-chan obiDiscover.Event[*e
 }
 
 func (pf *ProcessFinder) IsInstrumentationEnabled() bool {
-	c := pf.cfg
-
-	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
-		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled()
+	return pf.cfg.InstrumentationEnabled()
 }
 
 // connects the survey sub-pipeline to the pipe of kube enriched events, and forwards

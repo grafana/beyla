@@ -337,6 +337,7 @@ func main() {
 	}
 
 	schema := reflector.Reflect(&beyla.Config{})
+	addBeylaConfigFields(schema)
 	schema.Title = "Beyla Configuration Schema"
 	schema.Description = "JSON Schema for Beyla eBPF auto-instrumentation configuration"
 
@@ -669,6 +670,19 @@ func normalizeDescriptions(schema *jsonschema.Schema) {
 		}
 		s.Description = strings.ReplaceAll(s.Description, "\n", " ")
 	})
+}
+
+func addBeylaConfigFields(schema *jsonschema.Schema) {
+	genAI, ok := schema.Definitions["GenAIConfig"]
+	if !ok {
+		return
+	}
+	properties := jsonschema.NewProperties()
+	properties.Set("enabled", &jsonschema.Schema{
+		Type: "boolean", Default: false,
+		Description: "Enable Cohere native chat API payload extraction and parsing",
+	})
+	genAI.Properties.Set("cohere", &jsonschema.Schema{Type: "object", Properties: properties})
 }
 
 // customMapper returns a mapper function for types the default reflector cannot process.

@@ -1075,11 +1075,11 @@ func (i *instrumenter) sockmsgs(p Tracer) error {
 	return nil
 }
 
-func (i *instrumenter) sockops(p Tracer) error {
+func (i *instrumenter) sockops(p Tracer, cgroupPath string) error {
 	for _, sockops := range p.SockOps() {
 		slog.Info("Attaching sock ops")
 
-		l, err := AttachCgroupSockOps(sockops.Program, sockops.AttachAs)
+		l, err := AttachCgroupSockOps(sockops.Program, sockops.AttachAs, cgroupPath)
 		if err != nil {
 			if i.metrics != nil {
 				i.metrics.InstrumentationError(i.processName, imetrics.InstrumentationErrorAttachingCgroup)

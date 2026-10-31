@@ -5,9 +5,11 @@ package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -52,6 +54,7 @@ func NewProcessFinder(
 type processFinderStartConfig struct {
 	enrichedProcessEvents *msg.Queue[[]Event[ProcessAttrs]]
 	dynamicSelector       *DynamicSelector
+	criteriaUpdates       *services.CriteriaUpdates
 }
 
 // ProcessFinderStartOpt allows overriding some internal behavior of ProcessFinder.Start method.
@@ -76,6 +79,11 @@ func WithDynamicSelector(selector *DynamicSelector) ProcessFinderStartOpt {
 	}
 }
 
+// WithCriteriaUpdater refreshes static discovery criteria through updater.Update.
+func WithCriteriaUpdater(updater *CriteriaUpdater) ProcessFinderStartOpt {
+	return func(cfg *processFinderStartConfig) { cfg.criteriaUpdates = updater.Updates() }
+}
+
 // Start the ProcessFinder pipeline in background. It returns a channel where each new discovered
 // ebpf.ProcessTracer will be notified.
 func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOpt) (<-chan Event[*ebpf.Instrumentable], error) {
@@ -84,10 +92,24 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		opt(&startConfig)
 	}
 
+	updates := startConfig.criteriaUpdates
+	if updates == nil {
+		updates = pf.ctxInfo.CriteriaUpdates
+	}
+
+	if updates != nil && startConfig.dynamicSelector != nil {
+		return nil, errors.New("criteria updates cannot be combined with a dynamic PID selector")
+	}
+
 	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "tracerEvents")
 
 	logDeprecationAndConflicts(pf.cfg)
 	configCriteria := FindingCriteria(pf.cfg)
+
+	if updates != nil {
+		configCriteria, _ = updates.Current()
+	}
+
 	var appDynamicSelector *dynamicPIDSignalView
 	if startConfig.dynamicSelector != nil {
 		appDynamicSelector = startConfig.dynamicSelector.appSignals()
@@ -97,13 +119,17 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	processEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "processEvents")
 
 	var rescan ProcessWatcherRescan
+	if updates != nil {
+		rescan.TargetsChanged = updates.Changed()
+	}
+
 	if appDynamicSelector != nil {
 		rescan = ProcessWatcherRescan{
 			AddedPIDs:      appDynamicSelector.AddedPIDsNotifyContext(ctx),
 			TargetsChanged: startConfig.dynamicSelector.TargetsChangedNotifyContext(ctx),
 		}
 	}
-	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, rescan)),
+	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, rescan, updates)),
 		swarm.WithID("ProcessWatcher"))
 
 	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "kubeEnrichedEvents")
@@ -129,7 +155,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	), swarm.WithID("LanguageDecoratorProvider"))
 
 	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, pf.ctxInfo.Metrics, "criteriaFilteredEvents")
-	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicSelector),
+	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicSelector, updates),
 		swarm.WithID("CriteriaMatcher"))
 	swi.Add(dynamicMatcherProvider(langEnrichedEvents, criteriaFilteredEvents, appDynamicSelector),
 		swarm.WithID("DynamicMatcher"))

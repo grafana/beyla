@@ -42,3 +42,18 @@ func TestSurveySchemaIncludesNestedGlobAttributes(t *testing.T) {
 	_, ok = schema.Definitions["BeylaDiscoveryConfig"].Properties.Get("socket_apps")
 	assert.False(t, ok, "socket_apps must not be a global discovery option")
 }
+
+func TestCohereConfigSchema(t *testing.T) {
+	reflector := &jsonschema.Reflector{FieldNameTag: "yaml", RequiredFromJSONSchemaTags: true}
+	schema := reflector.Reflect(&beyla.Config{})
+	addBeylaConfigFields(schema)
+
+	genAI, ok := schema.Definitions["GenAIConfig"]
+	require.True(t, ok)
+	cohere, ok := genAI.Properties.Get("cohere")
+	require.True(t, ok)
+	enabled, ok := cohere.Properties.Get("enabled")
+	require.True(t, ok)
+	assert.Equal(t, "boolean", enabled.Type)
+	assert.Equal(t, false, enabled.Default)
+}

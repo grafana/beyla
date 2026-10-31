@@ -247,20 +247,20 @@ func detectGenericProtocol(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, e
 	return request.Span{}, false, false, nil
 }
 
-// caches the connection's database name for the SQL spans that follow
+// caches the connection's database and schema for the SQL spans that follow
 func matchPostgresStartup(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
-	if parseCtx.postgresDBNames == nil {
+	if parseCtx.postgresNamespaces == nil {
 		return request.Span{}, false, false, nil
 	}
 
-	if db, ok := parsePostgresStartup(requestBuffer); ok {
-		parseCtx.postgresDBNames.Add(event.ConnInfo, db)
+	if ns, ok := parsePostgresStartup(requestBuffer); ok {
+		parseCtx.postgresNamespaces.Add(event.ConnInfo, ns)
 		return request.Span{}, true, true, nil
 	}
 
 	// caught reversed in the middle of communication
-	if db, ok := parsePostgresStartup(responseBuffer); ok {
-		parseCtx.postgresDBNames.Add(reverseTCPConnInfo(event.ConnInfo), db)
+	if ns, ok := parsePostgresStartup(responseBuffer); ok {
+		parseCtx.postgresNamespaces.Add(reverseTCPConnInfo(event.ConnInfo), ns)
 		return request.Span{}, true, true, nil
 	}
 
@@ -277,7 +277,7 @@ func matchSQL(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, event *TCPRequ
 	if validSQL(op, len(tables) > 0, kind) {
 		span := TCPToSQLToSpan(event, op, tables, sql, kind, "", nil)
 		if kind == request.DBPostgres {
-			span.DBNamespace = postgresDBForConn(parseCtx, event.ConnInfo)
+			span.DBNamespace = postgresNamespaceForConn(parseCtx, event.ConnInfo)
 		}
 		return span, false, true, nil
 	}
@@ -288,7 +288,7 @@ func matchSQL(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, event *TCPRequ
 		reverseTCPEvent(event)
 		span := TCPToSQLToSpan(event, op, tables, sql, kind, "", nil)
 		if kind == request.DBPostgres {
-			span.DBNamespace = postgresDBForConn(parseCtx, event.ConnInfo)
+			span.DBNamespace = postgresNamespaceForConn(parseCtx, event.ConnInfo)
 		}
 		return span, false, true, nil
 	}

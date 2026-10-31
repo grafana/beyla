@@ -110,6 +110,10 @@ const (
 	ResponseLengthPtrPos
 	ContentLengthPtrPos
 	ReqHeaderPtrPos
+	ReqProtoMajorPos
+	ReqProtoMinorPos
+	RespProtoMajorPos
+	RespProtoMinorPos
 	IoWriterBufPtrPos
 	IoWriterNPos
 	IoWriterWrPos
@@ -306,6 +310,8 @@ var structMembers = map[string]structInfo{
 			"Method":        MethodPtrPos,
 			"ContentLength": ContentLengthPtrPos,
 			"Header":        ReqHeaderPtrPos,
+			"ProtoMajor":    ReqProtoMajorPos,
+			"ProtoMinor":    ReqProtoMinorPos,
 		},
 	},
 	"net/url.URL": {
@@ -322,6 +328,8 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"StatusCode":    StatusCodePtrPos,
 			"ContentLength": ResponseLengthPtrPos,
+			"ProtoMajor":    RespProtoMajorPos,
+			"ProtoMinor":    RespProtoMinorPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.Stream": {

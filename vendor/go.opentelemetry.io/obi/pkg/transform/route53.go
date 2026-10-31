@@ -26,7 +26,7 @@ const route53DefaultRegion = "us-east-1"
 type Route53MetadataConfig struct {
 	// RefreshInterval controls Route53 polling independently of other cloud sources.
 	RefreshInterval time.Duration `yaml:"refresh_interval" env:"OTEL_EBPF_NAME_RESOLVER_ROUTE53_REFRESH_INTERVAL" validate:"gt=0"`
-	// HostedZoneIDs restricts discovery to these hosted zones. Required when route53 is enabled.
+	// HostedZoneIDs optionally restricts the discovered zones. Discovery includes account public zones and private zones associated with the detected VPC. Explicit IDs retain the same VPC and address filters.
 	HostedZoneIDs []string `yaml:"hosted_zone_ids" env:"OTEL_EBPF_NAME_RESOLVER_ROUTE53_HOSTED_ZONE_IDS" envSeparator:","`
 }
 
@@ -34,9 +34,6 @@ type Route53MetadataConfig struct {
 func (c Route53MetadataConfig) Validate() error {
 	if c.RefreshInterval <= 0 {
 		return errors.New("enrich.enrichers.cloud.route53.refresh_interval must be greater than zero")
-	}
-	if len(c.HostedZoneIDs) == 0 {
-		return errors.New("enrich.enrichers.cloud.route53.hosted_zone_ids is required when the route53 source is enabled")
 	}
 	for _, id := range c.HostedZoneIDs {
 		if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(id), "/hostedzone/")) == "" {
@@ -59,6 +56,8 @@ func route53InventoryRefresher(
 		return nil, fmt.Errorf("loading AWS configuration for Route53 name resolver: %w", err)
 	}
 	inventory := cloud.NewRoute53Inventory(route53.NewFromConfig(awsCfg), cloudCfg.Route53.HostedZoneIDs)
+	inventory.VPCID = nodeMeta.EC2VPCID
+	inventory.VPCRegion = nodeMeta.Region
 	inventory.RefreshInterval = cloudCfg.Route53.RefreshInterval
 	return inventory, nil
 }

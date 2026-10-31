@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"errors"
 	"fmt"
 	"io"
@@ -112,7 +113,13 @@ func decompressBody(encoding string, b []byte) ([]byte, error) {
 		reader = zr
 		closeFn = zr.Close
 	case "deflate":
-		fr := flate.NewReader(bytes.NewReader(b))
+		var fr io.ReadCloser
+		fr, err = zlib.NewReader(bytes.NewReader(b))
+		// Preserve compatibility with servers that omit the zlib wrapper.
+		if errors.Is(err, zlib.ErrHeader) {
+			fr = flate.NewReader(bytes.NewReader(b))
+			err = nil
+		}
 		reader = fr
 		closeFn = func() { _ = fr.Close() }
 	case "br":

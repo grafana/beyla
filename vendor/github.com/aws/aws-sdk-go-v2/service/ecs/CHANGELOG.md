@@ -1,3 +1,23 @@
+# v1.103.0 (2026-10-27)
+
+* **Feature**: ECS now supports GPU sharing via NVIDIA Multi-Process Service (MPS) on ECS Managed Instances and ECS EC2, allowing multiple ECS tasks to share a single Nvidia GPU for improved utilization.
+* **Dependency Update**: Update to smithy-go v1.28.7.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.102.1 (2026-10-22)
+
+* **Bug Fix**: Update smithy-go to v1.28.6
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.102.0 (2026-10-20)
+
+* **Feature**: ECS Service Gateway makes it easier for developers to deploy ECS services without having to worry about complex ingress networking constructs.
+
+# v1.101.0 (2026-10-19)
+
+* **Feature**: Adds support for configurable envoy application log levels. Customers can now debug network connectivity issues with their task's sidecar envoys.
+* **Bug Fix**: Allow lists with null values to deserialize into its zero value instead of failing
+
 # v1.100.3 (2026-10-09.2)
 
 * **Dependency Update**: Update to smithy-go v1.28.5.

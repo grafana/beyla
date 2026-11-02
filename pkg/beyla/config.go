@@ -1,6 +1,7 @@
 package beyla
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obicfg "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
@@ -211,6 +213,39 @@ type Config struct {
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
+
+	// Set from a config v2 document. Unexported so Convert ignores them.
+	v2ProtocolSelection *instrumentations.InstrumentationSelection
+	criteriaUpdates     *services.CriteriaUpdates
+	criteriaUpdater     *discover.CriteriaUpdater
+}
+
+// SetV2Runtime records the protocol-metric selection and, when application
+// discovery is active, the criteria updater for a config v2 document.
+func (c *Config) SetV2Runtime(selection instrumentations.InstrumentationSelection, updater *discover.CriteriaUpdater) {
+	c.v2ProtocolSelection = &selection
+	c.criteriaUpdater = updater
+	if updater != nil {
+		c.criteriaUpdates = updater.Updates()
+	}
+}
+
+// RefreshCriteria applies a re-read v2 document to the running discovery criteria.
+func (c *Config) RefreshCriteria(ctx context.Context, cfg *obi.Config) error {
+	if c.criteriaUpdater == nil {
+		return nil
+	}
+	return c.criteriaUpdater.Update(ctx, cfg)
+}
+
+// V2ProtocolSelection returns the v2 instrumentation selection, or nil for a v1 document.
+func (c *Config) V2ProtocolSelection() *instrumentations.InstrumentationSelection {
+	return c.v2ProtocolSelection
+}
+
+// CriteriaUpdates returns discovery criteria that can be replaced without a restart.
+func (c *Config) CriteriaUpdates() *services.CriteriaUpdates {
+	return c.criteriaUpdates
 }
 
 type Consumer interface {

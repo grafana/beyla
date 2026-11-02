@@ -241,12 +241,24 @@ docker-generate: obi-submodule
 		'for llvm_bin in /usr/lib/llvm*/bin; do PATH="$$llvm_bin:$$PATH"; done; \
 		export PATH; make generate-beyla BPF2GO=/go/bin/bpf2go'
 
+# configbridge is compiled as part of the OBI module (see scripts/obi-configbridge).
+# The copy is removed after vendoring so the submodule checkout stays clean.
+CONFIGBRIDGE_SRC := scripts/obi-configbridge
+CONFIGBRIDGE_DST := $(OBI_MODULE)/cmd/obi/configbridge
+
+.PHONY: sync-configbridge
+sync-configbridge:
+	rm -rf $(CONFIGBRIDGE_DST)
+	mkdir -p $(CONFIGBRIDGE_DST)
+	cp $(CONFIGBRIDGE_SRC)/*.go $(CONFIGBRIDGE_DST)/
+
 .PHONY: copy-obi-vendor
-copy-obi-vendor: vendor-obi-tests
+copy-obi-vendor: sync-configbridge vendor-obi-tests
 	@echo "### Vendoring OBI submodule..."
 	go get go.opentelemetry.io/obi
 	go mod tidy
 	go mod vendor
+	rm -rf $(CONFIGBRIDGE_DST)
 
 .PHONY: vendor-obi-tests
 vendor-obi-tests:

@@ -54,6 +54,9 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	if err != nil {
 		return fmt.Errorf("can't build common context info: %w", err)
 	}
+	if ctxInfo.EBPFReverseDNS != nil {
+		defer ctxInfo.EBPFReverseDNS.Close(cfg.ShutdownTimeout)
+	}
 	for _, opt := range opts {
 		opt(ctxInfo)
 	}
@@ -270,12 +273,15 @@ func buildCommonContextInfo(
 		return nil, err
 	}
 
+	obiCfg := config.AsOBI()
 	promMgr := &connector.PrometheusManager{}
 	ctxInfo := &global.ContextInfo{
 		Prometheus:              promMgr,
-		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &config.AsOBI().OTELMetrics},
+		OTELMetricsExporter:     &otelcfg.MetricsExporterInstancer{Cfg: &obiCfg.OTELMetrics},
 		ExtraResourceAttributes: []attribute.KeyValue{semconv.OTelScopeName(otel.ReporterName)},
-		OverrideAppExportQueue:  msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "overriddenAppExportQueue"),
+		OverrideAppExportQueue:  msg2.QueueFromConfig[[]request.Span](obiCfg, "overriddenAppExportQueue"),
+		EBPFReverseDNS:          global.NewEBPFReverseDNS(ctx, &obiCfg.EBPF, &obiCfg.NetworkFlows.ReverseDNS, &obiCfg.Stats.ReverseDNS),
+		CriteriaUpdates:         config.CriteriaUpdates(),
 	}
 
 	// Node metadata must be resolved before the internal-metrics reporter is

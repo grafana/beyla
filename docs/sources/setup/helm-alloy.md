@@ -16,18 +16,15 @@ aliases:
 
 # Deploy Beyla with the Grafana Alloy Helm chart
 
-Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector, with native pipelines for OpenTelemetry, Prometheus, and other telemetry signals.
-Alloy includes Grafana Beyla, so you can process Beyla telemetry with Alloy pipelines.
-The Alloy Helm chart deploys Alloy in Kubernetes.
-
-The Alloy [`beyla.ebpf` component][alloy-beyla] runs Beyla as a child process inside the Alloy container.
-Alloy scrapes the Beyla metrics through the `targets` export of the component, and receives the Beyla traces through the `output` block of the component.
+Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector, and the Alloy Helm chart deploys Alloy in Kubernetes.
+Alloy includes Grafana Beyla as the [`beyla.ebpf` component][alloy-beyla], which runs Beyla as a child process inside the Alloy container.
+Alloy scrapes the Beyla metrics through the `targets` export of the component, and receives the Beyla traces through its `output` block.
 You can then process and route the Beyla telemetry with other Alloy components.
 
-You configure Beyla with the `beyla.ebpf` block in [Alloy syntax][alloy-syntax], not with the Beyla YAML configuration file.
+You configure Beyla in [Alloy syntax][alloy-syntax], not with the Beyla YAML configuration file.
 Each Alloy release includes a specific Beyla version, which the `beyla.ebpf` component reference lists.
 
-Use this option if you want to process the Beyla telemetry in Alloy pipelines.
+Use this option to process the Beyla telemetry in Alloy pipelines.
 The `beyla.ebpf` component needs elevated privileges, so the Alloy documentation recommends a [dedicated Alloy instance][alloy-access] for it.
 To deploy Beyla on its own, refer to [Deploy Beyla with the Beyla Helm chart][beyla-helm].
 To deploy Beyla with Kubernetes cluster monitoring, refer to [Deploy Beyla with the Kubernetes Monitoring Helm chart][k8s-monitoring-helm].
@@ -44,12 +41,12 @@ Before you deploy Beyla, make sure you have the following:
 
 ## Prepare the Alloy environment
 
-Add the Grafana Helm chart repository, update it, and create the `alloy` namespace:
+Add the Grafana Helm chart repository, update it, and create the `alloy-beyla` namespace for a dedicated Alloy instance:
 
 ```sh
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
-kubectl create namespace alloy
+kubectl create namespace alloy-beyla
 ```
 
 You install the Alloy Helm chart in this namespace after you create the credentials and the Alloy configuration.
@@ -70,7 +67,7 @@ Save the following Secret as `secrets.yml`, and create it with `kubectl apply -f
 apiVersion: v1
 kind: Secret
 metadata:
-  namespace: alloy
+  namespace: alloy-beyla
   name: grafana-credentials
 type: Opaque
 stringData:
@@ -157,20 +154,19 @@ Replace the following:
 Create a ConfigMap from the file:
 
 ```sh
-kubectl create configmap --namespace alloy alloy-config "--from-file=config.alloy=./config.alloy"
+kubectl create configmap --namespace alloy-beyla alloy-config "--from-file=config.alloy=./config.alloy"
 ```
 
 With this configuration, Beyla instruments the applications in the _`<NAMESPACE>`_ namespace, and Alloy sends the metrics to Grafana Cloud Metrics and the traces to Grafana Cloud Traces.
+The configuration sets the following:
 
-The `attributes > kubernetes > enable` attribute adds Kubernetes metadata, such as the namespace and Pod name, to the metrics and traces of the instrumented applications.
-
-The `discovery > instrument > kubernetes` block selects the applications to instrument by their Kubernetes metadata, with glob patterns.
-
-The `metrics > features` list sets which metrics Beyla exports. The `application` feature, which is the default, exports application-level request rate, error, and duration (RED) metrics.
-
-The `prometheus.scrape` component collects the Beyla metrics. The `honor_labels = true` setting keeps the per-process `instance` and `job` labels that Beyla sets. The `prometheus.remote_write` component sends the metrics to Grafana Cloud Metrics.
-
-The `output` block sends the Beyla traces to the `otelcol.exporter.otlp` component. The [OTLP exporter][alloy-otlp-exporter] sends the traces to Grafana Cloud Traces, and the `otelcol.auth.basic` component authenticates the requests.
+- `attributes.kubernetes.enable` adds Kubernetes metadata, such as the namespace and Pod name, to the metrics and traces of the instrumented applications.
+- `discovery.instrument.kubernetes` selects the applications to instrument by their Kubernetes metadata, with glob patterns.
+- `metrics.features` sets which metrics Beyla exports. The `application` feature, which is the default, exports application-level request rate, error, and duration (RED) metrics.
+- The `prometheus.scrape` component collects the Beyla metrics. Its `honor_labels = true` setting keeps the per-process `instance` and `job` labels that Beyla sets.
+- The `prometheus.remote_write` component sends the metrics to Grafana Cloud Metrics.
+- `output.traces` sends the Beyla traces to the `otelcol.exporter.otlp` component, the [OTLP exporter][alloy-otlp-exporter], which sends them to Grafana Cloud Traces.
+- The `otelcol.auth.basic` component authenticates the requests to Grafana Cloud Traces.
 
 For more information about the configuration options, refer to the [`beyla.ebpf` component reference][alloy-beyla].
 
@@ -216,14 +212,18 @@ controller:
 Install Alloy with the command:
 
 ```sh
-helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
+helm upgrade --install --namespace alloy-beyla alloy-beyla grafana/alloy -f values.yaml
 ```
 
-- The `controller.hostPID: true` value runs the Alloy Pods in the host process ID (PID) namespace, so Beyla can find the processes on each node.
-- The Alloy container runs Beyla as a child process, and Beyla loads eBPF programs, so the Alloy container needs elevated privileges.
-  The `privileged: true` value in the `alloy.securityContext` section grants all capabilities.
+The values file sets the following:
+
+- `alloy.configMap` uses the `alloy-config` ConfigMap that you created, and its `config.alloy` key, instead of a ConfigMap that the chart creates.
+- `alloy.securityContext.privileged: true` grants all capabilities to the Alloy container.
+  The Alloy container runs Beyla as a child process, and Beyla loads eBPF programs, so the Alloy container needs elevated privileges.
   For production, the Alloy documentation recommends that you run Alloy without `privileged: true` and grant only the capabilities that Beyla needs, as described in [Kubernetes: unprivileged, root user][alloy-beyla-unprivileged].
-- The `extraEnv` section sets the environment variables for the Prometheus and Tempo credentials.
+- `alloy.extraEnv` sets environment variables from the `grafana-credentials` Secret, and the Alloy configuration reads them with `sys.env`.
+- `controller.type: daemonset` runs one Alloy Pod on each node, so Beyla instruments the applications on every node.
+- `controller.hostPID: true` runs the Alloy Pods in the host process ID (PID) namespace, so Beyla can find the processes on each node.
 
 ## Check that Beyla is running
 
@@ -232,20 +232,22 @@ To check the deployment, complete the following steps:
 1. Check that the Alloy Pods are running:
 
    ```sh
-   kubectl get pods --namespace alloy
+   kubectl get pods --namespace alloy-beyla
    ```
 
 1. Check the logs of an Alloy Pod for the `Beyla subprocess started` message:
 
    ```sh
-   kubectl logs --namespace alloy <POD_NAME>
+   kubectl logs --namespace alloy-beyla <POD_NAME>
    ```
 
    Replace _`<POD_NAME>`_ with a Pod name from the previous command.
    Alloy writes the Beyla logs to its own log, with the `source=beyla-subprocess` attribute.
 
 After the applications in the _`<NAMESPACE>`_ namespace receive requests, their metrics and traces appear in your Grafana Cloud stack.
-To query the traces, open **Explore** and select the `grafanacloud-<STACK_NAME>-traces` data source, where _`<STACK_NAME>`_ is the name of your Grafana Cloud stack.
+To query the metrics, open **Explore** and select the `grafanacloud-<STACK_NAME>-prom` data source.
+To query the traces, select the `grafanacloud-<STACK_NAME>-traces` data source.
+Replace _`<STACK_NAME>`_ with the name of your Grafana Cloud stack.
 For more information, refer to [Manage data sources in Grafana Cloud][cloud-data-sources].
 
 ## Next steps

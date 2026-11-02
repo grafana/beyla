@@ -53,12 +53,14 @@ You install the Alloy Helm chart in this namespace after you create the credenti
 
 ## Configure credentials
 
-Alloy sends the Beyla metrics to the Prometheus remote write endpoint of Grafana Cloud Metrics, and the traces to the Tempo OTLP endpoint of Grafana Cloud Traces. You can get a [free Grafana Cloud account][cloud-pricing].
+Alloy sends the Beyla metrics to the Prometheus remote write endpoint of Grafana Cloud Metrics, and the traces to the Tempo OTLP endpoint of Grafana Cloud Traces.
+You can get a [free Grafana Cloud account][cloud-pricing].
 To send data to another backend, replace the endpoints and credentials with your own.
 
 Find the URL, user, and password for each endpoint:
 
-- **Prometheus**: In the [Cloud Portal][cloud-portal], click **Details** in the **Prometheus** card. For more information, refer to [Send metrics data from Prometheus][cloud-prometheus].
+- **Prometheus**: In the [Cloud Portal][cloud-portal], click **Details** in the **Prometheus** card.
+  For more information, refer to [Send metrics data from Prometheus][cloud-prometheus].
 - **Tempo**: Follow the procedure in [Locate your stack's URL, user, and password][cloud-tempo-credentials].
 
 Save the following Secret as `secrets.yml`, and create it with `kubectl apply -f secrets.yml`:
@@ -162,8 +164,10 @@ The configuration sets the following:
 
 - `attributes.kubernetes.enable` adds Kubernetes metadata, such as the namespace and Pod name, to the metrics and traces of the instrumented applications.
 - `discovery.instrument.kubernetes` selects the applications to instrument by their Kubernetes metadata, with glob patterns.
-- `metrics.features` sets which metrics Beyla exports. The `application` feature, which is the default, exports application-level request rate, error, and duration (RED) metrics.
-- The `prometheus.scrape` component collects the Beyla metrics. Its `honor_labels = true` setting keeps the per-process `instance` and `job` labels that Beyla sets.
+- `metrics.features` sets which metrics Beyla exports.
+  The `application` feature, which is the default, exports application-level request rate, error, and duration (RED) metrics.
+- The `prometheus.scrape` component collects the Beyla metrics.
+  Its `honor_labels = true` setting keeps the per-process `instance` and `job` labels that Beyla sets.
 - The `prometheus.remote_write` component sends the metrics to Grafana Cloud Metrics.
 - `output.traces` sends the Beyla traces to the `otelcol.exporter.otlp` component, the [OTLP exporter][alloy-otlp-exporter], which sends them to Grafana Cloud Traces.
 - The `otelcol.auth.basic` component authenticates the requests to Grafana Cloud Traces.

@@ -1,19 +1,19 @@
 ---
-title: Run Beyla in Kubernetes using Grafana Alloy Helm's chart
+title: Deploy Beyla with the Grafana Alloy Helm chart
 menuTitle: Grafana Alloy Helm chart
-description: Learn how to instrument an application export data with Prometheus to Grafana Cloud
+description: Deploy Grafana Beyla in Kubernetes as the beyla.ebpf component of Grafana Alloy with the Alloy Helm chart, and send Beyla metrics and traces through Alloy pipelines to Grafana Cloud.
 weight: 600
 keywords:
   - Beyla
   - eBPF
   - Kubernetes
+  - Helm
   - Alloy
-  - tutorial
 aliases:
   - /docs/beyla/latest/tutorial/helm-alloy/
 ---
 
-# Run Beyla in Kubernetes using Grafana Alloy Helm's chart
+# Deploy Beyla with the Grafana Alloy Helm chart
 
 Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector.
 Alloy offers native pipelines for OpenTelemetry, Prometheus, and other telemetry signals.

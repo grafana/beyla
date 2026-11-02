@@ -866,7 +866,7 @@ ensure_multiexec_connectioninfo_feature_override() {
     local file="$OBI_DEST/docker-compose-multiexec.yml"
     [[ -f "$file" ]] || return 0
 
-    sed -i 's|BEYLA_OTEL_METRICS_FEATURES: "application,application_span_otel"|BEYLA_OTEL_METRICS_FEATURES: "${MULTI_TEST_METRICS_FEATURES-application,application_span_otel}"|' "$file"
+    sed_i -e 's|BEYLA_OTEL_METRICS_FEATURES: "application,application_span_otel"|BEYLA_OTEL_METRICS_FEATURES: "${MULTI_TEST_METRICS_FEATURES-application,application_span_otel}"|' "$file"
 }
 
 ensure_client_trace_waits_for_complete_attachment() {

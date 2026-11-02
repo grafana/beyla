@@ -21,8 +21,6 @@ Alloy offers native pipelines for OpenTelemetry, Prometheus, and other telemetry
 Grafana Alloy bundles Beyla allowing you to instrument your applications at the same time
 you instrument your infrastructure. It also provides a Helm chart to deploy Alloy in Kubernetes.
 
-In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Alloy Helm's chart.
-
 ## Prerequisites
 
 - A Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/) to create a local cluster
@@ -41,91 +39,6 @@ kubectl create namespace alloy
 ```
 
 You install the Alloy Helm chart in this namespace after you create the credentials and the Alloy configuration.
-
-### 2. Deploy services
-
-You can instrument any HTTP or HTTPS service in your Kubernetes cluster.
-
-Copy the following contents into a file, for example `sampleapps.yml`, and deploy it with
-the command `kubectl apply -f sampleapps.yml`.
-
-```yaml
-kind: Deployment
-apiVersion: apps/v1
-metadata:
-  name: docs
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: docs
-  template:
-    metadata:
-      labels:
-        app: docs
-    spec:
-      containers:
-        - name: docs-server
-          image: httpd:latest
-          ports:
-            - containerPort: 80
-              protocol: TCP
-              name: http
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: docs
-spec:
-  selector:
-    app: docs
-  ports:
-    - protocol: TCP
-      port: 80
----
-kind: Deployment
-apiVersion: apps/v1
-metadata:
-  name: website
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: website
-  template:
-    metadata:
-      labels:
-        app: website
-    spec:
-      containers:
-        - name: website-server
-          image: httpd:latest
-          ports:
-            - containerPort: 80
-              protocol: TCP
-              name: http
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: website
-spec:
-  selector:
-    app: website
-  ports:
-    - protocol: TCP
-      port: 80
-```
-
-To send requests to the services from your computer, forward a local port to each service.
-Run each of the following commands in its own terminal and keep them running:
-
-```sh
-kubectl port-forward services/website 8080:80
-kubectl port-forward services/docs 8081:80
-```
-
-Requests to `http://localhost:8080` go to the `website` service, and requests to `http://localhost:8081` go to the `docs` service.
 
 ### 3. Configure credentials
 
@@ -167,8 +80,7 @@ beyla.ebpf "default" {
 	discovery {
 		instrument {
 			kubernetes {
-				namespace       = "default"
-				deployment_name = "docs"
+				namespace = "<NAMESPACE>"
 			}
 		}
 	}
@@ -216,6 +128,7 @@ otelcol.auth.basic "grafana_cloud_tempo" {
 
 Replace the following:
 
+- _`<NAMESPACE>`_: The Kubernetes namespace of the applications to instrument
 - _`<PROMETHEUS_REMOTE_WRITE_URL>`_: The Prometheus remote write URL of your Grafana Cloud stack, which ends in `/api/prom/push`
 - _`<TEMPO_ENDPOINT>`_: The Tempo endpoint of your Grafana Cloud stack, including the `:443` port
 
@@ -225,11 +138,11 @@ Deploy the configuration with the command:
 kubectl create configmap --namespace alloy alloy-config "--from-file=config.alloy=./config.alloy"
 ```
 
-With this configuration Beyla instruments the `docs` service, and Alloy sends the traces to Grafana Cloud Tempo and the metrics to Grafana Cloud Prometheus.
+With this configuration Beyla instruments the applications in the _`<NAMESPACE>`_ namespace, and Alloy sends the traces to Grafana Cloud Tempo and the metrics to Grafana Cloud Prometheus.
 
 The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics and traces, which adds the metadata of the Kubernetes entities running the automatically instrumented services.
 
-The `discovery > instrument > kubernetes` block selects the services to instrument by their Kubernetes metadata, with glob patterns. In this example, Beyla instruments only the `docs` Deployment in the `default` namespace.
+The `discovery > instrument > kubernetes` block selects the services to instrument by their Kubernetes metadata, with glob patterns. In this example, Beyla instruments the applications in the _`<NAMESPACE>`_ namespace.
 
 The `prometheus.scrape` section configures Prometheus scrape to collect metrics from Beyla. The `honor_labels = true` setting preserves the per-process instance identifiers set by Beyla. The `prometheus.remote_write` section sends the metrics to Grafana Cloud Prometheus.
 
@@ -290,31 +203,23 @@ helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
   For the capabilities and Pod settings, refer to [Permissions](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#permissions) in the `beyla.ebpf` component reference.
 - The `extraEnv` section sets the environment variables for the Prometheus and Tempo credentials.
 
-### 5. Test the setup
+### 5. Check that Beyla is running
 
-With the `kubectl port-forward` commands from step 2 still running,
-test both web server instances. For example:
+1. Check that the Alloy Pods are running:
 
-```sh
-curl http://localhost:8080
-curl http://localhost:8080/foo
-curl http://localhost:8081
-curl http://localhost:8081/foo
-```
+   ```sh
+   kubectl get pods --namespace alloy
+   ```
 
-Navigate to the instance in Grafana Cloud, and from the **Explore** section in the left panel, select the data source for the traces, named `grafanacloud-<STACK_NAME>-traces`, where _`<STACK_NAME>`_ is the name of your Grafana Cloud stack.
+1. Check the logs of an Alloy Pod for the `Beyla subprocess started` message:
+
+   ```sh
+   kubectl logs --namespace alloy <POD_NAME>
+   ```
+
+   Replace _`<POD_NAME>`_ with a Pod name from the previous command.
+   Alloy writes the Beyla logs to its own log, with the `source=beyla-subprocess` attribute.
+
+After the applications in the _`<NAMESPACE>`_ namespace receive requests, their traces and metrics appear in your Grafana Cloud stack.
+To query the traces, open **Explore** and select the `grafanacloud-<STACK_NAME>-traces` data source, where _`<STACK_NAME>`_ is the name of your Grafana Cloud stack.
 For more information, refer to [Manage data sources in Grafana Cloud](https://grafana.com/docs/grafana-cloud/observe-and-act/connect-externally-hosted/data-sources-in-cloud/).
-
-![Select the traces data source](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/select-traces.png)
-
-To search for all the traces, select the **Search** box in the Query bar, leave the form empty, and click **Run query**:
-
-![Searching for all the traces in the system](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/run-query.png)
-
-This shows the traces for the `docs` instance on port 8081. You might see traces from your own services, but you shouldn't see traces from the `website` service, as it Beyla isn't instrumenting it.
-
-![Grafana Cloud list of traces](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-traces-list.png)
-
-In the trace details, the resource attributes of the traces have metadata of the Kubernetes Pod running the instrumented service:
-
-![Details of the trace](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/tut-trace-details.png)

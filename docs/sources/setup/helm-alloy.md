@@ -15,11 +15,9 @@ aliases:
 
 # Deploy Beyla with the Grafana Alloy Helm chart
 
-Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector.
-Alloy offers native pipelines for OpenTelemetry, Prometheus, and other telemetry signals.
-
-Grafana Alloy bundles Beyla allowing you to instrument your applications at the same time
-you instrument your infrastructure. It also provides a Helm chart to deploy Alloy in Kubernetes.
+Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector, with native pipelines for OpenTelemetry, Prometheus, and other telemetry signals.
+Alloy includes Grafana Beyla, so you can instrument your applications with the same Alloy deployment that collects your infrastructure telemetry.
+The Alloy Helm chart deploys Alloy in Kubernetes.
 
 The Alloy [`beyla.ebpf` component](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/) runs Beyla as a child process inside the Alloy container.
 Alloy scrapes the Beyla metrics through the `targets` export of the component, and receives the Beyla traces through the `output` block of the component.
@@ -36,16 +34,17 @@ To deploy Beyla with Kubernetes cluster monitoring, refer to [Deploy Beyla with 
 
 Before you deploy Beyla, make sure you have the following:
 
-- A Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/) to create a local cluster
-- `kubectl` installed and configured for your cluster
-- [Helm](https://helm.sh/) installed
+- A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations](../../introduction/requirements/).
+  For a local cluster, you can use [kind](https://kind.sigs.k8s.io/).
+- [Helm](https://helm.sh/) and `kubectl`, configured for the cluster
+- Permission to create cluster-scoped resources and privileged Pods
 - A Grafana Cloud stack, or a Prometheus remote write endpoint and an OTLP endpoint for traces
 
 ## Prepare the Alloy environment
 
 Add the Grafana Helm chart repository, update it, and create the `alloy` namespace:
 
-```bash
+```sh
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 kubectl create namespace alloy
@@ -55,14 +54,14 @@ You install the Alloy Helm chart in this namespace after you create the credenti
 
 ## Configure credentials
 
-In this setup, Alloy sends the Beyla metrics to the Grafana Cloud Prometheus remote write endpoint and the traces to the Grafana Cloud Tempo OTLP endpoint. You can get a [free Grafana Cloud Account](/pricing/).
+Alloy sends the Beyla metrics to the Grafana Cloud Prometheus remote write endpoint and the traces to the Grafana Cloud Tempo OTLP endpoint. You can get a [free Grafana Cloud account](/pricing/).
 
 Find the URL, user, and password for each endpoint:
 
-- Prometheus: In the [Cloud Portal](https://grafana.com/docs/grafana-cloud/platform/security-and-account-management/account-management/cloud-portal/), click **Details** in the **Prometheus** card. The password is a Cloud Access Policy token. For more information, refer to [Send metrics data from Prometheus](https://grafana.com/docs/grafana-cloud/send-data/metrics/metrics-prometheus/).
-- Tempo: Follow the procedure in [Locate your stack's URL, user, and password](https://grafana.com/docs/grafana-cloud/send-data/traces/set-up/locate-url-user-password/).
+- **Prometheus**: In the [Cloud Portal](https://grafana.com/docs/grafana-cloud/platform/security-and-account-management/account-management/cloud-portal/), click **Details** in the **Prometheus** card. The password is a Cloud Access Policy token. For more information, refer to [Send metrics data from Prometheus](https://grafana.com/docs/grafana-cloud/send-data/metrics/metrics-prometheus/).
+- **Tempo**: Follow the procedure in [Locate your stack's URL, user, and password](https://grafana.com/docs/grafana-cloud/send-data/traces/set-up/locate-url-user-password/).
 
-Create a `secrets.yml` file with your Grafana Cloud credentials for the Prometheus and Tempo endpoints. Deploy it with the command `kubectl apply -f secrets.yml`.
+Save the following Secret as `secrets.yml`, and create it with `kubectl apply -f secrets.yml`:
 
 ```yaml
 apiVersion: v1
@@ -72,70 +71,72 @@ metadata:
   name: grafana-credentials
 type: Opaque
 stringData:
-  prometheus-rw-user: "prom-user"
-  prometheus-rw-pwd: "prom-pwd"
-  tempo-rw-user: "tempo-user"
-  tempo-rw-pwd: "tempo-pwd"
+  prometheus-rw-user: "<PROMETHEUS_USER>"
+  prometheus-rw-pwd: "<PROMETHEUS_PASSWORD>"
+  tempo-rw-user: "<TEMPO_USER>"
+  tempo-rw-pwd: "<TEMPO_PASSWORD>"
 ```
+
+Replace the placeholders with the user and password for each endpoint.
 
 ## Create the Alloy configuration
 
-Create a `ConfigMap` with the Alloy configuration. Copy the following contents into a file, for example `config.alloy`:
+Save the following Alloy configuration as `config.alloy`:
 
 ```alloy
 beyla.ebpf "default" {
-	attributes {
-		kubernetes {
-			enable = "true"
-		}
-	}
+  attributes {
+    kubernetes {
+      enable = "true"
+    }
+  }
 
-	discovery {
-		instrument {
-			kubernetes {
-				namespace = "<NAMESPACE>"
-			}
-		}
-	}
+  discovery {
+    instrument {
+      kubernetes {
+        namespace = "<NAMESPACE>"
+      }
+    }
+  }
 
-	metrics {
-		features = [
-			"application",
-		]
-	}
+  metrics {
+    features = [
+      "application",
+    ]
+  }
 
-	output {
-		traces = [otelcol.exporter.otlp.grafana_cloud_tempo.input]
-	}
+  output {
+    traces = [otelcol.exporter.otlp.grafana_cloud_tempo.input]
+  }
 }
 
 prometheus.scrape "beyla" {
-	targets      = beyla.ebpf.default.targets
-	honor_labels = true
-	forward_to   = [prometheus.remote_write.rw.receiver]
+  targets      = beyla.ebpf.default.targets
+  honor_labels = true
+  forward_to   = [prometheus.remote_write.rw.receiver]
 }
 
 prometheus.remote_write "rw" {
-	endpoint {
-		url = "<PROMETHEUS_REMOTE_WRITE_URL>"
+  endpoint {
+    url = "<PROMETHEUS_REMOTE_WRITE_URL>"
 
-		basic_auth {
-			username = sys.env("PROMETHEUS_REMOTE_WRITE_USERNAME")
-			password = sys.env("PROMETHEUS_REMOTE_WRITE_PASSWORD")
-		}
-	}
+    basic_auth {
+      username = sys.env("PROMETHEUS_REMOTE_WRITE_USERNAME")
+      password = sys.env("PROMETHEUS_REMOTE_WRITE_PASSWORD")
+    }
+  }
 }
 
 otelcol.exporter.otlp "grafana_cloud_tempo" {
-	client {
-		endpoint = "<TEMPO_ENDPOINT>"
-		auth     = otelcol.auth.basic.grafana_cloud_tempo.handler
-	}
+  client {
+    endpoint = "<TEMPO_ENDPOINT>"
+    auth     = otelcol.auth.basic.grafana_cloud_tempo.handler
+  }
 }
 
 otelcol.auth.basic "grafana_cloud_tempo" {
-	username = sys.env("TEMPO_REMOTE_WRITE_USERNAME")
-	password = sys.env("TEMPO_REMOTE_WRITE_PASSWORD")
+  username = sys.env("TEMPO_REMOTE_WRITE_USERNAME")
+  password = sys.env("TEMPO_REMOTE_WRITE_PASSWORD")
 }
 ```
 
@@ -145,27 +146,27 @@ Replace the following:
 - _`<PROMETHEUS_REMOTE_WRITE_URL>`_: The Prometheus remote write URL of your Grafana Cloud stack, which ends in `/api/prom/push`
 - _`<TEMPO_ENDPOINT>`_: The Tempo endpoint of your Grafana Cloud stack, including the `:443` port
 
-Deploy the configuration with the command:
+Create a ConfigMap from the file:
 
-```bash
+```sh
 kubectl create configmap --namespace alloy alloy-config "--from-file=config.alloy=./config.alloy"
 ```
 
-With this configuration Beyla instruments the applications in the _`<NAMESPACE>`_ namespace, and Alloy sends the traces to Grafana Cloud Tempo and the metrics to Grafana Cloud Prometheus.
+With this configuration, Beyla instruments the applications in the _`<NAMESPACE>`_ namespace, and Alloy sends the traces to Grafana Cloud Tempo and the metrics to Grafana Cloud Prometheus.
 
-The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics and traces, which adds the metadata of the Kubernetes entities running the automatically instrumented services.
+The `attributes > kubernetes > enable` attribute adds Kubernetes metadata, such as the namespace and Pod name, to the metrics and traces of the instrumented applications.
 
-The `discovery > instrument > kubernetes` block selects the services to instrument by their Kubernetes metadata, with glob patterns. In this example, Beyla instruments the applications in the _`<NAMESPACE>`_ namespace.
+The `discovery > instrument > kubernetes` block selects the applications to instrument by their Kubernetes metadata, with glob patterns.
 
-The `prometheus.scrape` section configures Prometheus scrape to collect metrics from Beyla. The `honor_labels = true` setting preserves the per-process instance identifiers set by Beyla. The `prometheus.remote_write` section sends the metrics to Grafana Cloud Prometheus.
+The `prometheus.scrape` component collects the Beyla metrics. The `honor_labels = true` setting keeps the per-process `instance` and `job` labels that Beyla sets. The `prometheus.remote_write` component sends the metrics to Grafana Cloud Prometheus.
 
-The `output` section configures that Beyla component sends traces to `otelcol.exporter.otlp` component. The `otelcol.exporter.otlp` section configures the [OTLP exporter](/docs/alloy/latest/reference/components/otelcol.exporter.otlp) to send the traces to Grafana Cloud Tempo.
+The `output` block sends the Beyla traces to the `otelcol.exporter.otlp` component. The [OTLP exporter](/docs/alloy/latest/reference/components/otelcol.exporter.otlp) sends the traces to Grafana Cloud Tempo, and the `otelcol.auth.basic` component authenticates the requests.
 
-For further details on the configuration options, refer to the documentation of the [Grafana Alloy Beyla component](/docs/alloy/latest/reference/components/beyla.ebpf)
+For more information about the configuration options, refer to the [Grafana Alloy Beyla component](/docs/alloy/latest/reference/components/beyla.ebpf) documentation.
 
 ## Install the Alloy Helm chart
 
-Create a `values.yaml` with the configuration for the Alloy Helm chart. Copy the following contents into a file, for example `values.yaml`.
+Save the following Alloy Helm chart values as `values.yaml`:
 
 ```yaml
 alloy:
@@ -208,8 +209,7 @@ Install Alloy with the command:
 helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
 ```
 
-- To run in DaemonSet mode, Beyla requires to have access to all the
-  processes in the node. Therefore set `hostPID: true` the `controller` section.
+- The `controller.hostPID: true` value runs the Alloy Pods in the host process ID (PID) namespace, so Beyla can find the processes on each node.
 - The Alloy container runs Beyla as a child process, and Beyla loads eBPF programs, so the Alloy container needs elevated privileges.
   The `privileged: true` value in the `alloy.securityContext` section grants all capabilities.
   For production, the Alloy documentation recommends that you run Alloy without `privileged: true` and grant only the capabilities that Beyla needs, as described in [Kubernetes: unprivileged, root user](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#kubernetes-unprivileged-root-user).

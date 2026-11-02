@@ -88,6 +88,20 @@
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
       ],
     },
+    {
+      customType: 'regex',
+      description: 'dashboard-linter installs the release named by version when the action is pinned to a commit',
+      datasourceTemplate: 'github-releases',
+      depNameTemplate: 'grafana/dashboard-linter',
+      packageNameTemplate: 'grafana/dashboard-linter',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+      managerFilePatterns: [
+        '/^\\.github/workflows/pull_request\\.yml$/',
+      ],
+      matchStrings: [
+        'uses: grafana/dashboard-linter@[a-f0-9]{40} # v[0-9]+\\.[0-9]+\\.[0-9]+[\\s\\S]*?version: v(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)',
+      ],
+    },
   ],
   packageRules: [
     {
@@ -180,6 +194,19 @@
         'digest',
         'minor',
         'major',
+      ],
+      schedule: [
+        'before 8am on Wednesday',
+      ],
+    },
+    {
+      description: 'Keep the dashboard-linter version input with the other GitHub Actions updates',
+      groupName: 'Github Actions',
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchPackageNames: [
+        'grafana/dashboard-linter',
       ],
       schedule: [
         'before 8am on Wednesday',

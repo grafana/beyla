@@ -110,6 +110,10 @@ const (
 	ResponseLengthPtrPos
 	ContentLengthPtrPos
 	ReqHeaderPtrPos
+	ReqProtoMajorPos
+	ReqProtoMinorPos
+	RespProtoMajorPos
+	RespProtoMinorPos
 	IoWriterBufPtrPos
 	IoWriterNPos
 	IoWriterWrPos
@@ -306,6 +310,8 @@ var structMembers = map[string]structInfo{
 			"Method":        MethodPtrPos,
 			"ContentLength": ContentLengthPtrPos,
 			"Header":        ReqHeaderPtrPos,
+			"ProtoMajor":    ReqProtoMajorPos,
+			"ProtoMinor":    ReqProtoMinorPos,
 		},
 	},
 	"net/url.URL": {
@@ -322,6 +328,8 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"StatusCode":    StatusCodePtrPos,
 			"ContentLength": ResponseLengthPtrPos,
+			"ProtoMajor":    RespProtoMajorPos,
+			"ProtoMinor":    RespProtoMinorPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.Stream": {
@@ -899,6 +907,13 @@ func offsetsForLibVersions(fieldOffsets FieldOffsets, libVersions map[string]str
 				} else {
 					fieldOffsets[MongoOneThirteenOne] = uint64(0)
 				}
+			}
+		case "go.mongodb.org/mongo-driver/v2":
+			// Every v2 release has Operation.Name. The flag and that offset are
+			// shared with v1, so when v1 is linked too, its version decides and a
+			// v1 older than 1.13.1 keeps its spans.
+			if _, v1Linked := libVersions["go.mongodb.org/mongo-driver"]; !v1Linked {
+				fieldOffsets[MongoOneThirteenOne] = uint64(1)
 			}
 		case "golang.org/x/net":
 			ver = cleanLibVersion(ver, true, lib, log)

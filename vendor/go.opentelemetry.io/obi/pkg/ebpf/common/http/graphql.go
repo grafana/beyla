@@ -19,9 +19,10 @@ import (
 
 type (
 	graphQLRequest struct {
-		Query        string `json:"query"`
-		Mutation     string `json:"mutation"`
-		Subscription string `json:"subscription"`
+		Query         string `json:"query"`
+		Mutation      string `json:"mutation"`
+		Subscription  string `json:"subscription"`
+		OperationName string `json:"operationName"`
 	}
 	graphQLOperation struct {
 		Type     string // query, mutation, subscription
@@ -84,11 +85,15 @@ func parseGraphQLRequest(data []byte) (graphQLOperation, error) {
 	if err != nil {
 		return op, fmt.Errorf("failed to parse GraphQL document: %w", err)
 	}
-	if len(doc.Operations) < 1 {
+	if len(doc.Operations) == 0 {
 		return op, errors.New("no GraphQL operations found")
 	}
 
-	operation := doc.Operations[0]
+	operation := doc.Operations.ForName(req.OperationName)
+	if operation == nil {
+		operation = doc.Operations[0]
+	}
+
 	op.Document = input
 	op.Name = operation.Name
 	op.Type = string(operation.Operation)

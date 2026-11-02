@@ -24,6 +24,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -278,7 +279,9 @@ func (i *JavaInjector) NewExecutable(ctx context.Context, target InjectionTarget
 		}
 
 		if loaded {
-			if err := i.verifyLoadedAgentVersion(ctx, attacher, target.Process, target.Pid); err != nil {
+			// java.net.http.HttpClient was introduced after Java 8.
+			checkPropagation := !jdk8 && i.cfg.EBPF.ContextPropagation.HasHeaders() && supportsHeaderPropagation(i.log)
+			if err := i.verifyLoadedAgent(ctx, attacher, target.Process, target.Pid, checkPropagation); err != nil {
 				resultChan <- result{err: err}
 				return
 			}
@@ -433,6 +436,8 @@ func returnCodeLine(line string) (bool, error) {
 	return false, nil
 }
 
+var supportsHeaderPropagation = ebpfcommon.SupportsJavaHTTP1Propagation
+
 func (i *JavaInjector) attachOpts(runtimeMetricsEnabled bool) string {
 	var opts []string
 	if i.cfg.Java.Debug {
@@ -440,6 +445,16 @@ func (i *JavaInjector) attachOpts(runtimeMetricsEnabled bool) string {
 	}
 	if i.cfg.Java.DebugInstrumentation {
 		opts = append(opts, "debugBB=true")
+	}
+	switch {
+	case !i.cfg.EBPF.ContextPropagation.HasHeaders():
+		i.log.Debug("Java HTTPS HTTP/1.1 header injection disabled by propagation configuration",
+			"api", "HttpClient.send/sendAsync", "configured_header_propagation", false, "effective", "disabled")
+	case supportsHeaderPropagation(i.log):
+		opts = append(opts, "httpHeaders=true")
+	default:
+		i.log.Warn("Java HTTPS HTTP/1.1 header injection unavailable: kernel write-user or atomic reservation support is unavailable",
+			"api", "HttpClient.send/sendAsync", "configured_header_propagation", true, "effective", "unavailable")
 	}
 	if runtimeMetricsEnabled {
 		opts = append(opts, "runtimeMetrics=true")
@@ -596,26 +611,42 @@ func (i *JavaInjector) jdkAgentAlreadyLoadedHotspot8(
 	return false, nil
 }
 
-// verifyLoadedAgentVersion checks the agent a JVM already runs against the agent OBI would
-// inject. A Java agent cannot be unloaded or upgraded in place, so on a mismatch the process
-// keeps reporting through an agent this OBI build does not understand until it is restarted.
-func (i *JavaInjector) verifyLoadedAgentVersion(
+// verifyLoadedAgent checks the version and optional HttpClient capability in one
+// JVM properties response. A loaded agent cannot be upgraded without a restart.
+func (i *JavaInjector) verifyLoadedAgent(
 	ctx context.Context,
 	attacher jvmAttacher,
 	process *procs.ProcessHandle,
 	pid app.PID,
+	checkPropagation bool,
 ) error {
-	// nothing to compare against when the embedded agent carries no version marker
-	if i.agentVersion == "" {
+	if i.agentVersion == "" && !checkPropagation {
 		return nil
 	}
 
-	loadedVersion, err := i.loadedAgentVersion(ctx, attacher, process, pid)
-	if err != nil {
-		return err
+	version, capability, asyncCapability, err := i.loadedAgentProperties(ctx, attacher, process, pid)
+	if i.agentVersion != "" {
+		if err != nil {
+			return err
+		}
+		if err := i.verifyAgentVersion(pid, version); err != nil {
+			return err
+		}
 	}
-
-	return i.verifyAgentVersion(pid, loadedVersion)
+	if checkPropagation && (err != nil || capability != "true") {
+		i.log.Warn("HTTPS HttpClient header propagation unavailable in the loaded Java agent; restart the JVM with a supported runtime and header propagation enabled to activate it",
+			"pid", pid, "error", err)
+	}
+	if checkPropagation {
+		if err != nil || asyncCapability != "true" {
+			i.log.Warn("HTTPS HttpClient.sendAsync header propagation unavailable in the loaded Java agent; restart the JVM with a supported runtime and header propagation enabled to activate it",
+				"pid", pid, "configured_header_propagation", true, "effective", "unavailable", "protocol", "HTTP/1.1", "error", err)
+		} else {
+			i.log.Debug("HTTPS HttpClient.sendAsync header injection path available; individual requests may still be excluded or skipped",
+				"pid", pid, "configured_header_propagation", true, "effective", "available", "protocol", "HTTP/1.1")
+		}
+	}
+	return nil
 }
 
 func (i *JavaInjector) verifyAgentVersion(pid app.PID, loadedVersion string) error {
@@ -636,12 +667,12 @@ func (i *JavaInjector) verifyAgentVersion(pid app.PID, loadedVersion string) err
 	}
 }
 
-func (i *JavaInjector) loadedAgentVersion(
+func (i *JavaInjector) loadedAgentProperties(
 	ctx context.Context,
 	attacher jvmAttacher,
 	process *procs.ProcessHandle,
 	pid app.PID,
-) (string, error) {
+) (string, string, string, error) {
 	attacher.Init()
 
 	defer func() {
@@ -653,15 +684,28 @@ func (i *JavaInjector) loadedAgentVersion(
 	out, err := attacher.Attach(ctx, process, []string{"jcmd", "VM.system_properties"}, true)
 	if err != nil {
 		i.log.Error("error executing command for the JVM", "pid", pid, "error", err)
-		return "", err
+		return "", "", "", err
 	}
 
 	if out == nil {
-		return "", nil
+		return "", "", "", nil
 	}
 	defer out.Close()
 
-	return javaProperty(out, agentVersionProperty)
+	properties, err := io.ReadAll(out)
+	if err != nil {
+		return "", "", "", err
+	}
+	version, err := javaProperty(bytes.NewReader(properties), agentVersionProperty)
+	if err != nil {
+		return "", "", "", err
+	}
+	capability, err := javaProperty(bytes.NewReader(properties), httpClientPropagationProperty)
+	if err != nil {
+		return version, "", "", err
+	}
+	asyncCapability, err := javaProperty(bytes.NewReader(properties), httpClientAsyncPropagationProperty)
+	return version, capability, asyncCapability, err
 }
 
 func (i *JavaInjector) verifyJVMVersion(

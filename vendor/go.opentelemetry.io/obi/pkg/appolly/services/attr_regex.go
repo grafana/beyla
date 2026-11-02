@@ -126,6 +126,10 @@ type RegexSelector struct {
 
 	Routes *CustomRoutesConfig `yaml:"routes"`
 
+	// Exceptions overrides capture settings for this workload. Only config v2
+	// sets it, from a rule's refine.exceptions.
+	Exceptions *ExceptionsOverride `yaml:"-" env:"-"`
+
 	// Metrics configuration that is custom for this service match
 	Metrics perapp.SvcMetricsConfig `yaml:"metrics"`
 }
@@ -252,3 +256,5 @@ func (a *RegexSelector) pids() ([]app.PID, bool) {
 	}
 	return out, true
 }
+
+func (a *RegexSelector) GetExceptionsConfig() *ExceptionsOverride { return a.Exceptions }

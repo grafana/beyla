@@ -41,6 +41,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/kube/klogbridge"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
 	"go.opentelemetry.io/obi/pkg/metadata"
+	"go.opentelemetry.io/obi/pkg/metadata/peer"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
 
@@ -118,6 +119,7 @@ var (
 )
 
 var DefaultConfig = Config{
+	Logs:                    otelcfg.LogsConfig{BatchMaxSize: 512, QueueSize: 2048, BatchTimeout: time.Second},
 	ChannelBufferLen:        50,
 	ChannelSendTimeout:      time.Minute,
 	ChannelSendTimeoutPanic: false,
@@ -227,6 +229,7 @@ var DefaultConfig = Config{
 		BPFFSPath:      "/sys/fs/bpf/",
 		InstrumentCuda: config.CudaModeAuto,
 	},
+	PeerMetadata: peer.DefaultConfig(),
 	CloudMetadata: transform.CloudMetadataConfig{
 		RefreshInterval: 30 * time.Second,
 		Route53:         transform.Route53MetadataConfig{RefreshInterval: cloud.DefaultRoute53RefreshInterval},
@@ -390,6 +393,8 @@ type Config struct {
 
 	Attributes    Attributes                    `yaml:"attributes"`
 	CloudMetadata transform.CloudMetadataConfig `yaml:"cloud_metadata"`
+
+	PeerMetadata peer.MetadataConfig `yaml:"-" env:"-" jsonschema:"-" validate:"-"`
 	// Routes configures URL path grouping. If not set, data will be directly forwarded to exporters.
 	Routes       *transform.RoutesConfig       `yaml:"routes"`
 	NameResolver *transform.NameResolverConfig `yaml:"name_resolver"`
@@ -397,6 +402,10 @@ type Config struct {
 	Traces       otelcfg.TracesConfig          `yaml:"otel_traces_export"`
 	Prometheus   prom.PrometheusConfig         `yaml:"prometheus_export"`
 	TracePrinter debug.TracePrinter            `yaml:"trace_printer" env:"OTEL_EBPF_TRACE_PRINTER"`
+
+	// Exceptions and Logs are set only by config v2.
+	Exceptions services.ExceptionsConfig `yaml:"-" env:"-"`
+	Logs       otelcfg.LogsConfig        `yaml:"-" env:"-"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	//
@@ -720,6 +729,8 @@ type Attributes struct {
 
 	// SensitiveQueryParams controls which query-parameter keys are redacted in url.full and url.query.
 	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
+
+	SanitizeSQLQueryText bool `yaml:"-" env:"-" json:"-"`
 }
 
 type HostIDConfig struct {
@@ -780,6 +791,13 @@ func (c *Config) ValidateStatic() error {
 	return c.validate(validationContext{})
 }
 
+// ValidateStaticForApplicationRefresh validates a selection refresh for an already
+// initialized application pipeline without inspecting host state. The pipeline
+// may become idle when all include rules are removed.
+func (c *Config) ValidateStaticForApplicationRefresh() error {
+	return c.validate(validationContext{applicationPipelineInitialized: true})
+}
+
 // ValidateForReceiver validates an OBI configuration whose signal consumers
 // are supplied by a Collector receiver.
 func (c *Config) ValidateForReceiver() error {
@@ -797,9 +815,10 @@ func (c *Config) ValidateStaticForReceiver() error {
 }
 
 type validationContext struct {
-	hostTracesSink           bool
-	hostMetricsSink          bool
-	checkCiliumCompatibility func(config.TCBackend) error
+	applicationPipelineInitialized bool
+	hostTracesSink                 bool
+	hostMetricsSink                bool
+	checkCiliumCompatibility       func(config.TCBackend) error
 }
 
 //nolint:cyclop
@@ -864,7 +883,7 @@ func (c *Config) validate(context validationContext) error {
 	}
 
 	networkEnabled := c.enabledForValidation(FeatureNetO11y, context)
-	applicationEnabled := c.enabledForValidation(FeatureAppO11y, context)
+	applicationEnabled := context.applicationPipelineInitialized || c.enabledForValidation(FeatureAppO11y, context)
 	statsEnabled := c.enabledForValidation(FeatureStatsO11y, context)
 	if !networkEnabled && !applicationEnabled && !statsEnabled {
 		return ConfigError("at least one of 'network', 'application' or 'stats' features must be enabled. " +
@@ -879,6 +898,12 @@ func (c *Config) validate(context validationContext) error {
 		}
 	}
 
+	if err := c.Logs.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+	if c.ExceptionsEnabled() && !c.Logs.Enabled() {
+		return ConfigError("exception capture requires a logger_provider exporter or a logs consumer")
+	}
 	otelMetricsEnabled := context.hostMetricsSink || c.OTELMetrics.EndpointEnabled()
 	tracesEnabled := context.hostTracesSink || c.Traces.Enabled()
 
@@ -903,7 +928,7 @@ func (c *Config) validate(context validationContext) error {
 	}
 
 	if applicationEnabled && !c.TracePrinter.Enabled() &&
-		!otelMetricsEnabled && !tracesEnabled &&
+		!otelMetricsEnabled && !tracesEnabled && !c.Logs.Enabled() &&
 		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" otel_metrics_export, otel_traces_export or prometheus_export")
@@ -926,6 +951,10 @@ func (c *Config) validate(context validationContext) error {
 	}
 	if c.InternalMetrics.Exporter == imetrics.InternalMetricsExporterOTEL && !otelMetricsEnabled {
 		return ConfigError("you can't enable OTEL internal metrics without enabling OTEL metrics")
+	}
+
+	if err := c.PeerMetadata.Validate(); err != nil {
+		return ConfigError(err.Error())
 	}
 
 	return nil
@@ -1170,4 +1199,22 @@ func (c *Config) normalize() {
 	if c.NetworkFlows.Enable {
 		c.Metrics.Features |= export.FeatureNetwork
 	}
+}
+
+// ExceptionsEnabled reports whether any selected workload can request capture.
+func (c *Config) ExceptionsEnabled() bool {
+	if c.Exceptions.Enabled {
+		return true
+	}
+	for _, s := range c.Discovery.Instrument {
+		if s.Exceptions.Resolve(c.Exceptions).Enabled {
+			return true
+		}
+	}
+	for _, s := range c.Discovery.Services {
+		if s.Exceptions.Resolve(c.Exceptions).Enabled {
+			return true
+		}
+	}
+	return false
 }

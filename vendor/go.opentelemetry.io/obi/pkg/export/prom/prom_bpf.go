@@ -97,6 +97,7 @@ var ringbufWriteMetrics = [...]struct {
 	{name: "events", key: uint32(ebpfcommon.BpfRingbufIdRINGBUF_EVENTS)},
 	{name: "gpu_events", key: uint32(ebpfcommon.BpfRingbufIdRINGBUF_GPU_EVENTS)},
 	{name: "log_events", key: uint32(ebpfcommon.BpfRingbufIdRINGBUF_LOG_EVENTS)},
+	{name: "exception_events", key: uint32(ebpfcommon.BpfRingbufIdRINGBUF_EXCEPTION_EVENTS)},
 }
 
 func BPFMetrics(

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -20,7 +21,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 var (
@@ -38,6 +38,7 @@ func criteriaMatcherProvider(
 	output *msg.Queue[[]Event[ProcessMatch]],
 	configCriteria []services.Selector,
 	dynamicSelector *DynamicSelector,
+	updates *services.CriteriaUpdates,
 ) swarm.InstanceFunc {
 	instrumenterNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	if dynamicSelector != nil {
@@ -55,7 +56,9 @@ func criteriaMatcherProvider(
 		Output:              output,
 		Namespace:           instrumenterNamespace,
 		HasHostPidAccess:    hasHostPidAccess(),
+		CriteriaUpdates:     updates,
 	}
+
 	return swarm.DirectInstance(m.Run)
 }
 
@@ -68,12 +71,14 @@ type Matcher struct {
 	LogEnricherCriteria []services.Selector
 	// ProcessHistory keeps track of the processes that have been already matched and submitted for
 	// instrumentation.
-	// This avoids keep inspecting again and again client processes each time they open a new connection port
+	// Without criteria updates, this avoids inspecting matched processes again when they open new ports.
 	ProcessHistory   map[app.PID]ProcessMatch
 	Input            <-chan []Event[ProcessAttrs]
 	Output           *msg.Queue[[]Event[ProcessMatch]]
 	Namespace        string
 	HasHostPidAccess bool
+	CriteriaUpdates  *services.CriteriaUpdates
+	observed         map[app.PID]observedProcess
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -94,25 +99,54 @@ func (pm ProcessMatch) LogEnricherEnabled() bool {
 func (m *Matcher) Run(ctx context.Context) {
 	defer m.Output.Close()
 	m.Log.Debug("starting criteria matcher node")
-	swarms.ForEachInput(ctx, m.Input, m.Log.Debug, func(i []Event[ProcessAttrs]) {
-		m.Log.Debug("filtering processes", "len", len(i))
-		o := m.filter(i)
-		m.Log.Debug("processes matching selection criteria", "len", len(o))
-		if len(o) > 0 {
-			m.Output.Send(o)
+
+	var updates <-chan services.CriteriaUpdate
+	if m.CriteriaUpdates != nil {
+		updates = m.CriteriaUpdates.Requests()
+		defer m.CriteriaUpdates.Stop()
+		m.observed = map[app.PID]observedProcess{}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-updates:
+			m.CriteriaUpdates.Complete(update, m.refresh(ctx, update))
+		case events, ok := <-m.Input:
+			if !ok {
+				return
+			}
+			m.Log.Debug("filtering processes", "len", len(events))
+			matches := m.filter(events)
+			m.Log.Debug("processes matching selection criteria", "len", len(matches))
+			if len(matches) > 0 {
+				m.Output.SendCtx(ctx, matches)
+			}
 		}
-	})
+	}
 }
 
 func (m *Matcher) filter(events []Event[ProcessAttrs]) []Event[ProcessMatch] {
 	var matches []Event[ProcessMatch]
 	for _, ev := range events {
 		if ev.Type == EventDeleted {
+			delete(m.observed, ev.Obj.pid)
 			if ev, ok := m.filterDeleted(ev.Obj); ok {
 				matches = append(matches, ev)
 			}
 		} else {
-			if ev, ok := m.filterCreated(ev.Obj); ok {
+			if m.observed != nil {
+				proc, err := processInfo(ev.Obj)
+				if err != nil {
+					m.Log.Debug("can't get information for process", "pid", ev.Obj.pid, "error", err)
+					continue
+				}
+				observed := m.observed[ev.Obj.pid]
+				observed.attrs, observed.process = ev.Obj, proc
+				m.observed[ev.Obj.pid] = observed
+			}
+			if ev, ok := m.filterCreated(ev.Obj, m.Criteria); ok {
 				matches = append(matches, ev)
 			}
 		}
@@ -125,11 +159,40 @@ func (m *Matcher) alreadyMatched(pid app.PID) bool {
 	return ok
 }
 
-func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *ProcessMatch {
-	criteria := make([]services.Selector, 0, len(m.Criteria))
-	for i := range m.Criteria {
-		if m.matchProcess(&obj, proc, m.Criteria[i]) && !m.isExcluded(&obj, proc) {
-			criteria = append(criteria, m.Criteria[i])
+func (m *Matcher) confirmedMatch(pid app.PID, criterion services.Selector) bool {
+	return containsCriterion(m.observed[pid].confirmedCriteria, criterion)
+}
+
+func containsCriterion(criteria []services.Selector, criterion services.Selector) bool {
+	return slices.ContainsFunc(criteria, func(previous services.Selector) bool {
+		return reflect.DeepEqual(previous, criterion)
+	})
+}
+
+func (m *Matcher) confirmCriteria(pid app.PID, criteria []services.Selector) {
+	observed, ok := m.observed[pid]
+	if !ok {
+		return
+	}
+	// Re-emissions cannot change the criteria already sent for instrumentation.
+	if previous, tracked := m.ProcessHistory[pid]; tracked {
+		confirmed := make([]services.Selector, 0, len(previous.Criteria))
+		for _, criterion := range criteria {
+			if containsCriterion(previous.Criteria, criterion) {
+				confirmed = append(confirmed, criterion)
+			}
+		}
+		criteria = confirmed
+	}
+	observed.confirmedCriteria = criteria
+	m.observed[pid] = observed
+}
+
+func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo, findingCriteria []services.Selector) *ProcessMatch {
+	criteria := make([]services.Selector, 0, len(findingCriteria))
+	for _, criterion := range findingCriteria {
+		if (m.confirmedMatch(obj.pid, criterion) || m.matchProcess(&obj, proc, criterion)) && !m.isExcluded(&obj, proc) {
+			criteria = append(criteria, criterion)
 		}
 	}
 
@@ -137,6 +200,15 @@ func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *P
 	for i := range m.LogEnricherCriteria {
 		if m.matchProcess(&obj, proc, m.LogEnricherCriteria[i]) {
 			logEnricherCriteria = append(logEnricherCriteria, m.LogEnricherCriteria[i])
+		}
+	}
+	// Keep inherited log enrichment while an inherited include rule remains confirmed.
+	if len(logEnricherCriteria) == 0 {
+		for _, criterion := range criteria {
+			if m.confirmedMatch(obj.pid, criterion) {
+				logEnricherCriteria = m.observed[obj.pid].inheritedLogEnricherCriteria
+				break
+			}
 		}
 	}
 
@@ -162,18 +234,23 @@ func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *P
 	return nil
 }
 
-func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
-	if m.alreadyMatched(obj.pid) {
+func (m *Matcher) filterCreated(obj ProcessAttrs, findingCriteria []services.Selector) (Event[ProcessMatch], bool) {
+	tracked := m.alreadyMatched(obj.pid)
+	if tracked && m.observed == nil {
 		return Event[ProcessMatch]{}, false
 	}
 
-	proc, err := processInfo(obj)
+	proc, err := m.processInfo(obj)
 	if err != nil {
 		m.Log.Debug("can't get information for process", "pid", obj.pid, "error", err)
 		return Event[ProcessMatch]{}, false
 	}
 
-	if processMatch := m.matchCriteria(obj, proc); processMatch != nil {
+	if processMatch := m.matchCriteria(obj, proc, findingCriteria); processMatch != nil {
+		m.confirmCriteria(obj.pid, processMatch.Criteria)
+		if tracked {
+			return Event[ProcessMatch]{}, false
+		}
 		m.ProcessHistory[obj.pid] = *processMatch
 
 		return Event[ProcessMatch]{
@@ -184,6 +261,14 @@ func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
 
 	// We didn't match the process, but let's see if the parent PID is tracked, it might be the child hasn't opened the port yet
 	if procMatch, ok := m.ProcessHistory[proc.PPid]; ok && !m.isExcluded(&obj, proc) {
+		m.confirmCriteria(obj.pid, procMatch.Criteria)
+		if observed, ok := m.observed[obj.pid]; ok {
+			observed.inheritedLogEnricherCriteria = procMatch.LogEnricherCriteria
+			m.observed[obj.pid] = observed
+		}
+		if tracked {
+			return Event[ProcessMatch]{}, false
+		}
 		m.Log.Debug("found process by matching the process parent id", "pid", proc.Pid, "ppid", proc.PPid, "comm", proc.ExePath, "metadata", obj.metadata)
 
 		procMatch.Process = proc
@@ -196,6 +281,9 @@ func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
 		}, true
 	}
 
+	if tracked {
+		return m.filterDeleted(obj)
+	}
 	return Event[ProcessMatch]{}, false
 }
 
@@ -206,6 +294,11 @@ func (m *Matcher) filterDeleted(obj ProcessAttrs) (Event[ProcessMatch], bool) {
 		return Event[ProcessMatch]{}, false
 	}
 	delete(m.ProcessHistory, obj.pid)
+	if observed, ok := m.observed[obj.pid]; ok {
+		observed.confirmedCriteria = nil
+		observed.inheritedLogEnricherCriteria = nil
+		m.observed[obj.pid] = observed
+	}
 	m.Log.Debug("stopped process", "pid", procMatch.Process.Pid, "comm", procMatch.Process.ExePath)
 	return Event[ProcessMatch]{
 		Type: EventDeleted,
@@ -543,4 +636,11 @@ var processInfo = func(pp ProcessAttrs) (*services.ProcessInfo, error) {
 		CmdArgs:   cmdLine,
 		OpenPorts: pp.openPorts,
 	}, nil
+}
+
+func (m *Matcher) processInfo(obj ProcessAttrs) (*services.ProcessInfo, error) {
+	if observed, ok := m.observed[obj.pid]; ok {
+		return observed.process, nil
+	}
+	return processInfo(obj)
 }

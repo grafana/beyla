@@ -631,3 +631,5 @@ func cloneAttrs(attrs dynamicPIDAttributes) dynamicPIDAttributes {
 		resourceAttributes: maps.Clone(attrs.resourceAttributes),
 	}
 }
+
+func (a *dynamicPIDCriteriaAdapter) GetExceptionsConfig() *services.ExceptionsOverride { return nil }

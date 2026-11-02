@@ -132,6 +132,7 @@ type SelectorConfig struct {
 	SelectionCfg            Selection
 	ExtraGroupAttributesCfg map[string][]attr.Name
 	SensitiveQueryParamsCfg SensitiveQueryParamsConfig
+	SanitizeSQLQueryText    bool
 }
 
 // AttrSelector returns, for each metric, the attributes that have to be reported

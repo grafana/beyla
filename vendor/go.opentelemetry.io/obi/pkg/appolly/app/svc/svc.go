@@ -143,6 +143,8 @@ type Attrs struct {
 	// Service Graph Metrics for all the services but RED metrics only for a few
 	Features export.Features
 
+	Exceptions services.ExceptionsConfig
+
 	LogEnricherEnabled bool
 
 	CustomInRouteMatcher  route.Matcher

@@ -5,13 +5,10 @@ package otel // import "go.opentelemetry.io/obi/pkg/export/otel"
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -424,7 +421,7 @@ func newHTTPTraceClient(cfg otelcfg.TracesConfig, reporter imetrics.Reporter) (o
 		if opts.UnixSocketAddr != "" {
 			transport = otelcfg.UnixTransport(opts.UnixSocketAddr)
 		} else {
-			transport.TLSClientConfig, err = traceTLSConfig(opts.SkipTLSVerify)
+			transport.TLSClientConfig, err = otlpTLSConfig("TRACES", opts.SkipTLSVerify)
 			if err != nil {
 				return nil, err
 			}
@@ -436,42 +433,6 @@ func newHTTPTraceClient(cfg otelcfg.TracesConfig, reporter imetrics.Reporter) (o
 		options = append(options, otlptracehttp.WithHTTPClient(client))
 	}
 	return otlptracehttp.NewClient(options...), nil
-}
-
-func traceTLSConfig(skipVerify bool) (*tls.Config, error) {
-	certFile := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE")
-	if certFile == "" {
-		certFile = os.Getenv("OTEL_EXPORTER_OTLP_CERTIFICATE")
-	}
-	clientCertFile := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE")
-	clientKeyFile := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_CLIENT_KEY")
-	if clientCertFile == "" || clientKeyFile == "" {
-		clientCertFile = os.Getenv("OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE")
-		clientKeyFile = os.Getenv("OTEL_EXPORTER_OTLP_CLIENT_KEY")
-	}
-	if certFile == "" && clientCertFile == "" && !skipVerify {
-		return nil, nil
-	}
-	config := &tls.Config{InsecureSkipVerify: skipVerify}
-	if certFile != "" {
-		data, err := os.ReadFile(certFile)
-		if err != nil {
-			return nil, err
-		}
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM(data) {
-			return nil, fmt.Errorf("no certificates found in %s", certFile)
-		}
-		config.RootCAs = pool
-	}
-	if clientCertFile != "" && clientKeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
-		if err != nil {
-			return nil, err
-		}
-		config.Certificates = []tls.Certificate{cert}
-	}
-	return config, nil
 }
 
 func newGRPCTraceClient(cfg otelcfg.TracesConfig, reporter imetrics.Reporter) (otlptrace.Client, error) {

@@ -34,6 +34,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
+	"go.opentelemetry.io/obi/pkg/internal/sqlprune"
 	"go.opentelemetry.io/obi/pkg/metadata"
 )
 
@@ -139,8 +140,17 @@ func UserSelectedAttributes(selectorCfg *attributes.SelectorConfig) (map[attr.Na
 
 // GroupSpans must remain public for collectors embedding OBI.
 func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection, redactKeys ...string) map[svc.UID][]TraceSpanAndAttributes {
+	return GroupSpansWithOptions(ctx, spans, traceAttrs, sampler, is, GroupSpansOptions{RedactKeys: redactKeys})
+}
+
+type GroupSpansOptions struct {
+	RedactKeys           []string
+	SanitizeSQLQueryText bool
+}
+
+func GroupSpansWithOptions(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection, opts GroupSpansOptions) map[svc.UID][]TraceSpanAndAttributes {
 	spanGroups := map[svc.UID][]TraceSpanAndAttributes{}
-	redactSet := buildRedactSet(redactKeys)
+	redactSet := buildRedactSet(opts.RedactKeys)
 
 	for i := range spans {
 		span := &spans[i]
@@ -151,7 +161,7 @@ func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.N
 			continue
 		}
 
-		selectedAttrs := traceAttributesSelectorInternal(span, traceAttrs, redactSet)
+		selectedAttrs := traceAttributesSelectorInternal(span, traceAttrs, redactSet, opts.SanitizeSQLQueryText)
 		samplerAttrs, responseErrorSelected := removeGenAIResponseErrorControl(selectedAttrs)
 
 		spanSampler := func() trace.Sampler {
@@ -701,6 +711,20 @@ func httpTransportScopeOf(span *request.Span) httpTransportScope {
 	}
 }
 
+func sqlQueryText(statement string, kind request.SQLKind, sanitize bool) string {
+	if !sanitize {
+		return statement
+	}
+	return sqlprune.SanitizeSQL(statement, kind)
+}
+
+func sqlppQueryText(statement string, sanitize bool) string {
+	if !sanitize {
+		return statement
+	}
+	return sqlprune.SanitizeSQLPP(statement)
+}
+
 // appendIfSet reports an attribute only when the parser determined a value for
 // it. OTLP has no absent value, so emitting the key with an empty string would
 // assert that the value is empty rather than unknown. It takes a string
@@ -774,7 +798,7 @@ func appendPeerService(attrs []attribute.KeyValue, span *request.Span, optionalA
 }
 
 //nolint:cyclop
-func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.Name]struct{}, redactSet map[string]struct{}) []attribute.KeyValue {
+func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.Name]struct{}, redactSet map[string]struct{}, sanitizeSQLQueryText bool) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -835,7 +859,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendIfSet(attrs, request.DBCollectionName, span.Route)
 			attrs = appendIfSet(attrs, request.DBNamespace, span.DBNamespace)
 			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
-				attrs = appendIfSet(attrs, request.DBQueryText, span.Statement)
+				attrs = appendIfSet(attrs, request.DBQueryText, sqlppQueryText(span.Statement, sanitizeSQLQueryText))
 			}
 			attrs = appendIfSet(attrs, request.DBOperationName, span.Method)
 			if span.DBError.ErrorCode != "" {
@@ -1289,6 +1313,57 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			}
 		}
 
+		if span.SubType == request.HTTPSubtypeCohere && span.GenAI != nil && span.GenAI.Cohere != nil {
+			ai := span.GenAI.Cohere
+			attrs = append(attrs, semconv.GenAIProviderNameCohere)
+			attrs = append(attrs, semconv.GenAIOperationNameKey.String(genAIOperationName(ai.OperationName)))
+			attrs = appendIfSet(attrs, semconv.GenAIResponseID, ai.ID)
+			attrs = appendIfSet(attrs, semconv.GenAIRequestModel, ai.Request.Model)
+			attrs = appendIfSet(attrs, semconv.GenAIResponseModel, span.GenAIResponseModel())
+			attrs = append(attrs, genAIUsageAttributes(span)...)
+			if reasons := ai.GetFinishReasons(); len(reasons) > 0 {
+				attrs = append(attrs, semconv.GenAIResponseFinishReasons(reasons...))
+			}
+			if ai.Request.MaxTokens > 0 {
+				attrs = append(attrs, semconv.GenAIRequestMaxTokens(ai.Request.MaxTokens))
+			}
+			if ai.Request.Temperature != 0 {
+				attrs = append(attrs, semconv.GenAIRequestTemperature(ai.Request.Temperature))
+			}
+			if ai.TopP > 0.0 {
+				attrs = append(attrs, semconv.GenAIRequestTopP(ai.TopP))
+			}
+			if ai.Request.TopK > 0 {
+				attrs = append(attrs, semconv.GenAIRequestTopK(float64(ai.Request.TopK)))
+			}
+			if ai.Request.FrequencyPenalty != 0 {
+				attrs = append(attrs, semconv.GenAIRequestFrequencyPenalty(ai.Request.FrequencyPenalty))
+			}
+			if ai.Request.PresencePenalty != 0 {
+				attrs = append(attrs, semconv.GenAIRequestPresencePenalty(ai.Request.PresencePenalty))
+			}
+			if ai.Request.Seed != nil {
+				attrs = append(attrs, semconv.GenAIRequestSeed(*ai.Request.Seed))
+			}
+			if stopSeqs := ai.Request.GetStopSequences(); len(stopSeqs) > 0 {
+				attrs = append(attrs, semconv.GenAIRequestStopSequences(stopSeqs...))
+			}
+			if ai.Request.Stream {
+				attrs = append(attrs, genAIRequestStreamKey.Bool(true))
+			}
+			if _, ok := optionalAttrs[attr.GenAIInput]; ok {
+				attrs = appendIfSet(attrs, semconv.GenAIInputMessagesKey.String, ai.Request.GetInput())
+			}
+			if _, ok := optionalAttrs[attr.GenAIOutput]; ok {
+				attrs = appendIfSet(attrs, semconv.GenAIOutputMessagesKey.String, ai.GetOutput())
+			}
+			if _, ok := optionalAttrs[attr.GenAITools]; ok {
+				if len(ai.Request.Tools) > 0 {
+					attrs = appendIfSet(attrs, semconv.GenAIToolDefinitionsKey.String, request.NormalizeToolDefinitions(ai.Request.Tools))
+				}
+			}
+		}
+
 		if span.SubType == request.HTTPSubtypeOpenAICompatible && span.GenAI != nil && span.GenAI.OpenAICompatible != nil {
 			ai := span.GenAI.OpenAICompatible
 			attrs = appendIfSet(attrs, semconv.GenAIProviderNameKey.String, span.GenAIProviderName())
@@ -1526,7 +1601,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendPeerService(attrs, span, optionalAttrs)
 		}
 		if _, ok := optionalAttrs[attr.DBQueryText]; ok {
-			attrs = appendIfSet(attrs, request.DBQueryText, span.Statement)
+			attrs = appendIfSet(attrs, request.DBQueryText, sqlQueryText(span.Statement, request.SQLKind(span.SubType), sanitizeSQLQueryText))
 		}
 		operation := span.Method
 		if operation != "" {
@@ -1835,7 +1910,7 @@ func networkPeerAttributes(span *request.Span, optionalAttrs map[attr.Name]struc
 
 // TraceAttributesSelector returns the []attribute.KeyValue for a single span.
 func TraceAttributesSelector(span *request.Span, optionalAttrs map[attr.Name]struct{}, redactKeys ...string) []attribute.KeyValue {
-	return traceAttributesSelectorInternal(span, optionalAttrs, buildRedactSet(redactKeys))
+	return traceAttributesSelectorInternal(span, optionalAttrs, buildRedactSet(redactKeys), false)
 }
 
 func removeGenAIResponseErrorControl(attrs []attribute.KeyValue) ([]attribute.KeyValue, bool) {
@@ -1880,6 +1955,10 @@ func genAIResponseErrorMessage(span *request.Span) string {
 	case request.HTTPSubtypeQwen:
 		if span.GenAI.Qwen != nil {
 			return span.GenAI.Qwen.Error.Message
+		}
+	case request.HTTPSubtypeCohere:
+		if span.GenAI.Cohere != nil {
+			return span.GenAI.Cohere.Error.Message
 		}
 	case request.HTTPSubtypeAWSBedrock:
 		if span.GenAI.Bedrock != nil {

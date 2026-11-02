@@ -83,6 +83,7 @@ func HTTPRequestTraceToSpan(parseCtx *EBPFParseContext, trace *HTTPRequestTrace)
 		Start:          int64(trace.StartMonotimeNs),
 		End:            int64(trace.EndMonotimeNs),
 		Status:         int(trace.Status),
+		ProtoVersion:   request.HTTPProtoVersion(int(trace.ProtoMajor), int(trace.ProtoMinor)),
 		TraceID:        trace.Tp.TraceId,
 		SpanID:         trace.Tp.SpanId,
 		ParentSpanID:   trace.Tp.ParentId,

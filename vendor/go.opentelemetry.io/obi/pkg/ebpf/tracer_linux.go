@@ -102,6 +102,7 @@ func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, cfg *obi.
 		shutdownTimeout:           cfg.ShutdownTimeout,
 		metrics:                   metrics,
 		bpffsPath:                 cfg.EBPF.BPFFSPath,
+		cgroupFSPath:              cfg.EBPF.CgroupFSPath,
 	}
 }
 
@@ -329,7 +330,7 @@ func (pt *ProcessTracer) loadTracer(eventContext *common.EBPFEventContext, p Tra
 	}
 
 	// Sockops support
-	if err := i.sockops(p); err != nil {
+	if err := i.sockops(p, pt.cgroupFSPath); err != nil {
 		printVerifierErrorInfo(err)
 		return err
 	}

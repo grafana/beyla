@@ -4,17 +4,23 @@
 package global // import "go.opentelemetry.io/obi/pkg/pipe/global"
 
 import (
+	"context"
+
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/cloud"
+	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/docker"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/exceptions"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/connector"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	netebpf "go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/pipe/rdns"
 	statsebpf "go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/metadata"
@@ -47,12 +53,17 @@ type ContextInfo struct {
 	// ECSInventory is shared by endpoint resolution and process metadata enrichment.
 	// TODO: add AWS name resolution features to network metrics
 	CloudMetaInventory *cloud.Inventory
+	// EBPFReverseDNS is shared by the network and stats pipelines.
+	EBPFReverseDNS *rdns.EBPFLookup
 
 	// OverrideAppExportQueue allows overriding the output queue of the application exporter
 	// to connect your own application exporters outside the OBI code base. If left unset, OBI will
 	// create its own private queue.
 	// This is useful when OBI runs in vendored mode
 	OverrideAppExportQueue *msg.Queue[[]request.Span]
+
+	// ExceptionInput carries capture-time events independently of span sampling.
+	ExceptionInput *msg.Queue[[]exceptions.Event]
 
 	// OverrideNetExportQueue allows overriding the output queue of the network exporter
 	// to connect your own network exporters outside the OBI code base. If left unset, OBI will
@@ -75,6 +86,7 @@ type ContextInfo struct {
 	// DynamicSelector, when set, restricts App O11y, NetO11y, and StatsO11y signals to
 	// the runtime-selected targets for each signal view. Pass via instrumenter.WithDynamicSelector.
 	DynamicSelector selection.MultiSignalPIDSelector
+	CriteriaUpdates *services.CriteriaUpdates
 }
 
 // AppO11y stores context information that is only required for application observability.
@@ -83,4 +95,8 @@ type AppO11y struct {
 	ReportRoutes bool
 	// EBPFEventContext provides shared eBPF maps to application observability nodes.
 	EBPFEventContext *ebpfcommon.EBPFEventContext
+}
+
+func NewEBPFReverseDNS(ctx context.Context, ebpfCfg *config.EBPFTracer, cfgs ...*rdns.ReverseDNS) *rdns.EBPFLookup {
+	return rdns.NewEBPFLookup(ctx, ebpfCfg, cfgs...)
 }

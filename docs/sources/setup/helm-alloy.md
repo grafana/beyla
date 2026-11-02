@@ -150,11 +150,11 @@ beyla.ebpf "default" {
 	}
 
 	discovery {
-		services {
-      kubernetes {
-				namespace = "default"
-				deployment_name = "."
-      }
+		instrument {
+			kubernetes {
+				namespace       = "default"
+				deployment_name = "docs"
+			}
 		}
 	}
 
@@ -177,27 +177,32 @@ prometheus.scrape "beyla" {
 
 prometheus.remote_write "rw" {
 	endpoint {
-		url = "https://prometheus-us-central1.grafana.net/api/prom/push"
+		url = "<PROMETHEUS_REMOTE_WRITE_URL>"
 
 		basic_auth {
-			username = env("PROMETHEUS_REMOTE_WRITE_USERNAME")
-			password = env("PROMETHEUS_REMOTE_WRITE_PASSWORD")
+			username = sys.env("PROMETHEUS_REMOTE_WRITE_USERNAME")
+			password = sys.env("PROMETHEUS_REMOTE_WRITE_PASSWORD")
 		}
 	}
 }
 
 otelcol.exporter.otlp "grafana_cloud_tempo" {
 	client {
-		endpoint = "tempo-us-central1.grafana.net:443"
+		endpoint = "<TEMPO_ENDPOINT>"
 		auth     = otelcol.auth.basic.grafana_cloud_tempo.handler
 	}
 }
 
 otelcol.auth.basic "grafana_cloud_tempo" {
-	username = env("TEMPO_REMOTE_WRITE_USERNAME")
-	password = env("TEMPO_REMOTE_WRITE_PASSWORD")
+	username = sys.env("TEMPO_REMOTE_WRITE_USERNAME")
+	password = sys.env("TEMPO_REMOTE_WRITE_PASSWORD")
 }
 ```
+
+Replace the following:
+
+- _`<PROMETHEUS_REMOTE_WRITE_URL>`_: The Prometheus remote write URL of your Grafana Cloud stack, which ends in `/api/prom/push`
+- _`<TEMPO_ENDPOINT>`_: The Tempo endpoint of your Grafana Cloud stack, including the `:443` port
 
 Deploy the configuration with the command:
 
@@ -209,7 +214,7 @@ With this configuration Beyla instruments the services running in the Kubernetes
 
 The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics and traces, which adds the metadata of the Kubernetes entities running the automatically instrumented services.
 
-The argument `discovery > services > kubernetes` specifies the selection of services based on Kubernetes metadata. In this example, Beyla instruments all deployments in namespace "default".
+The `discovery > instrument > kubernetes` block selects the services to instrument by their Kubernetes metadata, with glob patterns. In this example, Beyla instruments only the `docs` Deployment in the `default` namespace.
 
 The `prometheus.scrape` section configures Prometheus scrape to collect metrics from Beyla. The `honor_labels = true` setting preserves the per-process instance identifiers set by Beyla. The `prometheus.remote_write` section sends the metrics to Grafana Cloud Prometheus.
 

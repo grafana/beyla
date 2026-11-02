@@ -32,13 +32,15 @@ In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Allo
 
 ### 1. Prepare the Alloy environment in Kubernetes
 
-You need to install the Helm chart for Grafana Alloy in your Kubernetes cluster.
+Add the Grafana Helm chart repository, update it, and create the `alloy` namespace:
 
 ```bash
-helm install --namespace alloy alloy grafana/alloy
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+kubectl create namespace alloy
 ```
 
-This command installs the Grafana Alloy Helm chart in the `alloy` namespace.
+You install the Alloy Helm chart in this namespace after you create the credentials and the Alloy configuration.
 
 ### 2. Deploy services
 
@@ -261,10 +263,10 @@ controller:
   hostPID: true
 ```
 
-Deploy the configuration with the command:
+Install Alloy with the command:
 
 ```sh
-helm upgrade --namespace alloy alloy grafana/alloy -f values.yaml
+helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
 ```
 
 - To run in DaemonSet mode, Beyla requires to have access to all the

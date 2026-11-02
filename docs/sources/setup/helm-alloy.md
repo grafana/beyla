@@ -32,14 +32,16 @@ Use this option if you run Alloy in your cluster, or want to process the Beyla t
 To deploy Beyla on its own, refer to [Deploy Beyla with the Beyla Helm chart](../kubernetes-helm/).
 To deploy Beyla with Kubernetes cluster monitoring, refer to [Deploy Beyla with the Kubernetes Monitoring Helm chart](../kubernetes-helm-k8s-monitoring/).
 
-## Prerequisites
+## Before you begin
+
+Before you deploy Beyla, make sure you have the following:
 
 - A Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/) to create a local cluster
 - `kubectl` installed and configured for your cluster
 - [Helm](https://helm.sh/) installed
 - A Grafana Cloud stack, or a Prometheus remote write endpoint and an OTLP endpoint for traces
 
-### 1. Prepare the Alloy environment in Kubernetes
+## Prepare the Alloy environment
 
 Add the Grafana Helm chart repository, update it, and create the `alloy` namespace:
 
@@ -51,7 +53,7 @@ kubectl create namespace alloy
 
 You install the Alloy Helm chart in this namespace after you create the credentials and the Alloy configuration.
 
-### 3. Configure credentials
+## Configure credentials
 
 In this setup, Alloy sends the Beyla metrics to the Grafana Cloud Prometheus remote write endpoint and the traces to the Grafana Cloud Tempo OTLP endpoint. You can get a [free Grafana Cloud Account](/pricing/).
 
@@ -76,7 +78,7 @@ stringData:
   tempo-rw-pwd: "tempo-pwd"
 ```
 
-### 3. Create a ConfigMap with Alloy configuration
+## Create the Alloy configuration
 
 Create a `ConfigMap` with the Alloy configuration. Copy the following contents into a file, for example `config.alloy`:
 
@@ -161,7 +163,7 @@ The `output` section configures that Beyla component sends traces to `otelcol.ex
 
 For further details on the configuration options, refer to the documentation of the [Grafana Alloy Beyla component](/docs/alloy/latest/reference/components/beyla.ebpf)
 
-### 4. Deploy Alloy with Helm
+## Install the Alloy Helm chart
 
 Create a `values.yaml` with the configuration for the Alloy Helm chart. Copy the following contents into a file, for example `values.yaml`.
 
@@ -214,7 +216,9 @@ helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
   For the capabilities and Pod settings, refer to [Permissions](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#permissions) in the `beyla.ebpf` component reference.
 - The `extraEnv` section sets the environment variables for the Prometheus and Tempo credentials.
 
-### 5. Check that Beyla is running
+## Check that Beyla is running
+
+To check the deployment, complete the following steps:
 
 1. Check that the Alloy Pods are running:
 
@@ -234,3 +238,9 @@ helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
 After the applications in the _`<NAMESPACE>`_ namespace receive requests, their traces and metrics appear in your Grafana Cloud stack.
 To query the traces, open **Explore** and select the `grafanacloud-<STACK_NAME>-traces` data source, where _`<STACK_NAME>`_ is the name of your Grafana Cloud stack.
 For more information, refer to [Manage data sources in Grafana Cloud](https://grafana.com/docs/grafana-cloud/observe-and-act/connect-externally-hosted/data-sources-in-cloud/).
+
+## Next steps
+
+- [`beyla.ebpf` component reference](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/)
+- [Configure Grafana Alloy on Kubernetes](https://grafana.com/docs/alloy/latest/configure/kubernetes/)
+- [Beyla exported metrics](../../metrics/)

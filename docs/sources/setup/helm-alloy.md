@@ -117,6 +117,16 @@ spec:
       port: 80
 ```
 
+To send requests to the services from your computer, forward a local port to each service.
+Run each of the following commands in its own terminal and keep them running:
+
+```sh
+kubectl port-forward services/website 8080:80
+kubectl port-forward services/docs 8081:80
+```
+
+Requests to `http://localhost:8080` go to the `website` service, and requests to `http://localhost:8081` go to the `docs` service.
+
 ### 3. Configure credentials
 
 In this setup, Alloy sends the Beyla metrics to the Grafana Cloud Prometheus remote write endpoint and the traces to the Grafana Cloud Tempo OTLP endpoint. You can get a [free Grafana Cloud Account](/pricing/).
@@ -215,7 +225,7 @@ Deploy the configuration with the command:
 kubectl create configmap --namespace alloy alloy-config "--from-file=config.alloy=./config.alloy"
 ```
 
-With this configuration Beyla instruments the services running in the Kubernetes cluster and send traces to Grafana Cloud Tempo and metrics to Prometheus.
+With this configuration Beyla instruments the `docs` service, and Alloy sends the traces to Grafana Cloud Tempo and the metrics to Grafana Cloud Prometheus.
 
 The `attributes > kubernetes > enable` enables Kubernetes decoration for metrics and traces, which adds the metadata of the Kubernetes entities running the automatically instrumented services.
 
@@ -282,7 +292,7 @@ helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
 
 ### 5. Test the setup
 
-With the `kubectl port-forward` commands from the first step still running,
+With the `kubectl port-forward` commands from step 2 still running,
 test both web server instances. For example:
 
 ```sh
@@ -292,7 +302,8 @@ curl http://localhost:8081
 curl http://localhost:8081/foo
 ```
 
-Navigate to the instance in Grafana Cloud, and from the **Explore** section in the left panel, select the data source for the traces, named `grafanacloud-<your user name>-traces`.
+Navigate to the instance in Grafana Cloud, and from the **Explore** section in the left panel, select the data source for the traces, named `grafanacloud-<STACK_NAME>-traces`, where _`<STACK_NAME>`_ is the name of your Grafana Cloud stack.
+For more information, refer to [Manage data sources in Grafana Cloud](https://grafana.com/docs/grafana-cloud/observe-and-act/connect-externally-hosted/data-sources-in-cloud/).
 
 ![Select the traces data source](https://grafana.com/media/docs/grafana-cloud/beyla/tutorial/k8s/select-traces.png)
 

@@ -19,24 +19,24 @@ Grafana Alloy is a vendor-neutral distribution of the OpenTelemetry Collector, w
 Alloy includes Grafana Beyla, so you can instrument your applications with the same Alloy deployment that collects your infrastructure telemetry.
 The Alloy Helm chart deploys Alloy in Kubernetes.
 
-The Alloy [`beyla.ebpf` component](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/) runs Beyla as a child process inside the Alloy container.
+The Alloy [`beyla.ebpf` component][alloy-beyla] runs Beyla as a child process inside the Alloy container.
 Alloy scrapes the Beyla metrics through the `targets` export of the component, and receives the Beyla traces through the `output` block of the component.
 You can then process and route the Beyla telemetry with other Alloy components.
 
-You configure Beyla with the `beyla.ebpf` block in [Alloy syntax](https://grafana.com/docs/alloy/latest/get-started/syntax/), not with the Beyla YAML configuration file.
+You configure Beyla with the `beyla.ebpf` block in [Alloy syntax][alloy-syntax], not with the Beyla YAML configuration file.
 Each Alloy release includes a specific Beyla version, which the `beyla.ebpf` component reference lists.
 
 Use this option if you run Alloy in your cluster, or want to process the Beyla telemetry in Alloy pipelines.
-To deploy Beyla on its own, refer to [Deploy Beyla with the Beyla Helm chart](../kubernetes-helm/).
-To deploy Beyla with Kubernetes cluster monitoring, refer to [Deploy Beyla with the Kubernetes Monitoring Helm chart](../kubernetes-helm-k8s-monitoring/).
+To deploy Beyla on its own, refer to [Deploy Beyla with the Beyla Helm chart][beyla-helm].
+To deploy Beyla with Kubernetes cluster monitoring, refer to [Deploy Beyla with the Kubernetes Monitoring Helm chart][k8s-monitoring-helm].
 
 ## Before you begin
 
 Before you deploy Beyla, make sure you have the following:
 
-- A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations](../../introduction/requirements/).
-  For a local cluster, you can use [kind](https://kind.sigs.k8s.io/).
-- [Helm](https://helm.sh/) and `kubectl`, configured for the cluster
+- A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations][requirements].
+  For a local cluster, you can use [kind][kind].
+- [Helm][helm] and `kubectl`, configured for the cluster
 - Permission to create cluster-scoped resources and privileged Pods
 - A Grafana Cloud stack, or a Prometheus remote write endpoint and an OTLP endpoint for traces
 
@@ -54,12 +54,12 @@ You install the Alloy Helm chart in this namespace after you create the credenti
 
 ## Configure credentials
 
-Alloy sends the Beyla metrics to the Grafana Cloud Prometheus remote write endpoint and the traces to the Grafana Cloud Tempo OTLP endpoint. You can get a [free Grafana Cloud account](/pricing/).
+Alloy sends the Beyla metrics to the Grafana Cloud Prometheus remote write endpoint and the traces to the Grafana Cloud Tempo OTLP endpoint. You can get a [free Grafana Cloud account][cloud-pricing].
 
 Find the URL, user, and password for each endpoint:
 
-- **Prometheus**: In the [Cloud Portal](https://grafana.com/docs/grafana-cloud/platform/security-and-account-management/account-management/cloud-portal/), click **Details** in the **Prometheus** card. The password is a Cloud Access Policy token. For more information, refer to [Send metrics data from Prometheus](https://grafana.com/docs/grafana-cloud/send-data/metrics/metrics-prometheus/).
-- **Tempo**: Follow the procedure in [Locate your stack's URL, user, and password](https://grafana.com/docs/grafana-cloud/send-data/traces/set-up/locate-url-user-password/).
+- **Prometheus**: In the [Cloud Portal][cloud-portal], click **Details** in the **Prometheus** card. The password is a Cloud Access Policy token. For more information, refer to [Send metrics data from Prometheus][cloud-prometheus].
+- **Tempo**: Follow the procedure in [Locate your stack's URL, user, and password][cloud-tempo-credentials].
 
 Save the following Secret as `secrets.yml`, and create it with `kubectl apply -f secrets.yml`:
 
@@ -160,9 +160,9 @@ The `discovery > instrument > kubernetes` block selects the applications to inst
 
 The `prometheus.scrape` component collects the Beyla metrics. The `honor_labels = true` setting keeps the per-process `instance` and `job` labels that Beyla sets. The `prometheus.remote_write` component sends the metrics to Grafana Cloud Prometheus.
 
-The `output` block sends the Beyla traces to the `otelcol.exporter.otlp` component. The [OTLP exporter](/docs/alloy/latest/reference/components/otelcol.exporter.otlp) sends the traces to Grafana Cloud Tempo, and the `otelcol.auth.basic` component authenticates the requests.
+The `output` block sends the Beyla traces to the `otelcol.exporter.otlp` component. The [OTLP exporter][alloy-otlp-exporter] sends the traces to Grafana Cloud Tempo, and the `otelcol.auth.basic` component authenticates the requests.
 
-For more information about the configuration options, refer to the [Grafana Alloy Beyla component](/docs/alloy/latest/reference/components/beyla.ebpf) documentation.
+For more information about the configuration options, refer to the [Grafana Alloy Beyla component][alloy-beyla] documentation.
 
 ## Install the Alloy Helm chart
 
@@ -212,8 +212,8 @@ helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
 - The `controller.hostPID: true` value runs the Alloy Pods in the host process ID (PID) namespace, so Beyla can find the processes on each node.
 - The Alloy container runs Beyla as a child process, and Beyla loads eBPF programs, so the Alloy container needs elevated privileges.
   The `privileged: true` value in the `alloy.securityContext` section grants all capabilities.
-  For production, the Alloy documentation recommends that you run Alloy without `privileged: true` and grant only the capabilities that Beyla needs, as described in [Kubernetes: unprivileged, root user](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#kubernetes-unprivileged-root-user).
-  For the capabilities and Pod settings, refer to [Permissions](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#permissions) in the `beyla.ebpf` component reference.
+  For production, the Alloy documentation recommends that you run Alloy without `privileged: true` and grant only the capabilities that Beyla needs, as described in [Kubernetes: unprivileged, root user][alloy-beyla-unprivileged].
+  For the capabilities and Pod settings, refer to [Permissions][alloy-beyla-permissions] in the `beyla.ebpf` component reference.
 - The `extraEnv` section sets the environment variables for the Prometheus and Tempo credentials.
 
 ## Check that Beyla is running
@@ -237,10 +237,28 @@ To check the deployment, complete the following steps:
 
 After the applications in the _`<NAMESPACE>`_ namespace receive requests, their traces and metrics appear in your Grafana Cloud stack.
 To query the traces, open **Explore** and select the `grafanacloud-<STACK_NAME>-traces` data source, where _`<STACK_NAME>`_ is the name of your Grafana Cloud stack.
-For more information, refer to [Manage data sources in Grafana Cloud](https://grafana.com/docs/grafana-cloud/observe-and-act/connect-externally-hosted/data-sources-in-cloud/).
+For more information, refer to [Manage data sources in Grafana Cloud][cloud-data-sources].
 
 ## Next steps
 
-- [`beyla.ebpf` component reference](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/)
-- [Configure Grafana Alloy on Kubernetes](https://grafana.com/docs/alloy/latest/configure/kubernetes/)
-- [Beyla exported metrics](../../metrics/)
+- [`beyla.ebpf` component reference][alloy-beyla]
+- [Configure Grafana Alloy on Kubernetes][alloy-kubernetes]
+- [Beyla exported metrics][metrics]
+
+[alloy-beyla]: https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/
+[alloy-beyla-permissions]: https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#permissions
+[alloy-beyla-unprivileged]: https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#kubernetes-unprivileged-root-user
+[alloy-kubernetes]: https://grafana.com/docs/alloy/latest/configure/kubernetes/
+[alloy-otlp-exporter]: https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.exporter.otlp/
+[alloy-syntax]: https://grafana.com/docs/alloy/latest/get-started/syntax/
+[beyla-helm]: ../kubernetes-helm/
+[cloud-data-sources]: https://grafana.com/docs/grafana-cloud/observe-and-act/connect-externally-hosted/data-sources-in-cloud/
+[cloud-portal]: https://grafana.com/docs/grafana-cloud/platform/security-and-account-management/account-management/cloud-portal/
+[cloud-pricing]: /pricing/
+[cloud-prometheus]: https://grafana.com/docs/grafana-cloud/send-data/metrics/metrics-prometheus/
+[cloud-tempo-credentials]: https://grafana.com/docs/grafana-cloud/send-data/traces/set-up/locate-url-user-password/
+[helm]: https://helm.sh/
+[k8s-monitoring-helm]: ../kubernetes-helm-k8s-monitoring/
+[kind]: https://kind.sigs.k8s.io/
+[metrics]: ../../metrics/
+[requirements]: ../../introduction/requirements/

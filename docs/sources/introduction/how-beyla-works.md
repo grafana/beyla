@@ -60,7 +60,7 @@ To configure exports, refer to [Configure Beyla Prometheus and OpenTelemetry dat
 
 In Grafana, you can correlate Beyla metrics and traces with your logs and infrastructure data.
 In Grafana Cloud, Application Observability and Knowledge Graph use Beyla metrics and traces.
-To set up Beyla for Grafana Cloud, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-grafana-cloud].
+To set up Beyla for Grafana Cloud, refer to [Deploy Beyla with the Beyla Helm chart for Grafana Cloud][helm-grafana-cloud].
 
 ## Where Beyla runs
 

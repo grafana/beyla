@@ -1,0 +1,18 @@
+# Config v1 equivalent of OBI's Java HttpClient propagation fixture.
+log_level: debug
+otel_traces_export:
+  endpoint: http://127.0.0.1:4317
+  protocol: grpc
+  batch_timeout: 100ms
+discovery:
+  poll_interval: 500ms
+  min_process_age: 0s
+  instrument:
+    - open_ports: "${JAVA_HTTPCLIENT_PORTS:-8080,8086}"
+ebpf:
+  batch_timeout: 10ms
+  context_propagation: "${JAVA_HTTPCLIENT_PROPAGATION:-headers}"
+  track_request_headers: true
+  http_request_timeout: 10s
+routes:
+  unmatched: path

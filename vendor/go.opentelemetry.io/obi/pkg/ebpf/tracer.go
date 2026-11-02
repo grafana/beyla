@@ -155,6 +155,7 @@ type ProcessTracer struct {
 	metrics         imetrics.Reporter
 	shutdownTimeout time.Duration
 	bpffsPath       string
+	cgroupFSPath    string
 	// instrumentablesMu guards the instrumentable maps and serializes
 	// attachment against shutdown
 	instrumentablesMu         sync.Mutex

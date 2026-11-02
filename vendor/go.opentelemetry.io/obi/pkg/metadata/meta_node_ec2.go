@@ -6,8 +6,12 @@ package metadata // import "go.opentelemetry.io/obi/pkg/metadata"
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"strings"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/smithy-go/logging"
 
 	"go.opentelemetry.io/contrib/detectors/aws/ec2/v2"
@@ -58,4 +62,43 @@ func newEC2Detector() resource.Detector {
 	return ec2.NewResourceDetectorWithOptions(
 		ec2.WithAWSLogger(ec2SDKLogger(slog.With("component", "meta.NodeMeta.ec2"))),
 	)
+}
+
+func ec2NodeFetcher(ctx context.Context) (NodeMeta, error) {
+	node, err := otelNodeFetcher(ClusterEC2, newEC2Detector())(ctx)
+	if err != nil || !node.Features.Has(ClusterEC2) {
+		return node, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, connectionTimeout)
+	defer cancel()
+	node.EC2VPCID, err = ec2VPCID(ctx)
+	if err != nil {
+		nslog().Debug("can't detect EC2 VPC; skipping private DNS discovery", "error", err)
+	}
+	return node, nil
+}
+
+func ec2VPCID(ctx context.Context) (string, error) {
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithLogger(ec2SDKLogger(nslog())))
+	if err != nil {
+		return "", err
+	}
+	client := imds.NewFromConfig(cfg)
+	read := func(path string) (string, error) {
+		out, err := client.GetMetadata(ctx, &imds.GetMetadataInput{Path: path})
+		if err != nil {
+			return "", err
+		}
+		defer out.Content.Close()
+		value, err := io.ReadAll(out.Content)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(value)), nil
+	}
+	mac, err := read("mac")
+	if err != nil || mac == "" {
+		return "", err
+	}
+	return read("network/interfaces/macs/" + mac + "/vpc-id")
 }

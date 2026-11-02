@@ -116,3 +116,14 @@ config:
 		})
 	}
 }
+
+func TestReplaceEnvFrom(t *testing.T) {
+	t.Setenv("TEST_VAR", "process_value")
+	environment := map[string]string{"TEST_VAR": "snapshot_value", "EMPTY_VAR": ""}
+	getenv := func(name string) string { return environment[name] }
+
+	assert.Equal(t, "key: snapshot_value", string(ReplaceEnvFrom([]byte("key: ${TEST_VAR}"), getenv)))
+	assert.Equal(t, "key: default", string(ReplaceEnvFrom([]byte("key: ${EMPTY_VAR:-default}"), getenv)))
+	assert.Equal(t, "key: ", string(ReplaceEnvFrom([]byte("key: ${UNSET_VAR}"), getenv)))
+	assert.Equal(t, "key: ${TEST_VAR}", string(ReplaceEnvFrom([]byte("key: $${TEST_VAR}"), getenv)))
+}

@@ -251,8 +251,8 @@ func parseSQLPPRequest(req *http.Request) (*sqlppRequest, error) {
 	contentType := req.Header.Get("Content-Type")
 	if strings.Contains(contentType, "application/x-www-form-urlencoded") {
 		// Handle form-encoded requests
-		sqlppReq.Statement = extractFormValue(string(reqB), "statement")
-		sqlppReq.QueryCtx = extractFormValue(string(reqB), "query_context")
+		sqlppReq.Statement = unescapeSQLPPFormValue(extractFormValue(string(reqB), "statement"))
+		sqlppReq.QueryCtx = unescapeSQLPPFormValue(extractFormValue(string(reqB), "query_context"))
 		sqlppReq.Prepared = unquoteSQLPPIdentifier(unescapeSQLPPFormValue(extractFormValue(string(reqB), "prepared")))
 		sqlppReq.AutoExecute = isSQLPPTrue(unescapeSQLPPFormValue(extractFormValue(string(reqB), "auto_execute")))
 	} else {

@@ -1289,6 +1289,57 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			}
 		}
 
+		if span.SubType == request.HTTPSubtypeCohere && span.GenAI != nil && span.GenAI.Cohere != nil {
+			ai := span.GenAI.Cohere
+			attrs = append(attrs, semconv.GenAIProviderNameCohere)
+			attrs = append(attrs, semconv.GenAIOperationNameKey.String(genAIOperationName(ai.OperationName)))
+			attrs = appendIfSet(attrs, semconv.GenAIResponseID, ai.ID)
+			attrs = appendIfSet(attrs, semconv.GenAIRequestModel, ai.Request.Model)
+			attrs = appendIfSet(attrs, semconv.GenAIResponseModel, span.GenAIResponseModel())
+			attrs = append(attrs, genAIUsageAttributes(span)...)
+			if reasons := ai.GetFinishReasons(); len(reasons) > 0 {
+				attrs = append(attrs, semconv.GenAIResponseFinishReasons(reasons...))
+			}
+			if ai.Request.MaxTokens > 0 {
+				attrs = append(attrs, semconv.GenAIRequestMaxTokens(ai.Request.MaxTokens))
+			}
+			if ai.Request.Temperature != 0 {
+				attrs = append(attrs, semconv.GenAIRequestTemperature(ai.Request.Temperature))
+			}
+			if ai.TopP > 0.0 {
+				attrs = append(attrs, semconv.GenAIRequestTopP(ai.TopP))
+			}
+			if ai.Request.TopK > 0 {
+				attrs = append(attrs, semconv.GenAIRequestTopK(float64(ai.Request.TopK)))
+			}
+			if ai.Request.FrequencyPenalty != 0 {
+				attrs = append(attrs, semconv.GenAIRequestFrequencyPenalty(ai.Request.FrequencyPenalty))
+			}
+			if ai.Request.PresencePenalty != 0 {
+				attrs = append(attrs, semconv.GenAIRequestPresencePenalty(ai.Request.PresencePenalty))
+			}
+			if ai.Request.Seed != nil {
+				attrs = append(attrs, semconv.GenAIRequestSeed(*ai.Request.Seed))
+			}
+			if stopSeqs := ai.Request.GetStopSequences(); len(stopSeqs) > 0 {
+				attrs = append(attrs, semconv.GenAIRequestStopSequences(stopSeqs...))
+			}
+			if ai.Request.Stream {
+				attrs = append(attrs, genAIRequestStreamKey.Bool(true))
+			}
+			if _, ok := optionalAttrs[attr.GenAIInput]; ok {
+				attrs = appendIfSet(attrs, semconv.GenAIInputMessagesKey.String, ai.Request.GetInput())
+			}
+			if _, ok := optionalAttrs[attr.GenAIOutput]; ok {
+				attrs = appendIfSet(attrs, semconv.GenAIOutputMessagesKey.String, ai.GetOutput())
+			}
+			if _, ok := optionalAttrs[attr.GenAITools]; ok {
+				if len(ai.Request.Tools) > 0 {
+					attrs = appendIfSet(attrs, semconv.GenAIToolDefinitionsKey.String, request.NormalizeToolDefinitions(ai.Request.Tools))
+				}
+			}
+		}
+
 		if span.SubType == request.HTTPSubtypeOpenAICompatible && span.GenAI != nil && span.GenAI.OpenAICompatible != nil {
 			ai := span.GenAI.OpenAICompatible
 			attrs = appendIfSet(attrs, semconv.GenAIProviderNameKey.String, span.GenAIProviderName())
@@ -1880,6 +1931,10 @@ func genAIResponseErrorMessage(span *request.Span) string {
 	case request.HTTPSubtypeQwen:
 		if span.GenAI.Qwen != nil {
 			return span.GenAI.Qwen.Error.Message
+		}
+	case request.HTTPSubtypeCohere:
+		if span.GenAI.Cohere != nil {
+			return span.GenAI.Cohere.Error.Message
 		}
 	case request.HTTPSubtypeAWSBedrock:
 		if span.GenAI.Bedrock != nil {

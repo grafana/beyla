@@ -94,6 +94,9 @@ type NodeMeta struct {
 	// GCEInstanceID retains the detected VM identity independently of host.id overrides.
 	GCEInstanceID string
 
+	// EC2VPCID identifies the primary network interface's VPC for private DNS discovery.
+	EC2VPCID string
+
 	// AzureInstanceID retains the detected VM UUID independently of host.id overrides.
 	AzureInstanceID string
 
@@ -125,7 +128,7 @@ func NewNodeMeta(
 			azurevm.WithAttributeFilter(azureVMAttributeFilter),
 		)),
 		otelNodeFetcher(ClusterGCP, gcp.NewDetector()),
-		otelNodeFetcher(ClusterEC2, newEC2Detector()),
+		ec2NodeFetcher,
 		ecsNodeFetcher,
 		func(_ context.Context) (NodeMeta, error) {
 			return NodeMeta{HostID: overrideHost}, nil
@@ -209,6 +212,10 @@ func (ns *NodeMeta) merge(src NodeMeta) {
 	}
 	if instanceID := strings.TrimSpace(src.GCEInstanceID); instanceID != "" {
 		ns.GCEInstanceID = instanceID
+	}
+
+	if vpcID := strings.TrimSpace(src.EC2VPCID); vpcID != "" {
+		ns.EC2VPCID = vpcID
 	}
 	if instanceID := strings.TrimSpace(src.AzureInstanceID); instanceID != "" {
 		ns.AzureInstanceID = instanceID

@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/docker"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -36,14 +37,25 @@ import (
 	"github.com/grafana/beyla/v3/pkg/webhook"
 )
 
+// Option overrides the context information that RunBeyla builds from the configuration.
+type Option func(*global.ContextInfo)
+
+// WithCriteriaUpdater lets updater refresh the discovery criteria of the application pipeline.
+func WithCriteriaUpdater(updater *obiDiscover.CriteriaUpdater) Option {
+	return func(info *global.ContextInfo) { info.CriteriaUpdates = updater.Updates() }
+}
+
 // RunBeyla in the foreground process. This is a blocking function and won't exit
 // until both the AppO11y and NetO11y components end
-func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
+func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	normalizeConfig(cfg)
 
 	ctxInfo, err := buildCommonContextInfo(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("can't build common context info: %w", err)
+	}
+	for _, opt := range opts {
+		opt(ctxInfo)
 	}
 
 	app := cfg.Enabled(beyla.FeatureAppO11y)

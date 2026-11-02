@@ -180,6 +180,10 @@ type EBPFTracer struct {
 	// BPF path used to pin eBPF maps
 	BPFFSPath string `yaml:"bpf_fs_path" env:"OTEL_EBPF_BPF_FS_PATH"`
 
+	// CgroupFSPath is the host cgroup v2 mount used to attach sockops programs.
+	// Empty auto-detects it. Loaded from Config v2 only.
+	CgroupFSPath string `yaml:"-" env:"-"`
+
 	// ForceBPFMapReader forces the PerCPU HashMap operation of the Network Flows reader.
 	// The system will always try "batch", which is more efficient, but legacy systems like RHEL8-based will fallback to
 	// "legacy" (the slowest, more resource-consuming iterate&delete approach).

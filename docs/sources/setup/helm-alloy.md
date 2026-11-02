@@ -21,6 +21,17 @@ Alloy offers native pipelines for OpenTelemetry, Prometheus, and other telemetry
 Grafana Alloy bundles Beyla allowing you to instrument your applications at the same time
 you instrument your infrastructure. It also provides a Helm chart to deploy Alloy in Kubernetes.
 
+The Alloy [`beyla.ebpf` component](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/) runs Beyla as a child process inside the Alloy container.
+Alloy scrapes the Beyla metrics through the `targets` export of the component, and receives the Beyla traces through the `output` block of the component.
+You can then process and route the Beyla telemetry with other Alloy components.
+
+You configure Beyla with the `beyla.ebpf` block in [Alloy syntax](https://grafana.com/docs/alloy/latest/get-started/syntax/), not with the Beyla YAML configuration file.
+Each Alloy release includes a specific Beyla version, which the `beyla.ebpf` component reference lists.
+
+Use this option if you run Alloy in your cluster, or want to process the Beyla telemetry in Alloy pipelines.
+To deploy Beyla on its own, refer to [Deploy Beyla with the Beyla Helm chart](../kubernetes-helm/).
+To deploy Beyla with Kubernetes cluster monitoring, refer to [Deploy Beyla with the Kubernetes Monitoring Helm chart](../kubernetes-helm-k8s-monitoring/).
+
 ## Prerequisites
 
 - A Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/) to create a local cluster

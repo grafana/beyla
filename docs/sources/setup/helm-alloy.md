@@ -28,7 +28,7 @@ In this tutorial, you learn how to deploy Beyla in Kubernetes using Grafana Allo
 - A Kubernetes cluster, you can use [kind](https://kind.sigs.k8s.io/) to create a local cluster
 - `kubectl` installed and configured for your cluster
 - [Helm](https://helm.sh/) installed
-- A Grafana Cloud account or a compatible Prometheus and/or OpenTelemetry backend to receive the data
+- A Grafana Cloud stack, or a Prometheus remote write endpoint and an OTLP endpoint for traces
 
 ### 1. Prepare the Alloy environment in Kubernetes
 
@@ -119,11 +119,14 @@ spec:
 
 ### 3. Configure credentials
 
-Alloy can export metrics and traces to any OpenTelemetry endpoint, as well as exposing metrics as a Prometheus endpoint. However, it's recommend using the Prometheus and Tempo remote write endpoints in Grafana Cloud. You can get a [free Grafana Cloud Account](/pricing/).
+In this setup, Alloy sends the Beyla metrics to the Grafana Cloud Prometheus remote write endpoint and the traces to the Grafana Cloud Tempo OTLP endpoint. You can get a [free Grafana Cloud Account](/pricing/).
 
-From the Grafana Cloud Portal, look for the **Prometheus** box and click **Send Metrics**. For the **Tempo** box, click **Send Traces**.
+Find the URL, user, and password for each endpoint:
 
-Create a `secrets.yml` file with your Grafana Cloud credentials for Prometheus and Tempo remote write. Deploy it with the command `kubectl apply -f secrets.yml`.
+- Prometheus: In the [Cloud Portal](https://grafana.com/docs/grafana-cloud/platform/security-and-account-management/account-management/cloud-portal/), click **Details** in the **Prometheus** card. The password is a Cloud Access Policy token. For more information, refer to [Send metrics data from Prometheus](https://grafana.com/docs/grafana-cloud/send-data/metrics/metrics-prometheus/).
+- Tempo: Follow the procedure in [Locate your stack's URL, user, and password](https://grafana.com/docs/grafana-cloud/send-data/traces/set-up/locate-url-user-password/).
+
+Create a `secrets.yml` file with your Grafana Cloud credentials for the Prometheus and Tempo endpoints. Deploy it with the command `kubectl apply -f secrets.yml`.
 
 ```yaml
 apiVersion: v1
@@ -275,7 +278,7 @@ helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
   The `privileged: true` value in the `alloy.securityContext` section grants all capabilities.
   For production, the Alloy documentation recommends that you run Alloy without `privileged: true` and grant only the capabilities that Beyla needs, as described in [Kubernetes: unprivileged, root user](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#kubernetes-unprivileged-root-user).
   For the capabilities and Pod settings, refer to [Permissions](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#permissions) in the `beyla.ebpf` component reference.
-- The `extraEnv` section sets the environment variables for the Prometheus and Tempo remote write credentials.
+- The `extraEnv` section sets the environment variables for the Prometheus and Tempo credentials.
 
 ### 5. Test the setup
 

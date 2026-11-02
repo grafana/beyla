@@ -102,6 +102,7 @@ const (
 	NetSkProgObiSocketFilter           = "obi_socket__filter"
 	NetSkVarG_bpfDebug                 = "g_bpf_debug"
 	NetSkVarG_bpfHeaderPropagation     = "g_bpf_header_propagation"
+	NetSkVarG_bpfJavaHttp1Enabled      = "g_bpf_java_http1_enabled"
 	NetSkVarG_bpfLoopEnabled           = "g_bpf_loop_enabled"
 	NetSkVarG_bpfProbeWriteUserEnabled = "g_bpf_probe_write_user_enabled"
 	NetSkVarG_bpfTraceparentEnabled    = "g_bpf_traceparent_enabled"
@@ -179,6 +180,7 @@ type NetSkMapSpecs struct {
 type NetSkVariableSpecs struct {
 	G_bpfDebug                 *ebpf.VariableSpec `ebpf:"g_bpf_debug"`
 	G_bpfHeaderPropagation     *ebpf.VariableSpec `ebpf:"g_bpf_header_propagation"`
+	G_bpfJavaHttp1Enabled      *ebpf.VariableSpec `ebpf:"g_bpf_java_http1_enabled"`
 	G_bpfLoopEnabled           *ebpf.VariableSpec `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.VariableSpec `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.VariableSpec `ebpf:"g_bpf_traceparent_enabled"`
@@ -238,6 +240,7 @@ func (m *NetSkMaps) Close() error {
 type NetSkVariables struct {
 	G_bpfDebug                 *ebpf.Variable `ebpf:"g_bpf_debug"`
 	G_bpfHeaderPropagation     *ebpf.Variable `ebpf:"g_bpf_header_propagation"`
+	G_bpfJavaHttp1Enabled      *ebpf.Variable `ebpf:"g_bpf_java_http1_enabled"`
 	G_bpfLoopEnabled           *ebpf.Variable `ebpf:"g_bpf_loop_enabled"`
 	G_bpfProbeWriteUserEnabled *ebpf.Variable `ebpf:"g_bpf_probe_write_user_enabled"`
 	G_bpfTraceparentEnabled    *ebpf.Variable `ebpf:"g_bpf_traceparent_enabled"`

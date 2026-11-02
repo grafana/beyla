@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -22,6 +23,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/obi"
 
+	"github.com/grafana/beyla/v3/cmd/beyla/internal/configrefresh"
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/buildinfo"
 	"github.com/grafana/beyla/v3/pkg/components"
@@ -65,7 +67,7 @@ func main() {
 		configPath = &cfg
 	}
 
-	config := loadConfig(configPath)
+	config, configData := loadConfig(configPath)
 	if err := config.Validate(); err != nil {
 		slog.Error("wrong Beyla configuration", "error", err)
 		os.Exit(-1)
@@ -105,7 +107,8 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	if err := components.RunBeyla(ctx, config); err != nil {
+	opts := startConfigRefresh(ctx, config, *configPath, configData)
+	if err := components.RunBeyla(ctx, config, opts...); err != nil {
 		slog.Error("Beyla ran with errors", "error", err)
 		os.Exit(-1)
 	}
@@ -167,7 +170,7 @@ func logConfig(config *beyla.Config) {
 	}
 }
 
-func loadConfig(configPath *string) *beyla.Config {
+func loadConfig(configPath *string) (*beyla.Config, []byte) {
 	var configReader io.ReadCloser
 	if configPath != nil && *configPath != "" {
 		var err error
@@ -177,11 +180,48 @@ func loadConfig(configPath *string) *beyla.Config {
 		}
 		defer configReader.Close()
 	}
-	config, err := beyla.LoadConfig(configReader)
+
+	var configData bytes.Buffer
+	var reader io.Reader
+	if configReader != nil {
+		reader = io.TeeReader(configReader, &configData)
+	}
+	config, err := beyla.LoadConfig(reader)
 	if err != nil {
 		slog.Error("wrong configuration", "error", err)
 		// nolint:gocritic
 		os.Exit(-1)
 	}
-	return config
+	return config, configData.Bytes()
+}
+
+// startConfigRefresh lets the discovery criteria change without restarting Beyla: through the
+// control socket of a parent process such as Alloy or, without one, by watching the
+// configuration file. It returns the options that connect the refreshes to the pipeline.
+func startConfigRefresh(ctx context.Context, config *beyla.Config, configPath string, configData []byte) []components.Option {
+	conn, err := configrefresh.ControlConn()
+	if err != nil {
+		slog.Error("can't open the configuration control socket", "error", err)
+	}
+
+	if conn == nil && configPath == "" {
+		return nil
+	}
+
+	refresher, err := configrefresh.New(config, configData)
+	if err != nil {
+		slog.Debug("discovery criteria refresh disabled", "reason", err)
+		if conn != nil {
+			go configrefresh.Serve(ctx, conn, func(context.Context, []byte) error { return err })
+		}
+		return nil
+	}
+
+	if conn != nil {
+		go configrefresh.Serve(ctx, conn, refresher.Refresh)
+	} else {
+		go configrefresh.Watch(ctx, configPath, configData, refresher)
+	}
+
+	return []components.Option{components.WithCriteriaUpdater(refresher.Updater())}
 }

@@ -2,6 +2,9 @@ name: "CI Supervisor: Rerun flaky failures"
 
 on: # zizmor: ignore[dangerous-triggers] no code checkout; GITHUB_TOKEN used for all ops except label addition
   workflow_run:
+    # Fix OBI submodule CI is the agent workflow, not a CI flake. Watching it
+    # made a failed triage look like exhausted CI, which re-added agent/fix-obi
+    # and looped. Do not add it back to this list.
     workflows:
       - "Pull request checks"
       - "Pull request integration tests"
@@ -14,14 +17,13 @@ on: # zizmor: ignore[dangerous-triggers] no code checkout; GITHUB_TOKEN used for
       - "Documentation CI"
       - "Pull request integration tests on VM"
       - "Helm Test"
-      - "Fix OBI submodule CI"
     types: [completed]
 
 # Set restrictive permissions at workflow level
 permissions: {}
 
 concurrency:
-  group: "supervisor-${{ github.event.workflow_run.id }}"
+  group: supervisor-${{ github.event.workflow_run.head_sha || github.event.workflow_run.id }}
   cancel-in-progress: false
 
 jobs:
@@ -108,12 +110,30 @@ jobs:
           else
             echo "Skipping re-run: ${REASON}"
 
-            # Check if we should add agent/fix-obi label for automated PRs
             MAX_AGENT_RUNS=5
-            HAS_AUTOMATED=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "automated-pr")')
-            HAS_AGENT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | any(. == "agent/fix-obi" or . == "agent/fix-obi-pending")')
-            AGENT_LABEL_COUNT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json comments --jq '[.comments[] | select(.author.login == "grafana-beyla-bot" or .author.login == "github-actions[bot]") | .body | select(contains("Added `agent/fix-obi-pending` label") or contains("Added `agent/fix-obi` label"))] | length')
-            echo "agent/fix-obi has been added ${AGENT_LABEL_COUNT}/${MAX_AGENT_RUNS} times"
+            PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels,headRefName)
+            HAS_AUTOMATED=$(echo "$PR_JSON" | jq '[.labels[].name] | any(. == "automated-pr")')
+            HAS_AGENT=$(echo "$PR_JSON" | jq '[.labels[].name] | any(. == "agent/fix-obi" or . == "agent/fix-obi-pending")')
+            HEAD_BRANCH=$(echo "$PR_JSON" | jq -r '.headRefName')
+            AGENT_LABEL_COUNT=0
+            PAGE=1
+            while [ "$AGENT_LABEL_COUNT" -lt "$MAX_AGENT_RUNS" ] && [ "$PAGE" -le 20 ]; do
+              PAGE_JSON=$(gh api --method GET \
+                -H "Accept: application/vnd.github+json" \
+                "repos/${REPO}/actions/workflows/agent_fix-obi.yml/runs" \
+                -f "branch=${HEAD_BRANCH}" \
+                -F per_page=100 \
+                -F "page=${PAGE}" \
+                -F exclude_pull_requests=true)
+              BATCH=$(echo "$PAGE_JSON" | jq '[.workflow_runs[] | select(.conclusion != "skipped")] | length')
+              PAGE_SIZE=$(echo "$PAGE_JSON" | jq '.workflow_runs | length')
+              AGENT_LABEL_COUNT=$((AGENT_LABEL_COUNT + BATCH))
+              if [ "$PAGE_SIZE" -lt 100 ]; then
+                break
+              fi
+              PAGE=$((PAGE + 1))
+            done
+            echo "agent/fix-obi has started ${AGENT_LABEL_COUNT}/${MAX_AGENT_RUNS} times on ${HEAD_BRANCH}"
             echo "label_count=${AGENT_LABEL_COUNT}" >> "$GITHUB_OUTPUT"
             echo "max_label_runs=${MAX_AGENT_RUNS}" >> "$GITHUB_OUTPUT"
 
@@ -130,8 +150,11 @@ jobs:
 
   add-agent-label:
     name: Add agent/fix-obi-pending label
-    needs: evaluate-and-rerun
-    if: needs.evaluate-and-rerun.outputs.should-label == 'true'
+    needs: [evaluate-and-rerun, handle-ci-completion]
+    if: >-
+      always() &&
+      needs.evaluate-and-rerun.result == 'success' &&
+      needs.evaluate-and-rerun.outputs.should-label == 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -153,6 +176,16 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          # Re-read labels. evaluate-and-rerun's should_label snapshot races
+          # handle-ci-completion, which may already have promoted pending.
+          LABELS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name]')
+          HAS_PENDING=$(echo "$LABELS" | jq 'any(. == "agent/fix-obi-pending")')
+          HAS_FIX=$(echo "$LABELS" | jq 'any(. == "agent/fix-obi")')
+          if [ "$HAS_PENDING" = "true" ] || [ "$HAS_FIX" = "true" ]; then
+            echo "PR #${PR_NUMBER} already has an agent label. Not adding agent/fix-obi-pending."
+            exit 0
+          fi
 
           echo "Adding agent/fix-obi-pending label to PR #${PR_NUMBER}"
           gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi-pending"
@@ -195,9 +228,24 @@ jobs:
           PENDING=$(echo "$CHECKS_JSON" | jq '[.check_runs[] | select(.status != "completed")] | length')
 
           if [ "$TOTAL" -gt 0 ] && [ "$PENDING" -eq 0 ]; then
-            echo "All ${TOTAL} CI checks already complete — promoting to agent/fix-obi immediately"
-            gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"
-            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"
+            # Live re-read. This run holds the per-commit concurrency group,
+            # so the other writer here is a person adding agent/fix-obi while
+            # the check list above was in flight.
+            LIVE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name]')
+            if echo "$LIVE" | jq -e 'any(. == "agent/fix-obi")' >/dev/null; then
+              echo "agent/fix-obi is already set. Removing stale pending label only."
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending" || true
+              exit 0
+            fi
+            echo "All ${TOTAL} CI checks already complete — promoting to agent/fix-obi"
+            if ! gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"; then
+              echo "agent/fix-obi-pending was already removed. Not adding agent/fix-obi."
+              exit 0
+            fi
+            if ! gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"; then
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi-pending" || true
+              exit 1
+            fi
 
             # This PR is always automated-pr (evaluate-and-rerun only sets should-label for automated PRs).
             # If checks are also all green, request Copilot review since handle-ci-completion won't re-fire.
@@ -327,9 +375,35 @@ jobs:
           PR_NUMBER: ${{ steps.check.outputs.pr_number }}
           REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
+          LIVE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name]')
+          HAS_PENDING=$(echo "$LIVE" | jq 'any(. == "agent/fix-obi-pending")')
+          HAS_FIX=$(echo "$LIVE" | jq 'any(. == "agent/fix-obi")')
+
+          if [ "$HAS_FIX" = "true" ]; then
+            if [ "$HAS_PENDING" = "true" ]; then
+              echo "agent/fix-obi already set on PR #${PR_NUMBER}. Removing stale pending label."
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending" || true
+            else
+              echo "agent/fix-obi already set on PR #${PR_NUMBER}. Nothing to do."
+            fi
+            exit 0
+          fi
+
+          if [ "$HAS_PENDING" != "true" ]; then
+            echo "agent/fix-obi-pending is no longer on PR #${PR_NUMBER}. Not promoting."
+            exit 0
+          fi
+
           echo "Swapping agent/fix-obi-pending → agent/fix-obi on PR #${PR_NUMBER}"
-          gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"
-          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"
+          if ! gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "agent/fix-obi-pending"; then
+            echo "agent/fix-obi-pending was already removed. Not adding agent/fix-obi."
+            exit 0
+          fi
+          if ! gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi"; then
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "agent/fix-obi-pending" || true
+            exit 1
+          fi
 
       - name: Request Copilot review
         if: steps.check.outputs.should_request_review == 'true'

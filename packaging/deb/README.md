@@ -39,11 +39,6 @@ sudo apt install ./dist/beyla_*.deb
 
 The package does not configure an APT source.
 
-Earlier experimental packages used Grafana-prefixed state and SDK paths. This
-package stops before unpacking over such an installation; it does not migrate
-or remove the existing configuration or payload. Manually migrate the old
-installation before retrying.
-
 The interactive debconf setup asks for an instrumentation mode and the
 following inputs:
 

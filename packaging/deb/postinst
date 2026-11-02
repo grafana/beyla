@@ -3,10 +3,6 @@ set -e
 P=${BEYLA_PACKAGE_ROOT:-}
 case "$1" in
   configure)
-    if [ -f "$P/var/lib/grafana-beyla-sdk/mode" ]; then
-      echo "beyla: prior experimental package state found in /var/lib/grafana-beyla-sdk; automatic migration is unsupported, and the existing configuration has been left untouched" >&2
-      exit 1
-    fi
     if [ "${BEYLA_TEST_NO_DEBCONF:-0}" != 1 ]; then
       . "$P/usr/share/debconf/confmodule"
       db_get beyla/mode; export BEYLA_SDK_MODE="$RET"

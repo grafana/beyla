@@ -92,36 +92,6 @@ common_env=(
   "PATH=$bin:$PATH"
 )
 
-# A previous experimental layout is not migrated implicitly: stop before
-# touching either its state or the new package-owned paths.
-root_legacy="$tmp/legacy-install"
-mkdir -p "$root_legacy/var/lib/grafana-beyla-sdk" "$root_legacy/etc/grafana/beyla-sdk"
-printf 'sdk\n' > "$root_legacy/var/lib/grafana-beyla-sdk/mode"
-printf 'customer config\n' > "$root_legacy/etc/grafana/beyla-sdk/config.alloy"
-mkdir -p "$root_legacy/opt/grafana/beyla-sdk/dist"
-printf 'old sdk payload\n' > "$root_legacy/opt/grafana/beyla-sdk/dist/payload"
-legacy_env=("${common_env[@]}")
-for i in "${!legacy_env[@]}"; do
-  case "${legacy_env[$i]}" in
-    BEYLA_PACKAGE_ROOT=*) legacy_env[$i]="BEYLA_PACKAGE_ROOT=$root_legacy" ;;
-  esac
-done
-if env "${legacy_env[@]}" "$PACKAGE_DIR/preinst" upgrade 0.0.0; then
-  echo "expected pre-unpack legacy state guard to require manual migration" >&2
-  exit 1
-fi
-test "$(cat "$root_legacy/opt/grafana/beyla-sdk/dist/payload")" = 'old sdk payload'
-test ! -e "$root_legacy/opt/beyla/sdk"
-if env "${legacy_env[@]}" "$PACKAGE_DIR/postinst" configure >"$tmp/legacy.log" 2>&1; then
-  echo "expected prior experimental package state to require manual migration" >&2
-  exit 1
-fi
-grep -q 'automatic migration is unsupported' "$tmp/legacy.log"
-test "$(cat "$root_legacy/var/lib/grafana-beyla-sdk/mode")" = sdk
-grep -q 'customer config' "$root_legacy/etc/grafana/beyla-sdk/config.alloy"
-test ! -e "$root_legacy/var/lib/beyla/mode"
-test ! -e "$root_legacy/etc/beyla"
-
 env "${common_env[@]}" "$PACKAGE_DIR/postinst" configure
 [[ $(stat -c '%a' "$root/etc/beyla/alloy.env") == 600 ]]
 grep -q 'CONFIG_FILE=".*/etc/beyla/config.alloy"' "$root/etc/beyla/alloy.env"

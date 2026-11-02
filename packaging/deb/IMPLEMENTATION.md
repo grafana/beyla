@@ -27,11 +27,6 @@ the pristine `/etc/default/alloy`, the checksum-matching vendor
 customized Alloy installation is rejected rather than adopted. The package
 also refuses unmarked pre-existing files at its config destination.
 
-The previous experimental package layout used Grafana-prefixed state and SDK
-paths. `preinst` refuses an installation or upgrade when its legacy state
-marker is present, before unpacking can replace the prior payload. Migration
-and cleanup of that layout are manual; the package does not remove old files.
-
 The package owns `/var/lib/beyla/mode` and, in SDK mode,
 `/var/lib/beyla/services` as its configuration state markers. The
 persistent Alloy environment is `/etc/beyla/alloy.env`; SDK

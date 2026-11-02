@@ -98,7 +98,6 @@ install -m 0644 "$PACKAGE_DIR/validate-alloy.py" "$stage/usr/lib/beyla/validate-
 install -m 0644 "$PACKAGE_DIR/templates" "$stage/DEBIAN/templates"
 sed "s/^Version: .*/Version: $VERSION/" "$PACKAGE_DIR/control" > "$stage/DEBIAN/control"
 install -m 0755 "$PACKAGE_DIR/config" "$stage/DEBIAN/config"
-install -m 0755 "$PACKAGE_DIR/preinst" "$stage/DEBIAN/preinst"
 install -m 0755 "$PACKAGE_DIR/postinst" "$stage/DEBIAN/postinst"
 install -m 0755 "$PACKAGE_DIR/postrm" "$stage/DEBIAN/postrm"
 

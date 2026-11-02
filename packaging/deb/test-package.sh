@@ -10,7 +10,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$PACKAGE_DIR" -p 'tes
 "$PACKAGE_DIR/test-maintainer-scripts.sh"
 bash -n "$PACKAGE_DIR/build-deb.sh"
 sh -n "$PACKAGE_DIR/config" "$PACKAGE_DIR/postinst" "$PACKAGE_DIR/postrm"
-sh -n "$PACKAGE_DIR/preinst"
 python3 - "$PACKAGE_DIR/configure.py" "$PACKAGE_DIR/validate-alloy.py" "$PACKAGE_DIR/test_configure.py" <<'PY'
 import pathlib
 import sys
@@ -39,7 +38,6 @@ dpkg-deb --field "$deb" Description | grep -q '^Experimental Beyla instrumentati
 ! dpkg-deb --field "$deb" Description | grep -qi 'companion\|poc'
 dpkg --compare-versions "$(dpkg-deb --field "$deb" Version)" lt 1.2.3
 dpkg-deb --control "$deb" "$tmp/control"
-test -x "$tmp/control/preinst"
 grep -Fxq "Template: beyla/mode" "$tmp/control/templates"
 grep -Fxq "Template: beyla/fleet-enabled" "$tmp/control/templates"
 grep -Fxq "Default: false" "$tmp/control/templates"

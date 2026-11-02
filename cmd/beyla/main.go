@@ -106,9 +106,7 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	var opts []components.Option
-	if configVersion == configVersionV2 && config.CriteriaUpdates() != nil && configPath != nil && *configPath != "" {
-		// Config v2 reloads through OBI's watcher. The v1 refresher only understands
-		// the legacy document, so it must not replace these criteria.
+	if watchV2Config(configVersion, config, configPath) {
 		go configbridge.Watch(ctx, *configPath, configData, config.RefreshCriteria)
 	} else {
 		opts = startConfigRefresh(ctx, config, *configPath, configData)
@@ -213,6 +211,15 @@ func loadConfig(configPath *string) (*beyla.Config, string, []byte) {
 		os.Exit(-1)
 	}
 	return config, configVersionV1, data
+}
+
+// watchV2Config reports whether config v2 should reload through OBI's watcher.
+// The v1 refresher only understands the legacy document, so it must not replace
+// these criteria.
+func watchV2Config(version string, cfg *beyla.Config, configPath *string) bool {
+	return version == configVersionV2 &&
+		cfg.CriteriaUpdates() != nil &&
+		configPath != nil && *configPath != ""
 }
 
 // startConfigRefresh lets the discovery criteria change without restarting Beyla: through the

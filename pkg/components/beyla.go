@@ -57,9 +57,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	if ctxInfo.EBPFReverseDNS != nil {
 		defer ctxInfo.EBPFReverseDNS.Close(cfg.ShutdownTimeout)
 	}
-	for _, opt := range opts {
-		opt(ctxInfo)
-	}
+	applyRunOptions(ctxInfo, opts)
 
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
@@ -112,6 +110,12 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	}
 
 	return nil
+}
+
+func applyRunOptions(ctxInfo *global.ContextInfo, opts []Option) {
+	for _, opt := range opts {
+		opt(ctxInfo)
+	}
 }
 
 func startHealthCheck(ctx context.Context, g *errgroup.Group, cfg obi.HealthCheckConfig) {

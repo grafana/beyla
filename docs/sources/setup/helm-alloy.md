@@ -22,7 +22,7 @@ Alloy scrapes the Beyla metrics through the `targets` export of the component, a
 You can then process and route the Beyla telemetry with other Alloy components.
 
 You configure Beyla in [Alloy syntax][alloy-syntax], not with the Beyla YAML configuration file.
-Each Alloy release includes a specific Beyla version, which the `beyla.ebpf` component reference lists.
+Each Alloy release includes a specific Beyla version, which the [`beyla.ebpf` component][alloy-beyla] reference lists.
 
 Use this option to process the Beyla telemetry in Alloy pipelines.
 The `beyla.ebpf` component needs elevated privileges, so the Alloy documentation recommends a [dedicated Alloy instance][alloy-access] for it.

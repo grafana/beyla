@@ -271,12 +271,10 @@ helm upgrade --install --namespace alloy alloy grafana/alloy -f values.yaml
 
 - To run in DaemonSet mode, Beyla requires to have access to all the
   processes in the node. Therefore set `hostPID: true` the `controller` section.
-- The Beyla container needs to run with privileges as it requires
-  to perform privileged actions such as loading BPF programs and creating
-  BPF maps. Therefore set `privileged: true` in `securityContext` section. For running Beyla as `unprivileged` container, that's without the
-  `privileged: true` option, visit the
-  [Deploy Beyla unprivileged](../kubernetes/#deploy-beyla-unprivileged)
-  guide.
+- The Alloy container runs Beyla as a child process, and Beyla loads eBPF programs, so the Alloy container needs elevated privileges.
+  The `privileged: true` value in the `alloy.securityContext` section grants all capabilities.
+  For production, the Alloy documentation recommends that you run Alloy without `privileged: true` and grant only the capabilities that Beyla needs, as described in [Kubernetes: unprivileged, root user](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#kubernetes-unprivileged-root-user).
+  For the capabilities and Pod settings, refer to [Permissions](https://grafana.com/docs/alloy/latest/reference/components/beyla/beyla.ebpf/#permissions) in the `beyla.ebpf` component reference.
 - The `extraEnv` section sets the environment variables for the Prometheus and Tempo remote write credentials.
 
 ### 5. Test the setup

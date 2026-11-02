@@ -75,39 +75,6 @@ define go-install-tool
 @cd $(TOOLS_MOD_DIR) && GOBIN=$(abspath $(dir $(1))) go install $(2)
 endef
 
-# host OS/ARCH normalized for matching pre-built release asset filenames
-HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
-HOST_ARCH := $(shell uname -m)
-ifeq ($(HOST_ARCH),x86_64)
-HOST_ARCH := amd64
-endif
-ifeq ($(HOST_ARCH),aarch64)
-HOST_ARCH := arm64
-endif
-
-# download-release-tool fetches a pre-built binary from a GitHub release tarball
-# and installs it locally to $(1). The tarball must contain the binary named
-# $(notdir $(1)) at its root.
-# $(1) destination binary path
-# $(2) version (used as a stamp file suffix; no leading "v")
-# $(3) tarball URL
-define download-release-tool
-@[ -f "$(1)-$(2)" ] || { \
-set -e ;\
-echo "Removing any outdated version of $(1)";\
-rm -f $(1)*;\
-mkdir -p $(TOOLS_DIR) ;\
-TMP_DIR=$$(mktemp -d) ;\
-echo "Downloading $(3)" ;\
-curl -sSfL "$(3)" -o "$$TMP_DIR/tool.tar.gz" ;\
-tar -xzf "$$TMP_DIR/tool.tar.gz" -C "$$TMP_DIR" $(notdir $(1)) ;\
-mv "$$TMP_DIR/$(notdir $(1))" "$(1)" ;\
-chmod +x "$(1)" ;\
-touch "$(1)-$(2)" ;\
-rm -rf $$TMP_DIR ;\
-}
-endef
-
 # Check that given variables are set and all have non-empty values,
 # die with an error otherwise.
 #
@@ -126,9 +93,6 @@ GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 BPF2GO ?= $(TOOLS_DIR)/bpf2go
 GO_LICENSES = $(TOOLS_DIR)/go-licenses
 KIND = $(TOOLS_DIR)/kind
-DASHBOARD_LINTER = $(TOOLS_DIR)/dashboard-linter
-DASHBOARD_LINTER_VERSION = 0.1.1
-DASHBOARD_LINTER_URL = https://github.com/grafana/dashboard-linter/releases/download/v$(DASHBOARD_LINTER_VERSION)/dashboard-linter_$(DASHBOARD_LINTER_VERSION)_$(HOST_OS)_$(HOST_ARCH).tar.gz
 GINKGO = $(TOOLS_DIR)/ginkgo
 GOTESTSUM = $(TOOLS_DIR)/gotestsum
 
@@ -169,16 +133,11 @@ $(ENVTEST): $(TOOLS_MOD)
 $(GOTESTSUM): $(TOOLS_MOD)
 	$(call go-install-tool,$@,gotest.tools/gotestsum)
 
-# Target the versioned stamp file (not the bare binary) so that bumping
-# $(DASHBOARD_LINTER_VERSION) renames the prerequisite and re-triggers download.
-$(DASHBOARD_LINTER)-$(DASHBOARD_LINTER_VERSION):
-	$(call download-release-tool,$(DASHBOARD_LINTER),$(DASHBOARD_LINTER_VERSION),$(DASHBOARD_LINTER_URL))
-
 .PHONY: bpf2go
 bpf2go: $(BPF2GO)
 
 .PHONY: prereqs
-prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_LICENSES) $(KIND) $(DASHBOARD_LINTER)-$(DASHBOARD_LINTER_VERSION) $(ENVTEST) $(GOTESTSUM)
+prereqs: install-hooks $(BPF2GO) $(GOLANGCI_LINT) $(GO_LICENSES) $(KIND) $(ENVTEST) $(GOTESTSUM)
 	@echo "### Check if prerequisites are met, and installing missing dependencies"
 	mkdir -p $(TEST_OUTPUT)/run
 
@@ -199,17 +158,6 @@ checkfmt:
 .PHONY: clang-tidy
 clang-tidy:
 	cd bpf && find . -type f \( -name '*.c' -o -name '*.h' \) ! -path "./bpfcore/*" | xargs clang-tidy
-
-.PHONY: lint-dashboard
-lint-dashboard: prereqs
-	@echo "### Linting dashboard";
-	@if [ "$(shell sh -c 'git ls-files --modified | grep grafana/*.json ')" != "" ]; then \
-		for file in grafana/*.json; do \
-			$(DASHBOARD_LINTER) lint --strict $$file; \
-		done; \
-	else \
-		echo '(no git changes detected. Skipping)'; \
-	fi
 
 .PHONY: lint
 lint: prereqs checkfmt
@@ -281,7 +229,7 @@ check-config-schema:
 vendor-obi: obi-submodule docker-generate generate-obi-tests copy-obi-vendor
 
 .PHONY: verify
-verify: prereqs lint-dashboard vendor-obi lint test
+verify: prereqs vendor-obi lint test
 
 .PHONY: build
 build: vendor-obi verify compile

@@ -98,7 +98,23 @@ jobs:
           name: bpf-generated-${{ github.sha }}
 
       - name: Lint
-        run: make lint lint-dashboard
+        run: make lint
+
+  lint-dashboard:
+    name: Lint dashboards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint dashboards
+        uses: grafana/dashboard-linter@63340c76001dd04e98ec0c3e5ed9f927eb3b7b68 # v0.5.0
+        with:
+          version: v0.5.0
+          files: ops/beyla-mixin/dashboards
+          args: --strict
 
   unit-test:
     name: "Unit test ${{ matrix.description }}"

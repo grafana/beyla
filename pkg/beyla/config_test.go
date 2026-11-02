@@ -239,6 +239,7 @@ network:
 		Metrics: perapp.GlobalMetricsConfig{
 			Features: export.FeatureApplicationRED | export.FeatureApplicationSizes | export.FeatureNetwork,
 		},
+		Logs: otelcfg.LogsConfig{BatchMaxSize: 512, QueueSize: 2048, BatchTimeout: time.Second},
 		OTELMetrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
@@ -383,6 +384,7 @@ network:
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
 		},
+		PeerMetadata:  obi.DefaultConfig.PeerMetadata,
 		CloudMetadata: obi.DefaultConfig.CloudMetadata,
 		Processes: process.CollectConfig{
 			RunMode:  process.RunModePrivileged,

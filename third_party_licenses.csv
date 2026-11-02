@@ -8,6 +8,7 @@ github.com/Azure/azure-sdk-for-go/sdk/internal,https://github.com/grafana/beyla/
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v9,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v9/LICENSE.txt,MIT
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12/LICENSE.txt,MIT
 github.com/AzureAD/microsoft-authentication-library-for-go/apps,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/AzureAD/microsoft-authentication-library-for-go/LICENSE,MIT
+github.com/DataDog/go-sqllexer,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/DataDog/go-sqllexer/LICENSE,MIT
 github.com/andybalholm/brotli,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/andybalholm/brotli/LICENSE,MIT
 github.com/aws/aws-sdk-go-v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/LICENSE.txt,Apache-2.0
 github.com/aws/aws-sdk-go-v2/config,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/aws/aws-sdk-go-v2/config/LICENSE.txt,Apache-2.0

@@ -50,7 +50,18 @@ func (pf *ProcessFinder) startSuveyPipeline(ctx context.Context) (<-chan obiDisc
 
 	obiCfg := pf.cfg.AsOBI()
 
-	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(obiCfg, pf.ebpfEventContext, processEvents, obiDiscover.FindingCriteria(obiCfg), obiDiscover.ProcessWatcherRescan{})),
+	// mirrors OBI's discover.ProcessFinder.Start: when criteria updates are enabled, the watcher
+	// takes its criteria from the update holder and re-scans whenever they change.
+	criteriaUpdates := pf.ctxInfo.CriteriaUpdates
+	findingCriteria := obiDiscover.FindingCriteria(obiCfg)
+	var rescan obiDiscover.ProcessWatcherRescan
+	if criteriaUpdates != nil {
+		findingCriteria, _ = criteriaUpdates.Current()
+		rescan.TargetsChanged = criteriaUpdates.Changed()
+	}
+
+	swi.Add(swarm.DirectInstance(obiDiscover.ProcessWatcherFunc(
+		obiCfg, pf.ebpfEventContext, processEvents, findingCriteria, rescan, criteriaUpdates)),
 		swarm.WithID("ProcessWatcher"))
 
 	enrichedProcessEvents := msg2.QueueFromConfig[[]obiDiscover.Event[obiDiscover.ProcessAttrs]](

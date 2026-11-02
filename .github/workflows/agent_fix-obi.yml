@@ -7,7 +7,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: "fix-obi-${{ github.event.pull_request.number || github.ref }}"
+  group: fix-obi-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || 'unlabeled' }}
   cancel-in-progress: true
 
 jobs:
@@ -130,35 +130,39 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-          submodules: recursive
+          fetch-depth: 1
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-
-      - name: Generate files
-        run: make prereqs vendor-obi
-
-      - name: Get vault secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
-        with:
-          repo_secrets: |
-            ANTHROPIC_API_KEY=anthropic-token:token
+      - name: Fetch main for OBI submodule SHAs
+        env:
+          GIT_TOKEN: ${{ github.token }}
+        run: |
+          git -c "http.extraheader=AUTHORIZATION: bearer ${GIT_TOKEN}" fetch --no-tags --depth 1 origin main:refs/remotes/origin/main
 
       - name: Get GitHub App token
         id: get-github-app-token
         uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
         with:
           github_app: grafana-beyla-bot
+
+      - name: Collect CI failure context
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: python3 scripts/collect_fix_obi_triage.py --output ci-context.md
+
+      - name: Get vault secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
+        with:
+          repo_secrets: |
+            ANTHROPIC_API_KEY=anthropic-token:token
 
       - name: Load triage prompt
         env:
@@ -181,14 +185,13 @@ jobs:
           github_token: ${{ steps.get-github-app-token.outputs.token }}
           label_trigger: agent/fix-obi
           allowed_bots: "grafana-beyla-bot"
-          use_sticky_comment: "true"
+          use_sticky_comment: "false"
           use_commit_signing: "false"
           claude_args: >-
-            --max-turns 75
-            --allowedTools
-            "Bash(cat:*),Bash(gh:*),Bash(grep:*),Bash(head:*),Bash(jq:*),
-            Bash(ls:*),Bash(python3:*),Bash(tail:*),Bash(wc:*),
-            Glob,Grep,LS,Read,Write,Task,TodoWrite"
+            --model sonnet
+            --effort low
+            --max-turns 30
+            --allowedTools "Read,Write"
           prompt: ${{ env.AGENT_PROMPT }}
         env:
           DISABLE_TELEMETRY: "1"
@@ -383,7 +386,7 @@ jobs:
   cleanup:
     name: Remove agent label
     needs: implement
-    if: always() && github.event.label.name == 'agent/fix-obi'
+    if: ${{ always() && !cancelled() && github.event.label.name == 'agent/fix-obi' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

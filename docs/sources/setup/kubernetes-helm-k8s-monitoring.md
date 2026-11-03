@@ -1,7 +1,7 @@
 ---
 title: Deploy Beyla with the Kubernetes Monitoring Helm chart
 menuTitle: Kubernetes Monitoring Helm chart
-description: Deploy Grafana Beyla as the auto-instrumentation feature of the Grafana Kubernetes Monitoring Helm chart, which runs Beyla alongside cluster monitoring and uses Grafana Alloy to collect Beyla metrics and traces and send them to Grafana Cloud.
+description: Deploy Grafana Beyla as the auto-instrumentation feature of the Grafana Kubernetes Monitoring Helm chart, which runs Beyla alongside cluster monitoring and uses Grafana Alloy to collect Beyla metrics and traces and send them to Grafana Cloud or any compatible backend.
 weight: 500
 keywords:
   - Beyla
@@ -17,7 +17,8 @@ aliases:
 
 # Deploy Beyla with the Kubernetes Monitoring Helm chart
 
-The [Kubernetes Monitoring Helm chart][k8s-monitoring-helm] deploys Beyla through its `autoInstrumentation` feature, alongside cluster monitoring, for Grafana Cloud [Knowledge Graph][knowledge-graph] and [Application Observability][app-o11y].
+The [Kubernetes Monitoring Helm chart][k8s-monitoring-helm] deploys Beyla through its `autoInstrumentation` feature, alongside cluster monitoring.
+With Grafana Cloud, Beyla data powers [Knowledge Graph][knowledge-graph] and [Application Observability][app-o11y].
 The chart deploys Beyla as a DaemonSet, together with a Beyla Kubernetes metadata cache.
 Grafana Alloy, which the chart also deploys, scrapes the Prometheus metrics from Beyla and sends them to your metrics destinations.
 If you enable the chart's `applicationObservability` feature with an OTLP receiver, Beyla also sends traces to Alloy over OTLP by default, and Alloy sends them to your traces destinations.
@@ -31,8 +32,8 @@ Before you deploy Beyla, make sure you have the following:
 - A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations][requirements]
 - Helm and `kubectl`, configured for the cluster
 - Permission to create cluster-scoped resources and privileged Pods
-- A Grafana Cloud stack with Kubernetes Monitoring activated.
-  To activate it, follow the procedure in [Activate and send data from your account][k8s-monitoring-activate].
+- An endpoint for metrics that accepts Prometheus remote write or OTLP, and an OTLP endpoint for traces, for example a Grafana Cloud stack with Kubernetes Monitoring activated.
+  To activate Kubernetes Monitoring, follow the procedure in [Activate and send data from your account][k8s-monitoring-activate].
 
 With the default chart values, Beyla runs as a privileged DaemonSet in the host process ID (PID) and network namespaces of each node.
 
@@ -41,7 +42,8 @@ With the default chart values, Beyla runs as a privileged DaemonSet in the host 
 To deploy Beyla, enable the `autoInstrumentation` feature in your Kubernetes Monitoring Helm chart values, then upgrade the chart:
 
 1. If you haven't installed the Kubernetes Monitoring Helm chart, install it.
-   Follow the procedure in [Configuration steps for Kubernetes Monitoring with Helm chart][k8s-monitoring-wizard] or [Configure Kubernetes Monitoring with a manual values file][k8s-monitoring-manual].
+   For Grafana Cloud, follow the procedure in [Configuration steps for Kubernetes Monitoring with Helm chart][k8s-monitoring-wizard] or [Configure Kubernetes Monitoring with a manual values file][k8s-monitoring-manual].
+   For other backends, configure `destinations` as described in the chart's [destinations documentation][k8s-monitoring-destinations].
 
 1. If you don't have a `values.yaml` file for the chart, save the current values:
 
@@ -52,7 +54,7 @@ To deploy Beyla, enable the `autoInstrumentation` feature in your Kubernetes Mon
    Replace _`<NAMESPACE>`_ with the namespace you installed the chart in.
    The commands on this page use the release name `grafana-k8s-monitoring` from the Grafana Cloud documentation.
    If you used a different release name, use that name instead.
-   The file can contain your Grafana Cloud access token, so store it securely.
+   The file can contain credentials for your destinations, so store it securely.
 
 1. Add the following to your `values.yaml` file:
 
@@ -129,7 +131,7 @@ The chart sets the following keys, so values you set for them in `config.data` h
 - `attributes.kubernetes.cluster_name`, from `cluster.name`
 - `internal_metrics.prometheus.port` and `prometheus_export.port`, from `autoInstrumentation.beyla.service.targetPort`
 
-To change the exported metric features, set `prometheus_export.features`.
+To change the exported [metric features][prometheus-features], set `prometheus_export.features`.
 The chart sets `prometheus_export.features`, and Beyla gives that list precedence over `metrics.features`, so a `metrics.features` list has no effect.
 
 ## Next steps
@@ -144,9 +146,11 @@ The chart sets `prometheus_export.features`, and Beyla gives that list precedenc
 [default-exclude]: ../../configure/service-discovery/#default-exclude-services-from-instrumentation
 [k8s-monitoring-activate]: https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/configuration/activate/
 [k8s-monitoring-config]: https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/configuration/config-k8s-helmchart/
+[k8s-monitoring-destinations]: https://github.com/grafana/k8s-monitoring-helm/blob/main/charts/k8s-monitoring/docs/destinations/README.md
 [k8s-monitoring-helm]: https://github.com/grafana/k8s-monitoring-helm/
 [k8s-monitoring-manual]: https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/configuration/helm-chart-config/hc-manual-config/
 [k8s-monitoring-wizard]: https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/configuration/helm-chart-config/hc-config-steps/
 [knowledge-graph]: https://grafana.com/docs/grafana-cloud/knowledge-graph/
+[prometheus-features]: ../../configure/export-data/#prometheus-export-features
 [requirements]: ../../introduction/requirements/
 [service-discovery]: ../../configure/service-discovery/

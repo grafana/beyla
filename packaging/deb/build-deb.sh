@@ -30,7 +30,7 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
 fi
 
 if [[ "$ARCH" != amd64 ]]; then
-  echo "This package currently supports Ubuntu amd64 (found $ARCH)." >&2
+  echo "This package currently supports amd64 (found $ARCH)." >&2
   exit 1
 fi
 

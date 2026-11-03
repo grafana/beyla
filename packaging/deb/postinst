@@ -36,7 +36,7 @@ case "$1" in
         ;;
     esac
 
-    # Preserve customer-owned config. Only accept the pristine Alloy package
+    # Preserve user-owned config. Only accept the pristine Alloy package
     # defaults on first installation.
     if [ ! -f "$P/var/lib/beyla/mode" ]; then
       if [ -f "$P/etc/default/alloy" ] && grep -Ev '^[[:space:]]*(#.*)?$|^(CONFIG_FILE="/etc/alloy/config.alloy"|OTEL_CONFIG_FILE="/etc/alloy/config.yaml"|CUSTOM_ARGS=""|OTEL_CUSTOM_ARGS=""|ALLOY_OTEL_MODE=""|RESTART_ON_UPGRADE=true)$' "$P/etc/default/alloy" | grep -q .; then

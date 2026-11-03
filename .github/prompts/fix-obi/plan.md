@@ -45,6 +45,8 @@ A bool or string that already lives on a Beyla struct does not need a new type. 
 
 Keep skip tags, and list the field in `FromOBI`'s skip map, only for values that are not configuration: the cached `obi` config, and the Alloy `TracesReceiver`. Do not leave a newly ported feature unreachable from a v1 file.
 
+Any change to Beyla config structs, yaml tags, or env tags makes `docs/config-schema.json` stale. `make check-config-schema` fails in CI until that file is regenerated. The plan must include `make generate-config-schema` for `docs/config-schema.json`, then `make check-config-schema`.
+
 Known mirror pairs — check these first:
 - `vendor/.../obi/pkg/kube/kubecache/config.go` (OBI) ↔ `cmd/k8s-cache/cfg/config.go` (Beyla)
 - `vendor/.../obi/pkg/obi/config.go` (OBI) ↔ `pkg/beyla/config.go` (Beyla), bridged via `pkg/beyla/config_obi.go`
@@ -72,6 +74,7 @@ Single file **`plan.md`** in repo root with:
    - `go vet` of the packages you changed
    - `go test` of the packages you changed, with no integration build tag
    - `./scripts/generate-obi-tests.sh` then `git diff --exit-code internal/testgenerated/`
+   - `make generate-config-schema` then `make check-config-schema`, whenever a Beyla config struct, yaml tag, or env tag changed
 
 Do not tell the implement job to run integration tests, `make integration-test`, Docker, `diff`, or the `beyla` binary. That job has a 100-turn cap and a shell allowlist; those commands are what made it fail with `error_max_turns` before it could commit. Keep the plan to the smallest set of edits that address the common root cause.
 

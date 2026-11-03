@@ -39,7 +39,7 @@ Anything else is denied.
 - `git diff`, `git status`, `git log`, `git show`, `git rev-parse`
 - `git -C .obi-src ...` for read-only inspection of the submodule
 - `go test`, `go vet`, and `go build` for packages you edited, without an integration build tag
-- `make fmt`, `make lint`, and `make generate-obi-tests`, each as its own command
+- `make fmt`, `make lint`, `make generate-obi-tests`, `make generate-config-schema`, and `make check-config-schema`, each as its own command
 - `./scripts/generate-obi-tests.sh`
 - `gh pr comment {{PR_NUMBER}} --body "..."` once, after the commit
 - `cat`, `ls`, `grep`, `head`, `tail`, `pwd`, `jq`, `sort`, `uniq`, `wc`, `python3`, `echo`, `date`
@@ -51,7 +51,7 @@ Commit with `mcp__github_file_ops__commit_files` only. Files must already be sav
 ## Process
 
 1. Read `plan.md` and make the concrete edits.
-2. Run the quick checks above that match the files you changed. After a generator change, run `./scripts/generate-obi-tests.sh` and `git diff --exit-code internal/testgenerated/`.
+2. Run the quick checks above that match the files you changed. After a generator change, run `./scripts/generate-obi-tests.sh` and `git diff --exit-code internal/testgenerated/`. After a Beyla config struct, yaml tag, or env tag change, run `make generate-config-schema` and then `make check-config-schema`. Commit the updated `docs/config-schema.json`. `make check-config-schema` fails if that file is left stale.
 3. Call `mcp__github_file_ops__commit_files` with those files and a short message. Then one `gh pr comment {{PR_NUMBER}}` summarising the files, the fix, and any upstream OBI follow-up from the plan. Then stop.
 
 ## Rules
@@ -59,4 +59,5 @@ Commit with `mcp__github_file_ops__commit_files` only. Files must already be sav
 - Do not skip or disable tests — fix the underlying cause.
 - Prefer porting proper fixes from OBI into Beyla over code injections in `scripts/generate-obi-tests.sh`.
 - Do not copy `yaml:"-" env:"-"` onto a Beyla setting just because OBI marked it config-v2-only. Recreate the struct with v1 yaml names and `BEYLA_` env tags, as `pkg/beyla/name_resolver.go` does, so `FromOBI` and `AsOBI` convert it by field name. Keep skip tags for function hooks, the cached `obi` config, and the Alloy traces receiver. When a hook exists on the OBI struct, keep it on the Beyla struct so the round trip does not drop it.
+- After that config change, regenerate `docs/config-schema.json` with `make generate-config-schema` and confirm it with `make check-config-schema`. CI runs the check and fails when the committed schema is stale.
 - Read-only git for inspection. Do not force-push or change the submodule pointer.

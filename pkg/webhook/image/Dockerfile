@@ -22,7 +22,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
     curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/python/requirements.txt" -o requirements.txt && \
     cat requirements.extra.txt >> requirements.txt
 
-FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS prepare-ruby
+FROM ruby:4.0.9-alpine3.23@sha256:b7f8aaf7d5270da1af1ca7059a633d798c223b0cda3d04ff293242f4bd27b2ba AS prepare-ruby
 WORKDIR /source
 RUN apk add --no-cache git
 COPY ruby/upstream-revision.txt .
@@ -34,7 +34,7 @@ RUN revision=$(cat upstream-revision.txt) && \
     git checkout --quiet --detach FETCH_HEAD && \
     gem build opentelemetry-auto-instrumentation.gemspec --output /opentelemetry-auto-instrumentation.gem
 
-FROM ruby:3.3.12-slim-bookworm@sha256:df209d82bb55aeb26b9b08922ee22c15f19b3458455690132dc07a5c52dc1c99 AS build-ruby-glibc
+FROM ruby:4.0.9-slim-bookworm@sha256:f999b3be00ed747bf7b2e450155ab1482d77300eb71ec7d3ada49ccc921c6ed4 AS build-ruby-glibc
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
@@ -47,7 +47,7 @@ COPY ruby/beyla /operator-build/beyla
 COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
 RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
 
-FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS build-ruby-musl
+FROM ruby:4.0.9-alpine3.23@sha256:b7f8aaf7d5270da1af1ca7059a633d798c223b0cda3d04ff293242f4bd27b2ba AS build-ruby-musl
 RUN apk add --no-cache build-base
 COPY --from=prepare-ruby /opentelemetry-auto-instrumentation.gem /tmp/
 COPY ruby/Gemfile.lock ruby/locked_gems.rb ruby/upstream-revision.txt /tmp/
@@ -131,7 +131,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
         package-operator.json package.extra.json > package.json
 
 # Build the Node.js artifacts
-FROM node:24@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS build-nodejs-sdk
+FROM node:26@sha256:6d2c7d5d074bf72f81ddc252b4fbb5d625bc028eeda49cb4b8c2ff8eda1ee617 AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY --from=prepare-nodejs-deps /build/package.json .

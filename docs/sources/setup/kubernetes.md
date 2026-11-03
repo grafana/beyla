@@ -1,7 +1,7 @@
 ---
-title: Deploy Beyla in Kubernetes
-menuTitle: Kubernetes
-description: Learn how to deploy Beyla in Kubernetes.
+title: Deploy Beyla with Kubernetes manifests
+menuTitle: Kubernetes manifests
+description: Deploy Grafana Beyla in Kubernetes with your own manifests, as a DaemonSet that instruments the applications on each node or as a sidecar container that instruments one application, and send metrics and traces to an OpenTelemetry endpoint.
 weight: 700
 keywords:
   - Beyla
@@ -12,487 +12,435 @@ aliases:
   - /docs/beyla/latest/tutorial/k8s-walkthrough/
 ---
 
-# Deploy Beyla in Kubernetes
+# Deploy Beyla with Kubernetes manifests
 
-{{% admonition type="note" %}}
-This document explains how to manually deploy Beyla in Kubernetes, setting up all the required entities by yourself.
+You can deploy Grafana Beyla in Kubernetes with your own manifests instead of a Helm chart.
+Use this option when you need full control of the Kubernetes resources that run Beyla, for example to meet the security policies of your cluster.
 
-You might prefer to follow the [Deploy Beyla in Kubernetes with Helm](../kubernetes-helm/) documentation instead.
-{{% /admonition %}}
+You can run Beyla in one of two ways:
 
-Contents:
+- As a DaemonSet, which runs a Beyla Pod on each node and instruments the applications on that node
+- As a sidecar container, which runs Beyla in the Pod of one application and instruments only that Pod, so you run one Beyla container for each replica of the application
 
-<!-- TOC -->
+To deploy Beyla with a Helm chart instead, refer to [Deploy Beyla with the Beyla Helm chart][beyla-helm].
 
-- [Deploy Beyla in Kubernetes](#deploy-beyla-in-kubernetes)
-  - [Configuring Kubernetes metadata decoration](#configuring-kubernetes-metadata-decoration)
-  - [Deploying Beyla](#deploying-beyla)
-    - [Deploy Beyla as a sidecar container](#deploy-beyla-as-a-sidecar-container)
-    - [Deploy Beyla as a Daemonset](#deploy-beyla-as-a-daemonset)
-    - [Deploy Beyla unprivileged](#deploy-beyla-unprivileged)
-      - [Deploy unprivileged Beyla on OpenShift](#deploy-unprivileged-beyla-on-openshift)
-  - [Providing an external configuration file](#providing-an-external-configuration-file)
-  - [Providing secret configuration](#providing-secret-configuration)
-  <!-- TOC -->
+## Before you begin
 
-## Configuring Kubernetes metadata decoration
+Before you deploy Beyla, make sure you have the following:
 
-Beyla can decorate your traces with the following Kubernetes labels:
+- A Kubernetes cluster whose nodes meet the [Beyla requirements and limitations][requirements]
+- `kubectl`, configured for the cluster
+- Permission to create cluster-scoped resources and privileged Pods
+- An OpenTelemetry Protocol (OTLP) endpoint for the Beyla metrics and traces, and the credentials for it, if any.
+  For Grafana Cloud, follow the procedure in [Send data to the Grafana Cloud OTLP endpoint][cloud-otlp].
+  For Grafana Alloy, refer to [Collect OpenTelemetry data and forward it to any OpenTelemetry-compatible endpoint][alloy-otlp].
 
-- `k8s.namespace.name`
-- `k8s.deployment.name`
-- `k8s.statefulset.name`
-- `k8s.replicaset.name`
-- `k8s.daemonset.name`
-- `k8s.node.name`
-- `k8s.pod.name`
-- `k8s.container.name`
-- `k8s.pod.uid`
-- `k8s.pod.start_time`
-- `k8s.cluster.name`
+## Pod requirements
 
-To enable metadata decoration, you need to:
+Beyla loads eBPF programs into the node kernel, so its container needs elevated privileges.
+Run the container in privileged mode, or grant only the Linux capabilities Beyla needs, as described in [Deploy Beyla unprivileged](#deploy-beyla-unprivileged).
 
-- Create a ServiceAccount and bind a ClusterRole granting list and watch permissions
-  for both Pods and ReplicaSets. You can do it by deploying this example file:
+Beyla also needs to see the processes it instruments:
 
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: beyla
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: beyla
-rules:
-  - apiGroups: [ "apps" ]
-    resources: [ "replicasets" ]
-    verbs: [ "list", "watch" ]
-  - apiGroups: [ "" ]
-    resources: [ "pods", "services", "nodes" ]
-    verbs: [ "list", "watch" ]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: beyla
-subjects:
-  - kind: ServiceAccount
-    name: beyla
-    namespace: default
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: beyla
-```
+- In a DaemonSet, set `hostPID: true` in the Pod, so Beyla shares the process ID (PID) namespace of the node
+- In a sidecar container, set `shareProcessNamespace: true` in the Pod, so Beyla shares the PID namespace of the other containers in the Pod
 
-(You need to change the `namespace: default` value if you are deploying Beyla
-in another namespace).
+When Beyla runs in a Pod, it adds Kubernetes metadata, such as the namespace and Pod name, to metrics and traces.
+To get the metadata, Beyla needs permission to list and watch Pods, Services, Nodes, and ReplicaSets in the Kubernetes API.
+Beyla doesn't instrument a process in a container until it finds the Pod for that container, so without these permissions Beyla doesn't instrument containerized applications.
+The default value of `BEYLA_KUBE_METADATA_ENABLE`, `autodetect`, turns on Kubernetes metadata when Beyla runs in Kubernetes.
+To turn off Kubernetes metadata, set `BEYLA_KUBE_METADATA_ENABLE=false`, or set `attributes.kubernetes.enable: false` in the Beyla configuration file.
+For the metadata attributes and options, refer to [Kubernetes decorator][k8s-decorator].
 
-2. Configure Beyla with the `BEYLA_KUBE_METADATA_ENABLE=true` environment variable,
-   or the `attributes.kubernetes.enable: true` YAML configuration.
+{{< admonition type="note" >}}
+If the Beyla container doesn't have the capabilities it needs, Beyla logs a warning and keeps running, but it might malfunction.
+To stop Beyla at startup instead, set `BEYLA_ENFORCE_SYS_CAPS=true`.
+{{< /admonition >}}
 
-3. Don't forget to specify the `serviceAccountName: beyla` property in your Beyla
-   Pod (as shown in the later deployment examples).
+## Create the service account and RBAC
 
-Optionally, select which Kubernetes services to instrument in the `discovery -> instrument`
-section of the YAML configuration file. For more information, refer to the
-_Service discovery_ section in the [Configuration document](../../configure/options/),
-as well as the [Providing an external configuration file](#providing-an-external-configuration-file)
-section of this page.
+Create a namespace for Beyla, and a service account with the permissions that Beyla needs to read Kubernetes metadata:
 
-## Deploying Beyla
+1. Create the `beyla` namespace:
 
-You can deploy Beyla in Kubernetes in two different ways:
+   ```sh
+   kubectl create namespace beyla
+   ```
 
-- As a sidecar container
-- As a DaemonSet
+1. Save the following manifest as `beyla-rbac.yml`:
 
-### Deploy Beyla as a sidecar container
+   ```yaml
+   apiVersion: v1
+   kind: ServiceAccount
+   metadata:
+     name: beyla
+     namespace: beyla
+   ---
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: ClusterRole
+   metadata:
+     name: beyla
+   rules:
+     - apiGroups: ["apps"]
+       resources: ["replicasets"]
+       verbs: ["list", "watch"]
+     - apiGroups: [""]
+       resources: ["pods", "services", "nodes"]
+       verbs: ["list", "watch"]
+   ---
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: ClusterRoleBinding
+   metadata:
+     name: beyla
+   subjects:
+     - kind: ServiceAccount
+       name: beyla
+       namespace: beyla
+   roleRef:
+     apiGroup: rbac.authorization.k8s.io
+     kind: ClusterRole
+     name: beyla
+   ```
 
-This is the way you can deploy Beyla if you want to monitor a given service that
-might not be deployed in all the hosts, so you only have to deploy one Beyla instance
-per each service instance.
+1. Create the resources:
 
-{{< youtube id="d7clTdz0bA4" >}}
+   ```sh
+   kubectl apply -f beyla-rbac.yml
+   ```
 
-Deploying Beyla as a sidecar container has the following configuration
-requirements:
+## Create the Beyla configuration
 
-- The process namespace must be shared between all containers in the Pod (`shareProcessNamespace: true`
-  pod variable)
-- The auto-instrument container must run in privileged mode (`securityContext.privileged: true` property of the
-  container configuration), or with the required Linux capabilities. Refer to [Security, permissions and capabilities](../../security/) for the list of capabilities required for your use case, or check the [Deploy Beyla unprivileged](#deploy-beyla-unprivileged) section below.
+Beyla reads its configuration from a YAML file.
+Store the file in a ConfigMap, and store the OTLP credentials in a Secret:
 
-The following example instruments the `goblog` pod by attaching Beyla
-as a container (image available at `grafana/beyla:latest`). The
-auto-instrumentation tool is configured to forward metrics and traces to Grafana Alloy,
-which is accessible behind the `grafana-alloy` service in the same namespace:
+1. Save the following ConfigMap as `beyla-config.yml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: goblog
-  labels:
-    app: goblog
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: goblog
-  template:
-    metadata:
-      labels:
-        app: goblog
-    spec:
-      # Required so the sidecar instrument tool can access the service process
-      shareProcessNamespace: true
-      serviceAccountName: beyla # required if you want kubernetes metadata decoration
-      containers:
-        # Container for the instrumented service
-        - name: goblog
-          image: mariomac/goblog:dev
-          imagePullPolicy: IfNotPresent
-          command: ["/goblog"]
-          ports:
-            - containerPort: 8443
-              name: https
-        # Sidecar container with Beyla - the eBPF auto-instrumentation tool
-        - name: beyla
-          image: grafana/beyla:latest
-          securityContext: # Privileges are required to install the eBPF probes
-            privileged: true
-          env:
-            # The internal port of the goblog application container
-            - name: BEYLA_OPEN_PORT
-              value: "8443"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://grafana-alloy:4318"
-              # required if you want kubernetes metadata decoration
-            - name: BEYLA_KUBE_METADATA_ENABLE
-              value: "true"
-```
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: beyla-config
+     namespace: beyla
+   data:
+     beyla-config.yml: |
+       discovery:
+         instrument:
+           - k8s_namespace: <NAMESPACE>
+   ```
 
-For more information about the different configuration options, check the
-[Configuration](../../configure/options/) section of this documentation site.
+   Replace _`<NAMESPACE>`_ with the namespace of the applications to instrument.
+   Beyla needs at least one selector under `discovery.instrument`, or it exits at startup with a `missing application discovery section` error.
+   Beyla still skips Kubernetes system namespaces and other services that it [excludes by default][default-exclude].
+   For other ways to select applications, refer to [Configure Beyla service discovery][service-discovery].
 
-### Deploy Beyla as a Daemonset
+1. Save the following Secret as `grafana-secret.yml`:
 
-You can also deploy Beyla as a Daemonset. This is the preferred way if:
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: grafana-secret
+     namespace: beyla
+   type: Opaque
+   stringData:
+     otlp-headers: "<OTLP_HEADERS>"
+   ```
 
-- You want to instrument a Daemonset
-- You want to instrument multiple processes from a single Beyla instance, or even
-  all of the processes in your cluster.
+   Replace _`<OTLP_HEADERS>`_ with the headers your OTLP endpoint needs, such as authentication, as comma-separated `key=value` pairs.
+   For Grafana Cloud, use `Authorization=Basic <BASE64_CREDENTIALS>`, where _`<BASE64_CREDENTIALS>`_ is your instance ID and token, joined by a colon and Base64-encoded.
+   If your endpoint doesn't need headers, skip this step.
 
-Using the previous example (the `goblog` pod), we cannot select the process
-to instrument by using its open port, because the port is internal to the Pod.
-At the same time multiple instances of the
-service would have different open ports. In this case, we will need to instrument by
-using the application service executable name (see later example).
+1. Create the ConfigMap and the Secret:
 
-In addition to the privilege requirements of the sidecar scenario,
-you will need to configure the auto-instrument pod template with the `hostPID: true`
-option enabled, so that it can access all the processes running on the same host.
+   ```sh
+   kubectl apply -f beyla-config.yml -f grafana-secret.yml
+   ```
 
-```yaml
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: beyla
-  labels:
-    app: beyla
-spec:
-  selector:
-    matchLabels:
-      app: beyla
-  template:
-    metadata:
-      labels:
-        app: beyla
-    spec:
-      hostPID: true # Required to access the processes on the host
-      serviceAccountName: beyla # required if you want kubernetes metadata decoration
-      containers:
-        - name: autoinstrument
-          image: grafana/beyla:latest
-          securityContext:
-            privileged: true
-          env:
-            # Select the executable by its name instead of BEYLA_OPEN_PORT
-            - name: BEYLA_AUTO_TARGET_EXE
-              value: "*/goblog"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://grafana-alloy:4318"
-              # required if you want kubernetes metadata decoration
-            - name: BEYLA_KUBE_METADATA_ENABLE
-              value: "true"
-```
+## Deploy Beyla as a DaemonSet
 
-### Deploy Beyla unprivileged
+A DaemonSet runs a Beyla Pod on each node, which instruments the applications on that node that match the `discovery` section of your configuration:
 
-In all of the examples so far, `privileged:true` or the `SYS_ADMIN` Linux capability was used in the Beyla deployment's `securityContext` section. While this works in all circumstances, there are ways to deploy Beyla in Kubernetes with reduced privileges if your security configuration requires you to do so. Whether this is possible depends on the Kubernetes version you have and the underlying container runtime used (e.g. **Containerd**, **CRI-O** or **Docker**).
+1. Save the following manifest as `beyla-daemonset.yml`:
 
-The following guide is based on tests performed mainly by running `containerd` with `GKE`, `kubeadm`, `k3s`, `microk8s` and `kind`.
+   ```yaml
+   apiVersion: apps/v1
+   kind: DaemonSet
+   metadata:
+     name: beyla
+     namespace: beyla
+     labels:
+       app: beyla
+   spec:
+     selector:
+       matchLabels:
+         app: beyla
+     template:
+       metadata:
+         labels:
+           app: beyla
+       spec:
+         serviceAccountName: beyla
+         hostPID: true
+         containers:
+           - name: beyla
+             image: grafana/beyla:latest
+             securityContext:
+               privileged: true
+               readOnlyRootFilesystem: true
+             env:
+               - name: BEYLA_CONFIG_PATH
+                 value: /config/beyla-config.yml
+               - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                 value: "<OTLP_ENDPOINT>"
+               - name: OTEL_EXPORTER_OTLP_HEADERS
+                 valueFrom:
+                   secretKeyRef:
+                     name: grafana-secret
+                     key: otlp-headers
+             volumeMounts:
+               - name: beyla-config
+                 mountPath: /config
+         volumes:
+           - name: beyla-config
+             configMap:
+               name: beyla-config
+   ```
 
-To run Beyla unprivileged, you need to replace the `privileged:true` setting with a set of Linux [capabilities](https://www.man7.org/linux/man-pages/man7/capabilities.7.html). A comprehensive list of capabilities required by Beyla can be found in [Security, permissions and capabilities](../../security/).
+   Replace _`<OTLP_ENDPOINT>`_ with the base URL of your OTLP endpoint.
+   Beyla appends `/v1/metrics` and `/v1/traces`.
+   For Grafana Cloud, copy the endpoint from the **OpenTelemetry** tile of your stack, for example `https://otlp-gateway-prod-eu-west-0.grafana.net/otlp`.
+   For Grafana Alloy in the same cluster, use the Alloy Service and the HTTP port of the Alloy `otelcol.receiver.otlp` component, `4318` by default, for example `http://<ALLOY_SERVICE>.<ALLOY_NAMESPACE>:4318`.
+   Replace _`<ALLOY_SERVICE>`_ and _`<ALLOY_NAMESPACE>`_ with the name and namespace of the Alloy Service.
+   If you skipped the Secret, remove the `OTEL_EXPORTER_OTLP_HEADERS` variable.
 
-**Note** Loading BPF programs requires that Beyla is able to read the Linux performance events, or at least be able to execute the Linux Kernel API `perf_event_open()`.
+   The DaemonSet doesn't run on nodes with taints, such as control-plane nodes.
+   To run Beyla on every node, add the following `tolerations` to the Pod spec, at the same level as `containers`:
 
-This permission is granted by `CAP_PERFMON` or more liberally through `CAP_SYS_ADMIN`. Since both `CAP_PERFMON` and `CAP_SYS_ADMIN` grant Beyla the permission to read performance
-events, you should use `CAP_PERFMON` because it grants lesser permissions. However, at system level, the access to the performance
-events is controlled through the setting `kernel.perf_event_paranoid`, which you can read or write by using `sysctl` or by modifying the file `/proc/sys/kernel/perf_event_paranoid`.
-The default setting for `kernel.perf_event_paranoid` is typically `2`, which is documented under the `perf_event_paranoid` section in the [kernel documentation](https://www.kernel.org/doc/Documentation/sysctl/kernel.txt).
-Some Linux distributions define higher levels for `kernel.perf_event_paranoid`, for example Debian based distributions [also use](https://lwn.net/Articles/696216/) `kernel.perf_event_paranoid=3`,
-which disallows access to `perf_event_open()` without `CAP_SYS_ADMIN`. If you are running on a distribution with `kernel.perf_event_paranoid` setting higher than `2`,
-you can either modify your configuration to lower it to `2` or use `CAP_SYS_ADMIN` instead of `CAP_PERFMON`.
+   ```yaml
+   tolerations:
+     - effect: NoSchedule
+       operator: Exists
+     - effect: NoExecute
+       operator: Exists
+   ```
 
-An example of a Beyla unprivileged container configuration can be found below, or you can download the [full example deployment](https://github.com/grafana/beyla/tree/main/examples/k8s/unprivileged.yaml) file:
+1. Create the DaemonSet:
 
-```yaml
-...
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: beyla
-  namespace: beyla-demo
-  labels:
-    k8s-app: beyla
-spec:
-  selector:
-    matchLabels:
-      k8s-app: beyla
-  template:
-    metadata:
-      labels:
-        k8s-app: beyla
-    spec:
-      serviceAccount: beyla
-      hostPID: true           # <-- Important. Required in Daemonset mode so Beyla can discover all monitored processes
-      containers:
-      - name: beyla
-        terminationMessagePolicy: FallbackToLogsOnError
-        image: grafana/beyla:latest
-        env:
-          - name: BEYLA_TRACE_PRINTER
-            value: "text"
-          - name: BEYLA_KUBE_METADATA_ENABLE
-            value: "autodetect"
-          - name: KUBE_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          ...
-        securityContext:
-          runAsUser: 0
-          readOnlyRootFilesystem: true
-          capabilities:
-            add:
-              - BPF                 # <-- Important. Required for most eBPF probes to function correctly.
-              - SYS_PTRACE          # <-- Important. Allows Beyla to access the container namespaces and inspect executables.
-              - NET_RAW             # <-- Important. Allows Beyla to use socket filters for http requests.
-              - CHECKPOINT_RESTORE  # <-- Important. Allows Beyla to open ELF files.
-              - DAC_READ_SEARCH     # <-- Important. Allows Beyla to open ELF files.
-              - PERFMON             # <-- Important. Allows Beyla to load BPF programs.
-              #- SYS_RESOURCE       # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
-              - SYS_ADMIN           # <-- Required for user space probes, or if kernel.perf_event_paranoid >= 3 on Debian distributions.
-            drop:
-              - ALL
-        volumeMounts:
-        - name: var-run-beyla
-          mountPath: /var/run/beyla
-        - name: cgroup
-          mountPath: /sys/fs/cgroup
-        - name: tracefs # <-- Important. Allows Beyla to mitigate the FIONREAD kernel bug for the broken kernel versions.
-          mountPath: /sys/kernel/tracing  
-      tolerations:
-      - effect: NoSchedule
-        operator: Exists
-      - effect: NoExecute
-        operator: Exists
-      volumes:
-      - name: var-run-beyla
-        emptyDir: {}
-      - name: cgroup
-        hostPath:
-          path: /sys/fs/cgroup
-      - name: tracefs
-        hostPath:
-          path: /sys/kernel/tracing
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: some-service
-  namespace: beyla-demo
-  ...
----
+   ```sh
+   kubectl apply -f beyla-daemonset.yml
+   ```
 
-```
+To expose Prometheus metrics instead of, or as well as, sending OTLP data, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].
 
-#### Deploy unprivileged Beyla on OpenShift
+## Check that Beyla is running
 
-The default OpenShift Security Context Constraint (SCC) policy doesn't allow the host access, user ID, and Linux capabilities required by the unprivileged deployment. A cluster administrator can create a dedicated SCC that permits the settings used by the example without allowing privileged containers:
+To check the deployment, complete the following steps:
 
-```yaml
-apiVersion: security.openshift.io/v1
-kind: SecurityContextConstraints
-metadata:
-  name: beyla
-allowHostDirVolumePlugin: true
-allowHostNetwork: true
-allowHostPID: true
-allowHostPorts: true
-allowPrivilegedContainer: false
-allowedCapabilities:
-  - BPF
-  - SYS_PTRACE
-  - NET_RAW
-  - CHECKPOINT_RESTORE
-  - DAC_READ_SEARCH
-  - PERFMON
-  - SYS_ADMIN
-  - NET_ADMIN
-readOnlyRootFilesystem: true
-runAsUser:
-  type: MustRunAs
-  uid: 0
-seLinuxContext:
-  type: RunAsAny
-fsGroup:
-  type: RunAsAny
-supplementalGroups:
-  type: RunAsAny
-```
+1. Check that the Beyla Pods are running:
 
-Save the manifest as `beyla-scc.yaml`, apply it, and grant it only to the Beyla service account from the example:
+   ```sh
+   kubectl get pods --namespace beyla
+   ```
 
-```sh
-oc apply -f beyla-scc.yaml
-oc adm policy add-scc-to-user beyla -z beyla -n beyla-demo
-```
+1. Check the logs of a Beyla Pod:
 
-Keep the capability-based container `securityContext` from the unprivileged example. The custom SCC permits those settings but keeps `allowPrivilegedContainer` disabled.
+   ```sh
+   kubectl logs --namespace beyla <POD_NAME>
+   ```
 
-SCC assignments grant elevated permissions. Use a dedicated namespace and service account for Beyla, and review the SCC with your OpenShift administrator before deploying it in production.
+   Replace _`<POD_NAME>`_ with a Pod name from the previous command.
+   The log starts with a `Grafana Beyla` line that shows the Beyla version.
+   If the log shows `Required system capabilities not present, Beyla may malfunction`, grant the capabilities that the message lists.
 
-## Providing an external configuration file
+1. Optional: To see each request that Beyla instruments, add the following variable to the `env` list of the Beyla container in `beyla-daemonset.yml`, and run `kubectl apply -f beyla-daemonset.yml` again:
 
-In the previous examples, Beyla was configured via environment variables.
-However, you can also configure it via an external YAML file (as documented
-in the [Configuration](../../configure/options/) section of
-this site).
+   ```yaml
+   - name: BEYLA_TRACE_PRINTER
+     value: text
+   ```
 
-To provide the configuration as a file, the recommended way is to deploy
-a ConfigMap with the intended configuration, then mount it into the Beyla
-Pod, and refer to it with the `BEYLA_CONFIG_PATH` environment variable.
+   After the applications receive requests, the Beyla log shows one line for each request.
+   Remove the variable when you finish testing.
 
-Example of ConfigMap with the Beyla YAML documentation:
+After the instrumented applications receive requests, their metrics and traces appear in your OTLP backend.
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: beyla-config
-data:
-  beyla-config.yml: |
-    trace_printer: text
-    grafana:
-      otlp:
-        submit: ["metrics","traces"]
-    otel_traces_export:
-      sampler:
-        name: parentbased_traceidratio
-        arg: "0.01"
-    routes:
-      patterns:
-        - /factorial/{num}
-```
+## Deploy Beyla as a sidecar container
 
-Example of Beyla DaemonSet configuration, mounting and accessing to the
-previous ConfigMap:
+To instrument only the Pods of one application, run Beyla as a sidecar container in the Pod template of that application, instead of as a DaemonSet:
 
-```yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: beyla
-spec:
-  selector:
-    matchLabels:
-      instrumentation: beyla
-  template:
-    metadata:
-      labels:
-        instrumentation: beyla
-    spec:
-      serviceAccountName: beyla
-      hostPID: true #important!
-      containers:
-        - name: beyla
-          image: grafana/beyla:latest
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            privileged: true
-            readOnlyRootFilesystem: true
-          # mount the previous ConfigMap as a folder
-          volumeMounts:
-            - mountPath: /config
-              name: beyla-config
-            - mountPath: /var/run/beyla
-              name: var-run-beyla
-          env:
-            # tell beyla where to find the configuration file
-            - name: BEYLA_CONFIG_PATH
-              value: "/config/beyla-config.yml"
-      volumes:
-        - name: beyla-config
-          configMap:
-            name: beyla-config
-        - name: var-run-beyla
-          emptyDir: {}
-```
+1. If the application runs in a namespace other than `beyla`, prepare that namespace:
+   - Create a `beyla` service account in the namespace, and add it to the `subjects` of the `beyla` ClusterRoleBinding.
+   - Create the `grafana-secret` Secret in the namespace.
+     A Pod can only read Secrets from its own namespace.
 
-## Providing secret configuration
+1. Add the following to the Pod template of the application, for example in its Deployment:
 
-The previous example is valid for regular configuration but should not be
-used to pass secret information like passwords or API keys.
+   ```yaml
+   spec:
+     template:
+       spec:
+         shareProcessNamespace: true
+         serviceAccountName: beyla
+         containers:
+           # Keep the existing application containers, and add:
+           - name: beyla
+             image: grafana/beyla:latest
+             securityContext:
+               privileged: true
+             env:
+               - name: BEYLA_OPEN_PORT
+                 value: "<SERVICE_PORT>"
+               - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                 value: "<OTLP_ENDPOINT>"
+               - name: OTEL_EXPORTER_OTLP_HEADERS
+                 valueFrom:
+                   secretKeyRef:
+                     name: grafana-secret
+                     key: otlp-headers
+   ```
 
-To provide secret information, the recommended way is to deploy a Kubernetes
-Secret. For example, this secret contains some fictional Grafana Cloud
-credentials:
+   Replace the following:
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: grafana-secret
-type: Opaque
-stringData:
-  grafana-user: "123456"
-  grafana-api-key: "xxxxxxxxxxxxxxx"
-```
+   - _`<SERVICE_PORT>`_: The port the application opens inside its container
+   - _`<OTLP_ENDPOINT>`_: The base URL of your OTLP endpoint
 
-Then you can access the secret values as environment variables. Following the
-previous DaemonSet example, this would be achieved by adding the following
-`env` section to the Beyla container:
+   The `serviceAccountName` value replaces the service account of the application.
+   If the application needs its own service account, bind the `beyla` ClusterRole to that account instead.
 
-```yaml
-env:
-  - name: GRAFANA_CLOUD_ZONE
-    value: prod-eu-west-0
-  - name: GRAFANA_CLOUD_INSTANCE_ID
-    valueFrom:
-      secretKeyRef:
-        key: grafana-user
-        name: grafana-secret
-  - name: GRAFANA_CLOUD_API_KEY
-    valueFrom:
-      secretKeyRef:
-        key: grafana-api-key
-        name: grafana-secret
-```
+1. Apply the updated manifest of the application, for example:
+
+   ```sh
+   kubectl apply -f <APPLICATION_MANIFEST>
+   ```
+
+   Replace _`<APPLICATION_MANIFEST>`_ with the file that contains the application Deployment.
+
+## Deploy Beyla unprivileged
+
+Instead of a privileged container, you can run Beyla with only the Linux capabilities it needs.
+Whether this works depends on your Kubernetes version and container runtime, for example containerd, CRI-O, or Docker.
+These steps were tested mainly with containerd on GKE, kubeadm, k3s, MicroK8s, and kind.
+For what each capability does, refer to [Beyla security, permissions, and capabilities][security].
+
+To run Beyla unprivileged, complete the following steps:
+
+1. In the Beyla container of your DaemonSet or sidecar, replace the `securityContext` section with the following:
+
+   ```yaml
+   securityContext:
+     runAsUser: 0
+     readOnlyRootFilesystem: true
+     capabilities:
+       add:
+         - BPF                # Required for most eBPF probes
+         - SYS_PTRACE         # Access the container namespaces and inspect executables
+         - NET_RAW            # Use socket filters for HTTP requests
+         - CHECKPOINT_RESTORE # Open ELF files
+         - DAC_READ_SEARCH    # Open ELF files
+         - PERFMON            # Load BPF programs
+         # - SYS_RESOURCE     # Kernels earlier than 5.11 only: increase the locked memory limit
+         - SYS_ADMIN          # Go context propagation, trace-log correlation, or kernel.perf_event_paranoid above 2
+       drop:
+         - ALL
+   ```
+
+   If your nodes set `kernel.perf_event_paranoid` higher than `2`, as some Debian-based distributions do, Beyla needs `SYS_ADMIN`, or you can lower the setting to `2`.
+   For details, refer to [Performance monitoring tasks][perf-tasks].
+   If you turn on network-level context propagation, also add `NET_ADMIN`.
+
+1. Mount the `/sys/fs/cgroup` and `/sys/kernel/tracing` directories of the node into the Beyla container.
+   Add the following `volumeMounts` entries to the Beyla container, and the `volumes` entries to the Pod spec:
+
+   ```yaml
+   volumeMounts:
+     - name: cgroup        # Network-level context propagation
+       mountPath: /sys/fs/cgroup
+     - name: tracefs       # Tracepoint probes, including the FIONREAD kernel bug mitigation
+       mountPath: /sys/kernel/tracing
+   volumes:
+     - name: cgroup
+       hostPath:
+         path: /sys/fs/cgroup
+     - name: tracefs
+       hostPath:
+         path: /sys/kernel/tracing
+   ```
+
+1. Apply the updated manifest, for example:
+
+   ```sh
+   kubectl apply -f beyla-daemonset.yml
+   ```
+
+### Deploy unprivileged Beyla on OpenShift
+
+The default OpenShift Security Context Constraint (SCC) policy doesn't allow the host access, user ID, and Linux capabilities that unprivileged Beyla needs.
+A cluster administrator can create a dedicated SCC that permits these settings without allowing privileged containers:
+
+1. Save the following SCC as `beyla-scc.yaml`:
+
+   ```yaml
+   apiVersion: security.openshift.io/v1
+   kind: SecurityContextConstraints
+   metadata:
+     name: beyla
+   allowHostDirVolumePlugin: true
+   allowHostNetwork: true
+   allowHostPID: true
+   allowHostPorts: true
+   allowPrivilegedContainer: false
+   allowedCapabilities:
+     - BPF
+     - SYS_PTRACE
+     - NET_RAW
+     - CHECKPOINT_RESTORE
+     - DAC_READ_SEARCH
+     - PERFMON
+     - SYS_ADMIN
+     - NET_ADMIN
+   readOnlyRootFilesystem: true
+   runAsUser:
+     type: MustRunAs
+     uid: 0
+   seLinuxContext:
+     type: RunAsAny
+   fsGroup:
+     type: RunAsAny
+   supplementalGroups:
+     type: RunAsAny
+   ```
+
+   The SCC also allows host networking, host ports, and the `NET_ADMIN` capability.
+   If you don't turn on network-level context propagation, you can remove `allowHostNetwork`, `allowHostPorts`, and `NET_ADMIN`.
+
+1. Create the SCC, and grant it only to the `beyla` service account:
+
+   ```sh
+   oc apply -f beyla-scc.yaml
+   oc adm policy add-scc-to-user beyla -z beyla -n beyla
+   ```
+
+1. Keep the capability-based `securityContext` from the previous section.
+   The SCC permits those settings but keeps `allowPrivilegedContainer` disabled.
+
+SCC assignments grant elevated permissions.
+Use a dedicated namespace and service account for Beyla, and review the SCC with your OpenShift administrator before you deploy it in production.
+
+## Next steps
+
+- [Configure Beyla][configure]
+- [Configure Beyla service discovery][service-discovery]
+- [Configure Beyla Prometheus and OpenTelemetry data export][export-data]
+- [Beyla security, permissions, and capabilities][security]
+
+[alloy-otlp]: https://grafana.com/docs/alloy/latest/collect/opentelemetry-data/
+[beyla-helm]: ../kubernetes-helm/
+[cloud-otlp]: https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users
+[configure]: ../../configure/
+[default-exclude]: ../../configure/service-discovery/#default-exclude-services-from-instrumentation
+[export-data]: ../../configure/export-data/
+[k8s-decorator]: ../../configure/metrics-traces-attributes/#kubernetes-decorator
+[perf-tasks]: ../security/#performance-monitoring-tasks
+[requirements]: ../../introduction/requirements/
+[security]: ../security/
+[service-discovery]: ../../configure/service-discovery/

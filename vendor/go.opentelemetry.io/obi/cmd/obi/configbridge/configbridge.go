@@ -1,9 +1,7 @@
 // Package configbridge re-exports OBI's config v2 loader and file watcher.
 //
 // Those APIs live in go.opentelemetry.io/obi/cmd/obi/internal and
-// go.opentelemetry.io/obi/internal/config. Beyla cannot import either path.
-// This package is copied into the OBI module at cmd/obi/configbridge before
-// vendoring, which is a path allowed to import both.
+// go.opentelemetry.io/obi/internal/config.
 package configbridge
 
 import (

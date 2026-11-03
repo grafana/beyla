@@ -6,6 +6,8 @@ go 1.26.10
 // but included as a go submodule
 replace go.opentelemetry.io/obi => ./.obi-src
 
+replace go.opentelemetry.io/obi/cmd/obi/configbridge => ./scripts/obi-configbridge
+
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.12
@@ -43,6 +45,7 @@ require (
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.161.0
 	go.opentelemetry.io/collector/pdata v1.69.0
 	go.opentelemetry.io/obi v1.0.0
+	go.opentelemetry.io/obi/cmd/obi/configbridge v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/metric v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0

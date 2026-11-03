@@ -1014,7 +1014,6 @@ go.opentelemetry.io/ebpf-profiler/stringutil
 go.opentelemetry.io/ebpf-profiler/support
 # go.opentelemetry.io/obi v1.0.0 => ./.obi-src
 ## explicit; go 1.26.0
-go.opentelemetry.io/obi/cmd/obi/configbridge
 go.opentelemetry.io/obi/cmd/obi/internal/configload
 go.opentelemetry.io/obi/cmd/obi/internal/configwatch
 go.opentelemetry.io/obi/internal/config/convert
@@ -1164,6 +1163,9 @@ go.opentelemetry.io/obi/pkg/selection
 go.opentelemetry.io/obi/pkg/statsolly/agent
 go.opentelemetry.io/obi/pkg/test/integration
 go.opentelemetry.io/obi/pkg/transform
+# go.opentelemetry.io/obi/cmd/obi/configbridge v0.0.0-00010101000000-000000000000 => ./scripts/obi-configbridge
+## explicit; go 1.26.10
+go.opentelemetry.io/obi/cmd/obi/configbridge
 # go.opentelemetry.io/otel v1.47.0
 ## explicit; go 1.26.0
 go.opentelemetry.io/otel
@@ -2139,3 +2141,4 @@ sigs.k8s.io/structured-merge-diff/v6/value
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 # go.opentelemetry.io/obi => ./.obi-src
+# go.opentelemetry.io/obi/cmd/obi/configbridge => ./scripts/obi-configbridge

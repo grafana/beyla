@@ -33,8 +33,7 @@ import (
 )
 
 // config v2 is loaded through go.opentelemetry.io/obi/cmd/obi/configbridge,
-// a package copied into the OBI module at vendoring time. Beyla still cannot
-// import OBI's internal packages directly.
+// the module in scripts/obi-configbridge.
 //
 // The generated integration fixtures therefore carry OBI's v2 documents
 // verbatim (modulo the OTEL_EBPF_* → BEYLA_* env renaming): appending

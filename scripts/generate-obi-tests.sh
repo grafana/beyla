@@ -556,7 +556,70 @@ transform_go_imports_and_paths() {
     if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
         sed_i -e 's|"internal", "test", "integration"|"internal", "testgenerated", "integration"|g' \
             "$OBI_DEST/components/docker/compose.go"
+        drain_every_instrumenter_service
     fi
+}
+
+# Close() upstream drains only the service literally named "obi".
+# docker-compose-peer-metadata.yml declares a second instrumenter
+# ("client-obi") that shares the client workload's PID and network namespaces;
+# leaving it undrained means Remove() force-kills it while it still holds
+# probes on a live workload, which breaks the workload container. Wait on
+# every instrumenter service the compose file declares instead.
+drain_every_instrumenter_service() {
+    local file="$OBI_DEST/components/docker/compose.go"
+
+    if ! grep -q 'c.commandContext(waitCtx, "wait", "obi")' "$file"; then
+        echo "ERROR: compose.go no longer waits for \"obi\" as expected; update the instrumenter drain transform" >&2
+        exit 1
+    fi
+    awk '
+        /if err := c.commandContext\(waitCtx, "wait", "obi"\); err != nil \{/ {
+            print "\t\targs := append([]string{\"wait\"}, c.instrumenterServices()...)"
+            print "\t\tif err := c.commandContext(waitCtx, args...); err != nil {"
+            next
+        }
+        { print }
+    ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+
+    cat >> "$file" <<EOF
+
+// instrumenterServices lists the Beyla instrumenter services declared in the
+// compose file. Most suites have a single service named "obi", but
+// docker-compose-peer-metadata.yml runs a second instrumenter ("client-obi")
+// that shares the client workload's PID and network namespaces. Draining only
+// "obi" leaves that one attached while Remove() force-kills it.
+func (c *Compose) instrumenterServices() []string {
+	data, err := os.ReadFile(c.Path)
+	if err != nil {
+		return []string{"obi"}
+	}
+
+	var doc struct {
+		Services map[string]struct {
+			Build struct {
+				Dockerfile string \`yaml:"dockerfile"\`
+			} \`yaml:"build"\`
+		} \`yaml:"services"\`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return []string{"obi"}
+	}
+
+	var services []string
+	for name, svc := range doc.Services {
+		if strings.Contains(svc.Build.Dockerfile, "${BEYLA_DOCKERFILE}") {
+			services = append(services, name)
+		}
+	}
+	if len(services) == 0 {
+		return []string{"obi"}
+	}
+	slices.Sort(services)
+
+	return services
+}
+EOF
 }
 
 apply_component_consolidation() {

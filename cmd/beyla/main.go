@@ -36,9 +36,10 @@ import (
 // a package copied into the OBI module at vendoring time. Beyla still cannot
 // import OBI's internal packages directly.
 //
-// scripts/generate-obi-tests.sh still rewrites one v1-shaped assertion and
-// appends v1 keys onto configs/obi-config-v2.yml for the generated test that
-// compares the logged document version. Those rules are independent of startup.
+// The generated integration fixtures therefore carry OBI's v2 documents
+// verbatim (modulo the OTEL_EBPF_* → BEYLA_* env renaming): appending
+// v1-equivalent keys to them is no longer possible, since OBI's v2 document
+// validator rejects unknown top-level fields.
 const (
 	configVersionV1 = "v1"
 	configVersionV2 = "v2"

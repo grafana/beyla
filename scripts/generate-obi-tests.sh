@@ -156,41 +156,6 @@ BEHAVIORAL_TRANSFORMS=(
     # inside EventuallyWithT before it can retry on slow/kernel-5.15 environments.
     'require\.Len(t, res, 1, traceID)|require.Len(ct, res, 1, traceID)'
 
-    # --- Config document version reported at startup (config_v2_test.go) ---
-    # LAST-RESORT TRANSFORM: this diverges an assertion from upstream. It is
-    # tolerable only because the divergence is real behaviour, not a masked bug.
-    #
-    # OBI bdabbaf2 (#2682) wired standalone Config v2 loading into
-    # cmd/obi/main.go, which logs `"version":"v2"`. Beyla's cmd/beyla/main.go
-    # cannot: OBI's v2 loader lives in go.opentelemetry.io/obi/internal/config/
-    # {schema,convert} and cmd/obi/internal/configcmd, and Go's internal-package
-    # rule is enforced by import path — the local `replace` to .obi-src does not
-    # lift it. Nothing under vendor/go.opentelemetry.io/obi/pkg/ exports a
-    # versioned loader (pkg/obi.LoadConfig is v1-only), so cmd/beyla/main.go
-    # hard-codes configVersionV1 and logs `"version":"v1"`.
-    #
-    # What is NOT weakened: every other assertion in config_v2_test.go is
-    # upstream's, unmodified — the suite keeps exercising standalone startup end
-    # to end. Only the version *label* differs.
-    #
-    # The test input does diverge, though: because the v1 loader is not a
-    # KnownFields decoder it drops the entire v2 document instead of rejecting
-    # it, so Beyla's copy of configs/obi-config-v2.yml carries an appended block
-    # of v1-equivalent keys (prometheus_export, routes, otel_*_export) that
-    # restores the same effective configuration. See
-    # ensure_config_v2_v1_equivalents below for the full key-by-key mapping.
-    #
-    # Scoped to the full quoted literal so it cannot leak into other generated
-    # files; `"version":"v2"` occurs exactly once in the upstream test tree.
-    #
-    # DELETE THIS RULE — and ensure_config_v2_v1_equivalents with it, they go
-    # away together — the moment OBI exports a versioned loader from pkg/
-    # (e.g. `func LoadConfigVersioned(io.Reader) (*Config, string, error)`
-    # wrapping schema.ParseStandaloneYAML → convert.DocumentToRuntime →
-    # NotV2Error → obi.LoadConfig, per .obi-src/cmd/obi/main.go:110-142) and
-    # cmd/beyla/main.go is switched over to report the real version.
-    '"version":"v2"|"version":"v1"'
-
     # --- K8s image tags ---
     '"obi:dev"|"beyla:dev"'
     '"obi-k8s-cache:dev"|"beyla-k8s-cache:dev"'
@@ -769,101 +734,6 @@ ensure_netolly_basic_guess_ports() {
     if ! grep -q 'guess_ports:' "$file"; then
         awk '/^      protocols:/ { print "      guess_ports: ordinal" } { print }' \
             "$file" > "$file.tmp" && mv "$file.tmp" "$file"
-    fi
-}
-
-ensure_config_v2_v1_equivalents() {
-    # Make imported v2 configs produce the same *effective* configuration under
-    # Beyla's v1 loader as OBI's documents do under its versioned one.
-    #
-    # cmd/beyla/main.go can only call the v1 loader (see the `"version":"v2"`
-    # rule in BEHAVIORAL_TRANSFORMS for why). The v1 loader is not a KnownFields
-    # decoder, so the whole v2 document — file_format, tracer_provider,
-    # meter_provider, extensions.obi — is silently dropped. The document still
-    # loads, which is why the startup assertions of config_v2_test.go pass, but
-    # nothing it declares takes effect. In particular no application Prometheus
-    # exporter is started, so the test's `GET :8999/metrics` gets a 404 from the
-    # internal-metrics-only server that BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT
-    # opens on that port.
-    #
-    # Fix the *input*, not the assertion: append the v1 keys that mirror the v2
-    # document, so config_v2_test.go's assertions hold unmodified.
-    #
-    #   v2 document key                                             -> v1 key
-    #   meter_provider.readers[].pull…prometheus/development.port   -> prometheus_export.{port,path}
-    #   capture.instrumentation.http.routes.incoming                -> routes
-    #   correlation.log_trace_annotation.match                      -> ebpf.log_enricher.services
-    #   tracer_provider…otlp_grpc.endpoint                          -> otel_traces_export.endpoint
-    #   meter_provider.readers[].periodic…otlp_grpc.endpoint        -> otel_metrics_export.endpoint
-    #
-    # Most remaining v2 settings are already supplied by docker-compose.yml
-    # (BEYLA_EXECUTABLE_NAME, BEYLA_OPEN_PORT, BEYLA_DISCOVERY_POLL_INTERVAL,
-    # BEYLA_LOG_FORMAT) or matches the v1 defaults (K8s decoration off).
-    #
-    # /metrics and /internal/metrics coexist on port 8999: OBI's
-    # connector.PrometheusManager multiplexes (port, path) registrations onto a
-    # single HTTP server, so the internal metrics endpoint is unaffected. Do NOT
-    # move it with BEYLA_INTERNAL_METRICS_PROMETHEUS_PATH instead — docker-compose.yml
-    # is shared by every suite, and other suites scrape /internal/metrics.
-    #
-    # DELETE THIS STEP together with the `"version":"v2"` behavioral transform
-    # and cmd/beyla/main.go's configVersionV1 constant, the moment OBI exports a
-    # versioned loader from pkg/.
-    local file="$OBI_DEST/configs/obi-config-v2.yml"
-    if [[ -f "$file" ]] && ! grep -q '^prometheus_export:' "$file"; then
-        cat >>"$file" <<'EOF'
-# --- Beyla-only: v1 equivalents of the v2 document above ---------------------
-# Beyla loads this file with the v1 loader (cmd/beyla/main.go), which ignores
-# `file_format`, `tracer_provider`, `meter_provider` and `extensions.obi`. The
-# keys below restore the same effective configuration, so config_v2_test.go's
-# assertions hold unmodified. Injected by ensure_config_v2_v1_equivalents in
-# scripts/generate-obi-tests.sh; delete it together with the `"version":"v2"`
-# transform once OBI exports a versioned loader from pkg/.
-otel_traces_export:
-  endpoint: http://jaeger:4317
-otel_metrics_export:
-  endpoint: http://otelcol:4317
-prometheus_export:
-  port: 8999
-  path: /metrics
-routes:
-  patterns:
-    - /basic/:rnd
-  unmatched: path
-  ignored_patterns:
-    - /metrics
-  ignore_mode: traces
-EOF
-    fi
-
-    file="$OBI_DEST/configs/obi-config-multiexec-connectioninfo.yml"
-    if [[ -f "$file" ]] && ! grep -q '^metrics:' "$file"; then
-        cat >>"$file" <<'EOF'
-# --- Beyla-only: v1 equivalent for the connection-info integration test --------
-# Beyla loads this Config v2 fixture through its v1 loader. The keys below enable
-# the equivalent metrics exporter, selected services, and opt-in metric feature.
-otel_metrics_export:
-  endpoint: http://otelcol:4018
-metrics:
-  features:
-    - application_service_graph_connection_info
-discovery:
-  instrument:
-    - open_ports: "8080,8088"
-    - open_ports: "7773"
-EOF
-    fi
-
-    file="$OBI_DEST/configs/obi-config-log-enricher-v2.yml"
-    if [[ -f "$file" ]] && ! grep -q '^ebpf:' "$file"; then
-        printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
-        cat "$OBI_DEST/configs/obi-config-log-enricher.yml" >>"$file"
-    fi
-
-    file="$OBI_DEST/configs/obi-config-log-enricher-unselected-v2.yml"
-    if [[ -f "$file" ]] && ! grep -q '^ebpf:' "$file"; then
-        printf '\n%s\n' '# --- Beyla-only: v1 equivalents of the v2 log-enricher document above --------' >>"$file"
-        cat "$OBI_DEST/configs/obi-config-log-enricher-unselected.yml" >>"$file"
     fi
 }
 
@@ -1727,7 +1597,6 @@ generate() {
     ensure_daemonset_process_metrics_enabled
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports
-    ensure_config_v2_v1_equivalents
     ensure_multiexec_connectioninfo_feature_override
     ensure_client_trace_waits_for_complete_attachment
     ensure_nodejs_traces_are_complete

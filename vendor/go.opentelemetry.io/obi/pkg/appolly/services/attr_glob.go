@@ -122,6 +122,10 @@ type GlobAttributes struct {
 
 	Routes *CustomRoutesConfig `yaml:"routes"`
 
+	// Exceptions overrides capture settings for this workload. Only config v2
+	// sets it, from a rule's refine.exceptions.
+	Exceptions *ExceptionsOverride `yaml:"-" env:"-"`
+
 	// Metrics configuration that is custom for this service match
 	Metrics perapp.SvcMetricsConfig `yaml:"metrics" env:"-"`
 }
@@ -258,3 +262,5 @@ type nilMatcher struct{}
 
 func (n nilMatcher) IsSet() bool               { return false }
 func (n nilMatcher) MatchString(_ string) bool { return false }
+
+func (ga *GlobAttributes) GetExceptionsConfig() *ExceptionsOverride { return ga.Exceptions }

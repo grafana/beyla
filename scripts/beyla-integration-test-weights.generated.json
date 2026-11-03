@@ -1,4 +1,8 @@
 {
   "_default": 20,
-  "TestProcessMetrics": 195
+  "TestInstrumentAllLocal": 47,
+  "TestInstrumentAllLocalWithSurvey": 38,
+  "TestProcessMetrics": 27,
+  "TestSigilSpans": 55,
+  "TestSurveySocketOptions": 46
 }

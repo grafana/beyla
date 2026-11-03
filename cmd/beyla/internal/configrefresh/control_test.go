@@ -22,8 +22,10 @@ import (
 // ControlConn through the environment, as a parent process would.
 func controlSocket(t *testing.T) (parent, child net.Conn) {
 	t.Helper()
-	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 	require.NoError(t, err)
+	syscall.CloseOnExec(fds[0])
+	syscall.CloseOnExec(fds[1])
 
 	parentFile := os.NewFile(uintptr(fds[0]), "parent")
 	defer parentFile.Close()

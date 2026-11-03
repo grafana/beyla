@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/traces"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/exceptions"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -95,6 +96,12 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 
 	runtimeMetrics := newRuntimeMetricsQueue(config.AsOBI())
 	ebpfEventContext := ebpfcommon.NewEBPFEventContext()
+	if obiCfg.ExceptionsEnabled() && obiCfg.Logs.Enabled() {
+		if ctxInfo.ExceptionInput == nil {
+			ctxInfo.ExceptionInput = msg2.QueueFromConfig[[]exceptions.Event](obiCfg, "exceptions")
+		}
+		ebpfEventContext.ExceptionInput = ctxInfo.ExceptionInput
+	}
 	ctxInfo.AppO11y.EBPFEventContext = ebpfEventContext
 
 	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsCloudDecorated, runtimeMetrics)

@@ -32,6 +32,7 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
+	"go.opentelemetry.io/obi/pkg/exceptions"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
@@ -247,6 +248,7 @@ func (p *Tracer) constants() map[string]any {
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["jvm_sampling_interval_ns"] = uint64(p.cfg.JVMRuntimeMetrics.SamplingInterval.Nanoseconds())
 	}
+	m["g_exceptions_enabled"] = p.cfg.ExceptionsEnabled() && p.cfg.Logs.Enabled()
 	m["nodejs_runtime_metrics_enabled"] = uint64(0)
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["nodejs_runtime_metrics_enabled"] = uint64(1)
@@ -759,6 +761,19 @@ func (p *Tracer) Run(
 		} else {
 			p.log.Debug("reading runtime metrics from shared ring buffer")
 		}
+	}
+
+	if ebpfEventContext.ExceptionInput != nil {
+		go ebpfcommon.ForwardRingbuf(
+			cfg,
+			p.bpfObjects.ExceptionEvents,
+			func(record *ringbuf.Record) (exceptions.Event, bool, error) {
+				return ebpfcommon.ReadExceptionRecord(record, p.pidsFilter)
+			},
+			nil,
+			p.log.With("ringbuf", "exception_events"),
+			p.metrics,
+		)(ctx, ebpfEventContext.ExceptionInput)
 	}
 
 	ebpfcommon.SharedRingbuf(

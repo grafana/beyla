@@ -239,7 +239,7 @@ network:
 		Metrics: perapp.GlobalMetricsConfig{
 			Features: export.FeatureApplicationRED | export.FeatureApplicationSizes | export.FeatureNetwork,
 		},
-		Logs: otelcfg.LogsConfig{BatchMaxSize: 512, QueueSize: 2048, BatchTimeout: time.Second},
+		Logs: LogsConfig{BatchMaxSize: 512, QueueSize: 2048, BatchTimeout: time.Second},
 		OTELMetrics: otelcfg.MetricsConfig{
 			OTELIntervalMS:    60_000,
 			CommonEndpoint:    "localhost:3131",
@@ -384,7 +384,7 @@ network:
 			CacheLen: 1024,
 			CacheTTL: 5 * time.Minute,
 		},
-		PeerMetadata:  obi.DefaultConfig.PeerMetadata,
+		PeerMetadata:  DefaultConfig().PeerMetadata,
 		CloudMetadata: obi.DefaultConfig.CloudMetadata,
 		Processes: process.CollectConfig{
 			RunMode:  process.RunModePrivileged,
@@ -797,7 +797,7 @@ func TestConfigValidate_TracePrinter(t *testing.T) {
 		},
 		{
 			env:      envMap{"BEYLA_EXECUTABLE_NAME": "foo"},
-			errorMsg: "you need to define at least one exporter: trace_printer, grafana, otel_metrics_export, otel_traces_export or prometheus_export",
+			errorMsg: "you need to define at least one exporter: trace_printer, grafana, otel_metrics_export, otel_traces_export, otel_logs_export or prometheus_export",
 		},
 	}
 

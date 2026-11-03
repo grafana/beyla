@@ -58,4 +58,5 @@ Commit with `mcp__github_file_ops__commit_files` only. Files must already be sav
 
 - Do not skip or disable tests — fix the underlying cause.
 - Prefer porting proper fixes from OBI into Beyla over code injections in `scripts/generate-obi-tests.sh`.
+- Do not copy `yaml:"-" env:"-"` onto a Beyla setting just because OBI marked it config-v2-only. Recreate the struct with v1 yaml names and `BEYLA_` env tags, as `pkg/beyla/name_resolver.go` does, so `FromOBI` and `AsOBI` convert it by field name. Keep skip tags for function hooks, the cached `obi` config, and the Alloy traces receiver. When a hook exists on the OBI struct, keep it on the Beyla struct so the round trip does not drop it.
 - Read-only git for inspection. Do not force-push or change the submodule pointer.

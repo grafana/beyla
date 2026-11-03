@@ -33,7 +33,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/prom"
 	"go.opentelemetry.io/obi/pkg/filter"
 	obimeta "go.opentelemetry.io/obi/pkg/metadata"
-	"go.opentelemetry.io/obi/pkg/metadata/peer"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 
@@ -110,7 +109,7 @@ type Config struct {
 	Attributes    Attributes                    `yaml:"attributes"`
 	CloudMetadata transform.CloudMetadataConfig `yaml:"cloud_metadata"`
 
-	PeerMetadata peer.MetadataConfig `yaml:"-" env:"-" jsonschema:"-" validate:"-"`
+	PeerMetadata PeerMetadataConfig `yaml:"peer_metadata"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes       *transform.RoutesConfig `yaml:"routes"`
 	NameResolver *NameResolverConfig     `yaml:"name_resolver"`
@@ -123,9 +122,8 @@ type Config struct {
 	Prometheus   prom.PrometheusConfig      `yaml:"prometheus_export"`
 	TracePrinter debug.TracePrinter         `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
 
-	// Exceptions and Logs are set only by config v2.
-	Exceptions services.ExceptionsConfig `yaml:"-" env:"-"`
-	Logs       otelcfg.LogsConfig        `yaml:"-" env:"-"`
+	Exceptions ExceptionsConfig `yaml:"exceptions"`
+	Logs       LogsConfig       `yaml:"otel_logs_export"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	//
@@ -250,16 +248,17 @@ func (c *Config) CriteriaUpdates() *services.CriteriaUpdates {
 
 // ExceptionsEnabled reports whether any selected workload can request capture.
 func (c *Config) ExceptionsEnabled() bool {
-	if c.Exceptions.Enabled {
+	defaults := c.Exceptions.obi()
+	if defaults.Enabled {
 		return true
 	}
 	for i := range c.Discovery.Instrument {
-		if c.Discovery.Instrument[i].Exceptions.Resolve(c.Exceptions).Enabled {
+		if c.Discovery.Instrument[i].Exceptions.Resolve(defaults).Enabled {
 			return true
 		}
 	}
 	for i := range c.Discovery.Services {
-		if c.Discovery.Services[i].Exceptions.Resolve(c.Exceptions).Enabled {
+		if c.Discovery.Services[i].Exceptions.Resolve(defaults).Enabled {
 			return true
 		}
 	}
@@ -305,7 +304,8 @@ type Attributes struct {
 	// SensitiveQueryParams controls which query-parameter keys are redacted in url.full and url.query.
 	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
 
-	SanitizeSQLQueryText bool `yaml:"-" env:"-" json:"-"`
+	// SanitizeSQLQueryText redacts SQL statement text.
+	SanitizeSQLQueryText bool `yaml:"sanitize_sql_query_text" env:"BEYLA_SANITIZE_SQL_QUERY_TEXT"`
 }
 
 type HostIDConfig struct {
@@ -431,7 +431,7 @@ func (c *Config) validate(context validationContext) error {
 		return ConfigError(err.Error())
 	}
 	if c.ExceptionsEnabled() && !c.Logs.Enabled() {
-		return ConfigError("exception capture requires a logger_provider exporter or a logs consumer")
+		return ConfigError("exception capture requires otel_logs_export or a logs consumer")
 	}
 
 	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() &&
@@ -461,7 +461,7 @@ func (c *Config) validate(context validationContext) error {
 		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() && !c.Logs.Enabled() &&
 		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
-			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+			" grafana, otel_metrics_export, otel_traces_export, otel_logs_export or prometheus_export")
 	}
 
 	if appEnabled &&

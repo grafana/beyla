@@ -33,7 +33,17 @@ The general principle is: Beyla's generated tests shadow OBI's tests. When OBI c
 **Anti-pattern — assertion-only fix**: If your plan only changes assertion values without also porting the corresponding OBI test inputs or production code changes, re-examine. The goal is to port OBI's intention and implementation pattern into Beyla, not to minimally satisfy test assertions. Example: OBI adds `log_format: json` to a test config YAML and asserts `LogFormat: LogFormatJSON`. The wrong fix is setting the assertion to the default (`LogFormatText`). The right fix is adding `log_format: json` to Beyla's test config, matching OBI's upstream intention.
 
 **Config struct parity (most common cause of timeouts):**
-Beyla mirrors OBI config structs and uses `pkg/helpers/config/convert.go` (`Convert()`) to copy between them. This converter **panics if the destination struct has an exported field the source does not have** (and vice versa). When OBI adds new config fields, Beyla's mirror must be updated with matching fields (`BEYLA_`-prefixed env tags, matching defaults). A startup panic in k8s-cache manifests as **test timeouts** — the cache process is dead and Beyla never receives K8s metadata, so tests hang rather than showing a panic.
+Beyla mirrors OBI config structs and uses `pkg/helpers/config/convert.go` (`Convert()`) to copy between them. This converter **panics if the destination struct has an exported field the source does not have**. When OBI adds new config fields, Beyla's mirror must be updated with matching fields (`BEYLA_`-prefixed env tags, matching defaults). A startup panic in k8s-cache manifests as **test timeouts** — the cache process is dead and Beyla never receives K8s metadata, so tests hang rather than showing a panic.
+
+**Backport OBI's config-v2-only settings to Beyla v1.** OBI tags some settings `yaml:"-" env:"-" jsonschema:"-" validate:"-"` because its own v1 loader does not expose them; config v2 writes them in code. That is not how Beyla works. Do not copy those skip tags onto a user-facing Beyla field.
+
+Recreate the struct in a Beyla package. Keep the same exported field names so `FromOBI` and `AsOBI` copy it onto the OBI type by name, including nested structs whose Go types differ. Give every user setting a v1 `yaml` name and a `BEYLA_`-prefixed `env` tag. The reference is `pkg/beyla/name_resolver.go`: OBI's `GCE` and `Azure` fields are `yaml:"-" env:"-"`, and Beyla's `NameResolverConfig` exposes them with `BEYLA_NAME_RESOLVER_GCE_*` and `BEYLA_NAME_RESOLVER_AZURE_*`. `pkg/beyla/peer_metadata.go`, `pkg/beyla/logs_config.go`, and `pkg/beyla/exceptions_config.go` do the same for peer metadata, exception logs, and exception capture.
+
+Include every exported field of the OBI struct. Runtime hooks that are not user settings (`LogsExport`, `InjectHeaders`, and the same kind of func field) stay on the Beyla struct with the same name and type, tagged `yaml:"-" env:"-"`, so a v2 document still round-trips through `FromOBI` and `AsOBI`. Omitting them makes `AsOBI` panic or drops the hook.
+
+A bool or string that already lives on a Beyla struct does not need a new type. `Attributes.SanitizeSQLQueryText` is the reference: replace the skip tags with a yaml name and a `BEYLA_` env tag.
+
+Keep skip tags, and list the field in `FromOBI`'s skip map, only for values that are not configuration: the cached `obi` config, and the Alloy `TracesReceiver`. Do not leave a newly ported feature unreachable from a v1 file.
 
 Known mirror pairs — check these first:
 - `vendor/.../obi/pkg/kube/kubecache/config.go` (OBI) ↔ `cmd/k8s-cache/cfg/config.go` (Beyla)

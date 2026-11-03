@@ -1,8 +1,10 @@
 # Beyla Ubuntu DEB package
 
-This initially experimental Ubuntu amd64 DEB configures Grafana Alloy 1.21.0
-or newer to collect application telemetry with Beyla, host metrics, and
-profiles. It does not install a separate Beyla executable or service.
+This initially experimental amd64 DEB targets Ubuntu and configures Grafana
+Alloy 1.21.0 or newer to collect application telemetry with Beyla, host
+metrics, and profiles. Ubuntu 24.04 amd64 is the currently validated platform;
+compatibility with other Debian-based distributions has not yet been validated.
+It does not install a separate Beyla executable or service.
 Alloy runs as root so it can use eBPF. The package keeps its Alloy config
 separate from Alloy's vendor config and refuses to take over an existing
 customized Alloy installation.

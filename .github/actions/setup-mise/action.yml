@@ -1,6 +1,23 @@
 name: Set up mise
 description: Set up mise and install only the selected tools.
+outputs:
+  download-cache-hit:
+    description: Whether the shared verified mise download cache was restored exactly.
+    value: ${{ steps.restore-downloads.outputs.cache-hit }}
+  download-cache-key:
+    description: Exact key for the shared verified mise download cache.
+    value: ${{ steps.restore-downloads.outputs.cache-primary-key }}
+  download-cache-path:
+    description: Platform-specific path to mise's verified download cache.
+    value: ${{ steps.download-cache-path.outputs.path }}
 inputs:
+  profile:
+    description: Named exact set of Mise tools to enable for this job.
+    required: true
+  cache-downloads:
+    description: Whether to restore the shared verified mise download cache.
+    required: false
+    default: "true"
   cache-modules:
     description: Whether to cache the Go module download directory.
     required: false
@@ -9,19 +26,38 @@ inputs:
     description: Whether to cache the Go build directory.
     required: false
     default: "false"
+  cache-build-prefix:
+    description: Prefix separating Go build-cache trust and workload scopes.
+    required: false
+    default: "go-build"
 runs:
   using: composite
   steps:
-    - name: Hash selected mise tools
-      id: tools
+    - name: Resolve Mise tool profile
       shell: bash
-      run: bash "$GITHUB_ACTION_PATH/hash-tool-selector.sh"
+      env:
+        MISE_TOOLS_PROFILE: ${{ inputs.profile }}
+      run: bash "$GITHUB_ACTION_PATH/resolve-profile.sh"
 
-    - name: Cache verified mise downloads
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # mise verifies downloads against mise.lock checksums
+    - name: Resolve mise download cache path
+      id: download-cache-path
+      shell: bash
+      env:
+        RUNNER_OS: ${{ runner.os }}
+      run: |
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          echo 'path=~/Library/Caches/mise/downloads-cas' >> "$GITHUB_OUTPUT"
+        else
+          echo 'path=~/.cache/mise/downloads-cas' >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Restore shared verified mise downloads
+      id: restore-downloads
+      if: ${{ inputs.cache-downloads == 'true' }}
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # mise verifies downloads against mise.lock checksums
       with:
-        path: ${{ runner.os == 'macOS' && '~/Library/Caches/mise/downloads-cas' || '~/.cache/mise/downloads-cas' }}
-        key: mise-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.lock', '**/mise.lock') }}-${{ steps.tools.outputs.hash }}
+        path: ${{ steps.download-cache-path.outputs.path }}
+        key: mise-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.lock', '.github/actions/setup-mise/action.yml', '.github/actions/setup-mise/measure-download-cache.sh', '.github/workflows/mise-download-cache.yml') }}-union
 
     - name: Cache Go modules
       if: ${{ inputs.cache-modules == 'true' }}
@@ -37,9 +73,9 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] Go build cache is content-addressable and self-verifying
       with:
         path: ~/.cache/go-build
-        key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+        key: ${{ inputs.cache-build-prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
         restore-keys: |
-          go-build-${{ runner.os }}-${{ runner.arch }}-
+          ${{ inputs.cache-build-prefix }}-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Set up mise CLI
       uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0

@@ -16,8 +16,6 @@ jobs:
   release-binaries:
     name: Release compiled binaries for Linux/${{inputs.arch}}
     runs-on: ${{inputs.runner}}
-    env:
-      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,java,gradle"
     permissions:
       contents: write
     steps:
@@ -28,7 +26,7 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          cache-modules: "false"
+          profile: release
       - name: Build Java agent and Go release for linux/${{inputs.arch}}
         run: mise run artifact
         env:

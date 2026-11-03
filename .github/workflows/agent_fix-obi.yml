@@ -212,8 +212,6 @@ jobs:
       github.event.label.name == 'agent/fix-obi' &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
-    env:
-      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,clang-tidy"
     permissions:
       contents: read
       pull-requests: write
@@ -230,7 +228,7 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          cache-modules: "false"
+          profile: obi-fix
       - name: Generate files
         run: "mise run test:prepare-output ::: vendor:obi"
 
@@ -299,8 +297,6 @@ jobs:
       github.event.label.name == 'agent/fix-obi' &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
-    env:
-      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,clang-tidy"
     permissions:
       contents: write
       pull-requests: write
@@ -317,7 +313,7 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          cache-modules: "false"
+          profile: obi-fix
       - name: Generate files
         run: "mise run test:prepare-output ::: vendor:obi"
 

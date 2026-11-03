@@ -32,8 +32,6 @@ jobs:
   test-matrix:
     name: "Build Beyla integration matrix"
     runs-on: ubuntu-x64
-    env:
-      MISE_ENABLE_TOOLS: "go"
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
@@ -44,7 +42,7 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          cache-modules: "false"
+          profile: go
 
       - name: Build matrix
         id: build-matrix
@@ -59,8 +57,6 @@ jobs:
     name: ${{ matrix.description }}
     needs: test-matrix
     runs-on: ubuntu-x64
-    env:
-      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,kind,gotestsum"
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -87,7 +83,7 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          cache-modules: "false"
+          profile: integration
       - name: Generate files
         run: "mise run test:prepare-output ::: vendor:obi"
 

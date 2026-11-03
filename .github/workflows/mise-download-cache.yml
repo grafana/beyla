@@ -1,0 +1,70 @@
+name: Warm mise download cache
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mise.toml"
+      - "mise.lock"
+      - "internal/java/mise.toml"
+      - "internal/test/oats/mise.toml"
+      - ".github/actions/setup-mise/action.yml"
+      - ".github/actions/setup-mise/measure-download-cache.sh"
+      - ".github/workflows/mise-download-cache.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mise-download-cache-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+          - runner: ubuntu-24.04-arm
+    env:
+      # Disable Mise's local LRU pruning for the producer, then enforce a hard
+      # 2 GiB publication bound below. This prevents silently saving a partial
+      # cache if an early download was evicted while populating the union.
+      MISE_DOWNLOAD_CACHE_MAX_SIZE: "0"
+    steps:
+      - name: Check out the trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mise and restore the shared download cache
+        id: setup-mise
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: none
+
+      - name: Install locked tools to populate verified downloads
+        if: steps.setup-mise.outputs.download-cache-hit != 'true'
+        run: env -u MISE_ENABLE_TOOLS mise install --locked --monorepo --include-lazy
+
+      - name: Measure the verified download cache
+        id: cache-size
+        if: steps.setup-mise.outputs.download-cache-hit != 'true'
+        shell: bash
+        env:
+          DOWNLOAD_CACHE_PATH: ${{ steps.setup-mise.outputs.download-cache-path }}
+          DOWNLOAD_CACHE_LIMIT_BYTES: 2147483648
+        run: bash .github/actions/setup-mise/measure-download-cache.sh
+
+      - name: Save the shared verified mise downloads
+        if: steps.setup-mise.outputs.download-cache-hit != 'true' && steps.cache-size.outputs.safe-to-save == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # only verified downloads, never installed tools
+        with:
+          path: ${{ steps.setup-mise.outputs.download-cache-path }}
+          key: ${{ steps.setup-mise.outputs.download-cache-key }}

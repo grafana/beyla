@@ -147,19 +147,22 @@ You should be able to query traces and metrics in your Grafana board.
 - [mise](https://mise.jdx.dev/) (installs Beyla's pinned Go and native eBPF toolchains)
 - GNU make, for invoking the pinned OBI submodule's BPF-generation interface
 
-After cloning the repository, install the non-lazy pinned tools with:
+After cloning the repository, install the complete pinned toolchain across the
+repository's Mise roots with:
 
 ```shell
-mise install
+mise install --monorepo
 ```
 
-Root Go, lint, BPF, and other development tools are lazy and are provisioned on
-first use. To prefetch the complete root toolchain, run `mise install
---include-lazy`. For task overrides, set environment variables before the task,
-for example `GOOS=darwin GOARCH=arm64 mise run compile`; do not append
-`KEY=value` arguments after the task name. Normal `[env]` defaults treat an
-empty value as omitted, while build-only `GOOS`/`GOARCH` overrides preserve an
-explicitly empty value.
+When a task needs a pinned tool that is not installed yet, Mise installs it
+automatically. In CI, jobs select exact tool sets through named profiles in the
+[shared setup action](.github/actions/setup-mise/README.md). For environment
+overrides, set variables before the task, for example
+`GOOS=darwin GOARCH=arm64 mise run compile`. Task arguments go after the task
+name, for example `mise run test:unit-shard --shard-id 1 --packages ./pkg`;
+do not use `KEY=value` task arguments to set environment variables. Normal
+`[env]` defaults treat an empty value as omitted, while build-only
+`GOOS`/`GOARCH` overrides preserve an explicitly empty value.
 
 Docker is optional for local development. It is used by Docker-based generation
 and image-building tasks, but Beyla's default development workflow generates

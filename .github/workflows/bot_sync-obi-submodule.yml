@@ -16,8 +16,6 @@ jobs:
   update-obi:
     name: Update OBI submodule and open PR
     runs-on: ubuntu-latest
-    env:
-      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format"
     permissions:
       contents: write # Needed for creating commits and pushing branch
       pull-requests: write # Needed for creating PRs
@@ -42,7 +40,7 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          cache-modules: "false"
+          profile: bpf
       # mise run vendor:obi uses pinned native Clang/LLVM to generate and vendor OBI.
       - name: Rebuild BPF and vendor OBI
         run: mise run vendor:obi

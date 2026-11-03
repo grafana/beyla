@@ -14,8 +14,6 @@ jobs:
   check-licenses:
     name: check-licenses
     runs-on: ubuntu-latest
-    env:
-      MISE_ENABLE_TOOLS: "go,go-licenses"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,6 +22,6 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          cache-modules: "false"
+          profile: license
       - name: Check licenses
         run: mise run check:licenses

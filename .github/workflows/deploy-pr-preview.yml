@@ -19,7 +19,7 @@ jobs:
       pull-requests: write # Create or update PR comments.
       statuses: write # Publish the deploy preview link.
     if: "!github.event.pull_request.head.repo.fork"
-    uses: grafana/writers-toolkit/.github/workflows/deploy-preview.yml@main
+    uses: grafana/writers-toolkit/.github/workflows/deploy-preview.yml@7b99659fe08f97476f08e29182ab5a3f4f5979cf # main
     with:
       branch: ${{ github.head_ref }}
       event_number: ${{ github.event.number }}

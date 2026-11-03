@@ -1,0 +1,38 @@
+name: Deploy docs preview
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - closed
+    paths:
+      - "docs/sources/**"
+
+permissions: {}
+
+jobs:
+  deploy-pr-preview:
+    permissions:
+      contents: read # Clone repositories.
+      id-token: write # Authenticate to Google Cloud through workload identity.
+      pull-requests: write # Create or update PR comments.
+      statuses: write # Publish the deploy preview link.
+    if: "!github.event.pull_request.head.repo.fork"
+    uses: grafana/writers-toolkit/.github/workflows/deploy-preview.yml@main
+    with:
+      branch: ${{ github.head_ref }}
+      event_number: ${{ github.event.number }}
+      repo: beyla
+      sha: ${{ github.event.pull_request.head.sha }}
+      sources: |
+        [
+          {
+            "index_file": "content/docs/beyla/_index.md",
+            "relative_prefix": "/docs/beyla/latest/",
+            "repo": "beyla",
+            "source_directory": "docs/sources",
+            "website_directory": "content/docs/beyla/latest"
+          }
+        ]
+      title: ${{ github.event.pull_request.title }}

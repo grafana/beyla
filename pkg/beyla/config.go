@@ -248,6 +248,24 @@ func (c *Config) CriteriaUpdates() *services.CriteriaUpdates {
 	return c.criteriaUpdates
 }
 
+// ExceptionsEnabled reports whether any selected workload can request capture.
+func (c *Config) ExceptionsEnabled() bool {
+	if c.Exceptions.Enabled {
+		return true
+	}
+	for i := range c.Discovery.Instrument {
+		if c.Discovery.Instrument[i].Exceptions.Resolve(c.Exceptions).Enabled {
+			return true
+		}
+	}
+	for i := range c.Discovery.Services {
+		if c.Discovery.Services[i].Exceptions.Resolve(c.Exceptions).Enabled {
+			return true
+		}
+	}
+	return false
+}
+
 type Consumer interface {
 	otelconsumer.Traces
 }
@@ -409,6 +427,13 @@ func (c *Config) validate(context validationContext) error {
 		return ConfigError("BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")
 	}
 
+	if err := c.Logs.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+	if c.ExceptionsEnabled() && !c.Logs.Enabled() {
+		return ConfigError("exception capture requires a logger_provider exporter or a logs consumer")
+	}
+
 	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() &&
 		!c.OTELMetrics.EndpointEnabled() && !c.Prometheus.EndpointEnabled() &&
 		!c.NetworkFlows.Print {
@@ -433,7 +458,7 @@ func (c *Config) validate(context validationContext) error {
 
 	if appEnabled && !c.TracePrinter.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
-		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() &&
+		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() && !c.Logs.Enabled() &&
 		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
 			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
@@ -484,6 +509,10 @@ func (c *Config) validate(context validationContext) error {
 		if err := c.Injector.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := c.PeerMetadata.Validate(); err != nil {
+		return ConfigError(err.Error())
 	}
 
 	return nil

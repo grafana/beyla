@@ -141,9 +141,6 @@ BEHAVIORAL_TRANSFORMS=(
     'o\.instrument(t, network, "obi-config-gce\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-gce.yml")'
     'o\.instrument(t, network, "obi-config-azure\.yml")|o.Env = append(o.Env, "BEYLA_OTEL_METRICS_FEATURES=", "BEYLA_PROMETHEUS_FEATURES="); o.instrument(t, network, "obi-config-azure.yml")'
 
-    # Let the connection-info test select only its opt-in feature.
-    '`MULTI_TEST_MODE=-connectioninfo`|`MULTI_TEST_MODE=-connectioninfo`, `MULTI_TEST_METRICS_FEATURES=application_service_graph_connection_info`'
-
     # --- K8s component paths ---
     'DockerfileOBI|DockerfileBeyla'
     'DockerfileK8sCache|DockerfileBeylaK8sCache'
@@ -735,13 +732,6 @@ ensure_netolly_basic_guess_ports() {
         awk '/^      protocols:/ { print "      guess_ports: ordinal" } { print }' \
             "$file" > "$file.tmp" && mv "$file.tmp" "$file"
     fi
-}
-
-ensure_multiexec_connectioninfo_feature_override() {
-    local file="$OBI_DEST/docker-compose-multiexec.yml"
-    [[ -f "$file" ]] || return 0
-
-    sed_i -e 's|BEYLA_OTEL_METRICS_FEATURES: "application,application_span_otel"|BEYLA_OTEL_METRICS_FEATURES: "${MULTI_TEST_METRICS_FEATURES-application,application_span_otel}"|' "$file"
 }
 
 ensure_client_trace_waits_for_complete_attachment() {
@@ -1597,7 +1587,6 @@ generate() {
     ensure_daemonset_process_metrics_enabled
     ensure_otherinstance_has_service_version
     ensure_netolly_basic_guess_ports
-    ensure_multiexec_connectioninfo_feature_override
     ensure_client_trace_waits_for_complete_attachment
     ensure_nodejs_traces_are_complete
     ensure_malicious_ioctl_local_downstream

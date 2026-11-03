@@ -2,12 +2,14 @@
 title: Beyla requirements and limitations
 menuTitle: Requirements
 description: Check the Linux kernel, Go version, and Linux capability requirements for Grafana Beyla, and learn what eBPF-based auto-instrumentation can and can't capture.
-weight: 500
+weight: 100
 keywords:
   - Beyla
   - eBPF
   - requirements
   - kernel
+aliases:
+  - ../introduction/requirements/ # /docs/beyla/<BEYLA_VERSION>/introduction/requirements/
 ---
 
 # Beyla requirements and limitations
@@ -77,7 +79,7 @@ To compare Beyla and SDK support for your languages and frameworks, refer to [Co
 
 [btf]: https://www.kernel.org/doc/html/latest/bpf/btf.html
 [distributed-traces]: ../../traces/
-[security]: ../../setup/security/
-[compare]: ../beyla-and-opentelemetry-sdks/
+[security]: ../security/
+[compare]: ../../introduction/beyla-and-opentelemetry-sdks/
 [setup]: ../../setup/
 [quickstart]: ../../quickstart/

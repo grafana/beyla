@@ -322,6 +322,7 @@ To instrument only the Pods of one application, run Beyla as a sidecar container
                    secretKeyRef:
                      name: grafana-secret
                      key: otlp-headers
+                     optional: true
    ```
 
    Replace the following:
@@ -497,7 +498,7 @@ A cluster administrator can create a dedicated SCC that permits these settings w
    oc adm policy add-scc-to-user beyla -z beyla -n beyla
    ```
 
-   For a sidecar, run the `oc adm policy` command again with `-n <APP_NAMESPACE>`, where _`<APP_NAMESPACE>`_ is the namespace of the application.
+   For a sidecar, run the `oc adm policy` command again with `-z <APP_SERVICE_ACCOUNT> -n <APP_NAMESPACE>`, where _`<APP_SERVICE_ACCOUNT>`_ is the service account used by the application Pod and _`<APP_NAMESPACE>`_ is its namespace.
    The SCC applies to every container in the Pod, so the application containers also run as user `0` with a read-only root file system.
 
 1. Keep the capability-based `securityContext` from the previous section.

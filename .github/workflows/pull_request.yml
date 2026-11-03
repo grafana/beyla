@@ -110,9 +110,8 @@ jobs:
           persist-credentials: false
 
       - name: Lint dashboards
-        uses: grafana/dashboard-linter@63340c76001dd04e98ec0c3e5ed9f927eb3b7b68 # v0.5.0
+        uses: grafana/dashboard-linter@c7d457aca03b773a9353be7e9d53d920b10f646c # v0.5.2
         with:
-          version: v0.5.0
           files: ops/beyla-mixin/dashboards
           args: --strict
 

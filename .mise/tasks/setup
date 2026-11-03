@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE alias=["prereqs"]
+#MISE hide=true
+#MISE description="Compatibility alias for test:prepare-output"
+set -euo pipefail
+exec mise run test:prepare-output

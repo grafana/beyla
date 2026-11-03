@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE alias="ginkgo"
+#MISE description="Verify the Ginkgo test runner is available"
+set -euo pipefail
+command -v ginkgo >/dev/null || { echo "ginkgo is unavailable; run mise install" >&2; exit 1; }

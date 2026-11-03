@@ -88,6 +88,87 @@
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
       ],
     },
+    {
+      customType: 'regex',
+      description: 'Track the mise runtime version passed to mise-action (Dockerfile image references are tracked by the native Dockerfile manager)',
+      managerFilePatterns: [
+        '/^\\.github/actions/setup-mise/action\\.yml$/',
+      ],
+      matchStrings: [
+        'version:\\s+"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)"',
+      ],
+      depNameTemplate: 'jdx/mise',
+      packageNameTemplate: 'jdx/mise',
+      datasourceTemplate: 'github-releases',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+    },
+    {
+      customType: 'regex',
+      description: 'Track the mise bpf2go backend alias (Renovate mise manager does not resolve tool_alias)',
+      managerFilePatterns: [
+        '/^mise\\.toml$/',
+      ],
+      matchStrings: [
+        '(?m)^"?bpf2go"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
+      ],
+      depNameTemplate: 'bpf2go',
+      packageNameTemplate: 'github.com/cilium/ebpf/cmd/bpf2go',
+      datasourceTemplate: 'go',
+    },
+    {
+      customType: 'regex',
+      description: 'Track the mise go-licenses backend alias (Renovate mise manager does not resolve tool_alias)',
+      managerFilePatterns: [
+        '/^mise\\.toml$/',
+      ],
+      matchStrings: [
+        '(?m)^"?go-licenses"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
+      ],
+      depNameTemplate: 'go-licenses',
+      packageNameTemplate: 'github.com/google/go-licenses/v2',
+      datasourceTemplate: 'go',
+    },
+    {
+      customType: 'regex',
+      description: 'Track the mise dashboard-linter backend alias (Renovate mise manager does not resolve tool_alias)',
+      managerFilePatterns: [
+        '/^mise\\.toml$/',
+      ],
+      matchStrings: [
+        '(?m)^"?dashboard-linter"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
+      ],
+      depNameTemplate: 'dashboard-linter',
+      packageNameTemplate: 'grafana/dashboard-linter',
+      datasourceTemplate: 'github-releases',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+    },
+    {
+      customType: 'regex',
+      description: 'Track the mise llvm-tools backend alias (Renovate mise manager does not resolve tool_alias)',
+      managerFilePatterns: [
+        '/^mise\\.toml$/',
+      ],
+      matchStrings: [
+        '(?m)^"?llvm-tools"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
+      ],
+      depNameTemplate: 'llvm-tools',
+      packageNameTemplate: 'llvm-tools',
+      datasourceTemplate: 'conda',
+    },
+    {
+      customType: 'regex',
+      description: 'Track the mise clang-tidy backend alias (Renovate mise manager does not resolve tool_alias)',
+      managerFilePatterns: [
+        '/^mise\\.toml$/',
+      ],
+      matchStrings: [
+        '(?ms)^\\[tools\\."clang-tidy"\\]\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
+      ],
+      depNameTemplate: 'clang-tidy',
+      packageNameTemplate: 'cpp-linter/clang-tools-static-binaries',
+      datasourceTemplate: 'github-releases',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+    },
   ],
   packageRules: [
     {
@@ -108,6 +189,23 @@
       ],
       postUpdateOptions: [
         'gomodTidy',
+      ],
+    },
+    {
+      description: 'Bump the root go.mod directive to the selected Go version',
+      matchManagers: [
+        'gomod',
+      ],
+      matchDepNames: [
+        'go',
+      ],
+      matchDepTypes: [
+        'golang',
+      ],
+      rangeStrategy: 'bump',
+      groupName: 'Go',
+      schedule: [
+        'before 8am on Monday',
       ],
     },
     {
@@ -156,6 +254,21 @@
       ],
     },
     {
+      description: 'Group only the selected Mise Go toolchain and bpf2go with Go module and Docker updates',
+      matchManagers: [
+        'mise',
+        'custom.regex',
+      ],
+      matchDepNames: [
+        'go',
+        'bpf2go',
+      ],
+      groupName: 'Go',
+      schedule: [
+        'before 8am on Monday',
+      ],
+    },
+    {
       groupName: 'Docker',
       matchManagers: [
         'dockerfile',
@@ -166,6 +279,45 @@
         'minor',
         'major',
       ],
+      schedule: [
+        'before 8am on Tuesday',
+      ],
+    },
+    {
+      description: 'Group Go base image tags with the selected Go toolchain and module directives',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchDepNames: [
+        'golang',
+      ],
+      groupName: 'Go',
+      schedule: [
+        'before 8am on Monday',
+      ],
+    },
+    {
+      description: 'Group the mise-action runtime with pinned official mise Docker images',
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchFileNames: [
+        '.github/actions/setup-mise/action.yml',
+      ],
+      groupName: 'Mise runtime',
+      schedule: [
+        'before 8am on Tuesday',
+      ],
+    },
+    {
+      description: 'Group pinned official mise Docker images with the mise-action runtime',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchPackageNames: [
+        'ghcr.io/jdx/mise',
+      ],
+      groupName: 'Mise runtime',
       schedule: [
         'before 8am on Tuesday',
       ],

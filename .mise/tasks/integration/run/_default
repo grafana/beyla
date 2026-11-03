@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE alias="run-integration-test"
+#MISE description="Run OBI integration tests"
+set -euo pipefail
+
+echo "### Running integration tests"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration --tags=integration

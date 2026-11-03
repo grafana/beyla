@@ -18,6 +18,8 @@ jobs:
   generate:
     name: Generate
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,gotestsum"
     timeout-minutes: 45
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
@@ -27,11 +29,11 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+      - name: Test Make and Mise migration regressions
+        run: bash scripts/tests/mise-review-regressions.sh
+
+      - name: Test mise action tool-selection cache key
+        run: bash .github/actions/setup-mise/test.sh
 
       - name: Go build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
@@ -41,20 +43,28 @@ jobs:
           restore-keys: |
             go-build-pr-race-${{ runner.os }}-${{ runner.arch }}-
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          cache-modules: "true"
+
+      - name: Preinstall bpf2go for cross-target generation
+        run: GOARCH=arm64 GOOS=linux mise exec -- bpf2go --help >/dev/null
+
       - name: Generate and vendor OBI
-        run: make vendor-obi
+        run: mise run vendor:obi
 
       - name: Check config schema is up to date
-        run: make check-config-schema
+        run: mise run check:config-schema
 
       - name: Build unit test matrix
         id: build-matrix
         env:
           PARTITIONS: 3
         run: |
-          make prereqs
+          mise run test:prepare-output
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          make unit-test-matrix-json >> $GITHUB_OUTPUT
+          mise run matrix:unit-test-json >> $GITHUB_OUTPUT
 
       - name: Upload generated build inputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -71,6 +81,8 @@ jobs:
     name: Lint
     needs: generate
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go,golangci-lint,dashboard-linter,clang-format,clang-tidy"
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,11 +90,10 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+          cache-modules: "true"
 
       - name: Go build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
@@ -98,12 +109,14 @@ jobs:
           name: bpf-generated-${{ github.sha }}
 
       - name: Lint
-        run: make lint lint-dashboard
+        run: mise run lint
 
   unit-test:
     name: "Unit test ${{ matrix.description }}"
     needs: generate
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go,setup-envtest,gotestsum"
     timeout-minutes: 45
     # Grant specific permissions needed only for this job
     permissions:
@@ -120,11 +133,10 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+          cache-modules: "true"
 
       - name: Go build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
@@ -143,12 +155,12 @@ jobs:
         env:
           MATRIX_ID: ${{ matrix.id }}
           MATRIX_PACKAGES: ${{ matrix.packages }}
-        run: make prereqs run-unit-test-shard SHARD_ID="${MATRIX_ID}" UNIT_TEST_PACKAGES="${MATRIX_PACKAGES}"
+        run: mise run test:unit-shard --shard-id "${MATRIX_ID}" --packages "${MATRIX_PACKAGES}"
 
       - name: Exclude generated files from coverage
         env:
-          MATRIX_ID: ${{ matrix.id }}
-        run: make cov-exclude-generated-shard SHARD_ID="${MATRIX_ID}"
+          SHARD_ID: ${{ matrix.id }}
+        run: mise run coverage:exclude-generated-shard --shard-id "${SHARD_ID}"
 
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1

@@ -1,0 +1,55 @@
+name: Set up mise
+description: Set up mise and install only the selected tools.
+inputs:
+  cache-modules:
+    description: Whether to cache the Go module download directory.
+    required: false
+    default: "false"
+  cache-build:
+    description: Whether to cache the Go build directory.
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Hash selected mise tools
+      id: tools
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/hash-tool-selector.sh"
+
+    - name: Cache verified mise downloads
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # mise verifies downloads against mise.lock checksums
+      with:
+        path: ${{ runner.os == 'macOS' && '~/Library/Caches/mise/downloads-cas' || '~/.cache/mise/downloads-cas' }}
+        key: mise-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.lock', '**/mise.lock') }}-${{ steps.tools.outputs.hash }}
+
+    - name: Cache Go modules
+      if: ${{ inputs.cache-modules == 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.sum', '**/go.sum') }}
+        restore-keys: |
+          go-mod-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Cache Go build
+      if: ${{ inputs.cache-build == 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] Go build cache is content-addressable and self-verifying
+      with:
+        path: ~/.cache/go-build
+        key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+        restore-keys: |
+          go-build-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Set up mise CLI
+      uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+      with:
+        version: "2026.10.18"
+        cache: false
+        install: true
+
+    - name: Check Go version matches go.mod
+      shell: bash
+      env:
+        MISE_ENABLE_TOOLS: go
+      run: mise run --skip-tools check:go-version

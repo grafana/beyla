@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE alias="beyla-integration-test-matrix-json"
+#MISE description="Generate the Beyla integration test matrix"
+set -euo pipefail
+
+PARTITIONS="${PARTITIONS:-5}"
+export PARTITIONS
+WEIGHTS_FILE=scripts/beyla-integration-test-weights.generated.json \
+	./scripts/generate-integration-matrix.sh "${TEST_TAGS}" internal/test/integration "${PARTITIONS}"

@@ -32,12 +32,19 @@ jobs:
   test-matrix:
     name: "Build Beyla integration matrix"
     runs-on: ubuntu-x64
+    env:
+      MISE_ENABLE_TOOLS: "go"
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          cache-modules: "false"
 
       - name: Build matrix
         id: build-matrix
@@ -46,12 +53,14 @@ jobs:
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          make beyla-integration-test-matrix-json >> $GITHUB_OUTPUT
+          mise run integration:matrix:beyla-json >> $GITHUB_OUTPUT
 
   test:
     name: ${{ matrix.description }}
     needs: test-matrix
     runs-on: ubuntu-x64
+    env:
+      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,kind,gotestsum"
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -75,14 +84,12 @@ jobs:
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
         uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: false
-
+          cache-modules: "false"
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Verify Beyla compiles
         run: docker build -f internal/test/integration/components/beyla/Dockerfile .
@@ -106,7 +113,7 @@ jobs:
 
           mkdir -p reports
 
-          ./bin/gotestsum \
+          gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="./internal/test/integration" -ftestname \
               --jsonfile=reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
@@ -115,7 +122,7 @@ jobs:
               -run="^(${MATRIX_TEST_PATTERN})$" ./internal/test/integration
 
       - name: Process coverage data
-        run: make itest-coverage-data
+        run: mise run integration:coverage-data
 
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1

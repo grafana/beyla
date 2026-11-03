@@ -1,0 +1,11 @@
+[tools]
+java = "temurin-21.0.8+9.0.LTS"
+gradle = "9.6.1"
+
+[tasks.verify]
+description = "Check Java formatting, run tests, and build the Java agent"
+run = [
+  { task = ":spotless-check" },
+  { task = ":test" },
+  { task = ":build" },
+]

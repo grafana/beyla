@@ -25,6 +25,8 @@ jobs:
   vm-test-matrix:
     name: "Build VM integration matrix"
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go"
     timeout-minutes: 10
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
@@ -35,8 +37,13 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          cache-modules: "false"
+
       - name: Generate OBI tests
-        run: make generate-obi-tests
+        run: mise run generate:obi-tests
 
       - name: Build test matrix
         id: build-matrix
@@ -50,7 +57,7 @@ jobs:
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          make vm-integration-test-matrix-json >> $GITHUB_OUTPUT
+          mise run integration:matrix:vm-json >> $GITHUB_OUTPUT
 
       - name: Build kernel matrix
         id: build-kernel-matrix
@@ -64,6 +71,8 @@ jobs:
     name: "Prep VM test artifacts"
     needs: vm-test-matrix
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format"
     timeout-minutes: 45
     permissions:
       contents: read
@@ -116,12 +125,6 @@ jobs:
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
         uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
       - name: Go build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
         with:
@@ -130,8 +133,12 @@ jobs:
           restore-keys: |
             go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          cache-modules: "true"
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Install qemu-utils and musl-tools
         run: |
@@ -239,6 +246,8 @@ jobs:
       # Required for uploading artifacts
       actions: write
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go"
     strategy:
       fail-fast: false
       matrix:
@@ -357,8 +366,13 @@ jobs:
             PRECOMPILED_TESTS_DIR="$(pwd)/compiled-tests" \
             && [ -f testoutput/success ]
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          cache-modules: "false"
+
       - name: Process coverage data
-        run: make itest-coverage-data
+        run: mise run integration:coverage-data
 
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1

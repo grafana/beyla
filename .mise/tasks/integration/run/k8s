@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE alias="run-integration-test-k8s"
+#MISE description="Run Kubernetes integration tests"
+set -euo pipefail
+
+echo "### Running K8s integration tests"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration/k8s/... --tags=integration

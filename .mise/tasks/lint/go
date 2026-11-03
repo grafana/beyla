@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run Go linters"
+#MISE depends=["check:fmt"]
+set -euo pipefail
+echo "### Linting code"
+golangci-lint run ./... --timeout=6m

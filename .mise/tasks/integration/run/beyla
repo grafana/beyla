@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE alias="run-beyla-integration-test"
+#MISE description="Run Beyla integration tests"
+set -euo pipefail
+
+echo "### Running Beyla integration tests"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration

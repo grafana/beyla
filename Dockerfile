@@ -37,7 +37,7 @@ WORKDIR /build
 # Copy build files
 COPY .obi-src/pkg/internal/java .
 # Apply Beyla-specific Java patches on top of OBI source
-COPY internal/java/ .
+COPY internal/java/agent/ agent/
 
 # Pre-built native library from jni-builder stage
 COPY --from=jni-builder /build/target/classes/native/linux-amd64/libobijni.so  agent/target/classes/native/linux-amd64/libobijni.so
@@ -58,44 +58,59 @@ ARG TARGETARCH
 
 # set it to a non-empty value if you are building this image
 # from a custom, local OBI repository
-# In that case, you must run `make generate copy-obi-vendor`
-# manually, before building this image.
-# Or directly run`make dev-image-build`
+# In that case, regenerate the OBI sources and vendor dependencies with
+# `mise run vendor-obi` before building this image.
+# Or directly run the development image build task.
 ARG DEV_OBI
 
 ENV GOARCH=$TARGETARCH
 
 WORKDIR /src
 
-RUN apk add make git bash
+RUN apk add --no-cache ca-certificates curl git bash make
+
+# The generator image provides Go, bpf2go, and Clang. Copy only Mise metadata
+# so repository tasks can run without installing a second Go toolchain.
+COPY --from=ghcr.io/jdx/mise:2026.10.18@sha256:fc31de7b93d195613deb600d42c65a164b0205716ade38132aadeabac3838248 /usr/local/bin/mise /usr/local/bin/mise
+ENV MISE_ENABLE_TOOLS=none
 
 # Copy the go manifests and source
 COPY .git/ .git/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
 COPY bpf/ bpf/
-COPY internal/tools/ internal/tools/
 COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum
-COPY Makefile Makefile
+COPY .obi-src/ .obi-src/
+COPY mise.toml mise.lock ./
+COPY .mise/ .mise/
+COPY internal/java/mise.toml internal/java/
+COPY internal/java/.mise/ internal/java/.mise/
+COPY internal/test/oats/mise.toml internal/test/oats/
 COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
 
-# Point make to the pre-installed bpf2go binary in the generator image
-ENV BPF2GO=/go/bin/bpf2go
+# The generator image already provides these pinned build tools. Mise supplies
+# the task graph and environment without downloading a duplicate Go toolchain.
 
+# .obi-src is a worktree; its .git file points to a host path that is not
+# present in the image, so remove that pointer before running its Makefile.
 # Build
 RUN if [ -z "${DEV_OBI}" ]; then \
-    /generate.sh && \
-    make copy-obi-vendor \
-    ; fi
+    rm -f .obi-src/.git && \
+    for llvm_bin in /usr/lib/llvm*/bin; do PATH="$llvm_bin:$PATH"; done; \
+    export PATH && \
+    make -C .obi-src generate BPF2GO=/go/bin/bpf2go && \
+    BPF2GO=/go/bin/bpf2go BPF_CLANG=clang mise run --skip-tools --skip-deps generate:beyla && \
+    go mod vendor; \
+    fi
 
 # The Java agent is embedded at Go compile time, so the platform-specific jar
 # must be copied into vendor before building the Beyla binary.
 COPY --from=javaagent-builder /build/build/obi-java-agent.jar /src/vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
-RUN make compile
+RUN mise run --skip-tools compile
 
 # Create final image from minimal + built binary
 FROM scratch

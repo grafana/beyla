@@ -6,7 +6,9 @@ ENV GOARCH=$TARGETARCH
 
 WORKDIR /src
 
-RUN apk add make git bash
+RUN apk add --no-cache ca-certificates curl git bash
+COPY --from=ghcr.io/jdx/mise:2026.10.18@sha256:fc31de7b93d195613deb600d42c65a164b0205716ade38132aadeabac3838248 /usr/local/bin/mise /usr/local/bin/mise
+ENV MISE_ENABLE_TOOLS=none
 
 # Copy the go manifests and source
 COPY .git/ .git/
@@ -15,17 +17,19 @@ COPY pkg/ pkg/
 COPY vendor/ vendor/
 COPY go.mod go.mod
 COPY go.sum go.sum
-COPY Makefile Makefile
+COPY mise.toml mise.lock ./
+COPY .mise/ .mise/
+COPY internal/java/mise.toml internal/java/
+COPY internal/java/.mise/ internal/java/.mise/
+COPY internal/test/oats/mise.toml internal/test/oats/
 COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv
 
-# OBI's Makefile doesn't let to override BPF2GO env var: temporary hack until we can
-ENV TOOLS_DIR=/go/bin
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
-# Prior to using this debug.Dockerfile, you should manually run `make generate copy-obi-vendor`
-RUN make debug
+# Prior to using this debug.Dockerfile, regenerate eBPF sources and vendor dependencies.
+RUN mise run --skip-tools debug
 
 FROM alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE alias="lint-dashboard"
+#MISE description="Lint Grafana dashboards"
+set -euo pipefail
+
+root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
+cd "$root"
+dashboard_linter=${DASHBOARD_LINTER:-dashboard-linter}
+if git ls-files --modified | grep -E 'grafana/.*\.json$' >/dev/null; then
+  for file in "$root"/grafana/*.json; do
+    "$dashboard_linter" lint --strict "$file"
+  done
+else
+  echo '(no git changes detected. Skipping)'
+fi

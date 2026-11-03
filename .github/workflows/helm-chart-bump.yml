@@ -26,6 +26,8 @@ jobs:
     name: Bump Helm chart appVersion and version
     if: github.repository == 'grafana/beyla'
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: ""
     permissions:
       contents: read
       pull-requests: write
@@ -135,9 +137,15 @@ jobs:
           echo "Updated Chart.yaml:"
           grep -E '^(version|appVersion):' charts/beyla/Chart.yaml
 
+      - name: Set up mise
+        if: steps.gate.outputs.skip != 'true'
+        uses: ./.github/actions/setup-mise
+        with:
+          cache-modules: "false"
+
       - name: Regenerate Helm docs
         if: steps.gate.outputs.skip != 'true'
-        run: make helm-docs
+        run: mise run helm:docs
 
       - name: Get GitHub App token
         if: steps.gate.outputs.skip != 'true'

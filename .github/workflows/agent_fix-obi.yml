@@ -212,6 +212,8 @@ jobs:
       github.event.label.name == 'agent/fix-obi' &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,clang-tidy"
     permissions:
       contents: read
       pull-requests: write
@@ -225,14 +227,12 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: go.mod
-          cache: false
-
+          cache-modules: "false"
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Download triage artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -299,6 +299,8 @@ jobs:
       github.event.label.name == 'agent/fix-obi' &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: "go,bpf2go,clang,llvm-tools,clang-format,clang-tidy"
     permissions:
       contents: write
       pull-requests: write
@@ -312,14 +314,12 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: go.mod
-          cache: false
-
+          cache-modules: "false"
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Download triage artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

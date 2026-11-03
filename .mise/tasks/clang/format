@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE alias="clang-format"
+#MISE description="Format BPF C source files"
+set -euo pipefail
+find ./bpf -type f -name '*.c' -print0 | xargs -0 -r -P 0 -n 1 clang-format -i
+find ./bpf -type f -name '*.h' -print0 | xargs -0 -r -P 0 -n 1 clang-format -i

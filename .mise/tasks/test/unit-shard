@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#MISE alias="run-unit-test-shard"
+#MISE description="Run one unit test shard"
+#MISE depends=["test:prepare-output"]
+#USAGE flag "--shard-id <id>" help="Unit test shard identifier" env="SHARD_ID"
+#USAGE flag "--packages <packages>" help="Whitespace-separated Go package patterns" env="UNIT_TEST_PACKAGES"
+set -euo pipefail
+test_output="$TEST_OUTPUT"
+shard_id="${usage_shard_id-${SHARD_ID-}}"
+package_list="${usage_packages-${UNIT_TEST_PACKAGES-}}"
+packages=()
+while IFS= read -r line; do
+  read -r -a line_packages <<< "$line"
+  packages+=("${line_packages[@]}")
+done <<< "$package_list"
+echo "### Running unit test shard ${shard_id}"
+KUBEBUILDER_ASSETS="$(setup-envtest use "$ENVTEST_K8S_VERSION" -p path)" \
+  gotestsum \
+  --jsonfile="$test_output/unit-test-shard-${shard_id}.log" \
+  -- -race -mod vendor -a -coverpkg=./... \
+  -coverprofile "$test_output/cover-shard-${shard_id}.all.txt" \
+  "${packages[@]}"

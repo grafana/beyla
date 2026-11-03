@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#MISE alias="debug"
+#MISE description="Compile Beyla with debug symbols"
+set -euo pipefail
+
+root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
+cd "$root"
+
+cmd=${CMD-beyla}
+main_go_file=${MAIN_GO_FILE-cmd/${cmd}/main.go}
+goos=${GOOS-linux}
+goarch=${GOARCH-amd64}
+buildinfo_pkg=${BUILDINFO_PKG-github.com/grafana/beyla/v3/pkg/buildinfo}
+release_version=${RELEASE_VERSION-$(git describe --all 2>/dev/null | cut -d/ -f2 || true)}
+release_revision=${RELEASE_REVISION-$(git rev-parse --short HEAD 2>/dev/null || true)}
+ldflags="-X '${buildinfo_pkg}.Version=${release_version}' -X '${buildinfo_pkg}.Revision=${release_revision}'"
+
+CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -mod vendor -gcflags "-N -l" -ldflags="$ldflags" -a -o "bin/${cmd}" "$main_go_file"

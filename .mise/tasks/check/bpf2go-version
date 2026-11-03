@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Check the Mise bpf2go pin matches the cilium/ebpf module"
+set -euo pipefail
+
+expected=$(go list -m -f '{{.Version}}' github.com/cilium/ebpf)
+actual=$(mise current bpf2go)
+expected=${expected#v}
+if [[ "$actual" != "$expected" ]]; then
+  echo "Mise bpf2go $actual does not match github.com/cilium/ebpf $expected" >&2
+  exit 1
+fi

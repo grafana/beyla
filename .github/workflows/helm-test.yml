@@ -28,14 +28,21 @@ jobs:
   run-unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: "false"
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          cache-modules: "false"
+
       - name: Run unit tests
-        run: make helm-unittest
+        run: mise run helm:unittest
 
   lint-helm-chart:
     runs-on: ubuntu-latest

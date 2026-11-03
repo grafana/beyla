@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE alias="test-privileged"
+#MISE description="Run unit tests with privileged tests enabled"
+#MISE depends=["test:prepare-output"]
+set -euo pipefail
+test_output="$TEST_OUTPUT"
+echo "### Testing code with privileged tests enabled"
+KUBEBUILDER_ASSETS="$(setup-envtest use "$ENVTEST_K8S_VERSION" -p path)" PRIVILEGED_TESTS=true go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile "$test_output/cover.all.txt"

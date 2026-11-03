@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE alias="integration-test-matrix-json"
+#MISE description="Generate the integration test matrix"
+set -euo pipefail
+
+PARTITIONS="${PARTITIONS:-5}"
+export PARTITIONS
+./scripts/generate-integration-matrix.sh "${TEST_TAGS}" internal/testgenerated/integration "${PARTITIONS}"

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE alias="cov-exclude-generated"
+#MISE description="Remove generated files from the coverage profile"
+set -euo pipefail
+test_output="${TEST_OUTPUT}"
+exclude_coverage_files="${EXCLUDE_COVERAGE_FILES}"
+grep -vE "$exclude_coverage_files" "$test_output/cover.all.txt" > "$test_output/cover.txt"

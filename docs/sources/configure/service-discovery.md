@@ -437,7 +437,7 @@ components:
 Change this option to allow Beyla to instrument itself or some of the other excluded components.
 
 Note: to enable such self-instrumentation, you still need to include them in the `instrument` section, or these components need to be
-a part of a encompassing inclusion criteria.
+a part of an encompassing inclusion criteria.
 
 ## Skip go specific tracers
 

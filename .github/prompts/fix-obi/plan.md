@@ -10,7 +10,7 @@
 4. **Cross-reference symbol changes**: When OBI renames, removes, or changes the signature of an exported symbol (function, type, const, struct field), search the Beyla codebase for **all references** to that symbol — including test files, helper packages, and generated test scripts. List every call site that needs updating. Existing tests may reference removed or renamed symbols and must be updated in the plan alongside production code.
 5. **Write `plan.md`** with a clear, ordered implementation plan.
 
-**Stay under ~25 tool calls.** Read triage.md, then open only the minimal set of source files needed to form the plan. Do not explore the repo broadly.
+**Stay under ~25 tool calls.** Read triage.md, then open only the minimal set of source files needed to form the plan. Do not explore the repo broadly. Do not spawn subagents. Do the field-by-field comparison yourself in this step. `plan.md` must contain the resulting edits, not an instruction for the implement job to repeat the comparison.
 
 ## Deductive reasoning — where changes MUST be
 
@@ -55,7 +55,14 @@ Port changes from OBI into Beyla. Do not plan edits to `internal/testgenerated/`
 
 Single file **`plan.md`** in repo root with:
 1. **Summary**: Short description of failures and the common root cause(s) identified.
-2. **Changes**: Ordered list of concrete file changes in Beyla only — each with file path, what to change, and why.
-3. **Verification**: Which `make` targets or quick checks the implement step should run after editing (e.g. `make fmt lint`, `go vet ./...`).
+2. **Changes**: Ordered list of concrete file edits in Beyla only. Every item names a file path, the code to add or delete, and why. A step that says "audit", "re-verify", "confirm parity", or "if this fails, investigate" is not done — replace it with the edit, or drop it.
+3. **Verification**: only commands from this list, and only the ones that apply:
+   - `make fmt`
+   - `make lint`
+   - `go vet` of the packages you changed
+   - `go test` of the packages you changed, with no integration build tag
+   - `./scripts/generate-obi-tests.sh` then `git diff --exit-code internal/testgenerated/`
+
+Do not tell the implement job to run integration tests, `make integration-test`, Docker, `diff`, or the `beyla` binary. That job has a 100-turn cap and a shell allowlist; those commands are what made it fail with `error_max_turns` before it could commit. Keep the plan to the smallest set of edits that address the common root cause.
 
 No code changes. Only produce `plan.md`.

@@ -7,6 +7,21 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin"
 
+# This script runs before setup-mise in CI. Reinvoke it with a hostile Mise
+# shim first on PATH and assert that no direct Mise call escapes into it.
+if [[ "${MISE_REVIEW_HERMETIC_CHILD:-}" != 1 ]]; then
+  mkdir -p "$tmp/hostile-bin"
+  cat > "$tmp/hostile-bin/mise" <<'SH'
+#!/usr/bin/env bash
+touch "$MISE_REVIEW_MISE_SENTINEL"
+exit 97
+SH
+  chmod +x "$tmp/hostile-bin/mise"
+  MISE_REVIEW_HERMETIC_CHILD=1 MISE_REVIEW_MISE_SENTINEL="$tmp/mise-was-called" \
+    PATH="$tmp/hostile-bin:$PATH" bash "$0" >"$tmp/hermetic-output"
+  [[ ! -e "$tmp/mise-was-called" ]]
+fi
+
 cat > "$tmp/bin/mise" <<'SH'
 #!/usr/bin/env bash
 printf 'start %s CMD=%s GOOS=%s\n' "$*" "${CMD-unset}" "${GOOS-unset}" >> "$EVENTS"
@@ -112,11 +127,6 @@ if MISE_MONOREPO_ROOT="$tmp/oats-root" GINKGO_LOG="$tmp/ginkgo-invalid" \
 fi
 [[ ! -e "$tmp/ginkgo-invalid" ]]
 
-# Generated OATS Go modules follow the single pinned Ginkgo version in Mise.
-ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$root/mise.toml")
-grep -q 'ginkgo_version=$(awk -F' "$root/scripts/generate-obi-tests.sh"
-[[ "$ginkgo_version" == "$(mise current ginkgo)" ]]
-
 # Git metadata failures are nonfatal for all metadata-enabled compile tasks.
 cat > "$tmp/bin/git" <<'SH'
 #!/usr/bin/env bash
@@ -196,20 +206,5 @@ GOTESTSUM_LOG="$tmp/gotestsum" PATH="$tmp/bin:$PATH" TEST_OUTPUT="$tmp/unit-outp
 grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
-
-# Pinned mise parses all task input flags; legacy env names remain declared
-# as their backing vars for Make/direct-shell compatibility.
-if command -v mise >/dev/null 2>&1; then
-  mise run test:unit-shard --help >"$tmp/unit-shard-help"
-  grep -q -- '--shard-id <id>' "$tmp/unit-shard-help"
-  grep -q -- '--packages <packages>' "$tmp/unit-shard-help"
-  mise run coverage:exclude-generated-shard --help >"$tmp/coverage-shard-help"
-  grep -q -- '--shard-id <id>' "$tmp/coverage-shard-help"
-  mise run integration:run:vm --help >"$tmp/vm-help"
-  grep -q -- '--test-pattern <pattern>' "$tmp/vm-help"
-  mise run oats-test-debug --help >"$tmp/oats-debug-help"
-  grep -q -- '--suite <suite>' "$tmp/oats-debug-help"
-  grep -q 'default.*kafka' "$tmp/oats-debug-help"
-fi
 
 echo 'mise review regressions passed'

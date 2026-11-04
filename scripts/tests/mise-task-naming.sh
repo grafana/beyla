@@ -19,7 +19,14 @@ if [[ -n "${MISE_EXPECTED_VERSION:-}" && "$version" != "$MISE_EXPECTED_VERSION"*
   echo "expected mise $MISE_EXPECTED_VERSION, got: $version" >&2
   exit 1
 fi
+unset MISE_EXPECTED_VERSION
 echo "checking task naming with $version"
+
+# Generated OATS Go modules follow the single pinned Ginkgo version in Mise.
+ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$root/mise.toml")
+grep -q 'ginkgo_version=$(awk -F' "$root/scripts/generate-obi-tests.sh"
+configured_ginkgo_version=$(env -u MISE_ENABLE_TOOLS "$mise_bin" -C "$root" current ginkgo)
+[[ "$ginkgo_version" == "$configured_ginkgo_version" ]]
 
 # Every historical spelling should resolve to the same dry-run plan as its new
 # task identity. Nothing is actually run and --skip-tools avoids tool installs.
@@ -148,5 +155,17 @@ PY
 grep -Fq '.mise/tasks/build' "$tmp/java-build-plan"
 "$mise_bin" -C "$root" run --dry-run --skip-tools oats-test-debug > "$tmp/oats-debug-plan" 2>&1
 grep -Fq 'internal/test/oats/.mise/tasks/debug' "$tmp/oats-debug-plan"
+
+# The configured mise parses task input flags. This runs after setup-mise in CI.
+"$mise_bin" -C "$root" run test:unit-shard --help >"$tmp/unit-shard-help"
+grep -q -- '--shard-id <id>' "$tmp/unit-shard-help"
+grep -q -- '--packages <packages>' "$tmp/unit-shard-help"
+"$mise_bin" -C "$root" run coverage:exclude-generated-shard --help >"$tmp/coverage-shard-help"
+grep -q -- '--shard-id <id>' "$tmp/coverage-shard-help"
+"$mise_bin" -C "$root" run integration:run:vm --help >"$tmp/vm-help"
+grep -q -- '--test-pattern <pattern>' "$tmp/vm-help"
+"$mise_bin" -C "$root" run oats-test-debug --help >"$tmp/oats-debug-help"
+grep -q -- '--suite <suite>' "$tmp/oats-debug-help"
+grep -q 'default.*kafka' "$tmp/oats-debug-help"
 
 echo 'mise naming regressions passed'

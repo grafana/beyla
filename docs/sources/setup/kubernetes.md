@@ -244,19 +244,6 @@ Each Pod instruments the applications on its node that match the `discovery` sec
    kubectl apply -f beyla-daemonset.yml
    ```
 
-With this configuration, Beyla does the following:
-
-- Instruments applications in the _`<NAMESPACE>`_ namespace, except services that Beyla [excludes by default][default-exclude]
-- Adds Kubernetes metadata attributes, for example `k8s.namespace.name` and `k8s.pod.name`
-- Exports application metrics and traces to your OTLP endpoint
-- Doesn't export [network-level metrics][network] or Prometheus metrics
-
-To also expose Prometheus metrics, or to use them instead of OTLP, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].
-
-## Check that Beyla is running
-
-To check the deployment, complete the following steps:
-
 1. Check that the Beyla Pods are running:
 
    ```sh
@@ -285,6 +272,15 @@ To check the deployment, complete the following steps:
    Remove the variable when you finish testing.
 
 After the instrumented applications receive requests, their metrics and traces appear in your OTLP backend.
+
+With this configuration, Beyla does the following:
+
+- Instruments applications in the _`<NAMESPACE>`_ namespace, except services that Beyla [excludes by default][default-exclude]
+- Adds Kubernetes metadata attributes, for example `k8s.namespace.name` and `k8s.pod.name`
+- Exports application metrics and traces to your OTLP endpoint
+- Doesn't export [network-level metrics][network] or Prometheus metrics
+
+To also expose Prometheus metrics, or to use them instead of OTLP, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].
 
 ## Deploy Beyla as a sidecar container
 

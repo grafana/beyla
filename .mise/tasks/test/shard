@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE alias="run-unit-test-shard"
+#MISE alias=["test:unit-shard", "run-unit-test-shard"]
 #MISE description="Run one unit test shard"
 #MISE depends=["test:prepare-output"]
 #USAGE flag "--shard-id <id>" help="Unit test shard identifier" env="SHARD_ID"

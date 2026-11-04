@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="k8s-integration-test-matrix-json"
-#MISE description="Generate the Kubernetes integration test matrix"
-set -euo pipefail
-
-./scripts/generate-dir-matrix.sh internal/testgenerated/integration/k8s common

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#MISE description="Run an OATS suite in manual debug mode (default: kafka)"
+#USAGE flag "--suite <suite>" help="OATS suite: ai, amqp, http, kafka, memcached, mongo, nats, redis, or sql" default="kafka"
+set -euo pipefail
+
+suite="${usage_suite-kafka}"
+
+# Never interpolate user input into a task `dir`; allow only known generated
+# suite directories, preventing path traversal and arbitrary directory choice.
+case "$suite" in
+  ai|amqp|http|kafka|memcached|mongo|nats|redis|sql) ;;
+  *) echo "Unknown OATS suite: $suite" >&2; exit 2 ;;
+esac
+
+suite_dir="${MISE_MONOREPO_ROOT:?}/internal/testgenerated/oats/$suite"
+if [[ ! -d "$suite_dir" ]]; then
+  echo "Generated OATS suite directory does not exist: $suite_dir" >&2
+  exit 1
+fi
+
+cd "$suite_dir"
+TESTCASE_BASE_PATH=./yaml TESTCASE_MANUAL_DEBUG=true TESTCASE_TIMEOUT=1h \
+  "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r

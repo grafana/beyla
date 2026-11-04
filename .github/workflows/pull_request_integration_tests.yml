@@ -57,7 +57,7 @@ jobs:
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run integration:matrix:test-json >> $GITHUB_OUTPUT
+          mise run integration:matrix >> $GITHUB_OUTPUT
 
   test:
     name: ${{ matrix.description }}

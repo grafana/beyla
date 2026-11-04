@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Format Java code"
+#MISE alias=["java-spotless-apply", "java:spotless-apply"]
 set -euo pipefail
 
 project_dir="${MISE_MONOREPO_ROOT:-$(git -C "${MISE_CONFIG_ROOT:-$PWD}" rev-parse --show-toplevel)}"

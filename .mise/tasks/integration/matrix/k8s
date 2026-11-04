@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE alias=["integration:matrix:k8s-json", "k8s-integration-test-matrix-json"]
+#MISE description="Generate the Kubernetes integration test matrix from OBI-generated tests"
+set -euo pipefail
+
+./scripts/generate-dir-matrix.sh internal/testgenerated/integration/k8s common

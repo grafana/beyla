@@ -31,7 +31,7 @@ COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
 
 # Build
-RUN mise run --skip-tools compile-for-coverage
+RUN mise run --skip-tools compile:coverage
 
 FROM scratch
 

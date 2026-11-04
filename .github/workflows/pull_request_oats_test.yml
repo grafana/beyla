@@ -53,7 +53,7 @@ jobs:
         id: build-matrix
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run //oats:matrix:integration-test-json >> $GITHUB_OUTPUT
+          mise run //oats:matrix >> $GITHUB_OUTPUT
 
   harness-unit-tests:
     name: "OATS harness unit tests"

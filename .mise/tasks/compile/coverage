@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE alias="compile-for-coverage"
+#MISE alias=["compile:for-coverage", "compile-for-coverage"]
 #MISE description="Compile Beyla to generate coverage profiles"
 set -euo pipefail
 

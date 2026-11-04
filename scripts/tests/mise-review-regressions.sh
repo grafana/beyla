@@ -80,30 +80,37 @@ KIND_LOG="$tmp/kind-override" KIND="$tmp/custom-kind" \
   OCI_BIN="$tmp/bin/docker" COMPOSE_ARGS='' bash "$root/.mise/tasks/clean/integration-test" >/dev/null
 grep -q 'delete cluster' "$tmp/kind-override"
 
-# Exercise the real OATS task command from its config with a mock executable.
-# It resolves Mise-managed Ginkgo from PATH by default; both explicit
-# OATS_GINKGO and legacy GINKGO command overrides remain supported.
+# Exercise the real OATS debug task script with a mock executable. A temporary
+# generated-suite tree keeps this check independent of OBI generation. It
+# resolves Mise-managed Ginkgo from PATH by default; explicit OATS_GINKGO and
+# legacy GINKGO command overrides remain supported.
 cat > "$tmp/bin/ginkgo" <<'SH'
 #!/usr/bin/env bash
-printf '%s|%s\n' "$0" "$*" >> "$GINKGO_LOG"
+printf '%s|%s|%s|%s|%s|%s\n' "$0" "$*" "$PWD" "${TESTCASE_BASE_PATH-unset}" \
+  "${TESTCASE_MANUAL_DEBUG-unset}" "${TESTCASE_TIMEOUT-unset}" >> "$GINKGO_LOG"
 SH
 chmod +x "$tmp/bin/ginkgo"
-oats_ginkgo_run=$(python3 - "$root/internal/test/oats/mise.toml" <<'PY'
-import sys, tomllib
-with open(sys.argv[1], "rb") as f:
-    print(tomllib.load(f)["tasks"]["test:debug"]["run"])
-PY
-)
-GINKGO_LOG="$tmp/ginkgo-default" PATH="$tmp/bin:$PATH" \
-  bash -c "$oats_ginkgo_run"
-grep -Fq "$tmp/bin/ginkgo|-v -r" "$tmp/ginkgo-default"
+oats_debug_script="$root/internal/test/oats/.mise/tasks/debug"
+mkdir -p "$tmp/oats-root/internal/testgenerated/oats/kafka" \
+  "$tmp/oats-root/internal/testgenerated/oats/ai"
+MISE_MONOREPO_ROOT="$tmp/oats-root" GINKGO_LOG="$tmp/ginkgo-default" PATH="$tmp/bin:$PATH" \
+  bash "$oats_debug_script"
+grep -Fq "$tmp/bin/ginkgo|-v -r|$tmp/oats-root/internal/testgenerated/oats/kafka|./yaml|true|1h" "$tmp/ginkgo-default"
 cp "$tmp/bin/ginkgo" "$tmp/custom-ginkgo"
-GINKGO_LOG="$tmp/ginkgo-oats-override" OATS_GINKGO="$tmp/custom-ginkgo" \
-  bash -c "$oats_ginkgo_run"
-grep -Fq "$tmp/custom-ginkgo|-v -r" "$tmp/ginkgo-oats-override"
-GINKGO_LOG="$tmp/ginkgo-override" GINKGO="$tmp/custom-ginkgo" \
-  bash -c "$oats_ginkgo_run"
-grep -Fq "$tmp/custom-ginkgo|-v -r" "$tmp/ginkgo-override"
+MISE_MONOREPO_ROOT="$tmp/oats-root" GINKGO_LOG="$tmp/ginkgo-oats-override" \
+  OATS_GINKGO="$tmp/custom-ginkgo" PATH="$tmp/bin:$PATH" \
+  usage_suite=ai bash "$oats_debug_script"
+grep -Fq "$tmp/custom-ginkgo|-v -r|$tmp/oats-root/internal/testgenerated/oats/ai|./yaml|true|1h" "$tmp/ginkgo-oats-override"
+MISE_MONOREPO_ROOT="$tmp/oats-root" GINKGO_LOG="$tmp/ginkgo-override" \
+  GINKGO="$tmp/custom-ginkgo" PATH="$tmp/bin:$PATH" \
+  bash "$oats_debug_script"
+grep -Fq "$tmp/custom-ginkgo|-v -r|$tmp/oats-root/internal/testgenerated/oats/kafka|./yaml|true|1h" "$tmp/ginkgo-override"
+if MISE_MONOREPO_ROOT="$tmp/oats-root" GINKGO_LOG="$tmp/ginkgo-invalid" \
+  PATH="$tmp/bin:$PATH" usage_suite=../../outside bash "$oats_debug_script" >/dev/null 2>&1; then
+  echo 'OATS debug task accepted a suite path outside its allowlist' >&2
+  exit 1
+fi
+[[ ! -e "$tmp/ginkgo-invalid" ]]
 
 # Generated OATS Go modules follow the single pinned Ginkgo version in Mise.
 ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$root/mise.toml")
@@ -116,7 +123,7 @@ cat > "$tmp/bin/git" <<'SH'
 exit 1
 SH
 chmod +x "$tmp/bin/git"
-for task in _default cache debug for-coverage; do
+for task in _default cache debug coverage; do
   log="$tmp/go-$task"
   case "$task" in
     cache) env_args=(CACHE_CMD=k8s-cache) ;;
@@ -185,7 +192,7 @@ mkdir -p "$tmp/unit-output"
 GOTESTSUM_LOG="$tmp/gotestsum" PATH="$tmp/bin:$PATH" TEST_OUTPUT="$tmp/unit-output" \
   ENVTEST_K8S_VERSION=1.30.0 SHARD_ID=3 \
   UNIT_TEST_PACKAGES=$'./pkg/alpha\n./pkg/beta ./literal*' \
-  bash "$root/.mise/tasks/test/unit-shard" >/dev/null
+  bash "$root/.mise/tasks/test/shard" >/dev/null
 grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
@@ -200,6 +207,9 @@ if command -v mise >/dev/null 2>&1; then
   grep -q -- '--shard-id <id>' "$tmp/coverage-shard-help"
   mise run integration:run:vm --help >"$tmp/vm-help"
   grep -q -- '--test-pattern <pattern>' "$tmp/vm-help"
+  mise run oats-test-debug --help >"$tmp/oats-debug-help"
+  grep -q -- '--suite <suite>' "$tmp/oats-debug-help"
+  grep -q 'default.*kafka' "$tmp/oats-debug-help"
 fi
 
 echo 'mise review regressions passed'

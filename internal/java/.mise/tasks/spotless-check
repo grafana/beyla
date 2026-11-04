@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Check Java code formatting"
+#MISE alias=["java-spotless-check", "java:spotless-check"]
 set -euo pipefail
 
 project_dir="${MISE_MONOREPO_ROOT:-$(git -C "${MISE_CONFIG_ROOT:-$PWD}" rev-parse --show-toplevel)}"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE alias="run-beyla-integration-test"
-#MISE description="Run Beyla integration tests"
+#MISE description="Run Beyla-only integration tests from internal/test/integration"
 set -euo pipefail
 
 echo "### Running Beyla integration tests"

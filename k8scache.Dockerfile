@@ -27,7 +27,7 @@ COPY vendor/ vendor/
 COPY .git/ .git/
 
 # Build
-RUN mise run --skip-tools compile-cache
+RUN mise run --skip-tools compile:cache
 
 # Create final image from minimal + built binary
 FROM scratch

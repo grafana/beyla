@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#MISE alias="vm-integration-test-matrix-json"
-#MISE description="Generate the VM integration test matrix"
+#MISE alias=["integration:matrix:vm-json", "vm-integration-test-matrix-json"]
+#MISE description="Generate the multiprocess integration test matrix"
 set -euo pipefail
 
 PARTITIONS="${PARTITIONS:-3}"

@@ -76,7 +76,7 @@ run = [
 ]
 
 [tasks.lint]
-description = "Run repository linters"
+description = "Run the Go and dashboard linters"
 depends = ["lint:go", "lint:dashboard"]
 
 [tasks.build]
@@ -89,7 +89,7 @@ description = "Prepare and vendor OBI, then build a coverage-enabled binary"
 run = [
   { task = "test:prepare-output" },
   { task = "vendor:obi" },
-  { task = "compile:for-coverage" },
+  { task = "compile:coverage" },
 ]
 
 [tasks.artifact]
@@ -109,111 +109,6 @@ run = [
   '''obi_module="${OBI_MODULE:-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' go.mod)}"; BPF2GO="${BPF2GO:-$(command -v bpf2go)}" CLANG="${CLANG:-$(command -v clang)}" make -C "$obi_module" generate''',
   { task = "generate:beyla" },
 ]
-
-[tasks."java:build"]
-alias = ["java-build"]
-description = "Build the Java agent and embed it in Beyla"
-depends = ["//java:build"]
-
-[tasks."java:clean"]
-alias = ["java-clean"]
-description = "Clean Java agent build artifacts"
-depends = ["//java:clean"]
-
-[tasks."java:docker-build"]
-alias = ["java-docker-build"]
-description = "Build the Java agent with Docker"
-depends = ["//java:docker-build"]
-
-[tasks."java:spotless-apply"]
-alias = ["java-spotless-apply"]
-description = "Format Java code"
-depends = ["//java:spotless-apply"]
-
-[tasks."java:spotless-check"]
-alias = ["java-spotless-check"]
-description = "Check Java code formatting"
-depends = ["//java:spotless-check"]
-
-[tasks."java:test"]
-alias = ["java-test"]
-description = "Test the Java agent"
-depends = ["//java:test"]
-
-[tasks."java:verify"]
-alias = ["java-verify"]
-description = "Check Java formatting, run tests, and build the Java agent"
-depends = ["//java:verify"]
-
-[tasks."oats:prereq"]
-alias = ["oats-prereq"]
-description = "Prepare generated OBI/vendor dependencies and OATS test output"
-depends = ["//oats:prereq"]
-
-[tasks."oats:matrix:integration-test-json"]
-alias = ["oats-integration-test-matrix-json"]
-description = "Generate the OATS integration test matrix JSON"
-depends = ["//oats:matrix:integration-test-json"]
-
-[tasks."oats:test"]
-alias = ["oats-test"]
-description = "Run all OATS suites and merge integration coverage"
-depends = ["//oats:test"]
-
-[tasks."oats:test:ai"]
-alias = ["oats-test-ai"]
-description = "Run OATS ai tests"
-depends = ["//oats:test:ai"]
-
-[tasks."oats:test:amqp"]
-alias = ["oats-test-amqp"]
-description = "Run OATS amqp tests"
-depends = ["//oats:test:amqp"]
-
-[tasks."oats:test:debug"]
-alias = ["oats-test-debug"]
-description = "Run OATS Kafka tests in manual debug mode"
-depends = ["//oats:test:debug"]
-
-[tasks."oats:test:harness"]
-alias = ["oats-test-harness"]
-description = "Run OATS harness unit tests"
-depends = ["//oats:test:harness"]
-
-[tasks."oats:test:http"]
-alias = ["oats-test-http"]
-description = "Run OATS http tests"
-depends = ["//oats:test:http"]
-
-[tasks."oats:test:kafka"]
-alias = ["oats-test-kafka"]
-description = "Run OATS kafka tests"
-depends = ["//oats:test:kafka"]
-
-[tasks."oats:test:memcached"]
-alias = ["oats-test-memcached"]
-description = "Run OATS memcached tests"
-depends = ["//oats:test:memcached"]
-
-[tasks."oats:test:mongo"]
-alias = ["oats-test-mongo"]
-description = "Run OATS mongo tests"
-depends = ["//oats:test:mongo"]
-
-[tasks."oats:test:nats"]
-alias = ["oats-test-nats"]
-description = "Run OATS nats tests"
-depends = ["//oats:test:nats"]
-
-[tasks."oats:test:redis"]
-alias = ["oats-test-redis"]
-description = "Run OATS redis tests"
-depends = ["//oats:test:redis"]
-
-[tasks."oats:test:sql"]
-alias = ["oats-test-sql"]
-description = "Run OATS sql tests"
-depends = ["//oats:test:sql"]
 
 [tasks."vendor:obi"]
 alias = ["vendor-obi"]
@@ -258,17 +153,17 @@ run = [
 
 [tasks."integration:test"]
 alias = ["integration-test"]
-description = "Prepare, run, and clean up OBI integration tests"
+description = "Prepare, run, and clean up OBI-generated integration tests"
 depends = ["integration:prepare"]
 depends_post = ["clean:integration-test"]
 run = [{ task = "integration:run" }, { task = "integration:coverage-data" }]
 
-[tasks."integration:test:arm"]
-alias = ["integration-test-arm"]
-description = "Prepare, run, and clean up ARM integration tests"
+[tasks."integration:test:multiprocess"]
+alias = ["integration:test:arm", "integration-test-arm"]
+description = "Prepare, run, and clean up multiprocess integration tests"
 depends = ["integration:prepare"]
 depends_post = ["clean:integration-test"]
-run = [{ task = "integration:run:arm" }, { task = "integration:coverage-data" }]
+run = [{ task = "integration:run:multiprocess" }, { task = "integration:coverage-data" }]
 
 [tasks."integration:test:k8s"]
 alias = ["integration-test-k8s"]

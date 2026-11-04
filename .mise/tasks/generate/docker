@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE alias="docker-generate"
+#MISE alias=["docker:generate", "docker-generate"]
 #MISE description="Generate OBI and Beyla eBPF code with the generator image"
 #MISE depends=["submodule:obi"]
 set -euo pipefail

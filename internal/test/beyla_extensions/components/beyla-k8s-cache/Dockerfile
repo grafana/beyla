@@ -27,7 +27,7 @@ COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
 
 # Build
-RUN mise run --skip-tools compile-cache-for-coverage
+RUN mise run --skip-tools compile:cache-coverage
 
 # Create final image from minimal + built binary
 FROM scratch

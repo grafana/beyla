@@ -41,6 +41,9 @@ jobs:
           profile: generate
           cache-modules: "true"
 
+      - name: Test canonical mise task names and compatibility aliases
+        run: bash scripts/tests/mise-task-naming.sh
+
       - name: Preinstall bpf2go for cross-target generation
         run: GOARCH=arm64 GOOS=linux mise exec -- bpf2go --help >/dev/null
 
@@ -57,7 +60,7 @@ jobs:
         run: |
           mise run test:prepare-output
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run matrix:unit-test-json >> $GITHUB_OUTPUT
+          mise run test:matrix >> $GITHUB_OUTPUT
 
       - name: Upload generated build inputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -134,7 +137,7 @@ jobs:
         env:
           MATRIX_ID: ${{ matrix.id }}
           MATRIX_PACKAGES: ${{ matrix.packages }}
-        run: mise run test:unit-shard --shard-id "${MATRIX_ID}" --packages "${MATRIX_PACKAGES}"
+        run: mise run test:shard --shard-id "${MATRIX_ID}" --packages "${MATRIX_PACKAGES}"
 
       - name: Exclude generated files from coverage
         env:

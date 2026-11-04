@@ -62,7 +62,7 @@ jobs:
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run integration:matrix:vm-json >> $GITHUB_OUTPUT
+          mise run integration:matrix:multiprocess >> $GITHUB_OUTPUT
 
   test:
     name: ${{ matrix.description }}

@@ -54,7 +54,7 @@ jobs:
         id: build-matrix
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run integration:matrix:k8s-json >> $GITHUB_OUTPUT
+          mise run integration:matrix:k8s >> $GITHUB_OUTPUT
 
   test:
     name: ${{ matrix.basename }}

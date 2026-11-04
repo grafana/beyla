@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Build the Java agent with Docker"
+#MISE alias=["java-docker-build", "java:docker-build"]
 set -euo pipefail
 
 project_dir="${MISE_MONOREPO_ROOT:-$(git -C "${MISE_CONFIG_ROOT:-$PWD}" rev-parse --show-toplevel)}"

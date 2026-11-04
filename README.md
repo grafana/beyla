@@ -159,7 +159,7 @@ automatically. In CI, jobs select exact tool sets through named profiles in the
 [shared setup action](.github/actions/setup-mise/README.md). For environment
 overrides, set variables before the task, for example
 `GOOS=darwin GOARCH=arm64 mise run compile`. Task arguments go after the task
-name, for example `mise run test:unit-shard --shard-id 1 --packages ./pkg`;
+name, for example `mise run test:shard --shard-id 1 --packages ./pkg`;
 do not use `KEY=value` task arguments to set environment variables. Normal
 `[env]` defaults treat an empty value as omitted, while build-only
 `GOOS`/`GOARCH` overrides preserve an explicitly empty value.
@@ -176,10 +176,10 @@ The default build flow is:
 - `mise run build` - generate and vendor OBI dependencies with pinned native tools, then verify and compile Beyla
 - `mise run dev` - prepare prerequisites, vendor OBI, and compile a coverage-enabled Beyla binary
 - `mise run generate` - regenerate OBI and Beyla eBPF bindings with pinned native tools
-- `mise run docker:generate` - optionally regenerate eBPF bindings using the Docker generator image
+- `mise run generate:docker` - optionally regenerate eBPF bindings using the Docker generator image
 - `mise run compile` - compile the `beyla` binary
 - `mise run lint` and `mise run test` - lint and test the code
-- `mise run install:hooks` - install the `clang-format` pre-commit hook
+- `mise run install:hooks` - install the `clang:format` pre-commit hook
 - `mise run //java:build` - build the Java agent with the Java project's pinned tools
 - `mise run //oats:test:ai` - run the OATS AI suite from its project-owned task config
 
@@ -204,7 +204,7 @@ A fresh clone's normal build vendors OBI and its generated BPF bindings as
 ignored build artifacts before compiling. Prerequisite setup no longer installs
 a Git hook: install it explicitly with `mise run install:hooks`. The old
 `check-license` no-op is now a real third-party license check; use
-`mise run check:license` (or the Make compatibility target).
+`mise run check:licenses` (or the Make compatibility target).
 
 ####  Quickstart
 
@@ -216,7 +216,7 @@ $ mise run build
 ```
 
 `mise run build` vendors OBI using pinned native Clang/LLVM tools, runs the
-standard verification suite, and compiles Beyla. Install the `clang-format`
+standard verification suite, and compiles Beyla. Install the `clang:format`
 pre-commit hook separately with `mise run install:hooks`. Use `mise run dev`
 when you specifically need a coverage-enabled binary.
 
@@ -254,7 +254,7 @@ Temporarily go to `go.mod` and change the first `replace` directive by your loca
 +replace go.opentelemetry.io/obi => ../opentelemetry-ebpf-instrumentation
 ```
 
-Build the docker image with `mise run dev-image-build`.
+Build the docker image with `mise run image:dev-build`.
 
 ⚠️ Before pushing your changes to our GitHub repo, don't forget to revert the `replace` directive in `go.mod`! 
 
@@ -262,15 +262,15 @@ Build the docker image with `mise run dev-image-build`.
 
 Beyla uses linters to enforce our coding style and best practices:
 - `golangci-lint` for Go code
-- `clang-format` for formatting C code
-- `clang-tidy` for static analysis of the C code
+- `clang:format` for formatting C code
+- `clang:tidy` for static analysis of the C code
 
 All of them are enforced on pull requests as part of the Beyla github workflows. Additionally, you can invoke the linters manually:
 
 - `mise run lint` runs the Go and dashboard linters; use `mise run lint:go` for Go only
-- `mise run clang-tidy` invokes `clang-tidy` on the C/eBPF code
+- `mise run clang:tidy` invokes `clang:tidy` on the C/eBPF code
 
-`clang-format` is invoked automatically as a `pre-commit` git hook; you can run it directly with `mise run clang-format`.
+`clang:format` is invoked automatically as a `pre-commit` git hook; you can run it directly with `mise run clang:format`.
 
 #### Running VM tests
 

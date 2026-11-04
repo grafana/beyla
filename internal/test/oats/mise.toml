@@ -1,17 +1,20 @@
-[tasks.prereq]
+[tasks.prepare]
+alias = ["prereq", "//oats:prereq", "oats-prereq", "oats:prereq"]
 description = "Prepare generated OBI/vendor dependencies and OATS test output"
 depends = ["//:vendor:obi"]
 dir = "{{config_root}}/../../../"
 run = 'mkdir -p "${TEST_OUTPUT}/run"'
 
-[tasks."matrix:integration-test-json"]
+[tasks.matrix]
+alias = ["matrix:integration-test-json", "//oats:matrix:integration-test-json", "oats-integration-test-matrix-json", "oats:matrix:integration-test-json"]
 description = "Generate the OATS integration test matrix JSON"
 dir = "{{config_root}}/../../../"
 run = 'scripts/generate-dir-matrix.sh internal/testgenerated/oats /harness/'
 
 [tasks.test]
+alias = ["oats-test", "oats:test"]
 description = "Run all OATS suites and merge integration coverage"
-depends = [":prereq"]
+depends = [":prepare"]
 run = [
   { task = ":test:sql" },
   { task = ":test:mongo" },
@@ -25,78 +28,86 @@ run = [
   { task = "//:integration:coverage-data" },
 ]
 
-[tasks."test:debug"]
-description = "Run OATS Kafka tests in manual debug mode"
-depends = [":prereq"]
-dir = "{{config_root}}/../../../internal/testgenerated/oats/kafka"
-env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_MANUAL_DEBUG = "true", TESTCASE_TIMEOUT = "1h" }
-run = '"${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
+[tasks.debug]
+alias = ["test:debug", "//oats:test:debug", "oats-test-debug", "oats:test:debug"]
+description = "Run an OATS suite in manual debug mode (default: kafka)"
+depends = [":prepare"]
 
 [tasks."test:harness"]
+alias = ["oats-test-harness", "oats:test:harness"]
 description = "Run OATS harness unit tests"
 depends = ["//:generate:obi-tests"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/harness"
 run = "go test -race ./..."
 
 [tasks."test:ai"]
+alias = ["oats-test-ai", "oats:test:ai"]
 description = "Run OATS ai tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/ai"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:amqp"]
+alias = ["oats-test-amqp", "oats:test:amqp"]
 description = "Run OATS amqp tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/amqp"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:http"]
+alias = ["oats-test-http", "oats:test:http"]
 description = "Run OATS http tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/http"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:kafka"]
+alias = ["oats-test-kafka", "oats:test:kafka"]
 description = "Run OATS kafka tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/kafka"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:memcached"]
+alias = ["oats-test-memcached", "oats:test:memcached"]
 description = "Run OATS memcached tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/memcached"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:mongo"]
+alias = ["oats-test-mongo", "oats:test:mongo"]
 description = "Run OATS mongo tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/mongo"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:nats"]
+alias = ["oats-test-nats", "oats:test:nats"]
 description = "Run OATS nats tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/nats"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:redis"]
+alias = ["oats-test-redis", "oats:test:redis"]
 description = "Run OATS redis tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/redis"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:sql"]
+alias = ["oats-test-sql", "oats:test:sql"]
 description = "Run OATS sql tests"
-depends = [":prereq"]
+depends = [":prepare"]
 dir = "{{config_root}}/../../../internal/testgenerated/oats/sql"
 env = { TESTCASE_BASE_PATH = "./yaml", TESTCASE_TIMEOUT = "5m" }
 run = 'mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'

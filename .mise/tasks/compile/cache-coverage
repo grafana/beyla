@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE alias="compile-cache-for-coverage"
+#MISE alias=["compile:cache-for-coverage", "compile-cache-for-coverage"]
 #MISE description="Compile Beyla cache to generate coverage profiles"
 set -euo pipefail
 

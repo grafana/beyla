@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE alias="run-integration-test"
-#MISE description="Run OBI integration tests"
+#MISE description="Run OBI-generated integration tests"
 set -euo pipefail
 
 echo "### Running integration tests"

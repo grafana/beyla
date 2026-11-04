@@ -28,7 +28,7 @@ COPY internal/test/oats/mise.toml internal/test/oats/
 COPY internal/test/integration/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
 
 # Build
-RUN mise run --skip-tools compile-for-coverage
+RUN mise run --skip-tools compile:coverage
 
 # Create final image from minimal + built binary
 FROM ubuntu@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03

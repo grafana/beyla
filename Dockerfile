@@ -59,7 +59,7 @@ ARG TARGETARCH
 # set it to a non-empty value if you are building this image
 # from a custom, local OBI repository
 # In that case, regenerate the OBI sources and vendor dependencies with
-# `mise run vendor-obi` before building this image.
+# `mise run vendor:obi` before building this image.
 # Or directly run the development image build task.
 ARG DEV_OBI
 

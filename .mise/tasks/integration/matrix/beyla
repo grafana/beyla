@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#MISE alias="beyla-integration-test-matrix-json"
-#MISE description="Generate the Beyla integration test matrix"
+#MISE alias=["integration:matrix:beyla-json", "beyla-integration-test-matrix-json"]
+#MISE description="Generate the Beyla-only internal/test/integration matrix"
 set -euo pipefail
 
 PARTITIONS="${PARTITIONS:-5}"

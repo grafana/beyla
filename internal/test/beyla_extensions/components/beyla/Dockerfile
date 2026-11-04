@@ -28,7 +28,7 @@ COPY internal/test/oats/mise.toml internal/test/oats/
 COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
 
 # Build
-RUN mise run --skip-tools compile-for-coverage
+RUN mise run --skip-tools compile:coverage
 
 # The enrollment tests inspect BPF maps and exercise seccomp fallbacks.
 COPY .obi-src/internal/test/integration/components/obi/testtool/ internal/test/obitesttool/

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Clean Java agent build artifacts"
+#MISE alias=["java-clean", "java:clean"]
 set -euo pipefail
 
 project_dir="${MISE_MONOREPO_ROOT:-$(git -C "${MISE_CONFIG_ROOT:-$PWD}" rev-parse --show-toplevel)}"

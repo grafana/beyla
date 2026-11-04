@@ -9,6 +9,11 @@ import (
 var envVarRegex = regexp.MustCompile(`\$?\${(?:env:)?([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?}`)
 
 func ReplaceEnv(content []byte) []byte {
+	return ReplaceEnvFrom(content, os.Getenv)
+}
+
+// ReplaceEnvFrom replaces the environment variables in content with the values returned by getenv.
+func ReplaceEnvFrom(content []byte, getenv func(string) string) []byte {
 	// Process normal environment variable substitutions
 	return envVarRegex.ReplaceAllFunc(content, func(match []byte) []byte {
 		// Replaces $$-escaped env vars by single-dollar mark
@@ -26,7 +31,7 @@ func ReplaceEnv(content []byte) []byte {
 		}
 
 		// Get environment variable value
-		envValue := os.Getenv(envName)
+		envValue := getenv(envName)
 		if envValue == "" && defaultValue != "" {
 			envValue = defaultValue
 		}

@@ -27,7 +27,7 @@ def package_root() -> Path:
 
 def main() -> int:
     root = package_root()
-    config = root / "etc/grafana/beyla-sdk/config.alloy"
+    config = root / "etc/beyla/config.alloy"
     environment = os.environ.copy()
     environment.update(read_environment(config.parent / "alloy.env"))
     return subprocess.run(

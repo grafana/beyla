@@ -28,16 +28,21 @@ type storage interface {
 	GetHostnames(ip string) ([]string, error)
 }
 
-// StartDNSPacketInspector in a backgound goroutine
-func StartDNSPacketInspector(ctx context.Context, storage storage, ebpfCfg *config.EBPFTracer) error {
+// StartDNSPacketInspector in a backgound goroutine. The returned channel is closed
+// once the inspector has stopped and detached from the network interfaces.
+func StartDNSPacketInspector(ctx context.Context, storage storage, ebpfCfg *config.EBPFTracer) (<-chan struct{}, error) {
 	tracer, err := newTracer(ebpfCfg)
 	if err != nil {
-		return fmt.Errorf("instantiating XDP tracer: %w", err)
+		return nil, fmt.Errorf("instantiating XDP tracer: %w", err)
 	}
 
-	go tracerLoop(ctx, storage, tracer)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		tracerLoop(ctx, storage, tracer)
+	}()
 
-	return nil
+	return stopped, nil
 }
 
 func tracerLoop(ctx context.Context, storage storage, tracer *tracer) {

@@ -15,7 +15,7 @@ aliases:
 # Deploy Beyla with the Beyla Helm chart
 
 The Beyla Helm chart deploys Grafana Beyla as a DaemonSet, which runs a Beyla Pod on your cluster nodes and instruments the applications on each node.
-To configure the chart for Grafana Cloud Application Observability and Knowledge Graph, refer to [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-cloud].
+To configure the chart for Grafana Cloud Application Observability and Knowledge Graph, refer to [Deploy Beyla with the Beyla Helm chart for Grafana Cloud][helm-cloud].
 
 ## Before you begin
 
@@ -234,7 +234,7 @@ To restart them on the next upgrade, set the chart value `config.checksum` to a 
 
 - [Beyla Helm chart README][chart-readme]
 - [Configure Beyla][configure]
-- [Deploy Beyla in Kubernetes with Helm for Grafana Cloud][helm-cloud]
+- [Deploy Beyla with the Beyla Helm chart for Grafana Cloud][helm-cloud]
 
 [chart-readme]: https://github.com/grafana/beyla/blob/main/charts/beyla/README.md
 [cloud-otlp]: https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users

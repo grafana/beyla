@@ -6,6 +6,7 @@ package otelcfg // import "go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 import (
 	"context"
 
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -15,3 +16,6 @@ type TracesExportFunc func(context.Context, ptrace.Traces) error
 
 // MetricsExportFunc sends metrics to a consumer in the same process.
 type MetricsExportFunc func(context.Context, pmetric.Metrics) error
+
+// LogsExportFunc sends logs to a consumer in the same process.
+type LogsExportFunc func(context.Context, plog.Logs) error

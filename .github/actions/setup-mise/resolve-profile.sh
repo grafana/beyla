@@ -10,7 +10,7 @@ case "$profile" in
   generate) tools='go,bpf2go,clang,llvm-tools,clang-format,gotestsum' ;;
   integration) tools='go,bpf2go,clang,llvm-tools,clang-format,kind,gotestsum' ;;
   oats) tools='go,bpf2go,clang,llvm-tools,clang-format,ginkgo' ;;
-  lint) tools='go,golangci-lint,dashboard-linter,clang-format,clang-tidy' ;;
+  lint) tools='go,golangci-lint,clang-format,clang-tidy' ;;
   unit) tools='go,setup-envtest,gotestsum' ;;
   release) tools='go,bpf2go,clang,llvm-tools,clang-format,java,gradle' ;;
   obi-fix) tools='go,bpf2go,clang,llvm-tools,clang-format,clang-tidy' ;;

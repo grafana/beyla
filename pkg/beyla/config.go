@@ -1,11 +1,14 @@
 package beyla
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
+	"os"
 	"slices"
 	"time"
 
@@ -15,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obicfg "go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/tcmanager"
@@ -57,6 +61,8 @@ const (
 // overriding here any value that differs from the OBI defaults
 func DefaultConfig() *Config {
 	def := FromOBI(&obi.DefaultConfig)
+	def.Routes = def.Routes.Clone()
+	def.Attributes.Kubernetes.ResourceLabels = maps.Clone(def.Attributes.Kubernetes.ResourceLabels)
 	def.Grafana = botel.GrafanaConfig{
 		OTLP: botel.GrafanaOTLP{
 			// by default we will only submit traces, assuming span2metrics will do the metrics conversion
@@ -102,6 +108,8 @@ type Config struct {
 
 	Attributes    Attributes                    `yaml:"attributes"`
 	CloudMetadata transform.CloudMetadataConfig `yaml:"cloud_metadata"`
+
+	PeerMetadata PeerMetadataConfig `yaml:"peer_metadata"`
 	// Routes is an optional node. If not set, data will be directly forwarded to exporters.
 	Routes       *transform.RoutesConfig `yaml:"routes"`
 	NameResolver *NameResolverConfig     `yaml:"name_resolver"`
@@ -113,6 +121,9 @@ type Config struct {
 	Metrics      perapp.GlobalMetricsConfig `yaml:"metrics"`
 	Prometheus   prom.PrometheusConfig      `yaml:"prometheus_export"`
 	TracePrinter debug.TracePrinter         `yaml:"trace_printer" env:"BEYLA_TRACE_PRINTER"`
+
+	Exceptions ExceptionsConfig `yaml:"exceptions"`
+	Logs       LogsConfig       `yaml:"otel_logs_export"`
 
 	// Exec allows selecting the instrumented executable whose complete path contains the Exec value.
 	//
@@ -200,6 +211,58 @@ type Config struct {
 
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
+
+	// Set from a config v2 document. Unexported so Convert ignores them.
+	v2ProtocolSelection *instrumentations.InstrumentationSelection
+	criteriaUpdates     *services.CriteriaUpdates
+	criteriaUpdater     *discover.CriteriaUpdater
+}
+
+// SetV2Runtime records the protocol-metric selection and, when application
+// discovery is active, the criteria updater for a config v2 document.
+func (c *Config) SetV2Runtime(selection instrumentations.InstrumentationSelection, updater *discover.CriteriaUpdater) {
+	c.v2ProtocolSelection = &selection
+	c.criteriaUpdater = updater
+	if updater != nil {
+		c.criteriaUpdates = updater.Updates()
+	}
+}
+
+// RefreshCriteria applies a re-read v2 document to the running discovery criteria.
+func (c *Config) RefreshCriteria(ctx context.Context, cfg *obi.Config) error {
+	if c.criteriaUpdater == nil {
+		return nil
+	}
+	return c.criteriaUpdater.Update(ctx, cfg)
+}
+
+// V2ProtocolSelection returns the v2 instrumentation selection, or nil for a v1 document.
+func (c *Config) V2ProtocolSelection() *instrumentations.InstrumentationSelection {
+	return c.v2ProtocolSelection
+}
+
+// CriteriaUpdates returns discovery criteria that can be replaced without a restart.
+func (c *Config) CriteriaUpdates() *services.CriteriaUpdates {
+	return c.criteriaUpdates
+}
+
+// ExceptionsEnabled reports whether any selected workload can request capture.
+func (c *Config) ExceptionsEnabled() bool {
+	defaults := c.Exceptions.obi()
+	if defaults.Enabled {
+		return true
+	}
+	for i := range c.Discovery.Instrument {
+		if c.Discovery.Instrument[i].Exceptions.Resolve(defaults).Enabled {
+			return true
+		}
+	}
+	for i := range c.Discovery.Services {
+		if c.Discovery.Services[i].Exceptions.Resolve(defaults).Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 type Consumer interface {
@@ -240,6 +303,9 @@ type Attributes struct {
 
 	// SensitiveQueryParams controls which query-parameter keys are redacted in url.full and url.query.
 	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
+
+	// SanitizeSQLQueryText redacts SQL statement text.
+	SanitizeSQLQueryText bool `yaml:"sanitize_sql_query_text" env:"BEYLA_SANITIZE_SQL_QUERY_TEXT"`
 }
 
 type HostIDConfig struct {
@@ -316,8 +382,20 @@ func (e ConfigError) Error() string {
 	return string(e)
 }
 
-// nolint:cyclop
 func (c *Config) Validate() error {
+	return c.validate(validationContext{})
+}
+
+func (c *Config) ValidateForRefresh() error {
+	return c.validate(validationContext{applicationPipelineInitialized: true})
+}
+
+type validationContext struct {
+	applicationPipelineInitialized bool
+}
+
+// nolint:cyclop
+func (c *Config) validate(context validationContext) error {
 	if err := c.validateInstrumentAllLocal(); err != nil {
 		return err
 	}
@@ -326,7 +404,9 @@ func (c *Config) Validate() error {
 		return ConfigError(err.Error())
 	}
 
-	if !c.Enabled(FeatureNetO11y) && !c.Enabled(FeatureAppO11y) &&
+	appEnabled := context.applicationPipelineInitialized || c.Enabled(FeatureAppO11y)
+
+	if !c.Enabled(FeatureNetO11y) && !appEnabled &&
 		!c.Enabled(FeatureStatsO11y) && !c.Injector.Webhook.Enabled() {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
@@ -337,7 +417,7 @@ func (c *Config) Validate() error {
 		return ConfigError("Invalid BEYLA_BPF_TC_BACKEND value")
 	}
 
-	if c.willUseTC() {
+	if !context.applicationPipelineInitialized && c.willUseTC() {
 		if err := tcmanager.EnsureCiliumCompatibility(c.EBPF.TCBackend); err != nil {
 			return ConfigError(fmt.Sprintf("Cilium compatibility error: %s", err.Error()))
 		}
@@ -345,6 +425,13 @@ func (c *Config) Validate() error {
 
 	if c.Attributes.Kubernetes.InformersSyncTimeout == 0 {
 		return ConfigError("BEYLA_KUBE_INFORMERS_SYNC_TIMEOUT duration must be greater than 0s")
+	}
+
+	if err := c.Logs.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+	if c.ExceptionsEnabled() && !c.Logs.Enabled() {
+		return ConfigError("exception capture requires otel_logs_export or a logs consumer")
 	}
 
 	if c.Enabled(FeatureNetO11y) && !c.Grafana.OTLP.MetricsEnabled() &&
@@ -369,15 +456,15 @@ func (c *Config) Validate() error {
 		return ConfigError(fmt.Sprintf("invalid value for trace_printer: '%s'", c.TracePrinter))
 	}
 
-	if c.Enabled(FeatureAppO11y) && !c.TracePrinter.Enabled() &&
+	if appEnabled && !c.TracePrinter.Enabled() &&
 		!c.Grafana.OTLP.MetricsEnabled() && !c.Grafana.OTLP.TracesEnabled() &&
-		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() &&
+		!c.OTELMetrics.EndpointEnabled() && !c.Traces.Enabled() && !c.Logs.Enabled() &&
 		!c.Prometheus.EndpointEnabled() && !c.TracePrinter.Enabled() {
 		return ConfigError("you need to define at least one exporter: trace_printer," +
-			" grafana, otel_metrics_export, otel_traces_export or prometheus_export")
+			" grafana, otel_metrics_export, otel_traces_export, otel_logs_export or prometheus_export")
 	}
 
-	if c.Enabled(FeatureAppO11y) &&
+	if appEnabled &&
 		(c.Prometheus.EndpointEnabled() && c.OTELMetrics.EndpointEnabled()) {
 		if err := c.resolveSpanMetricsFormats(); err != nil {
 			return err
@@ -422,6 +509,10 @@ func (c *Config) Validate() error {
 		if err := c.Injector.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := c.PeerMetadata.Validate(); err != nil {
+		return ConfigError(err.Error())
 	}
 
 	return nil
@@ -533,8 +624,12 @@ func (c *Config) willUseTC() bool {
 
 // Enabled checks if a given Beyla feature is enabled according to the global configuration
 func (c *Config) appO11yEnabled() bool {
+	return c.InstrumentationEnabled() || c.Discovery.SurveyEnabled()
+}
+
+func (c *Config) InstrumentationEnabled() bool {
 	return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || c.Exec.IsSet() ||
-		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled() || c.Discovery.SurveyEnabled()
+		c.Exec.IsSet() || c.Discovery.AppDiscoveryEnabled()
 }
 
 func (c *Config) Enabled(feature Feature) bool {
@@ -570,6 +665,10 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
 	OverrideOBIGlobalConfig()
+	return loadConfigFile(file, nil)
+}
+
+func loadConfigFile(file io.Reader, environment map[string]string) (*Config, error) {
 	cfg := *DefaultConfig()
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
@@ -577,12 +676,16 @@ func LoadConfig(file io.Reader) (*Config, error) {
 			return nil, fmt.Errorf("reading YAML configuration: %w", err)
 		}
 		// replaces environment variables in YAML file
-		cfgBuf = config.ReplaceEnv(cfgBuf)
+		getenv := os.Getenv
+		if environment != nil {
+			getenv = func(name string) string { return environment[name] }
+		}
+		cfgBuf = config.ReplaceEnvFrom(cfgBuf, getenv)
 		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}
 	}
-	if err := env.Parse(&cfg); err != nil {
+	if err := env.ParseWithOptions(&cfg, env.Options{Environment: environment}); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
 	}
 	normalizeConfig(&cfg)
@@ -635,8 +738,9 @@ func defaultServiceNameMetricAttributes(c *Config) {
 }
 
 func appendDefaultResourceLabels(dst []string) []string {
-	// appends mandatory resource labels to a slice and deduplicates it
-	return maps2.SetToSlice(maps2.SliceToSet(append(dst,
+	// appends mandatory resource labels to a slice and deduplicates it. Sorting keeps the
+	// result stable, so reloading an unchanged configuration yields an equal one.
+	labels := maps2.SetToSlice(maps2.SliceToSet(append(dst,
 		string(attr.K8sClusterName),
 		string(attr.K8sNamespaceName),
 		string(attr.K8sNodeName),
@@ -644,4 +748,6 @@ func appendDefaultResourceLabels(dst []string) []string {
 		string(semconv.DeploymentEnvironmentNameKey),
 		string(semconv.CloudAvailabilityZoneKey),
 		string(semconv.CloudRegionKey))))
+	slices.Sort(labels)
+	return labels
 }

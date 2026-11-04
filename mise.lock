@@ -1209,49 +1209,6 @@ url = "https://github.com/cpp-linter/clang-tools-static-binaries/releases/downlo
 url_api = "https://api.github.com/repos/cpp-linter/clang-tools-static-binaries/releases/assets/539995229"
 provenance = "github-attestations"
 
-[[tools.dashboard-linter]]
-version = "0.1.1"
-backend = "github:grafana/dashboard-linter"
-specifiers = ["0.1.1"]
-
-[tools.dashboard-linter.options]
-matching = "dashboard-linter_"
-
-[tools.dashboard-linter."platforms.linux-arm64"]
-checksum = "sha256:98612dd5a0a3d15b0f9004a66655521ad9b09c324ff651b66653bcd015dcfe2a"
-url = "https://github.com/grafana/dashboard-linter/releases/download/v0.1.1/dashboard-linter_0.1.1_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/grafana/dashboard-linter/releases/assets/420454749"
-
-[tools.dashboard-linter."platforms.linux-arm64-musl"]
-checksum = "sha256:98612dd5a0a3d15b0f9004a66655521ad9b09c324ff651b66653bcd015dcfe2a"
-url = "https://github.com/grafana/dashboard-linter/releases/download/v0.1.1/dashboard-linter_0.1.1_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/grafana/dashboard-linter/releases/assets/420454749"
-
-[tools.dashboard-linter."platforms.linux-x64"]
-checksum = "sha256:ab8891fa0e55b60baf0eb25c76cc92768c5e829a1ed525efd651bbd0c5ba9457"
-url = "https://github.com/grafana/dashboard-linter/releases/download/v0.1.1/dashboard-linter_0.1.1_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/grafana/dashboard-linter/releases/assets/420454747"
-
-[tools.dashboard-linter."platforms.linux-x64-musl"]
-checksum = "sha256:ab8891fa0e55b60baf0eb25c76cc92768c5e829a1ed525efd651bbd0c5ba9457"
-url = "https://github.com/grafana/dashboard-linter/releases/download/v0.1.1/dashboard-linter_0.1.1_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/grafana/dashboard-linter/releases/assets/420454747"
-
-[tools.dashboard-linter."platforms.macos-arm64"]
-checksum = "sha256:058a3fedd7a0d85e57933f029cbc0ae392548fe1256472e5a39dc6137c6d3ce7"
-url = "https://github.com/grafana/dashboard-linter/releases/download/v0.1.1/dashboard-linter_0.1.1_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/grafana/dashboard-linter/releases/assets/420454752"
-
-[tools.dashboard-linter."platforms.macos-x64"]
-checksum = "sha256:8ac4724705e7dc215cc6e1f80206c550cac345edddb110059593364191beb2af"
-url = "https://github.com/grafana/dashboard-linter/releases/download/v0.1.1/dashboard-linter_0.1.1_darwin_amd64.tar.gz"
-url_api = "https://api.github.com/repos/grafana/dashboard-linter/releases/assets/420454745"
-
-[tools.dashboard-linter."platforms.windows-x64"]
-checksum = "sha256:3c0792a652cb5b5c2072c756b1f7a39f483ea6ad91114a98b8ef7d135ce7340c"
-url = "https://github.com/grafana/dashboard-linter/releases/download/v0.1.1/dashboard-linter_0.1.1_windows_amd64.zip"
-url_api = "https://api.github.com/repos/grafana/dashboard-linter/releases/assets/420454748"
-
 [[tools.ginkgo]]
 version = "2.33.0"
 backend = "go:github.com/onsi/ginkgo/v2/ginkgo"

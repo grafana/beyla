@@ -39,7 +39,10 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	// 2. the process metrics swarm pipeline, connected to the output of (1)
 	swi := &swarm.Instancer{}
 	swi.Add(func(ctx context.Context) (swarm.RunFunc, error) {
-		obiSwarm, err := appolly.Build(ctx, config.AsOBI(), ctxInfo, tracesCh, processEventsCh, runtimeMetrics)
+		obiSwarm, err := appolly.BuildWithProtocolMetricSelection(
+			ctx, config.AsOBI(), ctxInfo, tracesCh, processEventsCh, runtimeMetrics,
+			config.V2ProtocolSelection(),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating OBI app pipeline: %w", err)
 		}

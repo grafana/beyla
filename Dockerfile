@@ -88,6 +88,8 @@ COPY .mise/ .mise/
 COPY internal/java/mise.toml internal/java/
 COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
+COPY Makefile Makefile
+COPY scripts/obi-configbridge/ scripts/obi-configbridge/
 COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY third_party_licenses.csv third_party_licenses.csv

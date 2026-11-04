@@ -267,7 +267,7 @@ Beyla uses linters to enforce our coding style and best practices:
 
 All of them are enforced on pull requests as part of the Beyla github workflows. Additionally, you can invoke the linters manually:
 
-- `mise run lint` runs the Go and dashboard linters; use `mise run lint:go` for Go only
+- `mise run lint` runs the Go linter; dashboard linting runs separately in CI with Grafana’s pinned dashboard-linter action
 - `mise run clang:tidy` invokes `clang:tidy` on the C/eBPF code
 
 `clang:format` is invoked automatically as a `pre-commit` git hook; you can run it directly with `mise run clang:format`.

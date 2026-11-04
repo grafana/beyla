@@ -234,7 +234,8 @@ def render_context(
         "",
         "This file is the full input for triage. Do not fetch more CI data.",
         "Agent workflow runs (Fix OBI submodule CI) and the CI supervisor are omitted.",
-        "Log excerpts are capped. Artifact names are listed; artifact bodies are not downloaded.",
+        "Jobs not listed here succeeded or were skipped. Do not infer failures from artifact names.",
+        "Log excerpts are capped. Only artifacts from failed jobs are named; bodies are not downloaded.",
         "",
         "## OBI SHAs",
     ]
@@ -256,13 +257,20 @@ def render_context(
         lines.append(f"- Run: {run.get('url') or 'unknown'}")
         lines.append(f"- Attempt: {run.get('attempt') or 'unknown'}")
         lines.append(f"- Conclusion: {run.get('conclusion') or 'unknown'}")
-        artifacts = run.get("artifacts") or []
-        if artifacts:
-            lines.append("- Artifacts: " + ", ".join(artifacts))
-        else:
-            lines.append("- Artifacts: none produced")
         jobs = list(run.get("jobs") or [])
         omitted = list(run.get("omitted_jobs") or [])
+        # Successful shards upload logs too. Naming them makes triage treat
+        # every shard on the artifact page as a failed job.
+        artifacts = artifacts_for_failed_jobs(
+            [str(job.get("name") or "") for job in jobs] + [str(name) for name in omitted],
+            list(run.get("artifacts") or []),
+        )
+        if artifacts:
+            lines.append("- Artifacts: " + ", ".join(artifacts))
+        elif run.get("artifacts"):
+            lines.append("- Artifacts: none matched the failed jobs")
+        else:
+            lines.append("- Artifacts: none produced")
         if not jobs and not omitted:
             lines.append("- No failed jobs were listed for this run.")
         for job in jobs:
@@ -346,32 +354,61 @@ def list_pr_runs(repo: str, head_sha: str) -> list[dict]:
     return runs
 
 
+def artifact_names_from_pages(pages: Iterable[Mapping]) -> list[str]:
+    """Artifact names from one or more List-artifacts API pages.
+
+    The same name can appear twice when a job is re-run: each attempt uploads
+    its own copy. Callers match on name, so keep the first one.
+    """
+    seen: set[str] = set()
+    names = []
+    for page in pages:
+        for artifact in page.get("artifacts") or []:
+            if not isinstance(artifact, Mapping):
+                continue
+            name = artifact.get("name")
+            if not name:
+                continue
+            text = str(name)
+            if text in seen:
+                continue
+            seen.add(text)
+            names.append(text)
+    return names
+
+
 def artifact_names(repo: str, run_id: int) -> list[str]:
+    # Default page size is 30. A full integration matrix uploads two artifacts
+    # per shard, so a single page both drops later artifacts and, when taken
+    # as the failure list, names shards that succeeded.
     try:
-        payload = gh_json(
+        raw = gh_text(
             [
                 "gh",
                 "api",
-                f"repos/{repo}/actions/runs/{run_id}/artifacts",
-                "--jq",
-                "[.artifacts[].name]",
+                "--paginate",
+                "-H",
+                "Accept: application/vnd.github+json",
+                f"repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100",
             ]
         )
+        pages = parse_concatenated_json(raw)
     except (subprocess.CalledProcessError, json.JSONDecodeError, subprocess.TimeoutExpired):
         return []
-    if not isinstance(payload, list):
-        return []
+    return artifact_names_from_pages(pages)
+
+
+def artifacts_for_failed_jobs(job_names: Sequence[str], artifacts: Sequence[str]) -> list[str]:
+    """Keep artifacts that belong to a failed job, in job order."""
     seen: set[str] = set()
-    names = []
-    for name in payload:
-        if not name:
-            continue
-        text = str(name)
-        if text in seen:
-            continue
-        seen.add(text)
-        names.append(text)
-    return names
+    matched: list[str] = []
+    for name in job_names:
+        for artifact in artifacts_for_job(name, artifacts):
+            if artifact in seen:
+                continue
+            seen.add(artifact)
+            matched.append(artifact)
+    return matched
 
 
 def artifacts_for_job(job_name: str, artifacts: Sequence[str]) -> list[str]:
@@ -590,7 +627,11 @@ def _test_render_lists_omitted_jobs_and_shas() -> None:
                 "url": "https://example.test/run/1",
                 "attempt": 2,
                 "conclusion": "failure",
-                "artifacts": ["logs"],
+                "artifacts": [
+                    "go-integration-test-logs-0-9055",
+                    "go-integration-test-logs-9-9055",
+                    "go-integration-test-logs-3-9055",
+                ],
                 "jobs": [
                     {
                         "name": "shard-0 (5 tests)",
@@ -608,6 +649,10 @@ def _test_render_lists_omitted_jobs_and_shas() -> None:
     assert "### Pull request integration tests — shard-0 (5 tests)" in text
     assert "--- FAIL: TestFoo" in text
     assert "shard-9 (9 tests)" in text
+    assert "go-integration-test-logs-0-9055" in text
+    assert "go-integration-test-logs-9-9055" in text
+    # shard-3 succeeded. Its artifact must not appear, or triage invents a failure.
+    assert "go-integration-test-logs-3-9055" not in text
     assert "Fix OBI submodule CI" not in text.split("## Workflow:", 1)[-1]
 
 
@@ -626,6 +671,38 @@ def _test_artifacts_for_job_does_not_confuse_shard_prefixes() -> None:
     assert artifacts_for_job("ai", artifacts) == ["oats-test-logs-ai-8372"]
 
 
+def _test_artifact_pages_keep_failed_shards_only() -> None:
+    # Two attempts upload the same shard-15 name. Page size used to be 30,
+    # so a later page's failed-shard artifact was dropped while page 1 still
+    # named every successful shard.
+    pages = [
+        {
+            "artifacts": [
+                {"name": "go-integration-test-logs-15-9084"},
+                {"name": "go-integration-test-logs-0-9084"},
+                {"name": ""},
+                "not-an-object",
+            ]
+        },
+        {
+            "artifacts": [
+                {"name": "go-integration-test-logs-15-9084"},
+                {"name": "go-integration-test-reports-15-9084"},
+            ]
+        },
+    ]
+    names = artifact_names_from_pages(pages)
+    assert names == [
+        "go-integration-test-logs-15-9084",
+        "go-integration-test-logs-0-9084",
+        "go-integration-test-reports-15-9084",
+    ]
+    assert artifacts_for_failed_jobs(["shard-15 (10 tests)"], names) == [
+        "go-integration-test-logs-15-9084",
+        "go-integration-test-reports-15-9084",
+    ]
+
+
 def _test_paginated_json() -> None:
     raw = '{"workflow_runs":[{"id":1}]}\n{"workflow_runs":[{"id":2}]}'
     pages = parse_concatenated_json(raw)
@@ -639,6 +716,7 @@ def _run_self_tests() -> None:
         _test_failed_jobs_ignore_agent_jobs_and_record_steps,
         _test_render_lists_omitted_jobs_and_shas,
         _test_artifacts_for_job_does_not_confuse_shard_prefixes,
+        _test_artifact_pages_keep_failed_shards_only,
         _test_paginated_json,
     ]
     for test in tests:

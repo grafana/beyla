@@ -107,6 +107,7 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	var samplerConfig *services.SamplerConfig
 	var routesConfig *services.CustomRoutesConfig
 	svcFeatures := t.cfg.Metrics.Features
+	exceptions := t.cfg.Exceptions
 	var metadata map[attr.Name]string
 
 	for _, s := range processMatch.Criteria {
@@ -137,6 +138,8 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 			routesConfig = m
 		}
 
+		exceptions = s.GetExceptionsConfig().Resolve(t.cfg.Exceptions)
+
 		// if the matching service > instrument entry does not define features,
 		// the globally defined features apply (and override any previous,
 		// wider-scope match features)
@@ -158,8 +161,11 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		Sampler:            samplerFromConfig(samplerConfig),
 		Features:           svcFeatures,
 		LogEnricherEnabled: processMatch.LogEnricherEnabled(),
+		Exceptions:         exceptions,
 		SDKLanguage:        svc.InstrumentableGeneric,
 	}
+
+	s.Exceptions.Enabled = s.Exceptions.Enabled && s.ExportModes.CanExportLogs() && t.cfg.Logs.Enabled()
 
 	routesCfg := t.cfg.Routes
 	if routesCfg != nil && routesCfg.Directional != nil {

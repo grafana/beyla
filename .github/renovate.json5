@@ -130,20 +130,6 @@
     },
     {
       customType: 'regex',
-      description: 'Track the mise dashboard-linter backend alias (Renovate mise manager does not resolve tool_alias)',
-      managerFilePatterns: [
-        '/^mise\\.toml$/',
-      ],
-      matchStrings: [
-        '(?m)^"?dashboard-linter"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
-      ],
-      depNameTemplate: 'dashboard-linter',
-      packageNameTemplate: 'grafana/dashboard-linter',
-      datasourceTemplate: 'github-releases',
-      extractVersionTemplate: '^v?(?<version>.*)$',
-    },
-    {
-      customType: 'regex',
       description: 'Track the mise llvm-tools backend alias (Renovate mise manager does not resolve tool_alias)',
       managerFilePatterns: [
         '/^mise\\.toml$/',

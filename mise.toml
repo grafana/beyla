@@ -17,7 +17,6 @@ lockfile = true
 [tool_alias]
 bpf2go = "go:github.com/cilium/ebpf/cmd/bpf2go"
 go-licenses = "go:github.com/google/go-licenses/v2"
-dashboard-linter = "github:grafana/dashboard-linter"
 llvm-tools = "conda:llvm-tools"
 clang-tidy = "github:cpp-linter/clang-tools-static-binaries"
 
@@ -42,7 +41,6 @@ gotestsum = "1.13.0"
 ginkgo = { version = "2.33.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 "go-licenses" = { version = "2.0.1", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 "bpf2go" = { version = "0.22.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
-"dashboard-linter" = { version = "0.1.1", matching = "dashboard-linter_" }
 clang = { version = "22.1.8" }
 "llvm-tools" = { version = "22.1.8" }
 "clang-format" = { version = "22.1.8" }
@@ -76,8 +74,8 @@ run = [
 ]
 
 [tasks.lint]
-description = "Run the Go and dashboard linters"
-depends = ["lint:go", "lint:dashboard"]
+description = "Run the Go linter"
+depends = ["lint:go"]
 
 [tasks.build]
 alias = ["all"]

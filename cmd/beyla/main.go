@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -20,28 +21,28 @@ import (
 
 	_ "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 
+	"go.opentelemetry.io/obi/cmd/obi/configbridge"
+	"go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/obi"
 
+	"github.com/grafana/beyla/v3/cmd/beyla/internal/configrefresh"
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/buildinfo"
 	"github.com/grafana/beyla/v3/pkg/components"
 )
 
-// configVersionV1 is the only configuration document version Beyla can load.
-// OBI additionally understands "v2" (a `file_format` / `extensions.obi`
-// document), but its loader lives in the module-internal packages
-// go.opentelemetry.io/obi/internal/config/{schema,convert}, which Beyla cannot
-// import — the local `replace` directive does not lift Go's internal-package
-// rule, and OBI exposes no wrapper under pkg/. Supporting v2 here requires an
-// exported versioned loader in OBI first.
+// config v2 is loaded through go.opentelemetry.io/obi/cmd/obi/configbridge,
+// the module in scripts/obi-configbridge.
 //
-// Two other places encode the same limitation and disappear with it, once that
-// loader exists — both in scripts/generate-obi-tests.sh: the `"version":"v2"`
-// BEHAVIORAL_TRANSFORMS rule (which rewrites config_v2_test.go's expected
-// label), and ensure_config_v2_v1_equivalents (which appends v1-equivalent keys
-// to configs/obi-config-v2.yml, because the v1 loader silently drops the whole
-// v2 document rather than rejecting it).
-const configVersionV1 = "v1"
+// The generated integration fixtures therefore carry OBI's v2 documents
+// verbatim (modulo the OTEL_EBPF_* → BEYLA_* env renaming): appending
+// v1-equivalent keys to them is no longer possible, since OBI's v2 document
+// validator rejects unknown top-level fields.
+const (
+	configVersionV1 = "v1"
+	configVersionV2 = "v2"
+)
 
 func main() {
 	lvl := slog.LevelVar{}
@@ -65,7 +66,7 @@ func main() {
 		configPath = &cfg
 	}
 
-	config := loadConfig(configPath)
+	config, configVersion, configData := loadConfig(configPath)
 	if err := config.Validate(); err != nil {
 		slog.Error("wrong Beyla configuration", "error", err)
 		os.Exit(-1)
@@ -79,7 +80,7 @@ func main() {
 	setupLogHandler(config.LogFormat, &lvl)
 
 	slog.Info("Grafana Beyla", "Version", buildinfo.Version, "Revision", buildinfo.Revision, "OpenTelemetry SDK Version", otelsdk.Version())
-	slog.Info("configuration loaded", "version", configVersionV1)
+	slog.Info("configuration loaded", "version", configVersion)
 
 	if err := obi.CheckOSCapabilities(config.AsOBI()); err != nil {
 		if config.EnforceSysCaps {
@@ -104,8 +105,13 @@ func main() {
 	// We must register the hook before we launch the pipe build, otherwise we won't clean up if the
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-
-	if err := components.RunBeyla(ctx, config); err != nil {
+	var opts []components.Option
+	if watchV2Config(configVersion, config, configPath) {
+		go configbridge.Watch(ctx, *configPath, configData, config.RefreshCriteria)
+	} else {
+		opts = startConfigRefresh(ctx, config, *configPath, configData)
+	}
+	if err := components.RunBeyla(ctx, config, opts...); err != nil {
 		slog.Error("Beyla ran with errors", "error", err)
 		os.Exit(-1)
 	}
@@ -167,21 +173,82 @@ func logConfig(config *beyla.Config) {
 	}
 }
 
-func loadConfig(configPath *string) *beyla.Config {
-	var configReader io.ReadCloser
+func loadConfig(configPath *string) (*beyla.Config, string, []byte) {
+	// Mirror BEYLA_* onto OTEL_EBPF_* before either loader reads the environment.
+	beyla.OverrideOBIGlobalConfig()
+
+	var data []byte
 	if configPath != nil && *configPath != "" {
 		var err error
-		if configReader, err = os.Open(*configPath); err != nil {
+		data, err = os.ReadFile(*configPath)
+		if err != nil {
 			slog.Error("can't open "+*configPath, "error", err)
 			os.Exit(-1)
 		}
-		defer configReader.Close()
 	}
-	config, err := beyla.LoadConfig(configReader)
-	if err != nil {
+
+	if obiCfg, err := configbridge.LoadV2(data); err == nil {
+		cfg := beyla.FromOBI(obiCfg)
+		selection := instrumentations.NewInstrumentationSelection(obiCfg.OTELMetrics.Instrumentations)
+		var updater *discover.CriteriaUpdater
+		if obiCfg.Enabled(obi.FeatureAppO11y) {
+			updater = discover.NewCriteriaUpdater(obiCfg)
+		}
+		cfg.SetV2Runtime(selection, updater)
+		return cfg, configVersionV2, data
+	} else if !configbridge.IsNotV2(err) {
 		slog.Error("wrong configuration", "error", err)
-		// nolint:gocritic
 		os.Exit(-1)
 	}
-	return config
+
+	var reader io.Reader
+	if data != nil {
+		reader = bytes.NewReader(data)
+	}
+	config, err := beyla.LoadConfig(reader)
+	if err != nil {
+		slog.Error("wrong configuration", "error", err)
+		os.Exit(-1)
+	}
+	return config, configVersionV1, data
+}
+
+// watchV2Config reports whether config v2 should reload through OBI's watcher.
+// The v1 refresher only understands the legacy document, so it must not replace
+// these criteria.
+func watchV2Config(version string, cfg *beyla.Config, configPath *string) bool {
+	return version == configVersionV2 &&
+		cfg.CriteriaUpdates() != nil &&
+		configPath != nil && *configPath != ""
+}
+
+// startConfigRefresh lets the discovery criteria change without restarting Beyla: through the
+// control socket of a parent process such as Alloy or, without one, by watching the
+// configuration file. It returns the options that connect the refreshes to the pipeline.
+func startConfigRefresh(ctx context.Context, config *beyla.Config, configPath string, configData []byte) []components.Option {
+	conn, err := configrefresh.ControlConn()
+	if err != nil {
+		slog.Error("can't open the configuration control socket", "error", err)
+	}
+
+	if conn == nil && configPath == "" {
+		return nil
+	}
+
+	refresher, err := configrefresh.New(config, configData)
+	if err != nil {
+		slog.Debug("discovery criteria refresh disabled", "reason", err)
+		if conn != nil {
+			go configrefresh.Serve(ctx, conn, func(context.Context, []byte) error { return err })
+		}
+		return nil
+	}
+
+	if conn != nil {
+		go configrefresh.Serve(ctx, conn, refresher.Refresh)
+	} else {
+		go configrefresh.Watch(ctx, configPath, configData, refresher)
+	}
+
+	return []components.Option{components.WithCriteriaUpdater(refresher.Updater())}
 }

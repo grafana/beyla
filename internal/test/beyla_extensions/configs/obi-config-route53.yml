@@ -17,9 +17,8 @@ name_resolver:
   sources: [route53]
 cloud_metadata:
   route53:
-    # Keep discovery and record replacement fast in the integration test.
+    # Discover the mock VPC's zones and refresh record changes quickly.
     refresh_interval: 1s
-    hosted_zone_ids: ["${ROUTE53_HOSTED_ZONE_ID}"]
 attributes:
   # server carries the resolved peer; server.address retains the HTTP Host.
   extra_group_attributes:

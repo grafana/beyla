@@ -105,6 +105,8 @@ type GenAIConfig struct {
 	Retrieval RetrievalConfig `yaml:"retrieval"`
 	// Ollama native API payload extraction and parsing
 	Ollama OllamaConfig `yaml:"ollama"`
+	// Cohere native chat API payload extraction and parsing. Config v2 only.
+	Cohere CohereConfig `yaml:"-" json:"-"`
 	// OpenAI-compatible gateway payload extraction and parsing
 	OpenAICompatible OpenAICompatibleConfig `yaml:"openai_compatible"`
 }
@@ -112,7 +114,7 @@ type GenAIConfig struct {
 func (g *GenAIConfig) Enabled() bool {
 	return g.Anthropic.Enabled || g.OpenAI.Enabled ||
 		g.Gemini.Enabled || g.Qwen.Enabled || g.Bedrock.Enabled ||
-		g.MCP.Enabled || g.Ollama.Enabled ||
+		g.MCP.Enabled || g.Ollama.Enabled || g.Cohere.Enabled ||
 		g.Embedding.Enabled || g.Rerank.Enabled || g.Retrieval.Enabled ||
 		g.OpenAICompatible.Enabled
 }
@@ -165,6 +167,11 @@ type RetrievalConfig struct {
 type OllamaConfig struct {
 	// Enable Ollama native API payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_OLLAMA_ENABLED" validate:"boolean"`
+}
+
+type CohereConfig struct {
+	// Enable Cohere native chat API payload extraction and parsing
+	Enabled bool `yaml:"-" json:"-"`
 }
 
 type OpenAICompatibleConfig struct {

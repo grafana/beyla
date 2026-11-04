@@ -32,6 +32,7 @@ import (
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
+	"go.opentelemetry.io/obi/pkg/exceptions"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
@@ -180,6 +181,9 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 	}
 
 	ebpfcommon.FixupSpec(spec, p.cfg.EBPF.OverrideBPFLoopEnabled)
+	if !ebpfcommon.SupportsJavaHTTP1ReservationCleanup() {
+		ebpfcommon.DisableJavaHTTP1Atomics(spec)
+	}
 
 	return []*ebpfcommon.SpecBundle{{Spec: spec, Objects: &p.bpfObjects, Constants: p.constants()}}, nil
 }
@@ -235,10 +239,16 @@ func (p *Tracer) constants() map[string]any {
 
 	m["g_bpf_debug"] = p.cfg.EBPF.BpfDebug
 	m["g_bpf_traceparent_enabled"] = p.cfg.EBPF.TrackRequestHeaders || p.cfg.EBPF.ContextPropagation.IsEnabled()
+	m["g_bpf_header_propagation"] = p.cfg.EBPF.ContextPropagation.HasHeaders()
+	canWriteHeaders := p.cfg.EBPF.ContextPropagation.HasHeaders() && !ebpfcommon.IntegrityModeOverride &&
+		ebpfcommon.SupportsContextPropagationWithProbe(p.log)
+	m["g_bpf_probe_write_user_enabled"] = canWriteHeaders
+	m["g_bpf_java_http1_enabled"] = p.cfg.EBPF.ContextPropagation.HasHeaders() && ebpfcommon.SupportsJavaHTTP1Propagation(p.log)
 	m["jvm_sampling_interval_ns"] = uint64(0)
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["jvm_sampling_interval_ns"] = uint64(p.cfg.JVMRuntimeMetrics.SamplingInterval.Nanoseconds())
 	}
+	m["g_exceptions_enabled"] = p.cfg.ExceptionsEnabled() && p.cfg.Logs.Enabled()
 	m["nodejs_runtime_metrics_enabled"] = uint64(0)
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["nodejs_runtime_metrics_enabled"] = uint64(1)
@@ -751,6 +761,19 @@ func (p *Tracer) Run(
 		} else {
 			p.log.Debug("reading runtime metrics from shared ring buffer")
 		}
+	}
+
+	if ebpfEventContext.ExceptionInput != nil {
+		go ebpfcommon.ForwardRingbuf(
+			cfg,
+			p.bpfObjects.ExceptionEvents,
+			func(record *ringbuf.Record) (exceptions.Event, bool, error) {
+				return ebpfcommon.ReadExceptionRecord(record, p.pidsFilter)
+			},
+			nil,
+			p.log.With("ringbuf", "exception_events"),
+			p.metrics,
+		)(ctx, ebpfEventContext.ExceptionInput)
 	}
 
 	ebpfcommon.SharedRingbuf(

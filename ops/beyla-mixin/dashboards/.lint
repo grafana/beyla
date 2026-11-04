@@ -1,0 +1,35 @@
+# These dashboards moved out of grafana/ without the lint target following them,
+# so the violations below were never enforced. Scope each exclusion to the
+# dashboard that already fails that rule.
+exclusions:
+  target-promql-rule:
+    reason: RED metrics queries put the range selector on the target_info join inside rate(), which the PromQL parser rejects.
+    entries:
+      - dashboard: Beyla RED Metrics
+  panel-datasource-rule:
+    reason: These dashboards pin a Prometheus datasource instead of templating it.
+    entries:
+      - dashboard: Beyla process metrics
+      - dashboard: Beyla
+  panel-title-description-rule:
+    reason: These dashboards were published without panel descriptions.
+    entries:
+      - dashboard: Beyla process metrics
+      - dashboard: Beyla
+  template-datasource-rule:
+    reason: These dashboards do not template the datasource.
+    entries:
+      - dashboard: Beyla process metrics
+      - dashboard: Beyla
+  uneditable-dashboard:
+    reason: These dashboards are shipped editable.
+    entries:
+      - dashboard: Beyla process metrics
+      - dashboard: Beyla
+  target-counter-agg-rule:
+    reason: The debug dashboard plots raw OTEL export counters.
+    entries:
+      - dashboard: Beyla
+        panel: OTEL metric exports
+      - dashboard: Beyla
+        panel: OTEL trace exports

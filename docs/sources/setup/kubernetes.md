@@ -51,9 +51,6 @@ Beyla also needs to see the processes it instruments:
 When Beyla runs in a Pod, it adds Kubernetes metadata, such as the namespace and Pod name, to metrics and traces.
 To get the metadata, Beyla needs permission to list and watch Pods, Services, Nodes, and ReplicaSets in the Kubernetes API.
 Beyla doesn't instrument a process in a container until it finds the Pod for that container, so without these permissions Beyla doesn't instrument containerized applications.
-
-The default value of `BEYLA_KUBE_METADATA_ENABLE`, `autodetect`, turns on Kubernetes metadata when Beyla runs in Kubernetes.
-To turn off Kubernetes metadata, set `BEYLA_KUBE_METADATA_ENABLE=false`, or set `attributes.kubernetes.enable: false` in the Beyla configuration file.
 For the metadata attributes and options, refer to [Kubernetes decorator][k8s-decorator].
 
 {{< admonition type="note" >}}
@@ -133,6 +130,7 @@ Store the file in a ConfigMap, and store the OTLP credentials in a Secret:
    ```
 
    Replace _`<NAMESPACE>`_ with the namespace of the applications to instrument.
+   To instrument applications in all namespaces, use `"*"`, which is what the [Beyla Helm chart][beyla-helm] uses by default.
    Without a selector, Beyla exits at startup with a `missing application discovery section` error.
    Beyla still skips Kubernetes system namespaces and other services that it [excludes by default][default-exclude].
    For other ways to select applications, refer to [Configure Beyla service discovery][service-discovery].
@@ -283,7 +281,7 @@ To check the deployment, complete the following steps:
    ```
 
    Then run `kubectl apply -f beyla-daemonset.yml` again.
-   After the applications receive requests, the Beyla log shows one line for each request.
+   After the applications receive requests, Beyla writes one line for each request to `stdout`, so `kubectl logs` shows the lines with the rest of the Beyla log.
    Remove the variable when you finish testing.
 
 After the instrumented applications receive requests, their metrics and traces appear in your OTLP backend.
@@ -434,14 +432,10 @@ To run Beyla unprivileged, complete the following steps:
          - DAC_READ_SEARCH    # Open ELF files
          - PERFMON            # Load BPF programs
          # - SYS_RESOURCE     # Kernels earlier than 5.11 only: increase the locked memory limit
-         - SYS_ADMIN          # Go context propagation, trace-log correlation, or kernel.perf_event_paranoid above 2
        drop:
          - ALL
    ```
 
-   Some Debian-based distributions set `kernel.perf_event_paranoid` higher than `2`.
-   On those nodes, Beyla needs `SYS_ADMIN`, or you can lower the setting to `2`.
-   For details, refer to [Performance monitoring tasks][perf-tasks].
    If you turn on [network-level context propagation][context-propagation-task], also add `NET_ADMIN`.
 
 1. Apply the updated manifest, for example:
@@ -474,7 +468,6 @@ A cluster administrator can create a dedicated SCC that permits these settings w
      - CHECKPOINT_RESTORE
      - DAC_READ_SEARCH
      - PERFMON
-     - SYS_ADMIN
      - NET_ADMIN
    readOnlyRootFilesystem: true
    runAsUser:
@@ -529,7 +522,6 @@ Use a dedicated namespace and service account for Beyla, and review the SCC with
 [k8s-decorator]: ../../configure/metrics-traces-attributes/#kubernetes-decorator
 [k8s-monitoring-helm]: ../kubernetes-helm-k8s-monitoring/
 [network]: ../../network/
-[perf-tasks]: ../security/#performance-monitoring-tasks
 [requirements]: ../../introduction/requirements/
 [security]: ../security/
 [service-discovery]: ../../configure/service-discovery/

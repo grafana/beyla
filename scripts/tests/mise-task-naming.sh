@@ -20,6 +20,8 @@ if [[ -n "${MISE_EXPECTED_VERSION:-}" && "$version" != "$MISE_EXPECTED_VERSION"*
   exit 1
 fi
 unset MISE_EXPECTED_VERSION
+# Keep dry-run output stable for the task-plan parser even when CI forces ANSI.
+export NO_COLOR=1
 echo "checking task naming with $version"
 
 # Generated OATS Go modules follow the single pinned Ginkgo version in Mise.
@@ -31,14 +33,24 @@ configured_ginkgo_version=$(env -u MISE_ENABLE_TOOLS "$mise_bin" -C "$root" curr
 # Every historical spelling should resolve to the same dry-run plan as its new
 # task identity. Nothing is actually run and --skip-tools avoids tool installs.
 check_task() {
-  local old_name=$1 expected=$2 actual expected_output
+  local old_name=$1 expected=$2 actual expected_output actual_raw expected_raw actual_status expected_status
   # Composite tasks need not print their own task ID (only their dependencies),
   # so compare the execution plan with the explicit canonical task identity.
-  actual=$("$mise_bin" -C "$root" run --dry-run --skip-tools "$old_name" 2>&1 | grep -F '] $ ' || true)
-  expected_output=$("$mise_bin" -C "$root" run --dry-run --skip-tools "$expected" 2>&1 | grep -F '] $ ' || true)
-  if [[ -z "$actual" || "$actual" != "$expected_output" ]]; then
-    printf 'legacy task %q did not resolve to %q; actual plan:\n%s\nexpected plan:\n%s\n' \
-      "$old_name" "$expected" "$actual" "$expected_output" >&2
+  if actual_raw=$("$mise_bin" -C "$root" run --dry-run --skip-tools "$old_name" 2>&1); then
+    actual_status=0
+  else
+    actual_status=$?
+  fi
+  if expected_raw=$("$mise_bin" -C "$root" run --dry-run --skip-tools "$expected" 2>&1); then
+    expected_status=0
+  else
+    expected_status=$?
+  fi
+  actual=$(grep -F '] $ ' <<<"$actual_raw" || true)
+  expected_output=$(grep -F '] $ ' <<<"$expected_raw" || true)
+  if [[ "$actual_status" != 0 || "$expected_status" != 0 || -z "$actual" || "$actual" != "$expected_output" ]]; then
+    printf 'legacy task %q did not resolve to %q; exit=%s raw output:\n%s\nexpected task exit=%s raw output:\n%s\n' \
+      "$old_name" "$expected" "$actual_status" "$actual_raw" "$expected_status" "$expected_raw" >&2
     exit 1
   fi
 }

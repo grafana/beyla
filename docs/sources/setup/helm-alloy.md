@@ -53,9 +53,9 @@ You install the Alloy Helm chart in this namespace after you create the credenti
 
 ## Configure credentials
 
-Alloy sends the Beyla metrics to the Prometheus remote write endpoint of Grafana Cloud Metrics, and the traces to the Tempo OTLP endpoint of Grafana Cloud Traces.
-You can get a [free Grafana Cloud account][cloud-pricing].
-To send data to another backend, replace the endpoints and credentials with your own.
+Alloy sends the Beyla metrics to Grafana Cloud Metrics through its Prometheus remote write endpoint.
+It sends the Beyla traces to Grafana Cloud Traces through its Tempo OTLP endpoint.
+To use another backend, replace these endpoints and credentials with your own.
 
 Find the URL, user, and password for each endpoint:
 
@@ -269,7 +269,6 @@ For more information, refer to [Manage data sources in Grafana Cloud][cloud-data
 [beyla-helm]: ../kubernetes-helm/
 [cloud-data-sources]: https://grafana.com/docs/grafana-cloud/observe-and-act/connect-externally-hosted/data-sources-in-cloud/
 [cloud-portal]: https://grafana.com/docs/grafana-cloud/platform/security-and-account-management/account-management/cloud-portal/
-[cloud-pricing]: /pricing/
 [cloud-prometheus]: https://grafana.com/docs/grafana-cloud/send-data/metrics/metrics-prometheus/
 [cloud-tempo-credentials]: https://grafana.com/docs/grafana-cloud/send-data/traces/set-up/locate-url-user-password/
 [helm]: https://helm.sh/

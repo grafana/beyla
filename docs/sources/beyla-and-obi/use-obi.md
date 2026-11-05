@@ -14,8 +14,7 @@ keywords:
 
 # Use OpenTelemetry eBPF Instrumentation with Grafana
 
-OpenTelemetry eBPF Instrumentation (OBI) is the open source, vendor-neutral eBPF auto-instrumentation project in OpenTelemetry.
-OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry Collector or Prometheus-compatible backend.
+OpenTelemetry eBPF Instrumentation (OBI) works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry Collector or Prometheus-compatible backend.
 This page shows how to configure OBI for Grafana Cloud, and how to use other OpenTelemetry projects for capabilities that Grafana Beyla includes.
 To compare Beyla and OBI, refer to [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi].
 
@@ -130,3 +129,12 @@ configure your instrumentation pipeline:
     For example, drop any span that doesn't contain a `gen_ai.*` attribute.
 
 [ai-observability]: https://grafana.com/docs/grafana-cloud/monitor-applications/ai-observability/
+
+## Next steps
+
+- [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi]
+- [OpenTelemetry eBPF Instrumentation documentation][obi-docs]
+- [Set up Beyla][setup] to use these capabilities without extra OpenTelemetry components
+
+[obi-docs]: https://opentelemetry.io/docs/zero-code/obi/
+[setup]: ../../setup/

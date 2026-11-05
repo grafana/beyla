@@ -20,8 +20,7 @@ Grafana Beyla is the Grafana Labs distribution of OBI.
 Grafana Labs [donated the Beyla code to the OpenTelemetry project][donation-blog] in 2025 as OBI.
 A community of contributors, including Grafana Labs, maintains OBI.
 
-Both projects work with Grafana Cloud.
-OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry or Prometheus collector.
+OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry Collector or Prometheus-compatible backend.
 
 [obi-docs]: https://opentelemetry.io/docs/zero-code/obi/
 [donation-blog]: https://grafana.com/blog/opentelemetry-ebpf-instrumentation-beyla-donation/
@@ -30,13 +29,10 @@ OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry or Pr
 
 The [OBI code repository][obi-repo] contains the eBPF auto-instrumentation code, and the [Grafana Beyla code repository][beyla-repo] imports it as a library.
 Every feature that's available in OBI is also available in Beyla.
-Both projects are open source and vendor-neutral.
+Both projects are open source, and both export data in the OpenTelemetry format and as Prometheus metrics.
 
 Beyla adds features on top of OBI that make it easier to adopt eBPF-based auto-instrumentation in the Grafana ecosystem.
 For details, refer to [What Beyla adds][beyla-adds].
-
-The two projects also have different release cycles.
-Beyla usually releases more often than OBI, so some features are available in Beyla before they're in an OBI release.
 
 For metrics and attributes that don't follow an OpenTelemetry semantic convention because none exists yet, Beyla prefixes the names with `beyla_` while OBI prefixes them with `obi_`.
 For example, Beyla reports the network-level flow bytes metric as `beyla_network_flow_bytes_total`, and OBI reports it as `obi_network_flow_bytes_total`.
@@ -68,6 +64,7 @@ OBI and Beyla both support the [OpenTelemetry common environment variables][otel
 
 Beyla includes the following features for the Grafana ecosystem:
 
+- **Grafana Cloud configuration**: Sends data to the Grafana Cloud OTLP endpoint with the [`grafana.otlp`][grafana-otlp] configuration section or the `GRAFANA_CLOUD_*` environment variables.
 - **Process metrics**: Reports CPU, memory, disk, and network metrics for the processes that Beyla instruments.
 - **Survey mode**: Discovers your services and detects their programming languages, without instrumenting them.
 - **Grafana Alloy integration**: Runs as an Alloy component that you can manage with Fleet Management.
@@ -78,6 +75,19 @@ If you use OBI, you can get most of these capabilities with other OpenTelemetry 
 To set this up, and to configure OBI for Grafana Cloud, refer to [Use OpenTelemetry eBPF Instrumentation with Grafana][use-obi].
 
 [use-obi]: ../use-obi/
+[grafana-otlp]: ../../configure/export-data/#grafana-cloud-otlp-endpoint
+
+## Choose Beyla or OBI
+
+Both projects provide the eBPF auto-instrumentation benefits that [Why use Grafana Beyla][why-beyla] describes, because they share the same instrumentation code.
+
+The two projects have different release cycles.
+Beyla usually releases more often than OBI, so some features are available in Beyla before they're in an OBI release.
+
+Choose Beyla if you want the features in [What Beyla adds][beyla-adds] built in.
+Choose OBI if you want to use the OpenTelemetry project release directly, and add the capabilities you need with other OpenTelemetry projects.
+
+[why-beyla]: ../../introduction/why-beyla/
 
 ## Next steps
 

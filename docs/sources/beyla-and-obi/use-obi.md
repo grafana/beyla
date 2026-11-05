@@ -2,7 +2,9 @@
 title: Use OpenTelemetry eBPF Instrumentation with Grafana
 menuTitle: Use OBI with Grafana
 description: Replace Grafana Beyla features that OpenTelemetry eBPF Instrumentation (OBI) doesn't have, and configure OBI for Grafana Cloud Application Observability and Knowledge Graph.
-weight: 1000
+weight: 200
+aliases:
+  - ../setup/use-obi/ # /docs/beyla/<BEYLA_VERSION>/setup/use-obi/
 keywords:
   - Beyla
   - eBPF
@@ -17,7 +19,7 @@ OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry or Pr
 This page shows how to replace Beyla-only features with other OpenTelemetry projects, and how to configure OBI for Grafana Cloud.
 To compare Beyla and OBI, refer to [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi].
 
-[compare-obi]: ../../introduction/obi/
+[compare-obi]: ../compare/
 
 ## Replace Beyla-only features
 

@@ -1,14 +1,15 @@
 ---
 title: Compare Beyla and OpenTelemetry eBPF Instrumentation
-menuTitle: Beyla and OBI
+menuTitle: Compare Beyla and OBI
 description: Compare Grafana Beyla with OpenTelemetry eBPF Instrumentation (OBI), including how the projects relate, how their configuration differs, and which Beyla features OBI doesn't have.
-weight: 400
+weight: 100
 keywords:
   - Beyla
   - eBPF
   - OpenTelemetry eBPF Instrumentation
 aliases:
   - ../obi/ # /docs/beyla/<BEYLA_VERSION>/obi/
+  - ../introduction/obi/ # /docs/beyla/<BEYLA_VERSION>/introduction/obi/
 ---
 
 # Compare Beyla and OpenTelemetry eBPF Instrumentation
@@ -75,7 +76,7 @@ Beyla provides the following features that OBI doesn't:
 
 To replace these features when you use OBI, and to configure OBI for Grafana Cloud, refer to [Use OpenTelemetry eBPF Instrumentation with Grafana][use-obi].
 
-[use-obi]: ../../setup/use-obi/
+[use-obi]: ../use-obi/
 
 ## Next steps
 
@@ -83,6 +84,6 @@ To replace these features when you use OBI, and to configure OBI for Grafana Clo
 - [Beyla requirements and limitations][requirements]
 - [Set up Beyla][setup]
 
-[requirements]: ../requirements/
+[requirements]: ../../requirements-and-security/requirements/
 [setup]: ../../setup/
 

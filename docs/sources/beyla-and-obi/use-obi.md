@@ -36,6 +36,9 @@ section:
 - `network_flow_packets`
 - `application_runtime`
 
+Set the list in the `metrics.features` section of the OBI configuration file, or with the `OTEL_EBPF_METRICS_FEATURES` environment variable.
+For example, `OTEL_EBPF_METRICS_FEATURES=application,application_span_otel,application_service_graph,network_flow_packets,application_runtime`.
+
 For full functionality, also enable traces with
 [full context propagation][obi-context-propagation],
 and provide a source for [process metrics][process-metrics].

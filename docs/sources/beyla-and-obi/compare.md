@@ -1,7 +1,7 @@
 ---
 title: Compare Beyla and OpenTelemetry eBPF Instrumentation
 menuTitle: Compare Beyla and OBI
-description: Compare Grafana Beyla with OpenTelemetry eBPF Instrumentation (OBI), including how the projects relate, how their configuration differs, and which Beyla features OBI doesn't have.
+description: Compare Grafana Beyla with OpenTelemetry eBPF Instrumentation (OBI), including how the projects relate, how their configuration differs, and what Beyla adds for the Grafana ecosystem.
 weight: 100
 keywords:
   - Beyla
@@ -14,23 +14,26 @@ aliases:
 
 # Compare Beyla and OpenTelemetry eBPF Instrumentation
 
-Grafana Beyla is the Grafana Labs distribution of [OpenTelemetry eBPF Instrumentation][obi-docs] (OBI).
+[OpenTelemetry eBPF Instrumentation][obi-docs] (OBI) is the open source, vendor-neutral eBPF auto-instrumentation project in OpenTelemetry.
+Grafana Beyla is the Grafana Labs distribution of OBI.
 
 Grafana Labs [donated the Beyla code to the OpenTelemetry project][donation-blog] in 2025 as OBI.
 A community of contributors, including Grafana Labs, maintains OBI.
 
+Both projects work with Grafana Cloud.
 OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry or Prometheus collector.
 
 [obi-docs]: https://opentelemetry.io/docs/zero-code/obi/
 [donation-blog]: https://grafana.com/blog/opentelemetry-ebpf-instrumentation-beyla-donation/
 
-## Differences between OBI and Beyla
+## How Beyla and OBI relate
 
 The [OBI code repository][obi-repo] contains the eBPF auto-instrumentation code, and the [Grafana Beyla code repository][beyla-repo] imports it as a library.
 Every feature that's available in OBI is also available in Beyla.
-
-Beyla also has features that OBI doesn't, which make it easier to adopt eBPF-based auto-instrumentation in the Grafana ecosystem.
 Both projects are open source and vendor-neutral.
+
+Beyla adds features on top of OBI that make it easier to adopt eBPF-based auto-instrumentation in the Grafana ecosystem.
+For details, refer to [What Beyla adds][beyla-adds].
 
 The two projects also have different release cycles.
 Beyla usually releases more often than OBI, so some features are available in Beyla before they're in an OBI release.
@@ -44,7 +47,7 @@ For example, Beyla reports the network-level flow bytes metric as `beyla_network
 ### Configuration
 
 Beyla and OBI use the same YAML configuration schema.
-Most Beyla configuration examples also work with OBI, except for the features in [Beyla features that are missing in OBI][missing-features].
+Most Beyla configuration examples also work with OBI, except for the features in [What Beyla adds][beyla-adds].
 
 The OpenTelemetry documentation also describes [how to configure OBI from a YAML configuration file][obi-configure].
 
@@ -59,22 +62,20 @@ OBI and Beyla both support the [OpenTelemetry common environment variables][otel
 
 [obi-configure]: https://opentelemetry.io/docs/zero-code/obi/configure/
 [otel-env-vars]: https://opentelemetry.io/docs/languages/sdk-configuration/otlp-exporter/
-[missing-features]: #beyla-features-that-are-missing-in-obi
+[beyla-adds]: #what-beyla-adds
 
-## Beyla features that are missing in OBI
+## What Beyla adds
 
-Beyla provides the following features that OBI doesn't:
+Beyla includes the following features for the Grafana ecosystem:
 
-- **Process metrics**: CPU, memory, disk, and network metrics for the processes that Beyla instruments.
-  With OBI, use the OpenTelemetry Collector Host Metrics Receiver.
+- **Process metrics**: Reports CPU, memory, disk, and network metrics for the processes that Beyla instruments.
 - **Survey mode**: Discovers your services and detects their programming languages, without instrumenting them.
-  OBI doesn't have a replacement.
-- **Integration inside Grafana Alloy**: Run Beyla as an Alloy component, and manage it with Fleet Management.
-  With OBI, build a custom Collector with OpAMP.
-- **Grafana AI Observability support**: With OBI, add the required span attributes in an OpenTelemetry Collector.
-- Connecting spans for Tempo service graph metrics
+- **Grafana Alloy integration**: Runs as an Alloy component that you can manage with Fleet Management.
+- **Grafana AI Observability support**: Adds the span attributes that AI Observability uses.
+- **Tempo service graph support**: Connects spans for Tempo service graph metrics.
 
-To replace these features when you use OBI, and to configure OBI for Grafana Cloud, refer to [Use OpenTelemetry eBPF Instrumentation with Grafana][use-obi].
+If you use OBI, you can get most of these capabilities with other OpenTelemetry projects.
+To set this up, and to configure OBI for Grafana Cloud, refer to [Use OpenTelemetry eBPF Instrumentation with Grafana][use-obi].
 
 [use-obi]: ../use-obi/
 

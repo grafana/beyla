@@ -16,7 +16,7 @@ aliases:
 
 [Cilium](https://cilium.io) is an open source cloud native solution for providing, securing, and observing network connectivity between workloads. In some cases the eBPF programs Cilium uses can conflict with the ePBF programs Beyla uses and lead to issues.
 
-Beyla and Cilium use eBPF traffic control classifier programs, `BPF_PROG_TYPE_SCHED_CLS`. These programs attach to the ingress and egress data paths of the kernel networking stack. Together they form a chain of packet filters. Each packet filter is able to inspect the contents of the packet and perform operations, for example redirect or discard the packet.
+Beyla and Cilium use eBPF traffic control classifier programs, `BPF_PROG_TYPE_SCHED_CLS`. Beyla attaches these programs when you enable network metrics and set `network.source` to `tc`. These programs attach to the ingress and egress data paths of the kernel networking stack. Together they form a chain of packet filters. Each packet filter is able to inspect the contents of the packet and perform operations, for example redirect or discard the packet.
 
 Beyla programs never disrupt the flow of a packet, but Cilium changes packet flow as part of its operation. If Cilium processes packets before Beyla it can affect its ability to process packets.
 
@@ -30,7 +30,7 @@ When Beyla and Cilium use TCX they don't interfere with each other. Beyla attach
 
 The legacy Netlink interface relies on `clsact`, [`qdiscs`](https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html), and a BPF TC filter to attach eBPF programs to network interfaces. The kernel executes filters in order of their priority, with lower numbers having higher priority, and 1 being the highest priority.
 
-When TCX isn't available, both Beyla and Cilium use Netlink interface to install eBPF programs. If Beyla detects Cilium runs programs with priority 1, Beyla exits and displays an error. You can resolve the error by configuring Cilium to use a priority greater than 1.
+When TCX isn't available, both Beyla and Cilium use Netlink interface to install eBPF programs. Beyla checks the Cilium programs at startup when you enable network metrics with the `tc` source, or when you set `ebpf.context_propagation` to `all`, `tcp`, or `headers,tcp`. If all Cilium TC filters use priority 1, Beyla logs `Cilium compatibility error: detected Cilium TC with priority 1 - Cilium may clobber OBI` and exits. If some Cilium filters use other priorities, Beyla treats the priority 1 filters as leftovers, logs a warning, and continues. You can resolve the error by configuring Cilium to use a priority greater than 1.
 
 Beyla also refuses to run if it's configured to use Netlink attachments and it detects Cilium uses TCX.
 

@@ -36,9 +36,8 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
 
 1. Check whether you need to configure the attachment mode.
    Beyla attaches traffic control programs when you enable network metrics and set `network.source` to `tc`.
-   Beyla also checks the Cilium programs at startup when you set `ebpf.context_propagation` to `all`, `tcp`, or `headers,tcp`.
-   The defaults are `socket_filter` for `network.source` and `disabled` for `ebpf.context_propagation`, so the default configuration doesn't run the check.
-   If your Beyla configuration uses none of these settings, you don't need to configure anything else.
+   The default for `network.source` is `socket_filter`, so the default configuration doesn't attach traffic control programs.
+   If your Beyla configuration doesn't set `network.source` to `tc`, you don't need to configure anything else.
 
 1. Check the Linux kernel version of your nodes:
 
@@ -153,7 +152,6 @@ If Cilium has priority 1 filters and filters with other priorities, Beyla logs t
 ## Next steps
 
 - [Beyla Network Metrics configuration options][network-config]
-- [Distributed traces with Beyla][traces]
 - [Configure Beyla performance][tune-performance]
 
 [cilium]: https://cilium.io
@@ -163,6 +161,5 @@ If Cilium has priority 1 filters and filters with other priorities, Beyla logs t
 [qdiscs]: https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html
 [requirements]: ../../requirements-and-security/requirements/
 [tc-backend]: ../../configure/tune-performance/#traffic-control-backend
-[traces]: ../../traces/
 [troubleshoot]: #troubleshoot-cilium-compatibility-errors
 [tune-performance]: ../../configure/tune-performance/

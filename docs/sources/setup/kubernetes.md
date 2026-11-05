@@ -277,65 +277,6 @@ With this configuration, Beyla does the following:
 
 To also expose Prometheus metrics, or to use them instead of OTLP, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].
 
-## Turn on network-level context propagation
-
-Beyla can propagate trace context at network level, by adding it to outgoing requests.
-Network-level context propagation is off by default.
-For how it works, refer to [Context propagation at network level][context-propagation].
-If your cluster runs Cilium, refer to [Run Beyla with Cilium][cilium] before you turn on context propagation.
-
-To turn on network-level context propagation in the DaemonSet, complete the following steps:
-
-1. In `beyla-config.yml`, add the `ebpf.context_propagation` option to the Beyla configuration:
-
-   ```yaml
-   data:
-     beyla-config.yml: |
-       discovery:
-         instrument:
-           - k8s_namespace: <NAMESPACE>
-       ebpf:
-         context_propagation: all
-   ```
-
-   HTTP header propagation needs Linux kernel 5.17 or later.
-   For the other values, refer to [Distributed traces with Beyla][traces].
-
-1. In `beyla-daemonset.yml`, give the Pod host network access, and mount the `/sys/fs/cgroup` and `/sys/kernel/tracing` directories of the node.
-   Add the following entries to the Pod spec, and keep the `beyla-config` entries:
-
-   ```yaml
-   spec:
-     template:
-       spec:
-         hostNetwork: true
-         dnsPolicy: ClusterFirstWithHostNet
-         containers:
-           - name: beyla
-             volumeMounts:
-               - name: cgroup     # Track new sockets to propagate context
-                 mountPath: /sys/fs/cgroup
-               - name: tracefs    # Mitigate the FIONREAD kernel bug
-                 mountPath: /sys/kernel/tracing
-         volumes:
-           - name: cgroup
-             hostPath:
-               path: /sys/fs/cgroup
-           - name: tracefs
-             hostPath:
-               path: /sys/kernel/tracing
-   ```
-
-   The `ClusterFirstWithHostNet` DNS policy lets the Pod resolve cluster DNS names, such as the name of an Alloy Service, while it uses the host network.
-
-1. If you run Beyla unprivileged, add `NET_ADMIN` to the capabilities of the Beyla container.
-
-1. Apply both files:
-
-   ```sh
-   kubectl apply -f beyla-config.yml -f beyla-daemonset.yml
-   ```
-
 ## Deploy Beyla unprivileged
 
 Instead of a privileged container, you can run Beyla with only the Linux capabilities it needs.
@@ -364,8 +305,6 @@ To run Beyla unprivileged, complete the following steps:
          - ALL
    ```
 
-   If you turn on [network-level context propagation][context-propagation-task], also add `NET_ADMIN`.
-
 1. Apply the updated manifest, for example:
 
    ```sh
@@ -385,9 +324,7 @@ A cluster administrator can create a dedicated SCC that permits these settings w
    metadata:
      name: beyla
    allowHostDirVolumePlugin: true
-   allowHostNetwork: true
    allowHostPID: true
-   allowHostPorts: true
    allowPrivilegedContainer: false
    allowedCapabilities:
      - BPF
@@ -396,7 +333,6 @@ A cluster administrator can create a dedicated SCC that permits these settings w
      - CHECKPOINT_RESTORE
      - DAC_READ_SEARCH
      - PERFMON
-     - NET_ADMIN
    readOnlyRootFilesystem: true
    runAsUser:
      type: MustRunAs
@@ -408,9 +344,6 @@ A cluster administrator can create a dedicated SCC that permits these settings w
    supplementalGroups:
      type: RunAsAny
    ```
-
-   The SCC also allows host networking, host ports, and the `NET_ADMIN` capability.
-   If you don't turn on network-level context propagation, you can remove `allowHostNetwork`, `allowHostPorts`, and `NET_ADMIN`.
 
 1. Create the SCC, and grant it only to the `beyla` service account:
 
@@ -437,11 +370,8 @@ Use a dedicated namespace and service account for Beyla, and review the SCC with
 [alloy-otlp]: https://grafana.com/docs/alloy/latest/collect/opentelemetry-data/
 [alloy-otlp-receiver]: https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.receiver.otlp/
 [beyla-helm]: ../kubernetes-helm/
-[cilium]: ../cilium-compatibility/
 [cloud-otlp]: https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users
 [configure]: ../../configure/
-[context-propagation]: ../../traces/#context-propagation-at-network-level
-[context-propagation-task]: #turn-on-network-level-context-propagation
 [default-exclude]: ../../configure/service-discovery/#default-exclude-services-from-instrumentation
 [export-data]: ../../configure/export-data/
 [helm-cloud]: ../kubernetes-helm-appolly/

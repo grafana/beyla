@@ -14,12 +14,6 @@ oats = "internal/test/oats"
 [settings]
 lockfile = true
 
-[tool_alias]
-bpf2go = "go:github.com/cilium/ebpf/cmd/bpf2go"
-go-licenses = "go:github.com/google/go-licenses/v2"
-llvm-tools = "conda:llvm-tools"
-clang-tidy = "github:cpp-linter/clang-tools-static-binaries"
-
 [env]
 # Mise defaults intentionally replace both unset and empty variables. Keep
 # these Make/CI-compatible defaults in one place so scripts don't drift.
@@ -39,13 +33,13 @@ kind = "0.33.0"
 setup-envtest = "0.25.1"
 gotestsum = "1.13.0"
 ginkgo = { version = "2.33.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
-"go-licenses" = { version = "2.0.1", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
-"bpf2go" = { version = "0.22.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
+"go:github.com/google/go-licenses/v2" = { version = "2.0.1", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
+"go:github.com/cilium/ebpf/cmd/bpf2go" = { version = "0.22.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 clang = { version = "22.1.8" }
-"llvm-tools" = { version = "22.1.8" }
+"conda:llvm-tools" = { version = "22.1.8" }
 "clang-format" = { version = "22.1.8" }
 
-[tools."clang-tidy"]
+[tools."github:cpp-linter/clang-tools-static-binaries"]
 version = "2026.09.01-5fb8802d"
 matching = "clang-tidy-22_"
 bin = "clang-tidy"

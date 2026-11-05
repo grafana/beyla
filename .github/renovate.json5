@@ -102,61 +102,38 @@
       datasourceTemplate: 'github-releases',
       extractVersionTemplate: '^v?(?<version>.*)$',
     },
-    {
-      customType: 'regex',
-      description: 'Track the mise bpf2go backend alias (Renovate mise manager does not resolve tool_alias)',
-      managerFilePatterns: [
-        '/^mise\\.toml$/',
-      ],
-      matchStrings: [
-        '(?m)^"?bpf2go"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
-      ],
-      depNameTemplate: 'bpf2go',
-      packageNameTemplate: 'github.com/cilium/ebpf/cmd/bpf2go',
-      datasourceTemplate: 'go',
-    },
-    {
-      customType: 'regex',
-      description: 'Track the mise go-licenses backend alias (Renovate mise manager does not resolve tool_alias)',
-      managerFilePatterns: [
-        '/^mise\\.toml$/',
-      ],
-      matchStrings: [
-        '(?m)^"?go-licenses"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
-      ],
-      depNameTemplate: 'go-licenses',
-      packageNameTemplate: 'github.com/google/go-licenses/v2',
-      datasourceTemplate: 'go',
-    },
-    {
-      customType: 'regex',
-      description: 'Track the mise llvm-tools backend alias (Renovate mise manager does not resolve tool_alias)',
-      managerFilePatterns: [
-        '/^mise\\.toml$/',
-      ],
-      matchStrings: [
-        '(?m)^"?llvm-tools"?\\s*=\\s*\\{\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
-      ],
-      depNameTemplate: 'llvm-tools',
-      packageNameTemplate: 'llvm-tools',
-      datasourceTemplate: 'conda',
-    },
-    {
-      customType: 'regex',
-      description: 'Track the mise clang-tidy backend alias (Renovate mise manager does not resolve tool_alias)',
-      managerFilePatterns: [
-        '/^mise\\.toml$/',
-      ],
-      matchStrings: [
-        '(?ms)^\\[tools\\."clang-tidy"\\]\\s*version\\s*=\\s*"(?<currentValue>[^"]+)"',
-      ],
-      depNameTemplate: 'clang-tidy',
-      packageNameTemplate: 'cpp-linter/clang-tools-static-binaries',
-      datasourceTemplate: 'github-releases',
-      extractVersionTemplate: '^v?(?<version>.*)$',
-    },
   ],
   packageRules: [
+    {
+      description: 'Look up the bpf2go Go backend through the containing cilium/ebpf module',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'go:github.com/cilium/ebpf/cmd/bpf2go',
+      ],
+      overridePackageName: 'github.com/cilium/ebpf',
+    },
+    {
+      description: 'Look up llvm-tools in the conda-forge channel',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'conda:llvm-tools',
+      ],
+      overridePackageName: 'conda-forge/llvm-tools',
+    },
+    {
+      description: 'Compare clang-tools calendar/hash release tags by their date components',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'github:cpp-linter/clang-tools-static-binaries',
+      ],
+      versioning: 'regex:^(?<major>\\d{4})\\.(?<minor>\\d{2})\\.(?<patch>\\d{2})-[a-f0-9]+$',
+    },
     {
       description: 'OBI submodule is updated by bot_sync-obi-submodule.yml, not Renovate',
       matchManagers: [
@@ -243,11 +220,10 @@
       description: 'Group only the selected Mise Go toolchain and bpf2go with Go module and Docker updates',
       matchManagers: [
         'mise',
-        'custom.regex',
       ],
       matchDepNames: [
         'go',
-        'bpf2go',
+        'go:github.com/cilium/ebpf/cmd/bpf2go',
       ],
       groupName: 'Go',
       schedule: [

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 expected=$(go list -m -f '{{.Version}}' github.com/cilium/ebpf)
-actual=$(mise current bpf2go)
+actual=$(mise current go:github.com/cilium/ebpf/cmd/bpf2go)
 expected=${expected#v}
 if [[ "$actual" != "$expected" ]]; then
   echo "Mise bpf2go $actual does not match github.com/cilium/ebpf $expected" >&2

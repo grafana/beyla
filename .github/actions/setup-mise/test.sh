@@ -5,6 +5,12 @@ action_dir=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+bpf2go_tool='go:github.com/cilium/ebpf/cmd/bpf2go'
+go_licenses_tool='go:github.com/google/go-licenses/v2'
+llvm_tools_tool='conda:llvm-tools'
+clang_tidy_tool='github:cpp-linter/clang-tools-static-binaries'
+bpf_tools="go,$bpf2go_tool,clang,$llvm_tools_tool,clang-format"
+
 assert_profile() {
   local profile=$1
   local expected=$2
@@ -17,15 +23,15 @@ assert_profile() {
 
 assert_profile none ''
 assert_profile go 'go'
-assert_profile bpf 'go,bpf2go,clang,llvm-tools,clang-format'
-assert_profile generate 'go,bpf2go,clang,llvm-tools,clang-format,gotestsum'
-assert_profile integration 'go,bpf2go,clang,llvm-tools,clang-format,kind,gotestsum'
-assert_profile oats 'go,bpf2go,clang,llvm-tools,clang-format,ginkgo'
-assert_profile lint 'go,golangci-lint,clang-format,clang-tidy'
+assert_profile bpf "$bpf_tools"
+assert_profile generate "$bpf_tools,gotestsum"
+assert_profile integration "$bpf_tools,kind,gotestsum"
+assert_profile oats "$bpf_tools,ginkgo"
+assert_profile lint "go,golangci-lint,clang-format,$clang_tidy_tool"
 assert_profile unit 'go,setup-envtest,gotestsum'
-assert_profile release 'go,bpf2go,clang,llvm-tools,clang-format,java,gradle'
-assert_profile obi-fix 'go,bpf2go,clang,llvm-tools,clang-format,clang-tidy'
-assert_profile license 'go,go-licenses'
+assert_profile release "$bpf_tools,java,gradle"
+assert_profile obi-fix "$bpf_tools,$clang_tidy_tool"
+assert_profile license "go,$go_licenses_tool"
 
 if MISE_TOOLS_PROFILE=unknown GITHUB_ENV="$tmp/profile-output" bash "$action_dir/resolve-profile.sh" >/dev/null 2>&1; then
   echo 'Unknown Mise tool profiles must fail.' >&2

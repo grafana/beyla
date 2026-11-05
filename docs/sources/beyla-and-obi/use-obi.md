@@ -1,7 +1,7 @@
 ---
 title: Use OpenTelemetry eBPF Instrumentation with Grafana
 menuTitle: Use OBI with Grafana
-description: Replace Grafana Beyla features that OpenTelemetry eBPF Instrumentation (OBI) doesn't have, and configure OBI for Grafana Cloud Application Observability and Knowledge Graph.
+description: Configure OpenTelemetry eBPF Instrumentation (OBI) for Grafana Cloud Application Observability and Knowledge Graph, and use OpenTelemetry projects for capabilities that Grafana Beyla includes.
 weight: 200
 aliases:
   - ../setup/use-obi/ # /docs/beyla/<BEYLA_VERSION>/setup/use-obi/
@@ -14,16 +14,42 @@ keywords:
 
 # Use OpenTelemetry eBPF Instrumentation with Grafana
 
-If you use upstream OpenTelemetry eBPF Instrumentation (OBI) instead of Grafana Beyla, some Beyla features aren't available.
+OpenTelemetry eBPF Instrumentation (OBI) is the open source, vendor-neutral eBPF auto-instrumentation project in OpenTelemetry.
 OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry or Prometheus collector.
-This page shows how to replace Beyla-only features with other OpenTelemetry projects, and how to configure OBI for Grafana Cloud.
+This page shows how to configure OBI for Grafana Cloud, and how to use other OpenTelemetry projects for capabilities that Grafana Beyla includes.
 To compare Beyla and OBI, refer to [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi].
 
 [compare-obi]: ../compare/
 
-## Replace Beyla-only features
+## Configure OBI for Grafana Cloud Application Observability and Knowledge Graph
 
-The following sections describe OBI alternatives for features that only Beyla provides.
+A base OBI installation provides basic functionality in Grafana Cloud
+[Application Observability][application-observability]
+and [Knowledge Graph][knowledge-graph].
+To get the most out of Application Observability, configure OBI to export the following metric families
+in the [features][obi-features]
+section:
+
+- `application`
+- `application_span_otel`
+- `application_service_graph`
+- `network_flow_packets`
+- `application_runtime`
+
+For full functionality, also enable traces with
+[full context propagation][obi-context-propagation],
+and provide a source for [process metrics][process-metrics].
+
+[application-observability]: https://grafana.com/products/cloud/application-observability/
+[knowledge-graph]: https://grafana.com/docs/grafana-cloud/knowledge-graph/
+[obi-features]: https://opentelemetry.io/docs/zero-code/obi/configure/export-data/#metrics-export-features
+[obi-context-propagation]: https://opentelemetry.io/docs/zero-code/obi/distributed-traces/
+[process-metrics]: #process-metrics
+
+## Add capabilities that Beyla includes
+
+Beyla includes some capabilities for the Grafana ecosystem that aren't part of OBI.
+The following sections describe how to get these capabilities with OBI and other OpenTelemetry projects.
 
 ### Process metrics
 
@@ -57,7 +83,7 @@ that don't match your [OBI service discovery configuration][obi-service-discover
 Beyla has a [survey mode][survey-mode] that discovers your services and detects their programming languages, without instrumenting them.
 Grafana Cloud [Instrumentation Hub][instrumentation-hub] uses survey mode to help you configure instrumentation for your services.
 
-OBI doesn't have a replacement for survey mode.
+OBI doesn't include survey mode.
 To follow the work to add survey mode to OBI, refer to the [OBI survey mode issue][obi-survey-issue].
 
 [survey-mode]: ../../configure/service-discovery/#survey-mode
@@ -100,28 +126,3 @@ configure your instrumentation pipeline:
     For example, drop any span that doesn't contain a `gen_ai.*` attribute.
 
 [ai-observability]: https://grafana.com/docs/grafana-cloud/monitor-applications/ai-observability/
-
-## Use OBI with Grafana Cloud Application Observability and Knowledge Graph
-
-A base OBI installation provides basic functionality in Grafana Cloud
-[Application Observability][application-observability]
-and [Knowledge Graph][knowledge-graph].
-To get the most out of Application Observability, configure OBI to export the following metric families
-in the [features][obi-features]
-section:
-
-- `application`
-- `application_span_otel`
-- `application_service_graph`
-- `network_flow_packets`
-- `application_runtime`
-
-For full functionality, also enable traces with
-[full context propagation][obi-context-propagation],
-and provide a source for [process metrics][process-metrics].
-
-[application-observability]: https://grafana.com/products/cloud/application-observability/
-[knowledge-graph]: https://grafana.com/docs/grafana-cloud/knowledge-graph/
-[obi-features]: https://opentelemetry.io/docs/zero-code/obi/configure/export-data/#metrics-export-features
-[obi-context-propagation]: https://opentelemetry.io/docs/zero-code/obi/distributed-traces/
-[process-metrics]: #process-metrics

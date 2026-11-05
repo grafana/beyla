@@ -129,6 +129,7 @@ Beyla also exits if you set `ebpf.traffic_control_backend` to `tc` and Cilium us
 ### Mixed TCX and Netlink
 
 When some programs attach with TCX and others with Netlink, the TCX programs run first.
+If Beyla uses Netlink and Cilium uses TCX, Cilium programs run before Beyla programs, so Beyla exits.
 
 ## Troubleshoot Cilium compatibility errors
 

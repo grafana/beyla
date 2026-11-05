@@ -1,18 +1,20 @@
 ---
-title: Cilium compatibility
-menuTitle: Cilium compatibility
-description: Compatibility notes when running Beyla alongside Cilium
+title: Run Beyla with Cilium
+menuTitle: Cilium
+description: Configure Grafana Beyla and Cilium so their traffic control eBPF programs don't conflict, and fix the Cilium compatibility error at Beyla startup.
 weight: 900
 keywords:
   - Beyla
   - eBPF
-  - distributed traces
+  - Cilium
+  - traffic control
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/cilium-compatibility/
+  - /docs/grafana-cloud/monitor-applications/beyla/setup/cilium-compatibility/
   - ../cilium-compatibility/ # /docs/beyla/<BEYLA_VERSION>/cilium-compatibility/
 ---
 
-# Cilium compatibility
+# Run Beyla with Cilium
 
 [Cilium](https://cilium.io) is an open source cloud native solution for providing, securing, and observing network connectivity between workloads. In some cases the eBPF programs Cilium uses can conflict with the ePBF programs Beyla uses and lead to issues.
 

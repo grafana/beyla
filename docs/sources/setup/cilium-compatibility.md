@@ -25,7 +25,7 @@ To prevent the conflict, configure how Beyla and Cilium attach their traffic con
 
 Before you configure Beyla and Cilium, make sure you have the following:
 
-- A Kubernetes cluster that runs Cilium and Beyla
+- A Kubernetes cluster that runs Cilium, with Beyla deployed on nodes that meet the [Beyla requirements and limitations][requirements]
 - `kubectl`, configured for the cluster
 - The `cilium` CLI, with permission to change the Cilium configuration
 - Access to the Beyla configuration
@@ -71,6 +71,13 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    ```
 
    Replace _`<BEYLA_DAEMONSET>`_ with the name of the Beyla DaemonSet, and _`<BEYLA_NAMESPACE>`_ with its namespace.
+   If you run Beyla with the [Grafana Alloy Helm chart][alloy-helm], restart the Alloy DaemonSet instead.
+
+1. Check that the Beyla Pods are running:
+
+   ```sh
+   kubectl get pods --namespace <BEYLA_NAMESPACE>
+   ```
 
 1. Check the logs of a Beyla Pod:
 
@@ -78,7 +85,7 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    kubectl logs --namespace <BEYLA_NAMESPACE> <POD_NAME>
    ```
 
-   Replace _`<POD_NAME>`_ with the name of a Beyla Pod.
+   Replace _`<POD_NAME>`_ with a Pod name from the previous command.
    If the log doesn't contain `Cilium compatibility error`, Beyla passed the Cilium check.
    Otherwise, refer to [Troubleshoot Cilium compatibility errors][troubleshoot].
 
@@ -136,9 +143,11 @@ If Cilium has priority 1 filters and filters with other priorities, Beyla logs t
 - [Configure Beyla performance][tune-performance]
 
 [cilium]: https://cilium.io
+[alloy-helm]: ../helm-alloy/
 [configure]: #configure-the-attachment-mode
 [network-config]: ../../network/config/
 [qdiscs]: https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html
+[requirements]: ../../requirements-and-security/requirements/
 [tc-backend]: ../../configure/tune-performance/#traffic-control-backend
 [traces]: ../../traces/
 [troubleshoot]: #troubleshoot-cilium-compatibility-errors

@@ -50,10 +50,13 @@ In the scenario in which the kernel uses both TCX and Netlink attachments, TCX p
 
 ## Beyla attachment mode configuration
 
-Refer to the [configuration documentation](/docs/beyla/latest/configure/options/), to configure Beyla TC attachment mode using the `BEYLA_BPF_TC_BACKEND` configuration option.
+To configure the Beyla TC attachment mode, set the `ebpf.traffic_control_backend` option or the `BEYLA_BPF_TC_BACKEND` environment variable to `tc`, `tcx`, or `auto`. The default is `auto`. For details, refer to [Traffic control backend](../../configure/tune-performance/#traffic-control-backend).
 
 You can configure Cilium via its `enable-tcx` boolean configuration option, refer to the [Cilium documentation](https://docs.cilium.io/en/stable/) for more information.
 
 ```shell
-cilium config set enable-tcx (true|false)
+cilium config set enable-tcx <TRUE_OR_FALSE>
 ```
+
+Replace _`<TRUE_OR_FALSE>`_ with `true` to use TCX when the kernel supports it, or `false` to use Netlink.
+By default, `cilium config set` restarts the Cilium Pods.

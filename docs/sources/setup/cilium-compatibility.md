@@ -64,7 +64,7 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    Beyla attaches its Netlink filters with priority 1, so they run before Cilium filters with priority 2 or higher.
    By default, `cilium config set` restarts the Cilium Pods.
 
-   Check that the Cilium configuration contains the new priority:
+   Check the filter priority in the Cilium configuration:
 
    ```sh
    cilium config view | grep bpf-filter-priority

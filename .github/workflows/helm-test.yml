@@ -38,7 +38,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           profile: none
-          cache-downloads: "false"
 
       - name: Run unit tests
         run: mise run helm:unittest

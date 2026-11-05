@@ -140,7 +140,6 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           profile: none
-          cache-downloads: "false"
 
       - name: Regenerate Helm docs
         if: steps.gate.outputs.skip != 'true'

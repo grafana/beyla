@@ -85,6 +85,7 @@ To learn more, refer to [Measuring total request times, instead of service times
 
 - [How Grafana Beyla works][how]
 - [Compare Beyla and OpenTelemetry SDKs][compare]
+- [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi]
 - [Beyla requirements and limitations][requirements]
 
 [distributed-traces]: ../../traces/
@@ -93,4 +94,5 @@ To learn more, refer to [Measuring total request times, instead of service times
 [requesttime]: ../../traces/requesttime/
 [how]: ../how-beyla-works/
 [compare]: ../beyla-and-opentelemetry-sdks/
+[compare-obi]: ../../beyla-and-obi/compare/
 [requirements]: ../requirements/

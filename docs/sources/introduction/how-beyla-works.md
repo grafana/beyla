@@ -68,7 +68,7 @@ You can run Beyla in the following ways:
 
 - As a standalone process on a Linux host or virtual machine
 - As a Docker container
-- In Kubernetes, as a DaemonSet or as a sidecar container
+- In Kubernetes, as a DaemonSet
 - Inside Grafana Alloy, with the `beyla.ebpf` component
 
 To choose a deployment method, refer to [Set up Beyla][setup].

@@ -1,7 +1,7 @@
 ---
 title: Deploy Beyla with Kubernetes manifests
 menuTitle: Kubernetes manifests
-description: Deploy Grafana Beyla in Kubernetes with your own manifests, as a DaemonSet that instruments the applications on each node or as a sidecar container that instruments one application, and send metrics and traces to an OpenTelemetry endpoint.
+description: Deploy Grafana Beyla in Kubernetes with your own manifests, as a DaemonSet that instruments the applications on each node, and send metrics and traces to an OpenTelemetry endpoint.
 weight: 700
 keywords:
   - Beyla
@@ -16,11 +16,7 @@ aliases:
 
 You can deploy Grafana Beyla in Kubernetes with your own manifests instead of a Helm chart.
 Use this option to create and manage all the Kubernetes resources that run Beyla yourself.
-
-You can run Beyla in one of two ways:
-
-- As a DaemonSet, which runs a Beyla Pod on your cluster nodes and instruments the applications on each node
-- As a sidecar container, which runs Beyla in each Pod of one application and instruments only that Pod
+The manifests run Beyla as a DaemonSet, which runs a Beyla Pod on your cluster nodes and instruments the applications on each node.
 
 To deploy Beyla with a Helm chart instead, refer to [Deploy Beyla with the Beyla Helm chart][beyla-helm].
 To configure the Helm chart for Grafana Cloud Application Observability, refer to [Deploy Beyla with the Beyla Helm chart for Grafana Cloud][helm-cloud].
@@ -43,10 +39,8 @@ Before you deploy Beyla, make sure you have the following:
 Beyla loads eBPF programs into the node kernel, so its container needs elevated privileges.
 Run the container in privileged mode, or grant only the Linux capabilities Beyla needs, as described in [Deploy Beyla unprivileged][unprivileged].
 
-Beyla also needs to see the processes it instruments:
-
-- In a DaemonSet, set `hostPID: true` in the Pod, so Beyla shares the process ID (PID) namespace of the node
-- In a sidecar container, set `shareProcessNamespace: true` in the Pod, so Beyla shares the PID namespace of the other containers in the Pod
+Beyla also needs to see the processes it instruments.
+Set `hostPID: true` in the Pod, so Beyla shares the process ID (PID) namespace of the node.
 
 When Beyla runs in a Pod, it adds Kubernetes metadata, such as the namespace and Pod name, to metrics and traces.
 To get the metadata, Beyla needs permission to list and watch Pods, Services, Nodes, and ReplicaSets in the Kubernetes API.
@@ -282,70 +276,6 @@ With this configuration, Beyla does the following:
 
 To also expose Prometheus metrics, or to use them instead of OTLP, refer to [Configure Beyla Prometheus and OpenTelemetry data export][export-data].
 
-## Deploy Beyla as a sidecar container
-
-To instrument only the Pods of one application, run Beyla as a sidecar container in the Pod template of that application:
-
-1. If the application runs in a namespace other than `beyla`, prepare that namespace:
-   - Create a `beyla` service account in the namespace, and add it to the `subjects` of the `beyla` ClusterRoleBinding
-   - Create the `grafana-secret` Secret in the namespace
-
-   A Pod can only reference Secrets in its own namespace.
-
-1. Add the following to the Pod template of the application, for example in its Deployment:
-
-   ```yaml
-   spec:
-     template:
-       spec:
-         shareProcessNamespace: true
-         serviceAccountName: beyla
-         containers:
-           # Keep the existing application containers, and add:
-           - name: beyla
-             image: grafana/beyla:latest
-             securityContext:
-               privileged: true
-             env:
-               - name: BEYLA_OPEN_PORT
-                 value: "<SERVICE_PORT>"
-               - name: OTEL_EXPORTER_OTLP_ENDPOINT
-                 value: "<OTLP_ENDPOINT>"
-               - name: OTEL_EXPORTER_OTLP_HEADERS
-                 valueFrom:
-                   secretKeyRef:
-                     name: grafana-secret
-                     key: otlp-headers
-                     optional: true
-   ```
-
-   Replace the following:
-
-   - _`<SERVICE_PORT>`_: The port the application opens inside its container
-   - _`<OTLP_ENDPOINT>`_: The base URL of your OTLP endpoint
-
-   Beyla still skips Kubernetes system namespaces and other services that it [excludes by default][default-exclude].
-
-   The `serviceAccountName` value replaces the service account of the application.
-   If the application needs its own service account, keep its `serviceAccountName` and remove `serviceAccountName: beyla` from the snippet.
-   Then add the service account of the application to the `subjects` of the `beyla` ClusterRoleBinding.
-
-1. Apply the updated manifest of the application, for example:
-
-   ```sh
-   kubectl apply -f <APPLICATION_MANIFEST>
-   ```
-
-   Replace _`<APPLICATION_MANIFEST>`_ with the file that contains the application Deployment.
-
-1. Check the logs of the Beyla container in one of the application Pods:
-
-   ```sh
-   kubectl logs --namespace <APP_NAMESPACE> <POD_NAME> --container beyla
-   ```
-
-   Replace _`<APP_NAMESPACE>`_ with the namespace of the application, and _`<POD_NAME>`_ with the name of one of its Pods.
-
 ## Turn on network-level context propagation
 
 Beyla can propagate trace context at network level, by adding it to outgoing requests.
@@ -413,7 +343,7 @@ For what each capability does, refer to [Beyla security, permissions, and capabi
 
 To run Beyla unprivileged, complete the following steps:
 
-1. In the Beyla container of your DaemonSet or sidecar, replace the `securityContext` section with the following:
+1. In the Beyla container of your DaemonSet, replace the `securityContext` section with the following:
 
    ```yaml
    securityContext:
@@ -486,9 +416,6 @@ A cluster administrator can create a dedicated SCC that permits these settings w
    oc apply -f beyla-scc.yml
    oc adm policy add-scc-to-user beyla -z beyla -n beyla
    ```
-
-   For a sidecar, run the `oc adm policy` command again with `-z <APP_SERVICE_ACCOUNT> -n <APP_NAMESPACE>`, where _`<APP_SERVICE_ACCOUNT>`_ is the service account used by the application Pod and _`<APP_NAMESPACE>`_ is its namespace.
-   The SCC applies to every container in the Pod, so the application containers also run as user `0` with a read-only root file system.
 
 1. Keep the capability-based `securityContext` from the previous section.
    The SCC permits those settings but keeps `allowPrivilegedContainer` disabled.

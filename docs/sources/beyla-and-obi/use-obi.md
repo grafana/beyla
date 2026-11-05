@@ -15,13 +15,13 @@ keywords:
 # Use OpenTelemetry eBPF Instrumentation with Grafana
 
 OpenTelemetry eBPF Instrumentation (OBI) is the open source, vendor-neutral eBPF auto-instrumentation project in OpenTelemetry.
-OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry or Prometheus collector.
+OBI works with the Grafana Cloud OTLP endpoint, and with any OpenTelemetry Collector or Prometheus-compatible backend.
 This page shows how to configure OBI for Grafana Cloud, and how to use other OpenTelemetry projects for capabilities that Grafana Beyla includes.
 To compare Beyla and OBI, refer to [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi].
 
 [compare-obi]: ../compare/
 
-## Configure OBI for Grafana Cloud Application Observability and Knowledge Graph
+## Configure OBI for Application Observability and Knowledge Graph
 
 A base OBI installation provides basic functionality in Grafana Cloud
 [Application Observability][application-observability]
@@ -39,7 +39,7 @@ section:
 Set the list in the `metrics.features` section of the OBI configuration file, or with the `OTEL_EBPF_METRICS_FEATURES` environment variable.
 For example, `OTEL_EBPF_METRICS_FEATURES=application,application_span_otel,application_service_graph,network_flow_packets,application_runtime`.
 
-For full functionality, also enable traces with
+To use all Application Observability features, also enable traces with
 [full context propagation][obi-context-propagation],
 and provide a source for [process metrics][process-metrics].
 
@@ -58,7 +58,8 @@ The following sections describe how to get these capabilities with OBI and other
 
 Beyla provides the following metrics, which follow the
 [OpenTelemetry semantic conventions for OS process metrics][process-semconv]:
-```
+
+```text
 process.cpu.time
 process.cpu.utilization
 process.memory.usage

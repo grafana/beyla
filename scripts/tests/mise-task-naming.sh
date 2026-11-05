@@ -180,4 +180,6 @@ grep -q -- '--test-pattern <pattern>' "$tmp/vm-help"
 grep -q -- '--suite <suite>' "$tmp/oats-debug-help"
 grep -q 'default.*kafka' "$tmp/oats-debug-help"
 
+bash "$root/scripts/tests/mise-oats-native-task.sh" "$mise_bin"
+
 echo 'mise naming regressions passed'

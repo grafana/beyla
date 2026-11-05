@@ -27,7 +27,7 @@ Before you configure Beyla and Cilium, make sure you have the following:
 
 - A Kubernetes cluster that runs Cilium, with Beyla deployed on nodes that meet the [Beyla requirements and limitations][requirements]
 - `kubectl`, configured for the cluster
-- The `cilium` CLI, with permission to change the Cilium configuration
+- For nodes that run a Linux kernel earlier than 6.6, the `cilium` CLI, with permission to change the Cilium configuration
 - Access to the Beyla configuration
 
 ## Configure the attachment mode
@@ -48,11 +48,11 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    The `KERNEL-VERSION` column shows the kernel version of each node.
    TCX requires Linux kernel 6.6 or later.
 
-1. If your nodes run Linux kernel 6.6 or later, set the Beyla `ebpf.traffic_control_backend` option or the `BEYLA_BPF_TC_BACKEND` environment variable to `auto` or `tcx`.
+1. If your nodes run Linux kernel 6.6 or later, check that the Beyla `ebpf.traffic_control_backend` option or the `BEYLA_BPF_TC_BACKEND` environment variable is `auto` or `tcx`.
    The default is `auto`.
    With TCX, Beyla programs run before Cilium programs, whether Cilium uses TCX or Netlink.
    For details, refer to [Traffic control backend][tc-backend].
-   If you run Beyla with the [Grafana Alloy Helm chart][alloy-helm], set the `traffic_control_backend` attribute in the `ebpf` block of the `beyla.ebpf` component instead.
+   If you run Beyla with the [Grafana Alloy Helm chart][alloy-helm], check the `traffic_control_backend` attribute in the `ebpf` block of the `beyla.ebpf` component instead.
 
 1. If your nodes run a Linux kernel earlier than 6.6, set the Cilium Netlink filter priority to 2 or higher:
 
@@ -62,6 +62,12 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
 
    Beyla attaches its Netlink filters with priority 1, so they run before Cilium filters with priority 2 or higher.
    By default, `cilium config set` restarts the Cilium Pods.
+
+   Check that the Cilium configuration contains the new priority:
+
+   ```sh
+   cilium config view | grep bpf-filter-priority
+   ```
 
    Keep the Beyla `ebpf.traffic_control_backend` option set to `auto` or `tc`.
 

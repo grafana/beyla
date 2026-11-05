@@ -13,8 +13,7 @@ keywords:
 # Beyla and OpenTelemetry eBPF Instrumentation
 
 Grafana Beyla is the Grafana Labs distribution of [OpenTelemetry eBPF Instrumentation][obi-docs] (OBI).
-Both projects are open source, and they share the same eBPF auto-instrumentation code.
-Use this section to understand how they relate, and to use OBI with Grafana.
+Both projects are open source, share the same eBPF auto-instrumentation code, and work with Grafana Cloud.
 
 {{< section menuTitle="true" withDescriptions="true" >}}
 

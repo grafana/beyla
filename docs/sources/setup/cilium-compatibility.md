@@ -42,6 +42,7 @@ You can configure Cilium Netlink program priority via the `bpf-filter-priority` 
 cilium config set bpf-filter-priority 2
 ```
 
+Beyla attaches its Netlink filters with priority 1.
 This ensures that Beyla programs always run before Cilium programs.
 
 ### Mixed TCX and Netlink
@@ -60,3 +61,14 @@ cilium config set enable-tcx <TRUE_OR_FALSE>
 
 Replace _`<TRUE_OR_FALSE>`_ with `true` to use TCX when the kernel supports it, or `false` to use Netlink.
 By default, `cilium config set` restarts the Cilium Pods.
+
+## Troubleshoot Cilium compatibility errors
+
+When the Cilium check fails, Beyla logs `wrong Beyla configuration` with one of the following errors and exits:
+
+| Error | Cause | Fix |
+| ----- | ----- | --- |
+| `Cilium compatibility error: detected Cilium TC with priority 1 - Cilium may clobber OBI` | Beyla uses Netlink, and all Cilium TC filters use priority 1. | Set the Cilium `bpf-filter-priority` option to 2 or higher, as described in [Configure Cilium Netlink priority](#configure-cilium-netlink-priority). On kernel 6.6 or later, you can instead set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
+| `Cilium compatibility error: detected Cilium TCX attachment, but OBI has been configured to use TC` | `ebpf.traffic_control_backend` is `tc`, and Cilium uses TCX. | Set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
+
+If Cilium has priority 1 filters and filters with other priorities, Beyla logs the warning `Detected potential Cilium TC left-overs!` and keeps running.

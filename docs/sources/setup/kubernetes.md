@@ -281,6 +281,7 @@ To also expose Prometheus metrics, or to use them instead of OTLP, refer to [Con
 Beyla can propagate trace context at network level, by adding it to outgoing requests.
 Network-level context propagation is off by default.
 For how it works, refer to [Context propagation at network level][context-propagation].
+If your cluster runs Cilium, refer to [Run Beyla with Cilium][cilium] before you turn on context propagation.
 
 To turn on network-level context propagation in the DaemonSet, complete the following steps:
 
@@ -435,6 +436,7 @@ Use a dedicated namespace and service account for Beyla, and review the SCC with
 [alloy-otlp]: https://grafana.com/docs/alloy/latest/collect/opentelemetry-data/
 [alloy-otlp-receiver]: https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.receiver.otlp/
 [beyla-helm]: ../kubernetes-helm/
+[cilium]: ../cilium-compatibility/
 [cloud-otlp]: https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users
 [configure]: ../../configure/
 [context-propagation]: ../../traces/#context-propagation-at-network-level

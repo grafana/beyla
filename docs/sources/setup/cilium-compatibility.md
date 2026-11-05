@@ -16,7 +16,7 @@ aliases:
 
 # Run Beyla with Cilium
 
-[Cilium](https://cilium.io) is an open source project that provides, secures, and observes network connectivity between workloads.
+[Cilium][cilium] is an open source project that provides, secures, and observes network connectivity between workloads.
 In some cases, the eBPF programs that Cilium uses can conflict with the eBPF programs that Beyla uses.
 
 To prevent the conflict, configure how Beyla and Cilium attach their traffic control programs.
@@ -52,10 +52,10 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
 
    - Set the Beyla `ebpf.traffic_control_backend` option or the `BEYLA_BPF_TC_BACKEND` environment variable to `auto` or `tcx`.
      The default is `auto`.
-     For details, refer to [Traffic control backend](../../configure/tune-performance/#traffic-control-backend).
+     For details, refer to [Traffic control backend][tc-backend].
    - Make sure Cilium uses TCX.
      The Cilium `enable-tcx` option is `true` by default.
-     For more information, refer to the [Cilium documentation](https://docs.cilium.io/en/stable/).
+     For more information, refer to the [Cilium documentation][cilium-docs].
      If you set the option to `false`, set it back to `true`:
 
      ```sh
@@ -92,7 +92,7 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
 
    Replace _`<POD_NAME>`_ with the name of a Beyla Pod.
    If the log doesn't contain `Cilium compatibility error`, Beyla passed the Cilium check.
-   Otherwise, refer to [Troubleshoot Cilium compatibility errors](#troubleshoot-cilium-compatibility-errors).
+   Otherwise, refer to [Troubleshoot Cilium compatibility errors][troubleshoot].
 
 ## How Beyla and Cilium share traffic control
 
@@ -117,7 +117,7 @@ When Beyla and Cilium use TCX, they don't interfere with each other.
 Beyla attaches its eBPF programs to the head of the list and Cilium to the tail.
 TCX is the preferred operation mode when possible.
 
-The legacy Netlink interface relies on `clsact`, [`qdiscs`](https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html), and a BPF TC filter to attach eBPF programs to network interfaces.
+The legacy Netlink interface relies on `clsact`, [`qdiscs`][qdiscs], and a BPF TC filter to attach eBPF programs to network interfaces.
 The kernel executes filters in order of their priority, with lower numbers having higher priority, and 1 being the highest priority.
 
 When TCX isn't available, both Beyla and Cilium use the Netlink interface to install eBPF programs.
@@ -137,13 +137,23 @@ When the Cilium check fails, Beyla logs `wrong Beyla configuration` with one of 
 
 | Error | Cause | Fix |
 | ----- | ----- | --- |
-| `Cilium compatibility error: detected Cilium TC with priority 1 - Cilium may clobber OBI` | Beyla uses Netlink, and all Cilium TC filters use priority 1. | Set the Cilium `bpf-filter-priority` option to 2 or higher, as described in [Configure the attachment mode](#configure-the-attachment-mode). On kernel 6.6 or later, you can instead set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
+| `Cilium compatibility error: detected Cilium TC with priority 1 - Cilium may clobber OBI` | Beyla uses Netlink, and all Cilium TC filters use priority 1. | Set the Cilium `bpf-filter-priority` option to 2 or higher, as described in [Configure the attachment mode][configure]. On kernel 6.6 or later, you can instead set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
 | `Cilium compatibility error: detected Cilium TCX attachment, but OBI has been configured to use TC` | `ebpf.traffic_control_backend` is `tc`, and Cilium uses TCX. | Set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
 
 If Cilium has priority 1 filters and filters with other priorities, Beyla logs the warning `Detected potential Cilium TC left-overs!` and keeps running.
 
 ## Next steps
 
-- [Beyla Network Metrics configuration options](../../network/config/)
-- [Distributed traces with Beyla](../../traces/)
-- [Configure Beyla performance](../../configure/tune-performance/)
+- [Beyla Network Metrics configuration options][network-config]
+- [Distributed traces with Beyla][traces]
+- [Configure Beyla performance][tune-performance]
+
+[cilium]: https://cilium.io
+[cilium-docs]: https://docs.cilium.io/en/stable/
+[configure]: #configure-the-attachment-mode
+[network-config]: ../../network/config/
+[qdiscs]: https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html
+[tc-backend]: ../../configure/tune-performance/#traffic-control-backend
+[traces]: ../../traces/
+[troubleshoot]: #troubleshoot-cilium-compatibility-errors
+[tune-performance]: ../../configure/tune-performance/

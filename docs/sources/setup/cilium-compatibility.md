@@ -17,7 +17,7 @@ aliases:
 # Run Beyla with Cilium
 
 [Cilium][cilium] is an open source project that provides, secures, and observes network connectivity between workloads.
-In some cases, the eBPF programs that Cilium uses can conflict with the eBPF programs that Beyla uses.
+In some cases, the eBPF programs that Cilium uses can conflict with the eBPF programs that Grafana Beyla uses.
 
 To prevent the conflict, configure how Beyla and Cilium attach their traffic control programs.
 
@@ -48,21 +48,10 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    The `KERNEL-VERSION` column shows the kernel version of each node.
    TCX requires Linux kernel 6.6 or later.
 
-1. If your nodes run Linux kernel 6.6 or later, use TCX for Beyla and Cilium:
-
-   - Set the Beyla `ebpf.traffic_control_backend` option or the `BEYLA_BPF_TC_BACKEND` environment variable to `auto` or `tcx`.
-     The default is `auto`.
-     For details, refer to [Traffic control backend][tc-backend].
-   - Make sure Cilium uses TCX.
-     The Cilium `enable-tcx` option is `true` by default.
-     For more information, refer to the [Cilium documentation][cilium-docs].
-     If you set the option to `false`, set it back to `true`:
-
-     ```sh
-     cilium config set enable-tcx true
-     ```
-
-     By default, `cilium config set` restarts the Cilium Pods.
+1. If your nodes run Linux kernel 6.6 or later, set the Beyla `ebpf.traffic_control_backend` option or the `BEYLA_BPF_TC_BACKEND` environment variable to `auto` or `tcx`.
+   The default is `auto`.
+   With TCX, Beyla programs run before Cilium programs, whether Cilium uses TCX or Netlink.
+   For details, refer to [Traffic control backend][tc-backend].
 
 1. If your nodes run a Linux kernel earlier than 6.6, set the Cilium Netlink filter priority to 2 or higher:
 
@@ -70,13 +59,12 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    cilium config set bpf-filter-priority 2
    ```
 
-   Beyla attaches its Netlink filters with priority 1.
-   This ensures that Beyla programs always run before Cilium programs.
+   Beyla attaches its Netlink filters with priority 1, so they run before Cilium filters with priority 2 or higher.
    By default, `cilium config set` restarts the Cilium Pods.
 
    Keep the Beyla `ebpf.traffic_control_backend` option set to `auto` or `tc`.
 
-1. Restart Beyla, so it runs the startup check again:
+1. Restart Beyla so that it runs the startup check again:
 
    ```sh
    kubectl rollout restart daemonset/<BEYLA_DAEMONSET> --namespace <BEYLA_NAMESPACE>
@@ -115,21 +103,20 @@ Beyla and Cilium auto-detect if the kernel supports TCX and use it by default.
 
 When Beyla and Cilium use TCX, they don't interfere with each other.
 Beyla attaches its eBPF programs to the head of the list and Cilium to the tail.
-TCX is the preferred operation mode when possible.
 
 The legacy Netlink interface relies on `clsact`, [`qdiscs`][qdiscs], and a BPF TC filter to attach eBPF programs to network interfaces.
-The kernel executes filters in order of their priority, with lower numbers having higher priority, and 1 being the highest priority.
+The kernel runs filters in order of their priority.
+Filters with lower numbers run first, and 1 is the highest priority.
 
 When TCX isn't available, both Beyla and Cilium use the Netlink interface to install eBPF programs.
-If all Cilium TC filters use priority 1, Beyla logs `Cilium compatibility error: detected Cilium TC with priority 1 - Cilium may clobber OBI` and exits.
-If some Cilium filters use other priorities, Beyla treats the priority 1 filters as leftovers, logs a warning, and continues.
-You can resolve the error by configuring Cilium to use a priority greater than 1.
+If all Cilium TC filters use priority 1, Beyla exits.
+For the error messages and fixes, refer to [Troubleshoot Cilium compatibility errors][troubleshoot].
 
-Beyla also refuses to run if it's configured to use Netlink attachments and it detects that Cilium uses TCX.
+Beyla also exits if you set `ebpf.traffic_control_backend` to `tc` and Cilium uses TCX.
 
 ### Mixed TCX and Netlink
 
-When the kernel uses both TCX and Netlink attachments, TCX programs run before programs attached through the Netlink interface.
+When some programs attach with TCX and others with Netlink, the TCX programs run first.
 
 ## Troubleshoot Cilium compatibility errors
 
@@ -149,7 +136,6 @@ If Cilium has priority 1 filters and filters with other priorities, Beyla logs t
 - [Configure Beyla performance][tune-performance]
 
 [cilium]: https://cilium.io
-[cilium-docs]: https://docs.cilium.io/en/stable/
 [configure]: #configure-the-attachment-mode
 [network-config]: ../../network/config/
 [qdiscs]: https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html

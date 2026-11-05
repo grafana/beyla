@@ -27,8 +27,11 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Test Make and Mise migration regressions
-        run: bash scripts/tests/mise-review-regressions.sh
+      - name: Test Make compatibility
+        run: bash scripts/tests/make-compat.sh
+
+      - name: Test mise task contracts
+        run: bash scripts/tests/mise-task-contracts.sh
 
       - name: Test mise action tool profiles
         run: bash .github/actions/setup-mise/test.sh
@@ -44,8 +47,8 @@ jobs:
       - name: Test canonical mise task names and compatibility aliases
         run: bash scripts/tests/mise-task-naming.sh
 
-      - name: Preinstall bpf2go for cross-target generation
-        run: GOARCH=arm64 GOOS=linux mise exec -- bpf2go --help >/dev/null
+      - name: Verify cold bpf2go install and ARM64 generation
+        run: bash scripts/tests/mise-bpf2go-cross-target.sh
 
       - name: Generate and vendor OBI
         run: mise run vendor:obi

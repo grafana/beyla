@@ -2,12 +2,14 @@
 title: Beyla requirements and limitations
 menuTitle: Requirements
 description: Check the Linux kernel, Go version, and Linux capability requirements for Grafana Beyla, and learn what eBPF-based auto-instrumentation can and can't capture.
-weight: 500
+weight: 100
 keywords:
   - Beyla
   - eBPF
   - requirements
   - kernel
+aliases:
+  - ../introduction/requirements/ # /docs/beyla/<BEYLA_VERSION>/introduction/requirements/
 ---
 
 # Beyla requirements and limitations
@@ -53,9 +55,9 @@ Some features and kernels need more capabilities:
 
 - Trace context propagation, and network observability with Linux Traffic Control, require `CAP_NET_ADMIN`.
 - Kernels earlier than 5.11 also require `CAP_SYS_RESOURCE`.
-- Kernels earlier than 5.8, such as the RHEL 8 kernel 4.18, require `CAP_SYS_ADMIN` instead of the individual capabilities.
+- Kernels earlier than 5.8, such as the RHEL 8 kernel 4.18, don't have `CAP_BPF` or `CAP_PERFMON`, and require `CAP_SYS_ADMIN` instead of them.
 
-`CAP_SYS_ADMIN` grants all the capabilities that Beyla needs.
+`CAP_SYS_ADMIN` covers the operations of `CAP_BPF`, `CAP_PERFMON`, and `CAP_CHECKPOINT_RESTORE`, but not those of `CAP_NET_RAW` or `CAP_SYS_PTRACE`.
 
 For the full list of capabilities, the capabilities each feature needs, and examples of how to run Beyla without root access, refer to [Beyla security, permissions, and capabilities][security].
 
@@ -77,7 +79,7 @@ To compare Beyla and SDK support for your languages and frameworks, refer to [Co
 
 [btf]: https://www.kernel.org/doc/html/latest/bpf/btf.html
 [distributed-traces]: ../../traces/
-[security]: ../../setup/security/
-[compare]: ../beyla-and-opentelemetry-sdks/
+[security]: ../security/
+[compare]: ../../introduction/beyla-and-opentelemetry-sdks/
 [setup]: ../../setup/
 [quickstart]: ../../quickstart/

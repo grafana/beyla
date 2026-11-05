@@ -52,6 +52,7 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    The default is `auto`.
    With TCX, Beyla programs run before Cilium programs, whether Cilium uses TCX or Netlink.
    For details, refer to [Traffic control backend][tc-backend].
+   If you run Beyla with the [Grafana Alloy Helm chart][alloy-helm], set the `traffic_control_backend` attribute in the `ebpf` block of the `beyla.ebpf` component instead.
 
 1. If your nodes run a Linux kernel earlier than 6.6, set the Cilium Netlink filter priority to 2 or higher:
 
@@ -71,13 +72,15 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    ```
 
    Replace _`<BEYLA_DAEMONSET>`_ with the name of the Beyla DaemonSet, and _`<BEYLA_NAMESPACE>`_ with its namespace.
-   If you run Beyla with the [Grafana Alloy Helm chart][alloy-helm], restart the Alloy DaemonSet instead.
+   If you run Beyla with the Alloy Helm chart, restart the Alloy DaemonSet instead.
 
 1. Check that the Beyla Pods are running:
 
    ```sh
    kubectl get pods --namespace <BEYLA_NAMESPACE>
    ```
+
+   If you run Beyla with the Alloy Helm chart, the Alloy Pods keep running even when the Cilium check fails, so check the logs in the next step.
 
 1. Check the logs of a Beyla Pod:
 
@@ -86,6 +89,8 @@ Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
    ```
 
    Replace _`<POD_NAME>`_ with a Pod name from the previous command.
+   If you run Beyla with the Alloy Helm chart, check the logs of an Alloy Pod.
+   Alloy writes the Beyla logs to its own log, with the `source=beyla-subprocess` attribute.
    If the log doesn't contain `Cilium compatibility error`, Beyla passed the Cilium check.
    Otherwise, refer to [Troubleshoot Cilium compatibility errors][troubleshoot].
 
@@ -134,6 +139,7 @@ When the Cilium check fails, Beyla logs `wrong Beyla configuration` with one of 
 | `Cilium compatibility error: detected Cilium TC with priority 1 - Cilium may clobber OBI` | Beyla uses Netlink, and all Cilium TC filters use priority 1. | Set the Cilium `bpf-filter-priority` option to 2 or higher, as described in [Configure the attachment mode][configure]. On kernel 6.6 or later, you can instead set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
 | `Cilium compatibility error: detected Cilium TCX attachment, but OBI has been configured to use TC` | `ebpf.traffic_control_backend` is `tc`, and Cilium uses TCX. | Set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
 
+If you run Beyla with Alloy, Alloy logs `Beyla subprocess crashed, scheduling restart` and restarts Beyla.
 If Cilium has priority 1 filters and filters with other priorities, Beyla logs the warning `Detected potential Cilium TC left-overs!` and keeps running.
 
 ## Next steps

@@ -49,9 +49,6 @@ OBI also has Config v2, which uses the OpenTelemetry declarative configuration s
 The OBI documentation recommends Config v2 for new configurations, and OBI Config v1 receives no bug fixes or new features.
 For details, refer to [Configure OBI][obi-configure].
 
-Beyla also accepts an OBI Config v2 file.
-Config v2 doesn't include Beyla-only settings, such as the `grafana` section and survey mode, so use Config v1 for those features.
-
 With Config v1, the environment variable prefixes differ.
 OBI uses the `OTEL_EBPF_` prefix, and Beyla uses the `BEYLA_` prefix.
 The rest of each environment variable name is the same in both projects.
@@ -63,9 +60,6 @@ For settings that Beyla defines itself, Beyla accepts only the `BEYLA_` prefix.
 For example, Beyla reads its log level from `BEYLA_LOG_LEVEL`, but not from `OTEL_EBPF_LOG_LEVEL`.
 
 OBI and Beyla both support the [OpenTelemetry common environment variables][otel-env-vars], for example `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_PROTOCOL`.
-
-Config v2 doesn't map the `OTEL_EBPF_` and `BEYLA_` environment variables to its fields.
-To set a Config v2 field from an environment variable, use a `${VAR}` expression in the file.
 
 [obi-configure]: https://opentelemetry.io/docs/zero-code/obi/configure/
 [otel-env-vars]: https://opentelemetry.io/docs/languages/sdk-configuration/otlp-exporter/
@@ -79,7 +73,6 @@ Beyla includes the following features for the Grafana ecosystem:
 - **Process metrics**: Reports CPU, memory, disk, and network metrics for the processes that Beyla instruments.
 - **Survey mode**: Discovers your services and detects their programming languages, without instrumenting them.
 - **Grafana Alloy integration**: Runs as an Alloy component that you can manage with Fleet Management.
-- **Grafana AI Observability support**: Adds the span attributes that AI Observability uses.
 - **Tempo inter-cluster service graph support**: In Kubernetes, sends connector spans for connections to and from addresses outside the cluster, so Tempo can build service graph connections between clusters. To turn it on, add `inter_cluster` to `topology.spans`.
 
 If you use OBI, you can get most of these capabilities with other OpenTelemetry projects, though not always completely.

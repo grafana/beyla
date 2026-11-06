@@ -54,10 +54,9 @@ Config v2 doesn't include Beyla-only settings, such as the `grafana` section and
 
 With Config v1, the environment variable prefixes differ.
 OBI uses the `OTEL_EBPF_` prefix, and Beyla uses the `BEYLA_` prefix.
-Beyla also accepts the `OTEL_EBPF_` prefix.
 The rest of each environment variable name is the same in both projects.
 
-For example, to set the logging verbosity level, OBI accepts the `OTEL_EBPF_LOG_LEVEL` environment variable, and Beyla accepts both `BEYLA_LOG_LEVEL` and `OTEL_EBPF_LOG_LEVEL`.
+For example, to set the logging verbosity level, OBI accepts the `OTEL_EBPF_LOG_LEVEL` environment variable, and Beyla accepts `BEYLA_LOG_LEVEL`.
 
 OBI and Beyla both support the [OpenTelemetry common environment variables][otel-env-vars], for example `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_PROTOCOL`.
 
@@ -77,7 +76,7 @@ Beyla includes the following features for the Grafana ecosystem:
 - **Survey mode**: Discovers your services and detects their programming languages, without instrumenting them.
 - **Grafana Alloy integration**: Runs as an Alloy component that you can manage with Fleet Management.
 - **Grafana AI Observability support**: Adds the span attributes that AI Observability uses.
-- **Tempo service graph support**: Connects spans for Tempo service graph metrics.
+- **Tempo inter-cluster service graph support**: In Kubernetes, sends connector spans for connections to and from addresses outside the cluster, so Tempo can build service graph connections between clusters. To turn it on, add `inter_cluster` to `topology.spans`.
 
 If you use OBI, you can get most of these capabilities with other OpenTelemetry projects, though not always completely.
 For example, the OpenTelemetry Collector reports most of the Beyla process metrics, but not `process.network.io`.

@@ -175,7 +175,7 @@ For all export options, refer to [Configure Beyla Prometheus and OpenTelemetry d
 - [Configure Beyla Prometheus and OpenTelemetry data export][export-data]
 - [Configure Beyla service discovery][service-discovery]
 - [Beyla security, permissions, and capabilities][security]
-- [Deploy Beyla in Kubernetes][kubernetes]
+- [Deploy Beyla with Kubernetes manifests][kubernetes]
 
 [docker-hub]: https://hub.docker.com/r/grafana/beyla
 [requirements]: ../../introduction/requirements/

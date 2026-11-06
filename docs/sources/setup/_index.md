@@ -12,7 +12,7 @@ aliases:
 
 # Set up Beyla
 
-You can run Grafana Beyla as a Docker container, or in Kubernetes with a Helm chart or your own manifests.
+You can run Grafana Beyla on a Linux host, as a Docker container, or in Kubernetes with a Helm chart or your own manifests.
 Before you set up Beyla, check the [requirements and limitations][requirements].
 
 {{< section menuTitle="true" withDescriptions="true" >}}

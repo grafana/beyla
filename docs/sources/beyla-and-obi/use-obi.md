@@ -38,11 +38,14 @@ section:
 Set the list in the `metrics.features` section of the OBI configuration file, or with the `OTEL_EBPF_METRICS_FEATURES` environment variable.
 For example, `OTEL_EBPF_METRICS_FEATURES=application,application_span_otel,application_service_graph,network_flow_packets,application_runtime`.
 
-To use all Application Observability features, also enable traces with
-[full context propagation][obi-context-propagation],
-and provide a source for [process metrics][process-metrics].
+Application Observability also uses traces and process metrics.
+To get them with OBI, enable traces with [full context propagation][obi-context-propagation], and provide a source for [process metrics][process-metrics].
+
+For [host-hours pricing][host-hours-pricing], Application Observability identifies hosts from the `k8s.node.name` or `host.id` resource attribute.
+OBI sets these attributes for most deployment models, so you don't need the Beyla `application_host` metric family, which exports the `traces_host_info` metric.
 
 [application-observability]: https://grafana.com/products/cloud/application-observability/
+[host-hours-pricing]: https://grafana.com/docs/grafana-cloud/observe-and-act/monitor-applications/application-observability-kg/pricing/
 [knowledge-graph]: https://grafana.com/docs/grafana-cloud/knowledge-graph/
 [obi-features]: https://opentelemetry.io/docs/zero-code/obi/configure/export-data/#metrics-export-features
 [obi-context-propagation]: https://opentelemetry.io/docs/zero-code/obi/distributed-traces/
@@ -71,6 +74,9 @@ If you use OBI and need these metrics, run an OpenTelemetry Collector on each no
 [Host Metrics Receiver][hostmetrics]
 to report process metrics.
 
+The [process scraper][process-scraper] of the Host Metrics Receiver doesn't report `process.network.io`, so this setup doesn't provide that metric.
+The scraper reports `process.cpu.utilization` only when you enable it.
+
 The Host Metrics Receiver sends metrics for all the processes in the system by default.
 Beyla sends process metrics only for the services and applications that it instruments.
 To report metrics only for the processes that OBI instruments, [configure the Collector to filter out processes][filterprocessor]
@@ -78,6 +84,7 @@ that don't match your [OBI service discovery configuration][obi-service-discover
 
 [process-semconv]: https://opentelemetry.io/docs/specs/semconv/system/process-metrics/
 [hostmetrics]: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/hostmetricsreceiver/README.md
+[process-scraper]: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/hostmetricsreceiver/internal/scraper/processscraper/documentation.md
 [filterprocessor]: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor
 [obi-service-discovery]: https://opentelemetry.io/docs/zero-code/obi/configure/service-discovery/
 

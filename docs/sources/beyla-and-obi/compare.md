@@ -42,12 +42,17 @@ For example, Beyla reports the network-level flow bytes metric as `beyla_network
 
 ### Configuration
 
-Beyla and OBI use the same YAML configuration schema.
-Most Beyla configuration examples also work with OBI, except for the features in [What Beyla adds][beyla-adds].
+Beyla and OBI share the Config v1 YAML schema, which the Beyla documentation uses.
+Most Beyla configuration examples also work with OBI Config v1, except for the features in [What Beyla adds][beyla-adds].
 
-The OpenTelemetry documentation also describes [how to configure OBI from a YAML configuration file][obi-configure].
+OBI also has Config v2, which uses the OpenTelemetry declarative configuration structure.
+The OBI documentation recommends Config v2 for new configurations, and OBI Config v1 receives no bug fixes or new features.
+For details, refer to [Configure OBI][obi-configure].
 
-The environment variable prefixes differ.
+Beyla also accepts an OBI Config v2 file.
+Config v2 doesn't include Beyla-only settings, such as the `grafana` section and survey mode, so use Config v1 for those features.
+
+With Config v1, the environment variable prefixes differ.
 OBI uses the `OTEL_EBPF_` prefix, and Beyla uses the `BEYLA_` prefix.
 Beyla also accepts the `OTEL_EBPF_` prefix.
 The rest of each environment variable name is the same in both projects.
@@ -55,6 +60,9 @@ The rest of each environment variable name is the same in both projects.
 For example, to set the logging verbosity level, OBI accepts the `OTEL_EBPF_LOG_LEVEL` environment variable, and Beyla accepts both `BEYLA_LOG_LEVEL` and `OTEL_EBPF_LOG_LEVEL`.
 
 OBI and Beyla both support the [OpenTelemetry common environment variables][otel-env-vars], for example `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_PROTOCOL`.
+
+Config v2 doesn't map the `OTEL_EBPF_` and `BEYLA_` environment variables to its fields.
+To set a Config v2 field from an environment variable, use a `${VAR}` expression in the file.
 
 [obi-configure]: https://opentelemetry.io/docs/zero-code/obi/configure/
 [otel-env-vars]: https://opentelemetry.io/docs/languages/sdk-configuration/otlp-exporter/
@@ -71,7 +79,8 @@ Beyla includes the following features for the Grafana ecosystem:
 - **Grafana AI Observability support**: Adds the span attributes that AI Observability uses.
 - **Tempo service graph support**: Connects spans for Tempo service graph metrics.
 
-If you use OBI, you can get most of these capabilities with other OpenTelemetry projects.
+If you use OBI, you can get most of these capabilities with other OpenTelemetry projects, though not always completely.
+For example, the OpenTelemetry Collector reports most of the Beyla process metrics, but not `process.network.io`.
 To set this up, and to configure OBI for Grafana Cloud, refer to [Use OpenTelemetry eBPF Instrumentation with Grafana][use-obi].
 
 [use-obi]: ../use-obi/

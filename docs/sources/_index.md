@@ -82,7 +82,7 @@ In Kubernetes, Beyla adds metadata such as Pod and namespace names to your metri
 Grafana Labs donated Beyla to the OpenTelemetry project in 2025 as [OpenTelemetry eBPF Instrumentation][obi] (OBI).
 Beyla is the Grafana Labs distribution of OBI, with extra features for the Grafana ecosystem.
 
-[obi]: ./introduction/obi/
+[obi]: ./beyla-and-obi/compare/
 
 ## Explore
 

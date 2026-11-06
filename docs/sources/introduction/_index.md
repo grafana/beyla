@@ -45,7 +45,7 @@ Learn more about Beyla with the following topics:
 - [Beyla security, permissions, and capabilities][security]: Run Beyla with the minimum Linux capabilities
 
 [obi-upstream]: https://opentelemetry.io/docs/zero-code/obi/
-[obi]: ./obi/
+[obi]: ../beyla-and-obi/compare/
 [setup]: ../setup/
 [linux-host]: ../setup/standalone/
 [configure]: ../configure/

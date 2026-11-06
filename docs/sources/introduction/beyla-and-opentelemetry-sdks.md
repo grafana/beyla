@@ -99,7 +99,7 @@ Don't use Beyla traces for the following frameworks:
 - [Run Beyla on a Linux host][linux-host]
 
 [exclude-otel]: ../../configure/service-discovery/#exclude-otel-instrumented-services
-[obi]: ../obi/
+[obi]: ../../beyla-and-obi/compare/
 [requirements]: ../requirements/
 [setup]: ../../setup/
 [linux-host]: ../../setup/standalone/

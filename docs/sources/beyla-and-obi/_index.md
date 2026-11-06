@@ -2,7 +2,7 @@
 title: Beyla and OpenTelemetry eBPF Instrumentation
 menuTitle: Beyla and OBI
 description: Learn how Grafana Beyla relates to OpenTelemetry eBPF Instrumentation (OBI), and how to use OBI with Grafana.
-weight: 450
+weight: 260
 keywords:
   - Beyla
   - eBPF

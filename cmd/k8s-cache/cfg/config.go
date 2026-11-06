@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/caarlos0/env/v9"
+	"github.com/caarlos0/env/v11"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/beyla/v3/pkg/config"

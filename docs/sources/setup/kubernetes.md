@@ -10,6 +10,7 @@ keywords:
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/setup/kubernetes/
   - /docs/beyla/latest/tutorial/k8s-walkthrough/
+  - ../quickstart/kubernetes/ # /docs/beyla/<BEYLA_VERSION>/quickstart/kubernetes/
 ---
 
 # Deploy Beyla with Kubernetes manifests

@@ -75,11 +75,11 @@ To compare Beyla and SDK support for your languages and frameworks, refer to [Co
 
 - [Set up Beyla][setup]
 - [Beyla security, permissions, and capabilities][security]
-- [Beyla quickstart guides][quickstart]
+- [Run Beyla on a Linux host][linux-host]
 
 [btf]: https://www.kernel.org/doc/html/latest/bpf/btf.html
 [distributed-traces]: ../../traces/
 [security]: ../security/
 [compare]: ../../introduction/beyla-and-opentelemetry-sdks/
 [setup]: ../../setup/
-[quickstart]: ../../quickstart/
+[linux-host]: ../../setup/standalone/

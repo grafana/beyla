@@ -264,12 +264,9 @@ github.com/brunoscheufler/aws-ecs-metadata-go
 # github.com/buger/jsonparser v1.6.1
 ## explicit; go 1.13
 github.com/buger/jsonparser
-# github.com/caarlos0/env/v11 v11.4.1
-## explicit; go 1.18
+# github.com/caarlos0/env/v11 v11.4.2
+## explicit; go 1.26.0
 github.com/caarlos0/env/v11
-# github.com/caarlos0/env/v9 v9.0.0
-## explicit; go 1.17
-github.com/caarlos0/env/v9
 # github.com/cenkalti/backoff/v5 v5.0.3
 ## explicit; go 1.23
 github.com/cenkalti/backoff/v5
@@ -324,7 +321,7 @@ github.com/docker/go-connections/tlsconfig
 # github.com/docker/go-units v0.5.0
 ## explicit
 github.com/docker/go-units
-# github.com/ebitengine/purego v0.11.1
+# github.com/ebitengine/purego v0.11.2
 ## explicit; go 1.25.0
 github.com/ebitengine/purego
 github.com/ebitengine/purego/internal/cgo
@@ -719,15 +716,7 @@ github.com/prometheus/procfs/internal/parsers
 ## explicit; go 1.13
 github.com/rs/cors
 github.com/rs/cors/internal
-# github.com/shirou/gopsutil/v3 v3.24.5
-## explicit; go 1.18
-github.com/shirou/gopsutil/v3/common
-github.com/shirou/gopsutil/v3/cpu
-github.com/shirou/gopsutil/v3/internal/common
-github.com/shirou/gopsutil/v3/mem
-github.com/shirou/gopsutil/v3/net
-github.com/shirou/gopsutil/v3/process
-# github.com/shirou/gopsutil/v4 v4.26.9
+# github.com/shirou/gopsutil/v4 v4.26.10
 ## explicit; go 1.26.0
 github.com/shirou/gopsutil/v4/common
 github.com/shirou/gopsutil/v4/cpu
@@ -735,9 +724,6 @@ github.com/shirou/gopsutil/v4/internal/common
 github.com/shirou/gopsutil/v4/mem
 github.com/shirou/gopsutil/v4/net
 github.com/shirou/gopsutil/v4/process
-# github.com/shoenig/go-m1cpu v0.2.2
-## explicit; go 1.20
-github.com/shoenig/go-m1cpu
 # github.com/spf13/pflag v1.0.10
 ## explicit; go 1.12
 github.com/spf13/pflag

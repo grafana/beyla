@@ -56,7 +56,11 @@ With Config v1, the environment variable prefixes differ.
 OBI uses the `OTEL_EBPF_` prefix, and Beyla uses the `BEYLA_` prefix.
 The rest of each environment variable name is the same in both projects.
 
-For example, to set the logging verbosity level, OBI accepts the `OTEL_EBPF_LOG_LEVEL` environment variable, and Beyla accepts `BEYLA_LOG_LEVEL`.
+For settings that Beyla takes from OBI, Beyla accepts both prefixes.
+For example, Beyla accepts both `BEYLA_METRICS_FEATURES` and `OTEL_EBPF_METRICS_FEATURES` for `metrics.features`.
+
+For settings that Beyla defines itself, Beyla accepts only the `BEYLA_` prefix.
+For example, Beyla reads its log level from `BEYLA_LOG_LEVEL`, but not from `OTEL_EBPF_LOG_LEVEL`.
 
 OBI and Beyla both support the [OpenTelemetry common environment variables][otel-env-vars], for example `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_PROTOCOL`.
 

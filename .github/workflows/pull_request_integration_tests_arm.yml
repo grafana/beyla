@@ -42,8 +42,13 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: go
+
       - name: Generate OBI tests
-        run: make generate-obi-tests
+        run: mise run generate:obi-tests
 
       - name: build matrix
         id: build-matrix
@@ -57,7 +62,7 @@ jobs:
           TEST_TAGS: integration
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          make vm-integration-test-matrix-json >> $GITHUB_OUTPUT
+          mise run integration:matrix:multiprocess >> $GITHUB_OUTPUT
 
   test:
     name: ${{ matrix.description }}
@@ -124,22 +129,15 @@ jobs:
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
         uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
-      - name: Go build cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
-        with:
-          path: ~/.cache/go-build
-          key: go-build-integration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
-          restore-keys: |
-            go-build-integration-${{ runner.os }}-${{ runner.arch }}-
-
+          cache-build: "true"
+          cache-build-prefix: "go-build-integration"
+          profile: integration
+          cache-modules: "true"
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Check disk usage before tests
         run: df -h
@@ -163,7 +161,7 @@ jobs:
 
           mkdir -p /home/runner/reports
 
-          ./bin/gotestsum \
+          gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="./internal/testgenerated/integration" -ftestname \
               --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
@@ -172,7 +170,7 @@ jobs:
               -run="^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration
 
       - name: Process coverage data
-        run: make itest-coverage-data
+        run: mise run integration:coverage-data
 
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1

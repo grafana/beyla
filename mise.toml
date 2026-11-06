@@ -1,0 +1,165 @@
+# Compatibility floor for mise config features, not the selected CI/container
+# runtime pin (maintained separately and intentionally can advance independently).
+min_version = "2026.10.18"
+monorepo_root = true
+
+[monorepo]
+lockfile = true
+config_roots = ["internal/java", "internal/test/oats"]
+
+[monorepo.path_aliases]
+java = "internal/java"
+oats = "internal/test/oats"
+
+[settings]
+lockfile = true
+
+[env]
+# Mise defaults intentionally replace both unset and empty variables. Keep
+# these Make/CI-compatible defaults in one place so scripts don't drift.
+OCI_BIN = { default = "docker" }
+TEST_OUTPUT = { default = "./testoutput" }
+ENVTEST_K8S_VERSION = { default = "1.30.0" }
+CONFIG_SCHEMA_FILE = { default = "docs/config-schema.json" }
+GEN_IMG_VERSION = { default = "latest" }
+TEST_TAGS = { default = "integration" }
+COMPOSE_ARGS = { default = "-f internal/testgenerated/integration/docker-compose.yml" }
+EXCLUDE_COVERAGE_FILES = { default = "(_bpfel.go)|(/beyla/v2/internal/test/)|(/beyla/v2/configs/)|(/v2/examples/)|(.pb.go)|(/beyla/v2/pkg/export/otel/metric/)" }
+
+[tools]
+go = { version = "1.26.10" }
+golangci-lint = { version = "2.14.0" }
+kind = "0.33.0"
+setup-envtest = "0.25.1"
+gotestsum = "1.13.0"
+ginkgo = { version = "2.33.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
+"go:github.com/google/go-licenses/v2" = { version = "2.0.1", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
+"go:github.com/cilium/ebpf/cmd/bpf2go" = { version = "0.22.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
+clang = { version = "22.1.8" }
+"conda:llvm-tools" = { version = "22.1.8" }
+"clang-format" = { version = "22.1.8" }
+
+[tools."github:cpp-linter/clang-tools-static-binaries"]
+version = "2026.09.01-5fb8802d"
+matching = "clang-tidy-22_"
+bin = "clang-tidy"
+
+# The root Go module is the source of truth for the Go toolchain version.
+# Keep this task in CI so a version drift fails before a build starts.
+[tasks."check:go-version"]
+description = "Check the Mise Go version matches go.mod"
+run = '''actual=$(mise current go)
+root_expected=$(awk '$1 == "go" { print $2; exit }' go.mod)
+if [ "$actual" != "$root_expected" ]; then
+  echo "Mise Go $actual does not match root go.mod ($root_expected)" >&2
+  exit 1
+fi'''
+
+[tasks.verify]
+description = "Prepare, vendor dependencies, and run lint and unit tests"
+run = [
+  { task = "test:prepare-output" },
+  { task = "check:bpf2go-version" },
+  { task = "vendor:obi" },
+  { tasks = [
+    "lint",
+    "test",
+  ] },
+]
+
+[tasks.lint]
+description = "Run the Go linter"
+depends = ["lint:go"]
+
+[tasks.build]
+alias = ["all"]
+description = "Vendor dependencies, verify, and compile Beyla"
+run = [{ task = "verify" }, { task = "compile" }]
+
+[tasks.dev]
+description = "Prepare and vendor OBI, then build a coverage-enabled binary"
+run = [
+  { task = "test:prepare-output" },
+  { task = "vendor:obi" },
+  { task = "compile:coverage" },
+]
+
+[tasks.artifact]
+description = "Build and package the Beyla binary artifact"
+run = [
+  { task = "vendor:obi" },
+  { task = "//java:build" },
+  { task = "compile" },
+  "cp LICENSE NOTICE third_party_licenses.csv ./bin/",
+  "tar -C ./bin -cvzf bin/beyla.tar.gz beyla LICENSE NOTICE third_party_licenses.csv",
+]
+
+[tasks."generate"]
+description = "Generate OBI and Beyla eBPF bindings locally"
+depends = ["submodule:obi"]
+run = [
+  '''obi_module="${OBI_MODULE:-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' go.mod)}"; BPF2GO="${BPF2GO:-$(command -v bpf2go)}" CLANG="${CLANG:-$(command -v clang)}" make -C "$obi_module" generate''',
+  { task = "generate:beyla" },
+]
+
+[tasks."vendor:obi"]
+alias = ["vendor-obi"]
+description = "Generate and vendor OBI dependencies using pinned native tools"
+run = [
+  { task = "generate" },
+  { task = "generate:obi-tests" },
+  { task = "vendor:copy-obi" },
+]
+
+[tasks."vendor:copy-obi"]
+alias = ["copy-obi-vendor"]
+description = "Vendor the pinned OBI module"
+run = [
+  { task = "vendor:obi-tests" },
+  "go get go.opentelemetry.io/obi",
+  "go mod tidy",
+  "go mod vendor",
+]
+
+[tasks."check:licenses"]
+alias = ["check-license", "check-licenses"]
+description = "Check third-party license notices are current"
+run = [
+  { task = "license:update" },
+  '''if ! git diff HEAD --quiet -- third_party_licenses.csv; then
+    echo "### Diff for third_party_licenses.csv"
+    git --no-pager diff -- third_party_licenses.csv
+    echo "ERROR: third_party_licenses.csv is not up to date. Run 'mise run license:update' and include the changes." >&2
+    exit 1
+  fi''',
+]
+
+[tasks."integration:prepare"]
+alias = ["prepare-integration-test"]
+description = "Vendor OBI and clear resources left by prior integration tests"
+depends = ["test:prepare-output", "vendor:obi"]
+run = [
+  '''rm -rf "${TEST_OUTPUT:-./testoutput}"/* || true''',
+  { task = "clean:integration-test" },
+]
+
+[tasks."integration:test"]
+alias = ["integration-test"]
+description = "Prepare, run, and clean up OBI-generated integration tests"
+depends = ["integration:prepare"]
+depends_post = ["clean:integration-test"]
+run = [{ task = "integration:run" }, { task = "integration:coverage-data" }]
+
+[tasks."integration:test:multiprocess"]
+alias = ["integration:test:arm", "integration-test-arm"]
+description = "Prepare, run, and clean up multiprocess integration tests"
+depends = ["integration:prepare"]
+depends_post = ["clean:integration-test"]
+run = [{ task = "integration:run:multiprocess" }, { task = "integration:coverage-data" }]
+
+[tasks."integration:test:k8s"]
+alias = ["integration-test-k8s"]
+description = "Prepare, run, and clean up Kubernetes integration tests"
+depends = ["integration:prepare"]
+depends_post = ["clean:integration-test"]
+run = [{ task = "integration:run:k8s" }, { task = "integration:coverage-data" }]

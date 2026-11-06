@@ -19,10 +19,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          cache: "false"
-          go-version-file: "go.mod"
+          profile: license
       - name: Check licenses
-        run: make check-licenses
+        run: mise run check:licenses

@@ -3,6 +3,10 @@
 # The production-ready minimal image is in the project root's dockerfile.
 FROM golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 AS builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/jdx/mise:2026.10.18@sha256:fc31de7b93d195613deb600d42c65a164b0205716ade38132aadeabac3838248 /usr/local/bin/mise /usr/local/bin/mise
+ENV MISE_ENABLE_TOOLS=none
+
 ARG TARGETARCH
 
 ENV GOARCH=$TARGETARCH
@@ -16,10 +20,14 @@ COPY cmd/ cmd/
 COPY pkg/ pkg/
 COPY go.mod go.mod
 COPY go.sum go.sum
-COPY Makefile Makefile
+COPY mise.toml mise.lock ./
+COPY .mise/ .mise/
+COPY internal/java/mise.toml internal/java/
+COPY internal/java/.mise/ internal/java/.mise/
+COPY internal/test/oats/mise.toml internal/test/oats/
 
 # Build
-RUN make compile-cache-for-coverage
+RUN mise run --skip-tools compile:cache-coverage
 
 # Create final image from minimal + built binary
 FROM scratch

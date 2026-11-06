@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE alias=["integration:run:arm", "run-integration-test-arm"]
+#MISE description="Run multiprocess integration tests (TestMultiProcess)"
+set -euo pipefail
+
+echo "### Running multiprocess integration tests (TestMultiProcess)"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/testgenerated/integration --tags=integration -run "^TestMultiProcess"

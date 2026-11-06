@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE alias="compile-cache"
+#MISE description="Compile Beyla Kubernetes cache"
+set -euo pipefail
+
+root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
+cd "$root"
+
+cmd=${CACHE_CMD-k8s-cache}
+main_go_file=${CACHE_MAIN_GO_FILE-cmd/${cmd}/main.go}
+goos=${GOOS-linux}
+goarch=${GOARCH-amd64}
+buildinfo_pkg=${BUILDINFO_PKG-github.com/grafana/beyla/v3/pkg/buildinfo}
+release_version=${RELEASE_VERSION-$(git describe --all 2>/dev/null | cut -d/ -f2 || true)}
+release_revision=${RELEASE_REVISION-$(git rev-parse --short HEAD 2>/dev/null || true)}
+ldflags="-X '${buildinfo_pkg}.Version=${release_version}' -X '${buildinfo_pkg}.Revision=${release_revision}'"
+
+echo "### Compiling Beyla Kubernetes cache"
+CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -mod vendor -ldflags="$ldflags" -a -o "bin/${cmd}" "$main_go_file"

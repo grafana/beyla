@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#MISE alias="cleanup-integration-test"
+#MISE description="Remove integration test clusters, containers, and images"
+set -euo pipefail
+
+KIND="${KIND:-kind}"
+OCI_BIN="${OCI_BIN}"
+COMPOSE_ARGS="${COMPOSE_ARGS}"
+export KIND OCI_BIN COMPOSE_ARGS
+
+echo "### Removing integration test clusters"
+"${KIND}" delete cluster -n test-kind-cluster || true
+echo "### Removing docker containers and images"
+# COMPOSE_ARGS is intentionally word-split, matching the Make variable's CLI arguments.
+# shellcheck disable=SC2086
+"${OCI_BIN}" compose ${COMPOSE_ARGS} stop || true
+# shellcheck disable=SC2086
+"${OCI_BIN}" compose ${COMPOSE_ARGS} rm -f || true
+"${OCI_BIN}" rm -f $("${OCI_BIN}" ps --format '{{.Names}}' | grep 'integration-') || true
+"${OCI_BIN}" rmi -f $("${OCI_BIN}" images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true

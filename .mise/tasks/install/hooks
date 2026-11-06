@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#MISE alias="install-hooks"
+#MISE description="Install the repository's pre-commit hook"
+set -euo pipefail
+
+# Do not replace or install into a globally configured hooks directory. It is
+# shared by unrelated repositories and is managed by the user's Git setup.
+if git config --get core.hooksPath >/dev/null 2>&1; then
+  echo "Skipping repository pre-commit hook installation: core.hooksPath is configured externally." >&2
+  exit 0
+fi
+
+hook_path=$(git rev-parse --git-path hooks/pre-commit)
+if [[ ! -f "$hook_path" ]]; then
+  echo "Installing pre-commit hook..."
+  mkdir -p "$(dirname "$hook_path")"
+  cp hooks/pre-commit "$hook_path"
+  chmod +x "$hook_path"
+  echo "Pre-commit hook installed."
+fi

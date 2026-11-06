@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE alias="generate-config-schema"
+#MISE description="Generate the Beyla configuration schema"
+set -euo pipefail
+root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
+cd "$root"
+config_schema_file=$CONFIG_SCHEMA_FILE
+echo "### Generating JSON schema for Beyla configuration"
+mkdir -p "$(dirname "$config_schema_file")"
+go run ./cmd/beyla-schema -output "$config_schema_file"

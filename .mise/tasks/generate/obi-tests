@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE alias="generate-obi-tests"
+#MISE description="Generate OBI integration tests from .obi-src"
+set -euo pipefail
+root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
+cd "$root"
+
+echo "### Generating OBI integration tests from .obi-src"
+./scripts/generate-obi-tests.sh

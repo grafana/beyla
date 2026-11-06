@@ -41,14 +41,19 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: go
+
       - name: Generate OBI tests
-        run: make generate-obi-tests
+        run: mise run generate:obi-tests
 
       - name: build matrix
         id: build-matrix
         run: |
           echo -n "matrix=" >> $GITHUB_OUTPUT
-          make oats-integration-test-matrix-json >> $GITHUB_OUTPUT
+          mise run //oats:matrix >> $GITHUB_OUTPUT
 
   harness-unit-tests:
     name: "OATS harness unit tests"
@@ -60,14 +65,14 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
+          profile: go
+          cache-modules: "true"
+          cache-build: "true"
       - name: Run OATS harness unit tests
-        run: make oats-test-harness
+        run: mise run //oats:test:harness
 
   test:
     name: ${{ matrix.basename }}
@@ -137,22 +142,15 @@ jobs:
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
         uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
-      - name: Go build cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
-        with:
-          path: ~/.cache/go-build
-          key: go-build-oats-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
-          restore-keys: |
-            go-build-oats-${{ runner.os }}-${{ runner.arch }}-
-
+          cache-build: "true"
+          cache-build-prefix: "go-build-oats"
+          profile: oats
+          cache-modules: "true"
       - name: Generate and vendor OBI
-        run: make vendor-obi
+        run: mise run vendor:obi
 
       - name: Verify Beyla compiles
         run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
@@ -161,7 +159,7 @@ jobs:
         env:
           MATRIX_BASENAME: ${{ matrix.basename }}
           TESTCASE_TIMEOUT: 5m
-        run: make oats-test-$MATRIX_BASENAME
+        run: mise run //oats:test:$MATRIX_BASENAME
 
       - name: Upload oats test logs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -171,7 +169,7 @@ jobs:
           path: internal/testgenerated/oats/${{ matrix.basename }}/build/*
 
       - name: Process coverage data
-        run: make itest-coverage-data
+        run: mise run integration:coverage-data
 
       - id: get-codecov-token
         uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1

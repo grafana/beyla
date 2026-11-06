@@ -44,7 +44,7 @@ The following chart values control what Beyla collects, where it runs, and what 
 | `contextPropagation.enabled` | `true`        | Gives the Pod host network access, the host `/sys/fs/cgroup` and `/sys/kernel/tracing` directories, and, when unprivileged, `NET_ADMIN`. |
 | `tolerations`                | `[]`          | Skips nodes with taints that the DaemonSet doesn't tolerate, such as control-plane nodes.                                                |
 
-The `contextPropagation.enabled` value grants the access that [network-level context propagation][context-propagation] needs, but doesn't turn it on in Beyla.
+The `contextPropagation.enabled` value grants the access that [context propagation][context-propagation] needs, but doesn't turn it on in Beyla.
 
 If another process on the node uses port `9090`, change `config.data.prometheus_export.port`.
 
@@ -128,7 +128,7 @@ The `privileged: false` value runs Beyla with a list of Linux capabilities inste
 For the capabilities, refer to [Beyla security, permissions, and capabilities][security].
 The chart still runs Beyla in the host PID namespace.
 
-The `contextPropagation.enabled: false` value removes the access that network-level context propagation needs.
+The `contextPropagation.enabled: false` value removes the access that context propagation needs.
 If you set `ebpf.context_propagation` under `config.data`, keep `contextPropagation.enabled: true`.
 The `network` preset still runs Beyla in the host network namespace.
 
@@ -239,7 +239,7 @@ To restart them on the next upgrade, set the chart value `config.checksum` to a 
 [chart-readme]: https://github.com/grafana/beyla/blob/main/charts/beyla/README.md
 [cloud-otlp]: https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/#manual-opentelemetry-setup-for-advanced-users
 [configure]: ../../configure/
-[context-propagation]: ../../traces/#context-propagation-at-network-level
+[context-propagation]: ../../configure/controlling-instrumentation/#context-propagation
 [customize]: #customize-the-beyla-configuration
 [default-exclude]: ../../configure/service-discovery/#default-exclude-services-from-instrumentation
 [helm-cloud]: ../kubernetes-helm-appolly/

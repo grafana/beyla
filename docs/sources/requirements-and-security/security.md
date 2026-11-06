@@ -224,7 +224,7 @@ The following list maps each internal tracer to their required capabilities, int
 [capabilities-man]: https://man7.org/linux/man-pages/man7/capabilities.7.html
 [service-discovery]: ../../configure/service-discovery/
 [network-config]: ../../network/config/
-[context-propagation]: ../../configure/controlling-instrumentation/#enable-context-propagation
+[context-propagation]: ../../configure/controlling-instrumentation/#context-propagation
 [setcap-examples]: #setcap-examples
 [kernel-sysctl]: https://docs.kernel.org/admin-guide/sysctl/kernel.html#perf-event-paranoid
 [perf-security]: https://docs.kernel.org/admin-guide/perf-security.html

@@ -323,7 +323,6 @@ A cluster administrator can create a dedicated SCC that permits these settings w
    kind: SecurityContextConstraints
    metadata:
      name: beyla
-   allowHostDirVolumePlugin: true
    allowHostPID: true
    allowPrivilegedContainer: false
    allowedCapabilities:
@@ -378,8 +377,8 @@ Use a dedicated namespace and service account for Beyla, and review the SCC with
 [k8s-decorator]: ../../configure/metrics-traces-attributes/#kubernetes-decorator
 [k8s-monitoring-helm]: ../kubernetes-helm-k8s-monitoring/
 [network]: ../../network/
-[requirements]: ../../introduction/requirements/
-[security]: ../security/
+[requirements]: ../../requirements-and-security/requirements/
+[security]: ../../requirements-and-security/security/
 [service-discovery]: ../../configure/service-discovery/
 [traces]: ../../traces/
 [unprivileged]: #deploy-beyla-unprivileged

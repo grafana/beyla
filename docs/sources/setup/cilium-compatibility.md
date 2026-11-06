@@ -17,7 +17,7 @@ aliases:
 # Run Beyla with Cilium
 
 [Cilium][cilium] is an open source project that provides, secures, and observes network connectivity between workloads.
-In some cases, the eBPF programs that Cilium uses can conflict with the eBPF programs that Grafana Beyla uses.
+When Grafana Beyla collects network metrics with `network.source` set to `tc`, its traffic control eBPF programs can conflict with the ones that Cilium uses.
 
 To prevent the conflict, configure how Beyla and Cilium attach their traffic control programs.
 

@@ -13,6 +13,7 @@ oats = "internal/test/oats"
 
 [settings]
 lockfile = true
+locked = true
 
 [env]
 # Mise defaults intentionally replace both unset and empty variables. Keep

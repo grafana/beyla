@@ -121,22 +121,6 @@ To get similar functionality with OBI, follow these steps:
 [opamp]: https://opentelemetry.io/docs/collector/management/
 [fleet-management-otelcol]: https://grafana.com/docs/grafana-cloud/send-data/fleet-management/get-started/opentelemetry-collector/
 
-### Grafana AI Observability support
-
-OBI can generate spans and traces from your generative AI clients.
-To use these traces with [Grafana Cloud AI Observability][ai-observability],
-configure your instrumentation pipeline:
-
-- Export OBI traces to an OpenTelemetry Collector that forwards them to Grafana Cloud.
-- In the OpenTelemetry Collector:
-  - Add a `sigil.generation.id` attribute to each span.
-    Set the value to `gen_` followed by a random UUID, for example `gen_01234567-90ab-cdef-0123-456789abcdef`.
-  - If a span doesn't have a `gen_ai.conversation.id` attribute, use a transform processor to set it to the value of the `gen_ai.response.id` attribute.
-  - Optional: To reduce costs, drop spans that don't belong to a generative AI workload.
-    For example, drop any span that doesn't contain a `gen_ai.*` attribute.
-
-[ai-observability]: https://grafana.com/docs/grafana-cloud/monitor-applications/ai-observability/
-
 ## Next steps
 
 - [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi]

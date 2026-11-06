@@ -96,10 +96,10 @@ Don't use Beyla traces for the following frameworks:
 - [Compare Beyla and OpenTelemetry eBPF Instrumentation][obi]
 - [Beyla requirements and limitations][requirements]
 - [Set up Beyla][setup]
-- [Beyla quickstart guides][quickstart]
+- [Run Beyla on a Linux host][linux-host]
 
 [exclude-otel]: ../../configure/service-discovery/#exclude-otel-instrumented-services
 [obi]: ../../beyla-and-obi/compare/
 [requirements]: ../requirements/
 [setup]: ../../setup/
-[quickstart]: ../../quickstart/
+[linux-host]: ../../setup/standalone/

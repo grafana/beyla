@@ -30,7 +30,7 @@ To start using Beyla, complete the following steps:
 
 - Check the [requirements and limitations][requirements] to confirm Beyla runs in your environment
 - [Set up Beyla][setup] with Docker, Kubernetes, or Grafana Alloy
-- Follow a [language quickstart][quickstart] to instrument your first service
+- [Run Beyla on a Linux host][linux-host] to instrument your first service
 - [Configure Beyla][configure] to choose which services to instrument and where to send data
 
 ## Learn more
@@ -47,7 +47,7 @@ Learn more about Beyla with the following topics:
 [obi-upstream]: https://opentelemetry.io/docs/zero-code/obi/
 [obi]: ../beyla-and-obi/compare/
 [setup]: ../setup/
-[quickstart]: ../quickstart/
+[linux-host]: ../setup/standalone/
 [configure]: ../configure/
 [security]: ../setup/security/
 [why]: ./why-beyla/

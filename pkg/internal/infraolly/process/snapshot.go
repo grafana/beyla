@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/process"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 
@@ -192,7 +192,7 @@ func (pw *linuxProcess) uid() (int32, error) {
 		return 0, errInvalidUidsForProcess //nolint:wrapcheck
 	}
 
-	return uuids[0], nil
+	return int32(uuids[0]), nil
 }
 
 // usernameFromGetent returns the username using getent https://man7.org/linux/man-pages/man1/getent.1.html

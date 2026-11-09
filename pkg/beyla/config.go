@@ -12,7 +12,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/caarlos0/env/v9"
+	"github.com/caarlos0/env/v11"
 	otelconsumer "go.opentelemetry.io/collector/consumer"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"gopkg.in/yaml.v3"

@@ -51,8 +51,8 @@ The following list describes how Beyla uses each capability:
   Required for *network observability* with the `socket_filter` source, for *application observability*, and for TCP statistics.
 
 `CAP_NET_ADMIN`
-: Required to load `BPF_PROG_TYPE_SCHED_CLS` TC programs.
-  Beyla needs it when `network.source` is `tc` or when you enable any trace context propagation mode.
+: Required to load `BPF_PROG_TYPE_SCHED_CLS` TC programs, which Beyla uses when `network.source` is `tc`.
+  Beyla also requires it when you enable any trace context propagation mode.
 
 `CAP_PERFMON`
 : Used for trace context propagation, general *application observability* and network flow monitoring.
@@ -224,7 +224,7 @@ The following list maps each internal tracer to their required capabilities, int
 [capabilities-man]: https://man7.org/linux/man-pages/man7/capabilities.7.html
 [service-discovery]: ../../configure/service-discovery/
 [network-config]: ../../network/config/
-[context-propagation]: ../../configure/controlling-instrumentation/#enable-context-propagation
+[context-propagation]: ../../configure/controlling-instrumentation/#context-propagation
 [setcap-examples]: #setcap-examples
 [kernel-sysctl]: https://docs.kernel.org/admin-guide/sysctl/kernel.html#perf-event-paranoid
 [perf-security]: https://docs.kernel.org/admin-guide/perf-security.html

@@ -73,8 +73,8 @@ Service time is the time a request handler takes to process a request.
 Before a handler starts, a request can wait in an internal framework queue, for example when all threads in the application thread pool are busy.
 This instrumentation starts timing when the handler starts, so it misses the wait time.
 
-As a result, library or agent telemetry can report low request durations while clients experience high latency.
-This usually happens when a service receives more requests than it can handle, which is when you're most likely to breach a service level objective (SLO) on response time and need to scale.
+Library or agent telemetry can therefore report low request durations while clients experience high latency.
+This usually happens when a service receives more requests than it can handle, which is when you're most likely to breach a service level objective on response time and need to scale.
 
 Beyla observes requests at the kernel network level, and in the Go runtime for Go applications.
 The latency that Beyla reports includes queue time, so it's closer to what the client sees.
@@ -85,6 +85,7 @@ To learn more, refer to [Measuring total request times, instead of service times
 
 - [How Grafana Beyla works][how]
 - [Compare Beyla and OpenTelemetry SDKs][compare]
+- [Compare Beyla and OpenTelemetry eBPF Instrumentation][compare-obi]
 - [Beyla requirements and limitations][requirements]
 
 [distributed-traces]: ../../traces/
@@ -93,4 +94,5 @@ To learn more, refer to [Measuring total request times, instead of service times
 [requesttime]: ../../traces/requesttime/
 [how]: ../how-beyla-works/
 [compare]: ../beyla-and-opentelemetry-sdks/
+[compare-obi]: ../../beyla-and-obi/compare/
 [requirements]: ../requirements/

@@ -1,366 +1,165 @@
 ---
-title: Cilium compatibility
-menuTitle: Cilium compatibility
-description: Compatibility notes when running Beyla alongside Cilium
+title: Run Beyla with Cilium
+menuTitle: Cilium
+description: Configure Grafana Beyla and Cilium so their traffic control eBPF programs don't conflict, and fix the Cilium compatibility error at Beyla startup.
 weight: 900
 keywords:
   - Beyla
   - eBPF
-  - distributed traces
+  - Cilium
+  - traffic control
 aliases:
   - /docs/grafana-cloud/monitor-applications/beyla/cilium-compatibility/
+  - /docs/grafana-cloud/monitor-applications/beyla/setup/cilium-compatibility/
   - ../cilium-compatibility/ # /docs/beyla/<BEYLA_VERSION>/cilium-compatibility/
 ---
 
-# Cilium compatibility
+# Run Beyla with Cilium
 
-[Cilium](https://cilium.io) is an open source cloud native solution for providing, securing, and observing network connectivity between workloads. In some cases the eBPF programs Cilium uses can conflict with the ePBF programs Beyla uses and lead to issues.
+[Cilium][cilium] is an open source project that provides, secures, and observes network connectivity between workloads.
+When Grafana Beyla collects network metrics with `network.source` set to `tc`, its traffic control eBPF programs can conflict with the ones that Cilium uses.
 
-Beyla and Cilium use eBPF traffic control classifier programs, `BPF_PROG_TYPE_SCHED_CLS`. These programs attach to the ingress and egress data paths of the kernel networking stack. Together they form a chain of packet filters. Each packet filter is able to inspect the contents of the packet and perform operations, for example redirect or discard the packet.
+To prevent the conflict, configure how Beyla and Cilium attach their traffic control programs.
 
-Beyla programs never disrupt the flow of a packet, but Cilium changes packet flow as part of its operation. If Cilium processes packets before Beyla it can affect its ability to process packets.
+## Before you begin
 
-## Attachment modes
+Before you configure Beyla and Cilium, make sure you have the following:
 
-Beyla uses the Traffic Control eXpress (TCX) API or the Netlink interface in the Linux Kernel to attach traffic control (TC) programs.
+- A Kubernetes cluster that runs Cilium, with Beyla deployed on nodes that meet the [Beyla requirements and limitations][requirements]
+- `kubectl`, configured for the cluster
+- For nodes that run a Linux kernel earlier than 6.6, the `cilium` CLI, with permission to change the Cilium configuration
+- Access to the Beyla configuration
 
-The TCX API is in the kernel since version 6.6 and is the preferred method to attach TC programs. It provides a linked list mechanism to attach programs to the head, middle, or tail. Beyla and Cilium auto-detect if the kernel supports TCX and use it by default.
+## Configure the attachment mode
 
-When Beyla and Cilium use TCX they don't interfere with each other. Beyla attaches its eBPF programs to the head of the list and Cilium to the tail. TCX is the preferred operation mode when possible.
+Configure Beyla and Cilium so that Beyla programs run before Cilium programs:
 
-The legacy Netlink interface relies on `clsact`, [`qdiscs`](https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html), and a BPF TC filter to attach eBPF programs to network interfaces. The kernel executes filters in order of their priority, with lower numbers having higher priority, and 1 being the highest priority.
+1. Check whether you need to configure the attachment mode.
+   Beyla attaches traffic control programs when you enable network metrics and set `network.source` to `tc`.
+   The default for `network.source` is `socket_filter`, so the default configuration doesn't attach traffic control programs.
+   If your Beyla configuration doesn't set `network.source` to `tc`, you don't need to configure anything else.
 
-When TCX isn't available, both Beyla and Cilium use Netlink interface to install eBPF programs. If Beyla detects Cilium runs programs with priority 1, Beyla exits and displays an error. You can resolve the error by configuring Cilium to use a priority greater than 1.
+1. Check the Linux kernel version of your nodes:
 
-Beyla also refuses to run if it's configured to use Netlink attachments and it detects Cilium uses TCX.
+   ```sh
+   kubectl get nodes -o wide
+   ```
 
-### Configure Cilium Netlink priority
+   The `KERNEL-VERSION` column shows the kernel version of each node.
+   TCX requires Linux kernel 6.6 or later.
 
-You can configure Cilium Netlink program priority via the `bpf-filter-priority` configuration:
+1. If your nodes run Linux kernel 6.6 or later, check that the Beyla `ebpf.traffic_control_backend` option or the `BEYLA_BPF_TC_BACKEND` environment variable is `auto` or `tcx`.
+   The default is `auto`.
+   With TCX, Beyla programs run before Cilium programs, whether Cilium uses TCX or Netlink.
+   For details, refer to [Traffic control backend][tc-backend].
+   If you run Beyla with the [Grafana Alloy Helm chart][alloy-helm], check the `traffic_control_backend` attribute in the `ebpf` block of the `beyla.ebpf` component instead.
 
-```shell
-cilium config set bpf-filter-priority 2
-```
+1. If your nodes run a Linux kernel earlier than 6.6, set the Cilium Netlink filter priority to 2 or higher:
 
-This ensures that Beyla programs always run before Cilium programs.
+   ```sh
+   cilium config set bpf-filter-priority 2
+   ```
+
+   Beyla attaches its Netlink filters with priority 1, so they run before Cilium filters with priority 2 or higher.
+   By default, `cilium config set` restarts the Cilium Pods.
+
+   Check the filter priority in the Cilium configuration:
+
+   ```sh
+   cilium config view | grep bpf-filter-priority
+   ```
+
+   Keep the Beyla `ebpf.traffic_control_backend` option set to `auto` or `tc`.
+
+1. Restart Beyla so that it runs the startup check again:
+
+   ```sh
+   kubectl rollout restart daemonset/<BEYLA_DAEMONSET> --namespace <BEYLA_NAMESPACE>
+   ```
+
+   Replace _`<BEYLA_DAEMONSET>`_ with the name of the Beyla DaemonSet, and _`<BEYLA_NAMESPACE>`_ with its namespace.
+   If you run Beyla with the Alloy Helm chart, restart the Alloy DaemonSet instead.
+
+1. Check that the Beyla Pods are running:
+
+   ```sh
+   kubectl get pods --namespace <BEYLA_NAMESPACE>
+   ```
+
+   If you run Beyla with the Alloy Helm chart, the Alloy Pods keep running even when the Cilium check fails, so check the logs in the next step.
+
+1. Check the logs of a Beyla Pod:
+
+   ```sh
+   kubectl logs --namespace <BEYLA_NAMESPACE> <POD_NAME>
+   ```
+
+   Replace _`<POD_NAME>`_ with a Pod name from the previous command.
+   If you run Beyla with the Alloy Helm chart, check the logs of an Alloy Pod.
+   Alloy writes the Beyla logs to its own log, with the `source=beyla-subprocess` attribute.
+   If the log doesn't contain `Cilium compatibility error`, Beyla passed the Cilium check.
+   Otherwise, refer to [Troubleshoot Cilium compatibility errors][troubleshoot].
+
+## How Beyla and Cilium share traffic control
+
+Beyla and Cilium use eBPF traffic control classifier programs, `BPF_PROG_TYPE_SCHED_CLS`.
+Beyla attaches these programs when you enable network metrics and set `network.source` to `tc`.
+These programs attach to the ingress and egress data paths of the kernel networking stack.
+Together they form a chain of packet filters.
+Each packet filter can inspect the contents of the packet and perform operations, for example redirect or discard the packet.
+
+Beyla programs never disrupt the flow of a packet, but Cilium changes packet flow as part of its operation.
+If Cilium processes packets before Beyla, it can affect the ability of Beyla to process packets.
+
+### Attachment modes
+
+Beyla uses the Traffic Control eXpress (TCX) API or the Netlink interface in the Linux kernel to attach traffic control (TC) programs.
+
+The TCX API is available in Linux kernel 6.6 and later, and is the preferred method to attach TC programs.
+It provides a linked list mechanism to attach programs to the head, middle, or tail.
+Beyla and Cilium auto-detect if the kernel supports TCX and use it by default.
+
+When Beyla and Cilium use TCX, they don't interfere with each other.
+Beyla attaches its eBPF programs to the head of the list and Cilium to the tail.
+
+The legacy Netlink interface relies on `clsact`, [`qdiscs`][qdiscs], and a BPF TC filter to attach eBPF programs to network interfaces.
+The kernel runs filters in order of their priority.
+Filters with lower numbers run first, and 1 is the highest priority.
+
+When TCX isn't available, both Beyla and Cilium use the Netlink interface to install eBPF programs.
+If all Cilium TC filters use priority 1, Beyla exits.
+For the error messages and fixes, refer to [Troubleshoot Cilium compatibility errors][troubleshoot].
+
+Beyla also exits if you set `ebpf.traffic_control_backend` to `tc` and Cilium uses TCX.
 
 ### Mixed TCX and Netlink
 
-In the scenario in which the kernel uses both TCX and Netlink attachments, TCX programs run before programs attached via the Netlink interface.
+When some programs attach with TCX and others with Netlink, the TCX programs run first.
+If Beyla uses Netlink and Cilium uses TCX, Cilium programs run before Beyla programs, so Beyla exits.
 
-## Beyla attachment mode configuration
+## Troubleshoot Cilium compatibility errors
 
-Refer to the [configuration documentation](/docs/beyla/latest/configure/options/), to configure Beyla TC attachment mode using the `BEYLA_BPF_TC_BACKEND` configuration option.
+When the Cilium check fails, Beyla logs `wrong Beyla configuration` with one of the following errors and exits:
 
-You can configure Cilium via its `enable-tcx` boolean configuration option, refer to the [Cilium documentation](https://docs.cilium.io/en/stable/) for more information.
+| Error | Cause | Fix |
+| ----- | ----- | --- |
+| `Cilium compatibility error: detected Cilium TC with priority 1 - Cilium may clobber OBI` | Beyla uses Netlink, and all Cilium TC filters use priority 1. | Set the Cilium `bpf-filter-priority` option to 2 or higher, as described in [Configure the attachment mode][configure]. On kernel 6.6 or later, you can instead set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
+| `Cilium compatibility error: detected Cilium TCX attachment, but OBI has been configured to use TC` | `ebpf.traffic_control_backend` is `tc`, and Cilium uses TCX. | Set `ebpf.traffic_control_backend` to `auto` or `tcx`. |
 
-```shell
-cilium config set enable-tcx (true|false)
-```
+If you run Beyla with Alloy, Alloy logs `Beyla subprocess crashed, scheduling restart` and restarts Beyla.
+If Cilium has priority 1 filters and filters with other priorities, Beyla logs the warning `Detected potential Cilium TC left-overs!` and keeps running.
 
-## Beyla and Cilium demo
+## Next steps
 
-The following example demonstrates Beyla and Cilium working together to propagate trace context in Kubernetes environments.
+- [Beyla Network Metrics configuration options][network-config]
+- [Configure Beyla performance][tune-performance]
 
-### Install Cilium
-
-Install Cilium to a [kind](https://kind.sigs.k8s.io/) hosted Kubernetes container as outlined in the [Cilium documentation](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/).
-
-If the kernel you deployed Cilium doesn't support TCX, configure Cilium to use priority 2 for its eBPF programs:
-
-```shell
-cilium config set bpf-filter-priority 2
-```
-
-### Deploy sample services
-
-Use the following definition to deploy the same services. These are small toy services that talk to one another and allow you to see Beyla working with trace-context propagation:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nodejs-deployment
-  labels:
-    app: node
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: node
-  template:
-    metadata:
-      labels:
-        app: node
-    spec:
-      containers:
-        - name: node
-          image: ghcr.io/grafana/beyla-test/nodejs-testserver
-          ports:
-            - containerPort: 3030
-              hostPort: 3030
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: node-service
-spec:
-  type: NodePort
-  selector:
-    app: node
-  ports:
-    - name: node
-      protocol: TCP
-      port: 30030
-      targetPort: 3030
-      nodePort: 30030
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: go-deployment
-  labels:
-    app: go-testserver
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: go-testserver
-  template:
-    metadata:
-      labels:
-        app: go-testserver
-    spec:
-      containers:
-        - name: go-testserver
-          image: ghcr.io/grafana/beyla-test/go-testserver
-          ports:
-            - containerPort: 8080
-              hostPort: 8080
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: testserver
-spec:
-  type: NodePort
-  selector:
-    app: go-testserver
-  ports:
-    - name: go-testserver
-      protocol: TCP
-      port: 8080
-      targetPort: 8080
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: python-deployment
-  labels:
-    app: python-testserver
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: python-testserver
-  template:
-    metadata:
-      labels:
-        app: python-testserver
-    spec:
-      containers:
-        - name: python-testserver
-          image: ghcr.io/grafana/beyla-test/python-testserver
-          ports:
-            - containerPort: 8083
-              hostPort: 8083
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: pytestserver
-spec:
-  type: NodePort
-  selector:
-    app: python-testserver
-  ports:
-    - name: python-testserver
-      protocol: TCP
-      port: 8083
-      targetPort: 8083
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: rails-deployment
-  labels:
-    app: rails-testserver
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: rails-testserver
-  template:
-    metadata:
-      labels:
-        app: rails-testserver
-    spec:
-      containers:
-        - name: rails-testserver
-          image: ghcr.io/grafana/beyla-test/rails-testserver
-          ports:
-            - containerPort: 3040
-              hostPort: 3040
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: utestserver
-spec:
-  type: NodePort
-  selector:
-    app: rails-testserver
-  ports:
-    - name: rails-testserver
-      protocol: TCP
-      port: 3040
-      targetPort: 3040
-```
-
-### Deploy Beyla
-
-Create the Beyla namespace:
-
-```
-kubectl create namespace beyla
-```
-
-Apply permissions:
-
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  namespace: beyla
-  name: beyla
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: beyla
-rules:
-  - apiGroups: [ "apps" ]
-    resources: [ "replicasets" ]
-    verbs: [ "list", "watch" ]
-  - apiGroups: [ "" ]
-    resources: [ "pods", "services", "nodes" ]
-    verbs: [ "list", "watch" ]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: beyla
-subjects:
-  - kind: ServiceAccount
-    name: beyla
-    namespace: beyla
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: beyla
-```
-
-Deploy Beyla:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  namespace: beyla
-  name: beyla-config
-data:
-  beyla-config.yml: |
-    attributes:
-      kubernetes:
-        enable: true
-    routes:
-      unmatched: heuristic
-    # let's instrument only the docs server
-    discovery:
-      instrument:
-        - k8s_deployment_name: "nodejs-deployment"
-        - k8s_deployment_name: "go-deployment"
-        - k8s_deployment_name: "python-deployment"
-        - k8s_deployment_name: "rails-deployment"
-    trace_printer: text
-    ebpf:
-      enable_context_propagation: true
-      traffic_control_backend: tcx
-      disable_blackbox_cp: true
-      track_request_headers: true
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  namespace: beyla
-  name: beyla
-spec:
-  selector:
-    matchLabels:
-      instrumentation: beyla
-  template:
-    metadata:
-      labels:
-        instrumentation: beyla
-    spec:
-      serviceAccountName: beyla
-      hostPID: true
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      containers:
-        - name: beyla
-          image: grafana/beyla:main
-          securityContext:
-            privileged: true
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - mountPath: /config
-              name: beyla-config
-            - mountPath: /var/run/beyla
-              name: var-run-beyla
-          env:
-            - name: BEYLA_CONFIG_PATH
-              value: "/config/beyla-config.yml"
-      volumes:
-        - name: beyla-config
-          configMap:
-            name: beyla-config
-        - name: var-run-beyla
-          emptyDir: {}
-```
-
-Forward a port to the host and trigger a request:
-
-```shell
-kubectl port-forward services/node-service 30030:30030 &
-curl http://localhost:30030/traceme
-```
-
-Finally check your Beyla Pod logs:
-
-```shell
-for i in `kubectl get pods -n beyla -o name | cut -d '/' -f2`; do kubectl logs -n beyla $i | grep "GET " | sort; done
-```
-
-You should see output that shows requests detected by Beyla with trace-context propagation similar to this:
-
-```
-2025-01-17 21:42:18.11794218 (5.045099ms[5.045099ms]) HTTPClient 200 GET /tracemetoo [10.244.1.92 as go-deployment.default:37450]->[10.96.214.17 as pytestserver.default:8083] size:0B svc=[default/go-deployment go] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-319fb03373427a41[cfa6d5d448e40b00]-01]
-2025-01-17 21:42:18.11794218 (5.284521ms[5.164701ms]) HTTP 200 GET /gotracemetoo [10.244.2.144 as nodejs-deployment.default:57814]->[10.244.1.92 as go-deployment.default:8080] size:0B svc=[default/go-deployment go] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-cfa6d5d448e40b00[cce1e6b5e932b89a]-01]
-2025-01-17 21:42:18.11794218 (1.934744ms[1.934744ms]) HTTP 403 GET /users [10.244.2.32 as python-deployment.default:46876]->[10.244.2.176 as rails-deployment.default:3040] size:222B svc=[default/rails-deployment ruby] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-57d77d99e9665c54[3d97d26b0051112b]-01]
-2025-01-17 21:42:18.11794218 (2.116628ms[2.116628ms]) HTTPClient 403 GET /users [10.244.2.32 as python-deployment.default:46876]->[10.96.69.89 as utestserver.default:3040] size:256B svc=[default/python-deployment python] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-ff48ab147cc92f93[2770ac4619aa0042]-01]
-2025-01-17 21:42:18.11794218 (4.281525ms[4.281525ms]) HTTP 200 GET /tracemetoo [10.244.1.92 as go-deployment.default:37450]->[10.244.2.32 as python-deployment.default:8083] size:178B svc=[default/python-deployment python] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-2770ac4619aa0042[319fb03373427a41]-01]
-2025-01-17 21:42:18.11794218 (5.391191ms[5.391191ms]) HTTPClient 200 GET /gotracemetoo [10.244.2.144 as nodejs-deployment.default:57814]->[10.96.134.167 as testserver.default:8080] size:256B svc=[default/nodejs-deployment nodejs] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-202ee68205e4ef3b[9408610968fa20f8]-01]
-2025-01-17 21:42:18.11794218 (6.939027ms[6.939027ms]) HTTP 200 GET /traceme [127.0.0.1 as 127.0.0.1:44720]->[127.0.0.1 as 127.0.0.1.default:3030] size:86B svc=[default/nodejs-deployment nodejs] traceparent=[00-14f07e11b5e57f14fd2da0541f0ddc2f-9408610968fa20f8[0000000000000000]-01]
-
-```
+[cilium]: https://cilium.io
+[alloy-helm]: ../helm-alloy/
+[configure]: #configure-the-attachment-mode
+[network-config]: ../../network/config/
+[qdiscs]: https://tldp.org/HOWTO/Traffic-Control-HOWTO/components.html
+[requirements]: ../../requirements-and-security/requirements/
+[tc-backend]: ../../configure/tune-performance/#traffic-control-backend
+[troubleshoot]: #troubleshoot-cilium-compatibility-errors
+[tune-performance]: ../../configure/tune-performance/

@@ -33,10 +33,7 @@ cards:
       description: Learn what Beyla is, how it works, and when to use it with OpenTelemetry SDKs.
     - title: Set up Beyla
       href: ./setup/
-      description: Run Beyla as a standalone process, as a Docker container, or in Kubernetes.
-    - title: Quickstart guides
-      href: ./quickstart/
-      description: Instrument a C/C++, Go, Java, Node.js, Python, Ruby, or Rust service.
+      description: Run Beyla on a Linux host, in a Docker container, or in Kubernetes.
     - title: Configure Beyla
       href: ./configure/
       description: Choose which services to instrument, where to send data, and which attributes to add.
@@ -85,7 +82,7 @@ In Kubernetes, Beyla adds metadata such as Pod and namespace names to your metri
 Grafana Labs donated Beyla to the OpenTelemetry project in 2025 as [OpenTelemetry eBPF Instrumentation][obi] (OBI).
 Beyla is the Grafana Labs distribution of OBI, with extra features for the Grafana ecosystem.
 
-[obi]: ./introduction/obi/
+[obi]: ./beyla-and-obi/compare/
 
 ## Explore
 

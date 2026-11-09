@@ -44,14 +44,14 @@ jobs:
           profile: generate
           cache-modules: "true"
 
-      - name: Test canonical mise task names and compatibility aliases
-        run: bash scripts/tests/mise-task-naming.sh
-
       - name: Verify cold bpf2go install and ARM64 generation
         run: bash scripts/tests/mise-bpf2go-cross-target.sh
 
       - name: Generate and vendor OBI
         run: mise run vendor:obi
+
+      - name: Test canonical mise task names and compatibility aliases
+        run: bash scripts/tests/mise-task-naming.sh
 
       - name: Check config schema is up to date
         run: mise run check:config-schema

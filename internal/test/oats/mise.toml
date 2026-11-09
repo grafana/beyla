@@ -47,7 +47,7 @@ run = "go test -race ./..."
 [tasks._suite]
 usage = 'arg "<suite>" { choices "sql" "mongo" "redis" "kafka" "http" "memcached" "ai" "nats" "amqp" }'
 dir = "{{config_root}}/../../../internal/testgenerated/oats"
-run = 'cd "${usage_suite}" && mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
+run = 'cd "${usage_suite?}" && mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
 
 [tasks."test:ai"]
 alias = ["oats-test-ai", "oats:test:ai"]

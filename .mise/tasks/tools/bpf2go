@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="bpf2go"
-#MISE hide=true
-#MISE description="Show help for the Mise-pinned bpf2go tool"
-set -euo pipefail
-bpf2go --help

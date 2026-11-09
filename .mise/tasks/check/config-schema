@@ -2,8 +2,6 @@
 #MISE alias="check-config-schema"
 #MISE description="Check whether the configuration JSON schema is up to date"
 set -euo pipefail
-root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
-cd "$root"
 config_schema_file="$CONFIG_SCHEMA_FILE"
 echo "### Checking if JSON schema is up-to-date"
 mkdir -p "$(dirname "$config_schema_file")"

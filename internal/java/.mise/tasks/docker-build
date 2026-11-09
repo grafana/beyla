@@ -3,7 +3,7 @@
 #MISE alias=["java-docker-build", "java:docker-build"]
 set -euo pipefail
 
-project_dir="${MISE_MONOREPO_ROOT:-$(git -C "${MISE_CONFIG_ROOT:-$PWD}" rev-parse --show-toplevel)}"
+project_dir="${MISE_MONOREPO_ROOT}"
 java_agent_dir=".obi-src/pkg/internal/java"
 java_agent_patch_dir="internal/java"
 java_agent_embed_dir="vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded"

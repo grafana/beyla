@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="clang-tidy"
-#MISE description="Run clang-tidy on BPF C and header files"
-set -euo pipefail
-cd bpf
-find . -type f \( -name '*.c' -o -name '*.h' \) ! -path './bpfcore/*' -print0 | xargs -0 -r clang-tidy

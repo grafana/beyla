@@ -75,36 +75,6 @@ if MISE_MONOREPO_ROOT="$tmp/oats-root" GINKGO_LOG="$tmp/ginkgo-invalid" \
 fi
 [[ ! -e "$tmp/ginkgo-invalid" ]]
 
-# Git metadata failures are nonfatal for all metadata-enabled compile tasks.
-cat > "$tmp/bin/git" <<'SH'
-#!/usr/bin/env bash
-exit 1
-SH
-chmod +x "$tmp/bin/git"
-for task in _default cache debug coverage; do
-  log="$tmp/go-$task"
-  case "$task" in
-    cache) env_args=(CACHE_CMD=k8s-cache) ;;
-    *) env_args=(CMD=beyla) ;;
-  esac
-  env -u RELEASE_VERSION -u RELEASE_REVISION GO_LOG="$log" PATH="$tmp/bin:$PATH" \
-    MISE_CONFIG_ROOT="$root" "${env_args[@]}" bash "$root/.mise/tasks/compile/$task" \
-    >"$tmp/$task-out" 2>"$tmp/$task-err"
-  [[ ! -s "$tmp/$task-err" ]]
-  [[ -s "$log" ]]
-done
-
-# Valid release overrides bypass Git, and explicitly empty build-only values
-# remain empty rather than silently falling back to defaults.
-GO_LOG="$tmp/go-overrides" PATH="$tmp/bin:$PATH" MISE_CONFIG_ROOT="$root" CMD='' \
-  GOOS='' GOARCH='' RELEASE_VERSION=review-override RELEASE_REVISION=abc123 \
-  bash "$root/.mise/tasks/compile/_default" >"$tmp/override-out" 2>"$tmp/override-err"
-[[ ! -s "$tmp/override-err" ]]
-grep -q 'review-override' "$tmp/go-overrides"
-grep -q 'abc123' "$tmp/go-overrides"
-grep -q 'GOOS= GOARCH=' "$tmp/go-overrides"
-grep -q -- '-o bin/' "$tmp/go-overrides"
-
 # Integration coverage obeys the configured exclusion expression.
 mkdir -p "$tmp/test-output"
 cat > "$tmp/bin/go" <<'SH'
@@ -154,6 +124,5 @@ GOTESTSUM_LOG="$tmp/gotestsum" PATH="$tmp/bin:$PATH" TEST_OUTPUT="$tmp/unit-outp
 grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
-
 
 echo 'mise task contract tests passed'

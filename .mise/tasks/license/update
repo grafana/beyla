@@ -3,8 +3,6 @@
 #MISE description="Update third-party license notices"
 #MISE depends=["test:prepare-output", "generate:obi-tests"]
 set -euo pipefail
-root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
-cd "$root"
 echo "### Updating third_party_licenses.csv"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go-licenses report \
   --ignore testing --ignore debug --ignore expvar --ignore structs --ignore go --ignore html --ignore text \

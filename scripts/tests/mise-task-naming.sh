@@ -139,6 +139,8 @@ check_task compile:cache-for-coverage //:compile:cache-coverage
 check_task compile-cache-for-coverage //:compile:cache-coverage
 check_task docker:generate //:generate:docker
 check_task docker-generate //:generate:docker
+check_task generate-config-schema //:generate:config-schema
+check_task generate-obi-tests //:generate:obi-tests
 check_task test:unit-shard //:test:shard
 check_task run-unit-test-shard //:test:shard
 
@@ -181,5 +183,108 @@ grep -q -- '--suite <suite>' "$tmp/oats-debug-help"
 grep -q 'default.*kafka' "$tmp/oats-debug-help"
 
 bash "$root/scripts/tests/mise-oats-native-task.sh" "$mise_bin"
+
+# Root matrix tasks expose partitions through documented native mise usage.
+# Verify help/defaults, CLI overrides, and the legacy PARTITIONS environment
+# variable while keeping generated JSON as the entire stdout stream.
+check_matrix_task() {
+  local task=$1 default_partitions=$2 help_output matrix_output
+  help_output=$("$mise_bin" -C "$root" run --skip-tools "$task" --help 2>&1)
+  grep -Fq -- '--partitions <count>' <<<"$help_output"
+  grep -Fq "(default: $default_partitions)" <<<"$help_output"
+
+  check_matrix_output() {
+    local expected=$1 mode=$2
+    local -a command=("$mise_bin" -C "$root" run --skip-tools "$task")
+    local -a env_args=()
+    case "$mode" in
+      cli) command+=(--partitions "$expected") ;;
+      env) env_args=(PARTITIONS="$expected") ;;
+    esac
+    matrix_output=$(env -u PARTITIONS "${env_args[@]}" TEST_OUTPUT="$tmp/matrix-output" "${command[@]}" 2>/dev/null)
+    python3 - "$matrix_output" "$expected" <<'PY'
+import json
+import sys
+matrix = json.loads(sys.argv[1])
+assert len(matrix["include"]) == int(sys.argv[2]), (len(matrix["include"]), sys.argv[2])
+PY
+  }
+
+  check_matrix_output "$default_partitions" default
+  check_matrix_output 2 cli
+  check_matrix_output 3 env
+}
+mkdir -p "$tmp/matrix-output"
+check_matrix_task //:test:matrix 3
+check_matrix_task //:integration:matrix 5
+check_matrix_task //:integration:matrix:beyla 5
+check_matrix_task //:integration:matrix:multiprocess 3
+
+# Exercise compile defaults through the repository's real task template. Use
+# fake Go/Git binaries to assert inherited values and Git fallback behavior
+# without building binaries or requiring the configured tool versions.
+mkdir -p "$tmp/compile-bin"
+cat > "$tmp/compile-bin/go" <<'SH'
+#!/usr/bin/env bash
+printf 'GOOS=%s GOARCH=%s CMD=%s MAIN_GO_FILE=%s CACHE_CMD=%s CACHE_MAIN_GO_FILE=%s BUILDINFO_PKG=%s ARGS=%s\n' \
+  "$GOOS" "$GOARCH" "$CMD" "$MAIN_GO_FILE" "$CACHE_CMD" \
+  "$CACHE_MAIN_GO_FILE" "$BUILDINFO_PKG" "$*" >> "$COMPILE_LOG"
+SH
+cat > "$tmp/compile-bin/git" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GIT_LOG"
+if [[ ${GIT_MODE:-success} == fail ]]; then exit 1; fi
+case "$*" in
+  'describe --all') printf 'heads/template-probe\n' ;;
+  'rev-parse --short HEAD') printf 'abc123\n' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$tmp/compile-bin/go" "$tmp/compile-bin/git"
+for task in //:compile //:compile:cache //:compile:cache-coverage \
+  //:compile:coverage //:compile:debug; do
+  compile_log="$tmp/compile-${task//[:\/]/-}"
+  git_log="$tmp/git-${task//[:\/]/-}"
+  env -u GOOS -u GOARCH -u CMD -u MAIN_GO_FILE -u CACHE_CMD \
+    -u CACHE_MAIN_GO_FILE -u RELEASE_VERSION -u RELEASE_REVISION \
+    MISE_ENABLE_TOOLS='' PATH="$tmp/compile-bin:$PATH" \
+    COMPILE_LOG="$compile_log" GIT_LOG="$git_log" GIT_MODE=success \
+    "$mise_bin" -C "$root" run --skip-tools "$task" >/dev/null 2>/dev/null
+  grep -Fq 'GOOS=linux GOARCH=amd64' "$compile_log"
+  grep -Fq 'BUILDINFO_PKG=github.com/grafana/beyla/v3/pkg/buildinfo' "$compile_log"
+  if [[ $task == *cache* ]]; then
+    grep -Fq 'CACHE_CMD=k8s-cache CACHE_MAIN_GO_FILE=cmd/k8s-cache/main.go' "$compile_log"
+  else
+    grep -Fq 'CMD=beyla MAIN_GO_FILE=cmd/beyla/main.go' "$compile_log"
+  fi
+  if [[ $task != *cache-coverage ]]; then
+    if [[ $task == *coverage ]]; then
+      grep -Fq 'Version=test-template-probe' "$compile_log"
+      grep -Fq 'Revision=test-abc123' "$compile_log"
+    else
+      grep -Fq 'Version=template-probe' "$compile_log"
+      grep -Fq 'Revision=abc123' "$compile_log"
+    fi
+  fi
+done
+
+# A failed Git command remains nonfatal, and explicit empty/override inputs
+# are preserved while preventing Git metadata fallback commands from running.
+env -u RELEASE_VERSION -u RELEASE_REVISION MISE_ENABLE_TOOLS='' \
+  PATH="$tmp/compile-bin:$PATH" COMPILE_LOG="$tmp/compile-failed-git" \
+  GIT_LOG="$tmp/git-failed-git" GIT_MODE=fail \
+  "$mise_bin" -C "$root" run --skip-tools //:compile:cache >/dev/null 2>/dev/null
+grep -Fq 'Version=' "$tmp/compile-failed-git"
+grep -Fq 'Revision=' "$tmp/compile-failed-git"
+
+env MISE_ENABLE_TOOLS='' PATH="$tmp/compile-bin:$PATH" \
+  COMPILE_LOG="$tmp/compile-overrides" GIT_LOG="$tmp/git-overrides" \
+  GOOS='' GOARCH='' CMD='' MAIN_GO_FILE='' \
+  RELEASE_VERSION=review-override RELEASE_REVISION=abc123 \
+  "$mise_bin" -C "$root" run --skip-tools //:compile >/dev/null 2>/dev/null
+grep -Fq 'GOOS= GOARCH= CMD= MAIN_GO_FILE=' "$tmp/compile-overrides"
+grep -Fq 'Version=review-override' "$tmp/compile-overrides"
+grep -Fq 'Revision=abc123' "$tmp/compile-overrides"
+[[ ! -e "$tmp/git-overrides" ]]
 
 echo 'mise naming regressions passed'

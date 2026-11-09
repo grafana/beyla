@@ -3,7 +3,7 @@
 #MISE description="Generate OBI and Beyla eBPF code with the generator image"
 #MISE depends=["submodule:obi"]
 set -euo pipefail
-root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
+root=${MISE_CONFIG_ROOT}
 obi_module=${OBI_MODULE-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' "$root/go.mod")}
 oci_bin=$OCI_BIN
 gen_img=${GEN_IMG:-ghcr.io/open-telemetry/obi-generator:$GEN_IMG_VERSION}

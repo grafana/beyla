@@ -26,6 +26,58 @@ GEN_IMG_VERSION = { default = "latest" }
 TEST_TAGS = { default = "integration" }
 COMPOSE_ARGS = { default = "-f internal/testgenerated/integration/docker-compose.yml" }
 EXCLUDE_COVERAGE_FILES = { default = "(_bpfel.go)|(/beyla/v2/internal/test/)|(/beyla/v2/configs/)|(/v2/examples/)|(.pb.go)|(/beyla/v2/pkg/export/otel/metric/)" }
+BUILDINFO_PKG = { default = "github.com/grafana/beyla/v3/pkg/buildinfo" }
+
+# Defaults shared only by the root compile tasks. Tera's `default` filter uses
+# the fallback only for an unset variable, preserving explicit empty overrides.
+[task_templates."compile:defaults"]
+[task_templates."compile:defaults".env]
+GOOS = "{{ env.GOOS | default(value='linux') }}"
+GOARCH = "{{ env.GOARCH | default(value='amd64') }}"
+CMD = "{{ env.CMD | default(value='beyla') }}"
+MAIN_GO_FILE = "{{ env.MAIN_GO_FILE | default(value='cmd/' ~ (env.CMD | default(value='beyla')) ~ '/main.go') }}"
+CACHE_CMD = "{{ env.CACHE_CMD | default(value='k8s-cache') }}"
+CACHE_MAIN_GO_FILE = "{{ env.CACHE_MAIN_GO_FILE | default(value='cmd/' ~ (env.CACHE_CMD | default(value='k8s-cache')) ~ '/main.go') }}"
+RELEASE_VERSION = "{% if env.RELEASE_VERSION is defined %}{{ env.RELEASE_VERSION }}{% else %}{{ exec(command='git describe --all 2>/dev/null | cut -d/ -f2 || true') }}{% endif %}"
+RELEASE_REVISION = "{% if env.RELEASE_REVISION is defined %}{{ env.RELEASE_REVISION }}{% else %}{{ exec(command='git rev-parse --short HEAD 2>/dev/null || true') }}{% endif %}"
+
+[tasks.compile]
+extends = "compile:defaults"
+shell = "bash -euo pipefail -c"
+description = "Compile Beyla"
+run = '''echo "### Compiling Beyla"
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
+
+[tasks."compile:cache"]
+extends = "compile:defaults"
+shell = "bash -euo pipefail -c"
+alias = ["compile-cache"]
+description = "Compile Beyla Kubernetes cache"
+run = '''echo "### Compiling Beyla Kubernetes cache"
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CACHE_CMD}" "$CACHE_MAIN_GO_FILE"'''
+
+[tasks."compile:cache-coverage"]
+extends = "compile:defaults"
+shell = "bash -euo pipefail -c"
+alias = ["compile:cache-for-coverage", "compile-cache-for-coverage"]
+description = "Compile Beyla cache to generate coverage profiles"
+run = '''echo "### Compiling K8s cache service to generate coverage profiles"
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -cover -a -o "bin/${CACHE_CMD}" "$CACHE_MAIN_GO_FILE"'''
+
+[tasks."compile:coverage"]
+extends = "compile:defaults"
+shell = "bash -euo pipefail -c"
+alias = ["compile:for-coverage", "compile-for-coverage"]
+description = "Compile Beyla to generate coverage profiles"
+run = '''echo "### Compiling project to generate coverage profiles"
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=test-${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=test-${RELEASE_REVISION}'" -cover -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
+
+[tasks."compile:debug"]
+extends = "compile:defaults"
+shell = "bash -euo pipefail -c"
+alias = ["debug"]
+description = "Compile Beyla with debug symbols"
+run = '''CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -gcflags "-N -l" -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
 
 [tools]
 go = { version = "1.26.10" }
@@ -50,6 +102,202 @@ bpf2go = "go:github.com/cilium/ebpf/cmd/bpf2go"
 go-licenses = "go:github.com/google/go-licenses/v2"
 llvm-tools = "conda:llvm-tools"
 clang-tidy = "github:cpp-linter/clang-tools-static-binaries"
+
+[tasks."clean:ebpf-generated-files"]
+shell = "bash -euo pipefail -c"
+alias = ["clean-ebpf-generated-files"]
+description = "Remove generated eBPF binding files"
+run = '''find . -name '*_bpfel*' -print0 | xargs -0 rm'''
+
+[tasks."clean:obi-tests"]
+shell = "bash -euo pipefail -c"
+alias = ["clean-obi-tests"]
+description = "Clean generated OBI integration tests"
+run = '''echo "### Cleaning generated OBI tests"
+./scripts/generate-obi-tests.sh --clean'''
+
+[tasks."clean:testoutput"]
+shell = "bash -euo pipefail -c"
+alias = ["clean-testoutput"]
+description = "Remove contents of the test output directory"
+run = '''echo "### Cleaning ${TEST_OUTPUT} folder"
+rm -rf "${TEST_OUTPUT}"/*'''
+
+[tasks.fmt]
+shell = "bash -euo pipefail -c"
+description = "Format Go code and imports"
+run = '''echo "### Formatting code and fixing imports"
+golangci-lint fmt'''
+
+[tasks."lint:go"]
+shell = "bash -euo pipefail -c"
+description = "Run Go linters"
+depends = ["check:fmt"]
+run = '''echo "### Linting code"
+golangci-lint run ./... --timeout=6m'''
+
+[tasks."clang:format"]
+shell = "bash -euo pipefail -c"
+alias = ["clang-format"]
+description = "Format BPF C source files"
+run = '''find ./bpf -type f -name '*.c' -print0 | xargs -0 -r -P 0 -n 1 clang-format -i
+find ./bpf -type f -name '*.h' -print0 | xargs -0 -r -P 0 -n 1 clang-format -i'''
+
+[tasks."clang:tidy"]
+shell = "bash -euo pipefail -c"
+alias = ["clang-tidy"]
+description = "Run clang-tidy on BPF C and header files"
+run = '''cd bpf
+find . -type f \( -name '*.c' -o -name '*.h' \) ! -path './bpfcore/*' -print0 | xargs -0 -r clang-tidy'''
+
+[tasks."generate:config-schema"]
+shell = "bash -euo pipefail -c"
+alias = ["generate-config-schema"]
+description = "Generate the Beyla configuration schema"
+run = '''echo "### Generating JSON schema for Beyla configuration"
+mkdir -p "$(dirname "$CONFIG_SCHEMA_FILE")"
+go run ./cmd/beyla-schema -output "$CONFIG_SCHEMA_FILE"'''
+
+[tasks."generate:obi-tests"]
+shell = "bash -euo pipefail -c"
+alias = ["generate-obi-tests"]
+description = "Generate OBI integration tests from .obi-src"
+run = '''echo "### Generating OBI integration tests from .obi-src"
+./scripts/generate-obi-tests.sh'''
+
+[tasks."coverage:exclude-generated"]
+shell = "bash -euo pipefail -c"
+alias = ["cov-exclude-generated"]
+description = "Remove generated files from the coverage profile"
+run = '''grep -vE "${EXCLUDE_COVERAGE_FILES}" "${TEST_OUTPUT}/cover.all.txt" > "${TEST_OUTPUT}/cover.txt"'''
+
+[tasks."coverage:report"]
+shell = "bash -euo pipefail -c"
+alias = ["coverage-report"]
+description = "Generate the function coverage report"
+depends = ["cov-exclude-generated"]
+run = '''echo "### Generating coverage report"
+go tool cover --func="${TEST_OUTPUT}/cover.txt"'''
+
+[tasks."coverage:report-html"]
+shell = "bash -euo pipefail -c"
+alias = ["coverage-report-html"]
+description = "Generate an HTML coverage report"
+depends = ["cov-exclude-generated"]
+run = '''echo "### Generating HTML coverage report"
+go tool cover --html="${TEST_OUTPUT}/cover.txt"'''
+
+[tasks."test:prepare-output"]
+shell = "bash -euo pipefail -c"
+description = "Create the test output directory"
+run = '''mkdir -p "${TEST_OUTPUT}/run"'''
+
+[tasks."submodule:obi"]
+shell = "bash -euo pipefail -c"
+alias = ["obi-submodule"]
+description = "Initialize and update the pinned OBI submodule"
+run = '''echo "# Updating OBI Git submodule..."
+git submodule update --init --recursive'''
+
+[tasks."test:matrix"]
+shell = "bash -euo pipefail -c"
+alias = ["matrix:unit-test-json", "unit-test-matrix-json"]
+description = "Generate the unit test shard matrix JSON"
+usage = 'flag "--partitions <count>" help="Number of matrix partitions" env="PARTITIONS" default="3"'
+run = '''go list -mod vendor ./... | grep -v /internal/testgenerated/ | gotestsum tool ci-matrix --partitions "${usage_partitions?}" --timing-files="${TEST_OUTPUT}"/unit-test-shard-*.log'''
+
+[tasks.test]
+shell = "bash -euo pipefail -c"
+description = "Run unit tests"
+depends = ["test:prepare-output"]
+run = '''echo "### Testing code"
+KUBEBUILDER_ASSETS="$(setup-envtest use "${ENVTEST_K8S_VERSION}" -p path)" go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile "${TEST_OUTPUT}/cover.all.txt"'''
+
+[tasks."test:privileged"]
+shell = "bash -euo pipefail -c"
+alias = ["test-privileged"]
+description = "Run unit tests with privileged tests enabled"
+depends = ["test:prepare-output"]
+run = '''echo "### Testing code with privileged tests enabled"
+KUBEBUILDER_ASSETS="$(setup-envtest use "${ENVTEST_K8S_VERSION}" -p path)" PRIVILEGED_TESTS=true go test -race -mod vendor -a ./... -coverpkg=./... -coverprofile "${TEST_OUTPUT}/cover.all.txt"'''
+
+[tasks."integration:matrix"]
+shell = "bash -euo pipefail -c"
+alias = ["integration:matrix:test-json", "integration-test-matrix-json"]
+description = "Generate the default OBI-generated integration test matrix"
+usage = 'flag "--partitions <count>" help="Number of matrix partitions" env="PARTITIONS" default="5"'
+run = '''./scripts/generate-integration-matrix.sh "${TEST_TAGS}" internal/testgenerated/integration "${usage_partitions?}"'''
+
+[tasks."integration:matrix:beyla"]
+shell = "bash -euo pipefail -c"
+alias = ["integration:matrix:beyla-json", "beyla-integration-test-matrix-json"]
+description = "Generate the Beyla-only internal/test/integration matrix"
+usage = 'flag "--partitions <count>" help="Number of matrix partitions" env="PARTITIONS" default="5"'
+run = '''WEIGHTS_FILE=scripts/beyla-integration-test-weights.generated.json ./scripts/generate-integration-matrix.sh "${TEST_TAGS}" internal/test/integration "${usage_partitions?}"'''
+
+[tasks."integration:matrix:k8s"]
+shell = "bash -euo pipefail -c"
+alias = ["integration:matrix:k8s-json", "k8s-integration-test-matrix-json"]
+description = "Generate the Kubernetes integration test matrix from OBI-generated tests"
+run = '''./scripts/generate-dir-matrix.sh internal/testgenerated/integration/k8s common'''
+
+[tasks."integration:matrix:multiprocess"]
+shell = "bash -euo pipefail -c"
+alias = ["integration:matrix:vm-json", "vm-integration-test-matrix-json"]
+description = "Generate the multiprocess integration test matrix"
+usage = 'flag "--partitions <count>" help="Number of matrix partitions" env="PARTITIONS" default="3"'
+run = '''./scripts/generate-integration-matrix.sh "${TEST_TAGS}" internal/testgenerated/integration "${usage_partitions?}" "TestMultiProcess"'''
+
+[tasks."integration:run"]
+shell = "bash -euo pipefail -c"
+description = "Run OBI-generated integration tests"
+run = '''echo "### Running integration tests"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration --tags=integration'''
+
+[tasks."integration:run:beyla"]
+shell = "bash -euo pipefail -c"
+alias = ["run-beyla-integration-test"]
+description = "Run Beyla-only integration tests from internal/test/integration"
+run = '''echo "### Running Beyla integration tests"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/test/integration --tags=integration'''
+
+[tasks."integration:run:k8s"]
+shell = "bash -euo pipefail -c"
+alias = ["run-integration-test-k8s"]
+description = "Run Kubernetes integration tests"
+run = '''echo "### Running K8s integration tests"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 60m -mod vendor -a ./internal/testgenerated/integration/k8s/... --tags=integration'''
+
+[tasks."integration:run:multiprocess"]
+shell = "bash -euo pipefail -c"
+alias = ["integration:run:arm", "run-integration-test-arm"]
+description = "Run multiprocess integration tests (TestMultiProcess)"
+run = '''echo "### Running multiprocess integration tests (TestMultiProcess)"
+go clean -testcache
+go test -p 1 -failfast -v -timeout 90m -mod vendor -a ./internal/testgenerated/integration --tags=integration -run "^TestMultiProcess"'''
+
+[tasks."tools:bpf2go"]
+shell = "bash -euo pipefail -c"
+alias = ["bpf2go"]
+hide = true
+description = "Show help for the Mise-pinned bpf2go tool"
+run = '''bpf2go --help'''
+
+[tasks."tools:ginkgo"]
+shell = "bash -euo pipefail -c"
+alias = ["ginkgo"]
+hide = true
+description = "Verify the Ginkgo test runner is available"
+run = '''command -v ginkgo >/dev/null || { echo "ginkgo is unavailable; run mise install" >&2; exit 1; }'''
+
+[tasks.setup]
+alias = ["prereqs"]
+hide = true
+description = "Compatibility alias for test:prepare-output"
+run = [{ task = "test:prepare-output" }]
 
 # The root Go module is the source of truth for the Go toolchain version.
 # Keep this task in CI so a version drift fails before a build starts.

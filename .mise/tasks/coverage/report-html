@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="coverage-report-html"
-#MISE description="Generate an HTML coverage report"
-#MISE depends=["cov-exclude-generated"]
-set -euo pipefail
-test_output="${TEST_OUTPUT}"
-echo "### Generating HTML coverage report"
-go tool cover --html="$test_output/cover.txt"

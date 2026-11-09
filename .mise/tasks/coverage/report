@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="coverage-report"
-#MISE description="Generate the function coverage report"
-#MISE depends=["cov-exclude-generated"]
-set -euo pipefail
-test_output="${TEST_OUTPUT}"
-echo "### Generating coverage report"
-go tool cover --func="$test_output/cover.txt"

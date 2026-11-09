@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="clean-obi-tests"
-#MISE description="Clean generated OBI integration tests"
-set -euo pipefail
-
-echo "### Cleaning generated OBI tests"
-./scripts/generate-obi-tests.sh --clean

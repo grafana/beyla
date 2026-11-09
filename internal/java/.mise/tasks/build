@@ -3,7 +3,7 @@
 #MISE alias=["java-build", "java:build"]
 set -euo pipefail
 
-project_dir="${MISE_MONOREPO_ROOT:-$(git -C "${MISE_CONFIG_ROOT:-$PWD}" rev-parse --show-toplevel)}"
+project_dir="${MISE_MONOREPO_ROOT}"
 java_agent="${JAVA_AGENT-obi-java-agent.jar}"
 java_agent_dir=".obi-src/pkg/internal/java"
 java_agent_patch_dir="internal/java"

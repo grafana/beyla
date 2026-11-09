@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias=["matrix:unit-test-json", "unit-test-matrix-json"]
-#MISE description="Generate the unit test shard matrix JSON"
-set -euo pipefail
-test_output="$TEST_OUTPUT"
-go list -mod vendor ./... | grep -v /internal/testgenerated/ | gotestsum tool ci-matrix --partitions "${PARTITIONS:-3}" --timing-files="$test_output"/unit-test-shard-*.log

@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="obi-submodule"
-#MISE description="Initialize and update the pinned OBI submodule"
-set -euo pipefail
-echo "# Updating OBI Git submodule..."
-git submodule update --init --recursive

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Create the test output directory"
-set -euo pipefail
-
-test_output=$TEST_OUTPUT
-
-mkdir -p "${test_output}/run"

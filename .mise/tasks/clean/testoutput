@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="clean-testoutput"
-#MISE description="Remove contents of the test output directory"
-set -euo pipefail
-test_output=$TEST_OUTPUT
-echo "### Cleaning ${test_output} folder"
-rm -rf "${test_output}"/*

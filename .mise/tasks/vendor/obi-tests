@@ -2,8 +2,6 @@
 #MISE alias="vendor-obi-tests"
 #MISE description="Vendor OBI integration-test dependencies"
 set -euo pipefail
-root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
-cd "$root"
 echo "### Vendoring OBI test dependencies..."
 go get -t ./internal/testgenerated/integration/...
 go mod tidy

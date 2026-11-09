@@ -2,8 +2,8 @@
 #MISE alias="helm-unittest"
 #MISE description="Run Helm chart unit tests"
 set -euo pipefail
+project_dir=${MISE_CONFIG_ROOT}
 
-project_dir="${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}"
 oci_bin="$OCI_BIN"
 helm_unittest_img="${HELM_UNITTEST_IMG-helmunittest/helm-unittest:3.21.0-1.0.3}"
 

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias="clean-ebpf-generated-files"
-#MISE description="Remove generated eBPF binding files"
-set -euo pipefail
-root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
-cd "$root"
-find . -name '*_bpfel*' -print0 | xargs -0 rm

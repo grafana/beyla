@@ -2,7 +2,7 @@
 #MISE alias="generate-beyla"
 #MISE description="Generate Beyla-owned eBPF bindings"
 set -euo pipefail
-root=${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}
+root=${MISE_CONFIG_ROOT}
 obi_module=${OBI_MODULE-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' "$root/go.mod")}
 bpf2go=${BPF2GO:-bpf2go}
 export BPF_CLANG="${BPF_CLANG-${CLANG-clang}}"

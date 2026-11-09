@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-#MISE alias=["integration:matrix:test-json", "integration-test-matrix-json"]
-#MISE description="Generate the default OBI-generated integration test matrix"
-set -euo pipefail
-
-PARTITIONS="${PARTITIONS:-5}"
-export PARTITIONS
-./scripts/generate-integration-matrix.sh "${TEST_TAGS}" internal/testgenerated/integration "${PARTITIONS}"

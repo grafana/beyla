@@ -2,8 +2,8 @@
 #MISE alias="helm-docs"
 #MISE description="Generate Helm chart documentation"
 set -euo pipefail
+project_dir=${MISE_CONFIG_ROOT}
 
-project_dir="${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}"
 oci_bin="$OCI_BIN"
 helm_docs_img="${HELM_DOCS_IMG-$(sed -n 's|.*docker://\(jnorwood/helm-docs[^[:space:]]*\).*|\1|p' .github/workflows/helm-test.yml | head -1)}"
 

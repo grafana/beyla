@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+report_error() {
+  local status=$?
+  printf 'mise task naming failed at line %s: %s (exit %s)\n' \
+    "$LINENO" "$BASH_COMMAND" "$status" >&2
+  exit "$status"
+}
+trap report_error ERR
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 mise_bin=${MISE_BIN:-$(command -v mise || true)}
@@ -189,25 +196,45 @@ bash "$root/scripts/tests/mise-oats-native-task.sh" "$mise_bin"
 # variable while keeping generated JSON as the entire stdout stream.
 check_matrix_task() {
   local task=$1 default_partitions=$2 help_output matrix_output
-  help_output=$("$mise_bin" -C "$root" run --skip-tools "$task" --help 2>&1)
-  grep -Fq -- '--partitions <count>' <<<"$help_output"
-  grep -Fq "(default: $default_partitions)" <<<"$help_output"
+  if ! help_output=$("$mise_bin" -C "$root" run --skip-tools "$task" --help 2>&1); then
+    printf 'could not read help for matrix task %s:\n%s\n' "$task" "$help_output" >&2
+    return 1
+  fi
+  if ! grep -Fq -- '--partitions <count>' <<<"$help_output" ||
+    ! grep -Fq "(default: $default_partitions)" <<<"$help_output"; then
+    printf 'unexpected help for matrix task %s (expected default %s):\n%s\n' \
+      "$task" "$default_partitions" "$help_output" >&2
+    return 1
+  fi
 
   check_matrix_output() {
-    local expected=$1 mode=$2
+    local expected=$1 mode=$2 error_output
     local -a command=("$mise_bin" -C "$root" run --skip-tools "$task")
     local -a env_args=()
+    error_output="$tmp/matrix-${task//[:\/]/_}-${mode}.stderr"
     case "$mode" in
-      cli) command+=(--partitions "$expected") ;;
-      env) env_args=(PARTITIONS="$expected") ;;
+    cli) command+=(--partitions "$expected") ;;
+    env) env_args=(PARTITIONS="$expected") ;;
     esac
-    matrix_output=$(env -u PARTITIONS "${env_args[@]}" TEST_OUTPUT="$tmp/matrix-output" "${command[@]}" 2>/dev/null)
-    python3 - "$matrix_output" "$expected" <<'PY'
+    if ! matrix_output=$(env -u PARTITIONS "${env_args[@]}" TEST_OUTPUT="$tmp/matrix-output" \
+      "${command[@]}" 2>"$error_output"); then
+      printf 'matrix task %s failed in %s mode (partitions=%s):\n' \
+        "$task" "$mode" "$expected" >&2
+      cat "$error_output" >&2
+      printf '%s\n' "$matrix_output" >&2
+      return 1
+    fi
+    if ! python3 - "$matrix_output" "$expected" <<'PY'
 import json
 import sys
 matrix = json.loads(sys.argv[1])
 assert len(matrix["include"]) == int(sys.argv[2]), (len(matrix["include"]), sys.argv[2])
 PY
+    then
+      printf 'matrix task %s returned the wrong number of partitions (expected %s):\n%s\n' \
+        "$task" "$expected" "$matrix_output" >&2
+      return 1
+    fi
   }
 
   check_matrix_output "$default_partitions" default

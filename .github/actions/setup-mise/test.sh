@@ -35,6 +35,7 @@ profiles = sys.argv[3:]
 
 root_config = tomllib.loads((repo_root / "mise.toml").read_text())
 configured_tools = set(root_config.get("tools", {}))
+aliases = root_config.get("tool_alias", {})
 for config_root in root_config.get("monorepo", {}).get("config_roots", []):
     config = repo_root / config_root / "mise.toml"
     with config.open("rb") as file:
@@ -48,9 +49,11 @@ for profile in profiles:
     tools = value.split(",") if value else []
     assert all(tool and tool == tool.strip() for tool in tools), (profile, tools)
     assert len(tools) == len(set(tools)), (profile, tools)
-    unknown = set(tools) - configured_tools
+    canonical_tools = [aliases.get(tool, tool) for tool in tools]
+    assert len(canonical_tools) == len(set(canonical_tools)), (profile, canonical_tools)
+    unknown = set(canonical_tools) - configured_tools
     assert not unknown, f"{profile} selects tools absent from Mise config: {sorted(unknown)}"
-    resolved[profile] = tools
+    resolved[profile] = canonical_tools
 
 assert resolved["none"] == []
 assert resolved["go"] == ["go"]

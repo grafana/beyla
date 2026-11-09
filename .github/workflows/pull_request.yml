@@ -47,6 +47,9 @@ jobs:
       - name: Test canonical mise task names and compatibility aliases
         run: bash scripts/tests/mise-task-naming.sh
 
+      - name: Test mise tool alias filters
+        run: bash scripts/tests/mise-tool-alias-filters.sh
+
       - name: Verify cold bpf2go install and ARM64 generation
         run: bash scripts/tests/mise-bpf2go-cross-target.sh
 

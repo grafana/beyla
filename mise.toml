@@ -1,6 +1,6 @@
 # Compatibility floor for mise config features, not the selected CI/container
 # runtime pin (maintained separately and intentionally can advance independently).
-min_version = "2026.10.18"
+min_version = "2026.11.4"
 monorepo_root = true
 
 [monorepo]
@@ -44,6 +44,12 @@ clang = { version = "22.1.8" }
 version = "2026.09.01-5fb8802d"
 matching = "clang-tidy-22_"
 bin = "clang-tidy"
+
+[tool_alias]
+bpf2go = "go:github.com/cilium/ebpf/cmd/bpf2go"
+go-licenses = "go:github.com/google/go-licenses/v2"
+llvm-tools = "conda:llvm-tools"
+clang-tidy = "github:cpp-linter/clang-tools-static-binaries"
 
 # The root Go module is the source of truth for the Go toolchain version.
 # Keep this task in CI so a version drift fails before a build starts.
@@ -156,7 +162,10 @@ alias = ["integration:test:arm", "integration-test-arm"]
 description = "Prepare, run, and clean up multiprocess integration tests"
 depends = ["integration:prepare"]
 depends_post = ["clean:integration-test"]
-run = [{ task = "integration:run:multiprocess" }, { task = "integration:coverage-data" }]
+run = [
+  { task = "integration:run:multiprocess" },
+  { task = "integration:coverage-data" },
+]
 
 [tasks."integration:test:k8s"]
 alias = ["integration-test-k8s"]

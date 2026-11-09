@@ -194,6 +194,46 @@ bash "$root/scripts/tests/mise-oats-native-task.sh" "$mise_bin"
 # Root matrix tasks expose partitions through documented native mise usage.
 # Verify help/defaults, CLI overrides, and the legacy PARTITIONS environment
 # variable while keeping generated JSON as the entire stdout stream.
+mkdir -p "$tmp/matrix-bin"
+cat >"$tmp/matrix-bin/go" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == 'list -mod vendor ./...' ]] || {
+  echo "unexpected go invocation in matrix fixture: $*" >&2
+  exit 1
+}
+printf '%s\n' ./pkg/alpha ./pkg/beta ./pkg/gamma
+SH
+cat >"$tmp/matrix-bin/gotestsum" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${1-} == tool && ${2-} == ci-matrix ]] || {
+  echo "unexpected gotestsum invocation in matrix fixture: $*" >&2
+  exit 1
+}
+shift 2
+partitions=
+timing_files=
+while (($#)); do
+  case "$1" in
+    --partitions) partitions=${2-}; shift 2 ;;
+    --timing-files=*) timing_files=$1; shift ;;
+    *) echo "unexpected gotestsum matrix argument: $1" >&2; exit 1 ;;
+  esac
+done
+[[ $partitions =~ ^[1-9][0-9]*$ && $timing_files == --timing-files=* ]] || {
+  echo "missing matrix options: partitions=$partitions timing_files=$timing_files" >&2
+  exit 1
+}
+printf '{"include":['
+for ((i = 0; i < partitions; i++)); do
+  if ((i > 0)); then printf ','; fi
+  printf '{"id":%d}' "$i"
+done
+printf ']}\n'
+SH
+chmod +x "$tmp/matrix-bin/go" "$tmp/matrix-bin/gotestsum"
+
 check_matrix_task() {
   local task=$1 default_partitions=$2 help_output matrix_output
   if ! help_output=$("$mise_bin" -C "$root" run --skip-tools "$task" --help 2>&1); then
@@ -211,12 +251,19 @@ check_matrix_task() {
     local expected=$1 mode=$2 error_output
     local -a command=("$mise_bin" -C "$root" run --skip-tools "$task")
     local -a env_args=()
+    local -a matrix_env=()
     error_output="$tmp/matrix-${task//[:\/]/_}-${mode}.stderr"
+    if [[ $task == //:test:matrix ]]; then
+      # The Generate workflow runs this check before cold bpf2go generation;
+      # stub Go discovery and gotestsum so missing generated .o files cannot
+      # make this task-argument regression depend on workflow ordering.
+      matrix_env=(MISE_ENABLE_TOOLS='' PATH="$tmp/matrix-bin:$PATH")
+    fi
     case "$mode" in
     cli) command+=(--partitions "$expected") ;;
     env) env_args=(PARTITIONS="$expected") ;;
     esac
-    if ! matrix_output=$(env -u PARTITIONS "${env_args[@]}" TEST_OUTPUT="$tmp/matrix-output" \
+    if ! matrix_output=$(env -u PARTITIONS "${env_args[@]}" "${matrix_env[@]}" TEST_OUTPUT="$tmp/matrix-output" \
       "${command[@]}" 2>"$error_output"); then
       printf 'matrix task %s failed in %s mode (partitions=%s):\n' \
         "$task" "$mode" "$expected" >&2

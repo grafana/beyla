@@ -46,7 +46,14 @@ extends = "compile:defaults"
 shell = "bash -euo pipefail -c"
 description = "Compile Beyla"
 run = '''echo "### Compiling Beyla"
-CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
+gpu_ldflags=""
+if [[ " ${BUILD_TAGS:-} " == *" beyla_nvml "* && "$GOOS" == linux ]]; then
+  case "$GOARCH" in
+    amd64) gpu_ldflags="-I /lib64/ld-linux-x86-64.so.2" ;;
+    arm64) gpu_ldflags="-I /lib/ld-linux-aarch64.so.1" ;;
+  esac
+fi
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -tags "${BUILD_TAGS:-}" -ldflags="${gpu_ldflags} -X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
 
 [tasks."compile:cache"]
 extends = "compile:defaults"
@@ -415,3 +422,12 @@ description = "Prepare, run, and clean up Kubernetes integration tests"
 depends = ["integration:prepare"]
 depends_post = ["clean:integration-test"]
 run = [{ task = "integration:run:k8s" }, { task = "integration:coverage-data" }]
+
+# GPU integration tests use fixtures and require no GPU hardware.
+[tasks."test:gpu-integration"]
+alias = ["test-gpu-integration"]
+run = 'CGO_ENABLED=0 go test -mod=vendor -tags "integration ${BUILD_TAGS:-}" ./pkg/export/gpumetrics -run TestGPUIntegration -count=1'
+
+[tasks."test:gpu-nvml-integration"]
+alias = ["test-gpu-nvml-integration"]
+run = 'CGO_ENABLED=0 go test -mod=vendor -tags "integration beyla_nvml" ./pkg/internal/infraolly/gpu -run TestNVMLIntegration -count=1'

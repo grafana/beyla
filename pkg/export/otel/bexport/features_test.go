@@ -123,6 +123,17 @@ func TestHostInfoFeatureRegistration(t *testing.T) {
 	}
 }
 
+func TestGPUFeatureRegistration(t *testing.T) {
+	f := mustLoadFeatures(t, "gpu")
+	assert.Equal(t, FeatureGPU, f)
+	assert.Zero(t, FeatureGPU&(FeatureProcess|FeatureHostInfo))
+	assert.Equal(t, []string{"gpu"}, f.Names())
+	assert.False(t, Has(mustLoadFeatures(t, "application"), FeatureGPU))
+	for _, name := range []string{"all", "*"} {
+		assert.True(t, Has(mustLoadFeatures(t, name), FeatureGPU))
+	}
+}
+
 func TestConnectionInfoFeatureRegistration(t *testing.T) {
 	features := mustLoadFeatures(t, "application_service_graph_connection_info")
 	assert.Equal(t, export.FeatureConnectionInfo, features)

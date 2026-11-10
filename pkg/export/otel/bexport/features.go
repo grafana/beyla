@@ -11,12 +11,16 @@ const (
 	FeatureProcess = export.Features((1 << 63) >> iota)
 	// FeatureHostInfo enables Beyla's traces_host_info metric.
 	FeatureHostInfo
+	// FeatureGPU enables the GPU hardware metrics (hw.gpu.*) and the GPU usage
+	// of the instrumented processes (process.gpu.*).
+	FeatureGPU
 )
 
 func init() {
 	export.AppO11yFeatures |= FeatureProcess | FeatureHostInfo
 	export.FeatureMapper["application_process"] = FeatureProcess
 	export.FeatureMapper["application_host"] = FeatureHostInfo
+	export.FeatureMapper["gpu"] = FeatureGPU
 	export.FeatureMapper["application_service_graph_connection_info"] = export.FeatureConnectionInfo
 }
 

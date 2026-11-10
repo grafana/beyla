@@ -327,6 +327,9 @@ github.com/ebitengine/purego
 github.com/ebitengine/purego/internal/cgo
 github.com/ebitengine/purego/internal/fakecgo
 github.com/ebitengine/purego/internal/strings
+# github.com/elastic/go-freelru v0.16.0
+## explicit; go 1.18
+github.com/elastic/go-freelru
 # github.com/emicklei/go-restful/v3 v3.13.0
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
@@ -992,8 +995,14 @@ go.opentelemetry.io/ebpf-profiler/internal/log
 go.opentelemetry.io/ebpf-profiler/libpf
 go.opentelemetry.io/ebpf-profiler/libpf/basehash
 go.opentelemetry.io/ebpf-profiler/libpf/hash
+go.opentelemetry.io/ebpf-profiler/libpf/pfbufio
+go.opentelemetry.io/ebpf-profiler/libpf/pfelf
+go.opentelemetry.io/ebpf-profiler/libpf/pfelf/internal/mmap
 go.opentelemetry.io/ebpf-profiler/libpf/pfunsafe
 go.opentelemetry.io/ebpf-profiler/metrics
+go.opentelemetry.io/ebpf-profiler/nativeunwind
+go.opentelemetry.io/ebpf-profiler/nativeunwind/elfunwindinfo
+go.opentelemetry.io/ebpf-profiler/nativeunwind/stackdeltatypes
 go.opentelemetry.io/ebpf-profiler/process/processcontext
 go.opentelemetry.io/ebpf-profiler/remotememory
 go.opentelemetry.io/ebpf-profiler/stringutil
@@ -1112,6 +1121,7 @@ go.opentelemetry.io/obi/pkg/internal/rdns/ebpf/xdp
 go.opentelemetry.io/obi/pkg/internal/rdns/store
 go.opentelemetry.io/obi/pkg/internal/rubytools
 go.opentelemetry.io/obi/pkg/internal/shardedqueue
+go.opentelemetry.io/obi/pkg/internal/shutdown
 go.opentelemetry.io/obi/pkg/internal/split
 go.opentelemetry.io/obi/pkg/internal/sqlprune
 go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf
@@ -1136,6 +1146,7 @@ go.opentelemetry.io/obi/pkg/kube/kubecache/service
 go.opentelemetry.io/obi/pkg/kube/kubeflags
 go.opentelemetry.io/obi/pkg/metadata
 go.opentelemetry.io/obi/pkg/metadata/peer
+go.opentelemetry.io/obi/pkg/metadata/peer/metadatapb
 go.opentelemetry.io/obi/pkg/netip
 go.opentelemetry.io/obi/pkg/netolly/agent
 go.opentelemetry.io/obi/pkg/netolly/flowdef

@@ -8,47 +8,41 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 )
 
-const (
-	ProtocolVersion = 1
-	MetadataPath    = "/v1/metadata"
-)
-
 type Service struct {
-	Name         string `json:"name"`
-	Namespace    string `json:"namespace,omitempty"`
-	ServiceGraph bool   `json:"service_graph,omitempty"`
+	Name         string
+	Namespace    string
+	ServiceGraph bool
 }
 
 type Endpoint struct {
-	IP   string `json:"ip"`
-	Port int    `json:"port"`
+	IP   string
+	Port int
 }
 
 type Listener struct {
-	Endpoint Endpoint `json:"endpoint"`
-	Service  Service  `json:"service"`
+	Endpoint Endpoint
+	Service  Service
 }
 
 type CallerService struct {
-	Service         Service `json:"service"`
-	RemainingMillis int64   `json:"remaining_ms"`
+	Service         Service
+	RemainingMillis int64
 }
 
 type Caller struct {
-	Destination Endpoint        `json:"destination"`
-	Services    []CallerService `json:"services"`
+	Destination Endpoint
+	Services    []CallerService
 }
 
 // Relative lifetimes avoid requiring synchronized clocks between agents.
 type Snapshot struct {
-	Version               int                                        `json:"version"`
-	Hostname              string                                     `json:"hostname"`
-	Services              []Service                                  `json:"services"`
-	Listeners             []Listener                                 `json:"listeners"`
-	Callers               []Caller                                   `json:"callers,omitempty"`
-	KnownCallers          []Caller                                   `json:"known_callers,omitempty"`
-	MetricProtocols       *instrumentations.InstrumentationSelection `json:"metric_protocols,omitempty"`
-	CallerAmbiguityMillis int64                                      `json:"caller_ambiguity_ms,omitempty"`
+	Hostname              string
+	Services              []Service
+	Listeners             []Listener
+	Callers               []Caller
+	KnownCallers          []Caller
+	MetricProtocols       *instrumentations.InstrumentationSelection
+	CallerAmbiguityMillis int64
 }
 
 // merge combines matching identities, requiring every candidate to export graph metrics.

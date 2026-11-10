@@ -75,6 +75,7 @@ func newMeterProvider(res *resource.Resource, exporter *sdkmetric.Exporter, inte
 }
 
 type netMetricsExporter struct {
+	provider       *metric.MeterProvider
 	flowBytes      *Expirer[*ebpf.Record, metric2.Int64Counter, float64]
 	flowPackets    *Expirer[*ebpf.Record, metric2.Int64Counter, float64]
 	interZoneBytes *Expirer[*ebpf.Record, metric2.Int64Counter, float64]
@@ -108,7 +109,7 @@ func newMetricsExporter(
 	ctxInfo *global.ContextInfo,
 	cfg *NetMetricsConfig,
 	input *msg.Queue[[]*ebpf.Record],
-) (*netMetricsExporter, error) {
+) (_ *netMetricsExporter, retErr error) {
 	log := nmlog()
 	log.Debug("instantiating network metrics exporter provider")
 	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
@@ -116,6 +117,7 @@ func newMetricsExporter(
 		log.Error("can't instantiate metrics exporter", "error", err)
 		return nil, err
 	}
+	defer releaseExporterOnError(ctx, exporter, &retErr)
 	exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
 	resource := createFilteredNetworkResource(ctxInfo.NodeMeta.HostID, cfg.SelectorCfg.SelectionCfg)
@@ -129,6 +131,7 @@ func newMetricsExporter(
 	ebpfEvents := provider.Meter("network_ebpf_events", obiMeterOptions()...)
 
 	nme := &netMetricsExporter{
+		provider:  provider,
 		expireTTL: cfg.Metrics.TTL,
 	}
 	recordGettersConfig := ebpf.RecordGettersConfig{
@@ -195,6 +198,7 @@ func newMetricsExporter(
 }
 
 func (me *netMetricsExporter) Do(ctx context.Context) {
+	defer me.shutdown(ctx)
 	for i := range me.in {
 		for _, v := range i {
 			if me.flowBytes != nil {
@@ -210,5 +214,13 @@ func (me *netMetricsExporter) Do(ctx context.Context) {
 				flowPackets.Add(ctx, int64(v.Metrics.Packets), metric2.WithAttributeSet(attrs))
 			}
 		}
+	}
+}
+
+func (me *netMetricsExporter) shutdown(ctx context.Context) {
+	shutdownCtx, cancel := shutdownContext(ctx)
+	defer cancel()
+	if err := me.provider.Shutdown(shutdownCtx); err != nil {
+		nmlog().Warn("error shutting down network metrics provider", "error", err)
 	}
 }

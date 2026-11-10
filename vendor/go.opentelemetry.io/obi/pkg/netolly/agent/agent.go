@@ -35,6 +35,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/logger"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tcmanager"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/tracefs"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/flow"
 	"go.opentelemetry.io/obi/pkg/netip"
@@ -259,7 +260,7 @@ func (f *Flows) Run(ctx context.Context) error {
 
 	f.ifaceManager.Start(ctx)
 
-	f.graph.Start(ctx, swarm.WithCancelTimeout(f.cfg.ShutdownTimeout))
+	f.graph.Start(ctx, swarm.WithCancelTimeout(tracefs.EffectiveShutdownTimeout(f.cfg.ShutdownTimeout)))
 	f.status = StatusStarted
 
 	alog.Info("Flows agent successfully started")
@@ -297,7 +298,7 @@ func (f *Flows) stop() error {
 		close(ifaceStopped)
 	}()
 
-	timer := time.NewTimer(f.cfg.ShutdownTimeout)
+	timer := time.NewTimer(tracefs.EffectiveShutdownTimeout(f.cfg.ShutdownTimeout))
 	defer timer.Stop()
 
 	select {

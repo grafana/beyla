@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	ciliumebpf "github.com/cilium/ebpf"
 
@@ -32,11 +33,11 @@ type RingBufTracer struct {
 	forward  func(context.Context, *msg.Queue[[]*ebpf.Stat])
 }
 
-func NewRingBufTracer(statsMap *ciliumebpf.Map, cfg *config.EBPFTracer) *RingBufTracer {
+func NewRingBufTracer(statsMap *ciliumebpf.Map, cfg *config.EBPFTracer, shutdownTimeout time.Duration) *RingBufTracer {
 	return &RingBufTracer{
 		statsMap: statsMap,
 		cfg:      cfg,
-		forward:  ebpfcommon.ForwardRingbuf(cfg, statsMap, parseStat, nil, rtlog(), nil),
+		forward:  ebpfcommon.ForwardRingbufWithDrainContext(cfg, shutdownTimeout, statsMap, parseStatRecord, nil, rtlog(), nil),
 	}
 }
 
@@ -45,6 +46,10 @@ func (m *RingBufTracer) TraceLoop(out *msg.Queue[[]*ebpf.Stat]) swarm.RunFunc {
 		defer out.MarkCloseable()
 		m.forward(ctx, out)
 	}
+}
+
+func parseStatRecord(_ context.Context, record *ringbuf.Record) (*ebpf.Stat, bool, error) {
+	return parseStat(record)
 }
 
 func parseStat(record *ringbuf.Record) (*ebpf.Stat, bool, error) {
@@ -72,6 +77,8 @@ func handleStatEvent(record *ringbuf.Record) (ebpf.Stat, error) {
 		return readTCPRetransmitIntoStat(record)
 	case ebpf.StatTypeTCPIo:
 		return readTCPIoIntoStat(record)
+	case ebpf.StatTypeTCPReset:
+		return readTCPResetIntoStat(record)
 	default:
 		return ebpf.Stat{}, fmt.Errorf("unknown stats event [type %d]", uint8(eventType))
 	}
@@ -159,6 +166,21 @@ func readTCPIoIntoStat(record *ringbuf.Record) (ebpf.Stat, error) {
 		TCPIo: &ebpf.TCPIo{
 			Direction: event.Direction,
 			Bytes:     total,
+		},
+		CommonAttrs: connToCommonAttrs(event.Conn),
+	}, nil
+}
+
+func readTCPResetIntoStat(record *ringbuf.Record) (ebpf.Stat, error) {
+	event, err := ebpfcommon.ReinterpretCast[ebpf.StatsTCPReset](record.RawSample)
+	if err != nil {
+		return ebpf.Stat{}, err
+	}
+	return ebpf.Stat{
+		Type: ebpf.StatTypeTCPReset,
+		TCPReset: &ebpf.TCPReset{
+			Direction: event.Direction,
+			Cause:     event.Cause,
 		},
 		CommonAttrs: connToCommonAttrs(event.Conn),
 	}, nil

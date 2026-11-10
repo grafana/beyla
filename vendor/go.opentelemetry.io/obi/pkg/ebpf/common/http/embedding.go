@@ -128,6 +128,20 @@ func parseEmbeddingDimensions(req *request.EmbeddingRequest, body []byte) int {
 		}
 	}
 
+	// Ollama layouts: {"embeddings":[[...]]} and the legacy {"embedding":[...]}
+	var ollamaStyle struct {
+		Embeddings []json.RawMessage `json:"embeddings"`
+		Embedding  json.RawMessage   `json:"embedding"`
+	}
+	unmarshalJSONBestEffort(body, &ollamaStyle)
+	vector := ollamaStyle.Embedding
+	if len(ollamaStyle.Embeddings) > 0 {
+		vector = ollamaStyle.Embeddings[0]
+	}
+	if n := embeddingVectorDims(vector, dtype); n > 0 {
+		return n
+	}
+
 	// Cohere v2 layout: {"embeddings":{"float":[[...]],"binary":[[...]]}}
 	var cohereStyle struct {
 		Embeddings map[string]json.RawMessage `json:"embeddings"`

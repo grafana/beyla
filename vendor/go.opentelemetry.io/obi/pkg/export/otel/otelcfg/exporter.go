@@ -24,6 +24,7 @@ func meilog() *slog.Logger {
 type MetricsExporterInstancer struct {
 	mutex    sync.Mutex
 	instance sdkmetric.Exporter
+	users    int
 	Cfg      *MetricsConfig
 }
 
@@ -31,6 +32,41 @@ type MetricsExporterInstancer struct {
 func (i *MetricsExporterInstancer) Instantiate(ctx context.Context) (sdkmetric.Exporter, error) {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
+	instance, err := i.instantiate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	i.users++
+	return &sharedMetricsExporter{Exporter: instance, instancer: i}, nil
+}
+
+func (i *MetricsExporterInstancer) release(ctx context.Context) error {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+	i.users--
+	if i.users > 0 {
+		return nil
+	}
+	instance := i.instance
+	i.instance = nil
+	return instance.Shutdown(ctx)
+}
+
+type sharedMetricsExporter struct {
+	sdkmetric.Exporter
+	instancer *MetricsExporterInstancer
+	shutdown  sync.Once
+}
+
+func (e *sharedMetricsExporter) Shutdown(ctx context.Context) error {
+	var err error
+	e.shutdown.Do(func() {
+		err = e.instancer.release(ctx)
+	})
+	return err
+}
+
+func (i *MetricsExporterInstancer) instantiate(ctx context.Context) (sdkmetric.Exporter, error) {
 	if i.instance != nil {
 		return i.instance, nil
 	}

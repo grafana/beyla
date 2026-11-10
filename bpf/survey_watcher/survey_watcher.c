@@ -20,7 +20,7 @@ char LICENSE[] SEC("license") = "Dual MIT/GPL";
 
 struct survey_process {
   u64 start_time;
-  pid_info id;
+  struct pid_info id;
   u32 reserved; // Explicit padding keeps map keys fully initialized.
 };
 

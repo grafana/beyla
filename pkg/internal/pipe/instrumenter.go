@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"slices"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,6 +13,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
+	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
+	meta "go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -19,12 +22,14 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 	"github.com/grafana/beyla/v3/pkg/export/alloy"
+	"github.com/grafana/beyla/v3/pkg/export/gpumetrics"
 	"github.com/grafana/beyla/v3/pkg/export/hostinfo"
 	"github.com/grafana/beyla/v3/pkg/export/otel"
 	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
 	"github.com/grafana/beyla/v3/pkg/internal/appolly/traces"
 	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
+	"github.com/grafana/beyla/v3/pkg/internal/infraolly/gpu"
 )
 
 func ilog() *slog.Logger {
@@ -58,6 +63,7 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	})
 
 	addHostInfoExporters(config, swi, ctxInfo, processEventsCh)
+	addGPUExporters(config, swi, ctxInfo, processEventsCh)
 
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
@@ -102,6 +108,53 @@ func addHostInfoExporters(
 		}
 		swi.Add(hostinfo.PromExport(promCfg, ctxInfo.OverrideAppExportQueue, processEventsCh))
 	}
+}
+
+func addGPUExporters(
+	config *beyla.Config,
+	swi *swarm.Instancer,
+	ctxInfo *global.ContextInfo,
+	processEventsCh *msg.Queue[exec.ProcessEvent],
+) {
+	otelEnabled := config.AsOBI().OTELMetrics.EndpointEnabled()
+	promEnabled := config.Prometheus.EndpointEnabled()
+	if !bexport.Has(config.AsOBI().JoinMetricsConfig().Features, bexport.FeatureGPU) || (!otelEnabled && !promEnabled) {
+		return
+	}
+	// both exporters share the collector, so the hardware is read only once per collection
+	collector := gpu.NewCollector(gpu.CollectorConfig{})
+	swi.Add(swarm.DirectInstance(func(ctx context.Context) {
+		<-ctx.Done()
+		collector.Close()
+	}))
+	hostName := nodeHostName(&ctxInfo.NodeMeta.Metadata)
+	swi.Add(gpumetrics.OTELExport(gpumetrics.OTELConfig{
+		Enabled:  otelEnabled,
+		HostID:   ctxInfo.NodeMeta.HostID,
+		HostName: hostName,
+		Interval: config.OTELMetrics.GetInterval(),
+		Exporter: ctxInfo.OTELMetricsExporter.Instantiate,
+	}, collector, processEventsCh))
+	swi.Add(gpumetrics.PromExport(gpumetrics.PromConfig{
+		Enabled:  promEnabled,
+		HostID:   ctxInfo.NodeMeta.HostID,
+		HostName: hostName,
+		Register: func(c prometheus.Collector) error {
+			ctxInfo.Prometheus.Register(config.Prometheus.Port, config.Prometheus.Path, c)
+			return nil
+		},
+		StartHTTP: ctxInfo.Prometheus.StartHTTP,
+	}, collector, processEventsCh))
+}
+
+func nodeHostName(entries *[]meta.Entry) string {
+	for _, e := range *entries {
+		if e.Key == attr.HostName && e.Value != "" {
+			return e.Value
+		}
+	}
+	name, _ := os.Hostname()
+	return name
 }
 
 func unresolvedNames(cfg *beyla.Config) request.UnresolvedNames {

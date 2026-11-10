@@ -44,6 +44,8 @@ func (c *Config) AsOBI() *obi.Config {
 			// or, renamed. For example:
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
+			// TODO: re-enable when we support v2 config
+			".Attributes.UseV2Selection": cfgutil.SkipConversion,
 		})
 		overrideOBI(c, obiCfg)
 		c.obi = obiCfg

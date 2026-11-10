@@ -137,6 +137,7 @@ The Beyla metrics exporter can export the following metrics data groups for proc
   `service-graphs-connection-info` processor.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for collection requirements and metric descriptions.
+- `gpu`: GPU hardware metrics of the host and GPU usage of the selected services. Refer to [GPU metrics](#gpu-metrics) for requirements and metric descriptions.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts. Enables `beyla.network.flow.packets` (`beyla_network_flow_packets_total` in Prometheus)
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
@@ -159,6 +160,50 @@ metrics:
 ```
 
 The counter records successful TCP handshakes rather than application requests. The same feature is accepted in per-service and deprecated exporter feature lists. Use [attribute selection](../metrics-traces-attributes/#select-tcp-handshake-roles) to split connections by handshake role.
+
+### GPU metrics
+
+Enable `gpu` to export the hardware metrics of the GPUs installed in the host, and the GPU usage of the instrumented processes. It is disabled by default, and included in `all`.
+
+```yaml
+metrics:
+  features: ["application", "gpu"]
+```
+
+Metric names and attributes follow the [OpenTelemetry semantic conventions for GPU hardware](https://opentelemetry.io/docs/specs/semconv/hardware/gpu/). Beyla reads the metrics when the exporter collects them, and omits the metrics that a device or driver doesn't provide.
+
+| Vendor | Source | Requirements |
+|--------|--------|--------------|
+| AMD | `amdgpu` driver sysfs and hwmon entries | Read access to `/sys` |
+| Intel | `i915` and `xe` driver sysfs and hwmon entries | Read access to `/sys` |
+| NVIDIA | NVIDIA Management Library (NVML) | A Beyla binary built with the `beyla_nvml` build tag, and `libnvidia-ml.so.1` available in the container, for example through the NVIDIA Container Toolkit with `NVIDIA_DRIVER_CAPABILITIES=utility` |
+
+NVML is loaded at runtime without CGO, but loading it makes the Beyla binary dynamically linked against glibc, so the `beyla_nvml` build can't run from the default `scratch`-based container image. Beyla logs a warning if it finds NVIDIA GPUs but can't load NVML.
+
+Device metrics have the `hw.id`, `hw.name`, and `hw.vendor` attributes. OTLP metrics carry the `host.id` and `host.name` resource attributes, and Prometheus metrics the `host_id` and `host_name` labels.
+
+| OTLP name | Prometheus name | Type | Extra attributes |
+|-----------|-----------------|------|------------------|
+| `hw.gpu.utilization` | `hw_gpu_utilization_ratio` | Gauge | `hw.gpu.task`: `general`, `encoder`, `decoder` |
+| `hw.gpu.memory.utilization` | `hw_gpu_memory_utilization_ratio` | Gauge | |
+| `hw.gpu.memory.controller.utilization` | `hw_gpu_memory_controller_utilization_ratio` | Gauge | |
+| `hw.gpu.memory.limit` | `hw_gpu_memory_limit_bytes` | UpDownCounter | |
+| `hw.gpu.memory.usage` | `hw_gpu_memory_usage_bytes` | UpDownCounter | |
+| `hw.gpu.speed` | `hw_gpu_speed_hertz` | Gauge | `hw.gpu.clock_domain`: `graphics`, `sm`, `memory` |
+| `hw.temperature` | `hw_temperature_celsius` | Gauge | `hw.sensor_location`, for example `die`, `edge`, `junction`, `mem` |
+| `hw.power` | `hw_power_watts` | Gauge | |
+| `hw.power.limit` | `hw_power_limit_watts` | Gauge | |
+| `hw.energy` | `hw_energy_joules_total` | Counter | |
+| `hw.fan.speed` | `hw_fan_speed_rpm` | Gauge | |
+| `hw.fan.speed_ratio` | `hw_fan_speed_ratio` | Gauge | |
+| `hw.errors` | `hw_errors_total` | Counter | `error.type`: `corrected`, `uncorrected`, `pcie_replay`; `hw.type`: `gpu` |
+
+For NVIDIA GPUs, Beyla also reports the GPU usage of the instrumented processes, with the `hw.id`, `process.pid`, `service.name`, `service.namespace`, and `service.instance.id` attributes. Beyla must run in the host PID namespace to match the processes that NVML reports.
+
+| OTLP name | Prometheus name | Type | Description |
+|-----------|-----------------|------|-------------|
+| `process.gpu.memory.usage` | `process_gpu_memory_usage_bytes` | UpDownCounter | GPU memory used by the process |
+| `process.gpu.utilization` | `process_gpu_utilization_ratio` | Gauge | Average fraction of time the process used the streaming multiprocessors since the previous collection |
 
 ### Application runtime metrics
 
@@ -450,6 +495,7 @@ The Prometheus metrics exporter can export the following metrics data groups:
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for collection requirements and metric descriptions.
+- `gpu`: GPU hardware metrics of the host and GPU usage of the selected services. Refer to [GPU metrics](#gpu-metrics)
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more

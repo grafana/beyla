@@ -14,6 +14,20 @@ local clangFormatter = (Builtins.clang_format) {
 }
 
 steps {
+  ["rumdl"] = (Builtins.rumdl) {
+    // Limit Markdown linting to the first-party .md files in this repository.
+    glob = List("**/*.md")
+  }
+  ["rumdl-config"] = new Config.Step {
+    // A policy change must re-check every Markdown file, not lint TOML as Markdown.
+    glob = ".rumdl.toml"
+    dir = "."
+    check = new Config.CommandSpec {
+      command = "rumdl check ."
+      effect = "read"
+    }
+    depends = List("rumdl")
+  }
   ["golangci-lint"] = (Builtins.golangci_lint) {
     // Beyla's existing root-module lint task has a six-minute timeout. Keep
     // the builtin scoped to this module instead of nested Go modules.

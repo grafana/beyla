@@ -1511,39 +1511,6 @@ checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9
 url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
 url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
 
-[[tools.java]]
-version = "temurin-21.0.8+9.0.LTS"
-backend = "core:java"
-specifiers = ["temurin-21.0.8+9.0.LTS"]
-
-[tools.java."platforms.linux-arm64"]
-checksum = "sha256:e5c41a1ab0865ea5de9b4529bf8526005f1d4593090845387d14fe450ce39c33"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.linux-arm64-musl"]
-checksum = "sha256:4773cfdc59d66b75f4a68ac843b2b5854791840114cf8bb1b56fb6f7826ae498"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_alpine-linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.linux-x64"]
-checksum = "sha256:f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.linux-x64-musl"]
-checksum = "sha256:73c4cbe10f4f385383d9cb54d34f2bee2c68b5265f9e3d954f3326948c40c0be"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_alpine-linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.macos-arm64"]
-checksum = "sha256:59422c2292ae4e76b87e00d8808dbe49cffa39af731e08bb0292ddb0af4e0261"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.macos-x64"]
-checksum = "sha256:0ceaf7060b2c9dbbe8ecc4fb9351c6b4cf24e4350d58772c9656589933a4fdeb"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_mac_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.windows-x64"]
-checksum = "sha256:5dbb74a4edda94c2aae97a1e30f448db0ad9023a9466fe31a8c68377d9dfbac4"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.8_9.zip"
-
 [[tools.hk]]
 version = "2.11.1"
 backend = "packslip:github.com/jdx/hk"
@@ -1585,6 +1552,39 @@ url = "https://github.com/jdx/hk/releases/download/v2.11.1/hk-x86_64-pc-windows-
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
+[[tools.java]]
+version = "temurin-21.0.8+9.0.LTS"
+backend = "core:java"
+specifiers = ["temurin-21.0.8+9.0.LTS"]
+
+[tools.java."platforms.linux-arm64"]
+checksum = "sha256:e5c41a1ab0865ea5de9b4529bf8526005f1d4593090845387d14fe450ce39c33"
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.8_9.tar.gz"
+
+[tools.java."platforms.linux-arm64-musl"]
+checksum = "sha256:4773cfdc59d66b75f4a68ac843b2b5854791840114cf8bb1b56fb6f7826ae498"
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_alpine-linux_hotspot_21.0.8_9.tar.gz"
+
+[tools.java."platforms.linux-x64"]
+checksum = "sha256:f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219"
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz"
+
+[tools.java."platforms.linux-x64-musl"]
+checksum = "sha256:73c4cbe10f4f385383d9cb54d34f2bee2c68b5265f9e3d954f3326948c40c0be"
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_alpine-linux_hotspot_21.0.8_9.tar.gz"
+
+[tools.java."platforms.macos-arm64"]
+checksum = "sha256:59422c2292ae4e76b87e00d8808dbe49cffa39af731e08bb0292ddb0af4e0261"
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.8_9.tar.gz"
+
+[tools.java."platforms.macos-x64"]
+checksum = "sha256:0ceaf7060b2c9dbbe8ecc4fb9351c6b4cf24e4350d58772c9656589933a4fdeb"
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_mac_hotspot_21.0.8_9.tar.gz"
+
+[tools.java."platforms.windows-x64"]
+checksum = "sha256:5dbb74a4edda94c2aae97a1e30f448db0ad9023a9466fe31a8c68377d9dfbac4"
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.8_9.zip"
+
 [[tools.kind]]
 version = "0.33.0"
 backend = "aqua:kubernetes-sigs/kind"
@@ -1624,6 +1624,53 @@ url_api = "https://api.github.com/repos/kubernetes-sigs/kind/releases/assets/531
 checksum = "sha256:4b22adaa135368c5a465d56bbd8e520cbea87272a06ca00b6078e7b81515c9fc"
 url = "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-windows-amd64"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kind/releases/assets/531396499"
+
+[[tools.rumdl]]
+version = "0.3.2"
+backend = "aqua:rvben/rumdl"
+specifiers = ["0.3.2"]
+
+[tools.rumdl."platforms.linux-arm64"]
+checksum = "sha256:bdfca7a602f893fbe5d73d5e38f73b31f45a21d3bcf385b6ea819997d0449ec3"
+url = "https://github.com/rvben/rumdl/releases/download/v0.3.2/rumdl-v0.3.2-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/685449365"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.linux-arm64-musl"]
+checksum = "sha256:afc6dd91f1c4f2a8cf4a40ab99f8e52e06e6dddfc5334f1c1db8b158d353d143"
+url = "https://github.com/rvben/rumdl/releases/download/v0.3.2/rumdl-v0.3.2-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/685449354"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.linux-x64"]
+checksum = "sha256:f527d1374765d826c1627ceab3d1f46e548268731a495b5b12a3af529b3d79e8"
+url = "https://github.com/rvben/rumdl/releases/download/v0.3.2/rumdl-v0.3.2-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/685449359"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.linux-x64-musl"]
+checksum = "sha256:395c4061041c5a25301c7b3564a93c4a661ed4df93427a77b6fc9e426ec8a13a"
+url = "https://github.com/rvben/rumdl/releases/download/v0.3.2/rumdl-v0.3.2-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/685449350"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.macos-arm64"]
+checksum = "sha256:a1eefb1cd2e0cafa42f0ca98d3f8713d7e73f9eba77fc8ef0ed6836875197935"
+url = "https://github.com/rvben/rumdl/releases/download/v0.3.2/rumdl-v0.3.2-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/685449362"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.macos-x64"]
+checksum = "sha256:ab35f245127a06374833127162eebdbdec1be17c1e3d8274f02f1b909645635c"
+url = "https://github.com/rvben/rumdl/releases/download/v0.3.2/rumdl-v0.3.2-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/685449351"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.windows-x64"]
+checksum = "sha256:87a632668c55969a7d916f214a28a7d365f6a68ec626b547bd1243e035b9c7ff"
+url = "https://github.com/rvben/rumdl/releases/download/v0.3.2/rumdl-v0.3.2-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/685449367"
+provenance = "github-attestations"
 
 [[tools.setup-envtest]]
 version = "0.25.1"

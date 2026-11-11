@@ -12,7 +12,7 @@ case "$profile" in
   generate) tools="$bpf_tools,gotestsum" ;;
   integration) tools="$bpf_tools,kind,gotestsum" ;;
   oats) tools="$bpf_tools,ginkgo" ;;
-  lint) tools='go,golangci-lint,hk' ;;
+  lint) tools='go,golangci-lint,hk,rumdl' ;;
   unit) tools='go,setup-envtest,gotestsum' ;;
   release) tools="$bpf_tools,java,gradle" ;;
   obi-fix) tools="$bpf_tools,clang-tidy" ;;

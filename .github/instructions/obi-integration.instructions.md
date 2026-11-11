@@ -9,6 +9,7 @@ When working on or reviewing changes related to OBI (OpenTelemetry eBPF Instrume
 ## Forbidden directories
 
 Never modify files in these directories directly:
+
 - `vendor/` — vendored OBI code, managed by `go mod vendor`. If OBI CI passes, this code is correct by definition.
 - `.obi-src/` — the OBI submodule. Changes go upstream.
 - `internal/testgenerated/` — generated test output. Change `scripts/generate-obi-tests.sh` or Go source instead.
@@ -20,6 +21,7 @@ Beyla mirrors OBI config structs and uses `pkg/helpers/config/convert.go` (`Conv
 When OBI adds new config fields, Beyla mirrors must be updated with matching fields, including `BEYLA_`-prefixed env tags and matching defaults.
 
 Known mirror pairs:
+
 - `vendor/.../obi/pkg/kube/kubecache/config.go` (OBI) <-> `cmd/k8s-cache/cfg/config.go` (Beyla)
 - `vendor/.../obi/pkg/obi/config.go` (OBI) <-> `pkg/beyla/config.go` (Beyla), bridged via `pkg/beyla/config_obi.go`
 
@@ -28,6 +30,7 @@ A config mismatch causes a startup panic. In k8s-cache this manifests as test ti
 ## Test sync before patch
 
 When a Beyla test fails on an assertion, do not simply adjust the assertion to make it pass. First locate the corresponding test in OBI (`.obi-src/`) and compare:
+
 - If the test block or sub-case has been **removed** in OBI, remove the same block from Beyla's copy (applying the OBI-to-Beyla translation rules from `scripts/generate-obi-tests.sh`). Do not patch the assertion.
 - If the test block still exists in OBI but the assertion changed, then adjust the assertion to match the new OBI behaviour.
 
@@ -44,11 +47,13 @@ Do not skip, disable, or `t.Skip()` tests. Fix failures at the source.
 ## Scope of OBI integration changes
 
 Changes should be limited to:
+
 - Beyla's own Go code (not in `vendor/`, not in `.obi-src/`)
 - Test synchronisation rules in `scripts/generate-obi-tests.sh` (`BEHAVIORAL_TRANSFORMS`, `CODE_INJECTIONS`)
 - Beyla-specific test extensions in `internal/test/beyla_extensions/`
 
 When reviewing OBI integration changes, flag:
+
 - Modifications to forbidden directories
 - Test skips
 - Assertion-only fixes that change expected values without also porting the corresponding OBI test inputs (config YAML fields, setup data, table entries) — this is the most common shortcut and defeats the purpose of the test

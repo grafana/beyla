@@ -39,7 +39,7 @@ attributes:
       exclude: ["k8s.pod.*"]
 ```
 
-### Select database metric attributes
+## Select database metric attributes
 
 Use `db_client_operation_duration` to select attributes for database client
 operation metrics and `db_server_operation_duration` for database server
@@ -132,7 +132,7 @@ In the previous example, all metrics with a name starting with `http_` or `http.
 
 When a metric name matches multiple definitions using wildcards, exact matches take precedence over wildcard matches.
 
-### Select HTTP and RPC metric attributes
+## Select HTTP and RPC metric attributes
 
 HTTP and RPC metrics include `error.type` (`error_type`) by default when available. RPC duration metrics also include `rpc.response.status_code` (`rpc_response_status_code`). Use `exclude` to remove a dimension while retaining the other defaults:
 
@@ -162,7 +162,7 @@ attributes:
 
 An explicit duration `include` list replaces its default attribute set. Choose route dimensions that fit the cardinality of your services.
 
-### Select messaging metric attributes
+## Select messaging metric attributes
 
 Both `messaging_client_operation_duration` and `messaging_process_duration` include `messaging.consumer.group.name`, `messaging.destination.subscription.name`, and `error.type` by default when available. The client-operation metric also includes `messaging.operation.type`. Underscore spellings, such as `messaging_consumer_group_name`, are accepted.
 
@@ -177,7 +177,7 @@ attributes:
       exclude: ["messaging_consumer_group_name", "messaging_destination_subscription_name"]
 ```
 
-### Select TCP handshake roles
+## Select TCP handshake roles
 
 The `beyla_stat_tcp_successful_connections` selector accepts `network.tcp.handshake.role`, also spelled `network_tcp_handshake_role`. This attribute is opt-in. Values are `client` for the endpoint that initiated the connection, `server` for the accepting endpoint, and `unknown` when the role is unavailable.
 
@@ -360,7 +360,7 @@ You can template service names using Go templates. This lets you create conditio
 
 The following context is available to the template:
 
-```
+```text
 Meta: (*informer.ObjectMeta)
   Name: (string)
   Namespace: (string)
@@ -380,13 +380,13 @@ You can find the full object and structure in the `kubecache informer.pb.go` sou
 
 Service name template examples:
 
-```
+```gotemplate
 {{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}{{ if .ContainerName }}/{{ .ContainerName -}}{{ end -}}
 ```
 
 or
 
-```
+```gotemplate
 {{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}
 ```
 
@@ -467,6 +467,7 @@ The following table describes the default group attributes.
 | `k8s_app_meta` | `k8s.owner.name`       |
 
 And the following table describes the metrics and their associated groups.
+
 | Group | OTEL Metric | Prom Metric |
 |---------------------|---------------------------------|---------------------------------|
 | `k8s_app_meta` | `process.cpu.utilization` | `process_cpu_utilization_ratio` |
@@ -526,7 +527,6 @@ Names are matched exactly and are case sensitive, so `token` does not cover `Tok
 YAML section: `attributes`
 
 Since Beyla instruments at the protocol level, it doesn't have access to programming language/framework information about host names or URL routes. Therefore, it's possible to create a metric cardinality explosion, without putting restrictions on how many possible values can be reported for a given metric label. To limit the possibility of cardinality explosion, Beyla has several options that control cardinality.
-
 
 | YAML<p>environment variable</p>             | Description                                                                                               | Type    | Default |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- | ------- |

@@ -1,0 +1,20 @@
+[global]
+# Keep existing paragraph wrapping; Vale remains the prose and style checker.
+disable = ["MD013"]
+exclude = [".obi-src/**", "vendor/**", "internal/testgenerated/**"]
+
+[MD025]
+# Hugo pages use a YAML title alongside the first visible H1; don't count both.
+front-matter-title = ""
+
+[MD033]
+# These are intentional in Beyla docs: paragraph wrappers and the README logo.
+allowed-elements = ["p", "img"]
+
+[per-file-ignores]
+# Hugo resolves these links against generated pages/assets, not source files.
+"docs/sources/**/*.md" = ["MD051", "MD057"]
+# README displays its logo before the visible H1.
+"README.md" = ["MD041"]
+# Keep these bold table labels so existing section anchors remain stable.
+"docs/sources/configure/export-data.md" = ["MD036"]

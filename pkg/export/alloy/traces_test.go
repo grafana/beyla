@@ -284,8 +284,10 @@ func TestConnectTraces(t *testing.T) {
 		Service:  svc.Attrs{UID: svc.UID{Name: "foo"}},
 		Host:     "1.2.3.4",
 		HostName: "foo.com",
-		Peer:     "4.2.3.1",
-		PeerName: "4.2.3.1",
+		// HTTP server spans derive server.address from the captured request host
+		RequestAuthority: "foo.com",
+		Peer:             "4.2.3.1",
+		PeerName:         "4.2.3.1",
 	}, {
 		Type:     request.EventTypeHTTPClient,
 		Method:   "POST",

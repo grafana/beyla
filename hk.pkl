@@ -15,8 +15,9 @@ local clangFormatter = (Builtins.clang_format) {
 
 steps {
   ["rumdl"] = (Builtins.rumdl) {
-    // Limit Markdown linting to the first-party .md files in this repository.
+    // Limit Markdown linting to first-party source; helm-docs owns the chart README.
     glob = List("**/*.md")
+    exclude = List("charts/beyla/README.md")
   }
   ["rumdl-config"] = new Config.Step {
     // A policy change must re-check every Markdown file, not lint TOML as Markdown.

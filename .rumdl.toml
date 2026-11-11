@@ -1,7 +1,7 @@
 [global]
 # Keep existing paragraph wrapping; Vale remains the prose and style checker.
 disable = ["MD013"]
-exclude = [".obi-src/**", "vendor/**", "internal/testgenerated/**"]
+exclude = [".obi-src/**", "vendor/**", "internal/testgenerated/**", "charts/beyla/README.md"]
 
 [MD025]
 # Hugo pages use a YAML title alongside the first visible H1; don't count both.

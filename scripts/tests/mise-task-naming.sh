@@ -202,6 +202,8 @@ set -euo pipefail
   echo "unexpected go invocation in matrix fixture: $*" >&2
   exit 1
 }
+# Delay discovery to expose consumers that exit without reading stdin.
+sleep 0.05
 printf '%s\n' ./pkg/alpha ./pkg/beta ./pkg/gamma
 SH
 cat >"$tmp/matrix-bin/gotestsum" <<'SH'
@@ -225,6 +227,8 @@ done
   echo "missing matrix options: partitions=$partitions timing_files=$timing_files" >&2
   exit 1
 }
+# The real matrix command consumes the package list from stdin.
+cat >/dev/null
 printf '{"include":['
 for ((i = 0; i < partitions; i++)); do
   if ((i > 0)); then printf ','; fi

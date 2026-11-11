@@ -44,6 +44,7 @@ const (
 	configVersionV2 = "v2"
 )
 
+// nolint:cyclop
 func main() {
 	// `beyla config validate|migrate` is OBI's config command group. It reads OBI v1 files, so
 	// it needs the same BEYLA_* to OTEL_EBPF_* environment mirroring as the regular config loader.

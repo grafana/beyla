@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE alias="run-integration-test-vm"
+#MISE description="Run integration tests in a VM"
+#USAGE flag "--test-pattern <pattern>" help="Go test name pattern" env="TEST_PATTERN"
+set -euo pipefail
+
+TEST_PATTERN="${usage_test_pattern-${TEST_PATTERN:-}}"
+export TEST_PATTERN
+echo "### Running integration tests (pattern: ${TEST_PATTERN})"
+TEST_TIMEOUT="60m"
+TEST_PARALLEL="1"
+if [ -f "/precompiled-tests/integration.test" ]; then
+	echo "Using pre-compiled integration tests"
+	chmod +x /precompiled-tests/integration.test
+	/precompiled-tests/integration.test \
+		-test.parallel="${TEST_PARALLEL}" \
+		-test.timeout="${TEST_TIMEOUT}" \
+		-test.failfast \
+		-test.v \
+		-test.run="^(${TEST_PATTERN})\$"
+else
+	echo "Pre-compiled tests not found, compiling in VM"
+	go test \
+		-p "${TEST_PARALLEL}" \
+		-timeout "${TEST_TIMEOUT}" \
+		-failfast \
+		-v -a \
+		-mod vendor \
+		-tags=integration \
+		-run="^(${TEST_PATTERN})\$" ./internal/testgenerated/integration
+fi

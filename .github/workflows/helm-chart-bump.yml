@@ -135,9 +135,15 @@ jobs:
           echo "Updated Chart.yaml:"
           grep -E '^(version|appVersion):' charts/beyla/Chart.yaml
 
+      - name: Set up mise
+        if: steps.gate.outputs.skip != 'true'
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: none
+
       - name: Regenerate Helm docs
         if: steps.gate.outputs.skip != 'true'
-        run: make helm-docs
+        run: mise run helm:docs
 
       - name: Get GitHub App token
         if: steps.gate.outputs.skip != 'true'

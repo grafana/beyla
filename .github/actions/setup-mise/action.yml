@@ -1,0 +1,57 @@
+name: Set up mise
+description: Set up mise and install only the selected tools.
+inputs:
+  profile:
+    description: Named exact set of Mise tools to enable for this job.
+    required: true
+  cache-modules:
+    description: Whether to cache the Go module download directory.
+    required: false
+    default: "false"
+  cache-build:
+    description: Whether to cache the Go build directory.
+    required: false
+    default: "false"
+  cache-build-prefix:
+    description: Prefix separating Go build-cache trust and workload scopes.
+    required: false
+    default: "go-build"
+runs:
+  using: composite
+  steps:
+    - name: Resolve Mise tool profile
+      shell: bash
+      env:
+        MISE_TOOLS_PROFILE: ${{ inputs.profile }}
+      run: bash "$GITHUB_ACTION_PATH/resolve-profile.sh"
+
+    - name: Cache Go modules
+      if: ${{ inputs.cache-modules == 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.sum', '**/go.sum') }}
+        restore-keys: |
+          go-mod-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Cache Go build
+      if: ${{ inputs.cache-build == 'true' }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] Go build cache is content-addressable and self-verifying
+      with:
+        path: ~/.cache/go-build
+        key: ${{ inputs.cache-build-prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
+        restore-keys: |
+          ${{ inputs.cache-build-prefix }}-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Set up mise CLI
+      uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+      with:
+        version: "2026.11.4"
+        cache: false
+        install: true
+
+    - name: Check Go version matches go.mod
+      shell: bash
+      env:
+        MISE_ENABLE_TOOLS: go
+      run: mise run --skip-tools check:go-version

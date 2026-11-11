@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#MISE alias="generate-beyla"
+#MISE description="Generate Beyla-owned eBPF bindings"
+set -euo pipefail
+root=${MISE_CONFIG_ROOT}
+obi_module=${OBI_MODULE-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' "$root/go.mod")}
+bpf2go=${BPF2GO:-bpf2go}
+export BPF_CLANG="${BPF_CLANG-${CLANG-clang}}"
+if [[ -n "${BPF_CFLAGS-}" ]]; then
+  :
+elif [[ -n "${CFLAGS-}" ]]; then
+  export BPF_CFLAGS="-O2 -g -Wunaligned-access -Wpacked -Wpadded -Wall -Werror ${CFLAGS}"
+else
+  export BPF_CFLAGS="-O2 -g -Wunaligned-access -Wpacked -Wpadded -Wall -Werror"
+fi
+export BPF2GO="$bpf2go"
+export OBI_BPF_INCLUDE="$(cd "$obi_module" && pwd)/bpf"
+GOOS=linux go generate ./pkg/internal/ebpf/surveywatcher

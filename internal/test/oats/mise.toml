@@ -1,0 +1,104 @@
+[env]
+TESTCASE_BASE_PATH = "./yaml"
+TESTCASE_TIMEOUT = "5m"
+
+[tasks.prepare]
+alias = ["prereq", "//oats:prereq", "oats-prereq", "oats:prereq"]
+description = "Prepare generated OBI/vendor dependencies and OATS test output"
+depends = ["//:vendor:obi"]
+dir = "{{config_root}}/../../../"
+run = 'mkdir -p "${TEST_OUTPUT}/run"'
+
+[tasks.matrix]
+alias = ["matrix:integration-test-json", "//oats:matrix:integration-test-json", "oats-integration-test-matrix-json", "oats:matrix:integration-test-json"]
+description = "Generate the OATS integration test matrix JSON"
+dir = "{{config_root}}/../../../"
+run = 'scripts/generate-dir-matrix.sh internal/testgenerated/oats /harness/'
+
+[tasks.test]
+alias = ["oats-test", "oats:test"]
+description = "Run all OATS suites and merge integration coverage"
+depends = [":prepare"]
+run = [
+  { task = ":test:sql" },
+  { task = ":test:mongo" },
+  { task = ":test:redis" },
+  { task = ":test:kafka" },
+  { task = ":test:http" },
+  { task = ":test:memcached" },
+  { task = ":test:ai" },
+  { task = ":test:nats" },
+  { task = ":test:amqp" },
+  { task = "//:integration:coverage-data" },
+]
+
+[tasks.debug]
+alias = ["test:debug", "//oats:test:debug", "oats-test-debug", "oats:test:debug"]
+description = "Run an OATS suite in manual debug mode (default: kafka)"
+depends = [":prepare"]
+
+[tasks."test:harness"]
+alias = ["oats-test-harness", "oats:test:harness"]
+description = "Run OATS harness unit tests"
+depends = ["//:generate:obi-tests"]
+dir = "{{config_root}}/../../../internal/testgenerated/oats/harness"
+run = "go test -race ./..."
+
+[tasks._suite]
+usage = 'arg "<suite>" { choices "sql" "mongo" "redis" "kafka" "http" "memcached" "ai" "nats" "amqp" }'
+dir = "{{config_root}}/../../../internal/testgenerated/oats"
+run = 'cd "${usage_suite?}" && mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
+
+[tasks."test:ai"]
+alias = ["oats-test-ai", "oats:test:ai"]
+description = "Run OATS ai tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["ai"] }]
+
+[tasks."test:amqp"]
+alias = ["oats-test-amqp", "oats:test:amqp"]
+description = "Run OATS amqp tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["amqp"] }]
+
+[tasks."test:http"]
+alias = ["oats-test-http", "oats:test:http"]
+description = "Run OATS http tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["http"] }]
+
+[tasks."test:kafka"]
+alias = ["oats-test-kafka", "oats:test:kafka"]
+description = "Run OATS kafka tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["kafka"] }]
+
+[tasks."test:memcached"]
+alias = ["oats-test-memcached", "oats:test:memcached"]
+description = "Run OATS memcached tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["memcached"] }]
+
+[tasks."test:mongo"]
+alias = ["oats-test-mongo", "oats:test:mongo"]
+description = "Run OATS mongo tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["mongo"] }]
+
+[tasks."test:nats"]
+alias = ["oats-test-nats", "oats:test:nats"]
+description = "Run OATS nats tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["nats"] }]
+
+[tasks."test:redis"]
+alias = ["oats-test-redis", "oats:test:redis"]
+description = "Run OATS redis tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["redis"] }]
+
+[tasks."test:sql"]
+alias = ["oats-test-sql", "oats:test:sql"]
+description = "Run OATS sql tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["sql"] }]

@@ -11,7 +11,7 @@ mkdir -p "$bin" "$root/etc/default" "$root/etc/alloy" \
   "$root/usr/lib/beyla" "$root/usr/share/beyla" \
   "$root/usr/lib/systemd/system" "$root/var/lib"
 
-cat > "$root/etc/default/alloy" <<'EOF'
+cat >"$root/etc/default/alloy" <<'EOF'
 ## Path:
 ## Description: Grafana Alloy settings
 ## Type:        string
@@ -44,24 +44,24 @@ ALLOY_OTEL_MODE=""
 # Restart on system upgrade. Defaults to true.
 RESTART_ON_UPGRADE=true
 EOF
-printf 'pristine package config\n' > "$root/etc/alloy/config.alloy"
+printf 'pristine package config\n' >"$root/etc/alloy/config.alloy"
 config_hash=$(md5sum "$root/etc/alloy/config.alloy" | awk '{print $1}')
 cp "$PACKAGE_DIR/alloy-config.alloy" "$root/usr/share/beyla/config.alloy"
 cp "$PACKAGE_DIR/alloy-dropin.conf" "$root/usr/share/beyla/alloy-service-dropin.conf"
 cp "$PACKAGE_DIR/configure.py" "$root/usr/lib/beyla/configure.py"
 cp "$PACKAGE_DIR/validate-alloy.py" "$root/usr/lib/beyla/validate-alloy.py"
-printf '[Service]\nExecStart=/usr/bin/demo\n' > "$root/usr/lib/systemd/system/demo.service"
+printf '[Service]\nExecStart=/usr/bin/demo\n' >"$root/usr/lib/systemd/system/demo.service"
 
-cat > "$bin/dpkg-query" <<'EOF'
+cat >"$bin/dpkg-query" <<'EOF'
 #!/bin/sh
 printf ' /etc/alloy/config.alloy %s\n' "$ALLOY_DEFAULT_HASH"
 EOF
-cat > "$bin/alloy" <<'EOF'
+cat >"$bin/alloy" <<'EOF'
 #!/bin/sh
 echo "$*" >> "$COMMAND_LOG"
 test "$1" = validate
 EOF
-cat > "$bin/systemctl" <<'EOF'
+cat >"$bin/systemctl" <<'EOF'
 #!/bin/sh
 echo "$*" >> "$COMMAND_LOG"
 if [ "$1" = is-active ]; then test -f "$ACTIVE_FILE"; exit; fi
@@ -112,7 +112,7 @@ rm -rf "$root_debconf/etc/beyla" \
   "$root_debconf/etc/systemd/system/alloy.service.d" \
   "$root_debconf/etc/systemd/system/demo.service.d"
 mkdir -p "$root_debconf/usr/share/debconf"
-cat > "$root_debconf/usr/share/debconf/confmodule" <<'DEBCONF'
+cat >"$root_debconf/usr/share/debconf/confmodule" <<'DEBCONF'
 db_get() {
   printf '%s\n' "$1" >> "$DEBCONF_LOG"
   case "$1" in
@@ -134,9 +134,9 @@ db_get() {
 }
 db_set() { :; }
 DEBCONF
-debconf_env=("${common_env[@]}" "BEYLA_PACKAGE_ROOT=$root_debconf" \
-  "BEYLA_TEST_NO_DEBCONF=0" "DEBCONF_LOG=$tmp/debconf.log" \
-  "GRAFANA_CLOUD_FLEET_URL=https://ambient.example/remotecfg" \
+debconf_env=("${common_env[@]}" "BEYLA_PACKAGE_ROOT=$root_debconf"
+  "BEYLA_TEST_NO_DEBCONF=0" "DEBCONF_LOG=$tmp/debconf.log"
+  "GRAFANA_CLOUD_FLEET_URL=https://ambient.example/remotecfg"
   "GRAFANA_CLOUD_FLEET_INSTANCE_ID=ambient-id")
 env "${debconf_env[@]}" "$PACKAGE_DIR/postinst" configure
 ! grep -q '^beyla/fleet-url$' "$tmp/debconf.log"
@@ -146,7 +146,7 @@ env "${debconf_env[@]}" "$PACKAGE_DIR/postinst" configure
 
 # An upgrade preserves edits/credentials and restarts only the package-owned
 # collector. The mode remains install-time-only.
-printf '# retained customer change\n' >> "$root/etc/beyla/alloy.env"
+printf '# retained customer change\n' >>"$root/etc/beyla/alloy.env"
 env "${common_env[@]}" "$PACKAGE_DIR/postinst" configure 1.2.3
 grep -q '# retained customer change' "$root/etc/beyla/alloy.env"
 grep -q 'restart alloy.service' "$tmp/commands"
@@ -158,7 +158,7 @@ mkdir -p "$root_bad/etc/default" "$root_bad/etc/alloy" \
   "$root_bad/usr/lib/beyla" "$root_bad/usr/share/beyla" \
   "$root_bad/var/lib"
 cp "$root/etc/default/alloy" "$root_bad/etc/default/alloy"
-printf 'customer config\n' > "$root_bad/etc/alloy/config.alloy"
+printf 'customer config\n' >"$root_bad/etc/alloy/config.alloy"
 cp "$root/usr/share/beyla/config.alloy" "$root_bad/usr/share/beyla/config.alloy"
 cp "$root/usr/share/beyla/alloy-service-dropin.conf" "$root_bad/usr/share/beyla/alloy-service-dropin.conf"
 cp "$root/usr/lib/beyla/configure.py" "$root_bad/usr/lib/beyla/configure.py"
@@ -166,8 +166,8 @@ cp "$root/usr/lib/beyla/validate-alloy.py" "$root_bad/usr/lib/beyla/validate-all
 bad_env=("${common_env[@]}")
 for i in "${!bad_env[@]}"; do
   case "${bad_env[$i]}" in
-    BEYLA_PACKAGE_ROOT=*) bad_env[$i]="BEYLA_PACKAGE_ROOT=$root_bad" ;;
-    ALLOY_DEFAULT_HASH=*) bad_env[$i]=ALLOY_DEFAULT_HASH=00000000000000000000000000000000 ;;
+  BEYLA_PACKAGE_ROOT=*) bad_env[$i]="BEYLA_PACKAGE_ROOT=$root_bad" ;;
+  ALLOY_DEFAULT_HASH=*) bad_env[$i]=ALLOY_DEFAULT_HASH=00000000000000000000000000000000 ;;
   esac
 done
 if env "${bad_env[@]}" "$PACKAGE_DIR/postinst" configure; then
@@ -181,14 +181,14 @@ test ! -e "$root_bad/var/lib/beyla/mode"
 # still rejected before any package-managed state is created.
 root_bad_env="$tmp/custom-alloy-env"
 cp -a "$root_bad" "$root_bad_env"
-printf 'pristine package config\n' > "$root_bad_env/etc/alloy/config.alloy"
-printf 'CUSTOM_ARGS="--storage.path=/data"\n' >> "$root_bad_env/etc/default/alloy"
+printf 'pristine package config\n' >"$root_bad_env/etc/alloy/config.alloy"
+printf 'CUSTOM_ARGS="--storage.path=/data"\n' >>"$root_bad_env/etc/default/alloy"
 env_hash=$(md5sum "$root_bad_env/etc/alloy/config.alloy" | awk '{print $1}')
 bad_env=("${common_env[@]}")
 for i in "${!bad_env[@]}"; do
   case "${bad_env[$i]}" in
-    BEYLA_PACKAGE_ROOT=*) bad_env[$i]="BEYLA_PACKAGE_ROOT=$root_bad_env" ;;
-    ALLOY_DEFAULT_HASH=*) bad_env[$i]="ALLOY_DEFAULT_HASH=$env_hash" ;;
+  BEYLA_PACKAGE_ROOT=*) bad_env[$i]="BEYLA_PACKAGE_ROOT=$root_bad_env" ;;
+  ALLOY_DEFAULT_HASH=*) bad_env[$i]="ALLOY_DEFAULT_HASH=$env_hash" ;;
   esac
 done
 if env "${bad_env[@]}" "$PACKAGE_DIR/postinst" configure >/dev/null 2>&1; then
@@ -205,7 +205,7 @@ mkdir -p "$root_retry/etc/default" "$root_retry/etc/alloy" \
   "$root_retry/usr/lib/beyla" "$root_retry/usr/share/beyla" \
   "$root_retry/usr/lib/systemd/system" "$root_retry/var/lib"
 cp "$root/etc/default/alloy" "$root_retry/etc/default/alloy"
-printf 'pristine package config\n' > "$root_retry/etc/alloy/config.alloy"
+printf 'pristine package config\n' >"$root_retry/etc/alloy/config.alloy"
 retry_hash=$(md5sum "$root_retry/etc/alloy/config.alloy" | awk '{print $1}')
 cp "$root/usr/share/beyla/config.alloy" "$root_retry/usr/share/beyla/config.alloy"
 cp "$root/usr/share/beyla/alloy-service-dropin.conf" "$root_retry/usr/share/beyla/alloy-service-dropin.conf"
@@ -214,9 +214,9 @@ cp "$root/usr/lib/beyla/validate-alloy.py" "$root_retry/usr/lib/beyla/validate-a
 retry_env=("${common_env[@]}")
 for i in "${!retry_env[@]}"; do
   case "${retry_env[$i]}" in
-    BEYLA_PACKAGE_ROOT=*) retry_env[$i]="BEYLA_PACKAGE_ROOT=$root_retry" ;;
-    BEYLA_SDK_SERVICES=*) retry_env[$i]=BEYLA_SDK_SERVICES=missing.service ;;
-    ALLOY_DEFAULT_HASH=*) retry_env[$i]="ALLOY_DEFAULT_HASH=$retry_hash" ;;
+  BEYLA_PACKAGE_ROOT=*) retry_env[$i]="BEYLA_PACKAGE_ROOT=$root_retry" ;;
+  BEYLA_SDK_SERVICES=*) retry_env[$i]=BEYLA_SDK_SERVICES=missing.service ;;
+  ALLOY_DEFAULT_HASH=*) retry_env[$i]="ALLOY_DEFAULT_HASH=$retry_hash" ;;
   esac
 done
 if env "${retry_env[@]}" "$PACKAGE_DIR/postinst" configure >/dev/null 2>&1; then
@@ -226,7 +226,7 @@ fi
 test ! -e "$root_retry/etc/beyla/config.alloy"
 test ! -e "$root_retry/etc/beyla/alloy.env"
 test ! -e "$root_retry/var/lib/beyla/mode"
-printf '[Service]\nExecStart=/usr/bin/demo\n' > "$root_retry/usr/lib/systemd/system/demo.service"
+printf '[Service]\nExecStart=/usr/bin/demo\n' >"$root_retry/usr/lib/systemd/system/demo.service"
 for i in "${!retry_env[@]}"; do
   case "${retry_env[$i]}" in BEYLA_SDK_SERVICES=*) retry_env[$i]=BEYLA_SDK_SERVICES=demo.service ;; esac
 done
@@ -242,10 +242,10 @@ test ! -e "$root/etc/systemd/system/demo.service.d/90-beyla.conf"
 
 root2="$tmp/foreign-root"
 mkdir -p "$root2/etc/systemd/system/demo.service.d" "$root2/var/lib/beyla"
-printf 'sdk\n' > "$root2/var/lib/beyla/mode"
-printf 'demo.service\n' > "$root2/var/lib/beyla/services"
+printf 'sdk\n' >"$root2/var/lib/beyla/mode"
+printf 'demo.service\n' >"$root2/var/lib/beyla/services"
 printf '[Service]\n# custom edit\nEnvironment=LD_PRELOAD=/custom.so\n' \
-  > "$root2/etc/systemd/system/demo.service.d/90-beyla.conf"
+  >"$root2/etc/systemd/system/demo.service.d/90-beyla.conf"
 env "BEYLA_PACKAGE_ROOT=$root2" "COMMAND_LOG=$tmp/commands" \
   "PATH=$bin:$PATH" "$PACKAGE_DIR/postrm" remove
 grep -q '/custom.so' "$root2/etc/systemd/system/demo.service.d/90-beyla.conf"

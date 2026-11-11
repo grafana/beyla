@@ -76,7 +76,7 @@ test ! -e "$tmp/invalid-version/beyla_not a version_amd64.deb"
 # Dockerfile adapter may qualify base images, but must preserve every other
 # canonical Dockerfile line and must not pass Podman-private storage flags.
 mock_engine="$tmp/mock-engine"
-cat > "$mock_engine" <<'MOCK'
+cat >"$mock_engine" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 command=$1
@@ -103,13 +103,13 @@ chmod +x "$mock_engine"
 engine_output="$tmp/engine-output"
 mkdir -p "$engine_output"
 ENGINE_LOG="$tmp/engine.log" \
-CAPTURED_DOCKERFILE="$tmp/captured.Dockerfile" \
-FIXTURE_DIST="$fixture" \
-OUTPUT_DIR="$engine_output" \
-CONTAINER_ENGINE="$mock_engine" \
+  CAPTURED_DOCKERFILE="$tmp/captured.Dockerfile" \
+  FIXTURE_DIST="$fixture" \
+  OUTPUT_DIR="$engine_output" \
+  CONTAINER_ENGINE="$mock_engine" \
   "$PACKAGE_DIR/build-deb.sh"
 sed -E 's/^FROM (alpine|ruby|python|node):/FROM docker.io\/library\/\1:/' \
-  "$ROOT_DIR/pkg/webhook/image/Dockerfile" > "$tmp/expected.Dockerfile"
+  "$ROOT_DIR/pkg/webhook/image/Dockerfile" >"$tmp/expected.Dockerfile"
 cmp "$tmp/expected.Dockerfile" "$tmp/captured.Dockerfile"
 ! grep -q -- '--root\|--runroot' "$tmp/engine.log"
 grep -q '^build --platform linux/amd64 --build-arg TARGETARCH=amd64 ' "$tmp/engine.log"

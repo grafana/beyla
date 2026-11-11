@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -e  # Exit immediately if any command fails
+set -e # Exit immediately if any command fails
 
 # Default MOUNT_PATH if not set
 MOUNT_PATH="${MOUNT_PATH:-/__otel_sdk_auto_instrumentation__}"

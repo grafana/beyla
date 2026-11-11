@@ -6,4 +6,4 @@ python -m venv .dep_tree_env
 
 pip install --root-user-action ignore -r requirements.txt
 pip install --root-user-action ignore pipdeptree
-pipdeptree --exclude pipdeptree > dependency-tree.txt
+pipdeptree --exclude pipdeptree >dependency-tree.txt

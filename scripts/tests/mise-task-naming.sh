@@ -154,7 +154,7 @@ check_task run-unit-test-shard //:test:shard
 # No moved task should be duplicated as a public root wrapper. --all is needed
 # to see monorepo children, but task identity still distinguishes root from the
 # named child config.
-"$mise_bin" -C "$root" tasks ls --all --json > "$tmp/tasks.json"
+"$mise_bin" -C "$root" tasks ls --all --json >"$tmp/tasks.json"
 python3 - "$tmp/tasks.json" <<'PY'
 import json, sys
 tasks = json.load(open(sys.argv[1]))
@@ -172,9 +172,9 @@ PY
 
 # The plans must point at the actual file-task implementations, not merely an
 # alias entry that resolves without doing anything.
-"$mise_bin" -C "$root" run --dry-run --skip-tools java-build > "$tmp/java-build-plan" 2>&1
+"$mise_bin" -C "$root" run --dry-run --skip-tools java-build >"$tmp/java-build-plan" 2>&1
 grep -Fq '.mise/tasks/build' "$tmp/java-build-plan"
-"$mise_bin" -C "$root" run --dry-run --skip-tools oats-test-debug > "$tmp/oats-debug-plan" 2>&1
+"$mise_bin" -C "$root" run --dry-run --skip-tools oats-test-debug >"$tmp/oats-debug-plan" 2>&1
 grep -Fq 'internal/test/oats/.mise/tasks/debug' "$tmp/oats-debug-plan"
 
 # The configured mise parses task input flags. This runs after setup-mise in CI.
@@ -298,13 +298,13 @@ check_matrix_task //:integration:matrix:multiprocess 3
 # fake Go/Git binaries to assert inherited values and Git fallback behavior
 # without building binaries or requiring the configured tool versions.
 mkdir -p "$tmp/compile-bin"
-cat > "$tmp/compile-bin/go" <<'SH'
+cat >"$tmp/compile-bin/go" <<'SH'
 #!/usr/bin/env bash
 printf 'GOOS=%s GOARCH=%s CMD=%s MAIN_GO_FILE=%s CACHE_CMD=%s CACHE_MAIN_GO_FILE=%s BUILDINFO_PKG=%s ARGS=%s\n' \
   "$GOOS" "$GOARCH" "$CMD" "$MAIN_GO_FILE" "$CACHE_CMD" \
   "$CACHE_MAIN_GO_FILE" "$BUILDINFO_PKG" "$*" >> "$COMPILE_LOG"
 SH
-cat > "$tmp/compile-bin/git" <<'SH'
+cat >"$tmp/compile-bin/git" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$GIT_LOG"
 if [[ ${GIT_MODE:-success} == fail ]]; then exit 1; fi

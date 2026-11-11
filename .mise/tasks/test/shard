@@ -10,9 +10,9 @@ shard_id="${usage_shard_id-${SHARD_ID-}}"
 package_list="${usage_packages-${UNIT_TEST_PACKAGES-}}"
 packages=()
 while IFS= read -r line; do
-  read -r -a line_packages <<< "$line"
+  read -r -a line_packages <<<"$line"
   packages+=("${line_packages[@]}")
-done <<< "$package_list"
+done <<<"$package_list"
 echo "### Running unit test shard ${shard_id}"
 KUBEBUILDER_ASSETS="$(setup-envtest use "$ENVTEST_K8S_VERSION" -p path)" \
   gotestsum \

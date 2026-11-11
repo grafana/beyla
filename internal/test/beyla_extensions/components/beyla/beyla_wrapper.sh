@@ -13,7 +13,7 @@ beyla_pid=$!
 # a workload that is still running, and the workload container dies when the
 # suite starts second-caller into that same namespace.
 terminate() {
-	kill -TERM "$beyla_pid" 2>/dev/null
+  kill -TERM "$beyla_pid" 2>/dev/null
 }
 trap terminate TERM INT
 
@@ -22,8 +22,8 @@ trap terminate TERM INT
 wait "$beyla_pid"
 status=$?
 if [ "$status" -gt 128 ]; then
-	wait "$beyla_pid"
-	status=$?
+  wait "$beyla_pid"
+  status=$?
 fi
 
 exit $status

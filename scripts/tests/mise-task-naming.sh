@@ -33,7 +33,7 @@ echo "checking task naming with $version"
 
 # Generated OATS Go modules follow the single pinned Ginkgo version in Mise.
 ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$root/mise.toml")
-grep -q 'ginkgo_version=$(awk -F' "$root/scripts/generate-obi-tests.sh"
+grep -q "ginkgo_version=\$(awk -F" "$root/scripts/generate-obi-tests.sh"
 configured_ginkgo_version=$(env -u MISE_ENABLE_TOOLS "$mise_bin" -C "$root" current ginkgo)
 [[ "$ginkgo_version" == "$configured_ginkgo_version" ]]
 
@@ -154,7 +154,7 @@ check_task run-unit-test-shard //:test:shard
 # No moved task should be duplicated as a public root wrapper. --all is needed
 # to see monorepo children, but task identity still distinguishes root from the
 # named child config.
-"$mise_bin" -C "$root" tasks ls --all --json > "$tmp/tasks.json"
+"$mise_bin" -C "$root" tasks ls --all --json >"$tmp/tasks.json"
 python3 - "$tmp/tasks.json" <<'PY'
 import json, sys
 tasks = json.load(open(sys.argv[1]))
@@ -172,9 +172,9 @@ PY
 
 # The plans must point at the actual file-task implementations, not merely an
 # alias entry that resolves without doing anything.
-"$mise_bin" -C "$root" run --dry-run --skip-tools java-build > "$tmp/java-build-plan" 2>&1
+"$mise_bin" -C "$root" run --dry-run --skip-tools java-build >"$tmp/java-build-plan" 2>&1
 grep -Fq '.mise/tasks/build' "$tmp/java-build-plan"
-"$mise_bin" -C "$root" run --dry-run --skip-tools oats-test-debug > "$tmp/oats-debug-plan" 2>&1
+"$mise_bin" -C "$root" run --dry-run --skip-tools oats-test-debug >"$tmp/oats-debug-plan" 2>&1
 grep -Fq 'internal/test/oats/.mise/tasks/debug' "$tmp/oats-debug-plan"
 
 # The configured mise parses task input flags. This runs after setup-mise in CI.
@@ -202,6 +202,8 @@ set -euo pipefail
   echo "unexpected go invocation in matrix fixture: $*" >&2
   exit 1
 }
+# Delay discovery to expose consumers that exit without reading stdin.
+sleep 0.05
 printf '%s\n' ./pkg/alpha ./pkg/beta ./pkg/gamma
 SH
 cat >"$tmp/matrix-bin/gotestsum" <<'SH'
@@ -225,6 +227,8 @@ done
   echo "missing matrix options: partitions=$partitions timing_files=$timing_files" >&2
   exit 1
 }
+# The real matrix command consumes the package list from stdin.
+cat >/dev/null
 printf '{"include":['
 for ((i = 0; i < partitions; i++)); do
   if ((i > 0)); then printf ','; fi
@@ -298,13 +302,13 @@ check_matrix_task //:integration:matrix:multiprocess 3
 # fake Go/Git binaries to assert inherited values and Git fallback behavior
 # without building binaries or requiring the configured tool versions.
 mkdir -p "$tmp/compile-bin"
-cat > "$tmp/compile-bin/go" <<'SH'
+cat >"$tmp/compile-bin/go" <<'SH'
 #!/usr/bin/env bash
 printf 'GOOS=%s GOARCH=%s CMD=%s MAIN_GO_FILE=%s CACHE_CMD=%s CACHE_MAIN_GO_FILE=%s BUILDINFO_PKG=%s ARGS=%s\n' \
   "$GOOS" "$GOARCH" "$CMD" "$MAIN_GO_FILE" "$CACHE_CMD" \
   "$CACHE_MAIN_GO_FILE" "$BUILDINFO_PKG" "$*" >> "$COMPILE_LOG"
 SH
-cat > "$tmp/compile-bin/git" <<'SH'
+cat >"$tmp/compile-bin/git" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$GIT_LOG"
 if [[ ${GIT_MODE:-success} == fail ]]; then exit 1; fi

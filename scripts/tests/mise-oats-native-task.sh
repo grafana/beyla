@@ -20,7 +20,7 @@ done
 # vendor and coverage dependencies with logging no-ops, and mock Ginkgo so this
 # checks task composition without generating OBI or running integration tests.
 cp "$root/internal/test/oats/mise.toml" "$fixture/internal/test/oats/mise.toml"
-cat > "$fixture/mise.toml" <<EOF
+cat >"$fixture/mise.toml" <<EOF
 monorepo_root = true
 
 [monorepo]
@@ -38,11 +38,11 @@ run = 'echo prepare >> "\$OATS_PREP_LOG"'
 [tasks."integration:coverage-data"]
 run = 'echo coverage >> "\$OATS_COVERAGE_LOG"'
 EOF
-cat > "$tmp/empty-global.toml" <<'EOF'
+cat >"$tmp/empty-global.toml" <<'EOF'
 [settings]
 auto_install = false
 EOF
-cat > "$tmp/bin/ginkgo" <<'EOF'
+cat >"$tmp/bin/ginkgo" <<'EOF'
 #!/usr/bin/env bash
 printf '%s|%s|%s|%s|%s|%s\n' \
   "${PWD##*/}" "$PWD" "$*" "$TESTCASE_BASE_PATH" "$TESTCASE_TIMEOUT" "$TEST_OUTPUT" \
@@ -90,16 +90,16 @@ PY
 all_suites=(sql mongo redis kafka http memcached ai nats amqp)
 run_mise //oats:test
 check_suites "${all_suites[@]}"
-[[ $(wc -l < "$tmp/prepare.log") -eq 1 ]]
-[[ $(wc -l < "$tmp/coverage.log") -eq 1 ]]
+[[ $(wc -l <"$tmp/prepare.log") -eq 1 ]]
+[[ $(wc -l <"$tmp/coverage.log") -eq 1 ]]
 
-: > "$tmp/ginkgo.log"
-: > "$tmp/prepare.log"
+: >"$tmp/ginkgo.log"
+: >"$tmp/prepare.log"
 run_mise --jobs 2 //oats:test:sql ::: //oats:test:ai
 check_suites sql ai
-[[ $(wc -l < "$tmp/prepare.log") -eq 1 ]]
+[[ $(wc -l <"$tmp/prepare.log") -eq 1 ]]
 
-: > "$tmp/ginkgo.log"
+: >"$tmp/ginkgo.log"
 if run_mise //oats:_suite ../escape >"$tmp/invalid-suite.log" 2>&1; then
   echo 'OATS suite helper accepted a path outside its allowlist' >&2
   exit 1

@@ -8,14 +8,14 @@ trap 'rm -rf "$tmp"' EXIT
 profiles=(none go bpf generate integration oats lint unit release obi-fix license)
 for profile in "${profiles[@]}"; do
   output="$tmp/profile-$profile"
-  : > "$output"
+  : >"$output"
   MISE_TOOLS_PROFILE="$profile" GITHUB_ENV="$output" bash "$action_dir/resolve-profile.sh"
-  [[ $(wc -l < "$output") -eq 1 ]]
+  [[ $(wc -l <"$output") -eq 1 ]]
   grep -q '^MISE_ENABLE_TOOLS=' "$output"
 done
 
 unknown_output="$tmp/profile-unknown"
-: > "$unknown_output"
+: >"$unknown_output"
 if MISE_TOOLS_PROFILE=unknown GITHUB_ENV="$unknown_output" bash "$action_dir/resolve-profile.sh" >/dev/null 2>&1; then
   echo 'Unknown Mise tool profiles must fail.' >&2
   exit 1
@@ -67,7 +67,14 @@ assert any(tool.endswith("/cmd/bpf2go") for tool in base_bpf)
 assert all(base_bpf <= set(resolved[profile]) for profile in ("generate", "integration", "oats", "release", "obi-fix"))
 
 assert "gotestsum" in resolved["generate"]
-assert {"go", "golangci-lint", "hk", "github:cpp-linter/clang-tools-static-binaries"} <= set(resolved["lint"])
+assert {
+    "go",
+    "golangci-lint",
+    "hk",
+    "shellcheck",
+    "shfmt",
+    "github:cpp-linter/clang-tools-static-binaries",
+} <= set(resolved["lint"])
 assert {"setup-envtest", "gotestsum"} <= set(resolved["unit"])
 assert {"java", "gradle"} <= set(resolved["release"])
 assert "ginkgo" in resolved["oats"]

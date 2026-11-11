@@ -1121,6 +1121,13 @@ adjust_oats_compose_paths() {
 }
 
 rewrite_oats_go_mod() {
+    local mise_config ginkgo_version
+    mise_config="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/mise.toml"
+    ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$mise_config")
+    if [[ -z "$ginkgo_version" ]]; then
+        echo "Could not read the pinned Ginkgo version from $mise_config" >&2
+        return 1
+    fi
     echo "  Rewriting OATs go.mod files..."
     find "$OATS_DEST" -name "go.mod" -type f | while read -r modfile; do
         # Rewrite all OBI oats module references (module declarations, require, and replace
@@ -1147,10 +1154,10 @@ rewrite_oats_go_mod() {
             "$modfile"
 
         # Keep the compiled Ginkgo version in lockstep with the CLI installed
-        # from internal/tools/go.mod (v2.33.0). The upstream OATS modules pin
+        # from mise.toml (v${ginkgo_version}). The upstream OATS modules pin
         # v2.32.0, which triggers a "Ginkgo detected a version mismatch"
-        # failure against the newer CLI. Update this if that pin changes.
-        sed_i -e "s|github.com/onsi/ginkgo/v2 v2.32.0|github.com/onsi/ginkgo/v2 v2.33.0|g" "$modfile"
+        # failure against the newer CLI. The target version comes from mise.toml.
+        sed_i -e "s|github.com/onsi/ginkgo/v2 v2.32.0|github.com/onsi/ginkgo/v2 v${ginkgo_version}|g" "$modfile"
     done
 }
 

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE alias="itest-coverage-data"
+#MISE description="Merge integration test coverage data"
+set -euo pipefail
+
+TEST_OUTPUT="${TEST_OUTPUT}"
+export TEST_OUTPUT
+EXCLUDE_COVERAGE_FILES="${EXCLUDE_COVERAGE_FILES}"
+echo "# merge coverage data from all the integration tests"
+mkdir -p "${TEST_OUTPUT}/merge"
+go tool covdata merge -i="${TEST_OUTPUT}" -o "${TEST_OUTPUT}/merge"
+go tool covdata textfmt -i="${TEST_OUTPUT}/merge" -o "${TEST_OUTPUT}/itest-covdata.raw.txt"
+echo "# replace the unexpected /src/cmd/beyla/main.go file by the module path"
+sed 's|^/src/cmd/|github.com/grafana/beyla/cmd/|' "${TEST_OUTPUT}/itest-covdata.raw.txt" > "${TEST_OUTPUT}/itest-covdata.all.txt"
+echo "# exclude generated files from coverage data"
+grep -vE "${EXCLUDE_COVERAGE_FILES}" "${TEST_OUTPUT}/itest-covdata.all.txt" > "${TEST_OUTPUT}/itest-covdata.txt" || true

@@ -143,38 +143,82 @@ You should be able to query traces and metrics in your Grafana board.
 
 ### Development environment requirements
 
-#### Minimum requirements
-- go 1.26
-- docker
-- GNU make
-#### Optional requirements
-- llvm >= 19
-- clang >= 19
+#### Required tools
+- [mise](https://mise.jdx.dev/) (installs Beyla's pinned Go and native eBPF toolchains)
+- GNU make, for invoking the pinned OBI submodule's BPF-generation interface
 
-#### Common `Makefile` targets
+After cloning the repository, install the complete pinned toolchain across the
+repository's Mise roots with:
 
-Beyla's `Makefile` provides several specific-purpose build targets. The most common ones are:
-- `prereqs` - install the build pre-requisites
-- `docker-generate` - regenerates the eBPF binaries (_preferred method_)
-- `generate` - regenerates the eBPF binaries [^1]
-- `compile` - compiles the `beyla` binary (but does not automatically regenerates the eBPF binaries)
-- `dev` - equivalent to `make prereqs && make docker-generate && make compile`
-- `test` - runs unit tests
-- `integration-test` - runs integration tests - may require `sudo`
-- `clang-format` - formats C (eBPF) source code[^1]
-- `vendor-obi` - Downloads all the Opentelemetry-eBPF-Instrumentation (OBI) dependencies in a submodule, builds the BPF targets, and vendors it.
+```shell
+mise install --monorepo
+```
 
-[^1]: Requires llvm/clang
+When a task needs a pinned tool that is not installed yet, Mise installs it
+automatically. In CI, jobs select exact tool sets through named profiles in the
+[shared setup action](.github/actions/setup-mise/README.md). For environment
+overrides, set variables before the task, for example
+`GOOS=darwin GOARCH=arm64 mise run compile`. Task arguments go after the task
+name, for example `mise run test:shard --shard-id 1 --packages ./pkg`;
+do not use `KEY=value` task arguments to set environment variables. Normal
+`[env]` defaults treat an empty value as omitted, while build-only
+`GOOS`/`GOARCH` overrides preserve an explicitly empty value.
+
+Docker is optional for local development. It is used by Docker-based generation
+and image-building tasks, but Beyla's default development workflow generates
+BPF bindings with the pinned native Clang/LLVM tools managed by Mise.
+
+#### Common Mise tasks
+
+Beyla's `mise.toml` and `.mise/` tasks are the authoritative development interface.
+The default build flow is:
+
+- `mise run build` - generate and vendor OBI dependencies with pinned native tools, then verify and compile Beyla
+- `mise run dev` - prepare prerequisites, vendor OBI, and compile a coverage-enabled Beyla binary
+- `mise run generate` - regenerate OBI and Beyla eBPF bindings with pinned native tools
+- `mise run generate:docker` - optionally regenerate eBPF bindings using the Docker generator image
+- `mise run compile` - compile the `beyla` binary
+- `mise run lint` and `mise run test` - lint and test the code
+- `mise run install:hooks` - install the `clang:format` pre-commit hook
+- `mise run //java:build` - build the Java agent with the Java project's pinned tools
+- `mise run //oats:test:ai` - run the OATS AI suite from its project-owned task config
+
+The root `Makefile` remains available as a compatibility interface. GNU Make is
+also used at the OBI submodule boundary to invoke OBI's own BPF generation
+interface. New Beyla workflows and automation should use `mise run <task>`.
+
+Legacy `make <target>` commands forward each target to its corresponding Mise
+task. GNU Make exports command-line variable assignments to the task (for
+example, `make compile CMD=beyla`). Each explicit goal starts its own Mise
+invocation; repeated goals are deduplicated by GNU Make, but dependencies shared
+across different goals are not. `make -jN` only limits how many forwarded goal
+recipes run concurrently; it does not control parallelism inside a Mise task or
+preserve GNU Make's full dependency graph and jobserver semantics. Use
+`mise run --jobs N <task>` to control Mise task concurrency. Recursive OBI Make
+calls through the wrapper may warn that the Make jobserver is unavailable.
+`make -n` prints the forwarding command without running it. The exception is
+`make run-integration-test-vm`, which directly invokes its script so it can run
+in VM images without Mise.
+
+A fresh clone's normal build vendors OBI and its generated BPF bindings as
+ignored build artifacts before compiling. Prerequisite setup no longer installs
+a Git hook: install it explicitly with `mise run install:hooks`. The old
+`check-license` no-op is now a real third-party license check; use
+`mise run check:licenses` (or the Make compatibility target).
 
 ####  Quickstart
 
 ```
 $ git clone https://github.com/grafana/beyla.git
 $ cd beyla/
-$ make dev
+$ mise install
+$ mise run build
 ```
 
-As described in the previous section, `make dev` takes care of setting up the build pre-requisites, including deploying a `clang-format` pre-commit hook.
+`mise run build` vendors OBI using pinned native Clang/LLVM tools, runs the
+standard verification suite, and compiles Beyla. Install the `clang:format`
+pre-commit hook separately with `mise run install:hooks`. Use `mise run dev`
+when you specifically need a coverage-enabled binary.
 
 After a successful compilation, binaries can be found in the `bin/` subdirectory.
 
@@ -187,7 +231,7 @@ The code is incorporated as a Git submodule, named `obi-src`, in the `.obi-src` 
 The contents of the `.obi-src` are used to build the BPF dependencies, and in a second step they are vendored
 in the `vendor/` directory.
 
-Usually, you just need to run `make vendor-obi` to get the submodule data, compile BPF targets, and vendor them locally.
+Usually, run `mise run vendor:obi` to generate OBI bindings with Beyla’s pinned native Clang/LLVM tools and vendor them locally. This task invokes GNU Make only at the OBI submodule boundary, where Make is OBI’s own BPF-generation interface.
 
 `.obi-src` folder is pinned to a concrete version of the OBI Git history. If you did changes in the upstream
 [opentelemetry-ebpf-instrumentation](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation)
@@ -210,7 +254,7 @@ Temporarily go to `go.mod` and change the first `replace` directive by your loca
 +replace go.opentelemetry.io/obi => ../opentelemetry-ebpf-instrumentation
 ```
 
-Build the docker image with `make dev-image-build`.
+Build the docker image with `mise run image:dev-build`.
 
 ⚠️ Before pushing your changes to our GitHub repo, don't forget to revert the `replace` directive in `go.mod`! 
 
@@ -218,15 +262,15 @@ Build the docker image with `make dev-image-build`.
 
 Beyla uses linters to enforce our coding style and best practices:
 - `golangci-lint` for Go code
-- `clang-format` for formatting C code
-- `clang-tidy` for static analysis of the C code
+- `clang:format` for formatting C code
+- `clang:tidy` for static analysis of the C code
 
 All of them are enforced on pull requests as part of the Beyla github workflows. Additionally, you can invoke the linters manually:
 
-- `make lint` invokes `golangci-lint` on the Go code
-- `make clang-tidy` invokes `clang-tidy` on the C/eBPF code
+- `mise run lint` runs the Go linter; dashboard linting runs separately in CI with Grafana’s pinned dashboard-linter action
+- `mise run clang:tidy` invokes `clang:tidy` on the C/eBPF code
 
-`clang-format` is invoked automatically as a `pre-commit` git hook, you can run it directly by using the `Makefile` `clang-format` target.
+`clang:format` is invoked automatically as a `pre-commit` git hook; you can run it directly with `mise run clang:format`.
 
 #### Running VM tests
 

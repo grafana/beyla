@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Build the Java agent and embed it in Beyla"
+#MISE alias=["java-build", "java:build"]
+set -euo pipefail
+
+project_dir="${MISE_MONOREPO_ROOT}"
+java_agent="${JAVA_AGENT-obi-java-agent.jar}"
+java_agent_dir=".obi-src/pkg/internal/java"
+java_agent_patch_dir="internal/java"
+java_agent_embed_dir="vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded"
+
+cd "$project_dir"
+echo "### Building Java agent"
+mkdir -p "$java_agent_embed_dir"
+cp -r "$java_agent_patch_dir/agent" "$java_agent_dir/"
+gradle -p "$project_dir/$java_agent_dir" build -PnativeOnly=true
+cp "$java_agent_dir/build/$java_agent" "$java_agent_embed_dir/$java_agent"

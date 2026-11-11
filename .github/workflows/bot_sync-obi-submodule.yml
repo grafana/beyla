@@ -37,16 +37,13 @@ jobs:
         run: |
           echo "sha=$(git -C .obi-src rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: false
-
-      # make vendor-obi internally downloads the ghcr.io/open-telemetry/obi-generator image
-      # Since this task is executed daily, there is no risk we hit a ghcr.io rate limit.
+          profile: bpf
+      # mise run vendor:obi uses pinned native Clang/LLVM to generate and vendor OBI.
       - name: Rebuild BPF and vendor OBI
-        run: make vendor-obi
+        run: mise run vendor:obi
 
       - name: Restore generated Beyla artifacts
         run: |

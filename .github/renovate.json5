@@ -88,8 +88,52 @@
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
       ],
     },
+    {
+      customType: 'regex',
+      description: 'Track the mise runtime version passed to mise-action (Dockerfile image references are tracked by the native Dockerfile manager)',
+      managerFilePatterns: [
+        '/^\\.github/actions/setup-mise/action\\.yml$/',
+      ],
+      matchStrings: [
+        'version:\\s+"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)"',
+      ],
+      depNameTemplate: 'jdx/mise',
+      packageNameTemplate: 'jdx/mise',
+      datasourceTemplate: 'github-releases',
+      extractVersionTemplate: '^v?(?<version>.*)$',
+    },
   ],
   packageRules: [
+    {
+      description: 'Look up the bpf2go Go backend through the containing cilium/ebpf module',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'go:github.com/cilium/ebpf/cmd/bpf2go',
+      ],
+      overridePackageName: 'github.com/cilium/ebpf',
+    },
+    {
+      description: 'Look up llvm-tools in the conda-forge channel',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'conda:llvm-tools',
+      ],
+      overridePackageName: 'conda-forge/llvm-tools',
+    },
+    {
+      description: 'Compare clang-tools calendar/hash release tags by their date components',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'github:cpp-linter/clang-tools-static-binaries',
+      ],
+      versioning: 'regex:^(?<major>\\d{4})\\.(?<minor>\\d{2})\\.(?<patch>\\d{2})-[a-f0-9]+$',
+    },
     {
       description: 'OBI submodule is updated by bot_sync-obi-submodule.yml, not Renovate',
       matchManagers: [
@@ -108,6 +152,23 @@
       ],
       postUpdateOptions: [
         'gomodTidy',
+      ],
+    },
+    {
+      description: 'Bump the root go.mod directive to the selected Go version',
+      matchManagers: [
+        'gomod',
+      ],
+      matchDepNames: [
+        'go',
+      ],
+      matchDepTypes: [
+        'golang',
+      ],
+      rangeStrategy: 'bump',
+      groupName: 'Go',
+      schedule: [
+        'before 8am on Monday',
       ],
     },
     {
@@ -156,6 +217,20 @@
       ],
     },
     {
+      description: 'Group only the selected Mise Go toolchain and bpf2go with Go module and Docker updates',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'go',
+        'go:github.com/cilium/ebpf/cmd/bpf2go',
+      ],
+      groupName: 'Go',
+      schedule: [
+        'before 8am on Monday',
+      ],
+    },
+    {
       groupName: 'Docker',
       matchManagers: [
         'dockerfile',
@@ -166,6 +241,45 @@
         'minor',
         'major',
       ],
+      schedule: [
+        'before 8am on Tuesday',
+      ],
+    },
+    {
+      description: 'Group Go base image tags with the selected Go toolchain and module directives',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchDepNames: [
+        'golang',
+      ],
+      groupName: 'Go',
+      schedule: [
+        'before 8am on Monday',
+      ],
+    },
+    {
+      description: 'Group the mise-action runtime with pinned official mise Docker images',
+      matchManagers: [
+        'custom.regex',
+      ],
+      matchFileNames: [
+        '.github/actions/setup-mise/action.yml',
+      ],
+      groupName: 'Mise runtime',
+      schedule: [
+        'before 8am on Tuesday',
+      ],
+    },
+    {
+      description: 'Group pinned official mise Docker images with the mise-action runtime',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchPackageNames: [
+        'ghcr.io/jdx/mise',
+      ],
+      groupName: 'Mise runtime',
       schedule: [
         'before 8am on Tuesday',
       ],

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE alias="helm-docs"
+#MISE description="Generate Helm chart documentation"
+set -euo pipefail
+project_dir=${MISE_CONFIG_ROOT}
+
+oci_bin="$OCI_BIN"
+helm_docs_img="${HELM_DOCS_IMG-$(sed -n 's|.*docker://\(jnorwood/helm-docs[^[:space:]]*\).*|\1|p' .github/workflows/helm-test.yml | head -1)}"
+
+cd "$project_dir/charts"
+echo "### Generating Helm chart documentation"
+"$oci_bin" run --rm --volume "$(pwd):/helm-docs" -u "$(id -u)" "$helm_docs_img"

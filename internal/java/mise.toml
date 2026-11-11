@@ -1,0 +1,47 @@
+[tools]
+java = "temurin-21.0.8+9.0.LTS"
+gradle = "9.6.1"
+
+[tasks.clean]
+dir = "{{ config_root }}/../.."
+shell = "bash -euo pipefail -c"
+alias = ["java-clean", "java:clean"]
+description = "Clean Java agent build artifacts"
+run = '''echo "### Cleaning Java agent build artifacts"
+gradle -p .obi-src/pkg/internal/java clean'''
+
+[tasks.test]
+dir = "{{ config_root }}/../.."
+shell = "bash -euo pipefail -c"
+alias = ["java-test", "java:test"]
+description = "Test the Java agent"
+run = '''echo "### Testing Java agent"
+cp -r internal/java/agent .obi-src/pkg/internal/java/
+gradle -p .obi-src/pkg/internal/java test'''
+
+[tasks."spotless-apply"]
+dir = "{{ config_root }}/../.."
+shell = "bash -euo pipefail -c"
+alias = ["java-spotless-apply", "java:spotless-apply"]
+description = "Format Java code"
+run = '''echo "### Formatting Java code"
+cp -r internal/java/agent .obi-src/pkg/internal/java/
+gradle -p .obi-src/pkg/internal/java spotlessApply'''
+
+[tasks."spotless-check"]
+dir = "{{ config_root }}/../.."
+shell = "bash -euo pipefail -c"
+alias = ["java-spotless-check", "java:spotless-check"]
+description = "Check Java code formatting"
+run = '''echo "### Checking Java code formatting"
+cp -r internal/java/agent .obi-src/pkg/internal/java/
+gradle -p .obi-src/pkg/internal/java spotlessCheck'''
+
+[tasks.verify]
+alias = ["java-verify", "java:verify"]
+description = "Check Java formatting, run tests, and build the Java agent"
+run = [
+  { task = ":spotless-check" },
+  { task = ":test" },
+  { task = ":build" },
+]

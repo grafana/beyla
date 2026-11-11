@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE alias="helm-unittest"
+#MISE description="Run Helm chart unit tests"
+set -euo pipefail
+project_dir=${MISE_CONFIG_ROOT}
+
+oci_bin="$OCI_BIN"
+helm_unittest_img="${HELM_UNITTEST_IMG-helmunittest/helm-unittest:3.21.0-1.0.3}"
+
+cd "$project_dir"
+echo "### Running Helm chart unit tests"
+"$oci_bin" run --rm -v "$project_dir:/apps" -w /apps -u "$(id -u)" \
+  -e HELM_CACHE_HOME=/tmp/.cache -e XDG_CACHE_HOME=/tmp/.cache -e HOME=/tmp \
+  "$helm_unittest_img" -f 'tests/unit/*.yaml' charts/beyla

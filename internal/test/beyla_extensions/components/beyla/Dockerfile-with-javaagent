@@ -11,8 +11,8 @@ COPY .obi-src/pkg/internal/java/agent/Makefile.jni Makefile.jni
 # hadolint ignore=DL3008
 RUN apt-get update && \
     case "$BUILDARCH" in \
-      amd64) apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu ;; \
-      arm64) apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu ;; \
+      amd64) apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross ;; \
+      arm64) apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu libc6-dev-amd64-cross ;; \
     esac
 
 RUN case "$BUILDARCH" in \

@@ -144,6 +144,12 @@ func OverrideOBIGlobalConfig() {
 		Unit:    "By",
 		Type:    attributes.InstrumentCounter,
 	})
+	attributes.StatTCPResets = beylaMetric(attributes.Name{
+		Section: "beyla.stat.tcp.resets",
+		OTEL:    "beyla.stat.tcp.resets",
+		Unit:    "{segment}",
+		Type:    attributes.InstrumentCounter,
+	})
 }
 
 // beylaMetric mirrors the unexported attributes.metric() constructor in OBI: it derives the

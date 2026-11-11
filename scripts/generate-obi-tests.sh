@@ -533,6 +533,24 @@ transform_go_imports_and_paths() {
             "$OBI_DEST/http_go_otel_test.go"
     fi
 
+    # OBI suites that run `obi config migrate` (v1 -> v2) before starting the instrumenter.
+    # Beyla has no `config migrate` command and only loads v1 files, and the compose files
+    # already point to the v1 config, so run the suite without the migration step.
+    find "$OBI_DEST" -maxdepth 1 -name "*_test.go" -type f \
+        -exec perl -0pi -e 's/docker\.ComposeSuiteWithConfigMigration\(\s*("[^"]+"),\s*(path\.Join\([^\n]*\)),\s*docker\.ConfigMigration\{[^}]*\},?\s*\)/docker.ComposeSuite($1, $2)/g' {} +
+
+    # peer metadata suite: starting second-caller must not recreate the running workload and
+    # instrumenter containers it shares namespaces with (the extra `up` took ~20s and left
+    # the client workload unreachable).
+    if [[ -f "$OBI_DEST/peer_metadata_test.go" ]]; then
+        if ! grep -qF '"up", "--detach", "--no-build", "second-caller"' "$OBI_DEST/peer_metadata_test.go"; then
+            echo "ERROR: peer_metadata_test.go no longer starts second-caller as expected; update the peer metadata transform" >&2
+            exit 1
+        fi
+        sed_i -e 's|"up", "--detach", "--no-build", "second-caller"|"up", "--detach", "--no-build", "--no-recreate", "second-caller"|' \
+            "$OBI_DEST/peer_metadata_test.go"
+    fi
+
     # goautosdk fixtures: same situation as go_otel above. The Dockerfiles do
     # `COPY internal/test/integration/components/goautosdk/...`, a path that
     # only resolves inside .obi-src, so the build context must be pathObiSrc

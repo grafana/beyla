@@ -652,6 +652,9 @@ adjust_docker_compose_paths() {
         # Volume mount that exposes the OBI repo root inside the container
         # (used by tests that `go test ./pkg/...` against OBI source).
         sed_i -e 's|\.\./\.\./\.\.:/src|../../../.obi-src:/src|g' "$file"
+        # Volume mount of OBI's .proto files (e.g. metadata.proto for grpcurl),
+        # which are not copied to the Beyla repo root.
+        sed_i -e 's|\.\./\.\./\.\./proto:|../../../.obi-src/proto:|g' "$file"
 
         # Redirect bare ./components/ and components/ paths to .obi-src.
         # These reference standalone app dirs that aren't copied to the

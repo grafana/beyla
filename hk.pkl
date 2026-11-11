@@ -1,0 +1,74 @@
+// Keep the Go commands and check selection in hk while Mise owns tool versions.
+amends "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.pkl"
+
+// These trees are generated or managed by another repository/tool.
+exclude = List(".obi-src/**", "vendor/**", "internal/testgenerated/**")
+
+local clangFormatter = (Builtins.clang_format) {
+  // Match the existing hook's C/C++ extensions and only apply fixes.
+  glob = List("**/*.c", "**/*.cpp", "**/*.h")
+  check = null
+}
+
+steps {
+  ["golangci-lint"] = (Builtins.golangci_lint) {
+    // Beyla's existing root-module lint task has a six-minute timeout. Keep
+    // the builtin scoped to this module instead of nested Go modules.
+    workspace_indicator = null
+    dir = "."
+    // Configuration and module dependency edits can affect every package.
+    glob = List("**/*.go", ".golangci.yml", "go.mod", "go.sum")
+    check = new Config.CommandSpec {
+      command = "golangci-lint run --fix=false ./... --timeout=6m"
+      effect = "write"
+    }
+    depends = List("go-format")
+    // Formatting is handled by the go-format step; lint checks remain
+    // non-mutating in hk fix/pre-commit mode.
+    fix = null
+  }
+  ["go-format"] = new Config.Step {
+    glob = "**/*.go"
+    dir = "."
+    // This uses the repository's golangci formatter configuration, including
+    // the gci import sections in .golangci.yml.
+    check_diff = new Config.CommandSpec {
+      command = "golangci-lint fmt --diff {{files}}"
+      effect = "read"
+    }
+    fix = new Config.CommandSpec {
+      command = "golangci-lint fmt {{files}}"
+      effect = "write"
+    }
+  }
+  ["go-format-config"] = new Config.Step {
+    glob = ".golangci.yml"
+    dir = "."
+    depends = List("go-format")
+    // A formatter configuration change must re-check all Go source, not just
+    // the YAML file that triggered this step.
+    check_diff = new Config.CommandSpec {
+      command = "golangci-lint fmt --diff"
+      effect = "read"
+    }
+  }
+}
+
+hooks {
+  ["pre-commit"] {
+    stash = "git"
+    steps {
+      ["clang-format"] = clangFormatter
+    }
+  }
+  ["clang-format"] {
+    fix = true
+    stage = false
+    steps {
+      ["clang-format"] = clangFormatter
+    }
+  }
+}

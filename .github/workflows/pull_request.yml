@@ -101,7 +101,7 @@ jobs:
           name: bpf-generated-${{ github.sha }}
 
       - name: Lint
-        run: mise run lint:go
+        run: mise run lint
 
   lint-dashboard:
     name: Lint dashboards

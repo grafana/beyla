@@ -82,6 +82,7 @@ run = '''CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -gcfla
 [tools]
 go = { version = "1.26.10" }
 golangci-lint = { version = "2.14.0" }
+hk = "2.11.1"
 kind = "0.33.0"
 setup-envtest = "0.25.1"
 gotestsum = "1.13.0"
@@ -126,22 +127,28 @@ rm -rf "${TEST_OUTPUT}"/*'''
 [tasks.fmt]
 shell = "bash -euo pipefail -c"
 description = "Format Go code and imports"
-run = '''echo "### Formatting code and fixing imports"
-golangci-lint fmt'''
+run = '''HK_MISE=1 hk fix --all --step go-format --no-stage'''
 
-[tasks."lint:go"]
+[tasks.lint]
 shell = "bash -euo pipefail -c"
-description = "Run Go linters"
-depends = ["check:fmt"]
-run = '''echo "### Linting code"
-golangci-lint run ./... --timeout=6m'''
+description = "Run configured repository checks through hk"
+run = '''HK_MISE=1 hk check -q --all --check --no-fail-fast'''
+
+[tasks."lint:fix"]
+shell = "bash -euo pipefail -c"
+description = "Apply available lint and formatting fixes without staging changes"
+run = '''HK_MISE=1 hk fix -q --all --no-stage --no-fail-fast'''
+
+# Keep the historical task name available to existing local scripts.
+[tasks."lint:go"]
+description = "Compatibility alias for lint"
+run = [{ task = "lint" }]
 
 [tasks."clang:format"]
 shell = "bash -euo pipefail -c"
 alias = ["clang-format"]
-description = "Format BPF C source files"
-run = '''find ./bpf -type f -name '*.c' -print0 | xargs -0 -r -P 0 -n 1 clang-format -i
-find ./bpf -type f -name '*.h' -print0 | xargs -0 -r -P 0 -n 1 clang-format -i'''
+description = "Format C/C++ files with hk"
+run = '''HK_MISE=1 hk run --all --no-stage clang-format'''
 
 [tasks."clang:tidy"]
 shell = "bash -euo pipefail -c"
@@ -321,10 +328,6 @@ run = [
     "test",
   ] },
 ]
-
-[tasks.lint]
-description = "Run the Go linter"
-depends = ["lint:go"]
 
 [tasks.build]
 alias = ["all"]

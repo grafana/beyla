@@ -151,6 +151,7 @@ type ExecutableKey struct {
 // ProcessTracer instruments an executable with eBPF and provides the eBPF readers
 // that will forward the traces to later stages in the pipeline
 type ProcessTracer struct {
+	symbols         *SymbolCache
 	log             *slog.Logger
 	metrics         imetrics.Reporter
 	shutdownTimeout time.Duration

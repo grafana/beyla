@@ -210,6 +210,10 @@ func (i *Attrs) SetAutoNamespace() {
 	i.setFlag(autoNamespace)
 }
 
+func (i *Attrs) ClearAutoNamespace() {
+	i.clearFlag(autoNamespace)
+}
+
 func (i *Attrs) AutoNamespace() bool {
 	return i.getFlag(autoNamespace)
 }

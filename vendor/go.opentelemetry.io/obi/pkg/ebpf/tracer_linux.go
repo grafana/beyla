@@ -93,6 +93,7 @@ func unloadInternalMaps(eventContext *common.EBPFEventContext) {
 
 func NewProcessTracer(tracerType ProcessTracerType, programs []Tracer, cfg *obi.Config, metrics imetrics.Reporter) *ProcessTracer {
 	return &ProcessTracer{
+		symbols:                   NewSymbolCache(cfg.DynamicInstrumentation),
 		log:                       ptlog().With("type", tracerType),
 		Programs:                  programs,
 		Type:                      tracerType,
@@ -224,6 +225,12 @@ func setupBPFMapSizes(spec *ebpf.CollectionSpec, cfg *obi.Config) {
 	ebpfconvenience.SetupMapSizes(spec, cfg.EBPF.MapsConfig.GlobalScaleFactor)
 
 	keepTrackedSockCookiesAtLeast(spec, cookiesDeclared)
+	if cfg.DynamicInstrumentation.IsEnabled() {
+		if specs := spec.Maps["obi_usdt_specs"]; specs != nil {
+			// Paired USDT rules need two specs; reserve room for predefined probes and replacements.
+			specs.MaxEntries += uint32(2 * (cfg.DynamicInstrumentation.MaxProbes + 1))
+		}
+	}
 }
 
 // tracked_sock_cookies mirrors sock_dir membership and sockhashes are not

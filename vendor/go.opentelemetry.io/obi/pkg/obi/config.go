@@ -118,6 +118,7 @@ var (
 )
 
 var DefaultConfig = Config{
+	DynamicInstrumentation:  config.DefaultDynamicInstrumentationConfig(),
 	ChannelBufferLen:        50,
 	ChannelSendTimeout:      time.Minute,
 	ChannelSendTimeoutPanic: false,
@@ -368,7 +369,9 @@ var DefaultConfig = Config{
 }
 
 type Config struct {
-	EBPF config.EBPFTracer `yaml:"ebpf"`
+	DynamicInstrumentation           config.DynamicInstrumentationConfig `yaml:"dynamic_instrumentation"`
+	DynamicInstrumentationConfigPath string                              `yaml:"-" json:"-"`
+	EBPF                             config.EBPFTracer                   `yaml:"ebpf"`
 
 	// NetworkFlows configuration for Network Observability feature
 	NetworkFlows NetworkConfig `yaml:"network"`
@@ -493,7 +496,7 @@ func (c *Config) AppRuntimeMetricsEnabled() bool {
 // runtime, so with no reader it is skipped entirely.
 func (c *Config) PopulateTraceContext() bool {
 	return c != nil && (c.EBPF.PopulateTraceContext ||
-		c.EBPF.LogEnricher.Enabled() ||
+		c.EBPF.LogEnricher.Enabled() || c.DynamicInstrumentation.IsEnabled() ||
 		(c.NodeJS.Enabled && c.NodeJS.ManualSpans))
 }
 
@@ -826,6 +829,10 @@ func (c *Config) validate(context validationContext) error {
 		return ConfigError(err.Error())
 	}
 
+	if err := c.DynamicInstrumentation.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+
 	if err := c.NetworkFlows.CIDRs.Validate(); err != nil {
 		return ConfigError("network " + err.Error())
 	}
@@ -1044,7 +1051,7 @@ func (c *Config) Enabled(feature Feature) bool {
 		return c.NetworkFlows.Enable || c.promNetO11yEnabled() || c.otelNetO11yEnabled()
 	case FeatureAppO11y:
 		return c.Port.Len() > 0 || c.AutoTargetExe.IsSet() || c.AutoTargetLanguage.IsSet() || len(c.Discovery.Instrument) > 0 ||
-			c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.TargetPIDs.Len() > 0
+			c.Exec.IsSet() || len(c.Discovery.Services) > 0 || c.TargetPIDs.Len() > 0 || c.DynamicInstrumentation.IsEnabled()
 	case FeatureStatsO11y:
 		return c.promStatsO11yEnabled() || c.otelStatsO11yEnabled()
 	}

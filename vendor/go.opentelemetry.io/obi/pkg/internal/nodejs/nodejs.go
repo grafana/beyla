@@ -48,7 +48,7 @@ func NewNodeInjector(cfg *obi.Config) *NodeInjector {
 // unless nodejs.enabled, the global opt-out, is set to false.
 func (i *NodeInjector) Enabled() bool {
 	return i.cfg.NodeJS.Enabled &&
-		(i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() || i.cfg.AppRuntimeMetricsEnabled())
+		(i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() || i.cfg.AppRuntimeMetricsEnabled() || i.cfg.DynamicInstrumentation.IsEnabled())
 }
 
 // injectionTrigger names what turned the injection on, so the logs explain a
@@ -231,7 +231,7 @@ func (i *NodeInjector) runtimeRefusal(target InjectionTarget, elfFile *elf.File)
 			node13Backport.Original(), minInjectableVersion.Original())
 	}
 
-	if i.cfg.NodeJS.ManualSpans && !supportsManualSpans(nodeVersion) {
+	if (i.cfg.NodeJS.ManualSpans || i.cfg.DynamicInstrumentation.IsEnabled()) && !supportsManualSpans(nodeVersion) {
 		return fmt.Sprintf(refusalManualSpansTooOld,
 			minManualSpansVersion.Original(), nodeVersion.Original())
 	}
@@ -320,7 +320,7 @@ func (i *NodeInjector) agentCode() string {
 	if i.cfg.AppRuntimeMetricsEnabled() {
 		code = strings.Replace(code, rtEnabledPlaceholder, rtEnabledOn, 1)
 	}
-	if i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() {
+	if i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() || i.cfg.DynamicInstrumentation.IsEnabled() {
 		code = strings.Replace(code, tracesEnabledPlaceholder, tracesEnabledOn, 1)
 	}
 	if i.cfg.PopulateTraceContext() {
@@ -329,5 +329,11 @@ func (i *NodeInjector) agentCode() string {
 	if i.cfg.NodeJS.ManualSpans {
 		code += ";\n" + _spanBridgeCode
 	}
+	if i.cfg.DynamicInstrumentation.IsEnabled() {
+		code += ";\n" + _dynamicCode
+	}
 	return code
 }
+
+//go:embed dynamic.js
+var _dynamicCode string

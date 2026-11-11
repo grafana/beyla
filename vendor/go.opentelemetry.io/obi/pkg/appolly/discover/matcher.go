@@ -17,10 +17,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
+	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/liveprober"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
-	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
 )
 
 var (
@@ -38,6 +39,7 @@ func criteriaMatcherProvider(
 	output *msg.Queue[[]Event[ProcessMatch]],
 	configCriteria []services.Selector,
 	dynamicSelector *DynamicPIDSelector,
+	options ...matcherContext,
 ) swarm.InstanceFunc {
 	instrumenterNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	if dynamicSelector != nil {
@@ -56,12 +58,25 @@ func criteriaMatcherProvider(
 		Namespace:           instrumenterNamespace,
 		HasHostPidAccess:    hasHostPidAccess(),
 	}
+	if len(options) > 0 {
+		m.Dynamic = options[0].dynamic
+		m.KubeStore = options[0].store
+		m.candidates = map[app.PID]ProcessAttrs{}
+	}
 	return swarm.DirectInstance(m.Run)
 }
 
 // Matcher is the component that matches the processes against the discovery criteria.
 // It filters the processes that match the discovery criteria and sends them to the output channel.
+type matcherContext struct {
+	dynamic *liveprober.Manager
+	store   *kube.Store
+}
+
 type Matcher struct {
+	KubeStore           *kube.Store
+	Dynamic             *liveprober.Manager
+	candidates          map[app.PID]ProcessAttrs
 	Log                 *slog.Logger
 	Criteria            []services.Selector
 	ExcludeCriteria     []services.Selector
@@ -94,14 +109,29 @@ func (pm ProcessMatch) LogEnricherEnabled() bool {
 func (m *Matcher) Run(ctx context.Context) {
 	defer m.Output.Close()
 	m.Log.Debug("starting criteria matcher node")
-	swarms.ForEachInput(ctx, m.Input, m.Log.Debug, func(i []Event[ProcessAttrs]) {
-		m.Log.Debug("filtering processes", "len", len(i))
-		o := m.filter(i)
-		m.Log.Debug("processes matching selection criteria", "len", len(o))
-		if len(o) > 0 {
-			m.Output.Send(o)
+	var changed <-chan struct{}
+	if m.Dynamic != nil {
+		changed = m.Dynamic.Changed()
+	}
+	for {
+		var events []Event[ProcessAttrs]
+		select {
+		case <-ctx.Done():
+			return
+		case batch, ok := <-m.Input:
+			if !ok {
+				return
+			}
+			events = batch
+		case <-changed:
+			for _, candidate := range m.candidates {
+				events = append(events, Event[ProcessAttrs]{Type: EventCreated, Obj: candidate})
+			}
 		}
-	})
+		if matches := m.filter(events); len(matches) > 0 {
+			m.Output.SendCtx(ctx, matches)
+		}
+	}
 }
 
 func (m *Matcher) filter(events []Event[ProcessAttrs]) []Event[ProcessMatch] {
@@ -140,6 +170,10 @@ func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *P
 		}
 	}
 
+	if m.Dynamic != nil && !m.isExcluded(&obj, proc) {
+		dynamic := m.Dynamic.Selection(int(proc.Pid))
+		criteria = append(criteria, NormalizeGlobCriteria(dynamic)...)
+	}
 	if len(criteria) > 0 {
 		m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
 			obj.metadata, "podLabels", obj.podLabels, "criteria", criteria, "logEnricherCriteria", logEnricherCriteria)
@@ -163,16 +197,26 @@ func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo) *P
 }
 
 func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
-	if m.alreadyMatched(obj.pid) {
-		return Event[ProcessMatch]{}, false
-	}
-
 	proc, err := processInfo(obj)
 	if err != nil {
 		m.Log.Debug("can't get information for process", "pid", obj.pid, "error", err)
 		return Event[ProcessMatch]{}, false
 	}
 
+	if m.Dynamic != nil {
+		m.candidates[obj.pid] = obj
+		m.Dynamic.ObserveProcess(int(obj.pid), func(criteria services.GlobDefinitionCriteria) bool {
+			for i := range criteria {
+				if m.matchProcess(&obj, proc, &criteria[i]) {
+					return true
+				}
+			}
+			return false
+		})
+	}
+	if m.alreadyMatched(obj.pid) {
+		return Event[ProcessMatch]{}, false
+	}
 	if processMatch := m.matchCriteria(obj, proc); processMatch != nil {
 		m.ProcessHistory[obj.pid] = *processMatch
 
@@ -200,6 +244,10 @@ func (m *Matcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], bool) {
 }
 
 func (m *Matcher) filterDeleted(obj ProcessAttrs) (Event[ProcessMatch], bool) {
+	if m.Dynamic != nil {
+		delete(m.candidates, obj.pid)
+		m.Dynamic.UnregisterTarget(int(obj.pid))
+	}
 	procMatch, ok := m.ProcessHistory[obj.pid]
 	if !ok {
 		m.Log.Debug("deleted untracked process. Ignoring", "pid", obj.pid)
@@ -307,6 +355,17 @@ func (m *Matcher) matchByAttributes(actual *ProcessAttrs, required services.Sele
 	log := m.Log.With("pid", actual.pid)
 	// match metadata
 	for attrName, criteriaRegexp := range required.RangeMetadata() {
+		if attrName == services.AttrServiceName {
+			if m.KubeStore == nil {
+				return false
+			}
+			matched := slices.ContainsFunc(m.KubeStore.ServicesForPod(actual.metadata[services.AttrNamespace], actual.podLabels), criteriaRegexp.MatchString)
+			if !matched {
+				return false
+			}
+			continue
+		}
+
 		if attrValue, ok := actual.metadata[attrName]; !ok || !criteriaRegexp.MatchString(attrValue) {
 			log.Debug("metadata does not match", "attr", attrName, "value", attrValue)
 			return false

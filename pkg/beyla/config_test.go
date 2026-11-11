@@ -418,9 +418,10 @@ network:
 			},
 			ExcludedLinuxSystemPaths: []string{"/lib/systemd/", "/usr/lib/systemd/", "/usr/libexec/", "/sbin/", "/usr/sbin/"},
 		},
-		NodeJS:            obi.NodeJSConfig{Enabled: true},
-		Java:              obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
-		JVMRuntimeMetrics: obi.JVMRuntimeMetricsConfig{SamplingInterval: time.Second},
+		NodeJS:                 obi.NodeJSConfig{Enabled: true},
+		Java:                   obi.JavaConfig{Enabled: true, Timeout: 10 * time.Second},
+		DynamicInstrumentation: obiconfig.DefaultDynamicInstrumentationConfig(),
+		JVMRuntimeMetrics:      obi.JVMRuntimeMetricsConfig{SamplingInterval: time.Second},
 		Injector: SDKInject{
 			EnabledSDKs: []servicesextra.InstrumentableType{
 				{InstrumentableType: svc.InstrumentableJava},

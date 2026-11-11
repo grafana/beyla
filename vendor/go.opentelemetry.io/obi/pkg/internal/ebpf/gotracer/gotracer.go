@@ -24,6 +24,7 @@ import (
 	"slices"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -42,6 +43,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/customspan"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/uprobe"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -49,7 +51,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -type go_sdk_resource_event -target amd64,arm64 Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
 
 type runtimeMetricTargetKey struct {
 	pid app.PID
@@ -304,6 +306,9 @@ type Tracer struct {
 	disabledRouteHarvesting           bool
 	supportsBPFLoop                   bool
 	traceCtxMapEnabled                bool
+	dynamicSpansEnabled               bool
+	dynamicSpanTTL                    time.Duration
+	customSpan                        *customspan.Runtime
 	runtimeMetricsEnabled             bool
 	runtimeMetricTargetKeys           map[runtimeMetricTargetKey]BpfPidInfo
 	goChannelOffsetsByExecutable      map[executableIdentity]bool
@@ -339,6 +344,8 @@ func New(
 		disabledRouteHarvesting:           disabledRouteHarvesting,
 		supportsBPFLoop:                   ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
 		traceCtxMapEnabled:                cfg.PopulateTraceContext(),
+		dynamicSpansEnabled:               cfg.DynamicInstrumentation.IsEnabled(),
+		dynamicSpanTTL:                    cfg.DynamicInstrumentation.TTL,
 		runtimeMetricsEnabled:             cfg.AppRuntimeMetricsEnabled(),
 		runtimeMetricTargetKeys:           map[runtimeMetricTargetKey]BpfPidInfo{},
 		goChannelOffsetsByExecutable:      map[executableIdentity]bool{},
@@ -473,6 +480,17 @@ func (p *Tracer) constants() map[string]any {
 		"g_bpf_traceparent_enabled":      true,
 		"g_bpf_loop_enabled":             p.supportsBPFLoop,
 		"g_traces_ctx_v1_enabled":        p.traceCtxMapEnabled,
+		"g_dynamic_goroutines_enabled":   p.dynamicSpansEnabled,
+		"go_dynamic_span_ttl":            uint64(0),
+	}
+
+	if p.dynamicSpansEnabled {
+		m["go_dynamic_span_ttl"] = uint64(p.dynamicSpanTTL)
+	}
+
+	m["has_attach_cookie"] = uint32(0)
+	if ebpfcommon.HasAttachCookie() {
+		m["has_attach_cookie"] = uint32(1)
 	}
 
 	if p.cfg.TrackRequestHeaders ||
@@ -505,6 +523,13 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 	initMissingGoOffsets(&offTable, goChannelOffsetFields[:])
 	initMissingGoOffsets(&offTable, goHTTPClientRequestOffsetFields[:])
 	initMissingGoOffsets(&offTable, goAutoSDKSpanContextOffsetFields[:])
+	initMissingGoOffsets(&offTable, []goexec.GoOffset{
+		goexec.SDKRecordingSpanContextPos,
+		goexec.SDKRecordingSpanType,
+		goexec.SDKRecordingSpanParentPos,
+		goexec.SpanContextRemotePos,
+	})
+	initMissingGoOffsets(&offTable, goSDKResourceOffsetFields[:])
 	initMissingGoOffsets(&offTable, goGRPCBufWriterOffsetFields[:])
 	offTable.Table[goexec.FramerPadLengthStackPos] = missingGoOffset
 	offTable.Table[goexec.FramerPadLengthStackVendoredPos] = missingGoOffset
@@ -610,6 +635,14 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.PgxConfigHostPos,
 		goexec.MuxTemplatePos,
 		goexec.GinFullpathPos,
+		goexec.SDKRecordingSpanContextPos,
+		goexec.SDKRecordingSpanParentPos,
+		goexec.SpanContextRemotePos,
+		goexec.SDKDynamicParentSupported,
+		goexec.SDKTracerProviderPos,
+		goexec.SDKProviderResourcePos,
+		goexec.SDKResourceAttrsPos,
+		goexec.SDKAttributeSetDataPos,
 	} {
 		if val, ok := offsets.Field[field].(uint64); ok {
 			offTable.Table[field] = val
@@ -664,6 +697,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 			symbol: "*google.golang.org/grpc/internal/credentials.syscallConn",
 			field:  goexec.GrpcSyscallConnTypeAddress,
 		},
+		{symbol: "*go.opentelemetry.io/otel/sdk/trace.recordingSpan,go.opentelemetry.io/otel/trace.Span", field: goexec.SDKRecordingSpanType},
 		{
 			symbol: "*crypto/tls.Conn",
 			field:  goexec.TLSConnTypeAddress,
@@ -2036,14 +2070,20 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}}
 	}
 
-	// runtime.casgstatus fires on every goroutine status transition and exists only
-	// to keep traces_ctx_v1 pointing at the span the thread is currently running
+	// runtime.casgstatus tracks the active thread context and clears dynamic
+	// span inheritance when a goroutine exits.
 	if p.traceCtxMapEnabled {
 		m["runtime.casgstatus"] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeRuntimeCasgstatus,
 		}}
 	}
 
+	m["go.opentelemetry.io/otel/sdk/trace.(*tracer).Start"] = []*ebpfcommon.ProbeDesc{{Start: p.bpfObjects.ObiUprobeSdkTracerResource}}
+	if p.dynamicSpansEnabled {
+		m["go.opentelemetry.io/otel/sdk/trace.(*tracer).newRecordingSpan"] = []*ebpfcommon.ProbeDesc{{End: p.bpfObjects.ObiUprobeSdkNewRecordingSpanReturn}}
+		m["go.opentelemetry.io/otel/sdk/trace.(*tracer).Start"][0].End = p.bpfObjects.ObiUprobeSdkTracerStartReturn
+		m["go.opentelemetry.io/otel/sdk/trace.(*recordingSpan).End"] = []*ebpfcommon.ProbeDesc{{Start: p.bpfObjects.ObiUprobeSdkRecordingSpanEnd}}
+	}
 	// HTTP Header extraction
 	// with bpf_loop we scan the buffer with a single uprobe - this is less overhead
 	// otherwise we have a probe per header net/textproto.(*Reader).readContinuedLineSlice
@@ -2456,6 +2496,7 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	}()
 
 	p.SetEventContext(ebpfEventContext)
+	go p.customSpan.Run(ctx)
 
 	if !p.traceCtxMapEnabled {
 		ebpfconvenience.DrainTraceContextMap[BpfObiCtxInfoT](p.log, p.bpfObjects.TracesCtxV1)
@@ -2472,6 +2513,12 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 			if handled, err := ebpfcommon.HandleRuntimeMetricsRecord(ctx, ebpfEventContext, record, p.pidsFilter, p.log); handled {
 				return request.Span{}, true, err
 			}
+			if span, skip, ok, err := ebpfcommon.DispatchCustomSpan(ebpfEventContext, record); ok {
+				if skip {
+					return request.Span{}, true, err
+				}
+				return span, false, err
+			}
 			s, ignore, err := ebpfcommon.ReadBPFTraceAsSpan(parseContext, p.cfg, record, p.pidsFilter)
 			if !ignore && err == nil && !s.IsValid() {
 				return s, true, nil
@@ -2485,6 +2532,12 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 }
 
 func (p *Tracer) SetEventContext(eventContext *ebpfcommon.EBPFEventContext) {
+	eventContext.RegisterInternalEventHandler(ebpfcommon.EventTypeGoSDKResource, func(record *ringbuf.Record) error {
+		return p.handleSDKResource(record, eventContext.ServiceMetadataUpdated)
+	})
+	if p.dynamicSpansEnabled && p.customSpan == nil {
+		p.customSpan = customspan.New(p.dynamicSpanTTL, eventContext, p.log)
+	}
 	eventContext.RegisterInternalEventHandler(
 		ebpfcommon.EventTypeGoAutoActivated,
 		func(record *ringbuf.Record) error {

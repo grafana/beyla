@@ -1429,31 +1429,11 @@ func baseTargetInfoLabelNames() []attr.Name {
 	}
 }
 
-func k8sTargetInfoLabelNames() []attr.Name {
-	return []attr.Name{
-		attr.K8sNamespaceName,
-		attr.K8sPodName,
-		attr.K8sContainerName,
-		attr.K8sNodeName,
-		attr.K8sPodUID,
-		attr.K8sPodStartTime,
-		attr.K8sDeploymentName,
-		attr.K8sReplicaSetName,
-		attr.K8sStatefulSetName,
-		attr.K8sJobName,
-		attr.K8sCronJobName,
-		attr.K8sDaemonSetName,
-		attr.K8sClusterName,
-		attr.K8sKind,
-		attr.K8sOwnerName,
-	}
-}
-
 func targetInfoLabelNames(kubeEnabled, dockerEnabled bool, nodeMeta *meta.NodeMeta, extraMetadataLabelNames []attr.Name) []attr.Name {
 	names := baseTargetInfoLabelNames()
 
 	if kubeEnabled {
-		names = append(names, k8sTargetInfoLabelNames()...)
+		names = append(names, attributes.KubernetesTargetInfoAttributes()...)
 	}
 	if dockerEnabled {
 		names = append(names, attr.ContainerID, attr.ContainerName)
@@ -1507,7 +1487,7 @@ func (r *metricsReporter) labelValuesForNodeMeta(service *svc.Attrs, nodeMeta *m
 	}
 
 	if r.kubeEnabled {
-		for _, name := range k8sTargetInfoLabelNames() {
+		for _, name := range attributes.KubernetesTargetInfoAttributes() {
 			labels = append(labels, targetInfoResourceLabel{name: name, value: service.Metadata[name]})
 		}
 	}

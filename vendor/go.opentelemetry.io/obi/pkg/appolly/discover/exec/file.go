@@ -233,6 +233,34 @@ func (fi *FileInfo) SetExplicitServiceName(name string) {
 	fi.service.ClearAutoName()
 }
 
+// ApplySDKService replaces inferred service identity with the SDK's resource.
+func (fi *FileInfo) ApplySDKService(name, namespace string) bool {
+	fi.mu.Lock()
+	defer fi.mu.Unlock()
+	changed := false
+	metadata := maps.Clone(fi.service.Metadata)
+	if metadata == nil {
+		metadata = map[attr.Name]string{}
+	}
+	if name != "" && !strings.HasPrefix(name, "unknown_service:") &&
+		(fi.service.UID.Name == "" || fi.service.AutoName()) {
+		fi.service.UID.Name = name
+		fi.service.ClearAutoName()
+		metadata[attr.ServiceName] = name
+		changed = true
+	}
+	if namespace != "" && (fi.service.UID.Namespace == "" || fi.service.AutoNamespace()) {
+		fi.service.UID.Namespace = namespace
+		fi.service.ClearAutoNamespace()
+		metadata[attr.ServiceNamespace] = namespace
+		changed = true
+	}
+	if changed {
+		fi.service.Metadata = metadata
+	}
+	return changed
+}
+
 func (fi *FileInfo) SetAutoServiceName(name string) {
 	fi.mu.Lock()
 	defer fi.mu.Unlock()

@@ -15,26 +15,30 @@ package attributes // import "go.opentelemetry.io/obi/pkg/export/attributes"
 // Unlike the metrics in metric.go these are not user-selectable, so they carry no Section:
 // nothing refers to them from an attributes.select group.
 type InternalMetrics struct {
-	TracerFlushes            Name
-	OTELMetricExports        Name
-	OTELMetricExportErrors   Name
-	OTELTraceExports         Name
-	OTELTraceExportErrors    Name
-	InstrumentedProcesses    Name
-	InstrumentationErrors    Name
-	AvoidedServices          Name
-	BuildInfo                Name
-	BpfProbeLatency          Name
-	BpfMapEntries            Name
-	BpfMapMaxEntries         Name
-	KubeCacheForwardLag      Name
-	BpfNetworkIgnoredPackets Name
-	BpfNetworkPackets        Name
-	QueueCapacityRatio       Name
+	DynamicProbes              Name
+	DynamicFunctionInvocations Name
+	TracerFlushes              Name
+	OTELMetricExports          Name
+	OTELMetricExportErrors     Name
+	OTELTraceExports           Name
+	OTELTraceExportErrors      Name
+	InstrumentedProcesses      Name
+	InstrumentationErrors      Name
+	AvoidedServices            Name
+	BuildInfo                  Name
+	BpfProbeLatency            Name
+	BpfMapEntries              Name
+	BpfMapMaxEntries           Name
+	KubeCacheForwardLag        Name
+	BpfNetworkIgnoredPackets   Name
+	BpfNetworkPackets          Name
+	QueueCapacityRatio         Name
 }
 
 func NewInternalMetrics(prefix string) InternalMetrics {
 	return InternalMetrics{
+		DynamicFunctionInvocations: metric(Name{OTEL: prefix + ".dynamic.function.invocations", Type: InstrumentCounter, Unit: "{invocation}"}),
+		DynamicProbes:              metric(Name{OTEL: prefix + ".dynamic.probes", Type: InstrumentGauge}),
 		TracerFlushes: metric(Name{
 			OTEL: prefix + ".ebpf.tracer.flushes",
 			Unit: "1",

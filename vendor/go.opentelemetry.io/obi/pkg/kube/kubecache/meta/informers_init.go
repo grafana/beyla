@@ -428,6 +428,7 @@ func serviceToIndexableEntity(svc *v1.Service) (any, error) {
 			Labels:          svc.Labels,
 			Ips:             ips,
 			Kind:            typeService,
+			ServiceSelector: svc.Spec.Selector,
 			Annotations:     svc.Annotations,
 			StatusTimeEpoch: objLastUpdateTime(&svc.ObjectMeta, nil, nil),
 		},

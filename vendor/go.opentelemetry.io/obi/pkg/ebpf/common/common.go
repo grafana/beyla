@@ -28,7 +28,9 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 	ebpfhttp "go.opentelemetry.io/obi/pkg/ebpf/common/http"
@@ -39,7 +41,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type protocol_type -type event_type -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t -type node_span_event_t Bpf ../../../bpf/common/common.c -- -I../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type protocol_type -type event_type -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t -type node_span_event_t -type node_dynamic_span_event_t Bpf ../../../bpf/common/common.c -- -I../../../bpf
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
@@ -102,6 +104,10 @@ const (
 	EventTypePythonRuntimeMetric   = uint8(BpfEventTypeK_eventTypePythonRuntimeMetrics)   // Python GC counters
 	EventTypeJVMRuntimeMetrics     = uint8(BpfEventTypeK_eventTypeJvmRuntimeMetrics)      // JVM runtime metrics
 	EventTypeNodejsResource        = uint8(BpfEventTypeK_eventTypeNodejsResource)
+	EventTypeNodeDynamicSpan       = uint8(BpfEventTypeK_eventTypeNodeDynamicSpan)
+	EventTypeCustomSpan            = uint8(BpfEventTypeK_eventTypeCustomSpan)
+	EventTypeGoSDKResource         = uint8(BpfEventTypeK_eventTypeGoSdkResource)
+	EventTypeGoDynamicGoroutine    = uint8(BpfEventTypeK_eventTypeGoDynamicGoroutine)
 	EventTypeJVMGCDuration         = uint8(BpfEventTypeK_eventTypeJvmGcDuration) // JVM garbage-collection duration
 )
 
@@ -196,6 +202,7 @@ type USDTSpecManager struct {
 	mu    sync.Mutex
 	next  uint32
 	specs map[string]uint32
+	free  []uint32
 }
 
 func (m *USDTSpecManager) ID(specKey string, maxSpecs uint32) (uint32, error) {
@@ -208,6 +215,19 @@ func (m *USDTSpecManager) ID(specKey string, maxSpecs uint32) (uint32, error) {
 	if id, ok := m.specs[specKey]; ok {
 		return id, nil
 	}
+	// IDs start at 1 — BPF custom_span treats attach_cookie==0 as "kernel
+	// lacks bpf_get_attach_cookie" and falls back to IP-map resolution.
+	// Reserving 0 prevents the first registered spec from triggering that
+	// fallback path on kernels ≥5.15.
+	if m.next == 0 {
+		m.next = 1
+	}
+	if len(m.free) > 0 {
+		id := m.free[len(m.free)-1]
+		m.free = m.free[:len(m.free)-1]
+		m.specs[specKey] = id
+		return id, nil
+	}
 	if m.next >= maxSpecs {
 		return 0, fmt.Errorf("too many USDT argument specs: max %d", maxSpecs)
 	}
@@ -218,7 +238,18 @@ func (m *USDTSpecManager) ID(specKey string, maxSpecs uint32) (uint32, error) {
 	return id, nil
 }
 
+// USDTAutoDiscoverLib, used as a USDTProbes() map key, makes the instrumenter
+// scan every executable mapping in /proc/<pid>/maps. Required for libstapsdt-
+// backed runtime probes whose .so path isn't known until registration.
+const USDTAutoDiscoverLib = "*"
+
+// USDTSpecRewriter mutates the parsed-from-ELF USDT spec before insertion
+// into the BPF specs map. Used by custom_span to coerce pointer args into
+// string-deref args.
+type USDTSpecRewriter func(spec any) (any, error)
+
 type USDTProbeDesc struct {
+	Dynamic  bool
 	Required bool
 	Provider string
 	Name     string
@@ -227,6 +258,29 @@ type USDTProbeDesc struct {
 	SpecsMap    *ebpf.Map
 	IPMap       *ebpf.Map
 	SpecManager *USDTSpecManager
+
+	// Cookie is written into the BPF spec's cookie field so userspace can
+	// resolve emitted events back to the originating descriptor.
+	Cookie uint64
+	// RewriteSpec optionally mutates the parsed-from-ELF spec before it is
+	// stored in the BPF specs map.
+	RewriteSpec USDTSpecRewriter
+
+	// Function, when set, attaches the probe at the named symbol's entry
+	// (uprobe by symbol). Mutually exclusive with Provider/Name (stapsdt).
+	// Used by custom_span function-mode.
+	Function        string
+	FunctionAddress uint64
+	FunctionSize    uint64
+	// BuildFunctionSpec is called at attach time with the opened ELF file
+	// of the target binary; the returned obiUSDTSpec is stored in the
+	// specs map. Allows late-binding decisions (e.g. Go vs C ABI for
+	// string args) based on the actual binary.
+	BuildFunctionSpec func(elfFile any) (any, error)
+	// ReturnProgram, when non-nil with Function set, attaches a uretprobe
+	// at the same symbol so paired (start+end) function spans can pair up.
+	// The attach cookie carries the spec id.
+	ReturnProgram *ebpf.Program
 }
 
 type Filter struct {
@@ -343,17 +397,53 @@ type sharedForwarder interface {
 }
 
 type EBPFEventContext struct {
-	CommonPIDsFilter ServiceFilter
-	SharedRingBuffer sharedForwarder
-	RuntimeMetrics   RuntimeMetricSender
-	EBPFMaps         map[string]*ebpf.Map
-	RingBufLock      sync.Mutex
-	MapsLock         sync.Mutex
-	LoadLock         sync.Mutex
-	Capabilities     TracerCapability
+	ServiceMetadataUpdated func(app.PID, svc.Attrs)
+	CommonPIDsFilter       ServiceFilter
+	SharedRingBuffer       sharedForwarder
+	RuntimeMetrics         RuntimeMetricSender
+	EBPFMaps               map[string]*ebpf.Map
+	RingBufLock            sync.Mutex
+	MapsLock               sync.Mutex
+	LoadLock               sync.Mutex
+	Capabilities           TracerCapability
 
 	internalEventHandlersMu sync.RWMutex
 	internalEventHandlers   map[uint8]func(*ringbuf.Record) error
+	// CustomSpanHandler routes dynamic spans and goroutine lifecycle records to
+	// the shared runtime, whichever language tracer reads the global ring buffer.
+	CustomSpanHandler CustomSpanRecordHandler
+	dynamicSpanMu     sync.RWMutex
+	dynamicSpanState  any
+
+	// CustomSpanSpecMgr allocates distinct IDs across language tracers sharing
+	// the global obi_usdt_specs BPF map.
+	CustomSpanSpecMgr USDTSpecManager
+}
+
+// CustomSpanRecordHandler dispatches dynamic span and goroutine lifecycle records.
+// It returns (span, ready, handled, err); ready means a completed span can be emitted.
+type CustomSpanRecordHandler func(record *ringbuf.Record) (request.Span, bool, bool, error)
+
+// DispatchCustomSpan routes dynamic instrumentation records to ctx.CustomSpanHandler.
+// It returns (span, skip, ok, err); ok means the caller should stop further parsing.
+func DispatchCustomSpan(ctx *EBPFEventContext, record *ringbuf.Record) (span request.Span, skip, ok bool, err error) {
+	if ctx == nil || record == nil || len(record.RawSample) == 0 || (record.RawSample[0] != EventTypeCustomSpan && record.RawSample[0] != EventTypeGoDynamicGoroutine && record.RawSample[0] != EventTypeNodeDynamicSpan) {
+		return request.Span{}, false, false, nil
+	}
+	ctx.dynamicSpanMu.RLock()
+	handler := ctx.CustomSpanHandler
+	ctx.dynamicSpanMu.RUnlock()
+	if handler == nil {
+		return request.Span{}, false, false, nil
+	}
+	s, ready, handled, herr := handler(record)
+	if !handled {
+		return request.Span{}, false, false, nil
+	}
+	if !ready {
+		return request.Span{}, true, true, herr
+	}
+	return s, false, true, herr
 }
 
 var MisclassifiedEvents = make(chan MisclassifiedEvent)
@@ -676,6 +766,12 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 		return finalizeParsedSpan(parseCtx, span, ignore, err)
 	case EventTypeGoChannelLink:
 		return readGoChannelLinkEvent(parseCtx, record)
+	case EventTypeCustomSpan, EventTypeGoDynamicGoroutine, EventTypeNodeDynamicSpan:
+		// Dynamic instrumentation events are dispatched out-of-band via the shared
+		// EBPFEventContext.CustomSpanHandler; the caller (tracer-specific
+		// parse) must have already routed this record. Ignore here so we
+		// never misinterpret the bytes as an HTTP/Memcached span.
+		return request.Span{}, true, nil
 	}
 
 	event, err := ReinterpretCast[HTTPRequestTrace](record.RawSample)
@@ -936,4 +1032,28 @@ func directionByPacketType(pt uint8, isClient bool) uint8 {
 		return directionRecv
 	}
 	return directionSend
+}
+
+func (ctx *EBPFEventContext) DynamicSpanState(create func() any) any {
+	ctx.dynamicSpanMu.Lock()
+	defer ctx.dynamicSpanMu.Unlock()
+	if ctx.dynamicSpanState == nil {
+		ctx.dynamicSpanState = create()
+	}
+	return ctx.dynamicSpanState
+}
+
+func (ctx *EBPFEventContext) SetCustomSpanHandler(handler CustomSpanRecordHandler) {
+	ctx.dynamicSpanMu.Lock()
+	defer ctx.dynamicSpanMu.Unlock()
+	ctx.CustomSpanHandler = handler
+}
+
+func (m *USDTSpecManager) Release(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id, ok := m.specs[key]; ok {
+		delete(m.specs, key)
+		m.free = append(m.free, id)
+	}
 }

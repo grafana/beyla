@@ -887,6 +887,7 @@ go.opentelemetry.io/obi/pkg/export/otel/tracesgen
 go.opentelemetry.io/obi/pkg/export/prom
 go.opentelemetry.io/obi/pkg/filter
 go.opentelemetry.io/obi/pkg/health
+go.opentelemetry.io/obi/pkg/internal/agentctl
 go.opentelemetry.io/obi/pkg/internal/avoidedsvc
 go.opentelemetry.io/obi/pkg/internal/cpython/runtime
 go.opentelemetry.io/obi/pkg/internal/denotools
@@ -896,6 +897,7 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/amqpparser
 go.opentelemetry.io/obi/pkg/internal/ebpf/bhpack
 go.opentelemetry.io/obi/pkg/internal/ebpf/convenience
 go.opentelemetry.io/obi/pkg/internal/ebpf/couchbasekv
+go.opentelemetry.io/obi/pkg/internal/ebpf/customspan
 go.opentelemetry.io/obi/pkg/internal/ebpf/generictracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer
 go.opentelemetry.io/obi/pkg/internal/ebpf/gpuevent
@@ -910,6 +912,7 @@ go.opentelemetry.io/obi/pkg/internal/ebpf/watcher
 go.opentelemetry.io/obi/pkg/internal/errtype
 go.opentelemetry.io/obi/pkg/internal/fastelf
 go.opentelemetry.io/obi/pkg/internal/goexec
+go.opentelemetry.io/obi/pkg/internal/gometa
 go.opentelemetry.io/obi/pkg/internal/helpers
 go.opentelemetry.io/obi/pkg/internal/helpers/cache
 go.opentelemetry.io/obi/pkg/internal/helpers/container
@@ -968,6 +971,7 @@ go.opentelemetry.io/obi/pkg/kube/kubecache/meta
 go.opentelemetry.io/obi/pkg/kube/kubecache/meta/cni
 go.opentelemetry.io/obi/pkg/kube/kubecache/service
 go.opentelemetry.io/obi/pkg/kube/kubeflags
+go.opentelemetry.io/obi/pkg/liveprober
 go.opentelemetry.io/obi/pkg/metadata
 go.opentelemetry.io/obi/pkg/netip
 go.opentelemetry.io/obi/pkg/netolly/agent

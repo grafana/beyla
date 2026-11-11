@@ -27,6 +27,7 @@ import (
 	javaagent "go.opentelemetry.io/obi/pkg/internal/java"
 	"go.opentelemetry.io/obi/pkg/internal/nodejs"
 	"go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
+	"go.opentelemetry.io/obi/pkg/liveprober"
 	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -86,7 +87,10 @@ type traceAttacher struct {
 	// Is able to find process lifetime duration
 	processAgeFunc func(app.PID) time.Duration
 
-	DynamicPIDSelector *DynamicPIDSelector
+	DynamicPIDSelector     *DynamicPIDSelector
+	DynamicInstrumentation *liveprober.Manager
+	JavaDynamic            *javaagent.DynamicRegistry
+	NodeDynamic            *nodejs.DynamicRegistry
 
 	// processResourceDetector finds resources like the service.name, service.namespace and service.version,
 	// from the process binary or the process deployment directory.
@@ -192,6 +196,24 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 
 					ta.processInstances.Inc(executableKey(instr.Obj.FileInfo))
 					if ok := ta.getTracer(ctx, &instr.Obj); ok {
+						if ta.DynamicInstrumentation != nil {
+							fi := instr.Obj.FileInfo
+							ta.DynamicInstrumentation.SetService(int(fi.Pid()), fi.ServiceAttrs())
+							tracer := ta.existingTracers[executableKey(fi)].tracer
+							if tracer != nil {
+								var target liveprober.TargetTracer = tracer
+								if instr.Obj.Type == svc.InstrumentableJava && ta.JavaDynamic != nil {
+									target = ta.JavaDynamic.Target(fi.Pid(), tracer)
+								}
+								if instr.Obj.Type == svc.InstrumentableNodejs && ta.NodeDynamic != nil {
+									target = ta.NodeDynamic.Target(fi.Pid(), tracer)
+								}
+								if err := ta.DynamicInstrumentation.RegisterTarget(int(fi.Pid()), fi.Ns(), target, fi.ServiceAttrs); err != nil {
+									ta.log.Warn("registering dynamic probe target", "pid", fi.Pid(), "error", err)
+								}
+							}
+						}
+
 						if dotnetSessions != nil && instr.Obj.Type == svc.InstrumentableDotnet &&
 							instr.Obj.FileInfo.ServiceAttrs().Features.AppRuntime() &&
 							instr.Obj.FileInfo.ServiceAttrs().ExportModes.CanExportMetrics() {
@@ -630,6 +652,15 @@ func (ta *traceAttacher) unregisterDynamicFileInfo(ie *ebpf.Instrumentable) {
 }
 
 func (ta *traceAttacher) notifyProcessDeletion(ctx context.Context, ie *ebpf.Instrumentable) {
+	if ta.DynamicInstrumentation != nil {
+		ta.DynamicInstrumentation.UnregisterTarget(int(ie.FileInfo.Pid()))
+		if ta.JavaDynamic != nil {
+			ta.JavaDynamic.Remove(ie.FileInfo.Pid())
+		}
+		if ta.NodeDynamic != nil {
+			ta.NodeDynamic.Remove(ie.FileInfo.Pid())
+		}
+	}
 	ta.unregisterDynamicFileInfo(ie)
 	key := executableKey(ie.FileInfo)
 	if existing, ok := ta.existingTracers[key]; ok {

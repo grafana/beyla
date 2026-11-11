@@ -237,6 +237,7 @@ func uprobeMultiClone(spec *ebpf.CollectionSpec, name string, twins map[string]b
 type Options struct {
 	Addresses    []uint64
 	RefCtrOffset uint64
+	Cookie       uint64
 	PID          uint32
 	Return       bool
 }
@@ -274,6 +275,12 @@ func attachMulti(exe *link.Executable, prog *ebpf.Program, opts Options) (io.Clo
 
 func multiOptions(opts Options) *link.UprobeMultiOptions {
 	multiOpts := &link.UprobeMultiOptions{Addresses: opts.Addresses, PID: opts.PID}
+	if opts.Cookie != 0 {
+		multiOpts.Cookies = make([]uint64, len(opts.Addresses))
+		for i := range multiOpts.Cookies {
+			multiOpts.Cookies[i] = opts.Cookie
+		}
+	}
 	if opts.RefCtrOffset != 0 {
 		multiOpts.RefCtrOffsets = make([]uint64, len(opts.Addresses))
 		for i := range multiOpts.RefCtrOffsets {
@@ -284,6 +291,9 @@ func multiOptions(opts Options) *link.UprobeMultiOptions {
 }
 
 func attachLegacy(exe *link.Executable, path string, prog *ebpf.Program, opts Options) (io.Closer, error) {
+	if opts.Cookie != 0 {
+		return attachPerfEvents(exe, prog, opts)
+	}
 	return attachWithTraceFSFallback(
 		func() (io.Closer, error) { return attachPerfEvents(exe, prog, opts) },
 		func() (io.Closer, error) { return attachTraceFS(path, prog, opts) },
@@ -293,7 +303,7 @@ func attachLegacy(exe *link.Executable, path string, prog *ebpf.Program, opts Op
 func attachPerfEvents(exe *link.Executable, prog *ebpf.Program, opts Options) (io.Closer, error) {
 	links := make(perfEventLinks, 0, len(opts.Addresses))
 	for _, address := range opts.Addresses {
-		perfOpts := &link.UprobeOptions{Address: address, PID: int(opts.PID), RefCtrOffset: opts.RefCtrOffset}
+		perfOpts := &link.UprobeOptions{Address: address, PID: int(opts.PID), RefCtrOffset: opts.RefCtrOffset, Cookie: opts.Cookie}
 		var (
 			l   link.Link
 			err error

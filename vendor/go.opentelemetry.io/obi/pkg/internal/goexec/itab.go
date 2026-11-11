@@ -54,6 +54,7 @@ func findInterfaceImpls(ef *elf.File) (map[string]uint64, error) {
 		iType := iTabType(s.Name)
 		if iType != "" {
 			implementations[iType] = s.Value
+			implementations[s.Name[prefixLen:]] = s.Value
 		}
 	}
 
@@ -148,6 +149,11 @@ func readGoInterfaceImpls(
 		}
 		if typeName != "" {
 			implementations[typeName] = itabAddr
+			// One concrete type can implement several interfaces with different itabs.
+			interfaceName, err := goTypeName(ef, types, interfaceType, abi)
+			if err == nil && interfaceName != "" {
+				implementations[typeName+","+interfaceName] = itabAddr
+			}
 		}
 
 		itabEntrySize := abi.ITabBaseSize

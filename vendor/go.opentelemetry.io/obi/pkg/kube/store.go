@@ -692,3 +692,27 @@ func (s *Store) Subscribe(observer meta.Observer) {
 		}
 	}
 }
+
+// ServicesForPod returns Services whose selectors match the pod's labels in its namespace.
+func (s *Store) ServicesForPod(namespace string, labels map[string]string) []string {
+	s.access.RLock()
+	defer s.access.RUnlock()
+	var names []string
+	for _, object := range s.objectMetaByQName {
+		meta := object.Meta
+		if meta.Kind != "Service" || meta.Namespace != namespace || len(meta.ServiceSelector) == 0 {
+			continue
+		}
+		matches := true
+		for key, value := range meta.ServiceSelector {
+			if actual, ok := labels[key]; !ok || actual != value {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			names = append(names, meta.Name)
+		}
+	}
+	return names
+}

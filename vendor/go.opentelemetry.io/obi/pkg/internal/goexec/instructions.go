@@ -271,6 +271,12 @@ func analyzeFunctionOffsets(baseOffset uint64, data []byte) (FuncOffsets, error)
 	}, nil
 }
 
+// GoSymbolTable exposes the .gopclntab-backed gosym.Table for resolving
+// Go function names in stripped binaries.
+func GoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
+	return findGoSymbolTable(elfF)
+}
+
 func findGoSymbolTable(elfF *elf.File) (*gosym.Table, error) {
 	var err error
 	var pclndat []byte

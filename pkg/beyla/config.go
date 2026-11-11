@@ -184,6 +184,13 @@ type Config struct {
 
 	Java obi.JavaConfig `yaml:"javaagent"`
 
+	// DynamicInstrumentation enables OBI's runtime rules API and rules (custom spans and live
+	// patches) for Java, Node.js and Go processes. It is converted to the OBI configuration as is.
+	DynamicInstrumentation obicfg.DynamicInstrumentationConfig `yaml:"dynamic_instrumentation"`
+	// DynamicInstrumentationConfigPath is the Beyla configuration file the dynamic instrumentation
+	// rules are also read from and watched in. It is set from the --config flag, never from YAML.
+	DynamicInstrumentationConfigPath string `yaml:"-" json:"-"`
+
 	// Topology enables extra topology-related features, such as inter-cluster connection spans.
 	Topology spanscfg.Topology `yaml:"topology"`
 
@@ -318,6 +325,9 @@ func (e ConfigError) Error() string {
 func (c *Config) Validate() error {
 	obiCfg := c.AsOBI()
 	if err := obiCfg.Discovery.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+	if err := c.DynamicInstrumentation.Validate(); err != nil {
 		return ConfigError(err.Error())
 	}
 

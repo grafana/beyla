@@ -66,6 +66,7 @@ func main() {
 	}
 
 	config := loadConfig(configPath)
+	config.DynamicInstrumentationConfigPath = *configPath
 	if err := config.Validate(); err != nil {
 		slog.Error("wrong Beyla configuration", "error", err)
 		os.Exit(-1)

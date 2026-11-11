@@ -209,6 +209,17 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	return outputSpans
 }
 
+// UpdateServiceFromSDK ignores metadata from processes already removed or replaced.
+func (pf *PIDsFilter) UpdateServiceFromSDK(pid app.PID, ns uint32, timestamp uint64, name, namespace string) (*exec.FileInfo, bool) {
+	pf.mux.RLock()
+	defer pf.mux.RUnlock()
+	info, ok := pf.current[ns][pid]
+	if !ok || info.removedAt != 0 || timestamp <= uint64(info.since) || info.fileInfo == nil {
+		return nil, false
+	}
+	return info.fileInfo, info.fileInfo.ApplySDKService(name, namespace)
+}
+
 func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, fi *exec.FileInfo, t PIDType) {
 	ns, nsExists := pf.current[nsid]
 	if !nsExists {

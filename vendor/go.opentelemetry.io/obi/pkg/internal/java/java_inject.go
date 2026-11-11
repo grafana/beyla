@@ -414,6 +414,9 @@ func returnCodeLine(line string) (bool, error) {
 
 func (i *JavaInjector) attachOpts(runtimeMetricsEnabled bool) string {
 	var opts []string
+	if i.cfg.DynamicInstrumentation.IsEnabled() {
+		opts = append(opts, "dynamicInstrumentation=true")
+	}
 	if i.cfg.Java.Debug {
 		opts = append(opts, "debug=true")
 	}

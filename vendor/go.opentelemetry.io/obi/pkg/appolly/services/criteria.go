@@ -22,6 +22,7 @@ import (
 const (
 	AttrNamespace       = "k8s_namespace"
 	AttrPodName         = "k8s_pod_name"
+	AttrServiceName     = "k8s_service_name"
 	AttrDeploymentName  = "k8s_deployment_name"
 	AttrReplicaSetName  = "k8s_replicaset_name"
 	AttrDaemonSetName   = "k8s_daemonset_name"
@@ -41,6 +42,7 @@ const (
 var AllowedAttributeNames = map[string]struct{}{
 	AttrNamespace:        {},
 	AttrPodName:          {},
+	AttrServiceName:      {},
 	AttrDeploymentName:   {},
 	AttrReplicaSetName:   {},
 	AttrDaemonSetName:    {},

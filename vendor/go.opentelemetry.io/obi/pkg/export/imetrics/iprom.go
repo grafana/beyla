@@ -30,6 +30,8 @@ type PrometheusEndpointConfig struct {
 
 // PrometheusReporter is an internal metrics Reporter that exports to Prometheus
 type PrometheusReporter struct {
+	DynamicProbeCounters
+	dynamicProbes                    *prometheus.GaugeVec
 	connector                        *connector.PrometheusManager
 	tracerFlushes                    prometheus.Histogram
 	otelMetricExports                prometheus.Counter
@@ -91,6 +93,7 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 			Name: attr.VendorPrefix + "_prometheus_http_requests_total",
 			Help: "Requests towards the Prometheus Scrape endpoint",
 		}, []string{"port", "path"}),
+		dynamicProbes: prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: internalNames.DynamicProbes.Prom, Help: "Attached dynamic function probes by OpenTelemetry service and process"}, []string{"service_name", "service_namespace", "process_pid", "code_function_name"}),
 		instrumentedProcesses: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: internalNames.InstrumentedProcesses.Prom,
 			Help: "Total number of instrumented processes by process executable name",
@@ -175,6 +178,8 @@ func NewPrometheusReporter(cfg *InternalMetricsConfig, manager *connector.Promet
 		pr.otelTraceExportErrs,
 		pr.prometheusRequests,
 		pr.instrumentedProcesses,
+		pr.dynamicProbes,
+		newDynamicInvocationCollector(&pr.DynamicProbeCounters, internalNames.DynamicFunctionInvocations.Prom),
 		pr.instrumentationErrors,
 		pr.buildInfo,
 		pr.bpfProbeExecutions,
@@ -287,4 +292,12 @@ func (p *PrometheusReporter) BPFPacketStats(count, ignored uint64) {
 
 func (p *PrometheusReporter) QueueBufferUtilization(subscriber string, ratio float64) {
 	p.queueCapacityRatio.WithLabelValues(subscriber).Set(ratio)
+}
+
+func (p *PrometheusReporter) DynamicProbe(serviceName, serviceNamespace, pid, function string, value float64) {
+	if value == 0 {
+		p.dynamicProbes.DeleteLabelValues(serviceName, serviceNamespace, pid, function)
+		return
+	}
+	p.dynamicProbes.WithLabelValues(serviceName, serviceNamespace, pid, function).Set(value)
 }

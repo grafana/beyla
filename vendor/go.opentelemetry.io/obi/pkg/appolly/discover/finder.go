@@ -5,10 +5,13 @@ package discover // import "go.opentelemetry.io/obi/pkg/appolly/discover"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
+	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
@@ -18,6 +21,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/logenricher"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/tpinjector"
 	msgh "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
+	javaagent "go.opentelemetry.io/obi/pkg/internal/java"
+	"go.opentelemetry.io/obi/pkg/internal/nodejs"
+	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/liveprober"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -85,6 +92,24 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		opt(&startConfig)
 	}
 
+	var dynamic *liveprober.Manager
+	var javaDynamic *javaagent.DynamicRegistry
+	var nodeDynamic *nodejs.DynamicRegistry
+	if pf.cfg.DynamicInstrumentation.IsEnabled() {
+		if startConfig.dynamicPIDSelector != nil {
+			return nil, errors.New("dynamic instrumentation rules cannot be combined with an embedding application's dynamic PID selector")
+		}
+		dynamic = liveprober.New()
+		javaDynamic = javaagent.NewDynamicRegistry(ctx, pf.cfg.DynamicInstrumentation, pf.ebpfEventContext)
+		nodeDynamic = nodejs.NewDynamicRegistry(ctx, pf.cfg.DynamicInstrumentation, pf.ebpfEventContext)
+		dynamic.Configure(pf.cfg.DynamicInstrumentation, ebpf.NewSymbolCache(pf.cfg.DynamicInstrumentation), pf.ctxInfo.Metrics)
+		pf.ebpfEventContext.ServiceMetadataUpdated = func(pid app.PID, service svc.Attrs) {
+			dynamic.SetService(int(pid), service)
+		}
+		if err := dynamic.Run(ctx, pf.cfg.DynamicInstrumentation, pf.cfg.DynamicInstrumentationConfigPath); err != nil {
+			return nil, err
+		}
+	}
 	tracerEvents := msgh.QueueFromConfig[Event[*ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "tracerEvents")
 
 	logDeprecationAndConflicts(pf.cfg)
@@ -101,7 +126,13 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	if appDynamicSelector != nil {
 		addedPIDsCh = appDynamicSelector.AddedPIDsNotifyContext(ctx)
 	}
-	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, addedPIDsCh)),
+	watchCriteria := configCriteria
+	if dynamic != nil {
+		var ports services.IntEnum
+		_ = ports.UnmarshalText([]byte("1-65535"))
+		watchCriteria = append(append([]services.Selector{}, configCriteria...), &services.GlobAttributes{OpenPorts: ports})
+	}
+	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, watchCriteria, addedPIDsCh)),
 		swarm.WithID("ProcessWatcher"))
 
 	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "kubeEnrichedEvents")
@@ -126,8 +157,16 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		langEnrichedEvents,
 	), swarm.WithID("LanguageDecoratorProvider"))
 
+	var kubeStore *kube.Store
+	if pf.ctxInfo.K8sInformer.IsKubeEnabled() {
+		var err error
+		kubeStore, err = pf.ctxInfo.K8sInformer.Get(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, pf.ctxInfo.Metrics, "criteriaFilteredEvents")
-	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicPIDSelector),
+	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicPIDSelector, matcherContext{dynamic: dynamic, store: kubeStore}),
 		swarm.WithID("CriteriaMatcher"))
 	swi.Add(dynamicMatcherProvider(langEnrichedEvents, criteriaFilteredEvents, appDynamicSelector),
 		swarm.WithID("DynamicMatcher"))
@@ -147,12 +186,15 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	swi.Add(ContainerStoreUpdaterProvider(pf.ctxInfo.K8sInformer, processContextEnrichedTypes, storedExecutableTypes),
 		swarm.WithID("ContainerStoreUpdater"))
 	swi.Add(traceAttacherProvider(&traceAttacher{
-		Cfg:                 pf.cfg,
-		OutputTracerEvents:  tracerEvents,
-		Metrics:             pf.ctxInfo.Metrics,
-		SpanSignalsShortcut: pf.tracesInput,
-		RuntimeMetrics:      pf.runtimeMetrics,
-		DynamicPIDSelector:  startConfig.dynamicPIDSelector,
+		Cfg:                    pf.cfg,
+		OutputTracerEvents:     tracerEvents,
+		Metrics:                pf.ctxInfo.Metrics,
+		SpanSignalsShortcut:    pf.tracesInput,
+		RuntimeMetrics:         pf.runtimeMetrics,
+		DynamicPIDSelector:     startConfig.dynamicPIDSelector,
+		DynamicInstrumentation: dynamic,
+		JavaDynamic:            javaDynamic,
+		NodeDynamic:            nodeDynamic,
 
 		InputInstrumentables: storedExecutableTypes,
 		EbpfEventContext:     pf.ebpfEventContext,

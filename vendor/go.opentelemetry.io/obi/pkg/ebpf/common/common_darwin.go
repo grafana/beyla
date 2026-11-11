@@ -8,6 +8,17 @@ func KernelVersion() (major, minor int) {
 	return 0, 0
 }
 
+// HasAttachCookie / HasUprobeRefCtrOffset are linux-only kernel feature
+// probes. Stubbed to false on darwin so the integration test package
+// compiles for `go vet` and `go test -short` runs on dev macs.
+func HasAttachCookie() bool {
+	return false
+}
+
+func HasUprobeRefCtrOffset() bool {
+	return false
+}
+
 func hasCapSysAdmin() bool {
 	return false
 }

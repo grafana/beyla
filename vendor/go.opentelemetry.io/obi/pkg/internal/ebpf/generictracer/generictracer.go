@@ -33,6 +33,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	ebpfconvenience "go.opentelemetry.io/obi/pkg/internal/ebpf/convenience"
+	"go.opentelemetry.io/obi/pkg/internal/ebpf/customspan"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/netns"
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
@@ -60,8 +61,20 @@ type Tracer struct {
 	iterMu             sync.Mutex
 	seenNetns          *expirable.LRU[uint64, struct{}]
 	eventCtx           *ebpfcommon.EBPFEventContext
-	jvmUSDTManager     ebpfcommon.USDTSpecManager
+	usdtSpecManager    ebpfcommon.USDTSpecManager
 	pythonRuntime      *pythonRuntimeController
+	customSpan         *customspan.Runtime
+}
+
+// customSpanSpecMgr allocates spec IDs shared with all language tracers.
+func (p *Tracer) customSpanSpecMgr() *ebpfcommon.USDTSpecManager {
+	if p.eventCtx == nil {
+		// Fall back to a per-tracer manager when the event context isn't
+		// wired yet (e.g. early init paths in tests). The integration
+		// path always sets eventCtx before any attach happens.
+		return &p.usdtSpecManager
+	}
+	return &p.eventCtx.CustomSpanSpecMgr
 }
 
 func tlog() *slog.Logger {
@@ -225,6 +238,7 @@ func (p *Tracer) BlockPIDLifecycle(pid app.PID, ns uint32, lifecycle *exec.FileI
 }
 
 func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
+	p.initCustomSpan()
 	if p.cfg.EBPF.TrackRequestHeaders ||
 		p.cfg.EBPF.ContextPropagation.IsEnabled() {
 		p.log.Info("Enabling trace information parsing", "bpf_loop_enabled", ebpfcommon.SupportsEBPFLoops(p.log, p.cfg.EBPF.OverrideBPFLoopEnabled))
@@ -238,6 +252,13 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 	ebpfcommon.FixupSpec(spec, p.cfg.EBPF.OverrideBPFLoopEnabled)
 
 	return []*ebpfcommon.SpecBundle{{Spec: spec, Objects: &p.bpfObjects, Constants: p.constants()}}, nil
+}
+
+func (p *Tracer) initCustomSpan() {
+	if p.customSpan != nil || p.cfg == nil || !p.cfg.DynamicInstrumentation.IsEnabled() {
+		return
+	}
+	p.customSpan = customspan.New(p.cfg.DynamicInstrumentation.TTL, p.eventCtx, p.log)
 }
 
 func (p *Tracer) constants() map[string]any {
@@ -293,12 +314,21 @@ func (p *Tracer) constants() map[string]any {
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["jvm_sampling_interval_ns"] = uint64(p.cfg.JVMRuntimeMetrics.SamplingInterval.Nanoseconds())
 	}
+	m["nodejs_dynamic_instrumentation_enabled"] = uint64(0)
+	if p.cfg.DynamicInstrumentation.IsEnabled() && p.cfg.NodeJS.Enabled {
+		m["nodejs_dynamic_instrumentation_enabled"] = uint64(1)
+	}
 	m["nodejs_runtime_metrics_enabled"] = uint64(0)
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["nodejs_runtime_metrics_enabled"] = uint64(1)
 	}
 
 	m["g_traces_ctx_v1_enabled"] = p.traceCtxMapEnabled
+	m["g_bpf_probe_write_user_enabled"] = p.cfg.DynamicInstrumentation.IsEnabled() && ebpfcommon.SupportsContextPropagationWithProbe(p.log)
+	m["has_attach_cookie"] = uint32(0)
+	if ebpfcommon.HasAttachCookie() {
+		m["has_attach_cookie"] = uint32(1)
+	}
 
 	return m
 }
@@ -614,18 +644,19 @@ func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
 }
 
 func (p *Tracer) USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc {
-	if !p.cfg.AppRuntimeMetricsEnabled() {
+	if p.cfg == nil {
 		return nil
 	}
-	return map[string][]*ebpfcommon.USDTProbeDesc{
-		"libjvm.so": {
+	out := map[string][]*ebpfcommon.USDTProbeDesc{}
+	if p.cfg.AppRuntimeMetricsEnabled() {
+		out["libjvm.so"] = []*ebpfcommon.USDTProbeDesc{
 			{
 				Provider:    "hotspot",
 				Name:        "mem__pool__gc__begin",
 				Program:     p.bpfObjects.ObiUsdtHotspotMemPoolGcBegin,
 				SpecsMap:    p.bpfObjects.ObiUsdtSpecs,
 				IPMap:       p.bpfObjects.ObiUsdtIpToSpecId,
-				SpecManager: &p.jvmUSDTManager,
+				SpecManager: p.customSpanSpecMgr(),
 			},
 			{
 				Provider:    "hotspot",
@@ -633,10 +664,14 @@ func (p *Tracer) USDTProbes() map[string][]*ebpfcommon.USDTProbeDesc {
 				Program:     p.bpfObjects.ObiUsdtHotspotMemPoolGcEnd,
 				SpecsMap:    p.bpfObjects.ObiUsdtSpecs,
 				IPMap:       p.bpfObjects.ObiUsdtIpToSpecId,
-				SpecManager: &p.jvmUSDTManager,
+				SpecManager: p.customSpanSpecMgr(),
 			},
-		},
+		}
 	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (p *Tracer) SocketFilters() []*ebpf.Program {
@@ -764,6 +799,10 @@ func (p *Tracer) Run(
 		defer p.pythonRuntime.close()
 	}
 
+	if p.customSpan != nil && ebpfEventContext != nil {
+		ebpfEventContext.SetCustomSpanHandler(p.customSpan.HandleRecord)
+	}
+
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map
 	if p.bpfObjects.ValidPids != nil {
@@ -787,6 +826,7 @@ func (p *Tracer) Run(
 
 	go p.watchForMisclassifedEvents(ctx)
 	go p.lookForTimeouts(ctx, parseContext, timeoutTicker, eventsChan)
+	go p.customSpan.Run(ctx)
 	defer timeoutTicker.Stop()
 
 	p.runItersForPids()
@@ -834,6 +874,13 @@ func (p *Tracer) processSharedRingbufRecord(
 		p.handleJVMRuntimeMetricsRecord,
 	); handled {
 		return request.Span{}, true, err
+	}
+
+	if span, skip, ok, err := ebpfcommon.DispatchCustomSpan(p.eventCtx, record); ok {
+		if skip {
+			return request.Span{}, true, err
+		}
+		return span, false, err
 	}
 
 	s, ignore, err := ebpfcommon.ReadBPFTraceAsSpan(parseContext, cfg, record, p.pidsFilter)
@@ -1072,7 +1119,10 @@ func bpfConnInfoT(src ebpfcommon.BpfConnectionInfoT) (dst BpfConnectionInfoT) {
 	return
 }
 
-func (p *Tracer) SetEventContext(ctx *ebpfcommon.EBPFEventContext) { p.eventCtx = ctx }
+func (p *Tracer) SetEventContext(ctx *ebpfcommon.EBPFEventContext) {
+	p.eventCtx = ctx
+	p.initCustomSpan()
+}
 
 func (p *Tracer) Capabilities() ebpfcommon.TracerCapability { return 0 }
 

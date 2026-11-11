@@ -370,7 +370,7 @@ func appendManualOTelJSON(rs ptrace.ResourceSpans, payload []byte) error {
 }
 
 func SpanDiscarded(span *request.Span, is instrumentations.InstrumentationSelection) bool {
-	return request.IgnoreTraces(span) || span.Service.ExportsOTelTraces() || !acceptSpan(is, span)
+	return request.IgnoreTraces(span) || (span.Service.ExportsOTelTraces() && span.Type != request.EventTypeCustomSpan) || !acceptSpan(is, span)
 }
 
 // createSubSpans creates the internal spans for a request.Span
@@ -476,6 +476,8 @@ func CodeToStatusCode(code string) ptrace.StatusCode {
 func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span) bool {
 	switch span.Type {
 	case request.EventTypeManualSpan, request.EventTypeFailedConnect:
+		return true
+	case request.EventTypeCustomSpan:
 		return true
 	case request.EventTypeGPUCudaKernelLaunch,
 		request.EventTypeGPUCudaGraphLaunch,
@@ -1622,6 +1624,8 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		}
 	case request.EventTypeManualSpan:
 		attrs = manualSpanAttributes(span)
+	case request.EventTypeCustomSpan:
+		attrs = customSpanAttributes(span)
 	case request.EventTypeFailedConnect:
 		attrs = []attribute.KeyValue{
 			request.ServerPort(span.HostPort),
@@ -1818,6 +1822,19 @@ func spanStartTime(t request.Timings) time.Time {
 		realStart = t.Start
 	}
 	return realStart
+}
+
+// customSpanAttributes emits Span.CustomSpan.Attrs as string-typed OTel
+// attributes; numeric coercion is the user's concern past the wire.
+func customSpanAttributes(span *request.Span) []attribute.KeyValue {
+	if span.CustomSpan == nil {
+		return nil
+	}
+	attrs := make([]attribute.KeyValue, 0, len(span.CustomSpan.Attrs))
+	for k, v := range span.CustomSpan.Attrs {
+		attrs = append(attrs, attribute.String(k, v))
+	}
+	return attrs
 }
 
 func manualSpanAttributes(span *request.Span) []attribute.KeyValue {

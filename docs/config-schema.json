@@ -384,6 +384,76 @@
       },
       "type": "object"
     },
+    "CustomSpanAttr": {
+      "properties": {
+        "arg": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "i16",
+            "i32",
+            "i64",
+            "i8",
+            "string",
+            "u16",
+            "u32",
+            "u64",
+            "u8"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CustomSpanMatch": {
+      "properties": {
+        "arg": {
+          "type": "integer"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "CustomSpanSpec": {
+      "properties": {
+        "attrs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CustomSpanAttr"
+          },
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        },
+        "on": {
+          "$ref": "#/$defs/CustomSpanTarget"
+        }
+      },
+      "type": "object"
+    },
+    "CustomSpanTarget": {
+      "properties": {
+        "function_noret": {
+          "type": "string"
+        },
+        "function_span": {
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/$defs/CustomSpanMatch"
+        },
+        "usdt_noret": {
+          "type": "string"
+        },
+        "usdt_span": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "Definitions": {
       "items": {
         "oneOf": [
@@ -434,6 +504,84 @@
             "1ms"
           ],
           "x-env-var": "OBI_DOTNET_RUNTIME_METRICS_TIMEOUT"
+        }
+      },
+      "type": "object"
+    },
+    "DynamicInstrumentationConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-env-var": "OTEL_EBPF_DYNAMIC_INSTRUMENTATION_ENABLED"
+        },
+        "listen_address": {
+          "type": "string",
+          "x-env-var": "OTEL_EBPF_DYNAMIC_INSTRUMENTATION_LISTEN_ADDRESS"
+        },
+        "max_cached_binary_bytes": {
+          "type": "integer"
+        },
+        "max_probes": {
+          "type": "integer"
+        },
+        "request_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ]
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/DynamicInstrumentationRule"
+          },
+          "type": "array"
+        },
+        "symbol_cache_bytes": {
+          "type": "integer"
+        },
+        "symbol_cache_entries": {
+          "type": "integer"
+        },
+        "ttl": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ]
+        },
+        "watch_interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DynamicInstrumentationRule": {
+      "properties": {
+        "patches": {
+          "items": {
+            "$ref": "#/$defs/PatchSpec"
+          },
+          "type": "array"
+        },
+        "service": {
+          "$ref": "#/$defs/GlobDefinitionCriteria"
+        },
+        "spans": {
+          "items": {
+            "$ref": "#/$defs/CustomSpanSpec"
+          },
+          "type": "array"
         }
       },
       "type": "object"
@@ -878,6 +1026,9 @@
           "$ref": "#/$defs/GlobAttr"
         },
         "k8s_replicaset_name": {
+          "$ref": "#/$defs/GlobAttr"
+        },
+        "k8s_service_name": {
           "$ref": "#/$defs/GlobAttr"
         },
         "k8s_statefulset_name": {
@@ -1940,6 +2091,35 @@
       },
       "type": "object"
     },
+    "PatchSpec": {
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string"
+        },
+        "descriptor": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m)$",
+          "examples": [
+            "30s",
+            "5m",
+            "1ms"
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "PayloadExtraction": {
       "properties": {
         "http": {
@@ -2134,6 +2314,9 @@
           "$ref": "#/$defs/RegexpAttr"
         },
         "k8s_replicaset_name": {
+          "$ref": "#/$defs/RegexpAttr"
+        },
+        "k8s_service_name": {
           "$ref": "#/$defs/RegexpAttr"
         },
         "k8s_statefulset_name": {
@@ -2719,6 +2902,10 @@
     },
     "dotnet_runtime_metrics": {
       "$ref": "#/$defs/DotnetRuntimeMetricsConfig"
+    },
+    "dynamic_instrumentation": {
+      "$ref": "#/$defs/DynamicInstrumentationConfig",
+      "description": "DynamicInstrumentation enables OBI's runtime rules API and rules (custom spans and live patches) for Java, Node.js and Go processes. It is converted to the OBI configuration as is."
     },
     "ebpf": {
       "$ref": "#/$defs/EBPFTracer"

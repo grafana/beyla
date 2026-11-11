@@ -87,6 +87,18 @@ var goAutoSDKActivationModules = [...]activationModule{
 	},
 }
 
+// Only reviewed SDK implementations may receive writes to recordingSpan.parent.
+var goSDKDynamicParentModules = [...]activationModule{
+	{path: "go.opentelemetry.io/otel/sdk", sums: map[string]string{
+		"v1.43.0": "h1:pi5mE86i5rTeLXqoF/hhiBtUNcrAGHLKQdhg4h4V9Dg=",
+		"v1.46.0": "h1:h5CNQQjEbuQXY/JfZtgt3i7HVFV3aHPO2OAwO2eTYPI=",
+	}},
+	{path: "go.opentelemetry.io/otel/trace", sums: map[string]string{
+		"v1.43.0": "h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09nk+3A=",
+		"v1.46.0": "h1:OULy7ccdJnZtJ0UDYFOIGaCmiWzJ8Vi2G/Rsu60qs1c=",
+	}},
+}
+
 const (
 	// go common
 	ConnFdPos GoOffset = iota + 1 // start at 1, must match what's in go_offsets.h
@@ -243,6 +255,15 @@ const (
 	// Go connection interface types
 	GrpcSyscallConnTypeAddress
 	TLSConnTypeAddress
+	SDKRecordingSpanContextPos
+	SDKRecordingSpanType
+	SDKTracerProviderPos
+	SDKProviderResourcePos
+	SDKResourceAttrsPos
+	SDKAttributeSetDataPos
+	SDKRecordingSpanParentPos
+	SpanContextRemotePos
+	SDKDynamicParentSupported
 )
 
 //go:embed offsets.json
@@ -603,8 +624,14 @@ var structMembers = map[string]structInfo{
 			"traceID":    SpanContextTraceIDPos,
 			"spanID":     SpanContextSpanIDPos,
 			"traceFlags": SpanContextTraceFlagsPos,
+			"remote":     SpanContextRemotePos,
 		},
 	},
+	"go.opentelemetry.io/otel/sdk/trace.tracer":         {lib: "go.opentelemetry.io/otel/sdk", fields: map[string]GoOffset{"provider": SDKTracerProviderPos}},
+	"go.opentelemetry.io/otel/sdk/trace.TracerProvider": {lib: "go.opentelemetry.io/otel/sdk", fields: map[string]GoOffset{"resource": SDKProviderResourcePos}},
+	"go.opentelemetry.io/otel/sdk/resource.Resource":    {lib: "go.opentelemetry.io/otel/sdk", fields: map[string]GoOffset{"attrs": SDKResourceAttrsPos}},
+	"go.opentelemetry.io/otel/attribute.Set":            {lib: "go.opentelemetry.io/otel", fields: map[string]GoOffset{"data": SDKAttributeSetDataPos}},
+	"go.opentelemetry.io/otel/sdk/trace.recordingSpan":  {lib: "go.opentelemetry.io/otel/sdk", fields: map[string]GoOffset{"spanContext": SDKRecordingSpanContextPos, "parent": SDKRecordingSpanParentPos}},
 	"go.opentelemetry.io/auto/sdk.span": {
 		lib: "go.opentelemetry.io/auto/sdk",
 		fields: map[string]GoOffset{
@@ -802,6 +829,7 @@ func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
 			}
 			offs = offsetsForLibVersions(offs, libVersions.versions, log())
 			setGoAutoSDKActivationSupport(offs, libVersions, elfFile)
+			setGoSDKDynamicParentSupport(offs, libVersions, elfFile)
 			return offs, nil
 		}
 	} else {
@@ -900,12 +928,23 @@ func goAutoSDKActivationArchitectureSupported(elfFile *elf.File) bool {
 	return elfFile.Machine == elf.EM_X86_64 || elfFile.Machine == elf.EM_AARCH64
 }
 
+func setGoSDKDynamicParentSupport(fieldOffsets FieldOffsets, modules moduleVersions, elfFile *elf.File) {
+	fieldOffsets[SDKDynamicParentSupported] = uint64(0)
+	if goAutoSDKActivationArchitectureSupported(elfFile) && goSDKModulesSupported(modules, goSDKDynamicParentModules[:]) {
+		fieldOffsets[SDKDynamicParentSupported] = uint64(1)
+	}
+}
+
 func goAutoSDKActivationSupported(modules moduleVersions) bool {
+	return goSDKModulesSupported(modules, goAutoSDKActivationModules[:])
+}
+
+func goSDKModulesSupported(modules moduleVersions, requiredModules []activationModule) bool {
 	if modules.invalid {
 		return false
 	}
 
-	for _, required := range goAutoSDKActivationModules {
+	for _, required := range requiredModules {
 		if _, replaced := modules.replacements[required.path]; replaced {
 			return false
 		}
@@ -948,6 +987,7 @@ func structMemberPreFetchedOffsets(elfFile *elf.File, fieldOffsets FieldOffsets)
 	}
 	fieldOffsets = offsetsForLibVersions(fieldOffsets, libVersions.versions, log)
 	setGoAutoSDKActivationSupport(fieldOffsets, libVersions, elfFile)
+	setGoSDKDynamicParentSupport(fieldOffsets, libVersions, elfFile)
 	// after putting the offsets.json in a Go structure, we search all the
 	// structMembers elements on it, to get the annotated offsets
 	for strName, strInfo := range structMembers {

@@ -65,6 +65,7 @@ const (
 	EventTypeSunRPCServer
 	EventTypeAerospikeClient
 	EventTypeAerospikeServer
+	EventTypeCustomSpan
 )
 
 const (
@@ -188,6 +189,8 @@ func (t EventType) String() string {
 		return "MongoClient"
 	case EventTypeManualSpan:
 		return "CUSTOM"
+	case EventTypeCustomSpan:
+		return "CustomSpan"
 	case EventTypeFailedConnect:
 		return "CONNECTION ERR"
 	case EventTypeDNS:
@@ -1074,6 +1077,13 @@ func (j *JSONRPC) QualifiedMethod() string {
 	return j.Method[:i] + "/" + j.Method[i+1:]
 }
 
+// CustomSpan carries the user-declared business-logic span definition name plus
+// the attribute values extracted from USDT probe arguments.
+type CustomSpan struct {
+	Name  string            `json:"name"`
+	Attrs map[string]string `json:"attrs,omitempty"`
+}
+
 // Generic embedding provider types (Voyage AI, Cohere, Jina AI)
 
 // GenAI operation name constants aligned with OTel semantic conventions.
@@ -1535,6 +1545,7 @@ type Span struct {
 	AWS               *AWS           `json:"-"`
 	GenAI             *GenAI         `json:"-"`
 	JSONRPC           *JSONRPC       `json:"-"`
+	CustomSpan        *CustomSpan    `json:"-"`
 
 	// Anything but ResponseParsed means Status holds no observation. Whether the
 	// duration is a measurement is recorded separately, by ignoreDurations.
@@ -2360,6 +2371,8 @@ func (s *Span) TraceName() string {
 		}
 		return semconv.DBSystemNameMongoDB.Value.AsString()
 	case EventTypeManualSpan:
+		return s.Method
+	case EventTypeCustomSpan:
 		return s.Method
 	case EventTypeFailedConnect:
 		return "CONNECT"

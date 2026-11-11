@@ -1009,6 +1009,7 @@ go.opentelemetry.io/ebpf-profiler/stringutil
 go.opentelemetry.io/ebpf-profiler/support
 # go.opentelemetry.io/obi v1.0.0 => ./.obi-src
 ## explicit; go 1.26.0
+go.opentelemetry.io/obi/cmd/obi/internal/configcmd
 go.opentelemetry.io/obi/cmd/obi/internal/configload
 go.opentelemetry.io/obi/cmd/obi/internal/configwatch
 go.opentelemetry.io/obi/internal/config/convert

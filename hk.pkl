@@ -1,4 +1,4 @@
-// Keep the Go commands and check selection in hk while Mise owns tool versions.
+// Keep check selection in hk while Mise owns tool versions.
 amends "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.pkl"
 
 import "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Builtins.pkl"
@@ -6,12 +6,6 @@ import "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.
 
 // These trees are generated or managed by another repository/tool.
 exclude = List(".obi-src/**", "vendor/**", "internal/testgenerated/**")
-
-local clangFormatter = (Builtins.clang_format) {
-  // Match the existing hook's C/C++ extensions and only apply fixes.
-  glob = List("**/*.c", "**/*.cpp", "**/*.h")
-  check = null
-}
 
 steps {
   ["golangci-lint"] = (Builtins.golangci_lint) {
@@ -55,20 +49,25 @@ steps {
       effect = "read"
     }
   }
+  ["clang-format"] = (Builtins.clang_format) {
+    // Keep C/C++ formatting fix-only, matching the existing hook policy.
+    glob = List("**/*.c", "**/*.cpp", "**/*.h")
+    check = null
+  }
+  ["clang-tidy"] = new Config.Step {
+    // Preserve the existing task's BPF source/header scope; bpfcore is generated.
+    glob = List("bpf/**/*.c", "bpf/**/*.h")
+    exclude = List("bpf/bpfcore/**")
+    dir = "."
+    check = new Config.CommandSpec {
+      command = "clang-tidy {{files}}"
+      effect = "read"
+    }
+  }
 }
 
 hooks {
   ["pre-commit"] {
     stash = "git"
-    steps {
-      ["clang-format"] = clangFormatter
-    }
-  }
-  ["clang-format"] {
-    fix = true
-    stage = false
-    steps {
-      ["clang-format"] = clangFormatter
-    }
   }
 }

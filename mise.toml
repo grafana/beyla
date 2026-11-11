@@ -124,11 +124,6 @@ description = "Remove contents of the test output directory"
 run = '''echo "### Cleaning ${TEST_OUTPUT} folder"
 rm -rf "${TEST_OUTPUT}"/*'''
 
-[tasks.fmt]
-shell = "bash -euo pipefail -c"
-description = "Format Go code and imports"
-run = '''HK_MISE=1 hk fix --all --step go-format --no-stage'''
-
 [tasks.lint]
 shell = "bash -euo pipefail -c"
 description = "Run configured repository checks through hk"
@@ -136,7 +131,8 @@ run = '''HK_MISE=1 hk check -q --all --check --no-fail-fast'''
 
 [tasks."lint:fix"]
 shell = "bash -euo pipefail -c"
-description = "Apply available lint and formatting fixes without staging changes"
+alias = ["fmt", "clang:format", "clang-format"]
+description = "Apply configured lint and formatting fixes without staging changes"
 run = '''HK_MISE=1 hk fix -q --all --no-stage --no-fail-fast'''
 
 # Keep the historical task name available to existing local scripts.
@@ -144,18 +140,11 @@ run = '''HK_MISE=1 hk fix -q --all --no-stage --no-fail-fast'''
 description = "Compatibility alias for lint"
 run = [{ task = "lint" }]
 
-[tasks."clang:format"]
-shell = "bash -euo pipefail -c"
-alias = ["clang-format"]
-description = "Format C/C++ files with hk"
-run = '''HK_MISE=1 hk run --all --no-stage clang-format'''
-
 [tasks."clang:tidy"]
 shell = "bash -euo pipefail -c"
 alias = ["clang-tidy"]
 description = "Run clang-tidy on BPF C and header files"
-run = '''cd bpf
-find . -type f \( -name '*.c' -o -name '*.h' \) ! -path './bpfcore/*' -print0 | xargs -0 -r clang-tidy'''
+run = '''HK_MISE=1 hk check -q --all --check --step clang-tidy'''
 
 [tasks."generate:config-schema"]
 shell = "bash -euo pipefail -c"

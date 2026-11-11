@@ -83,6 +83,7 @@ run = '''CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -gcfla
 go = { version = "1.26.10" }
 golangci-lint = { version = "2.14.0" }
 hk = "2.11.1"
+actionlint = "1.7.12"
 kind = "0.33.0"
 setup-envtest = "0.25.1"
 gotestsum = "1.13.0"

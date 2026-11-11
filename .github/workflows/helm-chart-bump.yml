@@ -88,9 +88,11 @@ jobs:
           # Check if appVersion already matches
           if [[ "${CURRENT_APP_VERSION}" == "${NEW_APP_VERSION}" ]]; then
             echo "::notice::appVersion already matches ${NEW_APP_VERSION}"
-            echo "app_version_changed=false" >> "${GITHUB_OUTPUT}"
-            echo "new_chart_version=${CURRENT_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
-            echo "chart_version_changed=false" >> "${GITHUB_OUTPUT}"
+            {
+              echo "app_version_changed=false"
+              echo "new_chart_version=${CURRENT_CHART_VERSION}"
+              echo "chart_version_changed=false"
+            } >> "${GITHUB_OUTPUT}"
             exit 0
           fi
           echo "app_version_changed=true" >> "${GITHUB_OUTPUT}"
@@ -106,8 +108,10 @@ jobs:
           fi
           IFS='.' read -r MAJOR MINOR PATCH <<< "${BASE_CHART_VERSION}"
           NEW_CHART_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
-          echo "new_chart_version=${NEW_CHART_VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "chart_version_changed=true" >> "${GITHUB_OUTPUT}"
+          {
+            echo "new_chart_version=${NEW_CHART_VERSION}"
+            echo "chart_version_changed=true"
+          } >> "${GITHUB_OUTPUT}"
           echo "Chart version: ${CURRENT_CHART_VERSION} -> ${NEW_CHART_VERSION} (patch bump from ${BASE_CHART_VERSION}, last released: ${RELEASED_CHART_VERSION:-none})"
 
       - name: Check if any changes needed

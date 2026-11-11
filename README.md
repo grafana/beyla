@@ -179,7 +179,7 @@ The default build flow is:
 - `mise run generate:docker` - optionally regenerate eBPF bindings using the Docker generator image
 - `mise run compile` - compile the `beyla` binary
 - `mise run lint` and `mise run test` - lint and test the code
-- `mise run install:hooks` - install the `clang:format` pre-commit hook
+- `mise run install:hooks` - install the hk pre-commit hook for C/C++ formatting
 - `mise run //java:build` - build the Java agent with the Java project's pinned tools
 - `mise run //oats:test:ai` - run the OATS AI suite from its project-owned task config
 
@@ -216,8 +216,8 @@ $ mise run build
 ```
 
 `mise run build` vendors OBI using pinned native Clang/LLVM tools, runs the
-standard verification suite, and compiles Beyla. Install the `clang:format`
-pre-commit hook separately with `mise run install:hooks`. Use `mise run dev`
+standard verification suite, and compiles Beyla. Install the hk pre-commit hook
+separately with `mise run install:hooks`. Use `mise run dev`
 when you specifically need a coverage-enabled binary.
 
 After a successful compilation, binaries can be found in the `bin/` subdirectory.
@@ -260,17 +260,20 @@ Build the docker image with `mise run image:dev-build`.
 
 #### Formatting and linting code
 
-Beyla uses linters to enforce our coding style and best practices:
-- `golangci-lint` for Go code
-- `clang:format` for formatting C code
+Beyla uses hk to orchestrate its Go linting and formatting checks:
+- `golangci-lint` for Go linting and the repository's gofmt/gci import formatting rules
+- `clang-format` for staged C/C++ formatting in the hk pre-commit hook
 - `clang:tidy` for static analysis of the C code
 
-All of them are enforced on pull requests as part of the Beyla github workflows. Additionally, you can invoke the linters manually:
+Go linting and formatting are checked on pull requests. You can invoke the checks and formatters manually:
 
-- `mise run lint` runs the Go linter; dashboard linting runs separately in CI with Grafana’s pinned dashboard-linter action
+- `mise run lint` runs the configured Go checks through hk; dashboard linting runs separately in CI with Grafana's pinned dashboard-linter action
+- `mise run lint:fix` applies Go formatting without staging changes
 - `mise run clang:tidy` invokes `clang:tidy` on the C/eBPF code
 
-`clang:format` is invoked automatically as a `pre-commit` git hook; you can run it directly with `mise run clang:format`.
+The hk pre-commit hook checks the root Go module when Go files are staged and
+applies C/C++ formatting to staged files. Run `mise run fmt` for Go formatting
+and `mise run clang:format` for C/C++ formatting.
 
 #### Running VM tests
 

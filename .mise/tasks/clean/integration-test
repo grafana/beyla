@@ -4,8 +4,8 @@
 set -euo pipefail
 
 KIND="${KIND:-kind}"
-OCI_BIN="${OCI_BIN}"
-COMPOSE_ARGS="${COMPOSE_ARGS}"
+OCI_BIN="${OCI_BIN:-docker}"
+COMPOSE_ARGS="${COMPOSE_ARGS:-}"
 export KIND OCI_BIN COMPOSE_ARGS
 
 echo "### Removing integration test clusters"
@@ -16,5 +16,11 @@ echo "### Removing docker containers and images"
 "${OCI_BIN}" compose ${COMPOSE_ARGS} stop || true
 # shellcheck disable=SC2086
 "${OCI_BIN}" compose ${COMPOSE_ARGS} rm -f || true
-"${OCI_BIN}" rm -f $("${OCI_BIN}" ps --format '{{.Names}}' | grep 'integration-') || true
-"${OCI_BIN}" rmi -f $("${OCI_BIN}" images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-') || true
+mapfile -t integration_containers < <("${OCI_BIN}" ps --format '{{.Names}}' | grep 'integration-' || true)
+if ((${#integration_containers[@]})); then
+  "${OCI_BIN}" rm -f "${integration_containers[@]}" || true
+fi
+mapfile -t test_images < <("${OCI_BIN}" images --format '{{.Repository}}:{{.Tag}}' | grep 'hatest-' || true)
+if ((${#test_images[@]})); then
+  "${OCI_BIN}" rmi -f "${test_images[@]}" || true
+fi

@@ -33,7 +33,7 @@ echo "checking task naming with $version"
 
 # Generated OATS Go modules follow the single pinned Ginkgo version in Mise.
 ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$root/mise.toml")
-grep -q 'ginkgo_version=$(awk -F' "$root/scripts/generate-obi-tests.sh"
+grep -q "ginkgo_version=\$(awk -F" "$root/scripts/generate-obi-tests.sh"
 configured_ginkgo_version=$(env -u MISE_ENABLE_TOOLS "$mise_bin" -C "$root" current ginkgo)
 [[ "$ginkgo_version" == "$configured_ginkgo_version" ]]
 

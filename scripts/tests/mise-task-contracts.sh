@@ -33,6 +33,31 @@ SH
   [[ ! -e "$tmp/mise-was-called" ]]
 fi
 
+# The integration matrix keeps multiple test paths as separate arguments,
+# including when a filename contains spaces.
+matrix_dir="$tmp/matrix inputs"
+mkdir -p "$matrix_dir"
+cat >"$matrix_dir/first file_test.go" <<'GO'
+//go:build integration
+
+package test
+
+func TestAlpha() {}
+GO
+cat >"$matrix_dir/second_test.go" <<'GO'
+//go:build integration
+
+package test
+
+func TestBeta() {}
+GO
+printf '{}\n' >"$tmp/matrix-weights.json"
+matrix_output=$(WEIGHTS_FILE="$tmp/matrix-weights.json" \
+  bash "$root/scripts/generate-integration-matrix.sh" "" "$matrix_dir" 2 Test 2>&1)
+grep -q "Total tests matching 'Test': 2" <<<"$matrix_output"
+grep -q 'TestAlpha' <<<"$matrix_output"
+grep -q 'TestBeta' <<<"$matrix_output"
+
 # The managed kind binary is resolved through PATH; an explicit KIND override
 # still wins. Mocks ensure cleanup invokes no real containers or images.
 env -u KIND PATH="$tmp/bin:$PATH" KIND_LOG="$tmp/kind" OCI_BIN="$tmp/bin/docker" \
@@ -89,14 +114,14 @@ SH
 chmod +x "$tmp/bin/go"
 PATH="$tmp/bin:$PATH" TEST_OUTPUT="$tmp/test-output" EXCLUDE_COVERAGE_FILES=custom.go \
   bash "$root/.mise/tasks/integration/coverage-data" >/dev/null
-! grep -q custom.go "$tmp/test-output/itest-covdata.txt"
+grep -q custom.go "$tmp/test-output/itest-covdata.txt" && exit 1
 grep -q keep.go "$tmp/test-output/itest-covdata.txt"
 
 # The workflow passes the shard ID as a task argument, and the task reads the
 # matching profile (not a profile selected by another similarly named step).
 coverage_step=$(sed -n '/- name: Exclude generated files from coverage/,/- id: get-codecov-token/p' \
   "$root/.github/workflows/pull_request.yml")
-grep -q -- '--shard-id "${SHARD_ID}"' <<<"$coverage_step"
+grep -q -- "--shard-id \"\${SHARD_ID}\"" <<<"$coverage_step"
 mkdir -p "$tmp/shard-output"
 printf 'mode: set\nkeep-3.go:1.1,2.1 1 1\n' >"$tmp/shard-output/cover-shard-3.all.txt"
 printf 'mode: set\nwrong-shard.go:1.1,2.1 1 1\n' >"$tmp/shard-output/cover-shard-2.all.txt"

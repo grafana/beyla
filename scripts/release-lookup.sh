@@ -170,6 +170,7 @@ if [[ $PR_FETCH_SUCCESS -ne 0 ]]; then
   OWNER=$(echo "$UPSTREAM_REPO" | cut -d'/' -f1)
   REPO_NAME=$(echo "$UPSTREAM_REPO" | cut -d'/' -f2)
 
+  # shellcheck disable=SC2016 # GraphQL variables must remain literal in this query.
   LINKED_PRS=$(gh api graphql -f query='
     query($owner: String!, $repo: String!, $number: Int!) {
       repository(owner: $owner, name: $repo) {

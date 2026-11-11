@@ -62,6 +62,7 @@ default_jobs() {
 # See pkg/beyla/config_obi.go OverrideOBIGlobalConfig() for the runtime equivalents.
 #
 # Format: "obi_pattern|beyla_replacement" — order matters, specific before generic.
+# shellcheck disable=SC2016 # Regex patterns in this array intentionally contain literal $ and backticks.
 BEHAVIORAL_TRANSFORMS=(
   # Use AWS's Docker Hub mock to avoid ECR Public's anonymous data limits.
   'public\.ecr\.aws/ecs-local/amazon-ecs-local-container-endpoints:latest@sha256:d0fb4c7d8ab2fde76252ff3bb87422de201a2a7a5494a19f5c72e5e90a1fe064|amazon/amazon-ecs-local-container-endpoints:latest@sha256:2f1be750a040f71540a1bca3c9fe3295030a022595a2fc8d3966623bd3f75bd2'
@@ -1188,6 +1189,7 @@ copy_vm() {
     # internal/test/vm/) so REPO_ROOT needs no adjustment.
     if [[ -f "$VM_DEST/Makefile" ]]; then
       # Quote test_pattern build-arg: patterns contain | which the shell interprets
+      # shellcheck disable=SC2016 # This matches Make syntax that must remain literal.
       sed_i -e 's|--build-arg test_pattern=$(TEST_PATTERN)|--build-arg "test_pattern=$(TEST_PATTERN)"|' \
         "$VM_DEST/Makefile"
 

@@ -30,6 +30,18 @@ steps {
     // non-mutating in hk fix/pre-commit mode.
     fix = null
   }
+  ["shellcheck"] = Builtins.shellcheck
+  // Preserve the repository's established two-space shell indentation.
+  ["shfmt"] = (Builtins.shfmt) {
+    check_diff = new Config.CommandSpec {
+      command = "shfmt -d -i 2 --apply-ignore {{files}}"
+      effect = "read"
+    }
+    fix = new Config.CommandSpec {
+      command = "shfmt -w -i 2 --apply-ignore {{files}}"
+      effect = "write"
+    }
+  }
   ["go-format"] = new Config.Step {
     glob = "**/*.go"
     dir = "."

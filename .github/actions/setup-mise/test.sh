@@ -67,6 +67,7 @@ assert any(tool.endswith("/cmd/bpf2go") for tool in base_bpf)
 assert all(base_bpf <= set(resolved[profile]) for profile in ("generate", "integration", "oats", "release", "obi-fix"))
 
 assert "gotestsum" in resolved["generate"]
+assert {"go", "golangci-lint", "hk", "shellcheck", "shfmt"} <= set(resolved["lint"])
 assert {"setup-envtest", "gotestsum"} <= set(resolved["unit"])
 assert {"java", "gradle"} <= set(resolved["release"])
 assert "ginkgo" in resolved["oats"]

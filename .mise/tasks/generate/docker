@@ -5,7 +5,6 @@
 set -euo pipefail
 root=${MISE_CONFIG_ROOT}
 obi_module=${OBI_MODULE-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' "$root/go.mod")}
-oci_bin=$OCI_BIN
 gen_img=${GEN_IMG:-ghcr.io/open-telemetry/obi-generator:$GEN_IMG_VERSION}
 clang=${CLANG-clang}
 if [[ -n "${CFLAGS-}" ]]; then
@@ -15,7 +14,8 @@ else
 fi
 echo "### Generating files (submodule: $obi_module)"
 (cd "$obi_module" && make docker-generate)
-"$oci_bin" run --rm -u "$(id -u):$(id -g)" \
+# shellcheck disable=SC2016 # This script runs inside the generator container.
+"$OCI_BIN" run --rm -u "$(id -u):$(id -g)" \
   -v "$root:/src:z" -v "$(cd "$obi_module" && pwd)/bpf:/obi-bpf:z" -w /src -e GOCACHE=/tmp/go-build \
   -e BPF2GO=/go/bin/bpf2go -e BPF_CLANG="$clang" -e BPF_CFLAGS="$bpf_cflags" \
   -e OBI_BPF_INCLUDE=/obi-bpf \

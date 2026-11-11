@@ -3,9 +3,9 @@
 #MISE description="Merge integration test coverage data"
 set -euo pipefail
 
-TEST_OUTPUT="${TEST_OUTPUT}"
+: "${TEST_OUTPUT:?TEST_OUTPUT must be set}"
 export TEST_OUTPUT
-EXCLUDE_COVERAGE_FILES="${EXCLUDE_COVERAGE_FILES}"
+: "${EXCLUDE_COVERAGE_FILES:?EXCLUDE_COVERAGE_FILES must be set}"
 echo "# merge coverage data from all the integration tests"
 mkdir -p "${TEST_OUTPUT}/merge"
 go tool covdata merge -i="${TEST_OUTPUT}" -o "${TEST_OUTPUT}/merge"

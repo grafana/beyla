@@ -4,6 +4,7 @@ P=${BEYLA_PACKAGE_ROOT:-}
 case "$1" in
 configure)
   if [ "${BEYLA_TEST_NO_DEBCONF:-0}" != 1 ]; then
+    # shellcheck source=/dev/null # Provided by debconf on the package target system.
     . "$P/usr/share/debconf/confmodule"
     db_get beyla/mode
     export BEYLA_SDK_MODE="$RET"

@@ -14,22 +14,22 @@ PARTITIONS="${3:-5}"
 TEST_PATTERN="${4:-Test}"
 WEIGHTS_FILE="${WEIGHTS_FILE:-$SCRIPT_DIR/integration-test-weights.generated.json}"
 
-# Get test names
-if [ -n "$TEST_TAGS" ]; then
-  # Find files with the specific build tag (exact match with word boundaries)
-  FILES=$(find "$SEARCH_DIR" -maxdepth 1 -type f -name "*_test.go" -exec grep -l "//go:build.*\b$TEST_TAGS\b" {} \;)
-else
-  # Find all test files
-  FILES=$(find "$SEARCH_DIR" -maxdepth 1 -type f -name "*_test.go")
-fi
+# Get test names from files; retain paths as array elements so filenames with
+# whitespace remain intact when passed to grep.
+TEST_FILES=()
+while IFS= read -r -d '' file; do
+  if [ -z "$TEST_TAGS" ] || grep -q "//go:build.*\b$TEST_TAGS\b" "$file"; then
+    TEST_FILES+=("$file")
+  fi
+done < <(find "$SEARCH_DIR" -maxdepth 1 -type f -name "*_test.go" -print0)
 
-if [ -z "$FILES" ]; then
+if [ "${#TEST_FILES[@]}" -eq 0 ]; then
   echo "No test files found" >&2
   exit 1
 fi
 
 # Extract test function names from the files and sort
-TEST_NAMES=$(grep -h "^func $TEST_PATTERN" $FILES | sed 's/^func \([^(]*\).*/\1/' | sort -u)
+TEST_NAMES=$(grep -h "^func $TEST_PATTERN" "${TEST_FILES[@]}" | sed 's/^func \([^(]*\).*/\1/' | sort -u)
 
 if [ -z "$TEST_NAMES" ]; then
   echo "ERROR: No tests found for tags '$TEST_TAGS' in '$SEARCH_DIR'" >&2

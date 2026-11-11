@@ -97,6 +97,7 @@ esac
 [[ -x "$installed_bpf2go" ]]
 
 echo 'Generating an ARM64-targeted BPF fixture'
+# shellcheck disable=SC2016 # This body is evaluated by the isolated Bash subprocess.
 env -u GOBIN "${mise_env[@]}" GOPACKAGE=crosscheck BPF2GO_CC="$clang_bin" BPF2GO_STRIP="$llvm_strip_bin" \
   "$mise_bin" --locked -C "$root" exec -- bash -c '
     cd "$1"

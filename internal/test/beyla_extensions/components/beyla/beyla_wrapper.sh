@@ -12,6 +12,7 @@ beyla_pid=$!
 # pid: service:client), so a SIGKILLed instrumenter leaves probes attached to
 # a workload that is still running, and the workload container dies when the
 # suite starts second-caller into that same namespace.
+# shellcheck disable=SC2329 # Bash invokes this function through the signal trap below.
 terminate() {
   kill -TERM "$beyla_pid" 2>/dev/null
 }

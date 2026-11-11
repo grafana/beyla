@@ -7,13 +7,13 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin"
 
-cat > "$tmp/bin/mise" <<'SH'
+cat >"$tmp/bin/mise" <<'SH'
 #!/usr/bin/env bash
 printf 'start %s CMD=%s GOOS=%s\n' "$*" "${CMD-unset}" "${GOOS-unset}" >> "$EVENTS"
 sleep 0.1
 echo "end $*" >> "$EVENTS"
 SH
-cat > "$tmp/bin/go" <<'SH'
+cat >"$tmp/bin/go" <<'SH'
 #!/usr/bin/env bash
 printf 'args=%s GOOS=%s GOARCH=%s\n' "$*" "${GOOS-unset}" "${GOARCH-unset}" >> "$GO_LOG"
 SH
@@ -22,7 +22,7 @@ chmod +x "$tmp/bin/"*
 # These pre-bootstrap contract tests must not invoke Mise, even if it is on PATH.
 if [[ "${MISE_CONTRACT_HERMETIC_CHILD:-}" != 1 ]]; then
   mkdir -p "$tmp/hostile-bin"
-  cat > "$tmp/hostile-bin/mise" <<'SH'
+  cat >"$tmp/hostile-bin/mise" <<'SH'
 #!/usr/bin/env bash
 touch "$MISE_CONTRACT_MISE_SENTINEL"
 exit 97
@@ -32,7 +32,6 @@ SH
     PATH="$tmp/hostile-bin:$PATH" bash "${BASH_SOURCE[0]}" >"$tmp/hermetic-output"
   [[ ! -e "$tmp/mise-was-called" ]]
 fi
-
 
 # Each requested Make goal is forwarded separately and runs serially by default.
 env -u GOOS -u GOARCH -u MAKEFLAGS -u MFLAGS -u MAKEOVERRIDES EVENTS="$tmp/events" \
@@ -65,7 +64,7 @@ if [[ -e /precompiled-tests/integration.test ]]; then
 fi
 mkdir -p "$tmp/vm-bin"
 ln -s "$(command -v bash)" "$tmp/vm-bin/bash"
-cat > "$tmp/vm-bin/go" <<EOF
+cat >"$tmp/vm-bin/go" <<EOF
 #!$tmp/vm-bin/bash
 printf '%s\\n' "\$*" >> "$tmp/vm-go"
 EOF
@@ -76,6 +75,5 @@ if PATH="$tmp/vm-bin" command -v mise >/dev/null 2>&1; then
 fi
 PATH="$tmp/vm-bin" "$make_bin" -C "$root" run-integration-test-vm TEST_PATTERN=VMProbe >/dev/null
 grep -q VMProbe "$tmp/vm-go"
-
 
 echo 'Make compatibility tests passed'

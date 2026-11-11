@@ -319,7 +319,6 @@
 #   - tempo
 #   - writers-toolkit
 
-
 set -ef
 
 readonly DOCS_HOST_PORT="${DOCS_HOST_PORT:-3002}"
@@ -351,7 +350,6 @@ if ! command -v "${PODMAN}" >/dev/null 2>&1; then
 
   exit 1
 fi
-
 
 about() {
   cat <<EOF
@@ -460,20 +458,20 @@ src() {
   _project="$1"
 
   case "${_project}" in
-    plugins/*)
-      if [ -z "$(aget SOURCES "${_project}")" ]; then
-        echo plugins-private
-      else
-        aget SOURCES "${_project}"
-      fi
-      ;;
-    *)
-      if [ -z "$(aget SOURCES "${_project}")" ]; then
-        echo "${_project}"
-      else
-        aget SOURCES "${_project}"
-      fi
-      ;;
+  plugins/*)
+    if [ -z "$(aget SOURCES "${_project}")" ]; then
+      echo plugins-private
+    else
+      aget SOURCES "${_project}"
+    fi
+    ;;
+  *)
+    if [ -z "$(aget SOURCES "${_project}")" ]; then
+      echo "${_project}"
+    else
+      aget SOURCES "${_project}"
+    fi
+    ;;
   esac
 
   unset _project
@@ -484,19 +482,20 @@ path() {
   _project="$1"
 
   case "${_project}" in
-    plugins/*)
-      if [ -z "$(aget PATHS "${_project}")" ]; then
-        echo "${_project}/docs/sources"
-      else
-        aget PATHS "${_project}"
-      fi
-      ;;
-    *)
-      if [ -z "$(aget PATHS "${_project}")" ]; then
-        echo "docs/sources"
-      else
-        aget PATHS "${_project}"
-      fi
+  plugins/*)
+    if [ -z "$(aget PATHS "${_project}")" ]; then
+      echo "${_project}/docs/sources"
+    else
+      aget PATHS "${_project}"
+    fi
+    ;;
+  *)
+    if [ -z "$(aget PATHS "${_project}")" ]; then
+      echo "docs/sources"
+    else
+      aget PATHS "${_project}"
+    fi
+    ;;
   esac
 
   unset _project
@@ -507,24 +506,24 @@ version() {
   _project="$1"
 
   case "${_project}" in
-    plugins/*)
-      if [ -z "$(aget VERSIONS "${_project}")" ]; then
-        echo "UNVERSIONED"
-      else
-        aget VERSIONS "${_project}"
-      fi
-      ;;
-    *)
+  plugins/*)
+    if [ -z "$(aget VERSIONS "${_project}")" ]; then
+      echo "UNVERSIONED"
+    else
+      aget VERSIONS "${_project}"
+    fi
+    ;;
+  *)
     if [ -z "$(aget VERSIONS "${_project}")" ]; then
       echo latest
     else
       aget VERSIONS "${_project}"
     fi
+    ;;
   esac
 
   unset _project
 }
-
 
 # new_proj populates a new project structure.
 new_proj() {
@@ -688,32 +687,32 @@ $arg
 POSIX_HERESTRING
 
     case "${_project}" in
-      # Workaround for arbitrary mounts where the version field is expected to be the local directory
-     # and the repo field is expected to be the container directory.
-      arbitrary)
-        echo "${_project}^${_version}^${_repo}^" # TODO
-        ;;
-      logs)
-        proj_to_url_src_dst_ver "$(new_proj loki "${_version}")"
-        proj_to_url_src_dst_ver "$(new_proj enterprise-logs "${_version}")"
-        ;;
-      metrics)
-        proj_to_url_src_dst_ver "$(new_proj mimir "${_version}")"
-        proj_to_url_src_dst_ver "$(new_proj helm-charts/mimir-distributed "${_version}")"
-        proj_to_url_src_dst_ver "$(new_proj enterprise-metrics "${_version}")"
-        ;;
-      resources)
-        _repo="$(repo_path website)"
-        echo "arbitrary^${_repo}/config^/hugo/config" "arbitrary^${_repo}/layouts^/hugo/layouts" "arbitrary^${_repo}/scripts^/hugo/scripts"
-        unset _repo
-        ;;
-      traces)
-        proj_to_url_src_dst_ver "$(new_proj tempo "${_version}")"
-        proj_to_url_src_dst_ver "$(new_proj enterprise-traces "${_version}")"
-        ;;
-      *)
-        proj_to_url_src_dst_ver "$(new_proj "${_project}" "${_version}" "${_repo}" "${_path}")"
-        ;;
+    # Workaround for arbitrary mounts where the version field is expected to be the local directory
+    # and the repo field is expected to be the container directory.
+    arbitrary)
+      echo "${_project}^${_version}^${_repo}^" # TODO
+      ;;
+    logs)
+      proj_to_url_src_dst_ver "$(new_proj loki "${_version}")"
+      proj_to_url_src_dst_ver "$(new_proj enterprise-logs "${_version}")"
+      ;;
+    metrics)
+      proj_to_url_src_dst_ver "$(new_proj mimir "${_version}")"
+      proj_to_url_src_dst_ver "$(new_proj helm-charts/mimir-distributed "${_version}")"
+      proj_to_url_src_dst_ver "$(new_proj enterprise-metrics "${_version}")"
+      ;;
+    resources)
+      _repo="$(repo_path website)"
+      echo "arbitrary^${_repo}/config^/hugo/config" "arbitrary^${_repo}/layouts^/hugo/layouts" "arbitrary^${_repo}/scripts^/hugo/scripts"
+      unset _repo
+      ;;
+    traces)
+      proj_to_url_src_dst_ver "$(new_proj tempo "${_version}")"
+      proj_to_url_src_dst_ver "$(new_proj enterprise-traces "${_version}")"
+      ;;
+    *)
+      proj_to_url_src_dst_ver "$(new_proj "${_project}" "${_version}" "${_repo}" "${_path}")"
+      ;;
     esac
   done
 
@@ -726,8 +725,7 @@ await_build() {
 
   i=1
   max=10
-  while [ "${i}" -ne "${max}" ]
-  do
+  while [ "${i}" -ne "${max}" ]; do
     sleep 1
     debg "Retrying request to web server assuming the process is still starting up."
     i=$((i + 1))
@@ -785,7 +783,7 @@ POSIX_HERESTRING
   if [ "${_project}" = website ] || [ "${_project}" = grafana-cloud ]; then
     note "Please be patient, building the website can take some time."
 
-      # If set, the docs-base image will run a prebuild script that sets up Hugo mounts.
+    # If set, the docs-base image will run a prebuild script that sets up Hugo mounts.
     if [ "${WEBSITE_MOUNTS}" = false ]; then
       unset WEBSITE_MOUNTS
     else
@@ -839,10 +837,10 @@ ${DOCS_IMAGE}
 POSIX_HERESTRING
 
 case "${image}" in
-  'grafana/vale')
-    proj="$(new_proj "$1")"
-    printf '\r\n'
-    IFS='' read -r cmd <<EOF
+'grafana/vale')
+  proj="$(new_proj "$1")"
+  printf '\r\n'
+  IFS='' read -r cmd <<EOF
     ${PODMAN} run \
                 --init \
                 --interactive \
@@ -856,27 +854,28 @@ case "${image}" in
                 /hugo/content/docs
 EOF
 
-    if [ -n "${DEBUG}" ]; then
-      debg "${cmd}"
-    fi
+  if [ -n "${DEBUG}" ]; then
+    debg "${cmd}"
+  fi
 
-    case "${OUTPUT_FORMAT}" in
-      human)
-        ${cmd} --output=line \
-        | sed "s#$(proj_dst "${proj}")#sources#"
-      ;;
-      json)
-        ${cmd} --output=/etc/vale/rdjsonl.tmpl \
-        | sed "s#$(proj_dst "${proj}")#sources#"
-      ;;
-      *)
-        errr "Invalid output format '${OUTPUT_FORMAT}'"
-    esac
-
+  case "${OUTPUT_FORMAT}" in
+  human)
+    ${cmd} --output=line |
+      sed "s#$(proj_dst "${proj}")#sources#"
+    ;;
+  json)
+    ${cmd} --output=/etc/vale/rdjsonl.tmpl |
+      sed "s#$(proj_dst "${proj}")#sources#"
     ;;
   *)
-    tempfile="$(mktemp -t make-docs.XXX)"
-    cat <<EOF >"${tempfile}"
+    errr "Invalid output format '${OUTPUT_FORMAT}'"
+    ;;
+  esac
+
+  ;;
+*)
+  tempfile="$(mktemp -t make-docs.XXX)"
+  cat <<EOF >"${tempfile}"
 #!/usr/bin/env bash
 
 tc() {
@@ -908,11 +907,11 @@ fi
 
 ${WEBSITE_EXEC}
 EOF
-    chmod +x "${tempfile}"
-    volumes="${volumes} --volume=${tempfile}:/entrypoint:z"
-    readonly volumes
+  chmod +x "${tempfile}"
+  volumes="${volumes} --volume=${tempfile}:/entrypoint:z"
+  readonly volumes
 
-    IFS='' read -r cmd <<EOF
+  IFS='' read -r cmd <<EOF
 ${PODMAN} run \
   --env=HUGO_REFLINKSERRORLEVEL=${HUGO_REFLINKSERRORLEVEL} \
   --init \
@@ -925,31 +924,30 @@ ${PODMAN} run \
   ${DOCS_IMAGE}
 EOF
 
-    if [ -n "${ENTER}" ]; then
-      ${cmd} /bin/bash
-    elif [ -n "${DEBUG}" ]; then
-      await_build http://localhost:3003 &
+  if [ -n "${ENTER}" ]; then
+    ${cmd} /bin/bash
+  elif [ -n "${DEBUG}" ]; then
+    await_build http://localhost:3003 &
 
-      debg "${cmd} /entrypoint"
-      ${cmd} /entrypoint
-    else
-      await_build http://localhost:3003 &
+    debg "${cmd} /entrypoint"
+    ${cmd} /entrypoint
+  else
+    await_build http://localhost:3003 &
 
-      ${cmd} /entrypoint  2>&1\
-        | sed -u \
-              -e '/Web Server is available at http:\/\/localhost:3003\/ (bind address 0.0.0.0)/ d' \
-              -e '/^hugo server/ d' \
-              -e '/fatal: not a git repository (or any parent up to mount point \/)/ d' \
-              -e '/Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)./ d' \
-              -e "/Makefile:[0-9]*: warning: overriding recipe for target 'docs'/ d" \
-              -e "/docs.mk:[0-9]*: warning: ignoring old recipe for target 'docs'/ d" \
-              -e '/\/usr\/bin\/make -j 2 proxy hserver-docs HUGO_PORT=3003/ d' \
-              -e '/website-proxy/ d' \
-              -e '/rm -rf dist*/ d' \
-              -e '/Press Ctrl+C to stop/ d' \
-              -e '/make/ d' \
-              -e '/WARNING: The manual_mount source directory/ d' \
-              -e '/"docs\/_index.md" not found/d'
-    fi
-    ;;
+    ${cmd} /entrypoint 2>&1 | sed -u \
+      -e '/Web Server is available at http:\/\/localhost:3003\/ (bind address 0.0.0.0)/ d' \
+      -e '/^hugo server/ d' \
+      -e '/fatal: not a git repository (or any parent up to mount point \/)/ d' \
+      -e '/Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)./ d' \
+      -e "/Makefile:[0-9]*: warning: overriding recipe for target 'docs'/ d" \
+      -e "/docs.mk:[0-9]*: warning: ignoring old recipe for target 'docs'/ d" \
+      -e '/\/usr\/bin\/make -j 2 proxy hserver-docs HUGO_PORT=3003/ d' \
+      -e '/website-proxy/ d' \
+      -e '/rm -rf dist*/ d' \
+      -e '/Press Ctrl+C to stop/ d' \
+      -e '/make/ d' \
+      -e '/WARNING: The manual_mount source directory/ d' \
+      -e '/"docs\/_index.md" not found/d'
+  fi
+  ;;
 esac

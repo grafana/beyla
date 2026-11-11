@@ -10,22 +10,22 @@ echo "### Running integration tests (pattern: ${TEST_PATTERN})"
 TEST_TIMEOUT="60m"
 TEST_PARALLEL="1"
 if [ -f "/precompiled-tests/integration.test" ]; then
-	echo "Using pre-compiled integration tests"
-	chmod +x /precompiled-tests/integration.test
-	/precompiled-tests/integration.test \
-		-test.parallel="${TEST_PARALLEL}" \
-		-test.timeout="${TEST_TIMEOUT}" \
-		-test.failfast \
-		-test.v \
-		-test.run="^(${TEST_PATTERN})\$"
+  echo "Using pre-compiled integration tests"
+  chmod +x /precompiled-tests/integration.test
+  /precompiled-tests/integration.test \
+    -test.parallel="${TEST_PARALLEL}" \
+    -test.timeout="${TEST_TIMEOUT}" \
+    -test.failfast \
+    -test.v \
+    -test.run="^(${TEST_PATTERN})\$"
 else
-	echo "Pre-compiled tests not found, compiling in VM"
-	go test \
-		-p "${TEST_PARALLEL}" \
-		-timeout "${TEST_TIMEOUT}" \
-		-failfast \
-		-v -a \
-		-mod vendor \
-		-tags=integration \
-		-run="^(${TEST_PATTERN})\$" ./internal/testgenerated/integration
+  echo "Pre-compiled tests not found, compiling in VM"
+  go test \
+    -p "${TEST_PARALLEL}" \
+    -timeout "${TEST_TIMEOUT}" \
+    -failfast \
+    -v -a \
+    -mod vendor \
+    -tags=integration \
+    -run="^(${TEST_PATTERN})\$" ./internal/testgenerated/integration
 fi

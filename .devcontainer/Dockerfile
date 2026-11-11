@@ -4,6 +4,9 @@ FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee
 COPY --from=go /usr/local/go /usr/local/go
 
 # Include the runtime dependencies needed by the IDE backends.
+# Use the current security updates from the pinned Debian base's package
+# repository; individual archive package versions are ephemeral.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates curl docker-cli gcc git jq libc6-dev make procps sudo unzip \
     libfreetype6 libstdc++6 libxext6 libxi6 libxrender1 libxtst6 \
@@ -22,5 +25,5 @@ ENV PATH="/usr/local/go/bin:/home/vscode/go/bin:${PATH}" \
     GOCACHE=/home/vscode/.cache/go-build \
     DOCKER_HOST=unix:///var/run/docker.sock
 
-USER vscode
+USER 1000:1000
 CMD ["sleep", "infinity"]

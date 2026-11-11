@@ -1,7 +1,11 @@
 # download the opentelemetry-injector binary for the target architecture
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS download-injector-binary
 ARG TARGETARCH
+WORKDIR /
 
+# Use the latest patched tools from the pinned Alpine base's stable repository;
+# package revisions are replaced as security updates ship.
+# hadolint ignore=DL3018
 RUN apk add --no-cache curl jq wget
 
 COPY opentelemetry-injector/version.txt .
@@ -15,6 +19,8 @@ RUN case ${TARGETARCH} in \
 # Fetch the operator's Python requirements and append beyla-specific additions
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS prepare-python-deps
 WORKDIR /build
+# Keep packages current with security updates from the pinned Alpine base.
+# hadolint ignore=DL3018
 RUN apk add --no-cache curl
 COPY opentelemetry-operator/version.txt .
 COPY python/requirements.extra.txt .
@@ -24,6 +30,8 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
 
 FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS prepare-ruby
 WORKDIR /source
+# Use the latest patched Git package from the pinned Alpine base repository.
+# hadolint ignore=DL3018
 RUN apk add --no-cache git
 COPY ruby/upstream-revision.txt .
 RUN revision=$(cat upstream-revision.txt) && \
@@ -35,24 +43,36 @@ RUN revision=$(cat upstream-revision.txt) && \
     gem build opentelemetry-auto-instrumentation.gemspec --output /opentelemetry-auto-instrumentation.gem
 
 FROM ruby:3.3.12-slim-bookworm@sha256:df209d82bb55aeb26b9b08922ee22c15f19b3458455690132dc07a5c52dc1c99 AS build-ruby-glibc
+WORKDIR /
+# Track current Debian security revisions rather than pinning package versions
+# that can disappear from the archive.
+# hadolint ignore=DL3008
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=prepare-ruby /opentelemetry-auto-instrumentation.gem /tmp/
 COPY ruby/Gemfile.lock ruby/locked_gems.rb ruby/upstream-revision.txt /tmp/
-RUN gem install --install-dir /operator-build --no-document --ignore-dependencies \
-    $(ruby /tmp/locked_gems.rb /tmp/Gemfile.lock) /tmp/opentelemetry-auto-instrumentation.gem
+# Gem versions come from the committed lockfile and locked_gems.rb; xargs keeps
+# each name/version pair as a separate argument to gem install.
+RUN ruby /tmp/locked_gems.rb /tmp/Gemfile.lock > /tmp/locked-gems.txt && \
+    xargs -r gem install --install-dir /operator-build --no-document --ignore-dependencies /tmp/opentelemetry-auto-instrumentation.gem < /tmp/locked-gems.txt && \
+    rm /tmp/locked-gems.txt
 COPY ruby/opentelemetry-auto-instrumentation.rb /operator-build/
 COPY ruby/beyla /operator-build/beyla
 COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
 RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
 
 FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS build-ruby-musl
+# Keep Alpine security updates current rather than pinning ephemeral versions.
+# hadolint ignore=DL3018
 RUN apk add --no-cache build-base
 COPY --from=prepare-ruby /opentelemetry-auto-instrumentation.gem /tmp/
 COPY ruby/Gemfile.lock ruby/locked_gems.rb ruby/upstream-revision.txt /tmp/
-RUN gem install --install-dir /operator-build --no-document --ignore-dependencies \
-    $(ruby /tmp/locked_gems.rb /tmp/Gemfile.lock) /tmp/opentelemetry-auto-instrumentation.gem
+# Gem versions come from the committed lockfile and locked_gems.rb; xargs keeps
+# each name/version pair as a separate argument to gem install.
+RUN ruby /tmp/locked_gems.rb /tmp/Gemfile.lock > /tmp/locked-gems.txt && \
+    xargs -r gem install --install-dir /operator-build --no-document --ignore-dependencies /tmp/opentelemetry-auto-instrumentation.gem < /tmp/locked-gems.txt && \
+    rm /tmp/locked-gems.txt
 COPY ruby/opentelemetry-auto-instrumentation.rb /operator-build/
 COPY ruby/beyla /operator-build/beyla
 COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
@@ -65,9 +85,17 @@ COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
 COPY python/deps_analyser.py .
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-RUN pip install --root-user-action ignore --target . -r requirements.txt
+# Avoid retaining pip's download cache in this build layer.
+RUN pip install --no-cache-dir --root-user-action ignore --target . -r requirements.txt
+# Keep dependency-tree generation in its own layer so the expensive install
+# above remains cached when the helper script changes.
+# hadolint ignore=DL3059
 RUN ./build_dep_tree.sh
+# Keep analysis cached separately from dependency-tree generation.
+# hadolint ignore=DL3059
 RUN python ./deps_analyser.py
+# Remove build-only helpers in a separate layer after they have been used.
+# hadolint ignore=DL3059
 RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
 COPY python/_beyla_otel ./_beyla_otel
@@ -79,16 +107,27 @@ COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
 COPY python/deps_analyser.py .
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-RUN pip install --root-user-action ignore --target . -r requirements.txt
+# Avoid retaining pip's download cache in this build layer.
+RUN pip install --no-cache-dir --root-user-action ignore --target . -r requirements.txt
+# Keep dependency-tree generation in its own layer so the expensive install
+# above remains cached when the helper script changes.
+# hadolint ignore=DL3059
 RUN ./build_dep_tree.sh
+# Keep analysis cached separately from dependency-tree generation.
+# hadolint ignore=DL3059
 RUN python ./deps_analyser.py
+# Remove build-only helpers in a separate layer after they have been used.
+# hadolint ignore=DL3059
 RUN rm -rf build_dep_tree.sh deps_analyser.py dependency-tree.txt .dep_tree_env
 COPY python/sitecustomize.py .
 COPY python/_beyla_otel ./_beyla_otel
 
 # Get the OTel Java SDK
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS download-java-sdk
+WORKDIR /
 
+# Keep security updates in the pinned Alpine base's package set.
+# hadolint ignore=DL3018
 RUN apk add --no-cache curl unzip
 
 # Use Grafana's distro of the OpenTelemetry Java Agent
@@ -99,7 +138,10 @@ RUN curl -sSfL -o opentelemetry-javaagent.jar \
 # Get the OTel .NET SDK
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS download-dotnet-sdk
 ARG TARGETARCH
+WORKDIR /
 
+# Keep security updates in the pinned Alpine base's package set.
+# hadolint ignore=DL3018
 RUN apk add --no-cache curl unzip
 
 COPY opentelemetry-operator/version.txt .
@@ -122,6 +164,8 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
 # Fetch the operator's Node.js package.json and merge in beyla-specific dependencies
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS prepare-nodejs-deps
 WORKDIR /build
+# Keep security updates in the pinned Alpine base's package set.
+# hadolint ignore=DL3018
 RUN apk add --no-cache curl jq
 COPY opentelemetry-operator/version.txt .
 COPY node.js/package.extra.json .
@@ -142,7 +186,7 @@ COPY node.js/*.js .
 RUN cp build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js \
     build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/otel-register.js && \
     cp ./*.js build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/
-RUN ls -al *
+RUN ls -al -- *
 
 # build the final instrumentation image
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b

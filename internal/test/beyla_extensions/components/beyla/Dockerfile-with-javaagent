@@ -6,23 +6,29 @@ WORKDIR /build
 COPY .obi-src/pkg/internal/java/agent/src/main/c/ src/main/c/
 COPY .obi-src/pkg/internal/java/agent/Makefile.jni Makefile.jni
 
+# Keep the cross-compiler packages at current Debian security revisions; pinning
+# archive versions would make later builds fail once the versions are removed.
+# hadolint ignore=DL3008
 RUN apt-get update && \
     case "$BUILDARCH" in \
-      amd64) apt-get install -y gcc-aarch64-linux-gnu ;; \
-      arm64) apt-get install -y gcc-x86-64-linux-gnu ;; \
+      amd64) apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu ;; \
+      arm64) apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu ;; \
     esac
 
 RUN case "$BUILDARCH" in \
       amd64) SLUG=linux-amd64 ;; \
       arm64) SLUG=linux-aarch64 ;; \
     esac && \
-    make -f Makefile.jni CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+    make -f Makefile.jni CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR="build/jni/$SLUG" TARGET_DIR="target/classes/native/$SLUG"
 
+# Preserve the native-library layer so the cross compile can use its BuildKit
+# cache independently.
+# hadolint ignore=DL3059
 RUN case "$BUILDARCH" in \
       amd64) CC=aarch64-linux-gnu-gcc; SLUG=linux-aarch64 ;; \
       arm64) CC=x86_64-linux-gnu-gcc;  SLUG=linux-amd64 ;; \
     esac && \
-    make -f Makefile.jni CC=$CC JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+    make -f Makefile.jni CC="$CC" JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR="build/jni/$SLUG" TARGET_DIR="target/classes/native/$SLUG"
 
 # Build the Java OBI agent
 FROM gradle:9.6.1-jdk21-noble@sha256:8074080ea0c9d663076211abc189ba1472474d3019a0da49c4216dce3184cf85 AS javaagent-builder
@@ -44,6 +50,8 @@ RUN gradle build -x buildNativeLib-amd64 -x buildNativeLib-aarch64 --no-daemon
 # The production-ready minimal image is in the project root's dockerfile.
 FROM golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 AS builder
 
+# Track current security updates from the pinned Debian base's package mirror.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/jdx/mise:2026.11.4@sha256:085be191bbe51dbe93894681b7f29f6c014ae267e7a365c0b8b6a2fdd882ac63 /usr/local/bin/mise /usr/local/bin/mise
 ENV MISE_ENABLE_TOOLS=none

@@ -19,7 +19,8 @@ go_build_cache=$("$go_bin" env GOCACHE)
 host_os=$("$go_bin" env GOHOSTOS)
 host_arch=$("$go_bin" env GOHOSTARCH)
 mise_cache=${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}
-readarray -t bpf2go_spec < <(python3 - "$root/mise.toml" <<'PY'
+readarray -t bpf2go_spec < <(
+  python3 - "$root/mise.toml" <<'PY'
 import sys, tomllib
 
 config = tomllib.load(open(sys.argv[1], "rb"))
@@ -45,11 +46,11 @@ fi
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/home/.config/mise" "$tmp/data" "$tmp/state" "$tmp/no-install-env"
-: > "$tmp/home/.config/mise/config.toml"
+: >"$tmp/home/.config/mise/config.toml"
 lock_before=$(sha256sum "$root/mise.lock" | awk '{print $1}')
 start_seconds=$SECONDS
 
-cat > "$tmp/cross_target.c" <<'C'
+cat >"$tmp/cross_target.c" <<'C'
 #define SEC(name) __attribute__((section(name), used))
 
 SEC("xdp")
@@ -87,12 +88,16 @@ env -u GOBIN "${mise_env[@]}" "$mise_bin" --locked -C "$root" exec -- bpf2go --h
 
 installed_bpf2go=$(env -u GOBIN "${mise_env[@]}" "$mise_bin" --locked -C "$root" which bpf2go)
 case "$installed_bpf2go" in
-  "$tmp/data"/*) ;;
-  *) echo "bpf2go was not installed in the isolated Mise data directory: $installed_bpf2go" >&2; exit 1 ;;
+"$tmp/data"/*) ;;
+*)
+  echo "bpf2go was not installed in the isolated Mise data directory: $installed_bpf2go" >&2
+  exit 1
+  ;;
 esac
 [[ -x "$installed_bpf2go" ]]
 
 echo 'Generating an ARM64-targeted BPF fixture'
+# shellcheck disable=SC2016 # This body is evaluated by the isolated Bash subprocess.
 env -u GOBIN "${mise_env[@]}" GOPACKAGE=crosscheck BPF2GO_CC="$clang_bin" BPF2GO_STRIP="$llvm_strip_bin" \
   "$mise_bin" --locked -C "$root" exec -- bash -c '
     cd "$1"
@@ -106,7 +111,7 @@ grep -q '^//go:build arm64$' "$generated_go"
 
 # Negative control: without install_env, Go refuses to install a cross-compiled
 # bpf2go into GOBIN (or would produce a binary that cannot run on the host).
-cat > "$tmp/no-install-env/mise.toml" <<TOML
+cat >"$tmp/no-install-env/mise.toml" <<TOML
 [settings]
 lockfile = false
 

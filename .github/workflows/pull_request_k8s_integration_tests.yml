@@ -53,8 +53,8 @@ jobs:
       - name: build matrix
         id: build-matrix
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run integration:matrix:k8s >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run integration:matrix:k8s >> "$GITHUB_OUTPUT"
 
   test:
     name: ${{ matrix.basename }}
@@ -149,7 +149,7 @@ jobs:
           echo "${MATRIX_JSON}"
 
           if [ -z "${MATRIX_TEST_PATTERN}" ]; then
-            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            echo "Error: Test pattern is empty for shard ${MATRIX_ID}"
             exit 1
           fi
 
@@ -159,9 +159,9 @@ jobs:
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="${MATRIX_TEST_PATTERN}" -ftestname \
               --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -race -count=1 -tags=${TEST_TAGS} -timeout 30m \
+              -- -race -count=1 -tags="${TEST_TAGS}" -timeout 30m \
               -mod vendor \
-              ${MATRIX_TEST_PATTERN}
+              "${MATRIX_TEST_PATTERN}"
 
       - name: Process coverage data
         run: mise run integration:coverage-data

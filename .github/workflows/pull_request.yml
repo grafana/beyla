@@ -62,8 +62,8 @@ jobs:
           PARTITIONS: 3
         run: |
           mise run test:prepare-output
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run test:matrix >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run test:matrix >> "$GITHUB_OUTPUT"
 
       - name: Upload generated build inputs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

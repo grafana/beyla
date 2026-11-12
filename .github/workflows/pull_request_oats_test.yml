@@ -68,11 +68,11 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          profile: go
+          profile: oats
           cache-modules: "true"
           cache-build: "true"
-      - name: Run OATS harness unit tests
-        run: mise run //oats:test:harness
+      - name: Run OATS Weaver finalizer unit tests
+        run: mise run //oats:test:finalizer
 
   test:
     name: ${{ matrix.basename }}
@@ -152,12 +152,6 @@ jobs:
           cache-build-prefix: "go-build-oats"
           profile: oats
           cache-modules: "true"
-      - name: Generate and vendor OBI
-        run: mise run vendor:obi
-
-      - name: Verify Beyla compiles
-        run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
-
       - name: Run oats tests
         env:
           MATRIX_BASENAME: ${{ matrix.basename }}

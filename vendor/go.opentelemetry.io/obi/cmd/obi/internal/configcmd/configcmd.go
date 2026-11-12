@@ -757,6 +757,9 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 			}
 		}
 	}
+	if changedExemplarFilter(before, after) {
+		changed = append(changed, "prometheus_export.exemplar_filter")
+	}
 	if before.Enabled(obi.FeatureNetO11y) != after.Enabled(obi.FeatureNetO11y) {
 		changed = append(changed, migrationNetworkEnablePath(root))
 	}
@@ -800,6 +803,31 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 	}
 	sort.Strings(changed)
 	return slices.Compact(changed), nil
+}
+
+func changedExemplarFilter(before, after *obi.Config) bool {
+	if before.OTELMetrics.EndpointEnabled() &&
+		effectiveOTLPExemplarFilter(before) != effectiveOTLPExemplarFilter(after) {
+		return true
+	}
+	return before.Prometheus.EndpointEnabled() &&
+		effectivePrometheusExemplarFilter(before) != effectivePrometheusExemplarFilter(after)
+}
+
+func effectiveOTLPExemplarFilter(cfg *obi.Config) string {
+	if cfg.OTELMetrics.ExemplarFilter == "" {
+		return "trace_based"
+	}
+	return cfg.OTELMetrics.ExemplarFilter
+}
+
+func effectivePrometheusExemplarFilter(cfg *obi.Config) string {
+	switch cfg.Prometheus.ExemplarFilter {
+	case "always_on", "trace_based":
+		return cfg.Prometheus.ExemplarFilter
+	default:
+		return "always_off"
+	}
 }
 
 func preservesV1DerivedMetricProtocols(protocols []instrumentations.Instrumentation) bool {
@@ -1064,6 +1092,7 @@ func migrationAlias(path string) bool {
 		"otel_metrics_export.features",
 		"otel_metrics_export.interval",
 		"otel_metrics_export.protocol",
+		"prometheus_export.exemplar_filter",
 		"prometheus_export.features",
 		"routes",
 		"otel_traces_export.protocol",

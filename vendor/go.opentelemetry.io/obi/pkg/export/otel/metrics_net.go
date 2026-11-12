@@ -67,10 +67,11 @@ func createFilteredNetworkResource(hostID string, attrSelector attributes.Select
 	return resource.NewWithAttributes(attr.OBISchemaURL, attrs...)
 }
 
-func newMeterProvider(res *resource.Resource, exporter *sdkmetric.Exporter, interval time.Duration) *metric.MeterProvider {
+func newMeterProvider(res *resource.Resource, exporter *sdkmetric.Exporter, cfg *otelcfg.MetricsConfig) *metric.MeterProvider {
 	return metric.NewMeterProvider(
 		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(*exporter, metric.WithInterval(interval))),
+		metric.WithReader(metric.NewPeriodicReader(*exporter, metric.WithInterval(cfg.Interval))),
+		metric.WithExemplarFilter(cfg.GetExemplarFilter()),
 	)
 }
 
@@ -121,7 +122,7 @@ func newMetricsExporter(
 	exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
 	resource := createFilteredNetworkResource(ctxInfo.NodeMeta.HostID, cfg.SelectorCfg.SelectionCfg)
-	provider := newMeterProvider(resource, &exporter, cfg.Metrics.Interval)
+	provider := newMeterProvider(resource, &exporter, cfg.Metrics)
 
 	attrProv, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, cfg.SelectorCfg)
 	if err != nil {

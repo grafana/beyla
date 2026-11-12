@@ -5,10 +5,7 @@ package transform // import "go.opentelemetry.io/obi/pkg/transform"
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
@@ -21,27 +18,7 @@ import (
 // metadata, nor the AWS SDK environment provide a region.
 const route53DefaultRegion = "us-east-1"
 
-// Route53MetadataConfig maps A/AAAA records to fully qualified names.
-// Aliases, CNAMEs, and wildcard records are excluded. ECS names take precedence.
-type Route53MetadataConfig struct {
-	// RefreshInterval controls Route53 polling independently of other cloud sources.
-	RefreshInterval time.Duration `yaml:"refresh_interval" env:"OTEL_EBPF_NAME_RESOLVER_ROUTE53_REFRESH_INTERVAL" validate:"gt=0"`
-	// HostedZoneIDs optionally restricts the discovered zones. Discovery includes account public zones and private zones associated with the detected VPC. Explicit IDs retain the same VPC and address filters.
-	HostedZoneIDs []string `yaml:"hosted_zone_ids" env:"OTEL_EBPF_NAME_RESOLVER_ROUTE53_HOSTED_ZONE_IDS" envSeparator:","`
-}
-
-// Validate checks settings required when the Route53 source is enabled.
-func (c Route53MetadataConfig) Validate() error {
-	if c.RefreshInterval <= 0 {
-		return errors.New("enrich.enrichers.cloud.route53.refresh_interval must be greater than zero")
-	}
-	for _, id := range c.HostedZoneIDs {
-		if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(id), "/hostedzone/")) == "" {
-			return errors.New("enrich.enrichers.cloud.route53.hosted_zone_ids must not contain blank IDs")
-		}
-	}
-	return nil
-}
+type Route53MetadataConfig = metadata.Route53MetadataConfig
 
 func route53InventoryRefresher(
 	ctx context.Context,

@@ -61,8 +61,8 @@ jobs:
           PARTITIONS: 4
           TEST_TAGS: integration
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run integration:matrix:multiprocess >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run integration:matrix:multiprocess >> "$GITHUB_OUTPUT"
 
   test:
     name: ${{ matrix.description }}
@@ -155,7 +155,7 @@ jobs:
           echo "${MATRIX_JSON}"
 
           if [ -z "${MATRIX_TEST_PATTERN}" ]; then
-            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            echo "Error: Test pattern is empty for shard ${MATRIX_ID}"
             exit 1
           fi
 
@@ -165,7 +165,7 @@ jobs:
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="./internal/testgenerated/integration" -ftestname \
               --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -count=1 -tags=${TEST_TAGS} -timeout 30m \
+              -- -count=1 -tags="${TEST_TAGS}" -timeout 30m \
               -mod vendor \
               -run="^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration
 

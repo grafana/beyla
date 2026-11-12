@@ -26,7 +26,7 @@ if [[ -z "$VERSION" ]] || ! dpkg --validate-version "$VERSION" >/dev/null 2>&1; 
   exit 1
 fi
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+  echo "version=$VERSION" >>"$GITHUB_OUTPUT"
 fi
 
 if [[ "$ARCH" != amd64 ]]; then
@@ -61,7 +61,7 @@ if [[ -z "$ARTIFACTS_DIR" ]]; then
   # temporary Containerfile, leaving the canonical recipe untouched.
   containerfile="$tmp/Dockerfile"
   sed -E 's/^FROM (alpine|ruby|python|node):/FROM docker.io\/library\/\1:/' \
-    "$ROOT_DIR/pkg/webhook/image/Dockerfile" > "$containerfile"
+    "$ROOT_DIR/pkg/webhook/image/Dockerfile" >"$containerfile"
   "$CONTAINER_ENGINE" build --platform linux/amd64 --build-arg TARGETARCH=amd64 --tag "$image" \
     -f "$containerfile" "$ROOT_DIR/pkg/webhook/image"
   BUILT_IMAGE=1
@@ -78,7 +78,10 @@ for artifact in \
   agents/node.js/register.js \
   agents/python/glibc \
   agents/ruby/glibc; do
-  [[ -e "$ARTIFACTS_DIR/$artifact" ]] || { echo "Missing canonical SDK artifact: $artifact" >&2; exit 1; }
+  [[ -e "$ARTIFACTS_DIR/$artifact" ]] || {
+    echo "Missing canonical SDK artifact: $artifact" >&2
+    exit 1
+  }
 done
 
 stage="$tmp/package"
@@ -87,7 +90,7 @@ install -d "$stage/DEBIAN" "$stage/opt/beyla/sdk/dist" \
 cp -a "$ARTIFACTS_DIR/." "$stage/opt/beyla/sdk/dist/"
 sed 's|/__otel_sdk_auto_instrumentation__/dist|/opt/beyla/sdk/dist|g' \
   "$stage/opt/beyla/sdk/dist/injector/otelinject.conf" \
-  > "$stage/opt/beyla/sdk/dist/injector/otelinject.conf.tmp"
+  >"$stage/opt/beyla/sdk/dist/injector/otelinject.conf.tmp"
 mv "$stage/opt/beyla/sdk/dist/injector/otelinject.conf.tmp" \
   "$stage/opt/beyla/sdk/dist/injector/otelinject.conf"
 install -m 0644 "$PACKAGE_DIR/alloy-config.alloy" "$stage/usr/share/beyla/config.alloy"
@@ -96,7 +99,7 @@ install -m 0644 "$PACKAGE_DIR/alloy-dropin.conf" \
 install -m 0644 "$PACKAGE_DIR/configure.py" "$stage/usr/lib/beyla/configure.py"
 install -m 0644 "$PACKAGE_DIR/validate-alloy.py" "$stage/usr/lib/beyla/validate-alloy.py"
 install -m 0644 "$PACKAGE_DIR/templates" "$stage/DEBIAN/templates"
-sed "s/^Version: .*/Version: $VERSION/" "$PACKAGE_DIR/control" > "$stage/DEBIAN/control"
+sed "s/^Version: .*/Version: $VERSION/" "$PACKAGE_DIR/control" >"$stage/DEBIAN/control"
 install -m 0755 "$PACKAGE_DIR/config" "$stage/DEBIAN/config"
 install -m 0755 "$PACKAGE_DIR/postinst" "$stage/DEBIAN/postinst"
 install -m 0755 "$PACKAGE_DIR/postrm" "$stage/DEBIAN/postrm"

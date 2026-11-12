@@ -5,6 +5,7 @@ if [ -f "$P/var/lib/beyla/mode" ]; then
   # Mode changes are not supported; retain the install-time choice.
   exit 0
 fi
+# shellcheck source=/dev/null # Provided by debconf on the package target system.
 . /usr/share/debconf/confmodule
 
 db_input high beyla/mode || true

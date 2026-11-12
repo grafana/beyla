@@ -171,7 +171,7 @@ The numbers taken as reference:
 
 It might appear that cardinality should not grow beyond 163. However this number is not realistic nor accurate since some multipliers might not apply to the whole system. For example, SQL methods should not multiply to the RPC and HTTP metrics.
 
-In this simple scenario, we can manually count more the maximum cardinality to 396, which is far less than the initial count of 2771:
+In this example, manually counting the applicable metric combinations gives a maximum cardinality of 396, far below the initial estimate of 2,771:
 
 | #   | Instance | Metric                          | Endpoint      | Operation  | Code |
 | --- | -------- | ------------------------------- | ------------- | ---------- | ---- |

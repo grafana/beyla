@@ -380,13 +380,13 @@ You can find the full object and structure in the `kubecache informer.pb.go` sou
 
 Service name template examples:
 
-```gotemplate
+```go-text-template
 {{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}{{ if .ContainerName }}/{{ .ContainerName -}}{{ end -}}
 ```
 
 or
 
-```gotemplate
+```go-text-template
 {{- .Meta.Namespace }}/{{ index .Meta.Labels "app.kubernetes.io/name" }}/{{ index .Meta.Labels "app.kubernetes.io/component" -}}
 ```
 

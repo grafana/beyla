@@ -268,18 +268,25 @@ Beyla uses hk to orchestrate linting and formatting checks:
 
 - `golangci-lint` for Go linting and the repository's gofmt/gci import formatting rules
 - `rumdl` for structural Markdown checks; Vale remains the prose and style checker
-- `clang-format` for staged C/C++ formatting in the hk pre-commit hook
-- `clang:tidy` for static analysis of the C code
+- `shellcheck` and `shfmt` for shell linting and formatting
+- `taplo-format` and `pkl-format` for TOML and Pkl formatting
+- `actionlint` for GitHub Actions workflows
+- `hadolint` for Dockerfiles
+- `destroyed-symlinks` for accidental replacement of symbolic links
+- `clang-tidy` for static analysis of BPF C and header files
+- `clang-format` for C/C++ formatting
 
-Go linting and formatting, plus Markdown linting, are checked on pull requests. You can invoke the checks and formatters manually:
+Go, shell, configuration, workflow, Dockerfile, and Markdown checks, along with BPF clang-tidy, are run on pull requests. You can invoke the checks and formatters manually:
 
-- `mise run lint` runs the configured Go and Markdown checks through hk; dashboard linting runs separately in CI with Grafana's pinned dashboard-linter action
-- `mise run lint:fix` applies available Go and Markdown fixes without staging changes
-- `mise run clang:tidy` invokes `clang:tidy` on the C/eBPF code
+- `mise run lint` runs the configured repository checks through hk; dashboard linting runs separately in CI with Grafana's pinned dashboard-linter action
+- `mise run lint:fix` applies configured lint and formatting fixes without staging changes
+- `mise run clang:tidy` checks BPF C and header files with clang-tidy
 
-The hk pre-commit hook checks the root Go module when Go files are staged and
-applies C/C++ formatting to staged files. Run `mise run fmt` for Go formatting
-and `mise run clang:format` for C/C++ formatting.
+The hk pre-commit hook checks the root Go module when Go files are staged,
+checks BPF C/header files with clang-tidy, and applies C/C++ formatting to
+staged files. Run `mise run lint:fix` to apply configured formatting fixes
+without staging changes; `mise run fmt` and `mise run clang:format` remain
+compatibility aliases for that command.
 
 #### Running VM tests
 

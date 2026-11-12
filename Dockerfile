@@ -9,10 +9,13 @@ COPY .obi-src/pkg/internal/java/agent/src/main/c/ src/main/c/
 COPY .obi-src/pkg/internal/java/agent/Makefile.jni Makefile.jni
 
 # Install the cross-compiler for the non-native architecture
+# Track current Debian security updates rather than pinning package versions
+# that can disappear from the archive.
+# hadolint ignore=DL3008
 RUN apt-get update && \
     case "$BUILDARCH" in \
-      amd64) apt-get install -y gcc-aarch64-linux-gnu ;; \
-      arm64) apt-get install -y gcc-x86-64-linux-gnu ;; \
+      amd64) apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross ;; \
+      arm64) apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu libc6-dev-amd64-cross ;; \
     esac
 
 # Build for own architecture
@@ -20,14 +23,17 @@ RUN case "$BUILDARCH" in \
       amd64) SLUG=linux-amd64 ;; \
       arm64) SLUG=linux-aarch64 ;; \
     esac && \
-    make -f Makefile.jni CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+    make -f Makefile.jni CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR="build/jni/$SLUG" TARGET_DIR="target/classes/native/$SLUG"
 
 # Cross-compile for the other architecture
+# Keep the cross build in its own layer so BuildKit can reuse the native
+# output when only the cross-build command changes.
+# hadolint ignore=DL3059
 RUN case "$BUILDARCH" in \
       amd64) CC=aarch64-linux-gnu-gcc; SLUG=linux-aarch64 ;; \
       arm64) CC=x86_64-linux-gnu-gcc;  SLUG=linux-amd64 ;; \
     esac && \
-    make -f Makefile.jni CC=$CC JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+    make -f Makefile.jni CC="$CC" JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR="build/jni/$SLUG" TARGET_DIR="target/classes/native/$SLUG"
 
 # Build the Java OBI agent
 FROM gradle:9.6.1-jdk21-noble@sha256:8074080ea0c9d663076211abc189ba1472474d3019a0da49c4216dce3184cf85 AS javaagent-builder
@@ -67,6 +73,9 @@ ENV GOARCH=$TARGETARCH
 
 WORKDIR /src
 
+# Use the current patched packages from the pinned generator image's Alpine
+# repositories; exact package versions are not stable in rolling repositories.
+# hadolint ignore=DL3018
 RUN apk add --no-cache ca-certificates curl git bash make
 
 # The generator image provides Go, bpf2go, and Clang. Copy only Mise metadata

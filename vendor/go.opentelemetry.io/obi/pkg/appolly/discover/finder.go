@@ -129,7 +129,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 			TargetsChanged: startConfig.dynamicSelector.TargetsChangedNotifyContext(ctx),
 		}
 	}
-	swi.Add(swarm.DirectInstance(ProcessWatcherFunc(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, rescan, updates)),
+	swi.Add(swarm.DirectInstance(ProcessWatcherWithCriteriaUpdates(pf.cfg, pf.ebpfEventContext, processEvents, configCriteria, rescan, updates)),
 		swarm.WithID("ProcessWatcher"))
 
 	kubeEnrichedEvents := msgh.QueueFromConfig[[]Event[ProcessAttrs]](pf.cfg, pf.ctxInfo.Metrics, "kubeEnrichedEvents")

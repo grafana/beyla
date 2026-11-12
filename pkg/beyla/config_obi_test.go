@@ -124,6 +124,8 @@ func TestOverrideOBIGlobalConfig_MetricNames(t *testing.T) {
 			"beyla_stat_tcp_retransmits_total", attributes.InstrumentCounter},
 		{attributes.StatTCPIo, "beyla.stat.tcp.io", "beyla.stat.tcp.io", "By",
 			"beyla_stat_tcp_io_bytes_total", attributes.InstrumentCounter},
+		{attributes.StatTCPResets, "beyla.stat.tcp.resets", "beyla.stat.tcp.resets", "{segment}",
+			"beyla_stat_tcp_resets_total", attributes.InstrumentCounter},
 	} {
 		t.Run(tc.otel, func(t *testing.T) {
 			assert.Equal(t, attributes.Section(tc.section), tc.name.Section)

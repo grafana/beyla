@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"slices"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -49,7 +51,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS -type go_exception_payload_t Bpf ../../../../bpf/gotracer/gotracer.c -- -I../../../../bpf
 
 type runtimeMetricTargetKey struct {
 	pid app.PID
@@ -312,6 +314,8 @@ type Tracer struct {
 	log                               *slog.Logger
 	pidsFilter                        ebpfcommon.ServiceFilter
 	cfg                               *config.EBPFTracer
+	shutdownTimeout                   time.Duration
+	tracesSampler                     *services.SamplerConfig
 	metrics                           imetrics.Reporter
 	bpfObjects                        BpfObjects
 	closers                           []io.Closer
@@ -319,7 +323,8 @@ type Tracer struct {
 	supportsBPFLoop                   bool
 	traceCtxMapEnabled                bool
 	runtimeMetricsEnabled             bool
-	runtimeMetricTargetKeys           map[runtimeMetricTargetKey]BpfPidInfo
+	runtimeMetricTargetKeys           map[runtimeMetricTargetKey]BpfPidInfoT
+	pidSamplers                       ebpfcommon.PIDSamplers
 	goChannelOffsetsByExecutable      map[executableIdentity]bool
 	goRuntimeMetricMaskByExecutable   map[executableIdentity]uint64
 	goRuntimeGCGoalSourceByExecutable map[executableIdentity]goRuntimeGCGoalSource
@@ -335,6 +340,11 @@ type Tracer struct {
 	goAutoSDKAttemptMap               mapKeyDeleter
 	attachGoAutoSDKProbe              func(goAutoSDKActivationProbe, app.PID, uint64, uint64, uint64) (io.Closer, error)
 	goAutoSDKProcessStartTime         func(app.PID) (uint64, error)
+	exceptionsEnabled                 bool
+	exceptionsMu                      sync.Mutex
+	exceptionProbes                   map[executableIdentity][]ebpfcommon.GoProbe
+	exceptionProcesses                map[app.PID]goExceptionProcess
+	attachGoExceptionProbe            func(app.PID, executableIdentity, *ebpfcommon.ProbeDesc) ([]io.Closer, error)
 }
 
 func New(
@@ -350,12 +360,14 @@ func New(
 		log:                               log,
 		pidsFilter:                        pidFilter,
 		cfg:                               &cfg.EBPF,
+		shutdownTimeout:                   cfg.ShutdownTimeout,
+		tracesSampler:                     &cfg.Traces.SamplerConfig,
 		metrics:                           metrics,
 		disabledRouteHarvesting:           disabledRouteHarvesting,
 		supportsBPFLoop:                   ebpfcommon.SupportsEBPFLoops(log, cfg.EBPF.OverrideBPFLoopEnabled),
 		traceCtxMapEnabled:                cfg.PopulateTraceContext(),
 		runtimeMetricsEnabled:             cfg.AppRuntimeMetricsEnabled(),
-		runtimeMetricTargetKeys:           map[runtimeMetricTargetKey]BpfPidInfo{},
+		runtimeMetricTargetKeys:           map[runtimeMetricTargetKey]BpfPidInfoT{},
 		goChannelOffsetsByExecutable:      map[executableIdentity]bool{},
 		goRuntimeMetricMaskByExecutable:   map[executableIdentity]uint64{},
 		goRuntimeGCGoalSourceByExecutable: map[executableIdentity]goRuntimeGCGoalSource{},
@@ -365,6 +377,10 @@ func New(
 		goAutoSDKActivationLinks:          map[goAutoSDKActivationLinkKey]goAutoSDKActivationLink{},
 		attachGoAutoSDKProbe:              attachGoAutoSDKActivationProbe,
 		goAutoSDKProcessStartTime:         readGoAutoSDKProcessStartTime,
+		exceptionsEnabled:                 cfg.ExceptionsEnabled() && cfg.Logs.Enabled(),
+		exceptionProbes:                   map[executableIdentity][]ebpfcommon.GoProbe{},
+		exceptionProcesses:                map[app.PID]goExceptionProcess{},
+		attachGoExceptionProbe:            attachGoExceptionProbe,
 	}
 }
 
@@ -416,6 +432,23 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	p.goAutoSDKTargetsMu.Unlock()
 
 	p.registerRuntimeMetricTarget(pid, ns, fi)
+	p.writePIDSampler(pid, ns, fi)
+	p.registerExceptionPID(pid, fi)
+}
+
+func (p *Tracer) writePIDSampler(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	if p.bpfObjects.PidSamplers == nil || fi == nil {
+		return
+	}
+
+	err := p.pidSamplers.Write(p.bpfObjects.PidSamplers, pid, ns, fi.ServiceAttrs().SamplerConfig, p.tracesSampler)
+	if err != nil {
+		p.log.Error("setting the process sampler in eBPF", "pid", pid, "error", err)
+	}
+}
+
+func (p *Tracer) UpdatePIDSampler(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	p.writePIDSampler(pid, ns, fi)
 }
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
@@ -428,6 +461,13 @@ func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.goAutoSDKTargetsMu.Unlock()
 
 	p.deleteRuntimeMetricTarget(pid, ns)
+	p.unregisterExceptionPID(pid)
+
+	if p.bpfObjects.PidSamplers != nil {
+		if err := p.pidSamplers.Delete(p.bpfObjects.PidSamplers, pid); err != nil {
+			p.log.Error("removing the process sampler from eBPF", "pid", pid, "error", err)
+		}
+	}
 }
 
 func (p *Tracer) supportsContextPropagation() bool {
@@ -458,15 +498,16 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 	if !ebpfcommon.SupportsJavaHTTP1ReservationCleanup() {
 		ebpfcommon.DisableJavaHTTP1Atomics(spec)
 	}
+	p.privateExceptionEvents(spec)
 
 	return []*ebpfcommon.SpecBundle{{
 		Spec:      spec,
 		Objects:   &p.bpfObjects,
-		Constants: p.constants(),
+		Constants: p.constants(ebpfconvenience.ScaledMaxEntries(spec.Maps[BpfMapEvents], p.cfg.MapsConfig.GlobalScaleFactor)),
 	}}, nil
 }
 
-func (p *Tracer) constants() map[string]any {
+func (p *Tracer) constants(eventsRingBufSize uint32) map[string]any {
 	blackBoxCP := uint32(0)
 	if p.cfg.DisableBlackBoxCP {
 		blackBoxCP = uint32(1)
@@ -477,7 +518,7 @@ func (p *Tracer) constants() map[string]any {
 		"g_bpf_header_propagation":       p.cfg.ContextPropagation.HasHeaders(),
 		"g_bpf_probe_write_user_enabled": p.supportsContextPropagation(),
 		"g_go_h2_write_fail_step":        goH2WriteFailStepForTest,
-		"wakeup_data_bytes":              uint32(p.cfg.WakeupLen) * uint32(unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{})),
+		"wakeup_data_bytes":              ebpfcommon.WakeupDataBytes(p.cfg.WakeupLen, unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}), eventsRingBufSize),
 		"ringbuf_metrics_enabled":        p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics),
 		"disable_black_box_cp":           blackBoxCP,
 		"attr_type_invalid":              uint64(attribute.INVALID),
@@ -492,6 +533,7 @@ func (p *Tracer) constants() map[string]any {
 		"g_bpf_traceparent_enabled":      true,
 		"g_bpf_loop_enabled":             p.supportsBPFLoop,
 		"g_traces_ctx_v1_enabled":        p.traceCtxMapEnabled,
+		"g_exceptions_enabled":           p.exceptionsEnabled,
 	}
 
 	if p.cfg.TrackRequestHeaders ||
@@ -513,6 +555,8 @@ func (p *Tracer) constants() map[string]any {
 	m["kafka_max_captured_bytes"] = p.cfg.BufferSizes.Kafka
 	m["postgres_max_captured_bytes"] = p.cfg.BufferSizes.Postgres
 	m["max_transaction_time"] = uint64(p.cfg.MaxTransactionTime.Nanoseconds())
+	// pid_samplers is keyed by the pid OBI's /proc numbers a process with
+	maps.Copy(m, ebpfcommon.PIDFilterConstants())
 
 	return m
 }
@@ -576,6 +620,7 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		goexec.TextReaderRPos,
 		goexec.BufReaderBufPos,
 		goexec.BufReaderWPos,
+		goexec.BufReaderRPos,
 		// grpc
 		goexec.GrpcStreamStPtrPos,
 		goexec.GrpcStreamMethodPtrPos,
@@ -708,6 +753,10 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 		{
 			symbol: "*crypto/tls.Conn",
 			field:  goexec.TLSConnTypeAddress,
+		},
+		{
+			symbol: "*net.TCPConn",
+			field:  goexec.TCPConnTypeAddress,
 		},
 	} {
 		if address, ok := offsets.ITypes[iType.symbol]; ok {
@@ -1026,30 +1075,11 @@ func attachGoAutoSDKActivationProbe(
 		return nil, errors.New("process-scoped Go Auto SDK activation probe is incomplete")
 	}
 
-	target, err := os.Open(fmt.Sprintf("/proc/%d/exe", pid))
+	target, err := openTargetExecutable(pid, dev, ino)
 	if err != nil {
-		return nil, fmt.Errorf("opening target executable: %w", err)
+		return nil, err
 	}
 	defer target.Close()
-
-	info, err := target.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("stating target executable: %w", err)
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		return nil, errors.New("reading target executable identity")
-	}
-	actualDev := normalizeDeviceID(stat.Dev)
-	if actualDev != dev || stat.Ino != ino {
-		return nil, fmt.Errorf(
-			"target executable identity changed: got %d:%d, want %d:%d",
-			actualDev,
-			stat.Ino,
-			dev,
-			ino,
-		)
-	}
 	if err := validateGoAutoSDKProcessStartTime(pid, startTime); err != nil {
 		return nil, err
 	}
@@ -1074,6 +1104,38 @@ func attachGoAutoSDKActivationProbe(
 		return nil, err
 	}
 	return activationLink, nil
+}
+
+// openTargetExecutable opens the executable of pid, and fails when it is no
+// longer the dev:ino the probes were resolved for.
+func openTargetExecutable(pid app.PID, dev, ino uint64) (*os.File, error) {
+	target, err := os.Open(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return nil, fmt.Errorf("opening target executable: %w", err)
+	}
+
+	info, err := target.Stat()
+	if err != nil {
+		_ = target.Close()
+		return nil, fmt.Errorf("stating target executable: %w", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		_ = target.Close()
+		return nil, errors.New("reading target executable identity")
+	}
+	actualDev := normalizeDeviceID(stat.Dev)
+	if actualDev != dev || stat.Ino != ino {
+		_ = target.Close()
+		return nil, fmt.Errorf(
+			"target executable identity changed: got %d:%d, want %d:%d",
+			actualDev,
+			stat.Ino,
+			dev,
+			ino,
+		)
+	}
+	return target, nil
 }
 
 func validateGoAutoSDKProcessStartTime(pid app.PID, expected uint64) error {
@@ -1106,8 +1168,14 @@ func (p *Tracer) RegisterProcessScopedGoProbe(
 	ino uint64,
 	candidate ebpfcommon.GoProbe,
 ) {
-	if p == nil || !candidate.ProcessScoped || candidate.Probe == nil ||
-		candidate.Probe.Start == nil {
+	if p == nil || !candidate.ProcessScoped || candidate.Probe == nil {
+		return
+	}
+	if isGoExceptionSymbol(candidate.Symbol) {
+		p.registerExceptionProbe(executableIdentity{Dev: dev, Ino: ino}, candidate)
+		return
+	}
+	if candidate.Probe.Start == nil {
 		return
 	}
 
@@ -1149,6 +1217,8 @@ func (p *Tracer) UnregisterProcessScopedGoProbes(dev, ino uint64) {
 	if p == nil {
 		return
 	}
+
+	p.unregisterExceptionProbes(executableIdentity{Dev: dev, Ino: ino})
 
 	p.goAutoSDKTargetsMu.Lock()
 	defer p.goAutoSDKTargetsMu.Unlock()
@@ -1529,7 +1599,7 @@ func (p *Tracer) registerRuntimeMetricTarget(pid app.PID, ns uint32, fileInfo *e
 	fileInfo.SetRuntimeMetricGeneration(pid, generation)
 
 	if p.runtimeMetricTargetKeys == nil {
-		p.runtimeMetricTargetKeys = map[runtimeMetricTargetKey]BpfPidInfo{}
+		p.runtimeMetricTargetKeys = map[runtimeMetricTargetKey]BpfPidInfoT{}
 	}
 	p.runtimeMetricTargetKeys[runtimeMetricTargetKey{pid: pid, ns: ns}] = pidInfo
 }
@@ -1592,17 +1662,17 @@ func (p *Tracer) deleteRuntimeMetricTarget(pid app.PID, ns uint32) {
 	delete(p.runtimeMetricTargetKeys, runtimeMetricTargetKey{pid: pid, ns: ns})
 }
 
-func runtimeMetricPIDInfo(pid app.PID, ns uint32) (BpfPidInfo, error) {
+func runtimeMetricPIDInfo(pid app.PID, ns uint32) (BpfPidInfoT, error) {
 	// HostPid stays zero: go_runtime_metric_targets is keyed on {user_pid, ns}
 	// (see go_runtime_metric_target_lookup in bpf/gotracer/go_runtime.c).
-	pidInfo := BpfPidInfo{
+	pidInfo := BpfPidInfoT{
 		UserPid: uint32(pid),
 		Ns:      ns,
 	}
 
 	pids, err := procs.FindNamespacedPids(pid)
 	if err != nil {
-		return BpfPidInfo{}, fmt.Errorf("reading namespaced PIDs: %w", err)
+		return BpfPidInfoT{}, fmt.Errorf("reading namespaced PIDs: %w", err)
 	}
 	if len(pids) == 0 {
 		return pidInfo, nil
@@ -1629,6 +1699,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 }
 
 func (p *Tracer) Close() error {
+	p.closeExceptionResources()
 	return ebpfcommon.CloseResources(append(p.closers, &p.bpfObjects)...)
 }
 
@@ -2134,8 +2205,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 		}}
 	}
 
-	// runtime.casgstatus fires on every goroutine status transition and exists only
-	// to keep traces_ctx_v1 pointing at the span the thread is currently running
+	// Track thread context when goroutines change state.
 	if p.traceCtxMapEnabled {
 		m["runtime.casgstatus"] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeRuntimeCasgstatus,
@@ -2143,15 +2213,26 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 	}
 
 	// HTTP Header extraction
-	// with bpf_loop we scan the buffer with a single uprobe - this is less overhead
-	// otherwise we have a probe per header net/textproto.(*Reader).readContinuedLineSlice
+	// With bpf_loop, readMIMEHeader scans the buffered request headers on entry.
+	// Following them across buffer refills needs a probe on every bufio fill in
+	// the process, so it is only done when request headers are captured.
+	// Otherwise we have a probe per header net/textproto.(*Reader).readContinuedLineSlice
 	if p.supportsBPFLoop {
+		var headerReturns *ebpf.Program
+		if p.cfg != nil && (p.cfg.TrackRequestHeaders || p.cfg.ContextPropagation.IsEnabled()) {
+			headerReturns = p.bpfObjects.ObiUprobeReadMimeHeaderReturns
+			m["bufio.(*Reader).fill"] = []*ebpfcommon.ProbeDesc{{
+				Start: p.bpfObjects.ObiUprobeHttp1ReaderFill,
+			}}
+		}
 		m["net/textproto.readMIMEHeader"] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeReadMimeHeader,
+			End:   headerReturns,
 		}}
 		// old go versions
 		m["net/textproto.(*Reader).ReadMIMEHeader"] = []*ebpfcommon.ProbeDesc{{
 			Start: p.bpfObjects.ObiUprobeReadMimeHeader,
+			End:   headerReturns,
 		}}
 	} else {
 		m["net/textproto.(*Reader).readContinuedLineSlice"] = []*ebpfcommon.ProbeDesc{{
@@ -2216,7 +2297,7 @@ func (p *Tracer) GoProbes() map[string][]*ebpfcommon.ProbeDesc {
 }
 
 func (p *Tracer) GoProbeGroups() []ebpfcommon.GoProbeGroup {
-	var groups []ebpfcommon.GoProbeGroup
+	groups := p.goExceptionProbeGroups()
 	if p.headerPropagationEnabled() {
 		groups = append(groups, p.goH2OwnershipProbeGroups()...)
 		groups = append(groups,
@@ -2587,6 +2668,7 @@ func (p *Tracer) AlreadyInstrumentedLib(_ uint64) bool {
 }
 
 func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEventContext, eventsChan *msg.Queue[[]request.Span]) {
+	defer p.closeExceptionResources()
 	parseContext := ebpfcommon.NewEBPFParseContext(p.cfg, eventsChan, p.pidsFilter)
 	defer parseContext.Close()
 	defer func() {
@@ -2594,20 +2676,22 @@ func (p *Tracer) Run(ctx context.Context, ebpfEventContext *ebpfcommon.EBPFEvent
 	}()
 
 	p.SetEventContext(ebpfEventContext)
+	p.readExceptionEvents(ctx, ebpfEventContext)
 
 	if !p.traceCtxMapEnabled {
 		ebpfconvenience.DrainTraceContextMap[BpfObiCtxInfoT](p.log, p.bpfObjects.TracesCtxV1)
 	}
 
-	ebpfcommon.SharedRingbuf(
+	ebpfcommon.SharedRingbufWithDrainContext(
 		ebpfEventContext,
 		p.cfg,
+		p.shutdownTimeout,
 		p.bpfObjects.Events,
-		func(record *ringbuf.Record) (request.Span, bool, error) {
+		func(drainCtx context.Context, record *ringbuf.Record) (request.Span, bool, error) {
 			if handled, err := ebpfEventContext.HandleInternalEvent(record); handled {
 				return request.Span{}, true, err
 			}
-			if handled, err := ebpfcommon.HandleRuntimeMetricsRecord(ctx, ebpfEventContext, record, p.pidsFilter, p.log); handled {
+			if handled, err := ebpfcommon.HandleRuntimeMetricsRecord(drainCtx, ebpfEventContext, record, p.pidsFilter, p.log); handled {
 				return request.Span{}, true, err
 			}
 			s, ignore, err := ebpfcommon.ReadBPFTraceAsSpan(parseContext, p.cfg, record, p.pidsFilter)

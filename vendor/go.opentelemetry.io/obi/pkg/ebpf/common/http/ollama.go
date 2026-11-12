@@ -7,6 +7,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,27 +16,30 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 )
 
-// ollamaRequest represents the Ollama native request body for both
-// /api/chat and /api/generate endpoints.
+// ollamaRequest represents the Ollama native request body shared between
+// the /api/chat, /api/generate, /api/embed and /api/embeddings endpoints.
 type ollamaRequest struct {
-	Model    string          `json:"model"`
-	Messages json.RawMessage `json:"messages"`
-	Prompt   string          `json:"prompt"`
-	System   string          `json:"system"`
-	Stream   *bool           `json:"stream"`
-	Tools    json.RawMessage `json:"tools"`
+	Model      string          `json:"model"`
+	Messages   json.RawMessage `json:"messages"`
+	Prompt     string          `json:"prompt"`
+	System     string          `json:"system"`
+	Stream     *bool           `json:"stream"`
+	Tools      json.RawMessage `json:"tools"`
+	Input      json.RawMessage `json:"input"`
+	Dimensions int             `json:"dimensions"`
 }
 
-// ollamaResponse represents the Ollama native response body shared
-// between /api/chat and /api/generate endpoints.
+// ollamaResponse represents the Ollama native response body shared between
+// the /api/chat, /api/generate, /api/embed and /api/embeddings endpoints.
 type ollamaResponse struct {
-	Model           string             `json:"model"`
-	Message         json.RawMessage    `json:"message"`
-	Response        string             `json:"response"`
-	Done            bool               `json:"done"`
-	DoneReason      string             `json:"done_reason"`
-	PromptEvalCount request.TokenCount `json:"prompt_eval_count"`
-	EvalCount       request.TokenCount `json:"eval_count"`
+	Model                 string             `json:"model"`
+	Message               json.RawMessage    `json:"message"`
+	Response              string             `json:"response"`
+	Done                  bool               `json:"done"`
+	DoneReason            string             `json:"done_reason"`
+	PromptEvalCount       request.TokenCount `json:"prompt_eval_count"`
+	PromptEvalCachedCount request.TokenCount `json:"prompt_eval_cached_count"`
+	EvalCount             request.TokenCount `json:"eval_count"`
 }
 
 // ollamaChatMessage represents a single message in an Ollama chat response.
@@ -44,23 +49,100 @@ type ollamaChatMessage struct {
 	ToolCalls json.RawMessage `json:"tool_calls"`
 }
 
-// isOllamaPath returns true if the URL path ends with /api/chat or /api/generate.
+func isOllamaEmbeddingPath(path string) bool {
+	return strings.HasSuffix(path, "/api/embed") || strings.HasSuffix(path, "/api/embeddings")
+}
+
+// isOllamaPath returns true if the URL path is one of the Ollama native
+// chat, generate or embedding endpoints.
 func isOllamaPath(req *http.Request) bool {
 	path := requestPath(req)
-	return strings.HasSuffix(path, "/api/chat") || strings.HasSuffix(path, "/api/generate")
+	return strings.HasSuffix(path, "/api/chat") || strings.HasSuffix(path, "/api/generate") ||
+		isOllamaEmbeddingPath(path)
 }
 
 // ollamaOperation returns the gen_ai.operation.name for the request path.
 func ollamaOperation(req *http.Request) string {
 	path := requestPath(req)
+	if isOllamaEmbeddingPath(path) {
+		return request.EmbeddingOperationName
+	}
 	if strings.HasSuffix(path, "/api/chat") {
 		return request.ChatOperationName
 	}
 	return request.CompletionOperationName
 }
 
-// OllamaSpan detects Ollama native /api/chat and /api/generate requests
-// and converts them into a GenAI span.
+// isOllamaEmbeddingResponse checks the body shape because other services expose
+// the same paths. It walks tokens because the capture can end inside a vector.
+func isOllamaEmbeddingResponse(body []byte) bool {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	root, err := dec.Token()
+	if err != nil || root != json.Delim('{') {
+		return false
+	}
+
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+
+		key, ok := keyTok.(string)
+		if !ok {
+			return false
+		}
+
+		switch key {
+		case "error":
+			// OpenAI-shaped errors carry an object here.
+			value, err := dec.Token()
+			_, isString := value.(string)
+			return err == nil && isString
+		case "embedding":
+			return isOllamaVector(dec)
+		case "embeddings":
+			return isOllamaVectorList(dec)
+		default:
+			if err := skipJSONValue(dec); err != nil {
+				return false
+			}
+		}
+	}
+
+	return false
+}
+
+// isOllamaVectorList rejects the array of objects that other providers use.
+func isOllamaVectorList(dec *json.Decoder) bool {
+	list, err := dec.Token()
+	if err != nil || list != json.Delim('[') {
+		return false
+	}
+
+	first, err := dec.Token()
+	return err == nil && (first == json.Delim('[') || first == json.Delim(']'))
+}
+
+// isOllamaVector rejects non-numeric arrays. The capture can end before the first
+// number is complete.
+func isOllamaVector(dec *json.Decoder) bool {
+	vector, err := dec.Token()
+	if err != nil || vector != json.Delim('[') {
+		return false
+	}
+
+	first, err := dec.Token()
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	_, isNumber := first.(float64)
+	return err == nil && (isNumber || first == json.Delim(']'))
+}
+
+// OllamaSpan detects Ollama native /api/chat, /api/generate, /api/embed and
+// /api/embeddings requests and converts them into a GenAI span.
 func OllamaSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) (request.Span, bool) {
 	if !isOllamaPath(req) {
 		return *baseSpan, false
@@ -83,6 +165,11 @@ func OllamaSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 
 	operation := ollamaOperation(req)
 	isChat := operation == request.ChatOperationName
+	isEmbedding := operation == request.EmbeddingOperationName
+
+	if isEmbedding && !isOllamaEmbeddingResponse(respB) {
+		return *baseSpan, false
+	}
 
 	var ollamaResp ollamaResponse
 	var toolCalls []request.ToolCall
@@ -92,6 +179,7 @@ func OllamaSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	case json.Valid(respB):
 		unmarshalJSONBestEffort(respB, &ollamaResp)
 		ollamaResp.PromptEvalCount.Merge(tokenCountJSONField(respB, "prompt_eval_count"))
+		ollamaResp.PromptEvalCachedCount.Merge(tokenCountJSONField(respB, "prompt_eval_cached_count"))
 		ollamaResp.EvalCount.Merge(tokenCountJSONField(respB, "eval_count"))
 		if isChat {
 			toolCalls = extractOllamaToolCalls(ollamaResp.Message)
@@ -115,8 +203,14 @@ func OllamaSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	}
 
 	// Map token counts: Ollama uses prompt_eval_count / eval_count.
+	// prompt_eval_count already includes prompt_eval_cached_count.
 	parsed.Usage.InputTokens = ollamaResp.PromptEvalCount
 	parsed.Usage.OutputTokens = ollamaResp.EvalCount
+	if _, reported := ollamaResp.PromptEvalCachedCount.Get(); reported {
+		parsed.Usage.InputDetails = &request.OpenAIInputTokensDetails{
+			CachedTokens: ollamaResp.PromptEvalCachedCount,
+		}
+	}
 
 	// Build request info.
 	parsed.Request = request.OpenAIInput{
@@ -125,6 +219,14 @@ func OllamaSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 		Prompt:   ollamaReq.Prompt,
 		Stream:   ollamaReq.Stream == nil || *ollamaReq.Stream,
 		Tools:    ollamaReq.Tools,
+	}
+
+	if isEmbedding {
+		// Ollama ignores the stream flag here and never streams embeddings.
+		parsed.Request.Stream = false
+		parsed.Request.Input = ollamaEmbedInput(ollamaReq.Input)
+		parsed.Request.Dimensions = ollamaReq.Dimensions
+		parsed.Dimensions = parseEmbeddingDimensions(&request.EmbeddingRequest{}, respB)
 	}
 
 	// For /api/generate, keep system instructions separate.
@@ -161,6 +263,15 @@ func OllamaSpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 	}
 
 	return *baseSpan, true
+}
+
+// ollamaEmbedInput skips batch inputs, as the OpenAI path does.
+func ollamaEmbedInput(raw json.RawMessage) string {
+	var input string
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return ""
+	}
+	return input
 }
 
 // buildOllamaChoices constructs the Choices JSON used by GetFinishReasons()
@@ -233,6 +344,7 @@ func parseOllamaStream(reader *bytes.Reader, isChat bool) (ollamaResponse, []req
 		var chunk ollamaResponse
 		unmarshalJSONBestEffort(line, &chunk)
 		chunk.PromptEvalCount.Merge(tokenCountJSONField(line, "prompt_eval_count"))
+		chunk.PromptEvalCachedCount.Merge(tokenCountJSONField(line, "prompt_eval_cached_count"))
 		chunk.EvalCount.Merge(tokenCountJSONField(line, "eval_count"))
 
 		if chunk.Model != "" && final.Model == "" {
@@ -257,6 +369,7 @@ func parseOllamaStream(reader *bytes.Reader, isChat bool) (ollamaResponse, []req
 		}
 
 		final.PromptEvalCount.Merge(chunk.PromptEvalCount)
+		final.PromptEvalCachedCount.Merge(chunk.PromptEvalCachedCount)
 		final.EvalCount.Merge(chunk.EvalCount)
 
 		if chunk.Done {

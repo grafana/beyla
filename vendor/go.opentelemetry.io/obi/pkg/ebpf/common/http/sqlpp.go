@@ -94,7 +94,12 @@ type sqlppError struct {
 }
 
 // SQLPPSpan detects and enriches SQL++ spans (Couchbase and other SQL++ databases)
-func SQLPPSpan(baseSpan *request.Span, req *http.Request, resp *http.Response, endpointPatterns []string, prepared *SQLPPPreparedStatements) (request.Span, bool) {
+func SQLPPSpan(baseSpan *request.Span, req *http.Request, resp *http.Response, endpointPatterns []string) (request.Span, bool) {
+	return SQLPPSpanWithPreparedStatements(baseSpan, req, resp, endpointPatterns, nil)
+}
+
+// SQLPPSpanWithPreparedStatements also resolves executions of cached prepared queries.
+func SQLPPSpanWithPreparedStatements(baseSpan *request.Span, req *http.Request, resp *http.Response, endpointPatterns []string, prepared *SQLPPPreparedStatements) (request.Span, bool) {
 	// Must match endpoint pattern first
 	if !matchesEndpointPattern(req, endpointPatterns) {
 		return *baseSpan, false

@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
@@ -30,9 +31,10 @@ type Instrumentable struct {
 	// tracing both the parent PID and all of its child PIDs
 	ChildPids []app.PID
 
-	FileInfo *exec.FileInfo
-	Offsets  *goexec.Offsets
-	Tracer   *ProcessTracer
+	FileInfo      *exec.FileInfo
+	Offsets       *goexec.Offsets
+	Tracer        *ProcessTracer
+	SamplerConfig *services.SamplerConfig
 
 	LogEnricherEnabled   bool
 	ExecutableGeneration uint64
@@ -57,6 +59,11 @@ type PIDsAccounter interface {
 // could remove state belonging to a reused PID.
 type LifecyclePIDBlocker interface {
 	BlockPIDLifecycle(app.PID, uint32, *exec.FileInfo)
+}
+
+// PIDSamplerUpdater refreshes sampling without repeating process instrumentation.
+type PIDSamplerUpdater interface {
+	UpdatePIDSampler(app.PID, uint32, *exec.FileInfo)
 }
 
 type CommonTracer interface {
@@ -173,6 +180,14 @@ type ProcessTracer struct {
 func (pt *ProcessTracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	for i := range pt.Programs {
 		pt.Programs[i].AllowPID(pid, ns, fi)
+	}
+}
+
+func (pt *ProcessTracer) UpdatePIDSampler(pid app.PID, ns uint32, fi *exec.FileInfo) {
+	for _, program := range pt.Programs {
+		if updater, ok := program.(PIDSamplerUpdater); ok {
+			updater.UpdatePIDSampler(pid, ns, fi)
+		}
 	}
 }
 

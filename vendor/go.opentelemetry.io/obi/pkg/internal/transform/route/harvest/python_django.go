@@ -4,6 +4,7 @@
 package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/harvest"
 
 import (
+	"context"
 	"path/filepath"
 	"regexp"
 	"regexp/syntax"
@@ -408,9 +409,12 @@ func djangoRootFiles(files map[string][]djangoRoute, modules map[string]string) 
 // resolveDjangoRoutes expands module and named-list includes from inferred root
 // files. Each visit carries the mount prefix accumulated from its parents;
 // endpoint paths are published with that prefix and a leading slash.
-func resolveDjangoRoutes(root string, files map[string][]djangoRoute, routes map[string]struct{}) {
+func resolveDjangoRoutes(ctx context.Context, root string, files map[string][]djangoRoute, routes map[string]struct{}) error {
 	const maxIncludeDepth = 32
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	modules := indexDjangoModules(root, files)
 	// A file can contain several lists that include each other, so recursion
 	// tracking identifies both the file and the list being expanded.
@@ -421,6 +425,9 @@ func resolveDjangoRoutes(root string, files map[string][]djangoRoute, routes map
 	active := map[listKey]bool{}
 	var visit func(file, listName, prefix string)
 	visit = func(file, listName, prefix string) {
+		if ctx.Err() != nil {
+			return
+		}
 		key := listKey{file: file, name: listName}
 		if active[key] || len(active) >= maxIncludeDepth {
 			return
@@ -430,6 +437,9 @@ func resolveDjangoRoutes(root string, files map[string][]djangoRoute, routes map
 		defer delete(active, key)
 
 		for _, declaration := range files[file] {
+			if ctx.Err() != nil {
+				return
+			}
 			// Select this list's routes. Unassigned declarations, including those
 			// from i18n_patterns(), are treated as part of the file's urlpatterns.
 			if declaration.listName != listName &&
@@ -464,4 +474,5 @@ func resolveDjangoRoutes(root string, files map[string][]djangoRoute, routes map
 		// Included files are reached through their mounts rather than as roots.
 		visit(file, "urlpatterns", "")
 	}
+	return ctx.Err()
 }

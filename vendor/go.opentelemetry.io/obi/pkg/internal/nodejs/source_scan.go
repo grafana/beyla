@@ -6,6 +6,7 @@
 package nodejs // import "go.opentelemetry.io/obi/pkg/internal/nodejs"
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -54,7 +55,7 @@ func scanFileForSIGUSR1(path string) bool {
 func dirHasSIGUSR1Reference(dir string) bool {
 	found := false
 
-	_ = harvest.WalkJSFiles(dir, func(path string) error {
+	_ = harvest.WalkJSFiles(context.Background(), dir, func(path string) error {
 		if scanFileForSIGUSR1(path) {
 			found = true
 			return filepath.SkipAll

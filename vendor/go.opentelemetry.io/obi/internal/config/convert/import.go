@@ -30,7 +30,8 @@ var v2NetworkMetricsFeatureMask = export.FeatureNetwork |
 	export.FeatureNetworkInterZone |
 	export.FeatureNetworkFlowPackets
 
-var v2StatsMetricsFeatureMask = export.FeatureStats
+var v2StatsMetricsFeatureMask = export.FeatureStats |
+	export.FeatureStatsTCPResets
 
 // V2ToRuntime converts a config v2 extension shape into an OBI runtime
 // configuration.
@@ -92,6 +93,7 @@ func V2ToRuntime(src *schema.Extension) (*obi.Config, error) {
 	src = &normalized
 
 	cfg := runtimeConfigDefaults()
+	cfg.Attributes.UseV2Selection = true
 	applyV2Capture(&cfg, src, policy, complete)
 	applyV2Standalone(&cfg, src, complete)
 	if err := applyV2PeerMetadata(&cfg, src.Enrich, complete); err != nil {
@@ -1593,6 +1595,10 @@ func applyProtocolEnablement(cfg *obi.Config, instrumentation schema.Instrumenta
 	cfg.Traces.Instrumentations = applySignalEnablement(cfg.Traces.Instrumentations, instrumentation, "traces", complete)
 	cfg.OTELMetrics.Instrumentations = applySignalEnablement(cfg.OTELMetrics.Instrumentations, instrumentation, "metrics", complete)
 	cfg.Prometheus.Instrumentations = applySignalEnablement(cfg.Prometheus.Instrumentations, instrumentation, "metrics", complete)
+
+	if enabled := instrumentation.HTTP.Enabled.RequestPhaseSpans; enabled != nil {
+		cfg.Traces.DisableHTTPRequestPhaseSpans = !*enabled
+	}
 }
 
 func applySignalEnablement(
@@ -2622,6 +2628,8 @@ func statsFeatureMask(features []string) export.Features {
 			out |= export.FeatureStatsTCPRetransmits
 		case statsFeatureTCPIo:
 			out |= export.FeatureStatsTCPIo
+		case statsFeatureTCPResets:
+			out |= export.FeatureStatsTCPResets
 		}
 	}
 	return out

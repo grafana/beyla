@@ -533,6 +533,18 @@ transform_go_imports_and_paths() {
       "$OBI_DEST/http_go_otel_test.go"
   fi
 
+  # peer metadata suite: starting second-caller must not recreate the running workload and
+  # instrumenter containers it shares namespaces with (the extra `up` took ~20s and left
+  # the client workload unreachable).
+  if [[ -f "$OBI_DEST/peer_metadata_test.go" ]]; then
+    if ! grep -qF '"up", "--detach", "--no-build", "second-caller"' "$OBI_DEST/peer_metadata_test.go"; then
+      echo "ERROR: peer_metadata_test.go no longer starts second-caller as expected; update the peer metadata transform" >&2
+      exit 1
+    fi
+    sed_i -e 's|"up", "--detach", "--no-build", "second-caller"|"up", "--detach", "--no-build", "--no-recreate", "second-caller"|' \
+      "$OBI_DEST/peer_metadata_test.go"
+  fi
+
   # goautosdk fixtures: same situation as go_otel above. The Dockerfiles do
   # `COPY internal/test/integration/components/goautosdk/...`, a path that
   # only resolves inside .obi-src, so the build context must be pathObiSrc
@@ -652,6 +664,9 @@ adjust_docker_compose_paths() {
     # Volume mount that exposes the OBI repo root inside the container
     # (used by tests that `go test ./pkg/...` against OBI source).
     sed_i -e 's|\.\./\.\./\.\.:/src|../../../.obi-src:/src|g' "$file"
+    # Volume mount of OBI's .proto files (e.g. metadata.proto for grpcurl),
+    # which are not copied to the Beyla repo root.
+    sed_i -e 's|\.\./\.\./\.\./proto:|../../../.obi-src/proto:|g' "$file"
 
     # Redirect bare ./components/ and components/ paths to .obi-src.
     # These reference standalone app dirs that aren't copied to the

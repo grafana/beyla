@@ -13,6 +13,9 @@ import (
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 )
 
+// maxFailures caps the consecutive failures counted towards the refresh backoff.
+const maxFailures = 16
+
 type cachedPeer struct {
 	address   netip.Addr
 	lastUsed  time.Time
@@ -100,6 +103,14 @@ func (c *peerCache) knownCallers(address netip.Addr, now time.Time) []Caller {
 	return callers
 }
 
+// contains reports whether the address is cached, without changing its LRU recency.
+func (c *peerCache) contains(address netip.Addr) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.peers.Contains(address)
+}
+
 func (c *peerCache) notify() {
 	select {
 	case c.wake <- struct{}{}:
@@ -170,7 +181,7 @@ func (c *peerCache) complete(peer *cachedPeer, snapshot *cachedSnapshot, size in
 	peer.fetching = false
 
 	if snapshot == nil {
-		peer.failures = min(peer.failures+1, 16)
+		peer.failures = min(peer.failures+1, maxFailures)
 		peer.nextFetch = now.Add(jitter(backoff(c.cfg.RefreshInterval, peer.failures)))
 		c.notify()
 		return

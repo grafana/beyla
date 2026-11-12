@@ -19,6 +19,7 @@ const (
 	StatTypeTCPRetransmit           = StatType(StatsStatTypeK_statTypeTcpRetransmit)
 	StatTypeTCPIo                   = StatType(StatsStatTypeK_statTypeTcpIo)
 	StatTypeTCPSuccessfulConnection = StatType(StatsStatTypeK_statTypeTcpSuccessfulConnection)
+	StatTypeTCPReset                = StatType(StatsStatTypeK_statTypeTcpReset)
 )
 
 type TCPFailReasonType string
@@ -81,6 +82,23 @@ const (
 	CodeDirectionTransmit = NetworkIoDirectionCode(StatsNetworkIoDirectionDirectionTransmit)
 )
 
+type TCPResetCauseType string
+
+const (
+	ResetCauseApplication TCPResetCauseType = "application"
+	ResetCauseTimeout     TCPResetCauseType = "timeout"
+)
+
+// TCPResetCauseCode aliases the bpf2go-generated constants derived from
+// enum tcp_reset_cause in bpf/statsolly/types.h.
+type TCPResetCauseCode uint8
+
+const (
+	CodeResetCauseUnknown     = TCPResetCauseCode(StatsTcpResetCauseResetCauseUnknown)
+	CodeResetCauseApplication = TCPResetCauseCode(StatsTcpResetCauseResetCauseApplication)
+	CodeResetCauseTimeout     = TCPResetCauseCode(StatsTcpResetCauseResetCauseTimeout)
+)
+
 // Stat contains accumulated metrics from a stat, with extra metadata
 // that is added from the user space
 // REMINDER: any attribute here must be also added to the functions StatGetters
@@ -93,6 +111,7 @@ type Stat struct {
 	TCPSuccessfulConnection *TCPSuccessfulConnection `json:"-"`
 	TCPRetransmit           bool                     `json:"-"`
 	TCPIo                   *TCPIo                   `json:"-"`
+	TCPReset                *TCPReset                `json:"-"`
 
 	// Attrs of the flow record: source/destination, OBI IP, etc...
 	CommonAttrs pipe.CommonAttrs
@@ -115,6 +134,11 @@ type TCPSuccessfulConnection struct {
 type TCPIo struct {
 	Direction uint8  `json:"direction"`
 	Bytes     uint32 `json:"bytes"`
+}
+
+type TCPReset struct {
+	Direction uint8 `json:"direction"`
+	Cause     uint8 `json:"cause"`
 }
 
 // Conn mirrors connection_info_t from bpf/common/connection_info.h.
@@ -156,6 +180,15 @@ type StatsTCPRetransmit struct {
 	_     structs.HostLayout
 	Flags uint8
 	Pad   [3]uint8
+	Conn
+}
+
+type StatsTCPReset struct {
+	_         structs.HostLayout
+	Flags     uint8
+	Direction uint8
+	Cause     uint8
+	Pad       [1]uint8
 	Conn
 }
 

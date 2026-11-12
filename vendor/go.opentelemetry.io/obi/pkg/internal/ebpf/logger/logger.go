@@ -74,8 +74,9 @@ func (p *BPFLogger) Tracepoints() map[string]ebpfcommon.ProbeDesc {
 }
 
 func (p *BPFLogger) Run(ctx context.Context) {
-	ebpfcommon.ForwardRingbuf(
+	ebpfcommon.ForwardRingbufWithDrainContext(
 		&p.cfg.EBPF,
+		p.cfg.ShutdownTimeout,
 		p.bpfObjects.DebugEvents,
 		p.processLogEvent,
 		nil,
@@ -96,7 +97,7 @@ func logDebugEvent(log *slog.Logger, record *ringbuf.Record) {
 		"comm", unix.ByteSliceToString(event.Comm[:]))
 }
 
-func (p *BPFLogger) processLogEvent(record *ringbuf.Record) (request.Span, bool, error) {
+func (p *BPFLogger) processLogEvent(_ context.Context, record *ringbuf.Record) (request.Span, bool, error) {
 	logDebugEvent(p.log, record)
 	return request.Span{}, true, nil
 }

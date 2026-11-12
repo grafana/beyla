@@ -112,9 +112,11 @@ func ReadNodeSpanEventIntoSpan(record *ringbuf.Record) (request.Span, bool, erro
 
 	var traceID trace.TraceID
 	var parentSpanID trace.SpanID
+	traceFlags := uint8(TPFlagSampled)
 	if event.HasParentCtx != 0 {
 		traceID = trace.TraceID(event.ParentTraceId)
 		parentSpanID = trace.SpanID(event.ParentSpanId)
+		traceFlags = event.ParentFlags
 	} else if tid, err := parseTraceID(rec.TraceID); err == nil {
 		traceID = tid
 	}
@@ -148,6 +150,7 @@ func ReadNodeSpanEventIntoSpan(record *ringbuf.Record) (request.Span, bool, erro
 		TraceID:      traceID,
 		SpanID:       spanID,
 		ParentSpanID: parentSpanID,
+		TraceFlags:   traceFlags,
 		Status:       nodeStatusToCode(rec.Status),
 		Pid: request.PidInfo{
 			HostPID:   app.PID(event.Pid.HostPid),

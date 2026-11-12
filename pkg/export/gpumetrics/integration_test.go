@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/beyla/v3/pkg/internal/infraolly/gpu"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/beyla/v3/pkg/internal/infraolly/gpu"
 )
 
 // Exercise real sysfs discovery, sampling and Prometheus HTTP exposition together.

@@ -44,24 +44,10 @@ jobs:
         include:
           - platform: linux/amd64
             runner: ubuntu-latest
-            artifact_suffix: amd64-default
-            mode: default
-            buildkit_config: default
-          - platform: linux/amd64
-            runner: ubuntu-latest
-            artifact_suffix: amd64-serial
-            mode: serial
-            buildkit_config: serial
+            artifact_suffix: unmodified-control-amd64
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
-            artifact_suffix: arm64-default
-            mode: default
-            buildkit_config: default
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            artifact_suffix: arm64-serial
-            mode: serial
-            buildkit_config: serial
+            artifact_suffix: unmodified-control-arm64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,42 +57,18 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        if: matrix.buildkit_config == 'default'
 
-      - name: Set up Docker Buildx (serial)
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        if: matrix.buildkit_config == 'serial'
-        with:
-          buildkitd-config-inline: |
-            [worker.oci]
-              max-parallelism = 1
-
-      - name: Create instrumented diagnostic Dockerfile
+      - name: Create byte-identical unmodified-control Dockerfile
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
+          cp source/pkg/webhook/image/Dockerfile Dockerfile.diagnostic
+          cmp source/pkg/webhook/image/Dockerfile Dockerfile.diagnostic
+          sha256sum source/pkg/webhook/image/Dockerfile Dockerfile.diagnostic
 
-          source = Path("source/pkg/webhook/image/Dockerfile").read_text()
-          old = "RUN npm install"
-          new = '''RUN set -eu; \
-              node --version; npm --version; \
-              heartbeat_loop() { for heartbeat_iteration in $(seq 1 30); do sleep 10; echo "[npm-diagnostic] heartbeat $heartbeat_iteration"; ps -eo pid,ppid,stat,etime,args --forest; done; }; \
-              heartbeat_loop & heartbeat=$!; \
-              cleanup() { kill "$heartbeat" 2>/dev/null || true; wait "$heartbeat" 2>/dev/null || true; }; \
-              trap cleanup 0; \
-              status=0; npm install || status=$?; \
-              echo "[npm-diagnostic] npm install exited status=$status"; \
-              exit "$status"'''
-          if source.count(old) != 1:
-              raise SystemExit("expected exactly one npm install RUN")
-          Path("Dockerfile.diagnostic").write_text(source.replace(old, new))
-          PY
-
-      - name: Build full SDK image (${{ matrix.mode }}, bounded, cache-only)
+      - name: Build full SDK image (unmodified control, bounded, cache-only)
         run: |
           set -uo pipefail
-          echo "Build mode: ${{ matrix.mode }}"
+          echo "Build mode: unmodified-control; architecture: ${{ matrix.platform }}"
           mkdir -p diagnostic-logs
           timeout --signal=TERM --kill-after=15s 5m docker buildx build \
             --progress=plain --platform "${{ matrix.platform }}" \
@@ -119,7 +81,7 @@ jobs:
             {
               date -u +%FT%TZ
               echo "snapshot $snapshot"
-              echo "Build mode: ${{ matrix.mode }}"
+              echo "Build mode: unmodified-control; architecture: ${{ matrix.platform }}"
               free -m
               df -h
               docker ps --no-trunc
@@ -146,7 +108,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: full-sdk-build-diagnostic-${{ matrix.artifact_suffix }}
+          name: full-sdk-build-${{ matrix.artifact_suffix }}
           path: diagnostic-logs/
           if-no-files-found: warn
           retention-days: 3

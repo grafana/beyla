@@ -87,7 +87,7 @@ jobs:
           timeout --signal=TERM --kill-after=15s 5m docker buildx build \
             --progress=plain --platform "${{ matrix.platform }}" \
             --target build-nodejs-sdk -f Dockerfile.diagnostic \
-            --output type=cacheonly source \
+            --output type=cacheonly source/pkg/webhook/image \
             >diagnostic-logs/build.log 2>&1 &
           build_pid=$!
           for snapshot in $(seq 1 30); do

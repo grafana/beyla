@@ -1632,6 +1632,53 @@ url = "https://github.com/jdx/hk/releases/download/v2.11.1/hk-x86_64-pc-windows-
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
+[[tools.hadolint]]
+version = "2.15.1"
+backend = "aqua:hadolint/hadolint"
+specifiers = ["2.15.1"]
+
+[tools.hadolint."platforms.linux-arm64"]
+checksum = "sha256:f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d"
+url = "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-arm64"
+url_api = "https://api.github.com/repos/hadolint/hadolint/releases/assets/496546507"
+provenance = "github-attestations"
+
+[tools.hadolint."platforms.linux-arm64-musl"]
+checksum = "sha256:f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d"
+url = "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-arm64"
+url_api = "https://api.github.com/repos/hadolint/hadolint/releases/assets/496546507"
+provenance = "github-attestations"
+
+[tools.hadolint."platforms.linux-x64"]
+checksum = "sha256:c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507"
+url = "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64"
+url_api = "https://api.github.com/repos/hadolint/hadolint/releases/assets/496546506"
+provenance = "github-attestations"
+
+[tools.hadolint."platforms.linux-x64-musl"]
+checksum = "sha256:c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507"
+url = "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64"
+url_api = "https://api.github.com/repos/hadolint/hadolint/releases/assets/496546506"
+provenance = "github-attestations"
+
+[tools.hadolint."platforms.macos-arm64"]
+checksum = "sha256:5c09f3213f8e40406abe048233d985eebef336d4a6a20021be47fadb6cf480a2"
+url = "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-macos-arm64"
+url_api = "https://api.github.com/repos/hadolint/hadolint/releases/assets/496546505"
+provenance = "github-attestations"
+
+[tools.hadolint."platforms.macos-x64"]
+checksum = "sha256:ffe9bb18b23d5ed1eae50237aecdbb523d016e96da0bd4e7aa432040acfc3fde"
+url = "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-macos-x86_64"
+url_api = "https://api.github.com/repos/hadolint/hadolint/releases/assets/496546509"
+provenance = "github-attestations"
+
+[tools.hadolint."platforms.windows-x64"]
+checksum = "sha256:01d927294962b5387f9ead4f18679158452be4f17c765ad0bdffe5264b9c7b0a"
+url = "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-windows-x86_64.exe"
+url_api = "https://api.github.com/repos/hadolint/hadolint/releases/assets/496546508"
+provenance = "github-attestations"
+
 [[tools.pkl]]
 version = "0.32.2"
 backend = "aqua:apple/pkl"

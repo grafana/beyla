@@ -537,12 +537,12 @@ transform_go_imports_and_paths() {
   # instrumenter containers it shares namespaces with (the extra `up` took ~20s and left
   # the client workload unreachable).
   if [[ -f "$OBI_DEST/peer_metadata_test.go" ]]; then
-      if ! grep -qF '"up", "--detach", "--no-build", "second-caller"' "$OBI_DEST/peer_metadata_test.go"; then
-          echo "ERROR: peer_metadata_test.go no longer starts second-caller as expected; update the peer metadata transform" >&2
-          exit 1
-      fi
-      sed_i -e 's|"up", "--detach", "--no-build", "second-caller"|"up", "--detach", "--no-build", "--no-recreate", "second-caller"|' \
-          "$OBI_DEST/peer_metadata_test.go"
+    if ! grep -qF '"up", "--detach", "--no-build", "second-caller"' "$OBI_DEST/peer_metadata_test.go"; then
+      echo "ERROR: peer_metadata_test.go no longer starts second-caller as expected; update the peer metadata transform" >&2
+      exit 1
+    fi
+    sed_i -e 's|"up", "--detach", "--no-build", "second-caller"|"up", "--detach", "--no-build", "--no-recreate", "second-caller"|' \
+      "$OBI_DEST/peer_metadata_test.go"
   fi
 
   # goautosdk fixtures: same situation as go_otel above. The Dockerfiles do
@@ -652,21 +652,21 @@ apply_component_consolidation() {
 }
 
 adjust_docker_compose_paths() {
-    echo "  Adjusting docker-compose relative paths..."
-    find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" | while read -r file; do
-        # Build contexts → .obi-src (slash-suffixed first, then bare end-of-line)
-        # Depth matches upstream (3 levels), just redirect to .obi-src
-        sed_i -e 's|context: \.\./\.\./\.\./|context: ../../../.obi-src/|g' "$file"
-        sed_i -e 's|context: \.\./\.\./\.\.$|context: ../../../.obi-src|' "$file"
-        # Volume mounts: internal/ paths → .obi-src
-        # (testoutput paths are unchanged — depth matches upstream)
-        sed_i -e 's|\.\./\.\./\.\./internal/|../../../.obi-src/internal/|g' "$file"
-        # Volume mount that exposes the OBI repo root inside the container
-        # (used by tests that `go test ./pkg/...` against OBI source).
-        sed_i -e 's|\.\./\.\./\.\.:/src|../../../.obi-src:/src|g' "$file"
-        # Volume mount of OBI's .proto files (e.g. metadata.proto for grpcurl),
-        # which are not copied to the Beyla repo root.
-        sed_i -e 's|\.\./\.\./\.\./proto:|../../../.obi-src/proto:|g' "$file"
+  echo "  Adjusting docker-compose relative paths..."
+  find "$OBI_DEST" -maxdepth 1 -name "docker-compose*.yml" | while read -r file; do
+    # Build contexts → .obi-src (slash-suffixed first, then bare end-of-line)
+    # Depth matches upstream (3 levels), just redirect to .obi-src
+    sed_i -e 's|context: \.\./\.\./\.\./|context: ../../../.obi-src/|g' "$file"
+    sed_i -e 's|context: \.\./\.\./\.\.$|context: ../../../.obi-src|' "$file"
+    # Volume mounts: internal/ paths → .obi-src
+    # (testoutput paths are unchanged — depth matches upstream)
+    sed_i -e 's|\.\./\.\./\.\./internal/|../../../.obi-src/internal/|g' "$file"
+    # Volume mount that exposes the OBI repo root inside the container
+    # (used by tests that `go test ./pkg/...` against OBI source).
+    sed_i -e 's|\.\./\.\./\.\.:/src|../../../.obi-src:/src|g' "$file"
+    # Volume mount of OBI's .proto files (e.g. metadata.proto for grpcurl),
+    # which are not copied to the Beyla repo root.
+    sed_i -e 's|\.\./\.\./\.\./proto:|../../../.obi-src/proto:|g' "$file"
 
     # Redirect bare ./components/ and components/ paths to .obi-src.
     # These reference standalone app dirs that aren't copied to the

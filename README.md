@@ -260,20 +260,22 @@ Build the docker image with `mise run image:dev-build`.
 
 #### Formatting and linting code
 
-Beyla uses hk to orchestrate its Go linting and formatting checks:
+Beyla uses hk to orchestrate its linting and formatting checks:
 - `golangci-lint` for Go linting and the repository's gofmt/gci import formatting rules
-- `clang-format` for staged C/C++ formatting in the hk pre-commit hook
-- `clang:tidy` for static analysis of the C code
+- `clang-tidy` for static analysis of BPF C and header files
+- `clang-format` for C/C++ formatting
 
-Go linting and formatting are checked on pull requests. You can invoke the checks and formatters manually:
+Go linting/formatting and BPF clang-tidy are checked on pull requests. You can invoke the checks and formatters manually:
 
-- `mise run lint` runs the configured Go checks through hk; dashboard linting runs separately in CI with Grafana's pinned dashboard-linter action
-- `mise run lint:fix` applies Go formatting without staging changes
-- `mise run clang:tidy` invokes `clang:tidy` on the C/eBPF code
+- `mise run lint` runs the configured Go checks and BPF clang-tidy through hk; dashboard linting runs separately in CI with Grafana's pinned dashboard-linter action
+- `mise run lint:fix` applies configured Go and C/C++ formatting fixes without staging changes
+- `mise run clang:tidy` checks BPF C and header files with clang-tidy
 
-The hk pre-commit hook checks the root Go module when Go files are staged and
-applies C/C++ formatting to staged files. Run `mise run fmt` for Go formatting
-and `mise run clang:format` for C/C++ formatting.
+The hk pre-commit hook checks the root Go module when Go files are staged,
+checks BPF C/header files with clang-tidy, and applies C/C++ formatting to
+staged files. Run `mise run lint:fix` to apply Go and C/C++ formatting fixes
+without staging changes; `mise run fmt` and `mise run clang:format` remain
+compatibility aliases for that command.
 
 #### Running VM tests
 

@@ -85,6 +85,8 @@ golangci-lint = { version = "2.14.0" }
 hk = "2.11.1"
 shellcheck = "0.11.0"
 shfmt = "3.14.1"
+taplo = "0.10.0"
+pkl = "0.32.2"
 kind = "0.33.0"
 setup-envtest = "0.25.1"
 gotestsum = "1.13.0"

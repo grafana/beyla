@@ -74,6 +74,8 @@ assert {
     "shellcheck",
     "shfmt",
     "github:cpp-linter/clang-tools-static-binaries",
+    "taplo",
+    "pkl",
 } <= set(resolved["lint"])
 assert {"setup-envtest", "gotestsum"} <= set(resolved["unit"])
 assert {"java", "gradle"} <= set(resolved["release"])

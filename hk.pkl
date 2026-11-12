@@ -36,6 +36,9 @@ steps {
       effect = "write"
     }
   }
+  ["taplo-format"] = Builtins.taplo_format
+  ["pkl-format"] = Builtins.pkl_format
+  ["destroyed-symlinks"] = Builtins.destroyed_symlinks
   ["go-format"] = new Config.Step {
     glob = "**/*.go"
     dir = "."

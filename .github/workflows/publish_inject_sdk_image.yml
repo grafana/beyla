@@ -44,10 +44,24 @@ jobs:
         include:
           - platform: linux/amd64
             runner: ubuntu-latest
-            artifact_suffix: amd64
+            artifact_suffix: amd64-default
+            mode: default
+            buildkit_config: default
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            artifact_suffix: amd64-serial
+            mode: serial
+            buildkit_config: serial
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
-            artifact_suffix: arm64
+            artifact_suffix: arm64-default
+            mode: default
+            buildkit_config: default
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: arm64-serial
+            mode: serial
+            buildkit_config: serial
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,6 +71,15 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: matrix.buildkit_config == 'default'
+
+      - name: Set up Docker Buildx (serial)
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: matrix.buildkit_config == 'serial'
+        with:
+          buildkitd-config-inline: |
+            [worker.oci]
+              max-parallelism = 1
 
       - name: Create instrumented diagnostic Dockerfile
         run: |
@@ -80,13 +103,14 @@ jobs:
           Path("Dockerfile.diagnostic").write_text(source.replace(old, new))
           PY
 
-      - name: Build Node.js SDK target (bounded, cache-only)
+      - name: Build full SDK image (${{ matrix.mode }}, bounded, cache-only)
         run: |
           set -uo pipefail
+          echo "Build mode: ${{ matrix.mode }}"
           mkdir -p diagnostic-logs
           timeout --signal=TERM --kill-after=15s 5m docker buildx build \
             --progress=plain --platform "${{ matrix.platform }}" \
-            --target build-nodejs-sdk -f Dockerfile.diagnostic \
+            -f Dockerfile.diagnostic \
             --output type=cacheonly source/pkg/webhook/image \
             >diagnostic-logs/build.log 2>&1 &
           build_pid=$!
@@ -95,6 +119,9 @@ jobs:
             {
               date -u +%FT%TZ
               echo "snapshot $snapshot"
+              echo "Build mode: ${{ matrix.mode }}"
+              free -m
+              df -h
               docker ps --no-trunc
               docker stats --no-stream
               docker top "$(docker ps -q --filter name=buildx_buildkit | head -n1)" 2>&1 || true
@@ -119,7 +146,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: nodejs-build-diagnostic-${{ matrix.artifact_suffix }}
+          name: full-sdk-build-diagnostic-${{ matrix.artifact_suffix }}
           path: diagnostic-logs/
           if-no-files-found: warn
           retention-days: 3

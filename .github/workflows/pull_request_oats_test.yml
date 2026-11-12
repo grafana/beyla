@@ -79,6 +79,9 @@ jobs:
     needs: test-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # The shared Beyla test Dockerfile uses a BuildKit cache mount.
+      DOCKER_BUILDKIT: "1"
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}

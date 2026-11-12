@@ -116,6 +116,7 @@ jobs:
   resolve-version:
     if: github.event_name != 'workflow_dispatch' || inputs.diagnostic != true
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
       packages: read
@@ -175,6 +176,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || inputs.diagnostic != true
     needs: resolve-version
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 12
     permissions:
       contents: read
       packages: write
@@ -206,6 +208,7 @@ jobs:
 
       - name: Build and push by digest
         id: build
+        timeout-minutes: 10
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./pkg/webhook/image
@@ -234,6 +237,7 @@ jobs:
       - resolve-version
       - build
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       packages: write

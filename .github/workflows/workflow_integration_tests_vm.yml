@@ -228,6 +228,8 @@ jobs:
     name: kernel ${{ matrix.kernel.id }} ${{ matrix.test.description }}
     needs: [vm-test-matrix, prep]
     timeout-minutes: 45
+    env:
+      DOCKER_BUILDKIT: "1"
     permissions:
       contents: read
       pull-requests: write

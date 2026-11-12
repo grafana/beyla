@@ -509,20 +509,18 @@ transform_go_imports_and_paths() {
     sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
       "$OBI_DEST/dockerutil_test.go"
 
-    # The generated OBI test helper builds Beyla's image through the Moby SDK,
-    # not the Docker CLI. Explicitly select BuildKit there so Dockerfile cache
-    # mounts work; DOCKER_BUILDKIT does not select the SDK builder.
-    if ! grep -q 'Dockerfile: dockerfile,' "$OBI_DEST/dockerutil_test.go" ||
-      ! grep -q '"github.com/moby/moby/api/types/container"' "$OBI_DEST/dockerutil_test.go"; then
-      echo "ERROR: dockerutil_test.go ImageBuildOptions changed; update the BuildKit transform" >&2
+    # Build the transformed Beyla image with the Docker CLI. The Moby SDK
+    # BuildKit API requires a BuildKit session for registry metadata resolution,
+    # while the CLI uses DOCKER_BUILDKIT from the test job environment.
+    local obi_image_build='return buildDockerImage(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")'
+    if ! grep -qF "$obi_image_build" "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: dockerutil_test.go Beyla image build changed; update the CLI build transform" >&2
       exit 1
     fi
-    sed_i -e '/"github.com\/moby\/moby\/api\/types\/container"/a\	"github.com/moby/moby/api/types/build"' \
+    sed_i -e 's|return buildDockerImage(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")|return buildBeylaDockerImageCLI(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")|' \
       "$OBI_DEST/dockerutil_test.go"
-    sed_i -e '/Dockerfile: dockerfile,/a\		Version:    build.BuilderBuildKit,' \
-      "$OBI_DEST/dockerutil_test.go"
-    if ! grep -q 'Version:    build.BuilderBuildKit,' "$OBI_DEST/dockerutil_test.go"; then
-      echo "ERROR: failed to select BuildKit for generated OBI ImageBuild" >&2
+    if ! grep -qF 'return buildBeylaDockerImageCLI(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")' "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: failed to select CLI for generated Beyla image build" >&2
       exit 1
     fi
 

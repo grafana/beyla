@@ -9,9 +9,43 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/moby/moby/client"
 )
+
+// buildBeylaDockerImageCLI builds the generated OBI test's Beyla image using
+// the Docker CLI. Unlike the Moby SDK, the CLI supplies the BuildKit session
+// needed to resolve the image's registry metadata.
+func buildBeylaDockerImageCLI(ctx context.Context, output io.Writer, tag, dockerfile string) error {
+	buildContext, err := createBuildContext(pathRoot)
+	if err != nil {
+		return err
+	}
+	defer buildContext.Close()
+
+	cmd := exec.CommandContext(ctx, "docker", "build", "--quiet", "-t", tag, "-f", dockerfile, "-")
+	cmd.Env = dockerBuildKitEnvironment(os.Environ())
+	cmd.Stdin = buildContext
+	cmd.Stdout = output
+	cmd.Stderr = output
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("building Docker image %q: %w", tag, err)
+	}
+	return nil
+}
+
+func dockerBuildKitEnvironment(env []string) []string {
+	for i, entry := range env {
+		if strings.HasPrefix(entry, "DOCKER_BUILDKIT=") {
+			env[i] = "DOCKER_BUILDKIT=1"
+			return env
+		}
+	}
+	return append(env, "DOCKER_BUILDKIT=1")
+}
 
 // buildDockerImageWithContext builds a Docker image using contextDir as the
 // Docker build context root, rather than pathRoot (the Beyla repo root).

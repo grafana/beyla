@@ -76,6 +76,7 @@ assert {
     "github:cpp-linter/clang-tools-static-binaries",
     "taplo",
     "pkl",
+    "actionlint",
 } <= set(resolved["lint"])
 assert {"setup-envtest", "gotestsum"} <= set(resolved["unit"])
 assert {"java", "gradle"} <= set(resolved["release"])

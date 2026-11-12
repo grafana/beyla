@@ -52,8 +52,8 @@ jobs:
       - name: build matrix
         id: build-matrix
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run //oats:matrix >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run //oats:matrix >> "$GITHUB_OUTPUT"
 
   harness-unit-tests:
     name: "OATS harness unit tests"
@@ -159,7 +159,7 @@ jobs:
         env:
           MATRIX_BASENAME: ${{ matrix.basename }}
           TESTCASE_TIMEOUT: 5m
-        run: mise run //oats:test:$MATRIX_BASENAME
+        run: mise run "//oats:test:${MATRIX_BASENAME}"
 
       - name: Upload oats test logs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

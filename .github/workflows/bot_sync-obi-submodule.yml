@@ -35,7 +35,7 @@ jobs:
       - name: Get OBI short SHA
         id: obi-sha
         run: |
-          echo "sha=$(git -C .obi-src rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "sha=$(git -C .obi-src rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up mise
         uses: ./.github/actions/setup-mise

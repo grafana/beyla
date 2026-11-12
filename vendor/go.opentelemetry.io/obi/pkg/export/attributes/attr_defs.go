@@ -424,6 +424,10 @@ func getDefinitions(
 		},
 		HTTPServerDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpRoutes, &serverInfo},
+			Attributes: map[attr.Name]Default{
+				attr.HTTPUrlPath: false,
+				attr.ClientAddr:  false,
+			},
 		},
 		HTTPServerRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpRoutes, &serverInfo},
@@ -433,6 +437,9 @@ func getDefinitions(
 		},
 		HTTPClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientDurationRoutes, &httpClientInfo},
+			Attributes: map[attr.Name]Default{
+				attr.HTTPUrlPath: false,
+			},
 		},
 		HTTPClientRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientRoutes, &httpClientInfo},
@@ -508,6 +515,7 @@ func getDefinitions(
 				attr.GenAIToolCallArguments: false,
 				attr.GenAIToolCallResult:    false,
 				attr.GenAIResponseError:     false,
+				attr.OpenAIRequestQuestions: false,
 				attr.DBResponseError:        false,
 				// Conditionally Required or Recommended by OTel semconv, so emitted
 				// by default. Opt out via attributes.select.traces.exclude.
@@ -959,6 +967,13 @@ func getDefinitions(
 				attr.NetworkTCPHandshakeRole: false,
 			},
 		},
+		StatTCPResets.Section: {
+			SubGroups: []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkIoDirection:   true,
+				attr.NetworkTCPResetCause: false,
+			},
+		},
 
 		// span and service graph metrics don't yet implement attribute selection,
 		// but their values can still be filtered, so we list them here just to
@@ -994,8 +1009,8 @@ func copyDisabled(src AttrReportGroup) AttrReportGroup {
 	return dst
 }
 
-// filterOnlyAttributes are span attributes that no metric reports, but that
-// attribute filters still match on.
+// filterOnlyAttributes keeps span attributes available to filters
+// independently of metric reporting.
 var filterOnlyAttributes = []attr.Name{attr.HTTPUrlPath}
 
 // AllAttributeNames returns a set with all the names in the attributes database

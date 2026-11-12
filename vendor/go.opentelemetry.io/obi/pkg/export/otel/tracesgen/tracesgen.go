@@ -105,13 +105,17 @@ var (
 	genAIUsageCacheReadInputTokens     = attribute.Key("gen_ai.usage.cache_read.input_tokens")
 	genAIUsageReasoningOutputTokens    = attribute.Key("gen_ai.usage.reasoning.output_tokens")
 	openAIAPITypeKey                   = attribute.Key("openai.api.type")
+	openAIRequestQuestionsKey          = attribute.Key("openai.request.questions")
 	awsBedrockGuardrailIDKey           = attribute.Key("aws.bedrock.guardrail.id")
 	genAIResponseErrorControlKey       = attribute.Key("obi.internal.gen_ai.response.error")
 )
 
 type TraceSpanAndAttributes struct {
-	Span       *request.Span
-	Attributes []attribute.KeyValue
+	Span                     *request.Span
+	Attributes               []attribute.KeyValue
+	DisableRequestPhaseSpans bool
+	// RecordOnly spans are exported without the sampled flag, as the sampler decided
+	RecordOnly bool
 }
 
 type SpanAttr struct {
@@ -144,8 +148,9 @@ func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.N
 }
 
 type GroupSpansOptions struct {
-	RedactKeys           []string
-	SanitizeSQLQueryText bool
+	RedactKeys                   []string
+	SanitizeSQLQueryText         bool
+	DisableHTTPRequestPhaseSpans bool
 }
 
 func GroupSpansWithOptions(ctx context.Context, spans []request.Span, traceAttrs map[attr.Name]struct{}, sampler trace.Sampler, is instrumentations.InstrumentationSelection, opts GroupSpansOptions) map[svc.UID][]TraceSpanAndAttributes {
@@ -173,7 +178,7 @@ func GroupSpansWithOptions(ctx context.Context, spans []request.Span, traceAttrs
 		}
 
 		sr := spanSampler().ShouldSample(trace.SamplingParameters{
-			ParentContext: ctx,
+			ParentContext: samplingParentContext(ctx, span),
 			Name:          span.TraceName(),
 			TraceID:       span.TraceID,
 			Kind:          spanKind(span),
@@ -192,14 +197,40 @@ func GroupSpansWithOptions(ctx context.Context, spans []request.Span, traceAttrs
 		if responseErrorSelected {
 			exportAttrs = append(slices.Clone(samplerAttrs), genAIResponseErrorControlKey.Bool(true))
 		}
+
+		disableRequestPhaseSpans := span.Type == request.EventTypeHTTP && opts.DisableHTTPRequestPhaseSpans
+
 		group = append(group, TraceSpanAndAttributes{
-			Span:       span,
-			Attributes: exportAttrs,
+			Span:                     span,
+			Attributes:               exportAttrs,
+			DisableRequestPhaseSpans: disableRequestPhaseSpans,
+			RecordOnly:               sr.Decision == trace.RecordOnly,
 		})
 		spanGroups[span.Service.UID] = group
 	}
 
 	return spanGroups
+}
+
+// samplingParentContext gives parent-based samplers the parent's decision. eBPF
+// samples each span with its process's sampler, and under a parent-based one a
+// span keeps its parent's flags, so the span's own flags stand for the parent's.
+func samplingParentContext(ctx context.Context, span *request.Span) context.Context {
+	parentSpanID := span.ParentSpanID
+	if !parentSpanID.IsValid() && span.ParentConditional {
+		parentSpanID = span.SpanID
+	}
+
+	if !parentSpanID.IsValid() {
+		return ctx
+	}
+
+	return trace2.ContextWithSpanContext(ctx, trace2.NewSpanContext(trace2.SpanContextConfig{
+		TraceID:    span.TraceID,
+		SpanID:     parentSpanID,
+		TraceFlags: trace2.TraceFlags(span.TraceFlags),
+		Remote:     true,
+	}))
 }
 
 // GenerateTracesWithAttributes must remain public for collectors embedding OBI
@@ -267,7 +298,7 @@ func generateTracesWithAttributes(
 
 		t := span.Timings()
 		start := spanStartTime(t)
-		hasSubSpans := t.Start.After(start)
+		hasSubSpans := t.Start.After(start) && !spanWithAttributes.DisableRequestPhaseSpans
 
 		traceID := pcommon.TraceID(span.TraceID)
 		spanID := pcommon.SpanID(idgen.RandomSpanID())
@@ -275,9 +306,10 @@ func generateTracesWithAttributes(
 		if traceID.IsEmpty() {
 			traceID = pcommon.TraceID(idgen.RandomTraceID())
 		}
+		flags := exportedFlags(span, spanWithAttributes.RecordOnly)
 
 		if hasSubSpans {
-			createSubSpans(span, spanID, traceID, &ss, t)
+			createSubSpans(span, spanID, traceID, flags, &ss, t)
 		} else if span.SpanID.IsValid() {
 			spanID = pcommon.SpanID(span.SpanID)
 		}
@@ -291,6 +323,7 @@ func generateTracesWithAttributes(
 		// Set trace and span IDs
 		s.SetSpanID(spanID)
 		s.SetTraceID(traceID)
+		s.SetFlags(flags)
 		if span.ParentSpanID.IsValid() {
 			s.SetParentSpanID(pcommon.SpanID(span.ParentSpanID))
 		}
@@ -383,21 +416,30 @@ func SpanDiscarded(span *request.Span, is instrumentations.InstrumentationSelect
 	return request.IgnoreTraces(span) || span.Service.ExportsOTelTraces() || !acceptSpan(is, span)
 }
 
+// exportedFlags are the W3C trace flags of an exported span: exporting it means
+// it was sampled, unless the sampler only asked for it to be recorded
+func exportedFlags(span *request.Span, recordOnly bool) uint32 {
+	return uint32(trace2.TraceFlags(span.TraceFlags).WithSampled(!recordOnly))
+}
+
 // createSubSpans creates the internal spans for a request.Span
-func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pcommon.TraceID, ss *ptrace.ScopeSpans, t request.Timings) {
+func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pcommon.TraceID, flags uint32, ss *ptrace.ScopeSpans, t request.Timings) {
 	// Create a child span showing the queue time
 	spQ := ss.Spans().AppendEmpty()
 	spQ.SetName("in queue")
+	spQ.Attributes().PutStr(string(attr.OBIRequestPhase.OTEL()), "queue")
 	spQ.SetStartTimestamp(pcommon.NewTimestampFromTime(t.RequestStart))
 	spQ.SetKind(ptrace.SpanKindInternal)
 	spQ.SetEndTimestamp(pcommon.NewTimestampFromTime(t.Start))
 	spQ.SetTraceID(traceID)
 	spQ.SetSpanID(pcommon.SpanID(idgen.RandomSpanID()))
 	spQ.SetParentSpanID(parentSpanID)
+	spQ.SetFlags(flags)
 
 	// Create a child span showing the processing time
 	spP := ss.Spans().AppendEmpty()
 	spP.SetName("processing")
+	spP.Attributes().PutStr(string(attr.OBIRequestPhase.OTEL()), "processing")
 	spP.SetStartTimestamp(pcommon.NewTimestampFromTime(t.Start))
 	spP.SetKind(ptrace.SpanKindInternal)
 	spP.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
@@ -408,6 +450,7 @@ func createSubSpans(span *request.Span, parentSpanID pcommon.SpanID, traceID pco
 		spP.SetSpanID(pcommon.SpanID(idgen.RandomSpanID()))
 	}
 	spP.SetParentSpanID(parentSpanID)
+	spP.SetFlags(flags)
 	appendSpanLinks(spP, span.Links)
 }
 
@@ -807,7 +850,12 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			request.ServerPort(span.HostPort),
 		}
 		attrs = appendIfSet(attrs, request.ClientAddr, request.PeerAsClient(span))
-		attrs = appendIfSet(attrs, request.ServerAddr, request.SpanHost(span))
+		host := request.HostWithoutPort(request.HostFromSchemeHost(span))
+
+		if span.RequestAuthority != "" {
+			host = request.HostWithoutPort(span.RequestAuthority)
+		}
+		attrs = appendIfSet(attrs, request.ServerAddr, host)
 
 		if httpServerTransportScope(span.SubType) == httpTransportAll {
 			attrs = appendHTTPRequestBodySize(attrs, span, optionalAttrs)
@@ -876,9 +924,11 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			urlPath = span.FullPath
 		}
 		// Scrub sensitive query parameters from url.full.
+		var scrubbedQS string
 		if idx := strings.IndexByte(urlPath, '?'); idx >= 0 {
 			if qs := scrubQuery(urlPath[idx+1:], redactSet); qs != "" {
 				urlPath = urlPath[:idx+1] + qs
+				scrubbedQS = qs
 			} else {
 				urlPath = urlPath[:idx]
 			}
@@ -907,6 +957,11 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendURLTemplate(attrs, span, optionalAttrs)
 			attrs = appendHTTPRequestBodySize(attrs, span, optionalAttrs)
 			attrs = appendHTTPResponseBodySize(attrs, span, optionalAttrs)
+			if scrubbedQS != "" {
+				if _, ok := optionalAttrs[attr.HTTPUrlQuery]; ok {
+					attrs = append(attrs, request.HTTPUrlQuery(scrubbedQS))
+				}
+			}
 		}
 
 		if span.SubType == request.HTTPSubtypeElasticsearch && span.Elasticsearch != nil {
@@ -1031,6 +1086,11 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendIfSet(attrs, semconv.OpenAIResponseServiceTier, ai.ServiceTier)
 			attrs = appendIfSet(attrs, semconv.OpenAIResponseSystemFingerprint, ai.SystemFingerprint)
 			attrs = appendIfSet(attrs, openAIAPITypeKey.String, ai.APIType)
+			if ai.OperationName == request.DecisionOperationName {
+				if _, ok := optionalAttrs[attr.OpenAIRequestQuestions]; ok {
+					attrs = appendIfSet(attrs, openAIRequestQuestionsKey.String, ai.Request.GetQuestions())
+				}
+			}
 			if _, ok := optionalAttrs[attr.GenAIInput]; ok {
 				attrs = appendIfSet(attrs, semconv.GenAIInputMessagesKey.String, ai.Request.GetInput())
 			}
@@ -1289,6 +1349,9 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 				attrs = append(attrs, semconv.GenAIResponseModel(ai.Request.Model))
 			}
 			attrs = append(attrs, genAIUsageAttributes(span)...)
+			if ai.Usage.InputDetails != nil {
+				attrs = appendGenAITokenCount(attrs, genAIUsageCacheReadInputTokens, ai.Usage.InputDetails.CachedTokens)
+			}
 			if reasons := ai.GetFinishReasons(); len(reasons) > 0 {
 				attrs = append(attrs, semconv.GenAIResponseFinishReasons(reasons...))
 			}
@@ -1299,7 +1362,9 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 				attrs = appendIfSet(attrs, semconv.GenAIInputMessagesKey.String, ai.Request.GetInput())
 			}
 			if _, ok := optionalAttrs[attr.GenAIOutput]; ok {
-				attrs = appendIfSet(attrs, semconv.GenAIOutputMessagesKey.String, ai.GetOutput())
+				if ai.OperationName != request.EmbeddingOperationName {
+					attrs = appendIfSet(attrs, semconv.GenAIOutputMessagesKey.String, ai.GetOutput())
+				}
 			}
 			if _, ok := optionalAttrs[attr.GenAIInstructions]; ok {
 				if ai.Request.Instructions != "" {
@@ -1309,6 +1374,11 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			if _, ok := optionalAttrs[attr.GenAITools]; ok {
 				if len(ai.Request.Tools) > 0 {
 					attrs = appendIfSet(attrs, semconv.GenAIToolDefinitionsKey.String, request.NormalizeToolDefinitions(ai.Request.Tools))
+				}
+			}
+			if ai.OperationName == request.EmbeddingOperationName {
+				if dims := ai.GetEmbeddingDimensions(); dims > 0 {
+					attrs = append(attrs, semconv.GenAIEmbeddingsDimensionCount(dims))
 				}
 			}
 		}

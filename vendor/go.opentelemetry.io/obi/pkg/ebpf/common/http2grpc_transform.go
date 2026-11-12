@@ -86,12 +86,13 @@ type h2StreamMeta struct {
 }
 
 type h2RequestMeta struct {
-	method   string
-	path     string
-	fullPath string
-	host     string
-	hostPort int
-	grpc     bool
+	method    string
+	path      string
+	fullPath  string
+	host      string
+	hostPort  int
+	grpc      bool
+	authority string
 }
 
 func byteFramer(data []uint8) *http2.Framer {
@@ -438,7 +439,7 @@ func splitAuthority(authority string) (host string, port int) {
 	return h, port
 }
 
-func http2InfoToSpan(info *BPFHTTP2Info, method, path, fullPath, peer, host string, hostPort int, status int, protocol Protocol) request.Span {
+func http2InfoToSpan(info *BPFHTTP2Info, method, path, fullPath, peer, host string, hostPort int, status int, protocol Protocol, authority string) request.Span {
 	return request.Span{
 		Type:              info.eventType(protocol),
 		ProtoVersion:      request.ProtoVersionHTTP2,
@@ -464,6 +465,7 @@ func http2InfoToSpan(info *BPFHTTP2Info, method, path, fullPath, peer, host stri
 			UserPID:   app.PID(info.Pid.UserPid),
 			Namespace: info.Pid.Ns,
 		},
+		RequestAuthority: authority,
 	}
 }
 
@@ -646,7 +648,7 @@ func http2EventToSpan(parseContext *EBPFParseContext, pending *pendingH2Event) (
 				host, hostPort = splitAuthority(authority)
 			}
 
-			return http2InfoToSpan(event, method, path, fullPath, peer, host, hostPort, status, eventType), false, nil
+			return http2InfoToSpan(event, method, path, fullPath, peer, host, hostPort, status, eventType, authority), false, nil
 		}
 	}
 
@@ -725,12 +727,13 @@ func readHTTP2HeaderEvent(parseContext *EBPFParseContext, event *BPFHTTP2Info) e
 		}
 		if !ignore && !stream.requestOK {
 			stream.request = h2RequestMeta{
-				method:   span.Method,
-				path:     span.Path,
-				fullPath: span.FullPath,
-				host:     span.Host,
-				hostPort: span.HostPort,
-				grpc:     h2SpanIsGRPC(span),
+				method:    span.Method,
+				path:      span.Path,
+				fullPath:  span.FullPath,
+				host:      span.Host,
+				hostPort:  span.HostPort,
+				grpc:      h2SpanIsGRPC(span),
+				authority: span.RequestAuthority,
 			}
 			stream.requestOK = true
 		}
@@ -816,7 +819,7 @@ func http2FromBuffers(parseContext *EBPFParseContext, event *BPFHTTP2Info) (requ
 		hostPort = cached.hostPort
 	}
 	span := http2InfoToSpan(
-		event, cached.method, cached.path, cached.fullPath, peer, host, hostPort, status, protocol,
+		event, cached.method, cached.path, cached.fullPath, peer, host, hostPort, status, protocol, cached.authority,
 	)
 	return span, false, nil
 }

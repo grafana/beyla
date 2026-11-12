@@ -13,22 +13,23 @@ import (
 // out of its v1 loader. The exported fields match that struct so FromOBI and
 // AsOBI copy them by name.
 type PeerMetadataConfig struct {
-	Enabled          bool                  `yaml:"enabled" env:"BEYLA_PEER_METADATA_ENABLED"`
-	Mode             peer.Mode             `yaml:"mode" env:"BEYLA_PEER_METADATA_MODE" validate:"omitempty,oneof=peer central"`
-	ListenAddress    string                `yaml:"listen_address" env:"BEYLA_PEER_METADATA_LISTEN_ADDRESS"`
-	Port             int                   `yaml:"port" env:"BEYLA_PEER_METADATA_PORT"`
-	PeerCIDRs        []string              `yaml:"peer_cidrs" env:"BEYLA_PEER_METADATA_PEER_CIDRS" envSeparator:","`
-	RefreshInterval  time.Duration         `yaml:"refresh_interval" env:"BEYLA_PEER_METADATA_REFRESH_INTERVAL" validate:"gte=1ms"`
-	CallerTTL        time.Duration         `yaml:"caller_ttl" env:"BEYLA_PEER_METADATA_CALLER_TTL" validate:"gte=1ms"`
-	CacheTTL         time.Duration         `yaml:"cache_ttl" env:"BEYLA_PEER_METADATA_CACHE_TTL" validate:"gte=1ms"`
-	RequestTimeout   time.Duration         `yaml:"request_timeout" env:"BEYLA_PEER_METADATA_REQUEST_TIMEOUT" validate:"gte=1ms"`
-	MaxPeers         int                   `yaml:"max_peers" env:"BEYLA_PEER_METADATA_MAX_PEERS" validate:"gt=0"`
-	MaxConcurrent    int                   `yaml:"max_concurrent" env:"BEYLA_PEER_METADATA_MAX_CONCURRENT" validate:"gt=0"`
-	MaxCallerEntries int                   `yaml:"max_caller_entries" env:"BEYLA_PEER_METADATA_MAX_CALLER_ENTRIES" validate:"gt=0"`
-	MaxResponseBytes int                   `yaml:"max_response_bytes" env:"BEYLA_PEER_METADATA_MAX_RESPONSE_BYTES" validate:"gt=0"`
-	MaxCacheBytes    int                   `yaml:"max_cache_bytes" env:"BEYLA_PEER_METADATA_MAX_CACHE_BYTES" validate:"gt=0"`
-	Token            string                `yaml:"token" env:"BEYLA_PEER_METADATA_TOKEN"`
-	TLS              PeerMetadataTLSConfig `yaml:"tls"`
+	Enabled          bool                       `yaml:"enabled" env:"BEYLA_PEER_METADATA_ENABLED"`
+	Mode             peer.Mode                  `yaml:"mode" env:"BEYLA_PEER_METADATA_MODE" validate:"omitempty,oneof=peer central"`
+	ListenAddress    string                     `yaml:"listen_address" env:"BEYLA_PEER_METADATA_LISTEN_ADDRESS"`
+	Port             int                        `yaml:"port" env:"BEYLA_PEER_METADATA_PORT"`
+	PeerCIDRs        []string                   `yaml:"peer_cidrs" env:"BEYLA_PEER_METADATA_PEER_CIDRS" envSeparator:","`
+	RefreshInterval  time.Duration              `yaml:"refresh_interval" env:"BEYLA_PEER_METADATA_REFRESH_INTERVAL" validate:"gte=1ms"`
+	CallerTTL        time.Duration              `yaml:"caller_ttl" env:"BEYLA_PEER_METADATA_CALLER_TTL" validate:"gte=1ms"`
+	CacheTTL         time.Duration              `yaml:"cache_ttl" env:"BEYLA_PEER_METADATA_CACHE_TTL" validate:"gte=1ms"`
+	RequestTimeout   time.Duration              `yaml:"request_timeout" env:"BEYLA_PEER_METADATA_REQUEST_TIMEOUT" validate:"gte=1ms"`
+	MaxPeers         int                        `yaml:"max_peers" env:"BEYLA_PEER_METADATA_MAX_PEERS" validate:"gt=0"`
+	MaxConcurrent    int                        `yaml:"max_concurrent" env:"BEYLA_PEER_METADATA_MAX_CONCURRENT" validate:"gt=0"`
+	MaxCallerEntries int                        `yaml:"max_caller_entries" env:"BEYLA_PEER_METADATA_MAX_CALLER_ENTRIES" validate:"gt=0"`
+	MaxResponseBytes int                        `yaml:"max_response_bytes" env:"BEYLA_PEER_METADATA_MAX_RESPONSE_BYTES" validate:"gt=0"`
+	MaxCacheBytes    int                        `yaml:"max_cache_bytes" env:"BEYLA_PEER_METADATA_MAX_CACHE_BYTES" validate:"gt=0"`
+	Token            string                     `yaml:"token" env:"BEYLA_PEER_METADATA_TOKEN"`
+	TLS              PeerMetadataTLSConfig      `yaml:"tls"`
+	Central          peer.MetadataCentralConfig `yaml:"central"`
 }
 
 // PeerMetadataTLSConfig is the v1 TLS configuration for peer metadata exchange.

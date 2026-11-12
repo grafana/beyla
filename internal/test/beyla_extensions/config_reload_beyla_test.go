@@ -39,11 +39,19 @@ func TestConfigReloadV1(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, compose.Close()) })
 	require.NoError(t, compose.Up())
 
+	// latchsrv serves one connection at a time, so an idle pooled connection
+	// can prevent it from accepting the next request on a new connection.
+	httpClient := &http.Client{
+		Transport: &http.Transport{DisableKeepAlives: true},
+		Timeout:   3 * time.Minute,
+	}
+	t.Cleanup(httpClient.CloseIdleConnections)
+
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
-		ti.DoHTTPGet(ct, configReloadServerB+"/ready", http.StatusOK)
+		ti.DoHTTPGetWithClient(ct, httpClient, configReloadServerB+"/ready", http.StatusOK)
 	}, testTimeout, 250*time.Millisecond)
-	waitForReloadTrace(t, "config-reload-a", configReloadServerA, "/initial-selection")
-	assertNoReloadTrace(t, "config-reload-b", configReloadServerB, "/initially-excluded")
+	waitForReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/initial-selection")
+	assertNoReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/initially-excluded")
 
 	cl, err := client.New(client.FromEnv)
 	require.NoError(t, err)
@@ -63,28 +71,28 @@ func TestConfigReloadV1(t *testing.T) {
 		[]byte(configReloadV1FirstDefinition+"\n"+secondDefinition), 1)
 	replaceReloadConfig(t, configPath, both)
 	waitForReloadSelection(t, compose, serverPIDs, "server-a", "server-b")
-	waitForReloadTrace(t, "config-reload-b", configReloadServerB, "/added-selection")
-	waitForReloadTrace(t, "config-reload-a", configReloadServerA, "/retained-selection")
+	waitForReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/added-selection")
+	waitForReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/retained-selection")
 
 	t.Log("remove the first definition while retaining the second")
 	onlyB := bytes.Replace(initial, []byte(configReloadV1FirstDefinition), []byte(secondDefinition), 1)
 	replaceReloadConfig(t, configPath, onlyB)
 	waitForReloadSelection(t, compose, serverPIDs, "server-b")
-	waitForReloadTrace(t, "config-reload-b", configReloadServerB, "/retained-after-removal")
-	assertNoReloadTrace(t, "config-reload-a", configReloadServerA, "/removed-selection")
+	waitForReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/retained-after-removal")
+	assertNoReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/removed-selection")
 
 	t.Log("reject a sampler change together with a selection change")
 	incompatible := bytes.Replace(initial, []byte("name: always_on"), []byte("name: always_off"), 1)
 	replaceReloadConfig(t, configPath, incompatible)
 	waitForBeylaReloadRejection(t, compose)
-	waitForReloadTrace(t, "config-reload-b", configReloadServerB, "/after-rejection")
-	assertNoReloadTrace(t, "config-reload-a", configReloadServerA, "/rejected-selection")
+	waitForReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/after-rejection")
+	assertNoReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/rejected-selection")
 
 	t.Log("accept a compatible edit after the rejection")
 	replaceReloadConfig(t, configPath, initial)
 	waitForReloadSelection(t, compose, serverPIDs, "server-a")
-	waitForReloadTrace(t, "config-reload-a", configReloadServerA, "/recovered-selection")
-	assertNoReloadTrace(t, "config-reload-b", configReloadServerB, "/excluded-after-recovery")
+	waitForReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/recovered-selection")
+	assertNoReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/excluded-after-recovery")
 
 	after, err := cl.ContainerInspect(t.Context(), beylaID, client.ContainerInspectOptions{})
 	require.NoError(t, err)

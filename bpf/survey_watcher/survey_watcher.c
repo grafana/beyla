@@ -20,7 +20,7 @@ char LICENSE[] SEC("license") = "Dual MIT/GPL";
 
 struct survey_process {
   u64 start_time;
-  pid_info id;
+  struct pid_info id;
   u32 reserved; // Explicit padding keeps map keys fully initialized.
 };
 
@@ -109,6 +109,7 @@ static __always_inline u8 port_flags(u16 port) {
 // attempts, Unix sockets, and io_uring operations. There is deliberately no OBI
 // PID filter.
 SEC("kprobe/security_socket_connect")
+// NOLINTNEXTLINE(misc-unused-parameters): BPF hook ABI requires context.
 int survey_watch_connect(void *ctx) {
   remember_socket((struct task_struct *)bpf_get_current_task(), SURVEY_SOCK_ANY,
                   true);
@@ -116,6 +117,7 @@ int survey_watch_connect(void *ctx) {
 }
 
 SEC("kprobe/security_socket_listen")
+// NOLINTNEXTLINE(misc-unused-parameters): BPF hook ABI requires context.
 int BPF_KPROBE(survey_watch_listen, struct socket *sock) {
   struct sock *sk = BPF_CORE_READ(sock, sk);
   u16 port = BPF_CORE_READ(sk, __sk_common.skc_num);
@@ -126,6 +128,7 @@ int BPF_KPROBE(survey_watch_listen, struct socket *sock) {
 }
 
 SEC("tracepoint/sched/sched_process_exit")
+// NOLINTNEXTLINE(misc-unused-parameters): BPF hook ABI requires context.
 int survey_watch_exit(void *ctx) {
   struct task_struct *task = (struct task_struct *)bpf_get_current_task();
 

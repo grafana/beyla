@@ -44,7 +44,17 @@ const (
 	configVersionV2 = "v2"
 )
 
+// nolint:cyclop
 func main() {
+	// `beyla config validate|migrate` is OBI's config command group. It reads OBI v1 files, so
+	// it needs the same BEYLA_* to OTEL_EBPF_* environment mirroring as the regular config loader.
+	if len(os.Args) > 1 && os.Args[1] == "config" {
+		beyla.OverrideOBIGlobalConfig()
+		if handled, code := configbridge.RunConfigCommand(os.Args[1:], os.Stdout, os.Stderr); handled {
+			os.Exit(code)
+		}
+	}
+
 	lvl := slog.LevelVar{}
 	lvl.Set(slog.LevelInfo)
 	// Bootstrap logger. The configured handler can only be installed once the

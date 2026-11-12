@@ -66,10 +66,25 @@ func StatGetters(name attr.Name) (attributes.Getter[*Stat, attribute.KeyValue], 
 	case attr.NetworkIoDirection:
 		getter = func(s *Stat) attribute.KeyValue {
 			var direction uint8
-			if s.TCPIo != nil {
+			switch {
+			case s.TCPIo != nil:
 				direction = s.TCPIo.Direction
+			case s.TCPReset != nil:
+				direction = s.TCPReset.Direction
 			}
 			return attribute.String(string(attr.NetworkIoDirection), networkIoDirectionStr(NetworkIoDirectionCode(direction)))
+		}
+	case attr.NetworkTCPResetCause:
+		getter = func(s *Stat) attribute.KeyValue {
+			if s.TCPReset == nil {
+				return attribute.KeyValue{}
+			}
+			// the cause is only set when it can be inferred
+			cause, ok := tcpResetCauseStr(TCPResetCauseCode(s.TCPReset.Cause))
+			if !ok {
+				return attribute.KeyValue{}
+			}
+			return attribute.String(string(attr.NetworkTCPResetCause), cause)
 		}
 
 	default:
@@ -80,7 +95,14 @@ func StatGetters(name attr.Name) (attributes.Getter[*Stat, attribute.KeyValue], 
 
 func StatStringGetters(name attr.Name) (attributes.Getter[*Stat, string], bool) {
 	if g, ok := StatGetters(name); ok {
-		return func(s *Stat) string { return g(s).Value.Emit() }, true
+		return func(s *Stat) string {
+			// an invalid KeyValue means "omit this attribute": map it to the empty
+			// label value rather than Value.Emit()'s "unknown" placeholder
+			if kv := g(s); kv.Valid() {
+				return kv.Value.Emit()
+			}
+			return ""
+		}, true
 	}
 	return nil, false
 }
@@ -123,4 +145,15 @@ func networkIoDirectionStr(d NetworkIoDirectionCode) string {
 		return string(DirectionReceive)
 	}
 	return ""
+}
+
+func tcpResetCauseStr(c TCPResetCauseCode) (string, bool) {
+	switch c {
+	case CodeResetCauseApplication:
+		return string(ResetCauseApplication), true
+	case CodeResetCauseTimeout:
+		return string(ResetCauseTimeout), true
+	default:
+		return "", false
+	}
 }

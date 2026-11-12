@@ -13,8 +13,8 @@ EXCLUDE_PATTERN="${2:-common}"
 TEST_DIRS=$(find "$SEARCH_DIR" -name "*_test.go" | grep -v "$EXCLUDE_PATTERN" | sort | xargs dirname | xargs basename -a | sort -u)
 
 if [ -z "$TEST_DIRS" ]; then
-    echo "ERROR: No test directories found in $SEARCH_DIR" >&2
-    exit 1
+  echo "ERROR: No test directories found in $SEARCH_DIR" >&2
+  exit 1
 fi
 
 # Count directories
@@ -27,17 +27,17 @@ FIRST=true
 SHARD_ID=0
 
 for dir in $TEST_DIRS; do
-    if [ "$FIRST" = "false" ]; then
-        MATRIX_JSON+=","
-    fi
-    FIRST=false
-    
-    # Each shard runs all tests in its package directory
-    MATRIX_JSON+="{\"id\":$SHARD_ID,\"basename\":\"$dir\",\"test_pattern\":\"./$SEARCH_DIR/$dir/...\"}"
-    
-    echo "Shard $SHARD_ID: $dir" >&2
-    
-    SHARD_ID=$((SHARD_ID + 1))
+  if [ "$FIRST" = "false" ]; then
+    MATRIX_JSON+=","
+  fi
+  FIRST=false
+
+  # Each shard runs all tests in its package directory
+  MATRIX_JSON+="{\"id\":$SHARD_ID,\"basename\":\"$dir\",\"test_pattern\":\"./$SEARCH_DIR/$dir/...\"}"
+
+  echo "Shard $SHARD_ID: $dir" >&2
+
+  SHARD_ID=$((SHARD_ID + 1))
 done
 
 MATRIX_JSON+=']}'

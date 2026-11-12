@@ -90,7 +90,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	))
 
 	processEventsCloudDecorated := msg2.QueueFromConfig[exec.ProcessEvent](obiCfg, "processEventsCloudDecorated")
-	swi.Add(transform.CloudProcessEventDecoratorProvider(
+	swi.Add(transform.CloudProcessEventDecoratorProviderWithConfig(
 		ctxInfo, obiCfg.NameResolver, processEventsDockerDecorated, processEventsCloudDecorated,
 	), swarm.WithID("CloudProcessEventDecorator"))
 

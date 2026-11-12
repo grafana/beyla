@@ -39,8 +39,8 @@ func applyV2PeerMetadata(cfg *obi.Config, enrich *schema.Enrich, complete bool) 
 			CAFile:     src.TLS.CAFile,
 			ServerName: src.TLS.ServerName,
 		},
-		// Config v2 does not expose the exchange mode yet, so the runtime default is kept.
-		Mode: cfg.PeerMetadata.Mode,
+		Mode:    peer.Mode(src.Mode),
+		Central: peer.MetadataCentralConfig{Address: src.Central.Address},
 	}
 
 	if !complete {
@@ -58,6 +58,7 @@ func peerMetadataEnrichment(cfg peer.MetadataConfig) schema.PeerMetadataEnricher
 	cfg = cfg.WithDefaults()
 	return schema.PeerMetadataEnricher{
 		Enabled:          cfg.Enabled,
+		Mode:             schema.PeerMetadataMode(cfg.Mode),
 		ListenAddress:    cfg.ListenAddress,
 		Port:             cfg.Port,
 		PeerCIDRs:        cloneStrings(cfg.PeerCIDRs),
@@ -78,5 +79,6 @@ func peerMetadataEnrichment(cfg peer.MetadataConfig) schema.PeerMetadataEnricher
 			CAFile:     cfg.TLS.CAFile,
 			ServerName: cfg.TLS.ServerName,
 		},
+		Central: schema.PeerMetadataCentral{Address: cfg.Central.Address},
 	}
 }

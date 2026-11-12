@@ -12,4 +12,4 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go-licenses report \
   --ignore encoding --ignore reflect --ignore fmt --ignore log --ignore maps --ignore errors --ignore io \
   --ignore slices --ignore runtime --ignore syscall --ignore time --ignore sync --ignore sort --ignore bytes \
   --ignore os --ignore regex --ignore internal --ignore math --ignore unicode --ignore go.opentelemetry.io/obi \
-  ./... 2>/dev/null | sed 's/\r$//' > third_party_licenses.csv
+  ./... 2>/dev/null | sed 's/\r$//' >third_party_licenses.csv

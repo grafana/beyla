@@ -5,6 +5,7 @@ package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,7 @@ const MaxJSFileScanBytes int64 = 10 * 1024 * 1024
 const (
 	maxNestDecoratorValues = 64
 	maxNestRouteVariants   = 256
+	maxJSStatementBytes    = 4 * 1024
 )
 
 // /root is purposefully missing, since we need it to star the file walk
@@ -1295,7 +1297,11 @@ func ScanJSFileLines(path string, fn func(line string) bool) error {
 	return scanner.Err()
 }
 
-func (e *RouteExtractor) scanFile(filePath string) error {
+func (e *RouteExtractor) scanFile(ctx context.Context, filePath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	file, ok, err := openJSFileForScan(filePath)
 	if err != nil {
 		return err
@@ -1321,6 +1327,10 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 	e.urlPatternCall = nil
 
 	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		lineNum++
 		line = scanner.Text()
 		if line == "" || strings.HasPrefix(line, "//") {
@@ -1329,10 +1339,10 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 		if strings.Contains(line, ";") {
 			save = ""
 		}
-		if save != "" {
+		if save != "" && len(save)+1+len(line) <= maxJSStatementBytes {
 			line = save + "\n" + line
-			save = ""
 		}
+		save = ""
 		trimmed := strings.TrimSpace(line)
 
 		// Skip comments and empty lines
@@ -1429,7 +1439,11 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 			continue
 		}
 
-		save = line
+		// Only buffer unfinished calls, and bound the text rescanned by the
+		// regexes when a call never closes.
+		if len(line) <= maxJSStatementBytes && hasUnclosedJSCall(line) {
+			save = line
+		}
 	}
 
 	// the file may end while a method decorator stack or a URLPattern call is
@@ -1441,16 +1455,36 @@ func (e *RouteExtractor) scanFile(filePath string) error {
 		return err
 	}
 
-	return nil
+	return ctx.Err()
 }
 
-func (e *RouteExtractor) ScanDirectory(root string) error {
+func hasUnclosedJSCall(line string) bool {
+	depth := 0
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case '\'', '"', '`':
+			i = endOfJSString(line, i)
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		}
+	}
+	return depth > 0
+}
+
+func (e *RouteExtractor) ScanDirectory(ctx context.Context, root string) error {
 	walk := WalkJSFiles
 	if e.compiled {
 		walk = WalkCompiledJSFiles
 	}
-	return walk(root, func(path string) error {
-		if err := e.scanFile(path); err != nil {
+	return walk(ctx, root, func(path string) error {
+		if err := e.scanFile(ctx, path); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			e.log.Debug("error processing file", "file", path, "error", err)
 		}
 		return nil
@@ -1534,10 +1568,14 @@ func (e *RouteExtractor) CleanupRegexPath(path string) string {
 	return pattern
 }
 
-func (e *RouteExtractor) GetHarvestedRoutes() []string {
+func (e *RouteExtractor) GetHarvestedRoutes(ctx context.Context) ([]string, error) {
 	dedup := map[string]struct{}{}
 
 	for _, r := range e.routes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		var route string
 		if r.Path == "/" {
 			// the root route survives cleanup so that the version and global
@@ -1576,7 +1614,7 @@ func (e *RouteExtractor) GetHarvestedRoutes() []string {
 		result = append(result, k)
 	}
 
-	return result
+	return result, ctx.Err()
 }
 
 // testing
@@ -1644,28 +1682,29 @@ var compiledSkipDirs = func() map[string]string {
 // source file found (.js, .ts, .mjs, .cjs) that is not larger than
 // MaxJSFileScanBytes. The callback can return filepath.SkipAll to stop the walk
 // early.
-func WalkJSFiles(root string, fn func(path string) error) error {
-	return filepath.Walk(root, newJSFileWalker(root, skipDirs, false, fn))
+func WalkJSFiles(ctx context.Context, root string, fn func(path string) error) error {
+	return filepath.Walk(root, newJSFileWalker(ctx, root, skipDirs, fn))
 }
 
 // WalkCompiledJSFiles is WalkJSFiles for compiled output: it descends into
 // compiled-output directories (dist, build) — including when root itself is
 // one, as happens when the process entrypoint is an absolute path like
 // /app/dist/main.js — so apps shipping only compiled code can be scanned.
-func WalkCompiledJSFiles(root string, fn func(path string) error) error {
-	return filepath.Walk(root, newJSFileWalker(root, compiledSkipDirs, true, fn))
+func WalkCompiledJSFiles(ctx context.Context, root string, fn func(path string) error) error {
+	return filepath.Walk(root, newJSFileWalker(ctx, root, compiledSkipDirs, fn))
 }
 
-func newJSFileWalker(root string, skip map[string]string, scanRoot bool, fn func(path string) error) filepath.WalkFunc {
+func newJSFileWalker(ctx context.Context, root string, skip map[string]string, fn func(path string) error) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		if err != nil {
 			return err
 		}
 
 		if info.IsDir() {
-			if scanRoot && path == root {
-				return nil
-			}
 			name := info.Name()
 			if name == "root" && path != root {
 				return filepath.SkipDir
@@ -1689,23 +1728,27 @@ func newJSFileWalker(root string, skip map[string]string, scanRoot bool, fn func
 	}
 }
 
-func ExtractNodejsRoutes(pid app.PID) (*RouteHarvesterResult, error) {
+func ExtractNodejsRoutes(ctx context.Context, pid app.PID) (*RouteHarvesterResult, error) {
 	dir, err := FindNodeJSAppDir(pid)
 	if err != nil {
 		return nil, err
 	}
-	return extractJSRoutes(dir)
+	return extractJSRoutes(ctx, dir)
 }
 
-func ExtractDenoRoutes(pid app.PID) (*RouteHarvesterResult, error) {
+func ExtractDenoRoutes(ctx context.Context, pid app.PID) (*RouteHarvesterResult, error) {
 	dir, err := FindDenoAppDir(pid)
 	if err != nil {
 		return nil, err
 	}
-	return extractJSRoutes(dir)
+	return extractJSRoutes(ctx, dir)
 }
 
-func extractJSRoutes(dir string) (*RouteHarvesterResult, error) {
+func extractJSRoutes(ctx context.Context, dir string) (*RouteHarvesterResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	jsExtractor := NewRouteExtractor()
 
 	if err := jsExtractor.extractNextJSRoutesFromManifest(dir); err != nil {
@@ -1714,7 +1757,7 @@ func extractJSRoutes(dir string) (*RouteHarvesterResult, error) {
 			"error", err)
 	}
 
-	err := jsExtractor.ScanDirectory(dir)
+	err := jsExtractor.ScanDirectory(ctx, dir)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning directory, error %w", err)
 	}
@@ -1722,8 +1765,12 @@ func extractJSRoutes(dir string) (*RouteHarvesterResult, error) {
 	// Routes declared through a recognized framework API are complete: prefix
 	// and path are joined at harvest time and can be matched exactly.
 	if jsExtractor.FrameworkRoutes() > 0 {
+		routes, err := jsExtractor.GetHarvestedRoutes(ctx)
+		if err != nil {
+			return nil, err
+		}
 		return &RouteHarvesterResult{
-			Routes: jsExtractor.GetHarvestedRoutes(),
+			Routes: routes,
 			Kind:   CompleteRoutes,
 		}, nil
 	}
@@ -1733,10 +1780,17 @@ func extractJSRoutes(dir string) (*RouteHarvesterResult, error) {
 	// lose the controller/method association, so their paths are harvested as
 	// fragments and matched partially.
 	compiledExtractor := NewCompiledRouteExtractor()
-	if err := compiledExtractor.ScanDirectory(dir); err != nil {
+	if err := compiledExtractor.ScanDirectory(ctx, dir); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		compiledExtractor.log.Debug("error scanning compiled output", "dir", dir, "error", err)
 	}
-	if fragments := compiledExtractor.GetHarvestedRoutes(); len(fragments) > 0 {
+	fragments, err := compiledExtractor.GetHarvestedRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(fragments) > 0 {
 		sortRouteFragments(fragments)
 		return &RouteHarvesterResult{
 			Routes: fragments,
@@ -1746,8 +1800,12 @@ func extractJSRoutes(dir string) (*RouteHarvesterResult, error) {
 
 	// Neither sources nor compiled output declared routes: keep whatever the
 	// fallback pattern guessed from the sources.
+	routes, err := jsExtractor.GetHarvestedRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return &RouteHarvesterResult{
-		Routes: jsExtractor.GetHarvestedRoutes(),
+		Routes: routes,
 		Kind:   CompleteRoutes,
 	}, nil
 }

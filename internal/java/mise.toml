@@ -40,8 +40,4 @@ gradle -p .obi-src/pkg/internal/java spotlessCheck'''
 [tasks.verify]
 alias = ["java-verify", "java:verify"]
 description = "Check Java formatting, run tests, and build the Java agent"
-run = [
-  { task = ":spotless-check" },
-  { task = ":test" },
-  { task = ":build" },
-]
+run = [{ task = ":spotless-check" }, { task = ":test" }, { task = ":build" }]

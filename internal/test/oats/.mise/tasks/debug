@@ -8,8 +8,11 @@ suite="${usage_suite-kafka}"
 # Never interpolate user input into a task `dir`; allow only known generated
 # suite directories, preventing path traversal and arbitrary directory choice.
 case "$suite" in
-  ai|amqp|http|kafka|memcached|mongo|nats|redis|sql) ;;
-  *) echo "Unknown OATS suite: $suite" >&2; exit 2 ;;
+ai | amqp | http | kafka | memcached | mongo | nats | redis | sql) ;;
+*)
+  echo "Unknown OATS suite: $suite" >&2
+  exit 2
+  ;;
 esac
 
 suite_dir="${MISE_MONOREPO_ROOT:?}/internal/testgenerated/oats/$suite"

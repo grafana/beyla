@@ -86,7 +86,7 @@ jobs:
           # --- Scan this workflow's failed jobs ---
           FOUND_FAILURE=0
 
-          while IFS=$'\t' read -r job_name job_conclusion; do
+          while IFS= read -r job_name; do
             FOUND_FAILURE=1
             # Unrecoverable: lint failure in "Pull request checks" -- re-run won't help
             if [ "$WORKFLOW_NAME" = "Pull request checks" ] && echo "$job_name" | grep -qi "lint"; then
@@ -95,7 +95,7 @@ jobs:
                 REASON="Lint job failed in '${WORKFLOW_NAME}' -- compile-level problem, re-run will not help"
               fi
             fi
-          done < <(echo "$RUN_JSON" | jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | [.name, .conclusion] | @tsv')
+          done < <(echo "$RUN_JSON" | jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | .name')
 
           if [ "$FOUND_FAILURE" -eq 0 ]; then
             echo "No failed or timed-out jobs found. Exiting."

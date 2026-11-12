@@ -3,7 +3,5 @@
 #MISE description="Remove generated files from a unit test shard coverage profile"
 #USAGE flag "--shard-id <id>" help="Unit test shard identifier" env="SHARD_ID"
 set -euo pipefail
-test_output="${TEST_OUTPUT}"
 shard_id="${usage_shard_id-${SHARD_ID-}}"
-exclude_coverage_files="${EXCLUDE_COVERAGE_FILES}"
-grep -vE "$exclude_coverage_files" "$test_output/cover-shard-${shard_id}.all.txt" > "$test_output/cover-shard-${shard_id}.txt"
+grep -vE "$EXCLUDE_COVERAGE_FILES" "$TEST_OUTPUT/cover-shard-${shard_id}.all.txt" >"$TEST_OUTPUT/cover-shard-${shard_id}.txt"

@@ -54,8 +54,8 @@ jobs:
           PARTITIONS: 4
           TEST_TAGS: integration
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run integration:matrix:multiprocess >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run integration:matrix:multiprocess >> "$GITHUB_OUTPUT"
 
       - name: Build kernel matrix
         id: build-kernel-matrix

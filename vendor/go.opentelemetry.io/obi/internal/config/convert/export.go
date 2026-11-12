@@ -86,6 +86,8 @@ func captureInstrumentation(cfg *obi.Config) schema.Instrumentation {
 	metricsInstrs := metricsInstrumentations(cfg)
 	appMetricsEnabled := cfg.Metrics.Features.AnyAppO11yMetric()
 
+	httpRequestPhaseSpans := !cfg.Traces.DisableHTTPRequestPhaseSpans
+
 	protocols := make(map[protocolName]schema.ProtocolInstrumentation, len(protocolMappings))
 	for _, mapping := range protocolMappings {
 		protocols[mapping.name] = protocolInstrumentation(
@@ -102,6 +104,7 @@ func captureInstrumentation(cfg *obi.Config) schema.Instrumentation {
 		Enabled: schema.HTTPProtocolEnablement{
 			ProtocolEnablement: http.Enabled,
 			BodySizeMetrics:    cfg.Metrics.Features.AppSizes(),
+			RequestPhaseSpans:  &httpRequestPhaseSpans,
 		},
 		Filters:                   http.Filters,
 		TrackRequestHeaders:       cfg.EBPF.TrackRequestHeaders,
@@ -383,6 +386,7 @@ const (
 	statsFeatureTCPSuccessfulConnections = "tcp_successful_connections"
 	statsFeatureTCPRetransmits           = "tcp_retransmits"
 	statsFeatureTCPIo                    = "tcp_io"
+	statsFeatureTCPResets                = "tcp_resets"
 )
 
 func statsFeatures(features featureexport.Features) []string {
@@ -401,6 +405,9 @@ func statsFeatures(features featureexport.Features) []string {
 	}
 	if features.StatsTCPIo() {
 		out = append(out, statsFeatureTCPIo)
+	}
+	if features.StatsTCPResets() {
+		out = append(out, statsFeatureTCPResets)
 	}
 	return out
 }

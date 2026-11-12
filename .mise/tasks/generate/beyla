@@ -14,5 +14,6 @@ else
   export BPF_CFLAGS="-O2 -g -Wunaligned-access -Wpacked -Wpadded -Wall -Werror"
 fi
 export BPF2GO="$bpf2go"
-export OBI_BPF_INCLUDE="$(cd "$obi_module" && pwd)/bpf"
+OBI_BPF_INCLUDE="$(cd "$obi_module" && pwd)/bpf"
+export OBI_BPF_INCLUDE
 GOOS=linux go generate ./pkg/internal/ebpf/surveywatcher

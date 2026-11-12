@@ -9,6 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6 libstdc++6 libxext6 libxi6 libxrender1 libxtst6 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install mise (https://mise.jdx.dev) from its official apt repository.
+RUN apt-get update && apt-get install -y --no-install-recommends gpg \
+    && install -dm 755 /etc/apt/keyrings \
+    && curl -fSs https://mise.jdx.dev/gpg-key.pub | gpg --dearmor -o /etc/apt/keyrings/mise-archive-keyring.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.gpg arch=$(dpkg --print-architecture)] https://mise.jdx.dev/deb stable main" > /etc/apt/sources.list.d/mise.list \
+    && apt-get update && apt-get install -y --no-install-recommends mise \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid 1000 vscode \
     && useradd --uid 1000 --gid vscode --create-home --shell /bin/bash vscode \
     && echo 'vscode ALL=(root) NOPASSWD:ALL' > /etc/sudoers.d/vscode \

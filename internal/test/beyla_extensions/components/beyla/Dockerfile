@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.

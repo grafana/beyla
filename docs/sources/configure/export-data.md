@@ -174,11 +174,11 @@ Metric names and attributes follow the [OpenTelemetry semantic conventions for G
 
 | Vendor | Source | Requirements |
 |--------|--------|--------------|
-| AMD | `amdgpu` driver sysfs and hwmon entries | Read access to `/sys` |
-| Intel | `i915` and `xe` driver sysfs and hwmon entries | Read access to `/sys` |
+| AMD | `amdgpu` driver `sysfs` and `hwmon` entries | Read access to `/sys` |
+| Intel | `i915` and `xe` driver `sysfs` and `hwmon` entries | Read access to `/sys` |
 | NVIDIA | NVIDIA Management Library (NVML) | A Beyla binary built with the `beyla_nvml` build tag, and `libnvidia-ml.so.1` available in the container, for example through the NVIDIA Container Toolkit with `NVIDIA_DRIVER_CAPABILITIES=utility` |
 
-NVML is loaded at runtime without CGO, but loading it makes the Beyla binary dynamically linked against glibc, so the `beyla_nvml` build can't run from the default `scratch`-based container image. Beyla logs a warning if it finds NVIDIA GPUs but can't load NVML.
+NVML is loaded at runtime without CGO, but loading it makes the Beyla binary dynamically linked against `glibc`, so the `beyla_nvml` build can't run from the default `scratch`-based container image. Beyla logs a warning if it finds NVIDIA GPUs but can't load NVML.
 
 Device metrics have the `hw.id`, `hw.name`, and `hw.vendor` attributes. OTLP metrics carry the `host.id` and `host.name` resource attributes, and Prometheus metrics the `host_id` and `host_name` labels.
 

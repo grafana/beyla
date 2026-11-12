@@ -509,6 +509,23 @@ transform_go_imports_and_paths() {
     sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
       "$OBI_DEST/dockerutil_test.go"
 
+    # The generated OBI test helper builds Beyla's image through the Moby SDK,
+    # not the Docker CLI. Explicitly select BuildKit there so Dockerfile cache
+    # mounts work; DOCKER_BUILDKIT does not select the SDK builder.
+    if ! grep -q 'Dockerfile: dockerfile,' "$OBI_DEST/dockerutil_test.go" ||
+      ! grep -q '"github.com/moby/moby/api/types/container"' "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: dockerutil_test.go ImageBuildOptions changed; update the BuildKit transform" >&2
+      exit 1
+    fi
+    sed_i -e '/"github.com\/moby\/moby\/api\/types\/container"/a\	"github.com/moby/moby/api/types/build"' \
+      "$OBI_DEST/dockerutil_test.go"
+    sed_i -e '/Dockerfile: dockerfile,/a\		Version:    build.BuilderBuildKit,' \
+      "$OBI_DEST/dockerutil_test.go"
+    if ! grep -q 'Version:    build.BuilderBuildKit,' "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: failed to select BuildKit for generated OBI ImageBuild" >&2
+      exit 1
+    fi
+
     # obi.instrument() mounts the instrumenter configs as /configs. Mount the
     # generated copy instead of .obi-src, so the Beyla overrides copied by
     # copy_beyla_extensions (e.g. the v1 obi-config-route53.yml) take effect,

@@ -10,7 +10,12 @@ dir = "{{config_root}}/../../../"
 run = 'mkdir -p "${TEST_OUTPUT}/run"'
 
 [tasks.matrix]
-alias = ["matrix:integration-test-json", "//oats:matrix:integration-test-json", "oats-integration-test-matrix-json", "oats:matrix:integration-test-json"]
+alias = [
+  "matrix:integration-test-json",
+  "//oats:matrix:integration-test-json",
+  "oats-integration-test-matrix-json",
+  "oats:matrix:integration-test-json",
+]
 description = "Generate the OATS integration test matrix JSON"
 dir = "{{config_root}}/../../../"
 run = 'scripts/generate-dir-matrix.sh internal/testgenerated/oats /harness/'
@@ -33,7 +38,12 @@ run = [
 ]
 
 [tasks.debug]
-alias = ["test:debug", "//oats:test:debug", "oats-test-debug", "oats:test:debug"]
+alias = [
+  "test:debug",
+  "//oats:test:debug",
+  "oats-test-debug",
+  "oats:test:debug",
+]
 description = "Run an OATS suite in manual debug mode (default: kafka)"
 depends = [":prepare"]
 

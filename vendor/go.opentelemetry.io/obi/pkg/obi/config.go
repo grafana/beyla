@@ -731,6 +731,7 @@ type Attributes struct {
 	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
 
 	SanitizeSQLQueryText bool `yaml:"-" env:"-" json:"-"`
+	UseV2Selection       bool `yaml:"-" env:"-" json:"-"`
 }
 
 type HostIDConfig struct {

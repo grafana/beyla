@@ -9,7 +9,9 @@ img_name="${IMG_NAME-beyla}"
 version="${VERSION-dev}"
 gen_img="${GEN_IMG-ghcr.io/open-telemetry/obi-generator:$GEN_IMG_VERSION}"
 img="${IMG-${img_registry}/${img_org}/${img_name}:${version}}"
-oci_bin="$OCI_BIN"
-if [[ -z "$img_org" ]]; then echo "Undefined IMG_ORG (Your Docker repository user name)" >&2; exit 2; fi
+if [[ -z "$img_org" ]]; then
+  echo "Undefined IMG_ORG (Your Docker repository user name)" >&2
+  exit 2
+fi
 echo "### Building the auto-instrumenter dev image"
-"$oci_bin" buildx build --build-arg "GEN_IMG=$gen_img" --build-arg DEV_OBI=1 -t "$img" .
+"$OCI_BIN" buildx build --build-arg "GEN_IMG=$gen_img" --build-arg DEV_OBI=1 -t "$img" .

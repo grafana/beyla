@@ -47,6 +47,7 @@ func (f *Flows) buildPipeline(ctx context.Context) (*swarm.Runner, error) {
 
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            f.cfg.Attributes.Select,
+		UseV2Selection:          f.cfg.Attributes.UseV2Selection,
 		ExtraGroupAttributesCfg: f.cfg.Attributes.ExtraGroupAttributes,
 	}
 

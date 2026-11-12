@@ -103,6 +103,7 @@ func ReadGoKafkaGoRequestIntoSpan(record *ringbuf.Record) (request.Span, bool, e
 		TraceID:       trace.TraceID(event.Tp.TraceId),
 		SpanID:        trace.SpanID(event.Tp.SpanId),
 		ParentSpanID:  trace.SpanID(event.Tp.ParentId),
+		TraceFlags:    event.Tp.Flags,
 		Status:        0,
 		Pid: request.PidInfo{
 			HostPID:   app.PID(event.Pid.HostPid),

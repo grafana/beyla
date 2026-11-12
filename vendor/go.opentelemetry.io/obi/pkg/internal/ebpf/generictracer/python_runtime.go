@@ -48,7 +48,7 @@ type pythonRuntimeLifecycle struct {
 	generation    uint64
 	lifecycle     *exec.FileInfo
 	serviceSource *exec.FileInfo
-	key           BpfPidInfo
+	key           BpfPidInfoT
 	link          io.Closer
 	cancel        context.CancelFunc
 }
@@ -371,7 +371,7 @@ func (c *pythonRuntimeController) cleanupLocked(target *pythonRuntimeLifecycle) 
 }
 
 // deletePythonRuntimeMapEntries removes both halves of one BPF process state.
-func deletePythonRuntimeMapEntries(targets, snapshots pythonRuntimeMap, key BpfPidInfo) {
+func deletePythonRuntimeMapEntries(targets, snapshots pythonRuntimeMap, key BpfPidInfoT) {
 	if targets != nil {
 		_ = targets.Delete(key)
 	}
@@ -393,11 +393,11 @@ func (c *pythonRuntimeController) maps() (pythonRuntimeMap, pythonRuntimeMap) {
 }
 
 // pythonRuntimePIDInfo builds the same namespace-aware key as task_pid in BPF.
-func pythonRuntimePIDInfo(pid app.PID, ns uint32) (BpfPidInfo, error) {
-	key := BpfPidInfo{HostPid: uint32(pid), UserPid: uint32(pid), Ns: ns}
+func pythonRuntimePIDInfo(pid app.PID, ns uint32) (BpfPidInfoT, error) {
+	key := BpfPidInfoT{HostPid: uint32(pid), UserPid: uint32(pid), Ns: ns}
 	pids, err := procs.FindNamespacedPids(pid)
 	if err != nil {
-		return BpfPidInfo{}, fmt.Errorf("reading namespaced PIDs: %w", err)
+		return BpfPidInfoT{}, fmt.Errorf("reading namespaced PIDs: %w", err)
 	}
 	if len(pids) != 0 {
 		key.HostPid = uint32(pids[0])

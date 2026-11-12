@@ -87,7 +87,6 @@ const (
 )
 
 type Tracer struct {
-	ctx         context.Context
 	cfg         *obi.Config
 	metrics     imetrics.Reporter
 	bpfObjects  BpfObjects
@@ -548,8 +547,6 @@ const logPipeReconcileInterval = 15 * time.Second
 func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("starting")
 
-	p.ctx = ctx
-
 	go func() {
 		t := time.NewTicker(logPipeReconcileInterval)
 		defer t.Stop()
@@ -563,8 +560,9 @@ func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg
 		}
 	}()
 
-	ebpfcommon.ForwardRingbuf(
+	ebpfcommon.ForwardRingbufWithDrainContext(
 		&p.cfg.EBPF,
+		p.cfg.ShutdownTimeout,
 		p.bpfObjects.LogEvents,
 		p.handleLogEvent,
 		nil,
@@ -584,7 +582,7 @@ func (p *Tracer) Required() bool {
 	return false
 }
 
-func (p *Tracer) handleLogEvent(record *ringbuf.Record) (request.Span, bool, error) {
+func (p *Tracer) handleLogEvent(ctx context.Context, record *ringbuf.Record) (request.Span, bool, error) {
 	hdrSize := uint32(unsafe.Offsetof(BpfLogEventT{}.Log)) // Remove `log` placeholder
 
 	event, err := ebpfcommon.ReinterpretCast[BpfLogEventT](record.RawSample)
@@ -628,7 +626,7 @@ func (p *Tracer) handleLogEvent(record *ringbuf.Record) (request.Span, bool, err
 		e.out = d
 	}
 
-	if err := p.asyncWriter.Enqueue(p.ctx, e); err != nil {
+	if err := p.asyncWriter.Enqueue(ctx, e); err != nil {
 		e.out.release()
 		return request.Span{}, true, err
 	}

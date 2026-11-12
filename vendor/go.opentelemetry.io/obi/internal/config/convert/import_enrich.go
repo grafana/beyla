@@ -18,6 +18,7 @@ func validateUnsupportedV2Enrichment(src *schema.Extension) error {
 		{path: "enrich.enrichers", values: src.Enrich.Enrichers.AdditionalProperties},
 		{path: "enrich.enrichers.peer_metadata", values: src.Enrich.Enrichers.PeerMetadata.AdditionalProperties},
 		{path: "enrich.enrichers.peer_metadata.tls", values: src.Enrich.Enrichers.PeerMetadata.TLS.AdditionalProperties},
+		{path: "enrich.enrichers.peer_metadata.central", values: src.Enrich.Enrichers.PeerMetadata.Central.AdditionalProperties},
 		{path: "enrich.enrichers.kubernetes", values: src.Enrich.Enrichers.Kubernetes.AdditionalProperties},
 		{path: "enrich.enrichers.cloud", values: src.Enrich.Enrichers.Cloud.AdditionalProperties},
 		{path: "enrich.enrichers.cloud.route53", values: src.Enrich.Enrichers.Cloud.Route53.AdditionalProperties},

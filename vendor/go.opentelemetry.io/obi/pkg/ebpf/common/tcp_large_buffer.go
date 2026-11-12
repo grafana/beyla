@@ -28,9 +28,13 @@ type largeBufferKey struct {
 	kind                  largeBufferKind
 }
 
+// must match the table large_buf_action in common.h
 const (
 	largeBufferActionInit = iota
 	largeBufferActionAppend
+	// The payload is the trace ID and span ID the buffer was sent with until
+	// the request adopted another traceparent.
+	largeBufferActionRekey
 )
 
 const (
@@ -82,6 +86,8 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 		} else {
 			lb.AppendChunk(chunk)
 		}
+	case largeBufferActionRekey:
+		return request.Span{}, true, rekeyLargeBuffer(parseCtx, key, chunk)
 	default:
 		return request.Span{}, true, fmt.Errorf("invalid large buffer action: %d", event.Action)
 	}
@@ -96,6 +102,23 @@ func appendTCPLargeBuffer(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 	}
 
 	return request.Span{}, true, nil
+}
+
+func rekeyLargeBuffer(parseCtx *EBPFParseContext, key largeBufferKey, previousIDs []byte) error {
+	previous := key
+	if len(previousIDs) != len(previous.traceID)+len(previous.spanID) {
+		return fmt.Errorf("invalid large buffer rekey payload: %d bytes", len(previousIDs))
+	}
+	copy(previous.traceID[:], previousIDs)
+	copy(previous.spanID[:], previousIDs[len(previous.traceID):])
+
+	lb, ok := parseCtx.largeBuffers.Get(previous)
+	if !ok {
+		return nil
+	}
+	parseCtx.largeBuffers.Remove(previous)
+	parseCtx.largeBuffers.Add(key, lb)
+	return nil
 }
 
 func extractLargeBuffer(

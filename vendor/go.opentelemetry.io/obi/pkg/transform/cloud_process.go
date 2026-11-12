@@ -17,7 +17,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
 
-func CloudProcessEventDecoratorProvider(ctxInfo *global.ContextInfo, cfg *NameResolverConfig,
+func CloudProcessEventDecoratorProvider(ctxInfo *global.ContextInfo,
+	input, output *msg.Queue[exec.ProcessEvent],
+) swarm.InstanceFunc {
+	return CloudProcessEventDecoratorProviderWithConfig(ctxInfo, nil, input, output)
+}
+
+// CloudProcessEventDecoratorProviderWithConfig also resolves configured VM identities.
+func CloudProcessEventDecoratorProviderWithConfig(ctxInfo *global.ContextInfo, cfg *NameResolverConfig,
 	input, output *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
 	return func(context.Context) (swarm.RunFunc, error) {

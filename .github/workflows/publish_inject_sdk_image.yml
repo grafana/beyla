@@ -8,6 +8,11 @@ on:
       - 'pkg/webhook/image/**'
   workflow_dispatch:
     inputs:
+      diagnostic:
+        description: "Run a bounded, read-only diagnostic build against the stalled source commit."
+        type: boolean
+        required: true
+        default: false
       confirm:
         description: "This workflow normally runs automatically on pushes to main that touch pkg/webhook/image/**. Only run manually for an out-of-band republish."
         type: boolean
@@ -19,7 +24,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: publish-inject-sdk-image
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic == true && 'diagnose-inject-sdk-image' || 'publish-inject-sdk-image' }}
   cancel-in-progress: false
 
 env:
@@ -27,7 +32,100 @@ env:
   PACKAGE_NAME: beyla%2Finject-sdk-image
 
 jobs:
+  diagnose-nodejs-build:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic == true
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            artifact_suffix: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: 22a114e2bc6913a772728d070424a3c0178da9bc
+          path: source
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Create instrumented diagnostic Dockerfile
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("source/pkg/webhook/image/Dockerfile").read_text()
+          old = "RUN npm install"
+          new = """RUN set -eu; \
+              node --version; npm --version; \
+              heartbeat_loop() { for heartbeat_iteration in $(seq 1 30); do sleep 10; echo "[npm-diagnostic] heartbeat $heartbeat_iteration"; ps -eo pid,ppid,stat,etime,args --forest; done; }; \
+              heartbeat_loop & heartbeat=$!; \
+              cleanup() { kill "$heartbeat" 2>/dev/null || true; wait "$heartbeat" 2>/dev/null || true; }; \
+              trap cleanup 0; \
+              status=0; npm install || status=$?; \
+              echo "[npm-diagnostic] npm install exited status=$status"; \
+              exit "$status"""
+          if source.count(old) != 1:
+              raise SystemExit("expected exactly one npm install RUN")
+          Path("Dockerfile.diagnostic").write_text(source.replace(old, new))
+          PY
+
+      - name: Build Node.js SDK target (bounded, cache-only)
+        run: |
+          set -uo pipefail
+          mkdir -p diagnostic-logs
+          timeout --signal=TERM --kill-after=15s 5m docker buildx build \
+            --progress=plain --platform "${{ matrix.platform }}" \
+            --target build-nodejs-sdk -f Dockerfile.diagnostic \
+            --output type=cacheonly source \
+            >diagnostic-logs/build.log 2>&1 &
+          build_pid=$!
+          for snapshot in $(seq 1 30); do
+            kill -0 "$build_pid" 2>/dev/null || break
+            {
+              date -u +%FT%TZ
+              echo "snapshot $snapshot"
+              docker ps --no-trunc
+              docker stats --no-stream
+              docker top "$(docker ps -q --filter name=buildx_buildkit | head -n1)" 2>&1 || true
+            } >> diagnostic-logs/host-snapshots.log 2>&1
+            sleep 10
+          done
+          set +e
+          wait "$build_pid"
+          status=$?
+          set -e
+          cat diagnostic-logs/build.log
+          echo "build exit status: $status" | tee diagnostic-logs/status.txt
+          docker ps -a --no-trunc > diagnostic-logs/docker-ps-final.log 2>&1 || true
+          builder_id=$(docker ps -aq --filter name=buildx_buildkit | head -n1)
+          if [ -n "$builder_id" ]; then
+            docker logs "$builder_id" > diagnostic-logs/buildkit.log 2>&1 || true
+            docker inspect "$builder_id" > diagnostic-logs/buildkit-inspect.json 2>&1 || true
+          fi
+          exit "$status"
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nodejs-build-diagnostic-${{ matrix.artifact_suffix }}
+          path: diagnostic-logs/
+          if-no-files-found: warn
+          retention-days: 3
+
   resolve-version:
+    if: github.event_name != 'workflow_dispatch' || inputs.diagnostic != true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -85,6 +183,7 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.diagnostic != true
     needs: resolve-version
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -141,6 +240,7 @@ jobs:
           retention-days: 1
 
   create-manifest:
+    if: github.event_name != 'workflow_dispatch' || inputs.diagnostic != true
     needs:
       - resolve-version
       - build

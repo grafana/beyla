@@ -122,7 +122,7 @@ If your nodes set it higher than `2`, grant Beyla `CAP_SYS_ADMIN` or set the val
 To change the value, use the node configuration method of your platform:
 
 - **Amazon EKS with Bottlerocket nodes**: Set `kernel.perf_event_paranoid` in the `bottlerocket.settings` field of the `eksctl` node group. Refer to the [`eksctl` Bottlerocket example][eksctl-bottlerocket] and [Bottlerocket kernel settings][bottlerocket-kernel].
-- **EKS Anywhere with Bottlerocket nodes**: Set `hostOSConfiguration.bottlerocketConfiguration.kernel.sysctlSettings` in the machine configuration, and run `eksctl anywhere create cluster -f <CLUSTER_FILE>`, where _`<CLUSTER_FILE>`_ is your cluster specification file. Refer to [EKS Anywhere host OS configuration][eksa-hostos].
+- **EKS Anywhere with Bottlerocket nodes**: Set `hostOSConfiguration.bottlerocketConfiguration.kernel.sysctlSettings` in the machine configuration, and run `eksctl anywhere create cluster -f <CLUSTER_FILE>`, where *`<CLUSTER_FILE>`* is your cluster specification file. Refer to [EKS Anywhere host OS configuration][eksa-hostos].
 - **AKS**: The AKS custom node configuration doesn't support `kernel.perf_event_paranoid`. For settings outside the supported list, AKS recommends a DaemonSet. Refer to [Customize node configuration for AKS node pools][aks-node-config].
 
 ## Grant capabilities

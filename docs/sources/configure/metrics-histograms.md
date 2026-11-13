@@ -40,7 +40,7 @@ Set the bucket boundaries for metrics related to request duration. Specifically:
 
 If you leave the value unset, Beyla uses the default bucket boundaries from the [OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/http-metrics.md):
 
-```
+```text
 0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10
 ```
 
@@ -67,7 +67,7 @@ Set the bucket boundaries for metrics related to request and response sizes:
 
 If you leave the value unset, Beyla uses these default bucket boundaries:
 
-```
+```text
 0, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192
 ```
 
@@ -81,7 +81,7 @@ Set the property as `otel_metrics_export.buckets.stat_tcp_rtt_histogram` or `pro
 
 If you leave the value unset, Beyla uses these boundaries:
 
-```
+```text
 0.0005, 0.001, 0.002, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0
 ```
 

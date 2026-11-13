@@ -54,14 +54,14 @@ routes:
 
 Traces with these HTTP paths have the same `http.route='/user/{id}'` property:
 
-```
+```text
 /user/123
 /user/456
 ```
 
 Traces with these HTTP paths have the same `http.route='/user/{id}'/basket/{product}` property:
 
-```
+```text
 /user/123/basket/1
 /user/456/basket/3
 ```
@@ -76,7 +76,7 @@ routes:
 
 Any traces with HTTP paths starting with `/user` (including `/user` itself) match the route `/user/*`. All these paths match as `/user/*`:
 
-```
+```text
 /user
 /user/123
 /user/123/basket/1
@@ -138,14 +138,14 @@ If your URL path patterns follow a certain structure and unique IDs are made of 
 
 Both URL paths below:
 
-```
+```text
 document/d/CfMkAGbE_aivhFydEpaRafPuGWbmHfG/edit (no numbers in the ID)
 document/d/C2fMkAGb3E_aivhFyd5EpaRafP123uGWbmHfG/edit
 ```
 
 are converted to a low cardinality route (using the default `wildcard_char`):
 
-```
+```text
 document/d/*/edit
 ```
 
@@ -161,11 +161,11 @@ The cardinality reduction logic detects cardinality explosion in specific URL pa
 
 Example flow with `low-cardinality` mode and `max_path_segment_cardinality=3`:
 
-  - Insert `/api/users/alice`  -> `/api/users/alice`   (cardinality: 1)
-  - Insert `/api/users/bob`    -> `/api/users/bob`     (cardinality: 2)
-  - Insert `/api/users/carol`  -> `/api/users/carol`   (cardinality: 3)
-  - Insert `/api/users/dave`   -> `/api/users/*`       (threshold exceeded, collapsed)
-  - Insert `/api/users/eve`    -> `/api/users/*`       (stays collapsed)
+- Insert `/api/users/alice`  -> `/api/users/alice`   (cardinality: 1)
+- Insert `/api/users/bob`    -> `/api/users/bob`     (cardinality: 2)
+- Insert `/api/users/carol`  -> `/api/users/carol`   (cardinality: 3)
+- Insert `/api/users/dave`   -> `/api/users/*`       (threshold exceeded, collapsed)
+- Insert `/api/users/eve`    -> `/api/users/*`       (stays collapsed)
 
 This means the first three routes match the original URL path. After the cardinality limit is reached, all future URL paths collapse to a low cardinality route.
 

@@ -22,7 +22,7 @@ YAML section: `name_resolver`
 | `cache_len`<p>`BEYLA_NAME_RESOLVER_CACHE_LEN`</p> | Size of the service name cache. Used to speed up reverse IP lookups.                | int    | (1024) |
 | `cache_expiry`<p>`BEYLA_NAME_RESOLVER_CACHE_TTL`</p> | Time-to-live value for the service name cache.                | string    | "5m" |
 
-The possible values for the name resolver sources are: 
+The possible values for the name resolver sources are:
 
 - `k8s`. Use Kubernetes API metadata for reverse IP address lookup.
 - `dns`. Use the host DNS for reverse IP address lookup. This option can cause flood of DNS requests in certain situations and should be used only on services that are not exposed to the Internet.

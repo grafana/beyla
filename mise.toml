@@ -91,7 +91,7 @@ shfmt = "3.14.1"
 taplo = "0.10.0"
 pkl = "0.32.2"
 kind = "0.33.0"
-setup-envtest = "0.25.1"
+setup-envtest = "0.25.2"
 gotestsum = "1.13.0"
 ginkgo = { version = "2.33.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 "go:github.com/google/go-licenses/v2" = { version = "2.0.1", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }

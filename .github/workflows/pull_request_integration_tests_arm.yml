@@ -69,6 +69,8 @@ jobs:
     needs: test-matrix
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
+    env:
+      DOCKER_BUILDKIT: "1"
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

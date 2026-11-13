@@ -33,6 +33,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/pipe"
 	"go.opentelemetry.io/obi/pkg/kube"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm/swarms"
@@ -60,15 +61,15 @@ func log() *slog.Logger { return slog.With("component", "k8s.MetadataDecorator")
 func MetadataDecoratorProvider[T any](
 	ctx context.Context,
 	cfg *transform.KubernetesDecorator,
-	k8sInformer *kube.MetadataProvider,
+	provider *metadata.MetadataProvider,
 	attrs func(T) *pipe.CommonAttrs,
 	input, output *msg.Queue[[]T],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		if !k8sInformer.IsKubeEnabled() {
+		if !provider.K8sInformer.IsKubeEnabled() {
 			return swarm.Bypass(input, output)
 		}
-		nt, err := newDecorator(ctx, cfg, k8sInformer)
+		nt, err := newDecorator(ctx, cfg, provider)
 		if err != nil {
 			return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 		}
@@ -196,14 +197,14 @@ func (n *decorator) nodeLabels(a *pipe.CommonAttrs, prefix string, meta *informe
 }
 
 // newDecorator create a new transform
-func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, k8sInformer *kube.MetadataProvider) (*decorator, error) {
-	store, err := k8sInformer.Get(ctx)
+func newDecorator(ctx context.Context, cfg *transform.KubernetesDecorator, provider *metadata.MetadataProvider) (*decorator, error) {
+	store, err := provider.K8sInformer.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("instantiating k8s.MetadataDecorator: %w", err)
 	}
 	nt := decorator{
 		log:         log(),
-		clusterName: transform.KubeClusterName(ctx, cfg, k8sInformer),
+		clusterName: transform.KubeClusterNameWithMetadataProvider(ctx, cfg, provider),
 		store:       store,
 	}
 	if nt.log.Enabled(ctx, slog.LevelDebug) {

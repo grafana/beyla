@@ -1,13 +1,13 @@
 [env]
-TESTCASE_BASE_PATH = "./yaml"
 TESTCASE_TIMEOUT = "5m"
 
 [tasks.prepare]
 alias = ["prereq", "//oats:prereq", "oats-prereq", "oats:prereq"]
-description = "Prepare generated OBI/vendor dependencies and OATS test output"
-depends = ["//:vendor:obi"]
+description = "Generate and vendor Beyla OATS suites and install the OATS CLI"
+depends = ["//:vendor:obi", ":install-tools", ":build-finalizer"]
 dir = "{{config_root}}/../../../"
-run = 'mkdir -p "${TEST_OUTPUT}/run"'
+run = '''mkdir -p "${TEST_OUTPUT}/run"
+DOCKER_BUILDKIT=1 docker build -t hatest-obi -f internal/test/beyla_extensions/components/beyla/Dockerfile .'''
 
 [tasks.matrix]
 alias = [
@@ -18,7 +18,21 @@ alias = [
 ]
 description = "Generate the OATS integration test matrix JSON"
 dir = "{{config_root}}/../../../"
-run = 'scripts/generate-dir-matrix.sh internal/testgenerated/oats /harness/'
+run = 'scripts/generate-dir-matrix.sh internal/testgenerated/oats "" oats-config.yaml'
+
+[tasks.install-tools]
+alias = ["oats:install-tools"]
+description = "Install checksum-pinned OATS and GCX binaries"
+depends = ["//:submodule:obi"]
+dir = "{{config_root}}/../../../"
+run = '.obi-src/scripts/install-oats-tools.sh .tools/oats'
+
+[tasks.build-finalizer]
+alias = ["oats:build-finalizer"]
+description = "Build the generated OATS Weaver finalizer"
+depends = ["//:vendor:obi"]
+dir = "{{config_root}}/../../../"
+run = 'mkdir -p .tools/oats && go build -o .tools/oats/weaver-finalizer ./internal/testgenerated/oats/finalizer'
 
 [tasks.test]
 alias = ["oats-test", "oats:test"]
@@ -44,20 +58,32 @@ alias = [
   "oats-test-debug",
   "oats:test:debug",
 ]
-description = "Run an OATS suite in manual debug mode (default: kafka)"
+description = "Run OATS Kafka tests and pause after failures"
 depends = [":prepare"]
+dir = "{{config_root}}/../../../internal/testgenerated/oats/kafka"
+run = 'mkdir -p build && OATS_ARTIFACT_DIR="$PWD/build" ../../../../.obi-src/scripts/run-oats-with-log.sh build/oats.log ../../../../.tools/oats/oats run --config oats-config.yaml --container-runtime docker --gcx ../../../../.tools/oats/gcx --timeout "${TESTCASE_TIMEOUT:-1h}" --absent-timeout 10s --no-cache --pause-on-failure -vvv'
 
-[tasks."test:harness"]
-alias = ["oats-test-harness", "oats:test:harness"]
-description = "Run OATS harness unit tests"
-depends = ["//:generate:obi-tests"]
-dir = "{{config_root}}/../../../internal/testgenerated/oats/harness"
-run = "go test -race ./..."
+[tasks.test-finalizer]
+alias = [
+  "oats-test-finalizer",
+  "oats:test:finalizer",
+  "//oats:test:finalizer",
+  "oats-test-harness",
+  "//oats:test:harness",
+  "oats:test:harness",
+]
+description = "Run OATS Weaver finalizer unit tests"
+depends = ["//:vendor:obi"]
+dir = "{{config_root}}/../../../"
+run = "go test -race ./internal/testgenerated/oats/finalizer"
 
 [tasks._suite]
 usage = 'arg "<suite>" { choices "sql" "mongo" "redis" "kafka" "http" "memcached" "ai" "nats" "amqp" }'
 dir = "{{config_root}}/../../../internal/testgenerated/oats"
-run = 'cd "${usage_suite?}" && mkdir -p "${TEST_OUTPUT}/run" && "${OATS_GINKGO:-${GINKGO:-ginkgo}}" -v -r'
+run = '''suite="${usage_suite?}"
+cd "$suite"
+mkdir -p build
+OATS_ARTIFACT_DIR="$PWD/build" ../../../../.obi-src/scripts/run-oats-with-log.sh build/oats.log ../../../../.tools/oats/oats run --config oats-config.yaml --container-runtime docker --gcx ../../../../.tools/oats/gcx --timeout "${TESTCASE_TIMEOUT:-5m}" --absent-timeout 10s --no-cache -vvv'''
 
 [tasks."test:ai"]
 alias = ["oats-test-ai", "oats:test:ai"]

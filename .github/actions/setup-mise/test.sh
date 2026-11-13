@@ -82,6 +82,6 @@ assert {
 } <= set(resolved["lint"])
 assert {"setup-envtest", "gotestsum"} <= set(resolved["unit"])
 assert {"java", "gradle"} <= set(resolved["release"])
-assert "ginkgo" in resolved["oats"]
+assert "ginkgo" not in resolved["oats"]
 assert "kind" in resolved["integration"]
 PY

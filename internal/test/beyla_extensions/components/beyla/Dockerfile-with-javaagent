@@ -77,8 +77,9 @@ COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
 COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
 
-# Build
-RUN mise run --skip-tools compile:coverage
+# Reuse Go package results from the standard image build; only the embedded JAR differs.
+RUN --mount=type=cache,id=beyla-go-build,target=/root/.cache/go-build \
+    mise run --skip-tools compile:coverage
 
 # Create final image from minimal + built binary
 FROM ubuntu@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03

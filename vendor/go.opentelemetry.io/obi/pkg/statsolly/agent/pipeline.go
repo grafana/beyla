@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/pipe/transform/k8s"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/ebpf"
 	"go.opentelemetry.io/obi/pkg/internal/statsolly/export"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	"go.opentelemetry.io/obi/pkg/selection"
@@ -55,7 +56,11 @@ func (s *Stats) buildPipeline(ctx, readerCtx context.Context) (*swarm.Runner, er
 	// Many of the nodes here are not mandatory. It's decision of each InstanceFunc to decide
 	// whether the node needs to be instantiated or just bypass their input/output channels.
 	kubeDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "kubeDecoratedStats")
-	swi.Add(k8s.MetadataDecoratorProvider(ctx, &s.cfg.Attributes.Kubernetes, s.ctxInfo.K8sInformer,
+	swi.Add(k8s.MetadataDecoratorProvider(ctx, &s.cfg.Attributes.Kubernetes,
+		&metadata.MetadataProvider{
+			K8sInformer:   s.ctxInfo.K8sInformer,
+			CloudMetadata: s.cfg.CloudMetadata,
+		},
 		statAttrs, ebpfStats, kubeDecoratedStats), swarm.WithID("K8sMetadataDecorator"))
 
 	dnsDecoratedStats := msgh.QueueFromConfig[[]*ebpf.Stat](s.cfg, s.ctxInfo.Metrics, "dnsDecoratedStats")

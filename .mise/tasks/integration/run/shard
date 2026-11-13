@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#MISE description="Run one gotestsum integration-test shard"
+set -euo pipefail
+
+echo Partition
+echo "${MATRIX_JSON}"
+
+if [[ -z "${MATRIX_TEST_PATTERN:-}" ]]; then
+  echo "Error: Test pattern is empty for shard ${MATRIX_ID:-}" >&2
+  exit 1
+fi
+
+gotestsum_args=(
+  --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race
+)
+go_test_args=(-count=1 "-tags=${TEST_TAGS}" -timeout 30m -mod vendor)
+
+case "${SHARD_MODE:-test-name}" in
+test-name)
+  gotestsum_args+=(--packages=./internal/testgenerated/integration)
+  go_test_args+=("-run=^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration)
+  ;;
+packages)
+  gotestsum_args+=("--packages=${MATRIX_TEST_PATTERN}")
+  go_test_args+=("${MATRIX_TEST_PATTERN}")
+  ;;
+*)
+  echo "Error: Unsupported integration shard mode: ${SHARD_MODE}" >&2
+  exit 1
+  ;;
+esac
+
+gotestsum_args+=(
+  -ftestname
+  "--jsonfile=${REPORT_DIR:-/home/runner/reports}/test-run-${RUN_NUMBER}-${MATRIX_ID}.log"
+)
+
+case "${SHARD_RACE:-false}" in
+true) go_test_args=(-race "${go_test_args[@]}") ;;
+false) ;;
+*)
+  echo "Error: SHARD_RACE must be true or false, got: ${SHARD_RACE}" >&2
+  exit 1
+  ;;
+esac
+
+mkdir -p "${REPORT_DIR:-/home/runner/reports}"
+
+gotestsum "${gotestsum_args[@]}" -- "${go_test_args[@]}"

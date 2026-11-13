@@ -142,24 +142,9 @@ jobs:
           MATRIX_TEST_PATTERN: ${{ matrix.test_pattern }}
           RUN_NUMBER: ${{ github.run_number }}
           TEST_TAGS: integration
-        run: |
-          echo Partition
-          echo "${MATRIX_JSON}"
-
-          if [ -z "${MATRIX_TEST_PATTERN}" ]; then
-            echo "Error: Test pattern is empty for shard ${MATRIX_ID}"
-            exit 1
-          fi
-
-          mkdir -p /home/runner/reports
-
-          gotestsum \
-              --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
-              --packages="${MATRIX_TEST_PATTERN}" -ftestname \
-              --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -race -count=1 -tags="${TEST_TAGS}" -timeout 30m \
-              -mod vendor \
-              "${MATRIX_TEST_PATTERN}"
+          SHARD_MODE: packages
+          SHARD_RACE: "true"
+        run: mise run integration:run:shard
 
       - name: Process coverage data
         run: mise run integration:coverage-data

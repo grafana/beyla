@@ -150,4 +150,104 @@ grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
 
+# Contract-test the shared pull-request integration shard task without Mise or
+# real test execution. These cases cover the three workflow configurations.
+cat >"$tmp/bin/gotestsum" <<'SH'
+#!/usr/bin/env bash
+printf 'called\n' >> "$GOTESTSUM_CALLS"
+printf '%s\n' "$@" > "$GOTESTSUM_LOG"
+exit "${GOTESTSUM_EXIT:-0}"
+SH
+chmod +x "$tmp/bin/gotestsum"
+shard_task="$root/.mise/tasks/integration/run/shard"
+shard_env=(
+  "PATH=$tmp/bin:$PATH"
+  "MATRIX_ID=shard-4"
+  'MATRIX_JSON={"id":"shard-4","test_pattern":"TestAlpha"}'
+  'MATRIX_TEST_PATTERN=TestAlpha|TestBeta'
+  "RUN_NUMBER=99"
+  "TEST_TAGS=integration"
+  "REPORT_DIR=$tmp/reports"
+  "GOTESTSUM_LOG=$tmp/shard-gotestsum"
+  "GOTESTSUM_CALLS=$tmp/shard-calls"
+)
+
+env "${shard_env[@]}" SHARD_MODE=test-name SHARD_RACE=true \
+  bash "$shard_task" >"$tmp/shard-test-name-output"
+cat >"$tmp/expected-test-name-race" <<EOF
+--rerun-fails=2
+--rerun-fails-max-failures=2
+--rerun-fails-abort-on-data-race
+--packages=./internal/testgenerated/integration
+-ftestname
+--jsonfile=$tmp/reports/test-run-99-shard-4.log
+--
+-race
+-count=1
+-tags=integration
+-timeout
+30m
+-mod
+vendor
+-run=^(TestAlpha|TestBeta)$
+./internal/testgenerated/integration
+EOF
+diff -u "$tmp/expected-test-name-race" "$tmp/shard-gotestsum"
+grep -Fxq 'Partition' "$tmp/shard-test-name-output"
+grep -Fxq '{"id":"shard-4","test_pattern":"TestAlpha"}' "$tmp/shard-test-name-output"
+[[ -d "$tmp/reports" ]]
+
+env "${shard_env[@]}" SHARD_MODE=test-name SHARD_RACE=false \
+  bash "$shard_task" >/dev/null
+sed '/^-race$/d' "$tmp/expected-test-name-race" >"$tmp/expected-test-name-no-race"
+diff -u "$tmp/expected-test-name-no-race" "$tmp/shard-gotestsum"
+
+env "${shard_env[@]}" MATRIX_TEST_PATTERN='./internal/testgenerated/integration/k8s/TestAlpha' \
+  SHARD_MODE=packages SHARD_RACE=true bash "$shard_task" >/dev/null
+cat >"$tmp/expected-k8s-packages" <<EOF
+--rerun-fails=2
+--rerun-fails-max-failures=2
+--rerun-fails-abort-on-data-race
+--packages=./internal/testgenerated/integration/k8s/TestAlpha
+-ftestname
+--jsonfile=$tmp/reports/test-run-99-shard-4.log
+--
+-race
+-count=1
+-tags=integration
+-timeout
+30m
+-mod
+vendor
+./internal/testgenerated/integration/k8s/TestAlpha
+EOF
+diff -u "$tmp/expected-k8s-packages" "$tmp/shard-gotestsum"
+
+invalid_calls="$tmp/invalid-shard-calls"
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='' SHARD_MODE=test-name SHARD_RACE=true \
+  GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
+  echo 'Integration shard accepted an empty pattern' >&2
+  exit 1
+fi
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='TestAlpha' SHARD_MODE=invalid SHARD_RACE=true \
+  GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
+  echo 'Integration shard accepted an invalid mode' >&2
+  exit 1
+fi
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='TestAlpha' SHARD_MODE=test-name SHARD_RACE=maybe \
+  GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
+  echo 'Integration shard accepted an invalid race setting' >&2
+  exit 1
+fi
+[[ ! -e "$invalid_calls" ]]
+
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='TestAlpha' SHARD_MODE=test-name SHARD_RACE=true \
+  GOTESTSUM_EXIT=23 bash "$shard_task" >/dev/null 2>&1; then
+  echo 'Integration shard did not propagate gotestsum failure' >&2
+  exit 1
+else
+  shard_status=$?
+fi
+[[ "$shard_status" -eq 23 ]]
+
 echo 'mise task contract tests passed'

@@ -34,9 +34,13 @@ func TestInstrumentAllLocalWithSurvey(t *testing.T) {
 func testInstrumentAllLocal(t *testing.T, config string, survey bool) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(pathOutput, 0o755))
+	unixDir := t.TempDir()
+	// The fixtures run as UID 1000, including when the test runner is root.
+	require.NoError(t, os.Chmod(unixDir, 0o777))
 	compose, err := docker.ComposeSuite("compose/docker-compose-instrument-all-local.yml", path.Join(pathOutput, t.Name()+".log"))
 	require.NoError(t, err)
 	compose.Env = append(compose.Env, "BEYLA_TEST_CONFIG="+config,
+		"BEYLA_TEST_UNIX_DIR="+unixDir,
 		fmt.Sprintf("COMPOSE_PROJECT_NAME=beyla-local-%d-%s", os.Getpid(), strings.ToLower(t.Name())))
 	t.Cleanup(func() { assert.NoError(t, compose.Close()) })
 	require.NoError(t, compose.Up())
@@ -75,6 +79,22 @@ func testInstrumentAllLocal(t *testing.T, config string, survey bool) {
 
 	if !t.Run("all forked Python workers produce application metrics", func(t *testing.T) {
 		waitForLocalInstances(t, &pq, requests, "http_server_request_duration_seconds_count", "local-python-workers", 3)
+	}) {
+		return
+	}
+
+	if !t.Run("Unix-only client and server", func(t *testing.T) {
+		// Application metrics above establish that discovery and its socket
+		// watcher are running. Only now fork the Unix server workers and let
+		// the client connect, exercising admission beyond the startup iterator.
+		require.NoError(t, os.WriteFile(path.Join(unixDir, "start"), nil, 0o644))
+		if survey {
+			waitForLocalServices(t, &pq, requests, "survey_info", "local-unix-client", "local-unix-server")
+		}
+		waitForLocalServices(t, &pq, requests, "http_client_request_duration_seconds_count", "local-unix-client")
+		waitForLocalServices(t, &pq, requests, "http_server_request_duration_seconds_count", "local-unix-server")
+		waitForLocalServices(t, &pq, requests, "target_info", "local-unix-client", "local-unix-server")
+		waitForLocalInstances(t, &pq, requests, "http_server_request_duration_seconds_count", "local-unix-server", 3)
 	}) {
 		return
 	}

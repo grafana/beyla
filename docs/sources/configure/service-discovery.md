@@ -34,7 +34,7 @@ discovery:
   instrument_all_local: true
 ```
 
-A process becomes eligible when socket activity is observed, including sockets already open when Beyla starts. Non-root processes qualify through socket activity; root processes (real UID 0) require a listener on a port below 1024. Once admitted, a process remains eligible until it exits, even if its sockets close.
+A process becomes eligible when socket activity is observed, including sockets already open when Beyla starts. Non-root processes qualify through socket activity; root processes (real UID 0) require a listener on a port below 1024. After admitted, a process remains eligible until it exits, even if its sockets close.
 
 Unix socket connections also qualify non-root processes.
 

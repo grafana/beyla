@@ -55,8 +55,8 @@ jobs:
           echo -n "matrix=" >> "$GITHUB_OUTPUT"
           mise run //oats:matrix >> "$GITHUB_OUTPUT"
 
-  harness-unit-tests:
-    name: "OATS harness unit tests"
+  finalizer-unit-tests:
+    name: "OATS Weaver finalizer unit tests"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -68,17 +68,20 @@ jobs:
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
-          profile: go
+          profile: oats
           cache-modules: "true"
           cache-build: "true"
-      - name: Run OATS harness unit tests
-        run: mise run //oats:test:harness
+      - name: Run OATS Weaver finalizer unit tests
+        run: mise run //oats:test:finalizer
 
   test:
     name: ${{ matrix.basename }}
     needs: test-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # The shared Beyla test Dockerfile uses a BuildKit cache mount.
+      DOCKER_BUILDKIT: "1"
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
@@ -149,12 +152,6 @@ jobs:
           cache-build-prefix: "go-build-oats"
           profile: oats
           cache-modules: "true"
-      - name: Generate and vendor OBI
-        run: mise run vendor:obi
-
-      - name: Verify Beyla compiles
-        run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
-
       - name: Run oats tests
         env:
           MATRIX_BASENAME: ${{ matrix.basename }}

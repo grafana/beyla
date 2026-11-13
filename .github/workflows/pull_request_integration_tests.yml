@@ -64,6 +64,9 @@ jobs:
     needs: test-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # The integration Dockerfiles use BuildKit cache mounts for Go compilation.
+      DOCKER_BUILDKIT: "1"
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

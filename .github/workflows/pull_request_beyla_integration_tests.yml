@@ -57,6 +57,8 @@ jobs:
     name: ${{ matrix.description }}
     needs: test-matrix
     runs-on: ubuntu-x64
+    env:
+      DOCKER_BUILDKIT: "1"
     # Grant specific permissions needed only for this job
     permissions:
       contents: read

@@ -509,6 +509,21 @@ transform_go_imports_and_paths() {
     sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
       "$OBI_DEST/dockerutil_test.go"
 
+    # Build the transformed Beyla image with the Docker CLI. The Moby SDK
+    # BuildKit API requires a BuildKit session for registry metadata resolution,
+    # while the CLI uses DOCKER_BUILDKIT from the test job environment.
+    local obi_image_build='return buildDockerImage(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")'
+    if ! grep -qF "$obi_image_build" "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: dockerutil_test.go Beyla image build changed; update the CLI build transform" >&2
+      exit 1
+    fi
+    sed_i -e 's|return buildDockerImage(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")|return buildBeylaDockerImageCLI(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")|' \
+      "$OBI_DEST/dockerutil_test.go"
+    if ! grep -qF 'return buildBeylaDockerImageCLI(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")' "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: failed to select CLI for generated Beyla image build" >&2
+      exit 1
+    fi
+
     # obi.instrument() mounts the instrumenter configs as /configs. Mount the
     # generated copy instead of .obi-src, so the Beyla overrides copied by
     # copy_beyla_extensions (e.g. the v1 obi-config-route53.yml) take effect,
@@ -1118,47 +1133,6 @@ adjust_oats_compose_paths() {
   done
 }
 
-rewrite_oats_go_mod() {
-  local mise_config ginkgo_version
-  mise_config="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/mise.toml"
-  ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$mise_config")
-  if [[ -z "$ginkgo_version" ]]; then
-    echo "Could not read the pinned Ginkgo version from $mise_config" >&2
-    return 1
-  fi
-  echo "  Rewriting OATs go.mod files..."
-  find "$OATS_DEST" -name "go.mod" -type f | while read -r modfile; do
-    # Rewrite all OBI oats module references (module declarations, require, and replace
-    # directives) to the Beyla module path. Use ${BEYLA_MODULE} (with /v3) to match
-    # the Go import transforms applied to .go files by transform_oats_go_files().
-    sed_i -e "s|${OBI_MODULE}/internal/test/oats|${BEYLA_MODULE}/internal/testgenerated/oats|g" "$modfile"
-
-    # The upstream OATS modules require the OBI ROOT module (added for the
-    # weavercheck package) via a local replace to the repo root. In Beyla
-    # the repo root IS the Beyla module, so repoint both the require and the
-    # replace at ${BEYLA_MODULE}. After the oats-path rewrite above, the only
-    # remaining go.opentelemetry.io/obi tokens are this root require and
-    # replace (the go.opentelemetry.io/{otel,collector,proto,auto} deps and
-    # the prose comment mentioning the OBI module are untouched).
-    # "../../../.." from internal/testgenerated/oats/{harness,http,…} is the
-    # Beyla repo root, whose module path is ${BEYLA_MODULE}, so the replace
-    # now matches and provides …/internal/testgenerated/weavercheck.
-    # The require version must carry the module's major-version suffix
-    # (Go rejects "v0.0.0" for a /v3 module path), so bump v0.0.0 → v3.0.0;
-    # the local replace makes the exact version immaterial at build time.
-    sed_i \
-      -e "s|${OBI_MODULE} v0.0.0|${BEYLA_MODULE} v3.0.0|g" \
-      -e "s|replace ${OBI_MODULE} =>|replace ${BEYLA_MODULE} =>|g" \
-      "$modfile"
-
-    # Keep the compiled Ginkgo version in lockstep with the CLI installed
-    # from mise.toml (v${ginkgo_version}). The upstream OATS modules pin
-    # v2.32.0, which triggers a "Ginkgo detected a version mismatch"
-    # failure against the newer CLI. The target version comes from mise.toml.
-    sed_i -e "s|github.com/onsi/ginkgo/v2 v2.32.0|github.com/onsi/ginkgo/v2 v${ginkgo_version}|g" "$modfile"
-  done
-}
-
 transform_oats_go_files() {
   local jobs="$1"
   echo "  Transforming OATs Go files..."
@@ -1172,21 +1146,6 @@ apply_oats_behavioral_transforms() {
   local jobs="$1"
   echo "  Applying OBI → Beyla behavioral transforms to OATs..."
   find "$OATS_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
-}
-
-tidy_oats_go_mods() {
-  # The rewrites above introduce a new require (the Beyla root module, for
-  # weavercheck) and bump the Ginkgo pin, so each OATS module's go.sum is now
-  # stale ("go: updates to go.mod needed; to update it: go mod tidy"). Tidy
-  # every generated OATS module. This needs module-cache/network access,
-  # consistent with the vendor-obi-tests / copy-obi-vendor make targets that
-  # already run go get / go mod tidy / go mod vendor.
-  echo "  Tidying generated OATs modules..."
-  # Tidy the shared harness first (group modules replace it via ../harness).
-  for modfile in "$OATS_DEST/harness/go.mod" $(find "$OATS_DEST" -name go.mod -type f ! -path "*/harness/go.mod"); do
-    [[ -f "$modfile" ]] || continue
-    (cd "$(dirname "$modfile")" && go mod tidy)
-  done
 }
 
 # =============================================================================
@@ -1684,14 +1643,18 @@ generate() {
   cleanup_and_inject_build_tags "$jobs"
 
   # -----------------------------------------------------------------
-  # OATs generation
+  # OATS v3 generation: suite manifests select case YAML files; no Go
+  # harness modules or Ginkgo tests are copied with the suites.
   # -----------------------------------------------------------------
   copy_oats
   adjust_oats_compose_paths
-  rewrite_oats_go_mod
   transform_oats_go_files "$jobs"
   apply_oats_behavioral_transforms "$jobs"
-  tidy_oats_go_mods
+  # OATS v0.11 sends inputs before polling assertions, unlike v0.7's per-poll
+  # input replay. The generic Kafka fixture has shown HTTP probe attachment
+  # after the default 10s input window; keep /produce active for 30s without
+  # changing either expected-span assertion.
+  scripts/extend-beyla-kafka-oats-window.sh "$OATS_DEST/kafka/oats_go_kafka-generic.yaml"
 
   # -----------------------------------------------------------------
   # VM test infrastructure

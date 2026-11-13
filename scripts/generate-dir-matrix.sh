@@ -3,14 +3,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Generate test matrix - one shard per test directory
-# Usage: ./scripts/generate-dir-matrix.sh [search_dir] [exclude_pattern]
+# Usage: ./scripts/generate-dir-matrix.sh [search_dir] [exclude_pattern] [test_marker]
 
 set -e
 
 # Find all test directories
 SEARCH_DIR="${1:-internal/test/integration/k8s}"
-EXCLUDE_PATTERN="${2:-common}"
-TEST_DIRS=$(find "$SEARCH_DIR" -name "*_test.go" | grep -v "$EXCLUDE_PATTERN" | sort | xargs dirname | xargs basename -a | sort -u)
+EXCLUDE_PATTERN="${2-common}"
+TEST_MARKER="${3:-*_test.go}"
+TEST_FILES=$(find "$SEARCH_DIR" -name "$TEST_MARKER")
+if [ -n "$EXCLUDE_PATTERN" ]; then
+  TEST_FILES=$(printf '%s\n' "$TEST_FILES" | grep -v "$EXCLUDE_PATTERN" || true)
+fi
+TEST_DIRS=$(printf '%s\n' "$TEST_FILES" | sort | while IFS= read -r file; do
+  [ -n "$file" ] && basename "$(dirname "$file")"
+done | sort -u)
 
 if [ -z "$TEST_DIRS" ]; then
   echo "ERROR: No test directories found in $SEARCH_DIR" >&2

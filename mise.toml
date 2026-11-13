@@ -80,7 +80,7 @@ description = "Compile Beyla with debug symbols"
 run = '''CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -gcflags "-N -l" -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
 
 [tools]
-go = { version = "1.26.10" }
+go = { version = "1.27.3" }
 golangci-lint = { version = "2.14.0" }
 hk = "2.11.1"
 rumdl = "0.3.2"

@@ -1,6 +1,6 @@
 module github.com/grafana/beyla/v3
 
-go 1.26.10
+go 1.27.4
 
 // opentelemetry-ebpf-instrumentation is not downloaded directly via go mod
 // but included as a go submodule
@@ -9,41 +9,41 @@ replace go.opentelemetry.io/obi => ./.obi-src
 replace go.opentelemetry.io/obi/cmd/obi/configbridge => ./scripts/obi-configbridge
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.47.5
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.12
-	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.6
+	github.com/aws/aws-sdk-go-v2 v1.47.8
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.17
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.9
 	github.com/caarlos0/env/v11 v11.4.2
 	github.com/cilium/ebpf v0.22.0
-	github.com/goccy/go-json v0.11.1
+	github.com/goccy/go-json v0.12.0
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/invopop/jsonschema v0.13.0
 	github.com/moby/moby/api v1.56.1
 	github.com/moby/moby/client v0.6.2
-	github.com/ory/dockertest/v4 v4.0.0
+	github.com/ory/dockertest/v4 v4.0.1
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
-	github.com/prometheus/common v0.72.0
+	github.com/prometheus/common v0.73.1
 	github.com/prometheus/otlptranslator v1.0.0
-	github.com/prometheus/procfs v0.22.0
+	github.com/prometheus/procfs v0.23.0
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/stretchr/testify v1.12.1
 	github.com/vladimirvivien/gexe v0.5.0
-	go.opentelemetry.io/collector/component v1.68.0
-	go.opentelemetry.io/collector/config/configgrpc v1.67.0
-	go.opentelemetry.io/collector/config/confighttp v0.161.0
-	go.opentelemetry.io/collector/config/configopaque v1.67.0
-	go.opentelemetry.io/collector/config/configoptional v1.67.0
-	go.opentelemetry.io/collector/config/configretry v1.67.0
-	go.opentelemetry.io/collector/config/configtls v1.67.0
-	go.opentelemetry.io/collector/consumer v1.68.0
-	go.opentelemetry.io/collector/exporter v1.67.0
-	go.opentelemetry.io/collector/exporter/exporterhelper v0.161.0
-	go.opentelemetry.io/collector/exporter/otlpexporter v0.161.0
-	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.161.0
-	go.opentelemetry.io/collector/pdata v1.69.0
+	go.opentelemetry.io/collector/component v1.71.0
+	go.opentelemetry.io/collector/config/configgrpc v1.71.0
+	go.opentelemetry.io/collector/config/confighttp v0.164.0
+	go.opentelemetry.io/collector/config/configopaque v1.71.0
+	go.opentelemetry.io/collector/config/configoptional v1.71.0
+	go.opentelemetry.io/collector/config/configretry v1.71.0
+	go.opentelemetry.io/collector/config/configtls v1.71.0
+	go.opentelemetry.io/collector/consumer v1.71.0
+	go.opentelemetry.io/collector/exporter v1.71.0
+	go.opentelemetry.io/collector/exporter/exporterhelper v0.165.0
+	go.opentelemetry.io/collector/exporter/otlpexporter v0.165.0
+	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.165.0
+	go.opentelemetry.io/collector/pdata v1.71.0
 	go.opentelemetry.io/obi v1.0.0
 	go.opentelemetry.io/obi/cmd/obi/configbridge v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.47.0
@@ -52,17 +52,17 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
 	go.uber.org/zap v1.28.0
-	golang.org/x/mod v0.41.0
+	golang.org/x/mod v0.43.0
 	golang.org/x/net v0.61.0
-	golang.org/x/sync v0.24.0
-	golang.org/x/sys v0.49.0
-	google.golang.org/api v0.287.1
-	google.golang.org/grpc v1.84.0
+	golang.org/x/sync v0.25.0
+	golang.org/x/sys v0.50.0
+	google.golang.org/api v0.311.0
+	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.37.1
-	k8s.io/apimachinery v0.37.1
-	k8s.io/client-go v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/client-go v0.37.2
 	sigs.k8s.io/e2e-framework v0.7.0
 )
 

@@ -300,6 +300,22 @@
       ],
     },
     {
+      description: 'Keep the docs preview reusable workflow on the branch ref required by its Google Workload Identity trust policy',
+      matchManagers: [
+        'github-actions',
+      ],
+      matchDepTypes: [
+        'workflow',
+      ],
+      matchFileNames: [
+        '.github/workflows/deploy-pr-preview.yml',
+      ],
+      matchPackageNames: [
+        'grafana/writers-toolkit',
+      ],
+      pinDigests: false,
+    },
+    {
       description: 'Group the helm-charts reusable workflow bump with the other GitHub Actions updates',
       groupName: 'Github Actions',
       matchManagers: [

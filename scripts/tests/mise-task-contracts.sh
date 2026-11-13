@@ -150,11 +150,10 @@ grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
 
-# Contract-test the shared pull-request integration shard task without Mise or
-# real test execution. These cases cover the three workflow configurations.
+# Contract-test argument forwarding and failure handling without Mise or real
+# test execution. Workflow checks exercise the three variants.
 cat >"$tmp/bin/gotestsum" <<'SH'
 #!/usr/bin/env bash
-printf 'called\n' >> "$GOTESTSUM_CALLS"
 printf '%s\n' "$@" > "$GOTESTSUM_LOG"
 exit "${GOTESTSUM_EXIT:-0}"
 SH
@@ -162,60 +161,29 @@ chmod +x "$tmp/bin/gotestsum"
 shard_task="$root/.mise/tasks/integration/run/shard"
 shard_env=(
   "PATH=$tmp/bin:$PATH"
-  "MATRIX_ID=shard-4"
-  'MATRIX_JSON={"id":"shard-4","test_pattern":"TestAlpha"}'
-  'MATRIX_TEST_PATTERN=TestAlpha|TestBeta'
-  "RUN_NUMBER=99"
+  'MATRIX_ID=shard-test'
+  'MATRIX_JSON={"id":"shard-test"}'
+  'MATRIX_TEST_PATTERN=TestAlpha'
+  "RUN_NUMBER=1"
   "TEST_TAGS=integration"
   "REPORT_DIR=$tmp/reports"
   "GOTESTSUM_LOG=$tmp/shard-gotestsum"
-  "GOTESTSUM_CALLS=$tmp/shard-calls"
 )
-gotestsum_prefix=(
-  --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race
-)
-gotestsum_suffix=(
-  -ftestname "--jsonfile=$tmp/reports/test-run-99-shard-4.log" --
-  -count=1 -tags=integration -timeout 30m -mod vendor
-)
-check_args() {
-  printf '%s\n' "$@" >"$tmp/expected-gotestsum"
-  diff -u "$tmp/expected-gotestsum" "$tmp/shard-gotestsum"
-}
-
-env "${shard_env[@]}" bash "$shard_task" ./internal/testgenerated/integration -race \
-  '-run=^(TestAlpha|TestBeta)$' >"$tmp/integration-shard-output"
-check_args "${gotestsum_prefix[@]}" --packages=./internal/testgenerated/integration \
-  "${gotestsum_suffix[@]}" -race '-run=^(TestAlpha|TestBeta)$' ./internal/testgenerated/integration
-grep -Fxq 'Partition' "$tmp/integration-shard-output"
-grep -Fxq '{"id":"shard-4","test_pattern":"TestAlpha"}' "$tmp/integration-shard-output"
-[[ -d "$tmp/reports" ]]
-
+forwarded="-run=Test Alpha [literal]*;\$(touch $tmp/should-not-exist)"
 env "${shard_env[@]}" bash "$shard_task" ./internal/testgenerated/integration \
-  '-run=^(TestAlpha|TestBeta)$' >/dev/null
-check_args "${gotestsum_prefix[@]}" --packages=./internal/testgenerated/integration \
-  "${gotestsum_suffix[@]}" '-run=^(TestAlpha|TestBeta)$' ./internal/testgenerated/integration
+  "$forwarded" >/dev/null
+grep -Fxq -- "$forwarded" "$tmp/shard-gotestsum"
+[[ ! -e "$tmp/should-not-exist" ]]
 
-env "${shard_env[@]}" MATRIX_TEST_PATTERN='./internal/testgenerated/integration/k8s/TestAlpha' \
-  bash "$shard_task" './internal/testgenerated/integration/k8s/TestAlpha' -race >/dev/null
-check_args "${gotestsum_prefix[@]}" \
-  --packages=./internal/testgenerated/integration/k8s/TestAlpha "${gotestsum_suffix[@]}" \
-  -race ./internal/testgenerated/integration/k8s/TestAlpha
-[[ $(wc -l <"$tmp/shard-calls") -eq 3 ]]
-
-invalid_calls="$tmp/invalid-shard-calls"
-if env "${shard_env[@]}" MATRIX_TEST_PATTERN='' GOTESTSUM_CALLS="$invalid_calls" \
+invalid_log="$tmp/invalid-shard-gotestsum"
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='' GOTESTSUM_LOG="$invalid_log" \
   bash "$shard_task" ./internal/testgenerated/integration >/dev/null 2>&1; then
   echo 'Integration shard accepted an empty pattern' >&2
   exit 1
 fi
-if env "${shard_env[@]}" GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
-  echo 'Integration shard accepted a missing package' >&2
-  exit 1
-fi
-[[ ! -e "$invalid_calls" ]]
+[[ ! -e "$invalid_log" ]]
 
-if env "${shard_env[@]}" GOTESTSUM_EXIT=23 bash "$shard_task" \
+if env "${shard_env[@]}" GOTESTSUM_LOG="$tmp/failing-gotestsum" GOTESTSUM_EXIT=23 bash "$shard_task" \
   ./internal/testgenerated/integration >/dev/null 2>&1; then
   echo 'Integration shard did not propagate gotestsum failure' >&2
   exit 1

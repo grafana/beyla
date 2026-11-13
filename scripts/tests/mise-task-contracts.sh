@@ -171,78 +171,52 @@ shard_env=(
   "GOTESTSUM_LOG=$tmp/shard-gotestsum"
   "GOTESTSUM_CALLS=$tmp/shard-calls"
 )
+gotestsum_prefix=(
+  --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race
+)
+gotestsum_suffix=(
+  -ftestname "--jsonfile=$tmp/reports/test-run-99-shard-4.log" --
+  -count=1 -tags=integration -timeout 30m -mod vendor
+)
+check_args() {
+  printf '%s\n' "$@" >"$tmp/expected-gotestsum"
+  diff -u "$tmp/expected-gotestsum" "$tmp/shard-gotestsum"
+}
 
-env "${shard_env[@]}" SHARD_MODE=test-name SHARD_RACE=true \
-  bash "$shard_task" >"$tmp/shard-test-name-output"
-cat >"$tmp/expected-test-name-race" <<EOF
---rerun-fails=2
---rerun-fails-max-failures=2
---rerun-fails-abort-on-data-race
---packages=./internal/testgenerated/integration
--ftestname
---jsonfile=$tmp/reports/test-run-99-shard-4.log
---
--race
--count=1
--tags=integration
--timeout
-30m
--mod
-vendor
--run=^(TestAlpha|TestBeta)$
-./internal/testgenerated/integration
-EOF
-diff -u "$tmp/expected-test-name-race" "$tmp/shard-gotestsum"
-grep -Fxq 'Partition' "$tmp/shard-test-name-output"
-grep -Fxq '{"id":"shard-4","test_pattern":"TestAlpha"}' "$tmp/shard-test-name-output"
+env "${shard_env[@]}" bash "$shard_task" ./internal/testgenerated/integration -race \
+  '-run=^(TestAlpha|TestBeta)$' >"$tmp/integration-shard-output"
+check_args "${gotestsum_prefix[@]}" --packages=./internal/testgenerated/integration \
+  "${gotestsum_suffix[@]}" -race '-run=^(TestAlpha|TestBeta)$' ./internal/testgenerated/integration
+grep -Fxq 'Partition' "$tmp/integration-shard-output"
+grep -Fxq '{"id":"shard-4","test_pattern":"TestAlpha"}' "$tmp/integration-shard-output"
 [[ -d "$tmp/reports" ]]
 
-env "${shard_env[@]}" SHARD_MODE=test-name SHARD_RACE=false \
-  bash "$shard_task" >/dev/null
-sed '/^-race$/d' "$tmp/expected-test-name-race" >"$tmp/expected-test-name-no-race"
-diff -u "$tmp/expected-test-name-no-race" "$tmp/shard-gotestsum"
+env "${shard_env[@]}" bash "$shard_task" ./internal/testgenerated/integration \
+  '-run=^(TestAlpha|TestBeta)$' >/dev/null
+check_args "${gotestsum_prefix[@]}" --packages=./internal/testgenerated/integration \
+  "${gotestsum_suffix[@]}" '-run=^(TestAlpha|TestBeta)$' ./internal/testgenerated/integration
 
 env "${shard_env[@]}" MATRIX_TEST_PATTERN='./internal/testgenerated/integration/k8s/TestAlpha' \
-  SHARD_MODE=packages SHARD_RACE=true bash "$shard_task" >/dev/null
-cat >"$tmp/expected-k8s-packages" <<EOF
---rerun-fails=2
---rerun-fails-max-failures=2
---rerun-fails-abort-on-data-race
---packages=./internal/testgenerated/integration/k8s/TestAlpha
--ftestname
---jsonfile=$tmp/reports/test-run-99-shard-4.log
---
--race
--count=1
--tags=integration
--timeout
-30m
--mod
-vendor
-./internal/testgenerated/integration/k8s/TestAlpha
-EOF
-diff -u "$tmp/expected-k8s-packages" "$tmp/shard-gotestsum"
+  bash "$shard_task" './internal/testgenerated/integration/k8s/TestAlpha' -race >/dev/null
+check_args "${gotestsum_prefix[@]}" \
+  --packages=./internal/testgenerated/integration/k8s/TestAlpha "${gotestsum_suffix[@]}" \
+  -race ./internal/testgenerated/integration/k8s/TestAlpha
+[[ $(wc -l <"$tmp/shard-calls") -eq 3 ]]
 
 invalid_calls="$tmp/invalid-shard-calls"
-if env "${shard_env[@]}" MATRIX_TEST_PATTERN='' SHARD_MODE=test-name SHARD_RACE=true \
-  GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='' GOTESTSUM_CALLS="$invalid_calls" \
+  bash "$shard_task" ./internal/testgenerated/integration >/dev/null 2>&1; then
   echo 'Integration shard accepted an empty pattern' >&2
   exit 1
 fi
-if env "${shard_env[@]}" MATRIX_TEST_PATTERN='TestAlpha' SHARD_MODE=invalid SHARD_RACE=true \
-  GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
-  echo 'Integration shard accepted an invalid mode' >&2
-  exit 1
-fi
-if env "${shard_env[@]}" MATRIX_TEST_PATTERN='TestAlpha' SHARD_MODE=test-name SHARD_RACE=maybe \
-  GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
-  echo 'Integration shard accepted an invalid race setting' >&2
+if env "${shard_env[@]}" GOTESTSUM_CALLS="$invalid_calls" bash "$shard_task" >/dev/null 2>&1; then
+  echo 'Integration shard accepted a missing package' >&2
   exit 1
 fi
 [[ ! -e "$invalid_calls" ]]
 
-if env "${shard_env[@]}" MATRIX_TEST_PATTERN='TestAlpha' SHARD_MODE=test-name SHARD_RACE=true \
-  GOTESTSUM_EXIT=23 bash "$shard_task" >/dev/null 2>&1; then
+if env "${shard_env[@]}" GOTESTSUM_EXIT=23 bash "$shard_task" \
+  ./internal/testgenerated/integration >/dev/null 2>&1; then
   echo 'Integration shard did not propagate gotestsum failure' >&2
   exit 1
 else

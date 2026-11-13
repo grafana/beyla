@@ -151,9 +151,9 @@ jobs:
           MATRIX_TEST_PATTERN: ${{ matrix.test_pattern }}
           RUN_NUMBER: ${{ github.run_number }}
           TEST_TAGS: integration
-          SHARD_MODE: test-name
-          SHARD_RACE: "true"
-        run: mise run integration:run:shard
+        run: >-
+          mise run integration:run:shard -- ./internal/testgenerated/integration -race
+          "-run=^(${MATRIX_TEST_PATTERN})$"
 
       - name: Process coverage data
         run: mise run integration:coverage-data

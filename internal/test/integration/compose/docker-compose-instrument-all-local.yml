@@ -46,6 +46,26 @@ services:
     ports:
       - "127.0.0.1::8080"
 
+  unix-server:
+    <<: *local-process
+    command: ["--unix-server"]
+    network_mode: none
+    volumes:
+      - ${BEYLA_TEST_UNIX_DIR:?}:/sockets
+    environment:
+      OTEL_SERVICE_NAME: local-unix-server
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+
+  unix-client:
+    <<: *local-process
+    command: ["--unix-client"]
+    network_mode: none
+    volumes:
+      - ${BEYLA_TEST_UNIX_DIR:?}:/sockets
+    environment:
+      OTEL_SERVICE_NAME: local-unix-client
+      OTEL_SERVICE_NAMESPACE: instrument-all-local
+
   idle-nonroot:
     <<: *local-process
     command: ["--idle"]
@@ -87,6 +107,8 @@ services:
       - root-1023
       - root-1024
       - python-workers
+      - unix-server
+      - unix-client
       - idle-nonroot
       - idle-root
 

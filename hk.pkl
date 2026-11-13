@@ -8,6 +8,23 @@ import "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.
 exclude = List(".obi-src/**", "vendor/**", "internal/testgenerated/**")
 
 steps {
+  ["rumdl"] = (Builtins.rumdl) {
+    // Limit Markdown linting to first-party source; helm-docs owns the chart README.
+    glob = List("**/*.md")
+    exclude = List("charts/beyla/README.md")
+    // Taplo also formats .rumdl.toml; finish it before rumdl reads its policy.
+    depends = List("taplo-format")
+  }
+  ["rumdl-config"] = new Config.Step {
+    // A policy change must re-check every Markdown file, not lint TOML as Markdown.
+    glob = ".rumdl.toml"
+    dir = "."
+    check = new Config.CommandSpec {
+      command = "rumdl check ."
+      effect = "read"
+    }
+    depends = List("rumdl")
+  }
   ["golangci-lint"] = (Builtins.golangci_lint) {
     // Beyla's existing root-module lint task has a six-minute timeout. Keep
     // the builtin scoped to this module instead of nested Go modules.
@@ -36,6 +53,11 @@ steps {
       effect = "write"
     }
   }
+  ["taplo-format"] = Builtins.taplo_format
+  ["pkl-format"] = Builtins.pkl_format
+  ["destroyed-symlinks"] = Builtins.destroyed_symlinks
+  ["actionlint"] = Builtins.actionlint
+  ["hadolint"] = Builtins.hadolint
   ["go-format"] = new Config.Step {
     glob = "**/*.go"
     dir = "."

@@ -102,4 +102,3 @@ Choose OBI if you want to use the OpenTelemetry project release directly, and ad
 
 [requirements]: ../../requirements-and-security/requirements/
 [setup]: ../../setup/
-

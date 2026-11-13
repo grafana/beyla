@@ -142,7 +142,7 @@ The configuration does not set an endpoint to export metrics. Instead, the `trac
 
 Use `kubectl logs` to see network flow entries, for example:
 
-```
+```text
 network_flow: beyla.ip=172.18.0.2 iface= direction=255 src.address=10.244.0.4 dst.address=10.96.0.1
 src.name=local-path-provisioner-7577fdbbfb-g6b7d dst.name=kubernetes
 k8s.src.node.name=kind-control-plane k8s.dst.namespace=default k8s.dst.name=kubernetes

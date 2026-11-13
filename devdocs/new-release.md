@@ -74,7 +74,7 @@ script separately calls OBI’s `make -C "$OBI_DIR" docker-generate` and
 `make -C "$OBI_DIR" java-build`; its Java 17 setup remains for that direct
 upstream Make/Gradle path.
 
-First, inspect Beyla `main` and confirm the OBI SHA that it pins. For example, 
+First, inspect Beyla `main` and confirm the OBI SHA that it pins. For example,
 Beyla `main` points to OBI commit `8634fc94ab21b86dd829fa92c87d8120790de337`.
 
 ```bash
@@ -247,6 +247,7 @@ to prepare the Beyla bump:
   architectural changes.
 - Merge the Alloy PR only after the Beyla release has been promoted to
   stable/latest.
+
 ## Failure Handling
 
 If a release fails in CI or in `dev/ops/prod`:
@@ -274,6 +275,7 @@ that the OBI fork's tag stream stays in lockstep with Beyla's.
 If the fix is in Beyla only (no OBI changes):
 
 1. **Cherry-pick the fix** onto the existing Beyla release branch:
+
    ```bash
    cd /path/to/beyla
    git fetch --prune origin
@@ -312,6 +314,7 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
 
 1. **Cherry-pick the fix** onto the OBI release branch and regenerate
    artifacts:
+
    ```bash
    cd /path/to/opentelemetry-ebpf-instrumentation
    git fetch --prune origin
@@ -330,6 +333,7 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
 
 2. **Update Beyla's `.obi-src`** on the Beyla release branch to point to the
    new OBI release branch tip, and regenerate Beyla artifacts:
+
    ```bash
    cd /path/to/beyla
    git fetch --prune origin
@@ -398,7 +402,7 @@ OBI PR or issue shipped in Beyla:
 ```
 
 Example below to find if the OBI PR linked to this issue
-https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/995
+<https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/995>
 was released in Beyla (it wasn't):
 
 ```shell
@@ -410,7 +414,7 @@ OBI Issue #995 (PR #997) was not yet released as part of Beyla
 ```
 
 Another example with
-https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/896:
+<https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/896>:
 
 ```shell
 ./scripts/release-lookup.sh --obi 896

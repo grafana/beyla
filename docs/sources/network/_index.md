@@ -21,11 +21,11 @@ To get started using Beyla networking metrics, consult the [quickstart setup doc
 
 Beyla provides two families of network metrics:
 
-* **Network flow bytes** as the number of bytes observed between two network endpoints.
+- **Network flow bytes** as the number of bytes observed between two network endpoints.
   - `beyla.network.flow.bytes`, if it is exported via OpenTelemetry.
   - `beyla_network_flow_bytes_total`, if it is exported by a Prometheus endpoint.
   - To enable it, add the `network` option to the [BEYLA_OTEL_METRICS_FEATURES or BEYLA_PROMETHEUS_FEATURES](../configure/export-data/) configuration option.
-* **Inter-zone bytes** as the number of bytes observed between two network endpoints in different Cloud Availability Zones.
+- **Inter-zone bytes** as the number of bytes observed between two network endpoints in different Cloud Availability Zones.
   - `beyla.network.inter.zone.bytes`, if it is exported via OpenTelemetry.
   - `beyla_network_inter_zone_bytes_total`, if it is exported by a Prometheus endpoint.
   - More information about how to enable it in the [Measuring traffic between Cloud availability zones](inter-az/) documentation.
@@ -41,7 +41,7 @@ For the inter-zone bytes metric, the default attributes are `k8s.cluster.name`, 
 | `beyla.ip` / `beyla_ip`                     | Local IP address of the Beyla instance that emitted the metric                                                                                                                      |
 | `transport`                                 | L4 Transport protocol (for example, `TCP` or `UDP`)                                                                                                                                 |
 | `src.address` / `src_address`               | Source IP address of Network flow                                                                                                                                                   |
-| `dst.address` / `dst_address`               | Destination IP address of Network flow
+| `dst.address` / `dst_address`               | Destination IP address of Network flow |
 | `src.port` / `src_port`                     | Source port of Network flow                                                                                                                                                         |
 | `dst.port` / `dst_port`                     | Destination port of Network flow                                                                                                                                                    |
 | `src.name` / `src_name`                     | Name of Network flow source: Kubernetes name, host name, or IP address                                                                                                              |

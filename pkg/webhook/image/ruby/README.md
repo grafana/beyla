@@ -96,7 +96,6 @@ The distribution is pinned by Git commit rather than a manually maintained versi
    ```
 
    The general compatibility list excludes OpenTelemetry gems, unconstrained dependencies, and `rake`. The same command separately generates the allowed `opentelemetry-api` requirements.
-
 3. Review the upstream Ruby requirement, Rails minimum, and the generated `beyla/dependency_requirements.rb` diff.
 4. Update `beyla/compatibility.rb`, scanner checks, documentation, and tests if the supported versions intentionally change.
 5. Run the unit tests and package-build validation commands from this README.

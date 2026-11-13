@@ -75,7 +75,7 @@ matching both selection criteria.
 
 This property accepts a comma-separated list of ports or port ranges. If an executable matches any of the ports Beyla selects it. For example:
 
-```
+```bash
 BEYLA_OPEN_PORT=80,443,8000-8999
 ```
 
@@ -138,7 +138,7 @@ Beyla pins some of its eBPF maps under an `otel` directory inside the BPF filesy
 
 The BPF filesystem has to be mounted before Beyla starts. When it isn't, Beyla keeps running with the pinning disabled and logs:
 
-```
+```text
 creating OTEL namespace in bpffs failed (is bpffs mounted?)
 OBI will still work, but features depending on pinned maps (e.g., log enricher, profile correlation) will be disabled
 ```

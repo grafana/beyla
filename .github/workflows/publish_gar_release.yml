@@ -135,7 +135,12 @@ jobs:
         run: |
           AMD64_DIGEST=$(basename "${DIGESTS_DIR}"/amd64/*)
           ARM64_DIGEST=$(basename "${DIGESTS_DIR}"/arm64/*)
+          mapfile -t image_tags < <(jq -r '.tags[]' <<< "${META_JSON}")
+          tag_args=()
+          for tag in "${image_tags[@]}"; do
+            tag_args+=(-t "${tag}")
+          done
           docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${META_JSON}") \
+            "${tag_args[@]}" \
             "${IMAGE}@sha256:${AMD64_DIGEST}" \
             "${IMAGE}@sha256:${ARM64_DIGEST}"

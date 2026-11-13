@@ -1650,6 +1650,11 @@ generate() {
   adjust_oats_compose_paths
   transform_oats_go_files "$jobs"
   apply_oats_behavioral_transforms "$jobs"
+  # OATS v0.11 sends inputs before polling assertions, unlike v0.7's per-poll
+  # input replay. The generic Kafka fixture has shown HTTP probe attachment
+  # after the default 10s input window; keep /produce active for 30s without
+  # changing either expected-span assertion.
+  scripts/extend-beyla-kafka-oats-window.sh "$OATS_DEST/kafka/oats_go_kafka-generic.yaml"
 
   # -----------------------------------------------------------------
   # VM test infrastructure

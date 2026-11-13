@@ -1,3 +1,4 @@
+ARG RUNTIME_IMG=scratch
 ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.18@sha256:00da54aef610c9d8ed77757afab9c419079f17852bad0e02fe0102e5ce508be4
 
 # Build JNI native library using Go image (has gcc + apt; installs cross-compiler)
@@ -121,10 +122,11 @@ RUN if [ -z "${DEV_OBI}" ]; then \
 # The Java agent is embedded at Go compile time, so the platform-specific jar
 # must be copied into vendor before building the Beyla binary.
 COPY --from=javaagent-builder /build/build/obi-java-agent.jar /src/vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar
+ARG BUILD_TAGS
 RUN mise run --skip-tools compile
 
 # Create final image from minimal + built binary
-FROM scratch
+FROM ${RUNTIME_IMG}
 
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 

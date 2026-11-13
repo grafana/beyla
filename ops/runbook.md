@@ -18,7 +18,6 @@ This alert is triggered when the error rate of the OpenTelemetry metric exporter
 1. Check the logs of the OpenTelemetry collector and verify that the configuration is correct. Verify the network connection between Beyla and the OpenTelemetry collector.
 2. Verify Beyla Metrics configuration and check Beyla logs.
 
-
 ### BeylaOTELTraceExportHighErrorRate
 
 This alert is triggered when the error rate of the OpenTelemetry trace exporter is high.

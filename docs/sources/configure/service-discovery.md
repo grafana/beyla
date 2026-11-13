@@ -275,7 +275,7 @@ discovery:
       open_ports: 8090
 ```
 
-This example configures Beyla to only export application service graph metrics by default, but it later overrides specific discovery criteria with different set of exported metrics. 
+This example configures Beyla to only export application service graph metrics by default, but it later overrides specific discovery criteria with different set of exported metrics.
 The outcome of the configuration is as follows:
 
 - The `apache`, `nginx`, and `tomcat` service instances only export
@@ -286,7 +286,6 @@ The outcome of the configuration is as follows:
 
 - Services listening on ports 3030 or 3040 export the `application`,
   `application_span`, and `application_service_graph` metric groups.
-
 
 ### Custom trace sampler
 
@@ -314,7 +313,7 @@ This example configures a global trace sampling configuration with the `traceidr
 
 By using the `routes` property for an `instrument` definition criteria, you can define individual incoming and outgoing route matching rules for each `instrument` criteria. This option appends to the default specified route matching patterns if it is defined for all instrumented services. For more details on configuring route matching patterns, refer to the [routes decorator](../routes-decorator/) documentation section.
 
-Unlike the default `routes` pattern matching configuration option, the `instrument` definition criteria routes option has separate section for defining route matching rules for `incoming` and `outgoing` requests. This allows for precise control of your HTTP route cardinality. 
+Unlike the default `routes` pattern matching configuration option, the `instrument` definition criteria routes option has separate section for defining route matching rules for `incoming` and `outgoing` requests. This allows for precise control of your HTTP route cardinality.
 
 For example:
 
@@ -369,7 +368,7 @@ port isn't required, meaning, client-only applications qualify too. At startup, 
 task/file iterator also records processes already holding sockets, including
 inherited listeners and established keepalive connections across network namespaces.
 
-Previously held candidates are promoted automatically to `survey_info`. 
+Previously held candidates are promoted automatically to `survey_info`.
 After being admitted, a process stays admitted until it exits, even if it closes
 all sockets. PID reuse doesn't inherit admission.
 

@@ -57,7 +57,6 @@ The `beyla_network_inter_zone_bytes` specification is currently in experimental 
 The specification is not final and future version of Beyla may introduce breaking changes.
 {{< /admonition >}}
 
-
 | YAML                 | Environment variable               | Type     | Default             |
 | -------------------- | ---------------------------------- | -------- | ------------------- |
 | `source`             | `BEYLA_NETWORK_SOURCE`             | string   | `socket_filter`     |
@@ -204,7 +203,6 @@ This means that the same network packet could be seen as "ingress" in a virtual 
 
 The rate at which packets should be sampled and sent to the target collector.
 For example, if set to 100, one out of 100 packets, on average, are sent to the target collector.
-
 
 | YAML          | Environment variable        | Type    | Default |
 | ------------- | --------------------------- | ------- | ------- |

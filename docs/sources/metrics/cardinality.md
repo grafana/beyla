@@ -62,7 +62,7 @@ instance belongs to a unique application instance.
 
 Cardinality, according to the default set of enabled attributes in Beyla:
 
-```
+```text
 #Instances * #Metrics * #AttributeValues
 ```
 
@@ -81,7 +81,7 @@ Cardinality, according to the default set of enabled attributes in Beyla:
 
 Summarizing, the formula to calculate the cardinality of processes is:
 
-```
+```text
 #ProcessInstances * 12
 ```
 
@@ -147,7 +147,7 @@ Both client and Backend are instrumented by Beyla. The other components are exte
 
 The pessimistic calculation would be:
 
-```
+```text
 #Instances * #MetricNames * #HistoBuckets * #Operations * #Endpoints * #ReturnCodes =
 = 2 * 5 * 177/3 * 37/3 =2771
 ```
@@ -169,9 +169,9 @@ The numbers taken as reference:
 * 3 endpoints: backend, Identity provider, and DB
 * 7 Return codes: RPC OK/Err, HTTP 200/401/500, SQL OK/Err
 
-It might appear that cardinality should not grow beyond 163. However this number is not realistic nor accurate  since some multipliers might not apply to the whole system. For example, SQL methods should not multiply to the RPC and HTTP metrics.
+It might appear that cardinality should not grow beyond 163. However this number is not realistic nor accurate since some multipliers might not apply to the whole system. For example, SQL methods should not multiply to the RPC and HTTP metrics.
 
-In this simple scenario, we can manually count more the maximum cardinality to 396, which is far less than the initial count of 2771:
+In this example, manually counting the applicable metric combinations gives a maximum cardinality of 396, far below the initial estimate of 2,771:
 
 | #   | Instance | Metric                          | Endpoint      | Operation  | Code |
 | --- | -------- | ------------------------------- | ------------- | ---------- | ---- |
@@ -229,7 +229,7 @@ The default attributes for `beyla.network.flow.bytes` are:
 
 The simplified, pessimistic formula, would be:
 
-```
+```text
 #Directions * #SourceOwners * #DestinationOwners
 ```
 
@@ -282,7 +282,7 @@ Attributes that might add cardinality to each metric are:
 
 Maximum cardinality could be roughly calculated as:
 
-```
+```text
 19 metric buckets * 3 span kinds * #Instances * #Operations * #ReturnCodes
 ```
 
@@ -303,11 +303,11 @@ It's difficult to determine the number of running processes unless you have a de
 
 Following the formula:
 
-#Instances #Metrics #AttributeValues
+`#Instances #Metrics #AttributeValues`
 
 Being 12 the sum of all the known process metrics and attribute values, we would analytically expect that the process-level metrics cardinality to be:
 
-```
+```text
 141 * 12 = 1680
 ```
 
@@ -318,7 +318,7 @@ Which is pretty close to our measured Cardinality value via PromQL:
 
 As most instrumented instances are both client and services, we ignore the #instances argument in the formula to be more accurate:
 
-```
+```text
 #MetricNames * (#HistoBuckets+2) * #Operations * #Endpoints * #ReturnCodes
 ```
 
@@ -334,7 +334,7 @@ To minimize the effects of attributes influencing non-linearly in the final card
 
 The total, maximum calculated limit for HTTP metrics is:
 
-```
+```text
 4 x 15 x 75 x 26 x 6 =~ 702,000
 ```
 
@@ -358,7 +358,7 @@ Network metrics measure the OpenTelemetry Demo connections, other internal clust
 
 We can group traffic between namespaces to get a better idea of which part belongs to the OpenTelemetry demo with the following query:
 
-```
+```promql
 count(beyla_network_flow_bytes_total) by (k8s_src_namespace, k8s_dst_namespace)
 ```
 

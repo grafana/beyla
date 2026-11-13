@@ -1,0 +1,30 @@
+name: Report Codecov coverage
+description: Fetch the repository Codecov token from Vault and upload coverage.
+inputs:
+  files:
+    description: Coverage files to upload.
+    required: true
+  flags:
+    description: Codecov flags for this upload.
+    required: true
+  name:
+    description: Optional Codecov upload name.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Get Codecov token
+      uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
+      continue-on-error: true
+      with:
+        # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
+        repo_secrets: |
+          CODECOV_TOKEN=codecov:token
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+      with:
+        files: ${{ inputs.files }}
+        flags: ${{ inputs.flags }}
+        name: ${{ inputs.name }}

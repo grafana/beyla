@@ -78,6 +78,7 @@ assert {
     "pkl",
     "actionlint",
     "hadolint",
+    "rumdl",
 } <= set(resolved["lint"])
 assert {"setup-envtest", "gotestsum"} <= set(resolved["unit"])
 assert {"java", "gradle"} <= set(resolved["release"])

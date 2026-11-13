@@ -62,8 +62,8 @@ jobs:
           PARTITIONS: 3
         run: |
           mise run test:prepare-output
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run test:matrix >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run test:matrix >> "$GITHUB_OUTPUT"
 
       - name: Upload generated build inputs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -162,16 +162,8 @@ jobs:
           SHARD_ID: ${{ matrix.id }}
         run: mise run coverage:exclude-generated-shard --shard-id "${SHARD_ID}"
 
-      - id: get-codecov-token
-        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
-        continue-on-error: true
-        with:
-          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
-          repo_secrets: |
-            CODECOV_TOKEN=codecov:token
-
       - name: Report coverage
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: ./.github/actions/report-codecov
         continue-on-error: true
         with:
           files: ./testoutput/cover-shard-${{ matrix.id }}.txt

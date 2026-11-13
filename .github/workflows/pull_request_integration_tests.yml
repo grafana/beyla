@@ -56,8 +56,8 @@ jobs:
           PARTITIONS: 24
           TEST_TAGS: integration
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          mise run integration:matrix >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run integration:matrix >> "$GITHUB_OUTPUT"
 
   test:
     name: ${{ matrix.description }}
@@ -156,7 +156,7 @@ jobs:
           echo "${MATRIX_JSON}"
 
           if [ -z "${MATRIX_TEST_PATTERN}" ]; then
-            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            echo "Error: Test pattern is empty for shard ${MATRIX_ID}"
             exit 1
           fi
 
@@ -166,23 +166,15 @@ jobs:
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="./internal/testgenerated/integration" -ftestname \
               --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -race -count=1 -tags=${TEST_TAGS} -timeout 30m \
+              -- -race -count=1 -tags="${TEST_TAGS}" -timeout 30m \
               -mod vendor \
               -run="^(${MATRIX_TEST_PATTERN})$" ./internal/testgenerated/integration
 
       - name: Process coverage data
         run: mise run integration:coverage-data
 
-      - id: get-codecov-token
-        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
-        continue-on-error: true
-        with:
-          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
-          repo_secrets: |
-            CODECOV_TOKEN=codecov:token
-
       - name: Report coverage
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: ./.github/actions/report-codecov
         with:
           files: ./testoutput/itest-covdata.txt
           flags: integration-test

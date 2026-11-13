@@ -18,6 +18,7 @@ A Kubernetes mutating admission webhook that automatically injects OpenTelemetry
 ### Core Components
 
 #### Server
+
 The main webhook server that handles TLS setup and HTTP endpoints.
 
 ```go
@@ -30,12 +31,15 @@ err = server.Start(ctx)
 ```
 
 Endpoints:
+
 - `/mutate` - Handles pod mutation requests
 - `/health` - Health check endpoint
 - `/readyz` - Readiness check endpoint
 
 #### PodMutator
+
 Handles the actual mutation logic for intercepted pods. It:
+
 - Injects LD_PRELOAD environment variables
 - Mounts instrumentation volumes
 - Configures OTLP exporters
@@ -43,16 +47,21 @@ Handles the actual mutation logic for intercepted pods. It:
 - Configures samplers and propagators
 
 #### PodMatcher
+
 Matches pods against selection criteria using:
+
 - Kubernetes metadata (namespace, deployment, etc.)
 - Pod labels
 - Pod annotations
 
 #### PodBouncer
+
 Restarts existing deployments that need instrumentation by patching their annotations with a restart timestamp.
 
 #### LocalProcessScanner
+
 Scans running processes on the node to:
+
 - Find existing instrumented processes
 - Detect programming languages (Java, .NET, Node.js, Python, Ruby)
 - Track SDK versions in use
@@ -130,6 +139,7 @@ injector:
 #### Sampler Types
 
 **Valid sampler names:**
+
 - `always_on` - Sample all traces
 - `always_off` - Sample no traces
 - `traceidratio` - Sample based on trace ID (requires `arg` between 0.0-1.0)
@@ -317,7 +327,8 @@ When selection criteria are configured:
    - Check if matches selection criteria
    - Check if has conflicting LD_PRELOAD
 5. **Restart**: If instrumentation needed, `PodBouncer` patches the deployment:
-   ```
+
+   ```bash
    kubectl patch deployment <name> -n <namespace> \
      -p '{"spec":{"template":{"metadata":{"annotations":{"beyla.grafana.com/restartedAt":"<timestamp>"}}}}}'
    ```
@@ -339,6 +350,7 @@ The scanner detects programming languages by:
 ### Container Identification
 
 Container information is extracted from `/proc/<pid>/cgroup` using multiple regex patterns to support:
+
 - Docker
 - containerd
 - CRI-O
@@ -416,6 +428,7 @@ Configured per-selector via `selector.GetExportModes()`. Controls which telemetr
 See [OTEL SDK Configuration - Exporters](https://opentelemetry.io/docs/languages/sdk-configuration/general/#otel_metrics_exporter).
 
 When a selector is present:
+
 - If the selector allows metrics export (via `exports: ["metrics"]`), sets `OTEL_METRICS_EXPORTER=otlp`
 - If the selector allows traces export (via `exports: ["traces"]`), sets `OTEL_TRACES_EXPORTER=otlp`
 - If a signal is not in the exports list, the corresponding exporter is set to `none` (disabling that signal)
@@ -456,6 +469,7 @@ Pod UID is only set when `cfg.Injector.Resources.AddK8sUIDAttributes = true`.
 
 **[5] Service Name Derivation:**
 Follows the [OpenTelemetry Kubernetes semantic conventions](https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/). Priority order:
+
 1. Annotation: `resource.opentelemetry.io/service.name`
 2. Label: `app.kubernetes.io/name` (if `UseLabelsForResourceAttributes` enabled)
 3. Label: `app.kubernetes.io/instance` (if `UseLabelsForResourceAttributes` enabled)
@@ -469,6 +483,7 @@ Follows the [OpenTelemetry Kubernetes semantic conventions](https://opentelemetr
 
 **[5] Service Version Derivation:**
 Follows the [OpenTelemetry Kubernetes semantic conventions](https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/). Priority order:
+
 1. Annotation: `resource.opentelemetry.io/service.version`
 2. Label: `app.kubernetes.io/version` (if `UseLabelsForResourceAttributes` enabled)
 3. Container image tag (extracted from image reference, e.g., `my-app:1.2.3` → `1.2.3`)
@@ -476,11 +491,13 @@ Follows the [OpenTelemetry Kubernetes semantic conventions](https://opentelemetr
 
 **[6] Service Namespace Derivation:**
 Follows the [OpenTelemetry Kubernetes semantic conventions](https://opentelemetry.io/docs/specs/semconv/non-normative/k8s-attributes/). Priority order:
+
 1. Annotation: `resource.opentelemetry.io/service.namespace`
 2. Kubernetes namespace name (fallback)
 
 **[7] Resource Attributes:**
 Additional resource attributes are collected from multiple sources and merged in order (later sources override earlier):
+
 1. Base attributes from `cfg.Injector.Resources.Attributes` (lowest priority)
 2. Kubernetes parent owner attributes (e.g., `k8s.deployment.name`, `k8s.replicaset.name`)
 3. Node name from downward API (`k8s.node.name`)
@@ -488,6 +505,7 @@ Additional resource attributes are collected from multiple sources and merged in
 5. Pod annotations prefixed with `resource.opentelemetry.io/` (highest priority)
 
 Example annotation override:
+
 ```yaml
 metadata:
   annotations:
@@ -496,6 +514,7 @@ metadata:
 ```
 
 Configure via:
+
 ```go
 cfg.Injector.Resources = beyla.ResourcesConfig{
     Attributes: map[string]string{
@@ -656,6 +675,7 @@ slog.SetLogLoggerLevel(slog.LevelDebug)
 ```
 
 The matcher will log:
+
 - `metadata does not match`
 - `pod label does not match`
 - `pod annotation does not match`
@@ -663,6 +683,7 @@ The matcher will log:
 ### Deployment not restarting
 
 Ensure:
+
 - Selection criteria are configured: `cfg.Injector.Instrument` is not empty
 - Auto-restart is not disabled: `cfg.Injector.NoAutoRestart` is false
 - The deployment name is correctly detected from pod owners
@@ -671,6 +692,7 @@ Ensure:
 ### Instrumentation not working
 
 Check:
+
 - LD_PRELOAD path is correct: `/__otel_sdk_auto_instrumentation__/injector/libotelinject.so`
 - Volume is mounted correctly
 - Instrumentation files exist on the node at `cfg.Injector.HostPathVolumeDir`
@@ -679,6 +701,7 @@ Check:
 ### TLS issues
 
 The server waits for TLS certificates. If it times out:
+
 - Check certificate paths are correct
 - Ensure certificates are valid
 - Verify secret is mounted correctly

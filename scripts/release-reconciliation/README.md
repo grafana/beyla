@@ -24,9 +24,34 @@ flowchart LR
 ```
 
 The workflow does not notify Grot or Slack. Its summary is not durable train
-state, and no wake-up/result bridge is configured or verified.
+state. The current implementation is read-only; the architecture below is a
+proposal, not functionality delivered by this workflow.
 
-For the proposed end-to-end design, see the [Release automation architecture](https://github.com/grafana/beyla-internal/blob/gregor/docs-release-automation-architecture/docs/release-automation/README.md) and its [draft review](https://github.com/grafana/beyla-internal/pull/116).
+## Target architecture {#target-architecture}
+
+The proposed design keeps deterministic lifecycle ownership in public GitHub
+workflows. Daily checks observe release and CI facts; a weekly publication
+cadence remains distinct from those checks. A completion event can reconcile
+the outcome, while existing public workflows continue to execute only under
+their exact candidate gates. Grot conversation or investigation may be an
+optional integration, but is not required for the core lifecycle. The core
+assumes no database or always-on service. Candidate and prerelease policy
+remain explicit decisions for maintainers; this proposal does not promise
+unconditional or autonomous publication.
+
+```mermaid
+flowchart TD
+    A[Daily checks] --> B[Reconcile facts]
+    B --> C[Candidate decision]
+    C -->|exact gates| D[Existing release workflows]
+    D --> E[Completion reconciliation]
+    E --> B
+    F[Weekly publication cadence] --> C
+    G[Optional Grot integration] -.-> B
+```
+
+The diagram is a target summary for public review. The current workflow above
+only observes and reports; it does not implement lifecycle progression.
 
 ## Local checks
 

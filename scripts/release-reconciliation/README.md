@@ -29,15 +29,31 @@ proposal, not functionality delivered by this workflow.
 
 ## Target architecture {#target-architecture}
 
-The proposed design keeps deterministic lifecycle ownership in public GitHub
-workflows. Daily checks observe release and CI facts; a weekly publication
-cadence remains distinct from those checks. A completion event can reconcile
-the outcome, while existing public workflows continue to execute only under
-their exact candidate gates. Grot conversation or investigation may be an
-optional integration, but is not required for the core lifecycle. The core
-assumes no database or always-on service. Candidate and prerelease policy
-remain explicit decisions for maintainers; this proposal does not promise
-unconditional or autonomous publication.
+The proposed target is an Actions-owned lifecycle that reuses existing public
+release workflows behind their exact candidate gates. In sequence, it would:
+
+1. Select the weekly Beyla candidate and resolve its source revisions.
+2. Prepare the paired Beyla and OBI release branches.
+3. Wait for branch CI and stop on failures or ambiguous results.
+4. Create the prerelease/tag and artifacts through existing workflows.
+5. Deploy the release to development.
+6. Deploy to operations and validate it there.
+7. Promote the release to stable/latest.
+8. Deploy the stable release to production.
+9. Follow up on Alloy; an Alloy PR may be prepared once the release is
+   available, but should be merged only after stable.
+
+Daily checks observe release and CI facts; the weekly publication cadence is
+distinct from those checks. Completion events can wake reconciliation, but
+GitHub remains authoritative. Grot conversation or investigation may be an
+optional integration, not a core dependency. The core assumes no database or
+always-on service. Candidate selection, health criteria, approvals, and
+prerelease policy remain maintainer decisions, not guarantees enforced by
+these workflows; this target does not promise unconditional publication. The
+current workflow above remains read-only and does not implement this lifecycle.
+
+The diagram summarizes target coordination components; the numbered list
+describes the release sequence.
 
 ```mermaid
 flowchart TD
@@ -47,7 +63,6 @@ flowchart TD
     D --> E[Results]
     E --> B
     F[Weekly cadence] --> C
-    G[Grot] -.-> B
 ```
 
 The diagram is a target summary for public review. The current workflow above

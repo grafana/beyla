@@ -368,9 +368,18 @@ func (d *nvidiaDevice) Processes() ([]ProcessUsage, error) {
 	if ret != nvmlSuccess {
 		return nil, fmt.Errorf("nvmlDeviceGetComputeRunningProcesses: %s", api.errorString(ret))
 	}
+	// a process can be listed once per GPU/compute instance (e.g. MIG), so its entries
+	// are merged to avoid reporting duplicate series
 	procs := make([]ProcessUsage, 0, count)
+	index := make(map[uint32]int, count)
 	for _, info := range infos[:count] {
-		procs = append(procs, ProcessUsage{PID: info.PID, MemoryBytes: ptr(nvmlInt64(info.UsedGPUMemory))})
+		mem := nvmlInt64(info.UsedGPUMemory)
+		if i, ok := index[info.PID]; ok {
+			*procs[i].MemoryBytes += mem
+			continue
+		}
+		index[info.PID] = len(procs)
+		procs = append(procs, ProcessUsage{PID: info.PID, MemoryBytes: ptr(mem)})
 	}
 	if utils, ok := d.processUtilization(); ok {
 		for i := range procs {

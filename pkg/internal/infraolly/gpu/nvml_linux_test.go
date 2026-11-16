@@ -136,3 +136,23 @@ func TestNVMLIntegerReadings(t *testing.T) {
 		})
 	}
 }
+
+func TestNVMLProcessesMergesDuplicatePIDs(t *testing.T) {
+	d := &nvidiaDevice{api: &nvmlAPI{
+		deviceGetComputeRunningProcesses: func(_ uintptr, count *uint32, info *nvmlProcessInfo) nvmlReturn {
+			infos := unsafe.Slice(info, *count)
+			*count = 3
+			infos[0] = nvmlProcessInfo{PID: 123, UsedGPUMemory: 100}
+			infos[1] = nvmlProcessInfo{PID: 456, UsedGPUMemory: 50}
+			infos[2] = nvmlProcessInfo{PID: 123, UsedGPUMemory: 200}
+			return nvmlSuccess
+		},
+	}}
+	processes, err := d.Processes()
+	require.NoError(t, err)
+	require.Len(t, processes, 2)
+	assert.Equal(t, uint32(123), processes[0].PID)
+	assert.Equal(t, int64(300), *processes[0].MemoryBytes)
+	assert.Equal(t, uint32(456), processes[1].PID)
+	assert.Equal(t, int64(50), *processes[1].MemoryBytes)
+}

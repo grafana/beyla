@@ -203,7 +203,7 @@ For NVIDIA GPUs, Beyla also reports the GPU usage of the instrumented processes,
 | OTLP name | Prometheus name | Type | Description |
 |-----------|-----------------|------|-------------|
 | `process.gpu.memory.usage` | `process_gpu_memory_usage_bytes` | UpDownCounter | GPU memory used by the process |
-| `process.gpu.utilization` | `process_gpu_utilization_ratio` | Gauge | Average fraction of time the process used the streaming multiprocessors since the previous collection |
+| `process.gpu.utilization` | `process_gpu_utilization_ratio` | Gauge | Average fraction of time the process used the streaming multiprocessors since the most recent collection by any exporter |
 
 ### Application runtime metrics
 

@@ -67,6 +67,7 @@ func (w *watcher) KProbes() map[string]ebpfcommon.ProbeDesc {
 	return map[string]ebpfcommon.ProbeDesc{
 		"security_socket_connect": {Start: w.objects.SurveyWatchConnect, Required: true},
 		"security_socket_listen":  {Start: w.objects.SurveyWatchListen, Required: true},
+		"security_socket_accept":  {Start: w.objects.SurveyWatchAccept, Required: true},
 	}
 }
 

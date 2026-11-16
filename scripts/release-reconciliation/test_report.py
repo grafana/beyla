@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("report", Path(__file__).with_name("release-reconcile-report.py"))
+spec = importlib.util.spec_from_file_location("report", Path(__file__).with_name("report.py"))
 report = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(report)
 
@@ -97,7 +97,7 @@ class ReportTests(unittest.TestCase):
 
     def test_cli_numeric_timestamp_reports_unknown(self):
         facts = self.facts(releases=[{"published_at": 7, "prerelease": False}])
-        completed = subprocess.run([sys.executable, str(Path(__file__).with_name("release-reconcile-report.py"))], input=json.dumps(facts), text=True, capture_output=True, check=True)
+        completed = subprocess.run([sys.executable, str(Path(__file__).with_name("report.py"))], input=json.dumps(facts), text=True, capture_output=True, check=True)
         self.assertEqual("unknown", json.loads(completed.stdout)["state"])
 
 

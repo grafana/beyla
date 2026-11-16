@@ -75,7 +75,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
 
       - name: Login to DockerHub
-        uses: grafana/shared-workflows/actions/dockerhub-login@081a366728379fd0426b9cfef190e9a21c2d5418 # dockerhub-login/v1.0.3
+        uses: grafana/shared-workflows/actions/dockerhub-login@3e6b757dee9d45b7c1b16d7f53b8cab2c9532ccb # dockerhub-login/v3.0.0
 
       - name: Get GitHub App token
         id: get-github-app-token

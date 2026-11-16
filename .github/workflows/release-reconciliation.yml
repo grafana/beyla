@@ -1,0 +1,58 @@
+name: Read-only release reconciliation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily observation at 14:00 UTC; release publication is still evaluated on a weekly cadence.
+    - cron: "0 14 * * *"
+
+permissions: {}
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out report helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Collect GitHub facts and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          facts_dir=$(mktemp -d)
+          trap 'rm -rf "$facts_dir"' EXIT
+          gh api "repos/${REPOSITORY}/commits/main" > "$facts_dir/candidate.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/candidate.json"
+          gh api "repos/${REPOSITORY}/contents/.obi-src?ref=main" > "$facts_dir/obi.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/obi.json"
+          # --paginate --slurp retains every page in temporary files, not environment values.
+          gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-prepare.yml/runs?per_page=100" > "$facts_dir/prepare-runs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/prepare-runs.json"
+          gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-tag.yml/runs?per_page=100" > "$facts_dir/tag-runs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/tag-runs.json"
+          gh api --paginate --slurp "repos/${REPOSITORY}/releases?per_page=100" > "$facts_dir/releases.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/releases.json"
+          gh api --paginate --slurp "repos/${REPOSITORY}/git/matching-refs/heads/release-" > "$facts_dir/beyla-refs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/beyla-refs.json"
+          gh api --paginate --slurp "repos/grafana/opentelemetry-ebpf-instrumentation/git/matching-refs/heads/release-" > "$facts_dir/obi-refs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/obi-refs.json"
+          FACTS_DIR="$facts_dir" REPOSITORY="$REPOSITORY" python3 - <<'PY' > "$facts_dir/report.json"
+          import json, os
+          import importlib.util
+          spec = importlib.util.spec_from_file_location("reconcile", "scripts/release-reconcile-report.py")
+          helper = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(helper)
+          facts = helper.load_facts(os.environ["FACTS_DIR"], os.environ["REPOSITORY"])
+          print(json.dumps(helper.report(facts), indent=2, sort_keys=True))
+          PY
+          cat "$facts_dir/report.json" | tee /tmp/release-report.json
+          {
+            echo "## Read-only release reconciliation"
+            echo '```json'
+            cat /tmp/release-report.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "report<<EOF"
+            cat /tmp/release-report.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"

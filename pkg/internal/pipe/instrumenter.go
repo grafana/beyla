@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"slices"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,8 +12,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
-	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
-	meta "go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -110,6 +107,13 @@ func addHostInfoExporters(
 	}
 }
 
+// BuildGPU instantiates the GPU hardware exporters for operation without application discovery.
+func BuildGPU(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo) (*swarm.Runner, error) {
+	swi := &swarm.Instancer{}
+	addGPUExporters(config, swi, ctxInfo, nil)
+	return swi.Instance(ctx)
+}
+
 func addGPUExporters(
 	config *beyla.Config,
 	swi *swarm.Instancer,
@@ -118,7 +122,7 @@ func addGPUExporters(
 ) {
 	otelEnabled := config.AsOBI().OTELMetrics.EndpointEnabled()
 	promEnabled := config.Prometheus.EndpointEnabled()
-	if !bexport.Has(config.AsOBI().JoinMetricsConfig().Features, bexport.FeatureGPU) || (!otelEnabled && !promEnabled) {
+	if !config.GPUMetricsEnabled() {
 		return
 	}
 	// both exporters share the collector, so the hardware is read only once per collection
@@ -127,7 +131,7 @@ func addGPUExporters(
 		<-ctx.Done()
 		collector.Close()
 	}))
-	hostName := nodeHostName(&ctxInfo.NodeMeta.Metadata)
+	hostName := nodeHostName(&config.Attributes.InstanceID)
 	swi.Add(gpumetrics.OTELExport(gpumetrics.OTELConfig{
 		Enabled:  otelEnabled,
 		HostID:   ctxInfo.NodeMeta.HostID,
@@ -145,16 +149,6 @@ func addGPUExporters(
 		},
 		StartHTTP: ctxInfo.Prometheus.StartHTTP,
 	}, collector, processEventsCh))
-}
-
-func nodeHostName(entries *[]meta.Entry) string {
-	for _, e := range *entries {
-		if e.Key == attr.HostName && e.Value != "" {
-			return e.Value
-		}
-	}
-	name, _ := os.Hostname()
-	return name
 }
 
 func unresolvedNames(cfg *beyla.Config) request.UnresolvedNames {

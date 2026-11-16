@@ -27,6 +27,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
 	"go.opentelemetry.io/obi/pkg/transform"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/grafana/beyla/v3/pkg/export/otel"
 	"github.com/grafana/beyla/v3/pkg/internal/appolly"
 	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
+	"github.com/grafana/beyla/v3/pkg/internal/pipe"
 	"github.com/grafana/beyla/v3/pkg/webhook"
 )
 
@@ -45,8 +47,7 @@ func WithCriteriaUpdater(updater *obiDiscover.CriteriaUpdater) Option {
 	return func(info *global.ContextInfo) { info.CriteriaUpdates = updater.Updates() }
 }
 
-// RunBeyla in the foreground process. This is a blocking function and won't exit
-// until both the AppO11y and NetO11y components end
+// RunBeyla runs the enabled pipelines in the foreground until they stop or the context is canceled.
 func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	normalizeConfig(cfg)
 
@@ -75,6 +76,10 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 				return fmt.Errorf("setupAppO11y: %w", err)
 			}
 			return nil
+		})
+	} else if cfg.GPUMetricsEnabled() {
+		g.Go(func() error {
+			return setupGPUMetrics(ctx, ctxInfo, cfg)
 		})
 	}
 
@@ -158,6 +163,16 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 	}
 
 	return nil
+}
+
+func setupGPUMetrics(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
+	slog.Info("starting Beyla GPU hardware metrics")
+	runner, err := pipe.BuildGPU(ctx, cfg, ctxInfo)
+	if err != nil {
+		return fmt.Errorf("instantiating GPU metrics pipeline: %w", err)
+	}
+	runner.Start(ctx, swarm.WithCancelTimeout(cfg.ShutdownTimeout))
+	return <-runner.Done()
 }
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {

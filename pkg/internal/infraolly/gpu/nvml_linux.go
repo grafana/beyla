@@ -221,7 +221,10 @@ func discoverNVIDIA() ([]Device, error) {
 		var name [nvmlDeviceNameBufSize]byte
 		var uuid [nvmlDeviceUUIDBufSize]byte
 		api.deviceGetName(handle, &name[0], uint32(len(name)))
-		api.deviceGetUUID(handle, &uuid[0], uint32(len(uuid)))
+		if ret := api.deviceGetUUID(handle, &uuid[0], uint32(len(uuid))); ret != nvmlSuccess {
+			errs = append(errs, fmt.Errorf("nvmlDeviceGetUUID(%d): %s", i, api.errorString(ret)))
+			continue
+		}
 		d := &nvidiaDevice{api: api, handle: handle, info: DeviceInfo{
 			Vendor: VendorNVIDIA,
 			ID:     cString(uuid[:]),
@@ -271,8 +274,8 @@ func (d *nvidiaDevice) Sample() (*Sample, error) {
 	}
 	var mem nvmlMemory
 	if api.deviceGetMemoryInfo != nil && api.deviceGetMemoryInfo(h, &mem) == nvmlSuccess {
-		s.MemoryLimitBytes = ptr(int64(mem.Total))
-		s.MemoryUsedBytes = ptr(int64(mem.Used))
+		s.MemoryLimitBytes = ptr(nvmlInt64(mem.Total))
+		s.MemoryUsedBytes = ptr(nvmlInt64(mem.Used))
 	}
 	d.sampleUtilization(s)
 	d.sampleClocks(s)
@@ -311,16 +314,21 @@ func (d *nvidiaDevice) sampleErrors(s *Sample) {
 	if api.deviceGetTotalEccErrors != nil {
 		var count uint64
 		if api.deviceGetTotalEccErrors(h, nvmlMemoryErrCorrected, nvmlVolatileECC, &count) == nvmlSuccess {
-			s.Errors = append(s.Errors, ErrorCount{Type: "corrected", Count: int64(count)})
+			s.Errors = append(s.Errors, ErrorCount{Type: "corrected", Count: nvmlInt64(count)})
 		}
 		if api.deviceGetTotalEccErrors(h, nvmlMemoryErrUncorrect, nvmlVolatileECC, &count) == nvmlSuccess {
-			s.Errors = append(s.Errors, ErrorCount{Type: "uncorrected", Count: int64(count)})
+			s.Errors = append(s.Errors, ErrorCount{Type: "uncorrected", Count: nvmlInt64(count)})
 		}
 	}
 	var replays uint32
 	if api.deviceGetPcieReplayCounter != nil && api.deviceGetPcieReplayCounter(h, &replays) == nvmlSuccess {
 		s.Errors = append(s.Errors, ErrorCount{Type: "pcie_replay", Count: int64(replays)})
 	}
+}
+
+// nvmlInt64 converts unsigned readings to nonnegative metric values.
+func nvmlInt64(v uint64) int64 {
+	return max(int64(v), 0)
 }
 
 // nvmlUint32 invokes an optional NVML getter and returns its scaled value, or nil if it's not available
@@ -362,7 +370,7 @@ func (d *nvidiaDevice) Processes() ([]ProcessUsage, error) {
 	}
 	procs := make([]ProcessUsage, 0, count)
 	for _, info := range infos[:count] {
-		procs = append(procs, ProcessUsage{PID: info.PID, MemoryBytes: ptr(int64(info.UsedGPUMemory))})
+		procs = append(procs, ProcessUsage{PID: info.PID, MemoryBytes: ptr(nvmlInt64(info.UsedGPUMemory))})
 	}
 	if utils, ok := d.processUtilization(); ok {
 		for i := range procs {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -126,6 +127,48 @@ process_gpu_memory_usage_bytes{host_id="host-1",host_name="node-a",hw_id="GPU-12
 `), "hw_energy_joules_total", "hw_gpu_utilization_ratio", "process_gpu_memory_usage_bytes"))
 }
 
+func TestPromCollectorSanitizesLabels(t *testing.T) {
+	samples := testSamples()
+	samples[0].Info = gpu.DeviceInfo{
+		ID: "GPU-\xff1234", Name: "NVIDIA \xfeH100", Vendor: gpu.Vendor("nvidia\xff"),
+	}
+	samples[0].Sample.Temperatures[0].Location = "die\xff"
+	samples[0].Sample.Clocks[0].Domain = "sm\xff"
+	samples[0].Sample.Errors[0].Type = "uncorrected\xff"
+	procs := newProcesses()
+	procs.process(exec.ProcessEvent{Type: exec.ProcessEventCreated, File: exec.New(exec.Init{
+		Pid: 100,
+		Service: svc.Attrs{
+			UID:      svc.UID{Name: "llm\xff", Namespace: "ns\xfe", Instance: "llm-1\xff"},
+			Features: bexport.FeatureGPU,
+		},
+	})})
+	registry := prometheus.NewRegistry()
+	require.NoError(t, registry.Register(newPromCollector(
+		&PromConfig{HostID: "host-1\xff", HostName: "node-a\xfe"}, fakeSource(samples), procs,
+	)))
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	require.NotEmpty(t, families)
+	seen := map[string]string{}
+	for _, family := range families {
+		for _, metric := range family.Metric {
+			for _, label := range metric.Label {
+				assert.True(t, utf8.ValidString(label.GetValue()), label.GetName())
+				seen[label.GetName()] = label.GetValue()
+			}
+		}
+	}
+	for name, want := range map[string]string{
+		"host_id": "host-1", "host_name": "node-a", "hw_id": "GPU-1234",
+		"hw_name": "NVIDIA H100", "hw_vendor": "nvidia", "hw_sensor_location": "die",
+		"hw_gpu_clock_domain": "sm", "error_type": "uncorrected", "service_name": "llm",
+		"service_namespace": "ns", "service_instance_id": "llm-1",
+	} {
+		assert.Equal(t, want, seen[name], name)
+	}
+}
+
 func TestOTELInstruments(t *testing.T) {
 	collector := fakeSource(testSamples())
 	procs := newProcesses()
@@ -171,6 +214,35 @@ func TestOTELInstruments(t *testing.T) {
 	require.Len(t, util.DataPoints, 1)
 	svcName, _ := util.DataPoints[0].Attributes.Value("service.name")
 	assert.Equal(t, "llm", svcName.AsString())
+}
+
+func TestPromExportWithoutDiscovery(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	run, err := PromExport(PromConfig{Enabled: true, Register: registry.Register}, fakeSource(testSamples()), nil)(t.Context())
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		run(ctx)
+		close(done)
+	}()
+
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	require.NotEmpty(t, families)
+	var names []string
+	for _, family := range families {
+		names = append(names, family.GetName())
+	}
+	assert.Contains(t, names, "hw_gpu_utilization_ratio")
+	assert.NotContains(t, names, "process_gpu_memory_usage_bytes")
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("GPU exporter did not stop after cancellation")
+	}
 }
 
 func TestPromExport_TracksProcessEvents(t *testing.T) {

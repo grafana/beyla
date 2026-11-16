@@ -2,8 +2,13 @@ package components
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,6 +18,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 )
 
 func TestKubernetesMetadataConfigPreservesMetadataCacheTLS(t *testing.T) {
@@ -32,6 +38,51 @@ func TestKubernetesMetadataConfigPreservesMetadataCacheTLS(t *testing.T) {
 
 	plainTextConfig := kubernetesMetadataConfig(&beyla.Config{}, nil, nil)
 	require.Equal(t, kubecache.ClientTLSConfig{}, plainTextConfig.MetaCacheTLS)
+}
+
+func TestRunBeylaGPUWithoutDiscovery(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	require.NoError(t, listener.Close())
+
+	cfg := beyla.DefaultConfig()
+	cfg.Metrics.Features = bexport.FeatureGPU
+	cfg.Prometheus.Port = port
+	cfg.Prometheus.Path = "/metrics"
+	cfg.Attributes.InstanceID.OverrideHostname = "gpu-node.example.com"
+	cfg.Attributes.MetadataRetry.Timeout = 100 * time.Millisecond
+	cfg.Attributes.Kubernetes.Enable = "false"
+	cfg.NameResolver = nil
+	cfg.ShutdownTimeout = time.Second
+	require.False(t, cfg.Enabled(beyla.FeatureAppO11y))
+	require.NoError(t, cfg.Validate())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- RunBeyla(ctx, cfg) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			assert.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Error("Beyla did not stop after cancellation")
+		}
+	})
+
+	client := &http.Client{Timeout: time.Second}
+	url := fmt.Sprintf("http://127.0.0.1:%d/metrics", port)
+	require.Eventually(t, func() bool {
+		resp, err := client.Get(url)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		_, err = io.Copy(io.Discard, resp.Body)
+		return err == nil && resp.StatusCode == http.StatusOK
+	}, 10*time.Second, 20*time.Millisecond, "GPU-only startup should serve Prometheus without application discovery")
 }
 
 func TestServiceNameTemplate(t *testing.T) {

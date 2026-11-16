@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 )
@@ -26,7 +27,10 @@ type promCollector struct {
 }
 
 func newPromCollector(cfg *PromConfig, source Source, procs *processes) *promCollector {
-	constLabels := prometheus.Labels{hostID.Prom(): cfg.HostID, hostName.Prom(): cfg.HostName}
+	constLabels := prometheus.Labels{
+		hostID.Prom():   attributes.SanitizeUTF8(cfg.HostID),
+		hostName.Prom(): attributes.SanitizeUTF8(cfg.HostName),
+	}
 	descs := make(map[*metricDef]*prometheus.Desc, len(allMetrics))
 	for _, def := range allMetrics {
 		labels := make([]string, len(def.labels))
@@ -49,6 +53,9 @@ func (c *promCollector) Collect(ch chan<- prometheus.Metric) {
 		valueType := prometheus.GaugeValue
 		if def.kind == kindCounter {
 			valueType = prometheus.CounterValue
+		}
+		for i := range labelValues {
+			labelValues[i] = attributes.SanitizeUTF8(labelValues[i])
 		}
 		ch <- prometheus.MustNewConstMetric(c.descs[def], valueType, value, labelValues...)
 	})

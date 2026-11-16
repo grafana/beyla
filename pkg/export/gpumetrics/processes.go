@@ -57,7 +57,11 @@ func (p *processes) process(event exec.ProcessEvent) {
 }
 
 func (p *processes) watch(events *msg.Queue[exec.ProcessEvent], subscriber string) swarm.RunFunc {
-	in := events.Subscribe(msg.SubscriberName(subscriber))
+	// Hardware-only collection runs until cancellation without discovery events.
+	var in <-chan exec.ProcessEvent
+	if events != nil {
+		in = events.Subscribe(msg.SubscriberName(subscriber))
+	}
 	return func(ctx context.Context) {
 		for {
 			select {

@@ -41,13 +41,13 @@ unconditional or autonomous publication.
 
 ```mermaid
 flowchart TD
-    A[Daily checks] --> B[Reconcile facts]
-    B --> C[Candidate decision]
-    C -->|exact gates| D[Existing release workflows]
-    D --> E[Completion reconciliation]
+    A[Daily check] --> B[Actions]
+    B --> C[Release gate]
+    C --> D[Workflows]
+    D --> E[Results]
     E --> B
-    F[Weekly publication cadence] --> C
-    G[Optional Grot integration] -.-> B
+    F[Weekly cadence] --> C
+    G[Grot] -.-> B
 ```
 
 The diagram is a target summary for public review. The current workflow above

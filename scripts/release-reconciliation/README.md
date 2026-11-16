@@ -26,8 +26,7 @@ flowchart LR
 The workflow does not notify Grot or Slack. Its summary is not durable train
 state, and no wake-up/result bridge is configured or verified.
 
-For the proposed end-to-end design, see the [release automation architecture
-proposal](https://github.com/grafana/beyla-internal/blob/gregor/docs-release-automation-architecture/docs/release-automation/README.md) (**Grafana team access required**) and its [draft review](https://github.com/grafana/beyla-internal/pull/116).
+For the proposed end-to-end design, see the [Release automation architecture](https://github.com/grafana/beyla-internal/blob/gregor/docs-release-automation-architecture/docs/release-automation/README.md) and its [draft review](https://github.com/grafana/beyla-internal/pull/116).
 
 ## Local checks
 

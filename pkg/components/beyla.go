@@ -110,11 +110,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	return nil
+	return g.Wait()
 }
 
 func applyRunOptions(ctxInfo *global.ContextInfo, opts []Option) {

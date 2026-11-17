@@ -150,4 +150,6 @@ def report(facts, as_of=None):
 
 
 if __name__ == "__main__":
+    print("BEGIN_RELEASE_RECONCILIATION_REPORT")
     print(json.dumps(report(json.load(sys.stdin)), indent=2, sort_keys=True))
+    print("END_RELEASE_RECONCILIATION_REPORT")

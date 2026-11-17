@@ -27,6 +27,18 @@ The workflow does not notify Grot or Slack. Its summary is not durable train
 state. The current implementation is read-only; the architecture below is a
 proposal, not functionality delivered by this workflow.
 
+### Log integration contract
+
+The report step emits the JSON exactly once between two case-sensitive marker
+lines: `BEGIN_RELEASE_RECONCILIATION_REPORT` and
+`END_RELEASE_RECONCILIATION_REPORT`. An external log consumer can use these
+stable delimiters to extract the enclosed JSON; the Actions run log may add its
+normal step prefixes to displayed lines. The workflow summary remains intended
+for human reading and does not carry these markers. This repository defines the
+output contract only; external integrations and delivery are configured and
+verified separately. The marker contract does not imply that a notification
+was sent or that any release action occurred.
+
 ## Target architecture {#target-architecture}
 
 The proposed target is an Actions-owned lifecycle that reuses existing public

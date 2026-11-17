@@ -44,15 +44,12 @@ jobs:
           facts = helper.load_facts(os.environ["FACTS_DIR"], os.environ["REPOSITORY"])
           print(json.dumps(helper.report(facts), indent=2, sort_keys=True))
           PY
+          echo "BEGIN_RELEASE_RECONCILIATION_REPORT"
           cat "$facts_dir/report.json" | tee /tmp/release-report.json
+          echo "END_RELEASE_RECONCILIATION_REPORT"
           {
             echo "## Read-only release reconciliation"
             echo '```json'
             cat /tmp/release-report.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          {
-            echo "report<<EOF"
-            cat /tmp/release-report.json
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"

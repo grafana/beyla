@@ -98,7 +98,25 @@ class ReportTests(unittest.TestCase):
     def test_cli_numeric_timestamp_reports_unknown(self):
         facts = self.facts(releases=[{"published_at": 7, "prerelease": False}])
         completed = subprocess.run([sys.executable, str(Path(__file__).with_name("report.py"))], input=json.dumps(facts), text=True, capture_output=True, check=True)
-        self.assertEqual("unknown", json.loads(completed.stdout)["state"])
+        self.assertEqual("unknown", json.loads("\n".join(completed.stdout.splitlines()[1:-1]))["state"])
+
+    def test_cli_wraps_one_json_report_in_stable_log_markers(self):
+        completed = subprocess.run([sys.executable, str(Path(__file__).with_name("report.py"))], input=json.dumps(self.facts()), text=True, capture_output=True, check=True)
+        lines = completed.stdout.splitlines()
+        self.assertEqual("BEGIN_RELEASE_RECONCILIATION_REPORT", lines[0])
+        self.assertEqual("END_RELEASE_RECONCILIATION_REPORT", lines[-1])
+        payload = "\n".join(lines[1:-1])
+        self.assertEqual(1, completed.stdout.count('"state"'))
+        self.assertEqual("candidate", json.loads(payload)["state"])
+
+    def test_workflow_logs_markers_around_report_without_unused_output(self):
+        workflow = (Path(__file__).parents[2] / ".github/workflows/release-reconciliation.yml").read_text()
+        begin = workflow.index('echo "BEGIN_RELEASE_RECONCILIATION_REPORT"')
+        payload = workflow.index('cat "$facts_dir/report.json" | tee /tmp/release-report.json')
+        end = workflow.index('echo "END_RELEASE_RECONCILIATION_REPORT"')
+        self.assertLess(begin, payload)
+        self.assertLess(payload, end)
+        self.assertNotIn("GITHUB_OUTPUT", workflow)
 
 
 if __name__ == "__main__":

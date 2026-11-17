@@ -21,21 +21,21 @@ trap 'rm -rf "$facts_dir"' EXIT
 
 fetch() {
   local filename=$1 endpoint=$2
-  gh api "$endpoint" > "$facts_dir/$filename" 2>/dev/null || printf 'invalid response' > "$facts_dir/$filename"
+  gh api "$endpoint" >"$facts_dir/$filename" 2>/dev/null || printf 'invalid response' >"$facts_dir/$filename"
 }
 fetch candidate.json "repos/${REPOSITORY}/commits/main"
 if candidate_sha=$(jq -er '.sha | select(type == "string" and test("^[0-9a-fA-F]{40}$"))' "$facts_dir/candidate.json"); then
   fetch obi.json "repos/${REPOSITORY}/contents/.obi-src?ref=${candidate_sha}"
 else
   # Missing/malformed candidate identity is unknown; never follow a moving ref.
-  printf 'invalid response' > "$facts_dir/obi.json"
+  printf 'invalid response' >"$facts_dir/obi.json"
 fi
-gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-prepare.yml/runs?per_page=100" > "$facts_dir/prepare-runs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/prepare-runs.json"
-gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-tag.yml/runs?per_page=100" > "$facts_dir/tag-runs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/tag-runs.json"
-gh api --paginate --slurp "repos/${REPOSITORY}/releases?per_page=100" > "$facts_dir/releases.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/releases.json"
-gh api --paginate --slurp "repos/${REPOSITORY}/git/matching-refs/heads/release-" > "$facts_dir/beyla-refs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/beyla-refs.json"
-gh api --paginate --slurp "repos/grafana/opentelemetry-ebpf-instrumentation/git/matching-refs/heads/release-" > "$facts_dir/obi-refs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/obi-refs.json"
-FACTS_DIR="$facts_dir" python3 - <<'PY' > "$facts_dir/report.json"
+gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-prepare.yml/runs?per_page=100" >"$facts_dir/prepare-runs.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/prepare-runs.json"
+gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-tag.yml/runs?per_page=100" >"$facts_dir/tag-runs.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/tag-runs.json"
+gh api --paginate --slurp "repos/${REPOSITORY}/releases?per_page=100" >"$facts_dir/releases.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/releases.json"
+gh api --paginate --slurp "repos/${REPOSITORY}/git/matching-refs/heads/release-" >"$facts_dir/beyla-refs.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/beyla-refs.json"
+gh api --paginate --slurp "repos/grafana/opentelemetry-ebpf-instrumentation/git/matching-refs/heads/release-" >"$facts_dir/obi-refs.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/obi-refs.json"
+FACTS_DIR="$facts_dir" python3 - <<'PY' >"$facts_dir/report.json"
 import importlib.util
 import json
 import os
@@ -55,5 +55,5 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo '```json'
     cat "$facts_dir/report.json"
     echo '```'
-  } >> "$GITHUB_STEP_SUMMARY"
+  } >>"$GITHUB_STEP_SUMMARY"
 fi

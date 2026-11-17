@@ -18,9 +18,12 @@ whether prereleases qualify. No release version is selected.
 
 ## Data flow and ownership
 
-GitHub is the authoritative store for release refs, workflow runs, releases,
-deployment outcomes, and approvals. The report is derived from a point-in-time
-read of those facts. It is emitted to the Actions run log and human-readable
+GitHub is authoritative for release refs, workflow runs, releases, and (when
+applicable) deployment outcomes and approvals. The current report reads only
+the main-branch candidate SHAs, prepare/tag workflow runs, releases, and
+matching release refs; it does not collect deployment or approval records. The
+report is derived from a point-in-time read of those facts. It is emitted to
+the Actions run log and human-readable
 workflow summary; neither is durable release truth, and normal Actions run
 retention applies. Grot may be configured separately as a consumer to explain
 or investigate the report and notify people. It is not an execution engine,
@@ -29,7 +32,7 @@ that integration.
 
 | Where | Writer | Reader | Meaning |
 |---|---|---|---|
-| GitHub refs, Actions runs, releases, deployment and approval records | Existing GitHub workflows and authorized operators | Reconciliation workflow and maintainers | Authoritative current facts; future progression gates must inspect these facts. |
+| GitHub refs, Actions runs, releases, deployment and approval records | Existing GitHub workflows and authorized operators | Reconciliation workflow and maintainers | Authoritative current facts. The present report reads only candidate SHAs, prepare/tag runs, releases, and matching release refs; future progression gates must inspect all applicable facts directly. |
 | Reconciliation JSON in the run log and workflow summary | Read-only reconciliation workflow | Maintainers; optionally a separately configured Grot consumer | Derived, disposable observation snapshot; never a command or resume checkpoint. |
 
 The operational data flow is therefore: (1) GitHub records release facts; (2)

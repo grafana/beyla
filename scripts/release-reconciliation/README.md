@@ -16,6 +16,19 @@ weekly. Neither schedule is a release trigger or gate. The report may flag
 prerelease-only observations for policy review; owners still need to decide
 whether prereleases qualify. No release version is selected.
 
+### Verification status
+
+A separate, explicitly test-only handoff was exercised end to end: the
+[readiness test run](https://github.com/grafana/beyla/actions/runs/44080106521)
+completed successfully and emitted the marked JSON fixture; a human then
+approved the linked test handoff, and the
+[approval test run](https://github.com/grafana/beyla/actions/runs/44080132726)
+completed successfully. This verifies the test handoff pattern only. The
+release-reconciliation workflow itself has not been run from `main` and has
+not produced a release report. Its connection to Grot or Slack, notifications,
+and any production approval flow remain unverified. No release or deployment
+action was taken during the test.
+
 ## Data flow and ownership
 
 GitHub is authoritative for release refs, workflow runs, releases, and (when

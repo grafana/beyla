@@ -1,0 +1,39 @@
+name: Grot handoff approval test
+run-name: Grot handoff approval test — readiness run ${{ github.event.workflow_run.id }}
+
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    # Intentional: this read-only, no-op workflow accepts only the named readiness workflow on main.
+    workflows: [Grot handoff readiness test]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  approval:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main' &&
+      vars.GROT_HANDOFF_TEST_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: grot-handoff-test
+    steps:
+      - name: Post test-only handoff link
+        shell: bash
+        env:
+          READY_RUN_ID: ${{ github.event.workflow_run.id }}
+          READY_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+          APPROVAL_RUN_ID: ${{ github.run_id }}
+        run: |
+          {
+            echo '## TEST ONLY — human approval handoff'
+            echo
+            echo '- This gated job performs no release or deployment operation.'
+            echo "- Readiness run: [#${READY_RUN_ID}](https://github.com/${REPOSITORY}/actions/runs/${READY_RUN_ID}) (commit ${READY_SHA})."
+            echo "- Approval-test run: [#${APPROVAL_RUN_ID}](https://github.com/${REPOSITORY}/actions/runs/${APPROVAL_RUN_ID})."
+            echo '- Approval echo only; no external actions are taken.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "TEST ONLY — approval handoff for readiness run ${READY_RUN_ID}; no release/deployment action."

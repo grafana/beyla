@@ -91,10 +91,17 @@ type KubernetesSourceLabels struct {
 
 // CloudEnricher describes cloud metadata enrichment settings.
 type CloudEnricher struct {
+	Detection            CloudDetection `yaml:"detection"`
 	ClusterName          string         `yaml:"cluster_name"`
 	Region               string         `yaml:"region"`
 	RefreshInterval      Duration       `yaml:"refresh_interval"`
 	Route53              Route53        `yaml:"route53"`
+	AdditionalProperties map[string]any `yaml:",inline"`
+}
+
+// CloudDetection describes cloud metadata detection settings.
+type CloudDetection struct {
+	Enabled              *bool          `yaml:"enabled,omitempty"`
 	AdditionalProperties map[string]any `yaml:",inline"`
 }
 

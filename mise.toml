@@ -69,8 +69,10 @@ extends = "compile:defaults"
 shell = "bash -euo pipefail -c"
 alias = ["compile:for-coverage", "compile-for-coverage"]
 description = "Compile Beyla to generate coverage profiles"
+# Keep Go's content-addressed build cache enabled: coverage instrumentation is
+# keyed separately, and Docker test images reuse package outputs across builds.
 run = '''echo "### Compiling project to generate coverage profiles"
-CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=test-${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=test-${RELEASE_REVISION}'" -cover -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=test-${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=test-${RELEASE_REVISION}'" -cover -o "bin/${CMD}" "$MAIN_GO_FILE"'''
 
 [tasks."compile:debug"]
 extends = "compile:defaults"

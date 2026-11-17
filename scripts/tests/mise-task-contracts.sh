@@ -150,4 +150,53 @@ grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
 
+# The Beyla-only OATS adaptation must change only the generic Kafka input
+# retry window, leave the upstream fixture untouched, and reject source drift.
+mkdir -p "$tmp/oats-window"
+cat >"$tmp/oats-window/upstream.yaml" <<'YAML'
+input:
+  - path: /produce
+    retry:
+      timeout: 10s
+      interval: 500ms
+      continue_after_success: true
+expected:
+  traces:
+    - traceql: kafka
+      match_spans:
+        - name: send my-topic
+          match_type: strict
+    - traceql: http
+      match_spans:
+        - name: GET /produce
+          match_type: strict
+YAML
+cp "$tmp/oats-window/upstream.yaml" "$tmp/oats-window/beyla.yaml"
+"$root/scripts/extend-beyla-kafka-oats-window.sh" "$tmp/oats-window/beyla.yaml"
+sed '/^input:[[:space:]]*$/,/^expected:[[:space:]]*$/s/^      timeout: 10s$/      timeout: 30s/' \
+  "$tmp/oats-window/upstream.yaml" >"$tmp/oats-window/expected.yaml"
+diff -u "$tmp/oats-window/expected.yaml" "$tmp/oats-window/beyla.yaml"
+[[ $(grep -F -c '      timeout: 10s' "$tmp/oats-window/upstream.yaml") -eq 1 ]]
+for invalid_value in 'wrong-duration' 'trailing-comment' 'shifted-indentation'; do
+  cp "$tmp/oats-window/upstream.yaml" "$tmp/oats-window/beyla.yaml"
+  case "$invalid_value" in
+  wrong-duration)
+    sed 's/timeout: 10s$/timeout: 5s/' "$tmp/oats-window/beyla.yaml" >"$tmp/oats-window/invalid.yaml"
+    ;;
+  trailing-comment)
+    sed 's/timeout: 10s$/timeout: 10s # note/' "$tmp/oats-window/beyla.yaml" >"$tmp/oats-window/invalid.yaml"
+    ;;
+  shifted-indentation)
+    sed 's/^      timeout: 10s$/        timeout: 10s/' "$tmp/oats-window/beyla.yaml" >"$tmp/oats-window/invalid.yaml"
+    ;;
+  esac
+  mv "$tmp/oats-window/invalid.yaml" "$tmp/oats-window/beyla.yaml"
+  cp "$tmp/oats-window/beyla.yaml" "$tmp/oats-window/unchanged.yaml"
+  if "$root/scripts/extend-beyla-kafka-oats-window.sh" "$tmp/oats-window/beyla.yaml"; then
+    echo 'Kafka OATS input-window adaptation must reject unexpected source values.' >&2
+    exit 1
+  fi
+  diff -u "$tmp/oats-window/unchanged.yaml" "$tmp/oats-window/beyla.yaml"
+done
+
 echo 'mise task contract tests passed'

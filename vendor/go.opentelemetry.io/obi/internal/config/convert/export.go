@@ -578,12 +578,30 @@ func traceIDRatioSampler(raw string) *otelconfx.Sampler {
 	}
 }
 
+func v2ExemplarFilter(cfg *obi.Config) *otelconfx.ExemplarFilter {
+	name := cfg.OTELMetrics.ExemplarFilter
+	if name == "" && cfg.Prometheus.EndpointEnabled() {
+		name = cfg.Prometheus.ExemplarFilter
+		if cfg.OTELMetrics.EndpointEnabled() && name != string(otelconfx.ExemplarFilterTraceBased) {
+			return nil
+		}
+	}
+	filter := otelconfx.ExemplarFilter(name)
+	switch filter {
+	case otelconfx.ExemplarFilterAlwaysOn, otelconfx.ExemplarFilterAlwaysOff, otelconfx.ExemplarFilterTraceBased:
+		return &filter
+	default:
+		return nil
+	}
+}
+
 func meterProvider(cfg *obi.Config) *otelconfx.MeterProvider {
 	endpoint, _ := cfg.OTELMetrics.OTLPMetricsEndpoint()
 	insecure := insecureOTLPTransport(endpoint)
 	interval := int(cfg.OTELMetrics.GetInterval().Milliseconds())
 	prometheusPort := cfg.Prometheus.Port
 	return &otelconfx.MeterProvider{
+		ExemplarFilter: v2ExemplarFilter(cfg),
 		Readers: []otelconfx.MetricReader{
 			{
 				Periodic: &otelconfx.PeriodicMetricReader{
@@ -654,6 +672,9 @@ func enrich(cfg *obi.Config) *schema.Enrich {
 				},
 			},
 			Cloud: schema.CloudEnricher{
+				Detection: schema.CloudDetection{
+					Enabled: &cfg.CloudMetadata.DetectionEnabled,
+				},
 				ClusterName:     cfg.CloudMetadata.ClusterName,
 				Region:          cfg.CloudMetadata.Region,
 				RefreshInterval: schema.Duration(cfg.CloudMetadata.RefreshInterval),

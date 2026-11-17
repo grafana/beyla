@@ -34,7 +34,9 @@ discovery:
   instrument_all_local: true
 ```
 
-A process becomes eligible when socket activity is observed, including sockets already open when Beyla starts. Non-root processes qualify through socket activity; root processes (real UID 0) require a listener on a port below 1024. Once admitted, a process remains eligible until it exits, even if its sockets close.
+A process becomes eligible when socket activity is observed, including sockets already open when Beyla starts. Non-root processes qualify through socket activity; root processes (real UID 0) require a listener on a port below 1024. After admitted, a process remains eligible until it exits, even if its sockets close.
+
+Unix socket connections also qualify non-root processes.
 
 This mode uses the same default system-process exclusions as survey mode and honors configured discovery exclusions. It is mutually exclusive with `discovery.instrument`, `discovery.services`, and executable, language, port, or PID instrumentation selectors.
 
@@ -360,7 +362,7 @@ all other processes must use sockets. You can also use `socket_apps.enabled: tru
 in an entry to select any process with socket activity. The socket watcher starts
 only if at least one survey entry enables it.
 
-A Beyla-specific eBPF watcher observes `connect` and `listen` attempts on valid
+A Beyla-specific eBPF watcher observes `connect`, `listen`, and `accept` attempts on valid
 sockets, including failed or non-blocking connections and Unix sockets. A listening
 port isn't required, meaning, client-only applications qualify too. At startup, a kernel
 task/file iterator also records processes already holding sockets, including

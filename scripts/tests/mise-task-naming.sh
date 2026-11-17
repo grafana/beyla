@@ -31,11 +31,9 @@ unset MISE_EXPECTED_VERSION
 export NO_COLOR=1
 echo "checking task naming with $version"
 
-# Generated OATS Go modules follow the single pinned Ginkgo version in Mise.
-ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$root/mise.toml")
-grep -q "ginkgo_version=\$(awk -F" "$root/scripts/generate-obi-tests.sh"
-configured_ginkgo_version=$(env -u MISE_ENABLE_TOOLS "$mise_bin" -C "$root" current ginkgo)
-[[ "$ginkgo_version" == "$configured_ginkgo_version" ]]
+# OATS suites run through the pinned v0.11 CLI; generated suites no longer
+# compile per-suite Ginkgo modules.
+grep -q 'checksum-pinned OATS and GCX binaries' "$root/internal/test/oats/mise.toml"
 
 # Every historical spelling should resolve to the same dry-run plan as its new
 # task identity. Nothing is actually run and --skip-tools avoids tool installs.
@@ -53,8 +51,8 @@ check_task() {
   else
     expected_status=$?
   fi
-  actual=$(grep -F '] $ ' <<<"$actual_raw" || true)
-  expected_output=$(grep -F '] $ ' <<<"$expected_raw" || true)
+  actual=$(grep -F '] $ ' <<<"$actual_raw" | sort || true)
+  expected_output=$(grep -F '] $ ' <<<"$expected_raw" | sort || true)
   if [[ "$actual_status" != 0 || "$expected_status" != 0 || -z "$actual" || "$actual" != "$expected_output" ]]; then
     printf 'legacy task %q did not resolve to %q; exit=%s raw output:\n%s\nexpected task exit=%s raw output:\n%s\n' \
       "$old_name" "$expected" "$actual_status" "$actual_raw" "$expected_status" "$expected_raw" >&2
@@ -75,7 +73,8 @@ check_task oats-test //internal/test/oats:test
 check_task oats-test-ai //internal/test/oats:test:ai
 check_task oats-test-amqp //internal/test/oats:test:amqp
 check_task oats-test-debug //internal/test/oats:debug
-check_task oats-test-harness //internal/test/oats:test:harness
+check_task oats-test-harness //internal/test/oats:test-finalizer
+check_task oats-test-finalizer //internal/test/oats:test-finalizer
 check_task oats-test-http //internal/test/oats:test:http
 check_task oats-test-kafka //internal/test/oats:test:kafka
 check_task oats-test-memcached //internal/test/oats:test:memcached
@@ -99,7 +98,8 @@ check_task oats:test //internal/test/oats:test
 check_task oats:test:ai //internal/test/oats:test:ai
 check_task oats:test:amqp //internal/test/oats:test:amqp
 check_task oats:test:debug //internal/test/oats:debug
-check_task oats:test:harness //internal/test/oats:test:harness
+check_task oats:test:harness //internal/test/oats:test-finalizer
+check_task oats:test:finalizer //internal/test/oats:test-finalizer
 check_task oats:test:http //internal/test/oats:test:http
 check_task oats:test:kafka //internal/test/oats:test:kafka
 check_task oats:test:memcached //internal/test/oats:test:memcached
@@ -117,7 +117,8 @@ check_task //oats:test //internal/test/oats:test
 check_task //oats:test:ai //internal/test/oats:test:ai
 check_task //oats:test:amqp //internal/test/oats:test:amqp
 check_task //oats:test:debug //internal/test/oats:debug
-check_task //oats:test:harness //internal/test/oats:test:harness
+check_task //oats:test:harness //internal/test/oats:test-finalizer
+check_task //oats:test:finalizer //internal/test/oats:test-finalizer
 check_task //oats:test:http //internal/test/oats:test:http
 check_task //oats:test:kafka //internal/test/oats:test:kafka
 check_task //oats:test:memcached //internal/test/oats:test:memcached
@@ -162,6 +163,7 @@ names = [task.get("name", "") for task in tasks]
 for moved in ("java:build", "java:clean", "java:docker-build", "java:spotless-apply",
               "java:spotless-check", "java:test", "java:verify", "oats:prereq",
               "oats:matrix:integration-test-json", "oats:test", "oats:test:ai",
+              "oats:test:finalizer",
               "oats:test:amqp", "oats:test:debug", "oats:test:harness",
               "oats:test:http", "oats:test:kafka", "oats:test:memcached",
               "oats:test:mongo", "oats:test:nats", "oats:test:redis", "oats:test:sql"):
@@ -175,7 +177,7 @@ PY
 "$mise_bin" -C "$root" run --dry-run --skip-tools java-build >"$tmp/java-build-plan" 2>&1
 grep -Fq '.mise/tasks/build' "$tmp/java-build-plan"
 "$mise_bin" -C "$root" run --dry-run --skip-tools oats-test-debug >"$tmp/oats-debug-plan" 2>&1
-grep -Fq 'internal/test/oats/.mise/tasks/debug' "$tmp/oats-debug-plan"
+grep -Fq -- '--pause-on-failure' "$tmp/oats-debug-plan"
 
 # The configured mise parses task input flags. This runs after setup-mise in CI.
 "$mise_bin" -C "$root" run test:unit-shard --help >"$tmp/unit-shard-help"
@@ -186,8 +188,7 @@ grep -q -- '--shard-id <id>' "$tmp/coverage-shard-help"
 "$mise_bin" -C "$root" run integration:run:vm --help >"$tmp/vm-help"
 grep -q -- '--test-pattern <pattern>' "$tmp/vm-help"
 "$mise_bin" -C "$root" run oats-test-debug --help >"$tmp/oats-debug-help"
-grep -q -- '--suite <suite>' "$tmp/oats-debug-help"
-grep -q 'default.*kafka' "$tmp/oats-debug-help"
+grep -q 'does not accept any arguments' "$tmp/oats-debug-help"
 
 bash "$root/scripts/tests/mise-oats-native-task.sh" "$mise_bin"
 

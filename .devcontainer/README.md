@@ -1,6 +1,13 @@
 # Development container
 
-DevContainers development environment bundling Bash, Go, Make, Git, and the Docker CLI.
+DevContainers development environment bundling Bash, Go, Make, Git, mise, and the Docker CLI.
+
+The container copies its Go toolchain and standalone mise executable from
+pinned image stages rather than installing them separately. Keep the mise
+image pin aligned with the main build Dockerfile and its version aligned with
+`.github/actions/setup-mise/action.yml`, so local and CI tasks use the same mise
+version. Mise provides the task runner for the repository's `mise run`
+commands.
 
 ## Requirements
 

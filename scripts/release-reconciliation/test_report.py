@@ -118,6 +118,18 @@ class ReportTests(unittest.TestCase):
         self.assertLess(payload, end)
         self.assertNotIn("GITHUB_OUTPUT", workflow)
 
+    def test_workflow_pins_obi_lookup_to_validated_candidate_sha(self):
+        workflow = (Path(__file__).parents[2] / ".github/workflows/release-reconciliation.yml").read_text()
+        candidate_fetch = 'gh api "repos/${REPOSITORY}/commits/main"'
+        obi_fetch = 'gh api "repos/${REPOSITORY}/contents/.obi-src?ref=${candidate_sha}"'
+        self.assertIn(candidate_fetch, workflow)
+        self.assertIn("test(\"^[0-9a-fA-F]{40}$\")", workflow)
+        self.assertIn(obi_fetch, workflow)
+        self.assertLess(workflow.index(candidate_fetch), workflow.index("if candidate_sha=$(jq -er"))
+        self.assertLess(workflow.index("if candidate_sha=$(jq -er"), workflow.index(obi_fetch))
+        self.assertIn("Missing or malformed candidate identity is unknown", workflow)
+        self.assertNotIn("contents/.obi-src?ref=main", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

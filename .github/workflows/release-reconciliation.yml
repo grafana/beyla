@@ -28,7 +28,12 @@ jobs:
           facts_dir=$(mktemp -d)
           trap 'rm -rf "$facts_dir"' EXIT
           gh api "repos/${REPOSITORY}/commits/main" > "$facts_dir/candidate.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/candidate.json"
-          gh api "repos/${REPOSITORY}/contents/.obi-src?ref=main" > "$facts_dir/obi.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/obi.json"
+          if candidate_sha=$(jq -er '.sha | select(type == "string" and test("^[0-9a-fA-F]{40}$"))' "$facts_dir/candidate.json"); then
+            gh api "repos/${REPOSITORY}/contents/.obi-src?ref=${candidate_sha}" > "$facts_dir/obi.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/obi.json"
+          else
+            # Missing or malformed candidate identity is unknown; never fall back to a moving ref.
+            printf 'invalid response' > "$facts_dir/obi.json"
+          fi
           # --paginate --slurp retains every page in temporary files, not environment values.
           gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-prepare.yml/runs?per_page=100" > "$facts_dir/prepare-runs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/prepare-runs.json"
           gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-tag.yml/runs?per_page=100" > "$facts_dir/tag-runs.json" 2>/dev/null || printf 'invalid response' > "$facts_dir/tag-runs.json"

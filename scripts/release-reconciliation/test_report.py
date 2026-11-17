@@ -109,26 +109,66 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(1, completed.stdout.count('"state"'))
         self.assertEqual("candidate", json.loads(payload)["state"])
 
-    def test_workflow_logs_markers_around_report_without_unused_output(self):
-        workflow = (Path(__file__).parents[2] / ".github/workflows/release-reconciliation.yml").read_text()
-        begin = workflow.index('echo "BEGIN_RELEASE_RECONCILIATION_REPORT"')
-        payload = workflow.index('cat "$facts_dir/report.json" | tee /tmp/release-report.json')
-        end = workflow.index('echo "END_RELEASE_RECONCILIATION_REPORT"')
-        self.assertLess(begin, payload)
-        self.assertLess(payload, end)
-        self.assertNotIn("GITHUB_OUTPUT", workflow)
+    def test_local_task_uses_pinned_candidate_and_emits_markers_once(self):
+        import os
+        task = Path(__file__).parents[2] / ".mise/tasks/release/reconcile"
+        with tempfile.TemporaryDirectory() as directory:
+            fake_bin = Path(directory) / "bin"
+            fake_bin.mkdir()
+            calls = Path(directory) / "calls"
+            fake_gh = fake_bin / "gh"
+            fake_gh.write_text("""#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+with open(os.environ['GH_CALLS'], 'a') as f: f.write(' '.join(args) + '\\n')
+endpoint = args[-1]
+if endpoint.endswith('/commits/main'): print(json.dumps({'sha': 'a' * 40}))
+elif '/contents/.obi-src?ref=' in endpoint: print(json.dumps({'sha': 'b' * 40}))
+elif 'workflows/' in endpoint: print('[{\"workflow_runs\": []}]')
+elif '--paginate' in args: print('[[]]')
+else: print('{}')
+""")
+            fake_gh.chmod(0o755)
+            env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}", "GH_TOKEN": "test-token",
+                   "REPOSITORY": "grafana/beyla", "GH_CALLS": str(calls)}
+            env.pop("GITHUB_STEP_SUMMARY", None)
+            completed = subprocess.run(["mise", "run", "release:reconcile"], cwd=task.parents[3], env=env, text=True, capture_output=True, check=True)
+            self.assertEqual(1, completed.stdout.count("BEGIN_RELEASE_RECONCILIATION_REPORT"))
+            self.assertEqual(1, completed.stdout.count("END_RELEASE_RECONCILIATION_REPORT"))
+            self.assertEqual("candidate", json.loads("\n".join(completed.stdout.splitlines()[1:-1]))["state"])
+            calls_text = calls.read_text()
+            self.assertIn("contents/.obi-src?ref=" + "a" * 40, calls_text)
+            self.assertNotIn("contents/.obi-src?ref=main", calls_text)
 
-    def test_workflow_pins_obi_lookup_to_validated_candidate_sha(self):
+    def test_collector_api_failures_are_unknown_and_temporary_files_are_cleaned(self):
+        import os
+        task = Path(__file__).parents[2] / ".mise/tasks/release/reconcile"
+        with tempfile.TemporaryDirectory() as directory:
+            fake_bin = Path(directory) / "bin"
+            fake_bin.mkdir()
+            tmp = Path(directory) / "tmp"
+            tmp.mkdir()
+            summary = Path(directory) / "summary"
+            fake_gh = fake_bin / "gh"
+            fake_gh.write_text("#!/usr/bin/env bash\nexit 1\n")
+            fake_gh.chmod(0o755)
+            env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}", "TMPDIR": str(tmp),
+                   "GH_TOKEN": "test-token", "REPOSITORY": "grafana/beyla",
+                   "GITHUB_STEP_SUMMARY": str(summary)}
+            completed = subprocess.run(["mise", "run", "release:reconcile"], cwd=task.parents[3], env=env, text=True, capture_output=True, check=True)
+            payload = json.loads("\n".join(completed.stdout.splitlines()[1:-1]))
+            self.assertEqual("unknown", payload["state"])
+            self.assertEqual([], list(tmp.iterdir()))
+            self.assertIn("Read-only release reconciliation", summary.read_text())
+            self.assertEqual(1, summary.read_text().count('"state"'))
+
+    def test_workflow_invokes_shared_task_with_read_only_scope(self):
         workflow = (Path(__file__).parents[2] / ".github/workflows/release-reconciliation.yml").read_text()
-        candidate_fetch = 'gh api "repos/${REPOSITORY}/commits/main"'
-        obi_fetch = 'gh api "repos/${REPOSITORY}/contents/.obi-src?ref=${candidate_sha}"'
-        self.assertIn(candidate_fetch, workflow)
-        self.assertIn("test(\"^[0-9a-fA-F]{40}$\")", workflow)
-        self.assertIn(obi_fetch, workflow)
-        self.assertLess(workflow.index(candidate_fetch), workflow.index("if candidate_sha=$(jq -er"))
-        self.assertLess(workflow.index("if candidate_sha=$(jq -er"), workflow.index(obi_fetch))
-        self.assertIn("Missing or malformed candidate identity is unknown", workflow)
-        self.assertNotIn("contents/.obi-src?ref=main", workflow)
+        self.assertIn("run: mise run release:reconcile", workflow)
+        self.assertIn("contents: read", workflow)
+        self.assertIn("actions: read", workflow)
+        self.assertNotIn("GITHUB_OUTPUT", workflow)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
 
 
 if __name__ == "__main__":

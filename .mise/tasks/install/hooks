@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE alias="install-hooks"
+#MISE description="Install hk Git hooks for the repository"
+set -euo pipefail
+
+# Do not replace or install into a globally configured hooks directory. It is
+# shared by unrelated repositories and is managed by the user's Git setup.
+if git config --get core.hooksPath >/dev/null 2>&1; then
+  echo "Skipping repository pre-commit hook installation: core.hooksPath is configured externally." >&2
+  exit 0
+fi
+
+HK_MISE=1 hk install

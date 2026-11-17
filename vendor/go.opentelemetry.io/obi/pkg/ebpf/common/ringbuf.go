@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/shutdown"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
@@ -30,6 +31,12 @@ const flushInterval = 3 * time.Second
 // lets every flush suppress the tick that should follow it, halving the flush
 // rate and leaving records pending for two intervals instead of one.
 const readerStalledAfter = flushInterval / 2
+
+const maxShutdownDrain = 2 * time.Second
+
+func shutdownDrainTimeout(shutdownTimeout time.Duration) time.Duration {
+	return min(maxShutdownDrain, shutdownTimeout/4)
+}
 
 // ringBufReader interface extracts the used methods from ringbuf.Reader for proper
 // dependency injection during tests
@@ -50,6 +57,8 @@ var readerFactory = func(rb *ebpf.Map) (ringBufReader, error) {
 // RecordParserFunc reads one ring buffer record and returns (item, ignore, err).
 type RecordParserFunc[T any] func(*ringbuf.Record) (T, bool, error)
 
+type ContextRecordParserFunc[T any] func(context.Context, *ringbuf.Record) (T, bool, error)
+
 // BatchFilterFunc is an optional filter applied to each parsed group before batching (nil = identity).
 type BatchFilterFunc[T any] func([]T) []T
 
@@ -68,7 +77,7 @@ type ringBufForwarder[T any] struct {
 
 	// parse reads one record and returns (item, ignore, err).
 	// Callers close over whatever context they need (parse ctx, filter, etc.)
-	parse RecordParserFunc[T]
+	parse ContextRecordParserFunc[T]
 
 	// filter is optional and runs on each parsed group before it enters the batch
 	// (nil = identity). In appolly it drops the spans of processes that do not match
@@ -79,6 +88,8 @@ type ringBufForwarder[T any] struct {
 	metrics imetrics.Reporter
 	// lastReadAtUnixNano is updated by the read loop and observed by the periodic flusher.
 	lastReadAtUnixNano atomic.Int64
+	draining           atomic.Bool
+	drainTimeout       time.Duration
 }
 
 // AlreadyForwarded is used in the case when a second tracer tries to set up the
@@ -100,6 +111,32 @@ func SharedRingbuf[T any](
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 ) func(context.Context, []io.Closer, *msg.Queue[[]T]) {
+	return sharedRingbuf(eventContext, cfg, maxShutdownDrain, ringbuffer, ignoreContext(parse), filter, logger, metrics)
+}
+
+func SharedRingbufWithDrainContext[T any](
+	eventContext *EBPFEventContext,
+	cfg *config.EBPFTracer,
+	shutdownTimeout time.Duration,
+	ringbuffer *ebpf.Map,
+	parse ContextRecordParserFunc[T],
+	filter BatchFilterFunc[T], // nil = no filter
+	logger *slog.Logger,
+	metrics imetrics.Reporter,
+) func(context.Context, []io.Closer, *msg.Queue[[]T]) {
+	return sharedRingbuf(eventContext, cfg, shutdownDrainTimeout(shutdownTimeout), ringbuffer, parse, filter, logger, metrics)
+}
+
+func sharedRingbuf[T any](
+	eventContext *EBPFEventContext,
+	cfg *config.EBPFTracer,
+	drainTimeout time.Duration,
+	ringbuffer *ebpf.Map,
+	parse ContextRecordParserFunc[T],
+	filter BatchFilterFunc[T],
+	logger *slog.Logger,
+	metrics imetrics.Reporter,
+) func(context.Context, []io.Closer, *msg.Queue[[]T]) {
 	eventContext.RingBufLock.Lock()
 	defer eventContext.RingBufLock.Unlock()
 
@@ -113,7 +150,8 @@ func SharedRingbuf[T any](
 	}
 
 	rbf := ringBufForwarder[T]{
-		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
+		cfg: cfg, drainTimeout: drainTimeout,
+		logger: logger, ringbuffer: ringbuffer,
 		closers: nil, parse: parse,
 		filter: filter, metrics: metrics,
 	}
@@ -130,16 +168,51 @@ func ForwardRingbuf[T any](
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
 ) func(context.Context, *msg.Queue[[]T]) {
+	return forwardRingbuf(cfg, maxShutdownDrain, ringbuffer, ignoreContext(parse), filter, logger, metrics, closers...)
+}
+
+func ForwardRingbufWithDrainContext[T any](
+	cfg *config.EBPFTracer,
+	shutdownTimeout time.Duration,
+	ringbuffer *ebpf.Map,
+	parse ContextRecordParserFunc[T],
+	filter BatchFilterFunc[T], // nil = no filter
+	logger *slog.Logger,
+	metrics imetrics.Reporter,
+	closers ...io.Closer,
+) func(context.Context, *msg.Queue[[]T]) {
+	return forwardRingbuf(cfg, shutdownDrainTimeout(shutdownTimeout), ringbuffer, parse, filter, logger, metrics, closers...)
+}
+
+func forwardRingbuf[T any](
+	cfg *config.EBPFTracer,
+	drainTimeout time.Duration,
+	ringbuffer *ebpf.Map,
+	parse ContextRecordParserFunc[T],
+	filter BatchFilterFunc[T],
+	logger *slog.Logger,
+	metrics imetrics.Reporter,
+	closers ...io.Closer,
+) func(context.Context, *msg.Queue[[]T]) {
 	rbf := ringBufForwarder[T]{
-		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
+		cfg: cfg, drainTimeout: drainTimeout,
+		logger: logger, ringbuffer: ringbuffer,
 		closers: closers, parse: parse,
 		filter: filter, metrics: metrics,
 	}
 	return rbf.readAndForward
 }
 
+func ignoreContext[T any](parse RecordParserFunc[T]) ContextRecordParserFunc[T] {
+	return func(_ context.Context, record *ringbuf.Record) (T, bool, error) {
+		return parse(record)
+	}
+}
+
 func (rbf *ringBufForwarder[T]) sharedReadAndForward(ctx context.Context, closers []io.Closer, out *msg.Queue[[]T]) {
 	rbf.logger.Debug("start reading and forwarding")
+	endDrain := shutdown.RegisterReader(ctx)
+	defer endDrain()
 	// BPF will send each measured item via Ring Buffer, so we listen for them from the
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
@@ -147,19 +220,25 @@ func (rbf *ringBufForwarder[T]) sharedReadAndForward(ctx context.Context, closer
 		rbf.logger.Error("creating ring buffer reader. Exiting", "error", err)
 		return
 	}
-	// If the underlying context is closed, it closes the objects we have allocated for this bpf program.
+	// If the underlying context is closed, it closes the objects we have allocated for this bpf program
+	// once the pending events are drained.
 	// We wait for the closer goroutine to finish before returning so that callers (e.g. Instrumenter.stop)
 	// do not signal completion while eBPF resources are still being torn down.
+	drainCtx, cancelDrain := rbf.drainContext(ctx)
 	var closerDone sync.WaitGroup
 	closerDone.Go(func() {
-		rbf.bgListenSharedContextCancelation(ctx, closers, eventsReader)
+		rbf.bgListenSharedContextCancelation(ctx, drainCtx, closers, eventsReader)
 	})
-	rbf.readAndForwardInner(ctx, eventsReader, out)
+	rbf.readAndForwardInner(ctx, drainCtx, eventsReader, out)
+	endDrain()
+	cancelDrain()
 	closerDone.Wait()
 }
 
 func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, out *msg.Queue[[]T]) {
 	rbf.logger.Debug("start reading and forwarding")
+	endDrain := shutdown.RegisterReader(ctx)
+	defer endDrain()
 	// BPF will send each measured item via Ring Buffer, so we listen for them from the
 	// user space.
 	eventsReader, err := readerFactory(rbf.ringbuffer)
@@ -167,13 +246,27 @@ func (rbf *ringBufForwarder[T]) readAndForward(ctx context.Context, out *msg.Que
 		rbf.logger.Error("creating ring buffer reader. Exiting", "error", err)
 		return
 	}
+	drainCtx, cancelDrain := rbf.drainContext(ctx)
+	defer cancelDrain()
 	rbf.closers = append(rbf.closers, eventsReader)
 	defer rbf.closeAllResources()
 
 	// If the underlying context is closed, it closes the events reader
-	// so the function can exit.
-	go rbf.bgListenContextCancelation(ctx, eventsReader)
-	rbf.readAndForwardInner(ctx, eventsReader, out)
+	// once the pending events are drained, so the function can exit.
+	go rbf.bgListenContextCancelation(ctx, drainCtx, eventsReader)
+	rbf.readAndForwardInner(ctx, drainCtx, eventsReader, out)
+	endDrain()
+}
+
+func (rbf *ringBufForwarder[T]) drainContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	drainCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	stop := context.AfterFunc(ctx, func() {
+		time.AfterFunc(rbf.drainTimeout, cancel)
+	})
+	return drainCtx, func() {
+		stop()
+		cancel()
+	}
 }
 
 func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, eventsReader ringBufReader) {
@@ -184,13 +277,13 @@ func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, event
 		select {
 		case <-ticker.C:
 			if ctx.Err() != nil {
-				return
+				continue
 			}
 
 			rbf.readerLock.Lock()
 			if ctx.Err() != nil {
 				rbf.readerLock.Unlock()
-				return
+				continue
 			}
 			available := eventsReader.AvailableBytes()
 			if available > 0 && rbf.hasPendingReadIdleSince(time.Now(), readerStalledAfter) {
@@ -199,18 +292,27 @@ func (rbf *ringBufForwarder[T]) flushOnAvailableBytes(ctx context.Context, event
 			}
 			rbf.readerLock.Unlock()
 		case <-ctx.Done():
+			rbf.flushForShutdown(eventsReader)
 			return
 		}
 	}
 }
 
-func (rbf *ringBufForwarder[T]) readAndForwardInner(ctx context.Context, eventsReader ringBufReader, out *msg.Queue[[]T]) {
+func (rbf *ringBufForwarder[T]) flushForShutdown(eventsReader ringBufReader) {
+	rbf.draining.Store(true)
+	rbf.readerLock.Lock()
+	err := eventsReader.Flush()
+	rbf.readerLock.Unlock()
+	rbf.logger.Debug("draining ringbuf before shutdown", "flush_err", err)
+}
+
+func (rbf *ringBufForwarder[T]) readAndForwardInner(ctx, drainCtx context.Context, eventsReader ringBufReader, out *msg.Queue[[]T]) {
 	rbf.items = make([]T, rbf.cfg.BatchLength)
 	rbf.itemsLen = 0
 
 	if rbf.cfg.BatchTimeout > 0 {
 		rbf.ticker = time.NewTicker(rbf.cfg.BatchTimeout)
-		go rbf.bgFlushOnTimeout(ctx, out)
+		go rbf.bgFlushOnTimeout(drainCtx, out)
 	}
 	go rbf.flushOnAvailableBytes(ctx, eventsReader)
 
@@ -224,10 +326,20 @@ func (rbf *ringBufForwarder[T]) readAndForwardInner(ctx context.Context, eventsR
 		freeIdx <- i
 	}
 
-	go rbf.parserLoop(ctx, records, freeIdx, workIdx, out)
+	parserDone := make(chan struct{})
+	go func() {
+		defer close(parserDone)
+		rbf.parserLoop(drainCtx, records, freeIdx, workIdx, out)
+	}()
 
 	rbf.logger.Debug("starting to read ring buffer")
-	rbf.readerLoop(ctx, eventsReader, records, freeIdx, workIdx)
+	rbf.readerLoop(drainCtx, eventsReader, records, freeIdx, workIdx)
+	select {
+	case <-parserDone:
+	case <-drainCtx.Done():
+		rbf.logger.Debug("parser did not finish within the shutdown drain timeout")
+	}
+	rbf.flushPendingItems(drainCtx, out)
 }
 
 func (rbf *ringBufForwarder[T]) readerLoop(
@@ -273,8 +385,8 @@ func (rbf *ringBufForwarder[T]) fillAndDispatch(
 		freeIdx <- i
 		switch {
 		case errors.Is(err, ringbuf.ErrFlushed):
-			rbf.logger.Debug("ring buffer already flushed")
-			return true
+			rbf.logger.Debug("ring buffer already flushed", "draining", rbf.draining.Load())
+			return !rbf.draining.Load()
 		case errors.Is(err, ringbuf.ErrClosed):
 			rbf.logger.Debug("ring buffer is closed")
 			return false
@@ -338,7 +450,7 @@ func (rbf *ringBufForwarder[T]) parserLoop(
 
 		// Parse outside the lock, return each slot to the pool immediately.
 		for _, i := range pending {
-			item, ignore, err := rbf.parse(&records[i])
+			item, ignore, err := rbf.parse(ctx, &records[i])
 			freeIdx <- i
 			if err != nil {
 				rbf.logger.Debug("error parsing ring buffer event", "error", err)
@@ -404,31 +516,36 @@ func (rbf *ringBufForwarder[T]) bgFlushOnTimeout(ctx context.Context, out *msg.Q
 			return
 
 		case <-rbf.ticker.C:
-			rbf.access.Lock()
-			if rbf.itemsLen > 0 {
-				rbf.logger.Debug("submitting items on timeout", "len", rbf.itemsLen)
-				rbf.flushEvents(ctx, out)
-			}
-			rbf.access.Unlock()
+			rbf.flushPendingItems(ctx, out)
 		}
 	}
 }
 
-func (rbf *ringBufForwarder[T]) bgListenContextCancelation(ctx context.Context, eventsReader ringBufReader) {
+func (rbf *ringBufForwarder[T]) flushPendingItems(ctx context.Context, out *msg.Queue[[]T]) {
+	rbf.access.Lock()
+	defer rbf.access.Unlock()
+	if rbf.itemsLen > 0 {
+		rbf.logger.Debug("submitting pending items", "len", rbf.itemsLen)
+		rbf.flushEvents(ctx, out)
+	}
+}
+
+func (rbf *ringBufForwarder[T]) bgListenContextCancelation(ctx, drainCtx context.Context, eventsReader ringBufReader) {
 	<-ctx.Done()
+	<-drainCtx.Done()
 	rbf.logger.Debug("context is cancelled. Closing events reader")
 	rbf.readerLock.Lock()
 	_ = eventsReader.Close()
 	rbf.readerLock.Unlock()
 }
 
-func (rbf *ringBufForwarder[T]) bgListenSharedContextCancelation(ctx context.Context, closers []io.Closer, eventsReader ringBufReader) {
+func (rbf *ringBufForwarder[T]) bgListenSharedContextCancelation(ctx, drainCtx context.Context, closers []io.Closer, eventsReader ringBufReader) {
 	<-ctx.Done()
+	<-drainCtx.Done()
 	rbf.logger.Debug("context is cancelled. Closing eBPF resources", "len", len(closers))
-	// Close the events reader before the eBPF objects so the readerLoop unblocks
-	// immediately via ErrClosed, rather than waiting for potentially hundreds of
-	// eBPF closers to finish. This trades a small window of data loss (events
-	// already in the ring buffer but not yet consumed) for a prompt shutdown.
+	// Close the events reader before the eBPF objects so a readerLoop that did not
+	// finish draining within drainTimeout unblocks immediately via ErrClosed,
+	// rather than waiting for potentially hundreds of eBPF closers to finish.
 	rbf.logger.Debug("closing events reader")
 	rbf.readerLock.Lock()
 	_ = eventsReader.Close()

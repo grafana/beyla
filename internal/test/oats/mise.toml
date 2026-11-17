@@ -1,0 +1,140 @@
+[env]
+TESTCASE_TIMEOUT = "5m"
+
+[tasks.prepare]
+alias = ["prereq", "//oats:prereq", "oats-prereq", "oats:prereq"]
+description = "Generate and vendor Beyla OATS suites and install the OATS CLI"
+depends = ["//:vendor:obi", ":install-tools", ":build-finalizer"]
+dir = "{{config_root}}/../../../"
+run = '''mkdir -p "${TEST_OUTPUT}/run"
+DOCKER_BUILDKIT=1 docker build -t hatest-obi -f internal/test/beyla_extensions/components/beyla/Dockerfile .'''
+
+[tasks.matrix]
+alias = [
+  "matrix:integration-test-json",
+  "//oats:matrix:integration-test-json",
+  "oats-integration-test-matrix-json",
+  "oats:matrix:integration-test-json",
+]
+description = "Generate the OATS integration test matrix JSON"
+dir = "{{config_root}}/../../../"
+run = 'scripts/generate-dir-matrix.sh internal/testgenerated/oats "" oats-config.yaml'
+
+[tasks.install-tools]
+alias = ["oats:install-tools"]
+description = "Install checksum-pinned OATS and GCX binaries"
+depends = ["//:submodule:obi"]
+dir = "{{config_root}}/../../../"
+run = '.obi-src/scripts/install-oats-tools.sh .tools/oats'
+
+[tasks.build-finalizer]
+alias = ["oats:build-finalizer"]
+description = "Build the generated OATS Weaver finalizer"
+depends = ["//:vendor:obi"]
+dir = "{{config_root}}/../../../"
+run = 'mkdir -p .tools/oats && go build -o .tools/oats/weaver-finalizer ./internal/testgenerated/oats/finalizer'
+
+[tasks.test]
+alias = ["oats-test", "oats:test"]
+description = "Run all OATS suites and merge integration coverage"
+depends = [":prepare"]
+run = [
+  { task = ":test:sql" },
+  { task = ":test:mongo" },
+  { task = ":test:redis" },
+  { task = ":test:kafka" },
+  { task = ":test:http" },
+  { task = ":test:memcached" },
+  { task = ":test:ai" },
+  { task = ":test:nats" },
+  { task = ":test:amqp" },
+  { task = "//:integration:coverage-data" },
+]
+
+[tasks.debug]
+alias = [
+  "test:debug",
+  "//oats:test:debug",
+  "oats-test-debug",
+  "oats:test:debug",
+]
+description = "Run OATS Kafka tests and pause after failures"
+depends = [":prepare"]
+dir = "{{config_root}}/../../../internal/testgenerated/oats/kafka"
+run = 'mkdir -p build && OATS_ARTIFACT_DIR="$PWD/build" ../../../../.obi-src/scripts/run-oats-with-log.sh build/oats.log ../../../../.tools/oats/oats run --config oats-config.yaml --container-runtime docker --gcx ../../../../.tools/oats/gcx --timeout "${TESTCASE_TIMEOUT:-1h}" --absent-timeout 10s --no-cache --pause-on-failure -vvv'
+
+[tasks.test-finalizer]
+alias = [
+  "oats-test-finalizer",
+  "oats:test:finalizer",
+  "//oats:test:finalizer",
+  "oats-test-harness",
+  "//oats:test:harness",
+  "oats:test:harness",
+]
+description = "Run OATS Weaver finalizer unit tests"
+depends = ["//:vendor:obi"]
+dir = "{{config_root}}/../../../"
+run = "go test -race ./internal/testgenerated/oats/finalizer"
+
+[tasks._suite]
+usage = 'arg "<suite>" { choices "sql" "mongo" "redis" "kafka" "http" "memcached" "ai" "nats" "amqp" }'
+dir = "{{config_root}}/../../../internal/testgenerated/oats"
+run = '''suite="${usage_suite?}"
+cd "$suite"
+mkdir -p build
+OATS_ARTIFACT_DIR="$PWD/build" ../../../../.obi-src/scripts/run-oats-with-log.sh build/oats.log ../../../../.tools/oats/oats run --config oats-config.yaml --container-runtime docker --gcx ../../../../.tools/oats/gcx --timeout "${TESTCASE_TIMEOUT:-5m}" --absent-timeout 10s --no-cache -vvv'''
+
+[tasks."test:ai"]
+alias = ["oats-test-ai", "oats:test:ai"]
+description = "Run OATS ai tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["ai"] }]
+
+[tasks."test:amqp"]
+alias = ["oats-test-amqp", "oats:test:amqp"]
+description = "Run OATS amqp tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["amqp"] }]
+
+[tasks."test:http"]
+alias = ["oats-test-http", "oats:test:http"]
+description = "Run OATS http tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["http"] }]
+
+[tasks."test:kafka"]
+alias = ["oats-test-kafka", "oats:test:kafka"]
+description = "Run OATS kafka tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["kafka"] }]
+
+[tasks."test:memcached"]
+alias = ["oats-test-memcached", "oats:test:memcached"]
+description = "Run OATS memcached tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["memcached"] }]
+
+[tasks."test:mongo"]
+alias = ["oats-test-mongo", "oats:test:mongo"]
+description = "Run OATS mongo tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["mongo"] }]
+
+[tasks."test:nats"]
+alias = ["oats-test-nats", "oats:test:nats"]
+description = "Run OATS nats tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["nats"] }]
+
+[tasks."test:redis"]
+alias = ["oats-test-redis", "oats:test:redis"]
+description = "Run OATS redis tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["redis"] }]
+
+[tasks."test:sql"]
+alias = ["oats-test-sql", "oats:test:sql"]
+description = "Run OATS sql tests"
+depends = [":prepare"]
+run = [{ task = ":_suite", args = ["sql"] }]

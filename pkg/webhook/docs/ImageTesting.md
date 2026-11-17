@@ -1,3 +1,5 @@
+# Image testing
+
 To build and test the injector image, first build it with:
 
 ```sh

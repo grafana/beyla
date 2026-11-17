@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE alias="cov-exclude-generated-shard"
+#MISE description="Remove generated files from a unit test shard coverage profile"
+#USAGE flag "--shard-id <id>" help="Unit test shard identifier" env="SHARD_ID"
+set -euo pipefail
+shard_id="${usage_shard_id-${SHARD_ID-}}"
+grep -vE "$EXCLUDE_COVERAGE_FILES" "$TEST_OUTPUT/cover-shard-${shard_id}.all.txt" >"$TEST_OUTPUT/cover-shard-${shard_id}.txt"

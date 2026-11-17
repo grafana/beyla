@@ -19,16 +19,16 @@ WEIGHTS_FILE="${WEIGHTS_FILE:-$SCRIPT_DIR/integration-test-weights.generated.jso
 DEFAULT_WEIGHT=20
 
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <logs-directory>" >&2
-    echo "  logs-directory: path to extracted GitHub Actions runner logs" >&2
-    exit 1
+  echo "Usage: $0 <logs-directory>" >&2
+  echo "  logs-directory: path to extracted GitHub Actions runner logs" >&2
+  exit 1
 fi
 
 LOGS_DIR="$1"
 
 if [ ! -d "$LOGS_DIR" ]; then
-    echo "Error: '$LOGS_DIR' is not a directory" >&2
-    exit 1
+  echo "Error: '$LOGS_DIR' is not a directory" >&2
+  exit 1
 fi
 
 # Extract top-level test durations from shard log files.
@@ -37,17 +37,17 @@ fi
 # (they have / after the test name). Re-runs are also excluded.
 # Takes the last (aggregate) duration per test name.
 ENTRIES=$(
-    grep -rhE '(PASS|FAIL).*integration\.Test' "$LOGS_DIR"/*shard*.txt 2>/dev/null \
-    | grep -v '^ ' \
-    | grep -v 're-run' \
-    | sed -n 's/.*integration\.\(Test[A-Za-z0-9_]*\) (\([0-9.]*\)s).*/\1 \2/p' \
-    | awk '{ val[$1] = int($2 + 0.5) } END { for (k in val) printf "%s %d\n", k, val[k] }' \
-    | sort
+  grep -rhE '(PASS|FAIL).*integration\.Test' "$LOGS_DIR"/*shard*.txt 2>/dev/null |
+    grep -v '^ ' |
+    grep -v 're-run' |
+    sed -n 's/.*integration\.\(Test[A-Za-z0-9_]*\) (\([0-9.]*\)s).*/\1 \2/p' |
+    awk '{ val[$1] = int($2 + 0.5) } END { for (k in val) printf "%s %d\n", k, val[k] }' |
+    sort
 ) || true # ignore errors so that we can report the error below
 
 if [ -z "$ENTRIES" ]; then
-    echo "Error: no test results found in files matching '$LOGS_DIR/*shard*.txt'" >&2
-    exit 1
+  echo "Error: no test results found in files matching '$LOGS_DIR/*shard*.txt'" >&2
+  exit 1
 fi
 
 TOTAL=$(echo "$ENTRIES" | wc -l | tr -d ' ')
@@ -55,9 +55,9 @@ echo "Found $TOTAL tests in logs" >&2
 
 # Build JSON
 {
-    echo "{"
-    echo "  \"_default\": $DEFAULT_WEIGHT,"
-    echo "$ENTRIES" | awk -v total="$TOTAL" '
+  echo "{"
+  echo "  \"_default\": $DEFAULT_WEIGHT,"
+  echo "$ENTRIES" | awk -v total="$TOTAL" '
     {
         count++
         if (count < total) {
@@ -66,7 +66,7 @@ echo "Found $TOTAL tests in logs" >&2
             printf "  \"%s\": %s\n", $1, $2
         }
     }'
-    echo "}"
-} > "$WEIGHTS_FILE"
+  echo "}"
+} >"$WEIGHTS_FILE"
 
 echo "Updated $WEIGHTS_FILE with $TOTAL tests" >&2

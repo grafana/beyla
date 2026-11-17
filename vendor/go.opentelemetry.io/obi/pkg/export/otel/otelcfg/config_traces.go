@@ -35,6 +35,9 @@ type TracesConfig struct {
 	// Allows configuration of which instrumentations should be enabled, e.g. http, grpc, sql...
 	Instrumentations []instrumentations.Instrumentation `yaml:"instrumentations" env:"OTEL_EBPF_TRACES_INSTRUMENTATIONS" envSeparator:"," jsonschema:"uniqueItems=true"`
 
+	// Config v2 control; the zero value preserves the existing request phase spans.
+	DisableHTTPRequestPhaseSpans bool `yaml:"-" env:"-"`
+
 	// InsecureSkipVerify enables skipping TLS certificate verification (not standard, so we don't follow the same naming convention)
 	InsecureSkipVerify bool `yaml:"insecure_skip_verify" env:"OTEL_EBPF_INSECURE_SKIP_VERIFY"`
 

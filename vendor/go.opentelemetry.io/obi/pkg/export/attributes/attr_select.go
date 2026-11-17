@@ -94,6 +94,25 @@ func (incl Selection) Matching(metricName Name) []InclusionLists {
 	if incl == nil {
 		return nil
 	}
+	var matching []Section
+	for glob := range incl {
+		if ok, _ := path.Match(string(glob), string(metricName.Section)); ok {
+			matching = append(matching, glob)
+		}
+	}
+	slices.Sort(matching)
+	lists := make([]InclusionLists, 0, len(matching))
+	for _, glob := range matching {
+		lists = append(lists, incl[glob])
+	}
+	return lists
+}
+
+// MatchingV2 also matches normalized names and applies exact selections after globs.
+func (incl Selection) MatchingV2(metricName Name) []InclusionLists {
+	if incl == nil {
+		return nil
+	}
 
 	// some sections are not normalized (e.g. jvm.thread.count), so we also match their normalized form
 	normalized := normalizeMetric(metricName.Section)
@@ -119,4 +138,17 @@ func (incl Selection) Matching(metricName Name) []InclusionLists {
 		inclusionLists = append(inclusionLists, incl[glob])
 	}
 	return inclusionLists
+}
+
+// RequiresV2Review reports selections whose matching semantics change on migration.
+func (incl Selection) RequiresV2Review() bool {
+	for section := range getDefinitions(0, nil) {
+		name := Name{Section: section}
+		if !slices.EqualFunc(incl.Matching(name), incl.MatchingV2(name), func(a, b InclusionLists) bool {
+			return slices.Equal(a.Include, b.Include) && slices.Equal(a.Exclude, b.Exclude)
+		}) {
+			return true
+		}
+	}
+	return false
 }

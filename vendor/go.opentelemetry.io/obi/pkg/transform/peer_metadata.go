@@ -34,7 +34,7 @@ func PeerMetadataProvider(ctxInfo *global.ContextInfo, cfg peer.MetadataConfig, 
 		if ctxInfo.DynamicSelector != nil {
 			metricsPIDs = ctxInfo.DynamicSelector.AppMetrics()
 		}
-		agent, err := peer.New(ctx, cfg, hostname, serviceGraphEnabled, metricsPIDs, metricProtocols)
+		agent, err := peer.New(ctx, cfg, hostname, ctxInfo.NodeMeta.HostID, serviceGraphEnabled, metricsPIDs, metricProtocols)
 		if err != nil {
 			return nil, err
 		}

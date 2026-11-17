@@ -48,6 +48,7 @@ For the sake of brevity, the metrics and attributes in this list use the OTEL `d
 In order to configure which attributes to show or which attributes to hide, check the `attributes`->`select` section in the [configuration documentation](../configure/options/).
 
 For more information about the OpenTelemetry semantic conventions for each metric type, refer to:
+
 - [HTTP metrics conventions](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/)
 - [RPC metrics conventions](https://opentelemetry.io/docs/specs/semconv/rpc/rpc-metrics/)
 - [Database metrics conventions](https://opentelemetry.io/docs/specs/semconv/database/database-metrics/)

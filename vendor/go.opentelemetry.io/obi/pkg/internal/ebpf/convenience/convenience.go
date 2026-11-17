@@ -138,39 +138,39 @@ func SetupMapSizes(spec *ebpf.CollectionSpec, globalScaleFactor int) {
 	}
 
 	for _, mSpec := range spec.Maps {
-		if !isResizableMapType(mSpec.Type) {
-			continue
-		}
+		mSpec.MaxEntries = ScaledMaxEntries(mSpec, globalScaleFactor)
+	}
+}
 
-		if mSpec.MaxEntries < MinResizableMapSize {
-			continue
-		}
+func ScaledMaxEntries(mSpec *ebpf.MapSpec, globalScaleFactor int) uint32 {
+	oldEntries := mSpec.MaxEntries
 
-		if mSpec.Pinning == ebpf.PinByName {
-			continue
-		}
+	if globalScaleFactor == 0 ||
+		!isResizableMapType(mSpec.Type) ||
+		oldEntries < MinResizableMapSize ||
+		mSpec.Pinning == ebpf.PinByName {
+		return oldEntries
+	}
 
-		oldEntries := mSpec.MaxEntries
-		var newEntries uint32
+	var newEntries uint32
 
-		if globalScaleFactor > 0 {
-			newEntries = oldEntries << uint32(globalScaleFactor)
-			if newEntries < oldEntries {
-				newEntries = MaxMapEntries
-			}
-		} else {
-			newEntries = oldEntries >> uint32(-globalScaleFactor)
-		}
-
-		if newEntries < MinMapEntries && oldEntries >= MinMapEntries {
-			newEntries = MinMapEntries
-		}
-		if newEntries > MaxMapEntries {
+	if globalScaleFactor > 0 {
+		newEntries = oldEntries << uint32(globalScaleFactor)
+		if newEntries < oldEntries {
 			newEntries = MaxMapEntries
 		}
-
-		mSpec.MaxEntries = newEntries
+	} else {
+		newEntries = oldEntries >> uint32(-globalScaleFactor)
 	}
+
+	if newEntries < MinMapEntries && oldEntries >= MinMapEntries {
+		newEntries = MinMapEntries
+	}
+	if newEntries > MaxMapEntries {
+		newEntries = MaxMapEntries
+	}
+
+	return newEntries
 }
 
 // MissingConstantsError is returned by [ebpf.CollectionSpec.RewriteConstants].

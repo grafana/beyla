@@ -4,8 +4,12 @@
 package fastelf // import "go.opentelemetry.io/obi/pkg/internal/fastelf"
 
 import (
+	"bytes"
+	"debug/elf"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"unsafe"
@@ -210,19 +214,14 @@ func unsafeString(b []byte) string {
 }
 
 func GetCStringUnsafe(strtab []byte, offset uint32) string {
-	size := uint32(len(strtab))
-
-	if offset >= size {
+	if uint64(offset) >= uint64(len(strtab)) {
 		return ""
 	}
-
-	start := offset
-
-	for offset < size && strtab[offset] != 0 {
-		offset++
+	data, _, ok := bytes.Cut(strtab[offset:], []byte{0})
+	if !ok {
+		return ""
 	}
-
-	return unsafeString(strtab[start:offset])
+	return unsafeString(data)
 }
 
 func ReadStruct[T any](data []byte, offset int) *T {
@@ -243,6 +242,28 @@ type ElfContext struct {
 
 	file     *os.File
 	ownsData bool
+}
+
+// NewElfContextFromELF borrows the file exposed by an ELF section's reader.
+// Closing the context unmaps its contents without closing the caller's file.
+func NewElfContextFromELF(f *elf.File) (*ElfContext, error) {
+	for _, section := range f.Sections {
+		reader, ok := section.ReaderAt.(*io.SectionReader)
+		if !ok {
+			continue
+		}
+		backing, offset, _ := reader.Outer()
+		file, ok := backing.(*os.File)
+		if !ok || offset != int64(section.Offset) {
+			continue
+		}
+		info, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
+		return NewElfContextFromFileHandle(file, info.Size())
+	}
+	return nil, errors.New("ELF is not backed by an open file")
 }
 
 func NewElfContextFromFile(filePath string) (*ElfContext, error) {
@@ -290,6 +311,16 @@ func NewElfContextFromFileHandle(file *os.File, fileSize int64) (*ElfContext, er
 	return ctx, nil
 }
 
+// nativeELFData is the EI_DATA value matching the host byte order, which is the
+// only one ReadStruct can decode.
+func nativeELFData() elf.Data {
+	if binary.NativeEndian.Uint16([]byte{1, 0}) == 1 {
+		return elf.ELFDATA2LSB
+	}
+
+	return elf.ELFDATA2MSB
+}
+
 func NewElfContextFromData(data []byte) (*ElfContext, error) {
 	hdr := ReadStruct[Elf64_Ehdr](data, 0)
 
@@ -299,6 +330,17 @@ func NewElfContextFromData(data []byte) (*ElfContext, error) {
 
 	if unsafeString(hdr.Ident[:4]) != "\x7fELF" {
 		return nil, errors.New("invalid ELF signature")
+	}
+	if hdr.Ident[elf.EI_CLASS] != byte(elf.ELFCLASS64) {
+		return nil, errors.New("only ELF64 files are supported")
+	}
+
+	switch elf.Data(hdr.Ident[elf.EI_DATA]) {
+	case nativeELFData():
+	case elf.ELFDATA2LSB, elf.ELFDATA2MSB:
+		return nil, errors.New("ELF byte order differs from the host byte order")
+	default:
+		return nil, errors.New("invalid ELF data encoding")
 	}
 
 	ctx := ElfContext{Hdr: hdr, Data: data}
@@ -310,9 +352,29 @@ func NewElfContextFromData(data []byte) (*ElfContext, error) {
 		ctx.Segments[i] = ReadStruct[Elf64_Phdr](data, off)
 	}
 
-	ctx.Sections = make([]*Elf64_Shdr, hdr.Shnum)
+	sectionCount := int(hdr.Shnum)
+	if sectionCount == 0 && hdr.Shoff != 0 {
+		offset, ok := uint64Offset(data, hdr.Shoff)
+		if !ok {
+			return nil, errors.New("invalid extended ELF section table offset")
+		}
 
-	for i := 0; i < int(hdr.Shnum); i++ {
+		// Extended numbering stores the section count in section zero's sh_size.
+		first := ReadStruct[Elf64_Shdr](data, offset)
+		if first == nil || first.Type != SHT_NULL || first.Size < uint64(elf.SHN_LORESERVE) {
+			return nil, errors.New("invalid extended ELF section count")
+		}
+
+		if hdr.Shentsize < uint16(unsafe.Sizeof(Elf64_Shdr{})) || first.Size > uint64((len(data)-offset)/int(hdr.Shentsize)) {
+			return nil, errors.New("extended ELF section table exceeds file bounds")
+		}
+
+		sectionCount = int(first.Size)
+	}
+
+	ctx.Sections = make([]*Elf64_Shdr, sectionCount)
+
+	for i := 0; i < sectionCount; i++ {
 		off := int(hdr.Shoff) + i*int(hdr.Shentsize)
 		ctx.Sections[i] = ReadStruct[Elf64_Shdr](data, off)
 	}

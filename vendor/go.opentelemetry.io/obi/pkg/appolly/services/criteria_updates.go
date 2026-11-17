@@ -15,6 +15,7 @@ type CriteriaUpdates struct {
 	mu       sync.RWMutex
 	include  []Selector
 	exclude  []Selector
+	sampler  *SamplerConfig
 	requests chan CriteriaUpdate
 	changed  chan struct{}
 	done     chan struct{}
@@ -22,16 +23,23 @@ type CriteriaUpdates struct {
 }
 
 type CriteriaUpdate struct {
-	Context context.Context
-	Include []Selector
-	Exclude []Selector
-	result  chan error
+	Context       context.Context
+	Include       []Selector
+	Exclude       []Selector
+	SamplerConfig *SamplerConfig
+	result        chan error
 }
 
+// Deprecated: use NewCriteriaUpdatesWithSampler instead.
 func NewCriteriaUpdates(include, exclude []Selector) *CriteriaUpdates {
+	return NewCriteriaUpdatesWithSampler(include, exclude, nil)
+}
+
+func NewCriteriaUpdatesWithSampler(include, exclude []Selector, sampler *SamplerConfig) *CriteriaUpdates {
 	return &CriteriaUpdates{
 		include:  include,
 		exclude:  exclude,
+		sampler:  sampler,
 		requests: make(chan CriteriaUpdate),
 		changed:  make(chan struct{}, 1),
 		done:     make(chan struct{}),
@@ -44,11 +52,23 @@ func (c *CriteriaUpdates) Current() ([]Selector, []Selector) {
 	return c.include, c.exclude
 }
 
+// Sampler is the global sampler applied with the current criteria.
+func (c *CriteriaUpdates) Sampler() *SamplerConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.sampler
+}
+
 func (c *CriteriaUpdates) Requests() <-chan CriteriaUpdate { return c.requests }
 func (c *CriteriaUpdates) Changed() <-chan struct{}        { return c.changed }
 
 func (c *CriteriaUpdates) Replace(ctx context.Context, include, exclude []Selector) error {
-	update := CriteriaUpdate{Context: ctx, Include: include, Exclude: exclude, result: make(chan error, 1)}
+	return c.ReplaceWithSampler(ctx, include, exclude, nil)
+}
+
+// ReplaceWithSampler also replaces the global sampler when sampler is non-nil.
+func (c *CriteriaUpdates) ReplaceWithSampler(ctx context.Context, include, exclude []Selector, sampler *SamplerConfig) error {
+	update := CriteriaUpdate{Context: ctx, Include: include, Exclude: exclude, SamplerConfig: sampler, result: make(chan error, 1)}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -85,6 +105,9 @@ func (c *CriteriaUpdates) Complete(update CriteriaUpdate, err error) {
 		c.mu.Lock()
 		c.include = update.Include
 		c.exclude = update.Exclude
+		if update.SamplerConfig != nil {
+			c.sampler = update.SamplerConfig
+		}
 		c.mu.Unlock()
 		select {
 		case c.changed <- struct{}{}:

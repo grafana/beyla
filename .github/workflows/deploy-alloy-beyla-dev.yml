@@ -53,9 +53,11 @@ jobs:
             IMAGE_TAG="${VERSION}"
           fi
           SHORT_SHA="$(git rev-parse --short HEAD)"
-          echo "image_tag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "image_tag=${IMAGE_TAG}"
+            echo "version=${VERSION}"
+            echo "short_sha=${SHORT_SHA}"
+          } >> "${GITHUB_OUTPUT}"
           echo "alloy-beyla dev image tag: ${IMAGE_TAG}, beyla image tag: ${VERSION}, beyla short SHA: ${SHORT_SHA}"
 
       - name: Log in to Google Artifact Registry

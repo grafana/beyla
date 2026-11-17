@@ -19,7 +19,7 @@ FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639
 
 WORKDIR /
 COPY --from=builder /src/openai-mock .
-USER 0:0
+USER 65532:65532
 
 ENV OPENAI_PORT=8081
 EXPOSE 8081

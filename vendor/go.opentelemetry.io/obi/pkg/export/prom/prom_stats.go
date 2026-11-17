@@ -41,6 +41,7 @@ type statMetricsReporter struct {
 	tcpRetransmits           *Expirer[prometheus.Counter]
 	tcpIo                    *Expirer[prometheus.Counter]
 	tcpSuccessfulConnections *Expirer[prometheus.Counter]
+	tcpResets                *Expirer[prometheus.Counter]
 
 	promConnect *connector.PrometheusManager
 
@@ -49,6 +50,7 @@ type statMetricsReporter struct {
 	tcpRetransmitsAttrs           []attributes.Field[*ebpf.Stat, string]
 	tcpIoAttrs                    []attributes.Field[*ebpf.Stat, string]
 	tcpSuccessfulConnectionsAttrs []attributes.Field[*ebpf.Stat, string]
+	tcpResetsAttrs                []attributes.Field[*ebpf.Stat, string]
 
 	input <-chan []*ebpf.Stat
 }
@@ -173,6 +175,21 @@ func newStatsReporter(
 		register = append(register, mr.tcpSuccessfulConnections)
 	}
 
+	if cfg.CommonCfg.Features.StatsTCPResets() {
+		log.Debug("registering stat tcp resets metric")
+
+		mr.tcpResetsAttrs = attributes.PrometheusGetters(
+			ebpf.StatStringGetters,
+			provider.For(attributes.StatTCPResets))
+
+		mr.tcpResets = NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: attributes.StatTCPResets.Prom,
+			Help: "counts the TCP RST segments sent or received outside connection establishment",
+		}, labelNames(mr.tcpResetsAttrs)).MetricVec, timeNow, cfg.Config.TTL)
+
+		register = append(register, mr.tcpResets)
+	}
+
 	mr.promConnect.Register(cfg.Config.Port, cfg.Config.Path, register...)
 
 	mr.input = input.Subscribe(msg.SubscriberName("prom.StatsReporterInput"))
@@ -192,6 +209,7 @@ func (r *statMetricsReporter) collectMetrics(_ context.Context) {
 			r.observeTCPSuccessfulConnections(stat)
 			r.observeTCPRetransmits(stat)
 			r.observeTCPIo(stat)
+			r.observeTCPResets(stat)
 		}
 	}
 }
@@ -234,4 +252,12 @@ func (r *statMetricsReporter) observeTCPIo(stat *ebpf.Stat) {
 	}
 	r.tcpIo.WithLabelValues(labelValues(stat, r.tcpIoAttrs)...).
 		Metric.Add(float64(stat.TCPIo.Bytes))
+}
+
+func (r *statMetricsReporter) observeTCPResets(stat *ebpf.Stat) {
+	if r.tcpResets == nil || stat.TCPReset == nil {
+		return
+	}
+	r.tcpResets.WithLabelValues(labelValues(stat, r.tcpResetsAttrs)...).
+		Metric.Add(1)
 }

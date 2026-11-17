@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE alias="check-config-schema"
+#MISE description="Check whether the configuration JSON schema is up to date"
+set -euo pipefail
+echo "### Checking if JSON schema is up-to-date"
+mkdir -p "$(dirname "$CONFIG_SCHEMA_FILE")"
+go run ./cmd/beyla-schema -output "${CONFIG_SCHEMA_FILE}.tmp"
+if ! diff -q "$CONFIG_SCHEMA_FILE" "${CONFIG_SCHEMA_FILE}.tmp" >/dev/null 2>&1; then
+  echo "JSON schema is out of date. Run 'mise run generate:config-schema' to update it."
+  echo "Diff:"
+  diff "$CONFIG_SCHEMA_FILE" "${CONFIG_SCHEMA_FILE}.tmp" || true
+  rm -f "${CONFIG_SCHEMA_FILE}.tmp"
+  exit 1
+fi
+rm -f "${CONFIG_SCHEMA_FILE}.tmp"

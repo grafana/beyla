@@ -63,6 +63,7 @@ HTTP/2 and gRPC use per-stream HTTP header propagation rather than TCP options, 
 The recommended way to deploy Beyla on Kubernetes with distributed tracing support at network level is as `DaemonSet`.
 
 The following `Kubernetes` configuration must be used:
+
 - Beyla must be deployed as a `DaemonSet` with host network access (`hostNetwork: true`).
 - The `/sys/fs/cgroup` path from the host must be volume mounted as local `/sys/fs/cgroup` path.
 - The `/sys/kernel/tracing` path from the host must be volume mounted as local `/sys/kernel/tracing` path, because of the

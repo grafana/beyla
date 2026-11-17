@@ -19,6 +19,10 @@ var testHTTPClient = &http.Client{
 }
 
 func DoHTTPGet(t require.TestingT, path string, status int) {
+	DoHTTPGetWithClient(t, testHTTPClient, path, status)
+}
+
+func DoHTTPGetWithClient(t require.TestingT, httpClient *http.Client, path string, status int) {
 	// Random fake body to cause the request to have some size (38 bytes)
 	jsonBody := []byte(`{"productId": 123456, "quantity": 100}`)
 
@@ -26,7 +30,7 @@ func DoHTTPGet(t require.TestingT, path string, status int) {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
-	r, err := testHTTPClient.Do(req)
+	r, err := httpClient.Do(req)
 	require.NoError(t, err)
 	defer r.Body.Close()
 	require.Equal(t, status, r.StatusCode)

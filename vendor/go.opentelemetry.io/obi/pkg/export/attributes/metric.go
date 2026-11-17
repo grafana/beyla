@@ -696,6 +696,12 @@ var (
 		OTEL:    "obi.stat.tcp.successful.connections",
 		Type:    InstrumentCounter,
 	})
+	StatTCPResets = metric(Name{
+		Section: "obi.stat.tcp.resets",
+		OTEL:    "obi.stat.tcp.resets",
+		Unit:    "{segment}",
+		Type:    InstrumentCounter,
+	})
 )
 
 // normalizeMetric will facilitate the user-input in the attributes.enable section.

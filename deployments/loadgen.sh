@@ -29,7 +29,7 @@ while true; do
   URL_IDX=$((${RANDOM} % ${URLS_LEN}))
   URL="${BASE_URL}${URLS[$URL_IDX]}"
   echo "calling ${URL}"
-  curl -k  "${URL}" > /dev/null
+  curl -k "${URL}" >/dev/null
 
   sleep "$(echo "scale=4;${URL_IDX} / ${URLS_LEN}0 " | bc)"
 done

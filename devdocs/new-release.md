@@ -61,16 +61,20 @@ Step outcome:
 
 This creates `release-3.0` in both OBI and Beyla. Both are based on the
 OBI SHA pinned by Beyla `main`. OBI commits its generated release artifacts.
-Beyla runs `make vendor-obi` to update vendored OBI and generate build inputs,
+Beyla runs `mise run vendor:obi` to update vendored OBI and generate build inputs,
 but keeps generated `*_bpfel.*` files ignored: Alloy now downloads published
 Beyla binaries and does not consume these source-tree artifacts. Beyla also
 does not commit a rebuilt Java agent. The Java agent is embedded in Beyla's Go
 binary and is built at binary-release time. The binary workflow checks out
-recursive submodules, sets up Java 17, and runs `make artifact`; that target
-orders `make vendor-obi`, `make java-build`, and Go compilation so the fresh
-agent is present when the executable is built.
+recursive submodules, installs Beyla’s Mise-pinned tools (including Java 21
+for the agent), and runs `mise run artifact`; that target orders
+`mise run vendor:obi`, `mise run //java:build`, and Go compilation so the fresh
+agent is present when the executable is built. The release-train preparation
+script separately calls OBI’s `make -C "$OBI_DIR" docker-generate` and
+`make -C "$OBI_DIR" java-build`; its Java 17 setup remains for that direct
+upstream Make/Gradle path.
 
-First, inspect Beyla `main` and confirm the OBI SHA that it pins. For example, 
+First, inspect Beyla `main` and confirm the OBI SHA that it pins. For example,
 Beyla `main` points to OBI commit `8634fc94ab21b86dd829fa92c87d8120790de337`.
 
 ```bash
@@ -219,7 +223,7 @@ Bump the Beyla Helm chart in this repository, as in
 - Update `charts/beyla/Chart.yaml`:
   - Set `appVersion` to the promoted Beyla version.
   - Bump the chart `version`.
-- Regenerate Helm chart docs with `make helm-docs`.
+- Regenerate Helm chart docs with `mise run helm:docs`.
 - Open and merge the Helm chart PR.
 - Run the Beyla
   [helm-release.yml](https://github.com/grafana/beyla/actions/workflows/helm-release.yml)
@@ -243,6 +247,7 @@ to prepare the Beyla bump:
   architectural changes.
 - Merge the Alloy PR only after the Beyla release has been promoted to
   stable/latest.
+
 ## Failure Handling
 
 If a release fails in CI or in `dev/ops/prod`:
@@ -270,6 +275,7 @@ that the OBI fork's tag stream stays in lockstep with Beyla's.
 If the fix is in Beyla only (no OBI changes):
 
 1. **Cherry-pick the fix** onto the existing Beyla release branch:
+
    ```bash
    cd /path/to/beyla
    git fetch --prune origin
@@ -283,13 +289,13 @@ If the fix is in Beyla only (no OBI changes):
    with `beyla_version=v3.0.1` (leave `obi_version` empty). The script
    detects that `PATCH != 0`, reuses the existing `release-3.0` branch
    on both repos, and reads the OBI submodule pointer from the Beyla release
-   branch. Beyla's `make vendor-obi` updates vendored OBI and generates build
+   branch. Beyla's `mise run vendor:obi` updates vendored OBI and generates build
    inputs, while generated Beyla `*_bpfel.*` files remain ignored (including
    removing any already tracked files from the index). The generated Java
    agent jar is also kept out of the Beyla release-train commit. Java-agent
    generation is deferred to binary publishing, where the fresh agent is
    embedded into the Go executable. The OBI artifact regeneration steps
-   (`make docker-generate`, `make java-build`) also run but should be a
+   (`make -C "$OBI_DIR" docker-generate`, `make -C "$OBI_DIR" java-build`) also run but should be a
    no-op when OBI is unchanged.
 
 3. **Tag**: After release branch CI is green, run
@@ -308,6 +314,7 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
 
 1. **Cherry-pick the fix** onto the OBI release branch and regenerate
    artifacts:
+
    ```bash
    cd /path/to/opentelemetry-ebpf-instrumentation
    git fetch --prune origin
@@ -326,6 +333,7 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
 
 2. **Update Beyla's `.obi-src`** on the Beyla release branch to point to the
    new OBI release branch tip, and regenerate Beyla artifacts:
+
    ```bash
    cd /path/to/beyla
    git fetch --prune origin
@@ -361,12 +369,12 @@ If the fix originates in OBI (e.g., a cherry-picked upstream security fix):
 3. **Prepare**: Run `release-train-prepare.yml` with `beyla_version=v3.0.1`
    (leave `obi_version` empty so OBI inherits the same version). The
    script reuses both existing `release-3.0` branches and regenerates
-   artifacts (OBI: `make docker-generate`, `make java-build`; Beyla:
-   `make vendor-obi`). Beyla leaves generated `*_bpfel.*` files untracked,
+   artifacts (OBI: `make -C "$OBI_DIR" docker-generate`, `make -C "$OBI_DIR" java-build`; Beyla:
+   `mise run vendor:obi`). Beyla leaves generated `*_bpfel.*` files untracked,
    removes older tracked files from its index, and excludes the generated
    Java-agent jar from the release-train commit. Java-agent build is deferred
    until the binary-release workflow, which initializes recursive submodules,
-   installs Java 17, and embeds the freshly built agent in the executable.
+   uses the Mise-pinned Java 21 toolchain to build the agent for the executable.
 
 4. **Tag**: Run `release-train-tag.yml` with `beyla_version=v3.0.1`
    (leave `obi_version` empty) after CI is green. Both `v3.0.1` tags are
@@ -394,7 +402,7 @@ OBI PR or issue shipped in Beyla:
 ```
 
 Example below to find if the OBI PR linked to this issue
-https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/995
+<https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/995>
 was released in Beyla (it wasn't):
 
 ```shell
@@ -406,7 +414,7 @@ OBI Issue #995 (PR #997) was not yet released as part of Beyla
 ```
 
 Another example with
-https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/896:
+<https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/issues/896>:
 
 ```shell
 ./scripts/release-lookup.sh --obi 896

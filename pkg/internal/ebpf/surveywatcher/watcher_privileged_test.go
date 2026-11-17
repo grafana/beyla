@@ -52,54 +52,117 @@ func TestSurveyWatcherKernel(t *testing.T) {
 	t.Cleanup(cancel)
 	state, err := Start(ctx, &obi.DefaultConfig, &ebpfcommon.EBPFEventContext{})
 	require.NoError(t, err)
-	assert.Contains(t, state.Snapshot(), server.identity, "seed existing listeners")
-	assert.Contains(t, state.Snapshot(), keepalive.identity, "seed existing established connections")
-	assert.NotContains(t, state.Snapshot(), client.identity, "idle processes must remain held")
+	assert.NotZero(t, server.flags(state), "seed existing listeners")
+	assert.NotZero(t, keepalive.flags(state), "seed existing established connections")
+	assert.Zero(t, client.flags(state), "idle processes must remain held")
 
 	// The connection closes before userspace reads the map. A thread exiting
 	// immediately afterwards must not erase the process's evidence either.
 	require.Equal(t, "ok", client.command(t, "thread_connect "+address))
 	require.Eventually(t, func() bool {
-		_, ok := state.Snapshot()[client.identity]
-		return ok
+		return client.flags(state) != 0
 	}, 3*time.Second, 10*time.Millisecond)
 	require.NotEmpty(t, listener.command(t, "listen"))
 	require.Equal(t, "ok", unixClient.command(t, "unix "+unixPath))
 	require.Eventually(t, func() bool {
-		_, listening := state.Snapshot()[listener.identity]
-		_, unixConnected := state.Snapshot()[unixClient.identity]
-		return listening && unixConnected
+		return listener.flags(state) != 0 && unixClient.flags(state) != 0
 	}, 3*time.Second, 10*time.Millisecond)
 
 	// Port flags: the seeded helper listened on an ephemeral port, the kprobe
 	// observed listener too. A privileged bind requires CAP_NET_BIND_SERVICE.
 	require.Eventually(t, func() bool {
-		snapshot := state.Snapshot()
-		for process := range snapshot {
-			if process.PID == server.identity.PID && process.Namespace == server.identity.Namespace {
-				return process.Flags&FlagNonPrivileged != 0 && process.Flags&FlagPrivileged == 0
-			}
-		}
-		return false
+		return server.flags(state)&FlagNonPrivileged != 0 && server.flags(state)&FlagPrivileged == 0
 	}, 3*time.Second, 10*time.Millisecond, "seeded ephemeral listener must be flagged unprivileged")
 	require.NotEmpty(t, privileged.command(t, "listen_privileged"))
 	require.Eventually(t, func() bool {
-		snapshot := state.Snapshot()
-		for process := range snapshot {
-			if process.PID == privileged.identity.PID && process.Namespace == privileged.identity.Namespace {
-				return process.Flags&FlagPrivileged != 0
-			}
-		}
-		return false
+		return privileged.flags(state)&FlagPrivileged != 0
 	}, 3*time.Second, 10*time.Millisecond, "kprobe must flag a privileged listener")
 
 	client.stop(t)
 	require.Eventually(t, func() bool {
-		_, ok := state.Snapshot()[client.identity]
-		return !ok
+		return client.flags(state) == 0
 	}, 2*recoveryInterval, 50*time.Millisecond, "remove evidence on the last thread's exit")
-	assert.Contains(t, state.Snapshot(), server.identity)
-	assert.Contains(t, state.Snapshot(), keepalive.identity)
+	assert.NotZero(t, server.flags(state))
+	assert.NotZero(t, keepalive.flags(state))
+}
+
+func TestSurveyWatcherUnixSockets(t *testing.T) {
+	if os.Getenv("BEYLA_TEST_SURVEY_BPF") != "1" {
+		t.Skip("set BEYLA_TEST_SURVEY_BPF=1 to run the privileged socket watcher test")
+	}
+	require.NoError(t, rlimit.RemoveMemlock())
+	for _, abstract := range []bool{false, true} {
+		name := "filesystem"
+		if abstract {
+			name = "abstract"
+		}
+		t.Run(name, func(t *testing.T) {
+			address := filepath.Join(t.TempDir(), "sock")
+			if abstract {
+				address = "@" + address
+			}
+			server := startSocketHelper(t)
+			require.Equal(t, address, server.command(t, "listen_unix "+address))
+			keepalive := startSocketHelper(t)
+			require.Equal(t, "ok", keepalive.command(t, "keepalive_unix "+address))
+			client := startSocketHelper(t)
+			listener := startSocketHelper(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			state, err := Start(ctx, &obi.DefaultConfig, &ebpfcommon.EBPFEventContext{})
+			require.NoError(t, err)
+			assert.Equal(t, FlagAny, server.flags(state), "seed a Unix listener without port flags")
+			assert.Equal(t, FlagAny, keepalive.flags(state), "seed an established Unix connection")
+			assert.Zero(t, client.flags(state))
+			require.Equal(t, "ok", client.command(t, "unix "+address))
+			require.Equal(t, address+"-live", listener.command(t, "listen_unix "+address+"-live"))
+			require.Eventually(t, func() bool {
+				return client.flags(state) == FlagAny && listener.flags(state) == FlagAny
+			}, 3*time.Second, 10*time.Millisecond, "observe new Unix connects and listeners without port flags")
+		})
+	}
+}
+
+// Workers created after the startup iterator inherit their listener without
+// calling connect or listen. Their first accept must supply socket evidence.
+func TestSurveyWatcherInheritedListeners(t *testing.T) {
+	if os.Getenv("BEYLA_TEST_SURVEY_BPF") != "1" {
+		t.Skip("set BEYLA_TEST_SURVEY_BPF=1 to run the privileged socket watcher test")
+	}
+	require.NoError(t, rlimit.RemoveMemlock())
+	for _, network := range []string{"unix", "tcp4"} {
+		t.Run(network, func(t *testing.T) {
+			address := "127.0.0.1:0"
+			expectedFlags := FlagAny | FlagNonPrivileged
+			if network == "unix" {
+				address = filepath.Join(t.TempDir(), "sock")
+				expectedFlags = FlagAny
+			}
+			listener, err := net.Listen(network, address)
+			require.NoError(t, err)
+			defer listener.Close()
+			file, err := listener.(interface{ File() (*os.File, error) }).File()
+			require.NoError(t, err)
+			defer file.Close()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			state, err := Start(ctx, &obi.DefaultConfig, &ebpfcommon.EBPFEventContext{})
+			require.NoError(t, err)
+			worker := startSocketHelper(t, file)
+			assert.Zero(t, worker.flags(state), "worker starts after the startup iterator")
+			conn, err := net.DialTimeout(network, listener.Addr().String(), time.Second)
+			require.NoError(t, err)
+			defer conn.Close()
+			require.Equal(t, "ok", worker.command(t, "accept"))
+			require.Eventually(t, func() bool {
+				return worker.flags(state) == expectedFlags
+			}, 3*time.Second, 10*time.Millisecond, "admit the accepting worker with the listener's port policy")
+			worker.stop(t)
+			require.Eventually(t, func() bool {
+				return worker.flags(state) == 0
+			}, 2*recoveryInterval, 50*time.Millisecond, "remove the worker's evidence on exit")
+		})
+	}
 }
 
 type socketHelper struct {
@@ -109,7 +172,7 @@ type socketHelper struct {
 	identity Process
 }
 
-func startSocketHelper(t *testing.T) *socketHelper {
+func startSocketHelper(t *testing.T, files ...*os.File) *socketHelper {
 	t.Helper()
 	executable, err := os.Executable()
 	require.NoError(t, err)
@@ -117,6 +180,7 @@ func startSocketHelper(t *testing.T) *socketHelper {
 	// when their input closes, so cleanup doesn't race CommandContext's SIGKILL.
 	childCtx, cancel := context.WithCancel(context.WithoutCancel(t.Context()))
 	cmd := exec.CommandContext(childCtx, executable, "-test.run=^TestSurveySocketHelper$")
+	cmd.ExtraFiles = files
 	if os.Getenv("BEYLA_TEST_SURVEY_PIDNS") == "1" {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWPID}
 	}
@@ -147,6 +211,15 @@ func startSocketHelper(t *testing.T) *socketHelper {
 		PID: uint32(status.NSpids[len(status.NSpids)-1]), Namespace: namespaces["pid"].Inode, StartTime: stat.Starttime,
 	}
 	return h
+}
+
+func (h *socketHelper) flags(state *State) uint8 {
+	for process := range state.Snapshot() {
+		if process.PID == h.identity.PID && process.Namespace == h.identity.Namespace && process.StartTime == h.identity.StartTime {
+			return process.Flags
+		}
+	}
+	return 0
 }
 
 func (h *socketHelper) command(t *testing.T, command string) string {
@@ -182,12 +255,35 @@ func TestSurveySocketHelper(t *testing.T) {
 	}()
 	for commands.Scan() {
 		fields := strings.Fields(commands.Text())
-		if fields[0] == "listen" || fields[0] == "listen_privileged" {
-			address := "127.0.0.1:0"
-			if fields[0] == "listen_privileged" {
-				address = "127.0.0.1:1"
+		if fields[0] == "accept" {
+			file := os.NewFile(3, "inherited-listener")
+			listener, err := net.FileListener(file)
+			_ = file.Close()
+			if err != nil {
+				fmt.Println("error:", err)
+				continue
 			}
-			listener, err := net.Listen("tcp4", address)
+			_ = listener.(interface{ SetDeadline(time.Time) error }).SetDeadline(time.Now().Add(3 * time.Second))
+			conn, err := listener.Accept()
+			_ = listener.Close()
+			if err != nil {
+				fmt.Println("error:", err)
+				continue
+			}
+			_ = conn.Close()
+			fmt.Println("ok")
+			continue
+		}
+		if fields[0] == "listen" || fields[0] == "listen_privileged" || fields[0] == "listen_unix" {
+			network := "tcp4"
+			address := "127.0.0.1:0"
+			switch fields[0] {
+			case "listen_privileged":
+				address = "127.0.0.1:1"
+			case "listen_unix":
+				network, address = "unix", fields[1]
+			}
+			listener, err := net.Listen(network, address)
 			if err != nil {
 				fmt.Println("error:", err)
 				continue
@@ -198,7 +294,7 @@ func TestSurveySocketHelper(t *testing.T) {
 		}
 		connect := func() {
 			network := "tcp4"
-			if fields[0] == "unix" {
+			if fields[0] == "unix" || fields[0] == "keepalive_unix" {
 				network = "unix"
 			}
 			conn, err := net.DialTimeout(network, fields[1], time.Second)
@@ -206,7 +302,7 @@ func TestSurveySocketHelper(t *testing.T) {
 				fmt.Println("error:", err)
 				return
 			}
-			if fields[0] == "keepalive" {
+			if fields[0] == "keepalive" || fields[0] == "keepalive_unix" {
 				sockets = append(sockets, conn)
 			} else {
 				_ = conn.Close()

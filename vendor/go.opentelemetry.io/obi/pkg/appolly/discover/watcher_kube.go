@@ -211,7 +211,7 @@ func (wk *watcherKubeEnricher) enrichProcessEvent(processEvents []Event[ProcessA
 					Obj:  procWithMeta,
 				})
 			}
-		case EventDeleted:
+		case EventDeleted, EventExecutableReplaced:
 			wk.log.Debug("process stopped", "pid", procEvent.Obj.pid)
 			wk.onProcessTerminate(procEvent.Obj)
 			// no need to decorate deleted processes

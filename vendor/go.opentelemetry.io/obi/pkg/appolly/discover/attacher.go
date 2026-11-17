@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"log/slog"
 	stdmaps "maps"
+	"os"
 	"slices"
 	"time"
 
-	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
@@ -49,7 +49,7 @@ type traceAttacher struct {
 	// processInstances keeps track of the instances of each process. This will help making sure
 	// that we don't remove the BPF resources of an executable until all their instances are removed
 	// are stopped
-	processInstances maps.Map2[ebpf.ExecutableKey, app.PID, struct{}]
+	processInstances maps.Map2[ebpf.ExecutableKey, app.PID, *exec.FileInfo]
 
 	// keeps a copy of all the tracers for a given executable path
 	existingTracers     map[ebpf.ExecutableKey]executableTracer
@@ -116,7 +116,7 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 	} else {
 		ta.javaInjector = javaInjector
 	}
-	ta.processInstances = maps.Map2[ebpf.ExecutableKey, app.PID, struct{}]{}
+	ta.processInstances = maps.Map2[ebpf.ExecutableKey, app.PID, *exec.FileInfo]{}
 	ta.EbpfEventContext.CommonPIDsFilter = ebpfcommon.NewPIDsFilter(&ta.Cfg.Discovery, slog.With("component", "ebpfCommon.CommonPIDsFilter"), ta.Metrics)
 	if ta.RuntimeMetrics != nil {
 		ta.EbpfEventContext.RuntimeMetrics = runtimemetrics.NewQueueSender(ta.RuntimeMetrics)
@@ -160,10 +160,15 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 		}
 
 		swarms.ForEachInput(ctx, in, ta.log.Debug, func(instrumentables []Event[ebpf.Instrumentable]) {
+			// Sampler updates wait for the rest of their batch, so a worker whose master
+			// leaves in the same refresh no longer defers to that master's update.
+			var updates []*ebpf.Instrumentable
 			for _, instr := range instrumentables {
 				ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
 					"exec", instr.Obj.FileInfo.CmdExePath(), "pid", instr.Obj.FileInfo.Pid())
 				switch instr.Type {
+				case EventUpdated:
+					updates = append(updates, &instr.Obj)
 				case EventCreated:
 					ta.resolveServiceMetadata(&instr.Obj)
 
@@ -226,6 +231,10 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 					}
 					ta.notifyProcessDeletion(ctx, &instr.Obj)
 				}
+			}
+
+			for _, update := range updates {
+				ta.updateSampler(update)
 			}
 		})
 	}, nil
@@ -368,13 +377,12 @@ func (ta *traceAttacher) getTracer(ctx context.Context, ie *ebpf.Instrumentable)
 	// Must be called after we've set the SDKLanguage
 	ta.harvestRoutes(ie, false)
 
-	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
-	// to allow loading it from different container/pods in containerized environments
 	exe, ok := ta.loadExecutable(ie)
 	if !ok {
 		ta.Metrics.InstrumentationError(ie.FileInfo.ExecutableName(), imetrics.InstrumentationErrorInspectionFailed)
 		return false
 	}
+	defer exe.Close()
 
 	tracer := ebpf.NewProcessTracer(tracerType, programs, ta.Cfg, ta.Metrics)
 
@@ -387,7 +395,7 @@ func (ta *traceAttacher) getTracer(ctx context.Context, ie *ebpf.Instrumentable)
 		return false
 	}
 
-	if err := tracer.NewExecutable(exe, ie); err != nil {
+	if err := tracer.NewExecutableFile(exe, ie); err != nil {
 		if closeErr := tracer.Close(); closeErr != nil {
 			ta.log.Debug("closing process tracer after failed executable attachment", "error", closeErr)
 		}
@@ -474,10 +482,12 @@ func (ta *traceAttacher) harvestRoutes(ie *ebpf.Instrumentable, reused bool) {
 	ta.harvestRoutesProcessor(ie, reused)
 }
 
-func (ta *traceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*link.Executable, bool) {
-	// Instead of the executable file in the disk, we pass the /proc/<pid>/exec
-	// to allow loading it from different container/pods in containerized environments
-	exe, err := link.OpenExecutable(ie.FileInfo.ProExeLinkPath())
+func (ta *traceAttacher) loadExecutable(ie *ebpf.Instrumentable) (*os.File, bool) {
+	// Open through /proc/<pid>/exe to access executables whose paths on disk
+	// belong to a different container mount namespace.
+	// Do not use Cilium's eBPF loader based on path, it can't handle execve changing
+	// the underlying executable.
+	exe, err := ie.FileInfo.OpenExecutable()
 	if err != nil {
 		ta.log.Debug("can't open executable. Ignoring",
 			"error", err, "pid", ie.FileInfo.Pid(), "cmd", ie.FileInfo.CmdExePath())
@@ -495,8 +505,9 @@ func (ta *traceAttacher) reuseTracer(ctx context.Context, tracer *ebpf.ProcessTr
 	if !ok {
 		return false
 	}
+	defer exe.Close()
 
-	if err := tracer.NewExecutable(exe, ie); err != nil {
+	if err := tracer.NewExecutableFile(exe, ie); err != nil {
 		ta.log.Debug("Failed to attach uprobes for new executable", "pid", ie.FileInfo.Pid(), "error", err)
 		return false
 	}
@@ -533,7 +544,7 @@ func (ta *traceAttacher) updateTracerProbes(tracer *ebpf.ProcessTracer, ie *ebpf
 }
 
 func (ta *traceAttacher) monitorPIDs(ctx context.Context, tracer *ebpf.ProcessTracer, ie *ebpf.Instrumentable) {
-	serviceSource := runtimeMetricServiceSource(ie.FileInfo, ie.FileInfo)
+	serviceSource := serviceAttributeSource(ie.FileInfo, ie.FileInfo)
 	if serviceSource != ie.FileInfo {
 		syncServiceMetadata(ie.FileInfo, serviceSource)
 		serviceSource.ApplyServiceDefaults(ie.Type)
@@ -582,7 +593,7 @@ func (ta *traceAttacher) monitorPIDs(ctx context.Context, tracer *ebpf.ProcessTr
 	}
 }
 
-func runtimeMetricServiceSource(lifecycle, fallback *exec.FileInfo) *exec.FileInfo {
+func serviceAttributeSource(lifecycle, fallback *exec.FileInfo) *exec.FileInfo {
 	if lifecycle != nil {
 		if source := lifecycle.RuntimeMetricServiceSource(); source != nil {
 			return source
@@ -634,9 +645,41 @@ func (ta *traceAttacher) unregisterDynamicFileInfo(ie *ebpf.Instrumentable) {
 // by PID, so the exit of a process whose attach failed can neither release nor pin the executable's tracer
 func (ta *traceAttacher) addProcessInstances(ie *ebpf.Instrumentable) {
 	key := executableKey(ie.FileInfo)
-	ta.processInstances.Put(key, ie.FileInfo.Pid(), struct{}{})
+	ta.processInstances.Put(key, ie.FileInfo.Pid(), ie.FileInfo)
 	for _, pid := range ie.ChildPids {
-		ta.processInstances.Put(key, pid, struct{}{})
+		ta.processInstances.Put(key, pid, ie.FileInfo)
+	}
+}
+
+// updateSampler applies a refreshed sampler to the PID's own FileInfo. As when the PIDs were
+// instrumented, the service source they share (a Python master, or a parent traced with its
+// children) samples for all of them, so only the source's own update rewrites their eBPF
+// samplers.
+func (ta *traceAttacher) updateSampler(ie *ebpf.Instrumentable) {
+	ie.FileInfo.SetSampler(ie.SamplerConfig)
+
+	key := executableKey(ie.FileInfo)
+	instance, ok := ta.processInstances.Get(key, ie.FileInfo.Pid())
+	if !ok {
+		return
+	}
+
+	source := serviceAttributeSource(instance, instance)
+	sourceInstance, _ := ta.processInstances.Get(key, source.Pid())
+	if source != ie.FileInfo && sourceInstance == source {
+		return
+	}
+	source.SetSampler(ie.SamplerConfig)
+
+	tracer := ta.existingTracers[key].tracer
+	if tracer == nil {
+		return
+	}
+
+	for pid, lifecycle := range ta.processInstances[key] {
+		if serviceAttributeSource(lifecycle, lifecycle) == source {
+			tracer.UpdatePIDSampler(pid, lifecycle.Ns(), source)
+		}
 	}
 }
 

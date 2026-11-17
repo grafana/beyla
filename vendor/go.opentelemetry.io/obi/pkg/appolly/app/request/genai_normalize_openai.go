@@ -16,6 +16,7 @@ type openAIInputAudio struct {
 type openAIResponsesContentBlock struct {
 	Type       string            `json:"type"`
 	Text       string            `json:"text,omitempty"`
+	Data       json.RawMessage   `json:"data,omitempty"`
 	Refusal    string            `json:"refusal,omitempty"`
 	ImageURL   string            `json:"image_url,omitempty"`
 	FileID     string            `json:"file_id,omitempty"`
@@ -167,6 +168,8 @@ func openAIResponsesContentBlockToPart(block openAIResponsesContentBlock) (norma
 	switch block.Type {
 	case "text", "input_text", "output_text":
 		return normalizedPart{Type: "text", Content: block.Text}, true
+	case "input_json":
+		return normalizedPart{Type: block.Type, Data: block.Data}, true
 	case "refusal":
 		return normalizedPart{Type: "text", Content: block.Refusal}, true
 	case "input_image":

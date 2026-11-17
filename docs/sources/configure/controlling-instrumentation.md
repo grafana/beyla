@@ -125,7 +125,6 @@ YAML section: `ebpf.payload_extraction.http.elasticsearch`
 | `Elasticsearch`     | /_search, /_msearch, /_bulk, /_doc                                                       | 7.14+    |
 | `Opensearch`        | /_search, /_msearch, /_bulk, /_doc                                                       | 3.0.0+   |
 
-
 YAML section: `ebpf.payload_extraction.http.aws`
 
 | YAML option<p>Environment variable</p>          | Description                                                        | Type    | Default |
@@ -333,7 +332,7 @@ To minimize the performance impact of eBPF data collection, Beyla uses limited p
 
 YAML section:
 
-```
+```yaml
 ebpf:
   buffer_sizes:
 ```

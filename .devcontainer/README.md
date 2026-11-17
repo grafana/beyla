@@ -59,7 +59,7 @@ before the non-root user can overwrite them.
 
 The development container is not privileged. Running OBI and its integration
 tests still requires the Linux kernel, BTF, and permissions described in
-[CONTRIBUTING.md](../CONTRIBUTING.md). Some integration tests access sibling
+[Beyla requirements](../docs/sources/requirements-and-security/requirements.md). Some integration tests access sibling
 containers through `localhost`; run those tests on the Linux Docker host, or
 configure host networking for the development container. Docker Desktop needs
 its host-networking option enabled for that workflow. Building on macOS or

@@ -24,6 +24,7 @@ import (
 
 	attr2 "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/metadata"
 )
 
 const (
@@ -44,19 +45,23 @@ type clusterNameFetcher func(context.Context) (string, error)
 // fetchClusterName tries to automatically guess the cluster name from
 // node labels, cloud providers (EC2, GCP, Azure), or OpenShift.
 // TODO: consider other providers (Alibaba, Oracle, etc...)
-func fetchClusterName(ctx context.Context, k8sInformer *kube.MetadataProvider) string {
+func fetchClusterName(ctx context.Context, provider *metadata.MetadataProvider) string {
 	log := klog().With("func", "fetchClusterName")
 	clusterNameFetchers := []struct {
 		provider string
 		fetch    clusterNameFetcher
+		cloud    bool
 	}{
-		{"Label", nodeLabelsClusterNameFetcher(k8sInformer)},
-		{"OpenShift", openshiftClusterNameFetcher(k8sInformer)},
-		{"EC2", eksClusterNameFetcher},
-		{"GCP", gcpClusterNameFetcher},
-		{"Azure", azureClusterNameFetcher},
+		{"Label", nodeLabelsClusterNameFetcher(provider.K8sInformer), false},
+		{"OpenShift", openshiftClusterNameFetcher(provider.K8sInformer), false},
+		{"EC2", eksClusterNameFetcher, true},
+		{"GCP", gcpClusterNameFetcher, true},
+		{"Azure", azureClusterNameFetcher, true},
 	}
 	for _, f := range clusterNameFetchers {
+		if f.cloud && !provider.CloudMetadata.DetectionEnabled {
+			continue
+		}
 		provider, fetch := f.provider, f.fetch
 		log := log.With("provider", provider)
 		log.Debug("trying to retrieve cluster name")

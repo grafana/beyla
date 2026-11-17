@@ -62,7 +62,19 @@ func findInterfaceImpls(ef *elf.File) (map[string]uint64, error) {
 		return implementations, nil
 	}
 	targetVersion, err := goversion.Parse(versionString)
-	if err != nil || targetVersion.Compare(minGoRuntimeTypeMetadataVersion) < 0 {
+	if err != nil {
+		return implementations, nil
+	}
+	if targetVersion.Compare(minGoRuntimeTypeMetadataVersion) < 0 {
+		if implementations["*net.TCPConn"] == 0 {
+			address, err := findTCPConnITab(ef)
+			if err != nil {
+				return nil, err
+			}
+			if address != 0 {
+				implementations["*net.TCPConn"] = address
+			}
+		}
 		return implementations, nil
 	}
 
@@ -72,6 +84,47 @@ func findInterfaceImpls(ef *elf.File) (map[string]uint64, error) {
 	}
 	maps.Copy(implementations, moduleImplementations)
 	return implementations, nil
+}
+
+// Legacy (< 1.27) stripped binaries retain .itablink and method names in .gopclntab,
+// we try harder here.
+func findTCPConnITab(ef *elf.File) (uint64, error) {
+	links := ef.Section(".itablink")
+	if links == nil || ef.Class != elf.ELFCLASS64 {
+		return 0, nil
+	}
+	table, err := findGoSymbolTable(ef)
+	if err != nil {
+		return 0, err
+	}
+	closeMethod := table.LookupFunc("net.(*TCPConn).Close")
+	if closeMethod == nil {
+		return 0, nil
+	}
+
+	const pointerSize = 8
+	// Before Go 1.27, ITab.Fun follows Inter, Type, and the aligned Hash field.
+	const methodOffset = 3 * pointerSize
+	if links.Size%pointerSize != 0 {
+		return 0, errors.New("truncated Go itab links")
+	}
+	relocs := buildRelocationInfo(ef)
+	var found, concreteType uint64
+	for offset := uint64(0); offset < links.Size; offset += pointerSize {
+		itab := resolveAddr(ef, links.Addr+offset, relocs)
+		if itab == 0 || resolveAddr(ef, itab+methodOffset, relocs) != closeMethod.Entry {
+			continue
+		}
+		typeAddress := resolveAddr(ef, itab+pointerSize, relocs)
+		if typeAddress == 0 {
+			continue
+		}
+		if found != 0 && concreteType != typeAddress {
+			return 0, errors.New("ambiguous Go TCP connection type")
+		}
+		found, concreteType = itab, typeAddress
+	}
+	return found, nil
 }
 
 func findInterfaceImplsFromModuledata(ef *elf.File, targetVersion goversion.Version) (map[string]uint64, error) {
@@ -259,11 +312,17 @@ func readVirtualMemory(ef *elf.File, addr, size uint64) ([]byte, error) {
 // readVirtualMemoryWithFlags reads file-backed bytes from a load segment that
 // includes all required permissions.
 func readVirtualMemoryWithFlags(ef *elf.File, addr, size uint64, flags elf.ProgFlag) ([]byte, error) {
+	return readVirtualMemoryWithPermissions(ef, addr, size, flags, 0)
+}
+
+// readVirtualMemoryWithPermissions selects a file-backed load segment with all
+// required permissions and none of the forbidden permissions.
+func readVirtualMemoryWithPermissions(ef *elf.File, addr, size uint64, required, forbidden elf.ProgFlag) ([]byte, error) {
 	if size > uint64(^uint(0)>>1) || addr > ^uint64(0)-size {
 		return nil, errors.New("invalid virtual memory range")
 	}
 	for _, prog := range ef.Progs {
-		if prog.Type != elf.PT_LOAD || prog.Flags&flags != flags || addr < prog.Vaddr {
+		if prog.Type != elf.PT_LOAD || prog.Flags&required != required || prog.Flags&forbidden != 0 || addr < prog.Vaddr {
 			continue
 		}
 		// Check the remaining file bytes without adding potentially overflowing

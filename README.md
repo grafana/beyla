@@ -9,7 +9,7 @@ Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.
 
 ## Important Update for current and future Beyla contributors
 
-Beyla has been [donated](https://github.com/open-telemetry/community/issues/2406) to the CNCF OpenTelemetry Project, under the project name 
+Beyla has been [donated](https://github.com/open-telemetry/community/issues/2406) to the CNCF OpenTelemetry Project, under the project name
 [OpenTelemetry eBPF Instrumentation](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation) or **OBI** for short. We are in
 the process of vendoring most of the code that exists in the Beyla source repository from upstream. If you are working on a PR, unless it's
 related to documentation, please make the PR to the [upstream repository](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation). All Beyla current maintainers work full time on the upstream repository.
@@ -19,15 +19,15 @@ likely be imported as a git submodule.
 
 ## Introduction
 
-Beyla is a vendor agnostic, eBPF-based, OpenTelemetry/Prometheus application auto-instrumentation tool, which lets you easily get started with Application Observability. 
+Beyla is a vendor agnostic, eBPF-based, OpenTelemetry/Prometheus application auto-instrumentation tool, which lets you easily get started with Application Observability.
 eBPF is used to automatically inspect application executables and the OS networking layer, allowing us to capture essential application observability events
-for HTTP/S and gRPC services. From these captured eBPF events, we produce OpenTelemetry web transaction trace spans and Rate-Errors-Duration (RED) metrics. 
+for HTTP/S and gRPC services. From these captured eBPF events, we produce OpenTelemetry web transaction trace spans and Rate-Errors-Duration (RED) metrics.
 As with most eBPF tools, all data capture and instrumentation occurs without any modifications to your application code or configuration.
 
 ## Community
 
-To engage with the Beyla community and to chat with us on our community Slack channel, 
-please invite yourself to the Grafana Slack, visit https://slack.grafana.com/ and join the #beyla channel.
+To engage with the Beyla community and to chat with us on our community Slack channel,
+please invite yourself to the Grafana Slack, visit <https://slack.grafana.com/> and join the #beyla channel.
 
 We also run a monthly Beyla community call, on the second Wednesday of the month at **4pm UTC**. You can
 find all of the details about our community call on the [Grafana Community Calendar](https://calendar.google.com/calendar/u/0/embed?src=grafana.com_n57lluqpn4h4edroeje6199o00@group.calendar.google.com).
@@ -39,14 +39,14 @@ Beyla supports a wide range of programming languages (Go, Java, .NET, NodeJS, Py
 so if you already have an example service you can use it.
 If you don't have an example, you can download and run `example-http-service.go` from the `examples/` directory:
 
-```
+```bash
 curl -OL https://raw.githubusercontent.com/grafana/beyla/main/examples/example-http-service/example-http-service.go
 go run ./example-http-service.go
 ```
 
-Next, generate some traffic. The following command will trigger a GET request to http://localhost:8080 every two seconds.
+Next, generate some traffic. The following command will trigger a GET request to <http://localhost:8080> every two seconds.
 
-```
+```bash
 watch curl -s http://localhost:8080
 ```
 
@@ -56,12 +56,12 @@ First, download and unpack the latest release from the [GitHub releases page](ht
 The release should contain the `./beyla` executable.
 
 Beyla supports multiple ways to find the service to be instrumented (by network port, executable name, process ID),
-and multiple exposition formats (Prometheus, OpenTelemetry metrics, Distributed Traces for Go, Single Span traces for 
+and multiple exposition formats (Prometheus, OpenTelemetry metrics, Distributed Traces for Go, Single Span traces for
 other languages).
 
 For getting started, we'll tell Beyla to instrument the service running on port 8080 (our example service) and expose metrics in Prometheus format on port 9400.
 
-```
+```bash
 export BEYLA_PROMETHEUS_PORT=9400
 export BEYLA_OPEN_PORT=8080
 sudo -E ./beyla
@@ -83,10 +83,10 @@ See [Documentation](https://grafana.com/docs/beyla/) and the [tutorials](https:/
   support Go applications built with a major **Go version no earlier than 3 versions** behind the current
   stable major release.
 - Some level of elevated permissions to execute the instrumenter:
-    - On host systems, running Beyla requires `sudo`.
-    - For Kubernetes we have detailed configuration example on how to run with minimum
-      required capabilities in the [examples/k8s/unprivileged.yaml](./examples/k8s/unprivileged.yaml) file.
-    - For docker compose, you need to setup Beyla as `privileged` container or grant the `SYS_ADMIN` capability.
+  - On host systems, running Beyla requires `sudo`.
+  - For Kubernetes we have detailed configuration example on how to run with minimum
+    required capabilities in the [examples/k8s/unprivileged.yaml](./examples/k8s/unprivileged.yaml) file.
+  - For docker compose, you need to setup Beyla as `privileged` container or grant the `SYS_ADMIN` capability.
 
 | Available Instrumentations                    | Supported  |
 |-----------------------------------------------|------------|
@@ -106,8 +106,8 @@ The Go instrumentation is limited to certain specific libraries.
 | [Gin](https://gin-gonic.com/)                       | ✅         |
 | [gRPC-Go](https://github.com/grpc/grpc-go)          | ✅         |
 | [Go x/net/http2](https://golang.org/x/net/http2)    | ✅         |
-| [Go-Redis v9](github.com/redis/go-redis)            | ✅         |
-| [Sarama Kafka](github.com/IBM/sarama)               | ✅         |
+| [Go-Redis v9](https://github.com/redis/go-redis)            | ✅         |
+| [Sarama Kafka](https://github.com/IBM/sarama)               | ✅         |
 | [kafka-Go](https://github.com/segmentio/kafka-go)   | ✅         |
 
 HTTPS instrumentation is limited to Go programs and libraries/languages using libssl3.
@@ -118,23 +118,26 @@ You can just trigger the Kubernetes descriptors in the `deployments/` folder.
 
 1. Provide your Grafana credentials. Use the following [K8s Secret template](deployments/01-grafana-credentials.template.yml)
    to introduce the endpoints, usernames and API keys for Mimir and Tempo:
+
+   ```bash
+   cp deployments/01-grafana-credentials.template.yml 01-grafana-credentials.yml
+   # EDIT the fields
+   vim 01-grafana-credentials.yml
+   kubectl apply -f 01-grafana-credentials.yml
    ```
-   $ cp deployments/01-grafana-credentials.template.yml 01-grafana-credentials.yml
-   $ # EDIT the fields
-   $ vim 01-grafana-credentials.yml
-   $ kubectl apply -f 01-grafana-credentials.yml 
-   ```
+
 2. Deploy the Grafana Agent:
-   ```
+
+   ```bash
    kubectl apply -f deployments/02-grafana-agent.yml
    ```
 
 3. Deploy a demo app with the auto-instrumenter as a sidecar. You can use the blog example in the
    [deployments/03-instrumented-app.yml](./deployments/03-instrumented-app.yml) file.
-   
-   ```
-   $ kubectl apply -f ./deployments/03-instrumented-app.yml
-   $ kubectl port-forward service/goblog 8443:8443
+
+   ```bash
+   kubectl apply -f ./deployments/03-instrumented-app.yml
+   kubectl port-forward service/goblog 8443:8443
    ```
 
 You should be able to query traces and metrics in your Grafana board.
@@ -143,38 +146,83 @@ You should be able to query traces and metrics in your Grafana board.
 
 ### Development environment requirements
 
-#### Minimum requirements
-- go 1.26
-- docker
-- GNU make
-#### Optional requirements
-- llvm >= 19
-- clang >= 19
+#### Required tools
 
-#### Common `Makefile` targets
+- [mise](https://mise.jdx.dev/) (installs Beyla's pinned Go and native eBPF toolchains)
+- GNU make, for invoking the pinned OBI submodule's BPF-generation interface
 
-Beyla's `Makefile` provides several specific-purpose build targets. The most common ones are:
-- `prereqs` - install the build pre-requisites
-- `docker-generate` - regenerates the eBPF binaries (_preferred method_)
-- `generate` - regenerates the eBPF binaries [^1]
-- `compile` - compiles the `beyla` binary (but does not automatically regenerates the eBPF binaries)
-- `dev` - equivalent to `make prereqs && make docker-generate && make compile`
-- `test` - runs unit tests
-- `integration-test` - runs integration tests - may require `sudo`
-- `clang-format` - formats C (eBPF) source code[^1]
-- `vendor-obi` - Downloads all the Opentelemetry-eBPF-Instrumentation (OBI) dependencies in a submodule, builds the BPF targets, and vendors it.
+After cloning the repository, install the complete pinned toolchain across the
+repository's Mise roots with:
 
-[^1]: Requires llvm/clang
-
-####  Quickstart
-
-```
-$ git clone https://github.com/grafana/beyla.git
-$ cd beyla/
-$ make dev
+```shell
+mise install --monorepo
 ```
 
-As described in the previous section, `make dev` takes care of setting up the build pre-requisites, including deploying a `clang-format` pre-commit hook.
+When a task needs a pinned tool that is not installed yet, Mise installs it
+automatically. In CI, jobs select exact tool sets through named profiles in the
+[shared setup action](.github/actions/setup-mise/README.md). For environment
+overrides, set variables before the task, for example
+`GOOS=darwin GOARCH=arm64 mise run compile`. Task arguments go after the task
+name, for example `mise run test:shard --shard-id 1 --packages ./pkg`;
+do not use `KEY=value` task arguments to set environment variables. Normal
+`[env]` defaults treat an empty value as omitted, while build-only
+`GOOS`/`GOARCH` overrides preserve an explicitly empty value.
+
+Docker is optional for local development. It is used by Docker-based generation
+and image-building tasks, but Beyla's default development workflow generates
+BPF bindings with the pinned native Clang/LLVM tools managed by Mise.
+
+#### Common Mise tasks
+
+Beyla's `mise.toml` and `.mise/` tasks are the authoritative development interface.
+The default build flow is:
+
+- `mise run build` - generate and vendor OBI dependencies with pinned native tools, then verify and compile Beyla
+- `mise run dev` - prepare prerequisites, vendor OBI, and compile a coverage-enabled Beyla binary
+- `mise run generate` - regenerate OBI and Beyla eBPF bindings with pinned native tools
+- `mise run generate:docker` - optionally regenerate eBPF bindings using the Docker generator image
+- `mise run compile` - compile the `beyla` binary
+- `mise run lint` and `mise run test` - lint and test the code
+- `mise run install:hooks` - install the hk pre-commit hook for C/C++ formatting
+- `mise run //java:build` - build the Java agent with the Java project's pinned tools
+- `mise run //oats:test:ai` - run the OATS AI suite from its project-owned task config
+
+The root `Makefile` remains available as a compatibility interface. GNU Make is
+also used at the OBI submodule boundary to invoke OBI's own BPF generation
+interface. New Beyla workflows and automation should use `mise run <task>`.
+
+Legacy `make <target>` commands forward each target to its corresponding Mise
+task. GNU Make exports command-line variable assignments to the task (for
+example, `make compile CMD=beyla`). Each explicit goal starts its own Mise
+invocation; repeated goals are deduplicated by GNU Make, but dependencies shared
+across different goals are not. `make -jN` only limits how many forwarded goal
+recipes run concurrently; it does not control parallelism inside a Mise task or
+preserve GNU Make's full dependency graph and jobserver semantics. Use
+`mise run --jobs N <task>` to control Mise task concurrency. Recursive OBI Make
+calls through the wrapper may warn that the Make jobserver is unavailable.
+`make -n` prints the forwarding command without running it. The exception is
+`make run-integration-test-vm`, which directly invokes its script so it can run
+in VM images without Mise.
+
+A fresh clone's normal build vendors OBI and its generated BPF bindings as
+ignored build artifacts before compiling. Prerequisite setup no longer installs
+a Git hook: install it explicitly with `mise run install:hooks`. The old
+`check-license` no-op is now a real third-party license check; use
+`mise run check:licenses` (or the Make compatibility target).
+
+#### Quickstart
+
+```bash
+git clone https://github.com/grafana/beyla.git
+cd beyla/
+mise install
+mise run build
+```
+
+`mise run build` vendors OBI using pinned native Clang/LLVM tools, runs the
+standard verification suite, and compiles Beyla. Install the hk pre-commit hook
+separately with `mise run install:hooks`. Use `mise run dev`
+when you specifically need a coverage-enabled binary.
 
 After a successful compilation, binaries can be found in the `bin/` subdirectory.
 
@@ -187,13 +235,13 @@ The code is incorporated as a Git submodule, named `obi-src`, in the `.obi-src` 
 The contents of the `.obi-src` are used to build the BPF dependencies, and in a second step they are vendored
 in the `vendor/` directory.
 
-Usually, you just need to run `make vendor-obi` to get the submodule data, compile BPF targets, and vendor them locally.
+Usually, run `mise run vendor:obi` to generate OBI bindings with Beyla’s pinned native Clang/LLVM tools and vendor them locally. This task invokes GNU Make only at the OBI submodule boundary, where Make is OBI’s own BPF-generation interface.
 
 `.obi-src` folder is pinned to a concrete version of the OBI Git history. If you did changes in the upstream
 [opentelemetry-ebpf-instrumentation](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation)
 repository, and want to update `.obi-src` to the latest contents, you'll need to run, from Beyla's project folder:
 
-```
+```bash
 git submodule update --checkout --remote 
 git add .
 ```
@@ -210,40 +258,50 @@ Temporarily go to `go.mod` and change the first `replace` directive by your loca
 +replace go.opentelemetry.io/obi => ../opentelemetry-ebpf-instrumentation
 ```
 
-Build the docker image with `make dev-image-build`.
+Build the docker image with `mise run image:dev-build`.
 
-⚠️ Before pushing your changes to our GitHub repo, don't forget to revert the `replace` directive in `go.mod`! 
+⚠️ Before pushing your changes to our GitHub repo, don't forget to revert the `replace` directive in `go.mod`!
 
 #### Formatting and linting code
 
-Beyla uses linters to enforce our coding style and best practices:
-- `golangci-lint` for Go code
-- `clang-format` for formatting C code
-- `clang-tidy` for static analysis of the C code
+Beyla uses hk to orchestrate linting and formatting checks:
 
-All of them are enforced on pull requests as part of the Beyla github workflows. Additionally, you can invoke the linters manually:
+- `golangci-lint` for Go linting and the repository's gofmt/gci import formatting rules
+- `rumdl` for structural Markdown checks; Vale remains the prose and style checker
+- `shellcheck` and `shfmt` for shell linting and formatting
+- `taplo-format` and `pkl-format` for TOML and Pkl formatting
+- `actionlint` for GitHub Actions workflows
+- `hadolint` for Dockerfiles
+- `destroyed-symlinks` for accidental replacement of symbolic links
+- `clang-tidy` for static analysis of BPF C and header files
+- `clang-format` for C/C++ formatting
 
-- `make lint` invokes `golangci-lint` on the Go code
-- `make clang-tidy` invokes `clang-tidy` on the C/eBPF code
+Go, shell, configuration, workflow, Dockerfile, and Markdown checks, along with BPF clang-tidy, are run on pull requests. You can invoke the checks and formatters manually:
 
-`clang-format` is invoked automatically as a `pre-commit` git hook, you can run it directly by using the `Makefile` `clang-format` target.
+- `mise run lint` runs the configured repository checks through hk; dashboard linting runs separately in CI with Grafana's pinned dashboard-linter action
+- `mise run lint:fix` applies configured lint and formatting fixes without staging changes
+- `mise run clang:tidy` checks BPF C and header files with clang-tidy
+
+The hk pre-commit hook checks the root Go module when Go files are staged,
+checks BPF C/header files with clang-tidy, and applies C/C++ formatting to
+staged files. Run `mise run lint:fix` to apply configured formatting fixes
+without staging changes; `mise run fmt` and `mise run clang:format` remain
+compatibility aliases for that command.
 
 #### Running VM tests
 
 In addition to the `test` and `integration-test` `Makefile` targets, Beyla also runs select tests on QEMU virtual machines in order to be able to test different kernel versions. These tests are also part of our GitHub workflow, but it is also possible to run them manually using the following command:
 
-```
-$ sudo make -C internal/testgenerated/vm KERNEL_VER=...
+```bash
+sudo make -C internal/testgenerated/vm KERNEL_VER=...
 ```
 
 where `KERNEL_VER` is one of the supported kernel versions located in `internal/testgenerated/vm/kernels`. For example, to run tests against kernel version 5.15.152, simply do:
 
-```
-$ sudo make -C internal/testgenerated/vm KERNEL_VER=5.15.152
+```bash
+sudo make -C internal/testgenerated/vm KERNEL_VER=5.15.152
 ```
 
 ## Credits
 
-Part of the code is taken from: https://github.com/open-telemetry/opentelemetry-go-instrumentation
-
-
+Part of the code is taken from: <https://github.com/open-telemetry/opentelemetry-go-instrumentation>

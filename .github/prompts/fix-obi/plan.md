@@ -15,6 +15,7 @@
 ## Deductive reasoning — where changes MUST be
 
 OBI CI passes for the submodule commit used in this branch. Beyla main CI passes. Therefore, the **only** places that can need changes are:
+
 - **Beyla's own Go code** (not in `vendor/`, not in `.obi-src/`)
 - **Test synchronisation rules** in `scripts/generate-obi-tests.sh` (BEHAVIORAL_TRANSFORMS, CODE_INJECTIONS)
 - **Beyla-specific test extensions** in `internal/test/beyla_extensions/`
@@ -25,6 +26,7 @@ OBI CI passes for the submodule commit used in this branch. Beyla main CI passes
 
 **Test failures — sync before patch:**
 When a Beyla test fails on an assertion, **do not** simply adjust the assertion to make it pass. First, locate the corresponding test in OBI (`.obi-src/`) and compare the failing test block with its upstream version:
+
 - If the test block (or the specific sub-case / table entry within it) has been **removed** in OBI, the correct fix is to **remove the same block** from Beyla's copy of the test (applying the OBI→Beyla translation rules from `scripts/generate-obi-tests.sh`). Do not patch the assertion.
 - If the test block still exists in OBI but the assertion is now wrong (e.g., a changed return value or behaviour), **then** adjust the assertion to match the new OBI behaviour.
 The general principle is: Beyla's generated tests shadow OBI's tests. When OBI changes a test, Beyla's version should be updated to match — not worked around with a minimal assertion fix that hides the upstream intent.
@@ -48,6 +50,7 @@ Keep skip tags, and list the field in `FromOBI`'s skip map, only for values that
 Any change to Beyla config structs, yaml tags, or env tags makes `docs/config-schema.json` stale. `make check-config-schema` fails in CI until that file is regenerated. The plan must include `make generate-config-schema` for `docs/config-schema.json`, then `make check-config-schema`.
 
 Known mirror pairs — check these first:
+
 - `vendor/.../obi/pkg/kube/kubecache/config.go` (OBI) ↔ `cmd/k8s-cache/cfg/config.go` (Beyla)
 - `vendor/.../obi/pkg/obi/config.go` (OBI) ↔ `pkg/beyla/config.go` (Beyla), bridged via `pkg/beyla/config_obi.go`
 
@@ -66,6 +69,7 @@ Port changes from OBI into Beyla. Do not plan edits to `internal/testgenerated/`
 ## Output
 
 Single file **`plan.md`** in repo root with:
+
 1. **Summary**: Short description of failures and the common root cause(s) identified.
 2. **Changes**: Ordered list of concrete file edits in Beyla only. Every item names a file path, the code to add or delete, and why. A step that says "audit", "re-verify", "confirm parity", or "if this fails, investigate" is not done — replace it with the edit, or drop it.
 3. **Verification**: only commands from this list, and only the ones that apply:

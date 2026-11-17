@@ -3,6 +3,13 @@
 # The production-ready minimal image is in the project root's dockerfile.
 FROM golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 AS builder
 
+# Track the pinned base image's current security updates instead of archive
+# package versions that can disappear.
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/jdx/mise:2026.11.4@sha256:085be191bbe51dbe93894681b7f29f6c014ae267e7a365c0b8b6a2fdd882ac63 /usr/local/bin/mise /usr/local/bin/mise
+ENV MISE_ENABLE_TOOLS=none
+
 ARG TARGETARCH
 
 ENV GOARCH=$TARGETARCH
@@ -16,11 +23,16 @@ COPY cmd/ cmd/
 COPY pkg/ pkg/
 COPY go.mod go.mod
 COPY go.sum go.sum
-COPY Makefile Makefile
+COPY mise.toml mise.lock ./
+COPY .mise/ .mise/
+COPY internal/java/mise.toml internal/java/
+COPY internal/java/.mise/ internal/java/.mise/
+COPY internal/test/oats/mise.toml internal/test/oats/
 COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh
 
-# Build
-RUN make compile-for-coverage
+# The Java-agent variant changes the embedded JAR but can reuse other Go packages.
+RUN --mount=type=cache,id=beyla-go-build,target=/root/.cache/go-build \
+    mise run --skip-tools compile:coverage
 
 # The enrollment tests inspect BPF maps and exercise seccomp fallbacks.
 COPY .obi-src/internal/test/integration/components/obi/testtool/ internal/test/obitesttool/

@@ -68,7 +68,7 @@ func (dd *dockerDecorator) decorate(ctx context.Context) {
 				if ok {
 					ev.Obj.metadata = docker.ContainerMetadata(ev.Obj.metadata, &meta, attr.Name.Prom)
 				}
-			case EventDeleted:
+			case EventDeleted, EventExecutableReplaced:
 				delete(dd.containerByPID, ev.Obj.pid)
 				dd.docker.InvalidatePID(ev.Obj.pid)
 			}

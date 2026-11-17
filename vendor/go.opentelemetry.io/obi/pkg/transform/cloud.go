@@ -24,6 +24,16 @@ func rlog() *slog.Logger {
 func CloudMetadataRefreshers(
 	ctx context.Context,
 	nodeMeta *metadata.NodeMeta,
+	sources []Source,
+	cloudCfg CloudMetadataConfig,
+) []cloud.MetadataRefresher {
+	return CloudMetadataRefreshersWithConfig(ctx, nodeMeta, &NameResolverConfig{Sources: sources}, cloudCfg)
+}
+
+// CloudMetadataRefreshersWithConfig also applies provider-specific discovery settings.
+func CloudMetadataRefreshersWithConfig(
+	ctx context.Context,
+	nodeMeta *metadata.NodeMeta,
 	cfg *NameResolverConfig,
 	cloudCfg CloudMetadataConfig,
 ) []cloud.MetadataRefresher {

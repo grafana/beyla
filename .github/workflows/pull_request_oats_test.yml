@@ -41,17 +41,22 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: go
+
       - name: Generate OBI tests
-        run: make generate-obi-tests
+        run: mise run generate:obi-tests
 
       - name: build matrix
         id: build-matrix
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          make oats-integration-test-matrix-json >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run //oats:matrix >> "$GITHUB_OUTPUT"
 
-  harness-unit-tests:
-    name: "OATS harness unit tests"
+  finalizer-unit-tests:
+    name: "OATS Weaver finalizer unit tests"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -60,20 +65,23 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
-      - name: Run OATS harness unit tests
-        run: make oats-test-harness
+          profile: oats
+          cache-modules: "true"
+          cache-build: "true"
+      - name: Run OATS Weaver finalizer unit tests
+        run: mise run //oats:test:finalizer
 
   test:
     name: ${{ matrix.basename }}
     needs: test-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # The shared Beyla test Dockerfile uses a BuildKit cache mount.
+      DOCKER_BUILDKIT: "1"
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.test-matrix.outputs.matrix) }}
@@ -135,33 +143,20 @@ jobs:
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
-        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+        uses: grafana/shared-workflows/actions/dockerhub-login@3e6b757dee9d45b7c1b16d7f53b8cab2c9532ccb # dockerhub-login/v3.0.0
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
-      - name: Go build cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
-        with:
-          path: ~/.cache/go-build
-          key: go-build-oats-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
-          restore-keys: |
-            go-build-oats-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Generate and vendor OBI
-        run: make vendor-obi
-
-      - name: Verify Beyla compiles
-        run: docker build -f internal/test/beyla_extensions/components/beyla/Dockerfile .
-
+          cache-build: "true"
+          cache-build-prefix: "go-build-oats"
+          profile: oats
+          cache-modules: "true"
       - name: Run oats tests
         env:
           MATRIX_BASENAME: ${{ matrix.basename }}
           TESTCASE_TIMEOUT: 5m
-        run: make oats-test-$MATRIX_BASENAME
+        run: mise run "//oats:test:${MATRIX_BASENAME}"
 
       - name: Upload oats test logs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -171,18 +166,10 @@ jobs:
           path: internal/testgenerated/oats/${{ matrix.basename }}/build/*
 
       - name: Process coverage data
-        run: make itest-coverage-data
-
-      - id: get-codecov-token
-        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
-        continue-on-error: true
-        with:
-          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
-          repo_secrets: |
-            CODECOV_TOKEN=codecov:token
+        run: mise run integration:coverage-data
 
       - name: Report coverage
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: ./.github/actions/report-codecov
         with:
           files: ./testoutput/itest-covdata.txt
           flags: oats-test

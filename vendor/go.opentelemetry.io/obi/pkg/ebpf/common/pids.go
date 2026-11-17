@@ -8,11 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/pkg/ebpf/ringbuf"
 	"go.opentelemetry.io/obi/pkg/ebpf/timing"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/export/otel/idgen"
@@ -39,6 +42,9 @@ var pidsFilterMonoNow = timing.MonoTimeNow
 // comparing span timestamps against removedAt
 const pidRemovalRetention = 5 * time.Minute
 
+// at 1000 forks/s entries outlive discovery's default poll interval plus minimum process age
+const forkedChildrenCapacity = 1 << 14
+
 type PIDInfo struct {
 	fileInfo       *exec.FileInfo
 	pidTypes       PIDType
@@ -52,6 +58,18 @@ type PIDInfo struct {
 	since time.Duration
 }
 
+type forkedChildKey struct {
+	ns  uint32
+	pid app.PID
+}
+
+type forkedChild struct {
+	fileInfo *exec.FileInfo
+	pidTypes PIDType
+	forkedAt time.Duration
+	execAt   time.Duration
+}
+
 type ServiceFilter interface {
 	AllowPID(app.PID, uint32, *exec.FileInfo, PIDType)
 	BlockPID(app.PID, uint32)
@@ -59,6 +77,12 @@ type ServiceFilter interface {
 	Filter(inputSpans []request.Span) []request.Span
 	CurrentPIDs(PIDType) map[uint32]map[app.PID]svc.Attrs
 	ProcPIDs(PIDType) []app.PID
+}
+
+// ForkedProcessTracker admits children forked before discovery polls them
+type ForkedProcessTracker interface {
+	AllowForkedChild(child, parent request.PidInfo, at time.Duration)
+	EndForkedChild(child request.PidInfo, at time.Duration)
 }
 
 // PIDsFilter keeps a thread-safe copy of the PIDs whose traces are allowed to
@@ -75,9 +99,13 @@ type PIDsFilter struct {
 	ignoreOtelSpan      bool
 	defaultOtlpGRPCPort int
 	metrics             imetrics.Reporter
+	// readers only Peek it under the read lock: Get would reorder it
+	forked *simplelru.LRU[forkedChildKey, forkedChild]
 }
 
 func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetrics.Reporter) *PIDsFilter {
+	// only fails for a non-positive size
+	forked, _ := simplelru.NewLRU[forkedChildKey, forkedChild](forkedChildrenCapacity, nil)
 	return &PIDsFilter{
 		log:                 log,
 		current:             map[uint32]map[app.PID]PIDInfo{},
@@ -87,6 +115,7 @@ func NewPIDsFilter(c *services.DiscoveryConfig, log *slog.Logger, metrics imetri
 		ignoreOtelSpan:      c.ExcludeOTelInstrumentedServicesSpanMetrics,
 		defaultOtlpGRPCPort: c.DefaultOtlpGRPCPort,
 		metrics:             metrics,
+		forked:              forked,
 	}
 }
 
@@ -118,22 +147,31 @@ func (pf *PIDsFilter) ValidPID(userPID app.PID, ns uint32, pidType PIDType) bool
 		}
 	}
 
-	return false
+	child, ok := pf.forked.Peek(forkedChildKey{ns: ns, pid: userPID})
+	return ok && child.pidTypes&pidType != 0
 }
 
-// The generation of the process that was alive when the span was captured, nil
-// when there is none: the span is newer than the last known process, or older
-// than the ones still kept
-func generationFor(info *PIDInfo, span *request.Span) *PIDInfo {
+// The generation of the process that was alive at the given instant, nil when
+// there is none: the instant is after the last known process, or before the
+// ones still kept
+func generationAt(info *PIDInfo, at int64) *PIDInfo {
 	for g := info; g != nil; g = g.previous {
-		if g.removedAt != 0 && span.End > int64(g.removedAt) {
+		if g.removedAt != 0 && at > int64(g.removedAt) {
 			return nil
 		}
-		if g.since == 0 || span.End > int64(g.since) {
+		if g.since == 0 || at > int64(g.since) {
 			return g
 		}
 	}
 	return nil
+}
+
+func (c *forkedChild) owns(span *request.Span) bool {
+	if span.End <= int64(c.forkedAt) || c.execAt != 0 && span.End > int64(c.execAt) {
+		return false
+	}
+	// a child discovery hasn't registered by then never will be
+	return span.End-int64(c.forkedAt) <= int64(pidRemovalRetention)
 }
 
 func expired(info *PIDInfo, now time.Duration) bool {
@@ -193,32 +231,20 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 	for i := range inputSpans {
 		span := &inputSpans[i]
 
-		// We first confirm that the current namespace seen by BPF is tracked by OBI
-		ns, nsExists := pf.current[span.Pid.Namespace]
-
-		if !nsExists {
+		fileInfo := pf.fileInfoFor(span)
+		if fileInfo == nil {
 			continue
 		}
-
-		// If the namespace exist, we confirm that we are tracking the user PID that OBI
-		// saw. We don't check for the host pid, because we can't be sure of the number
-		// of container layers. The Host PID is always the outer most layer.
-		info, pidExists := ns[span.Pid.UserPID]
-		if !pidExists {
-			continue
+		if pf.ignoreOtel {
+			pf.checkIfExportsOTel(fileInfo, span, pf.defaultOtlpGRPCPort)
 		}
-		if gen := generationFor(&info, span); gen != nil {
-			if pf.ignoreOtel {
-				pf.checkIfExportsOTel(gen.fileInfo, span, pf.defaultOtlpGRPCPort)
-			}
-			if pf.ignoreOtelSpan {
-				pf.checkIfExportsOTelSpanMetrics(gen.fileInfo, span, pf.defaultOtlpGRPCPort)
-			}
-			// Must use the unsafe version to avoid massive memory pressure here.
-			inputSpans[i].Service = gen.fileInfo.UnsafeServiceAttrs()
-			pf.normalizeTraceContext(&inputSpans[i])
-			outputSpans = append(outputSpans, inputSpans[i])
+		if pf.ignoreOtelSpan {
+			pf.checkIfExportsOTelSpanMetrics(fileInfo, span, pf.defaultOtlpGRPCPort)
 		}
+		// Must use the unsafe version to avoid massive memory pressure here.
+		inputSpans[i].Service = fileInfo.UnsafeServiceAttrs()
+		pf.normalizeTraceContext(&inputSpans[i])
+		outputSpans = append(outputSpans, inputSpans[i])
 	}
 
 	if len(outputSpans) != len(inputSpans) {
@@ -228,6 +254,24 @@ func (pf *PIDsFilter) Filter(inputSpans []request.Span) []request.Span {
 		)
 	}
 	return outputSpans
+}
+
+func (pf *PIDsFilter) fileInfoFor(span *request.Span) *exec.FileInfo {
+	// We first confirm that the current namespace seen by BPF is tracked by OBI.
+	// If the namespace exist, we confirm that we are tracking the user PID that OBI
+	// saw. We don't check for the host pid, because we can't be sure of the number
+	// of container layers. The Host PID is always the outer most layer.
+	if info, pidExists := pf.current[span.Pid.Namespace][span.Pid.UserPID]; pidExists {
+		if gen := generationAt(&info, span.End); gen != nil {
+			return gen.fileInfo
+		}
+	}
+
+	child, ok := pf.forked.Peek(forkedChildKey{ns: span.Pid.Namespace, pid: span.Pid.UserPID})
+	if ok && child.owns(span) {
+		return child.fileInfo
+	}
+	return nil
 }
 
 func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, fi *exec.FileInfo, t PIDType) {
@@ -246,6 +290,8 @@ func (pf *PIDsFilter) addPID(pid app.PID, nsid uint32, fi *exec.FileInfo, t PIDT
 	pf.procs[pid] |= t
 
 	for _, p := range allPids {
+		// discovery takes over from the fork event
+		pf.forked.Remove(forkedChildKey{ns: nsid, pid: p})
 		pidInfo := ns[p]
 		if pidInfo.removedAt != 0 {
 			// a reused pid starts a new generation; the old one is kept, not
@@ -284,6 +330,72 @@ func (pf *PIDsFilter) removePID(pid app.PID, nsid uint32) {
 	markAsRemoved(pid)
 
 	pf.pruneExpired()
+}
+
+// AllowForkedChild files a forked child's spans under its parent until discovery registers it
+func (pf *PIDsFilter) AllowForkedChild(child, parent request.PidInfo, at time.Duration) {
+	pf.mux.Lock()
+	defer pf.mux.Unlock()
+
+	// grandchildren never pass the BPF filter, which only checks the parent
+	parentInfo, ok := pf.current[parent.Namespace][parent.UserPID]
+	if !ok {
+		return
+	}
+	// discovery may have removed the parent, or given its pid to another process, since it forked
+	forker := generationAt(&parentInfo, int64(at))
+	if forker == nil {
+		return
+	}
+
+	key := forkedChildKey{ns: child.Namespace, pid: child.UserPID}
+	pf.forked.Add(key, forkedChild{fileInfo: forker.fileInfo, pidTypes: forker.pidTypes, forkedAt: at})
+}
+
+// EndForkedChild stops filing the child under its parent: after exec it runs another program
+func (pf *PIDsFilter) EndForkedChild(child request.PidInfo, at time.Duration) {
+	pf.mux.Lock()
+	defer pf.mux.Unlock()
+
+	key := forkedChildKey{ns: child.Namespace, pid: child.UserPID}
+	forked, ok := pf.forked.Peek(key)
+	if !ok || forked.execAt != 0 {
+		return
+	}
+	forked.execAt = at
+	pf.forked.Add(key, forked)
+}
+
+// RegisterProcessEventHandlers feeds fork and exec events to a filter that tracks forked children
+func RegisterProcessEventHandlers(ctx *EBPFEventContext, filter ServiceFilter) {
+	tracker, ok := filter.(ForkedProcessTracker)
+	if !ok {
+		return
+	}
+
+	handle := func(record *ringbuf.Record) error {
+		return handleProcessEvent(record, tracker)
+	}
+	ctx.RegisterInternalEventHandler(EventTypeProcessFork, handle)
+	ctx.RegisterInternalEventHandler(EventTypeProcessExec, handle)
+}
+
+func handleProcessEvent(record *ringbuf.Record, tracker ForkedProcessTracker) error {
+	event, err := ReinterpretCast[ProcessEvent](record.RawSample)
+	if err != nil {
+		return err
+	}
+
+	pid := request.PidInfo{HostPID: app.PID(event.Pid.HostPid), UserPID: app.PID(event.Pid.UserPid), Namespace: event.Pid.Ns}
+	at := time.Duration(event.Ts)
+	if event.Type == EventTypeProcessFork {
+		parent := request.PidInfo{HostPID: app.PID(event.Parent.HostPid), UserPID: app.PID(event.Parent.UserPid), Namespace: event.Parent.Ns}
+		tracker.AllowForkedChild(pid, parent, at)
+	} else {
+		tracker.EndForkedChild(pid, at)
+	}
+
+	return nil
 }
 
 // callers must hold the write lock

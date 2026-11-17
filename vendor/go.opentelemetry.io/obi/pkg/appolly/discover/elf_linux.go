@@ -43,7 +43,22 @@ func findExecElf(p *services.ProcessInfo, svcID *svc.Attrs) (_ *exec.FileInfo, r
 	}
 	// TODO: allow overriding /proc root folder
 	proExeLinkPath := fmt.Sprintf("/proc/%d/exe", p.Pid)
-	elfFile, err := elf.Open(proExeLinkPath)
+	executable, err := os.Open(proExeLinkPath)
+	if err != nil {
+		return nil, fmt.Errorf("can't open executable in %s: %w", proExeLinkPath, err)
+	}
+	defer executable.Close()
+	info, err := executable.Stat()
+	if err != nil {
+		return nil, err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, fmt.Errorf("can't read executable identity in %s", proExeLinkPath)
+	}
+	// elf.Open owns its descriptor; both descriptors refer to the inspected inode,
+	// even if the process execs while we are reading it.
+	elfFile, err := elf.Open(fmt.Sprintf("/proc/self/fd/%d", executable.Fd()))
 	if err != nil {
 		return nil, fmt.Errorf("can't open ELF file in %s: %w", proExeLinkPath, err)
 	}
@@ -52,11 +67,6 @@ func findExecElf(p *services.ProcessInfo, svcID *svc.Attrs) (_ *exec.FileInfo, r
 			_ = elfFile.Close()
 		}
 	}()
-
-	dev, ino, err := FindINodeForPID(p.Pid)
-	if err != nil {
-		return nil, err
-	}
 
 	envVars, err := procs.EnvVars(p.Pid)
 	if err != nil {
@@ -71,8 +81,8 @@ func findExecElf(p *services.ProcessInfo, svcID *svc.Attrs) (_ *exec.FileInfo, r
 		Pid:            p.Pid,
 		Ppid:           p.PPid,
 		StartTime:      startTime,
-		Dev:            dev,
-		Ino:            ino,
+		Dev:            stat.Dev,
+		Ino:            stat.Ino,
 		Ns:             ns,
 	})
 	fi.ApplyEnvVariables(envVars)

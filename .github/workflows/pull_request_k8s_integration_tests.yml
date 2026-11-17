@@ -42,20 +42,27 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: go
+
       - name: Generate OBI tests
-        run: make generate-obi-tests
+        run: mise run generate:obi-tests
 
       - name: build matrix
         id: build-matrix
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          make k8s-integration-test-matrix-json >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run integration:matrix:k8s >> "$GITHUB_OUTPUT"
 
   test:
     name: ${{ matrix.basename }}
     needs: test-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      DOCKER_BUILDKIT: "1"
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -114,24 +121,17 @@ jobs:
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
-        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+        uses: grafana/shared-workflows/actions/dockerhub-login@3e6b757dee9d45b7c1b16d7f53b8cab2c9532ccb # dockerhub-login/v3.0.0
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
-      - name: Go build cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
-        with:
-          path: ~/.cache/go-build
-          key: go-build-k8s-integration-race-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
-          restore-keys: |
-            go-build-k8s-integration-race-${{ runner.os }}-${{ runner.arch }}-
-
+          cache-build: "true"
+          cache-build-prefix: "go-build-k8s-integration-race"
+          profile: integration
+          cache-modules: "true"
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Check disk usage before tests
         run: df -h
@@ -149,33 +149,25 @@ jobs:
           echo "${MATRIX_JSON}"
 
           if [ -z "${MATRIX_TEST_PATTERN}" ]; then
-            echo "Error: Test pattern is empty for shard $MATRIX_ID"
+            echo "Error: Test pattern is empty for shard ${MATRIX_ID}"
             exit 1
           fi
 
           mkdir -p /home/runner/reports
 
-          ./bin/gotestsum \
+          gotestsum \
               --rerun-fails=2 --rerun-fails-max-failures=2 --rerun-fails-abort-on-data-race \
               --packages="${MATRIX_TEST_PATTERN}" -ftestname \
               --jsonfile=/home/runner/reports/test-run-"${RUN_NUMBER}"-"${MATRIX_ID}".log \
-              -- -race -count=1 -tags=${TEST_TAGS} -timeout 30m \
+              -- -race -count=1 -tags="${TEST_TAGS}" -timeout 30m \
               -mod vendor \
-              ${MATRIX_TEST_PATTERN}
+              "${MATRIX_TEST_PATTERN}"
 
       - name: Process coverage data
-        run: make itest-coverage-data
-
-      - id: get-codecov-token
-        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
-        continue-on-error: true
-        with:
-          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
-          repo_secrets: |
-            CODECOV_TOKEN=codecov:token
+        run: mise run integration:coverage-data
 
       - name: Report coverage
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: ./.github/actions/report-codecov
         with:
           files: ./testoutput/itest-covdata.txt
           flags: k8s-integration-test

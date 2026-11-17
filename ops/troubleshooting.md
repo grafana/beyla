@@ -1,12 +1,13 @@
 # Beyla Troubleshooting guide
 
-For more accurate troubleshooting, Beyla should run with the `BEYLA_LOG_LEVEL` property set to `debug` and the 
+For more accurate troubleshooting, Beyla should run with the `BEYLA_LOG_LEVEL` property set to `debug` and the
 `BEYLA_TRACE_PRINTER` property set to `text`.
 
 ## Beyla crashes after start
 
 Example message:
-```
+
+```text
 time=2025-02-06T10:49:50.406+01:00 level=ERROR msg="Beyla ran with errors" error="can't find target process: couldn't start Process Finder: can't instantiate discovery.ProcessFinder pipeline: invoking Final node provider: error invoking provider: removing memory lock: failed to set memlock rlimit: operation not permitted"
 ```
 
@@ -19,7 +20,7 @@ This indicates that Beyla is trying to lock memory but the process doesn't have 
 If even running Beyla with `BEYLA_TRACE_PRINTER=text`, you don't see any trace in the logs,
 check that Beyla is finding any process to instrument. The logs should show a message like:
 
-```
+```text
 level=INFO msg="instrumenting process" component=discover.TraceAttacher cmd=/frontend pid=1
 ```
 
@@ -39,6 +40,7 @@ If you see printed traces, but you don't see metrics in Grafana, go to [Check co
 ### Check connectivity issues
 
 If Beyla is configured to export metrics as Prometheus metrics.
+
 * Make sure that the `BEYLA_PROMETHEUS_PORT` configuration option is set.
 * Check the value of the `BEYLA_PROMETHEUS_PATH` configuration option. If it
   is not set, the `/metrics` path is assumed.
@@ -47,6 +49,7 @@ If Beyla is configured to export metrics as Prometheus metrics.
   2. If you don't see metrics, report the bug.
 
 If Beyla is configured to export metrics and/or traces to Grafana Cloud (OTEL endpoint):
+
 * Check the correct values of the `GRAFANA_CLOUD_ZONE`, `GRAFANA_CLOUD_INSTANCE_ID`
   and `GRAFANA_CLOUD_API_KEY` values.
 * Consider that the `GRAFANA_CLOUD_SUBMIT` variable is defaulted to `traces`.
@@ -61,17 +64,18 @@ If Beyla is configured to export metrics and/or traces to Grafana Cloud (OTEL en
 
 If Beyla is configured to export metrics and/or traces to any other OpenTelemetry
 collector:
+
 * Beyla accepts the standard [OpenTelemetry exporter configuration](https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/)
   variables.
 * If everything is correct and you don't see error messages, you might need to debug
   the OpenTelemetry SDK. Set the `BEYLA_OTEL_SDK_LOG_LEVEL=debug` variable.
 * If everything is still correct, the problem might be in the collector side.
 
-
 ## Kubernetes metadata decoration not working
 
 If your Beyla logs are full of messages like the following one:
-```
+
+```text
 W1123 10:20:26.347945    2078 reflector.go:533] k8s.io/client-go/informers/factory.go:150:
  failed to list *v1.Pod: pods is forbidden: User "system:serviceaccount:default:beyla"
  cannot list resource "pods" in API group "" at the cluster scope

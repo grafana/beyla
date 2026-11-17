@@ -56,6 +56,7 @@ func ReadGoOTelEventIntoSpan(record *ringbuf.Record) (request.Span, bool, error)
 		TraceID:       trace.TraceID(event.Tp.TraceId),
 		SpanID:        trace.SpanID(event.Tp.SpanId),
 		ParentSpanID:  trace.SpanID(event.Tp.ParentId),
+		TraceFlags:    event.Tp.Flags,
 		Status:        int(event.Status),
 		Pid: request.PidInfo{
 			HostPID:   app.PID(event.Pid.HostPid),

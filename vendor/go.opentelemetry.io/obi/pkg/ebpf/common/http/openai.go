@@ -117,7 +117,10 @@ func OpenAISpan(baseSpan *request.Span, req *http.Request, resp *http.Response) 
 
 	slog.Debug("OpenAI", "request", string(reqB), "response", string(respB))
 
-	parsedRequest := parseOpenAIInput(reqB, isOpenAIResponsesRequest(req))
+	parsedRequest := parseOpenAIInput(reqB, isOpenAIResponsesRequest(req) || isOpenAIDecisionsRequest(req))
+	if isOpenAIDecisionsRequest(req) {
+		parsedRequest.Questions = extractOpenAIDecisionQuestions(reqB)
+	}
 	parsedResponse, toolCalls := parseOpenAICompatibleResponse(respB)
 
 	if parsedResponse.ResponseModel == "" {
@@ -153,6 +156,7 @@ const (
 	openAIAPITypeTextCompletions = "text_completions"
 	openAIAPITypeEmbeddings      = "embeddings"
 	openAIAPITypeResponses       = "responses"
+	openAIAPITypeDecisions       = "decisions"
 )
 
 var openAIAPITypes = map[string]struct{}{
@@ -160,6 +164,7 @@ var openAIAPITypes = map[string]struct{}{
 	openAIAPITypeTextCompletions: {},
 	openAIAPITypeEmbeddings:      {},
 	openAIAPITypeResponses:       {},
+	openAIAPITypeDecisions:       {},
 }
 
 // Endpoints that name a GenAI operation, matched in order so that
@@ -173,6 +178,7 @@ var openAIEndpoints = []struct {
 	{"/completions", request.CompletionOperationName, openAIAPITypeTextCompletions},
 	{"/embeddings", request.EmbeddingOperationName, openAIAPITypeEmbeddings},
 	{"/responses", request.ResponseOperationName, openAIAPITypeResponses},
+	{"/v1/decisions", request.DecisionOperationName, openAIAPITypeDecisions},
 	{"/conversations", request.ConversationOperationName, ""},
 	{"/chatkit/sessions", request.ChatKitSessionOperationName, ""},
 	{"/chatkit/threads", request.ChatKitThreadOperationName, ""},

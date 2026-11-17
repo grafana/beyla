@@ -25,7 +25,7 @@ metric.
 Source and destination availability zone attributes are disabled by default in Beyla. To enable it, explicitly add them to the list of
 included network attributes in the Beyla YAML configuration:
 
-```
+```yaml
 attributes:
   select:
     beyla_network_flow_bytes:
@@ -87,7 +87,6 @@ This configuration provides detailed visibility into which specific pods and nod
 Adding more attributes increases the metric cardinality.
 {{< /admonition >}}
 
-
 ## PromQL queries to measure inter-zone traffic
 
 Assuming that both `network` and `network_inter_zone` metric families are enabled, you can use the following PromQL queries
@@ -95,27 +94,26 @@ to measure inter-zone traffic:
 
 Overall inter-zone traffic throughput:
 
-```
+```promql
 sum(rate(beyla_network_inter_zone_bytes_total[$__rate_interval]))
 ```
 
 Inter-zone traffic throughput, summarized by source and destination zones:
-```
+
+```promql
 sum(rate(beyla_network_inter_zone_bytes_total[$__rate_interval])) by(src_zone,dst_zone)
 ```
 
 Overall same-zone traffic throughput:
 
-```
+```promql
 sum(rate(beyla_network_flow_bytes_total[$__rate_interval]))
   - sum(rate(beyla_network_inter_zone_bytes_total[$__rate_interval]))
 ```
 
 Percentage of inter-zone traffic from the total:
 
-```
+```promql
 100 * sum(rate(beyla_network_inter_zone_bytes_total[$__rate_interval]))
   / sum(rate(beyla_network_flow_bytes_total[$__rate_interval]))
 ```
-
-

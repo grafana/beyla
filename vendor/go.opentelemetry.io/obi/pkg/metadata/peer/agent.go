@@ -25,7 +25,8 @@ type Agent struct {
 	exchange exchange
 }
 
-func New(ctx context.Context, cfg MetadataConfig, hostname string, serviceGraphEnabled bool,
+// New creates an agent for the host. hostID uniquely identifies the host, and is only required in ModeCentral.
+func New(ctx context.Context, cfg MetadataConfig, hostname, hostID string, serviceGraphEnabled bool,
 	metricsPIDs selection.PIDSelector, metricProtocols *instrumentations.InstrumentationSelection,
 ) (*Agent, error) {
 	cfg = cfg.WithDefaults()
@@ -49,7 +50,7 @@ func New(ctx context.Context, cfg MetadataConfig, hostname string, serviceGraphE
 		store.metricProtocols = *metricProtocols
 	}
 
-	exchange, err := newExchange(ctx, cfg, store, network)
+	exchange, err := newExchange(cfg, hostID, store, network)
 	if err != nil {
 		return nil, err
 	}

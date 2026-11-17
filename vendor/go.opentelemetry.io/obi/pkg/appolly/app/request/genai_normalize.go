@@ -14,6 +14,7 @@ import (
 type normalizedPart struct {
 	Type      string          `json:"type"`
 	Content   string          `json:"content,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
 	Response  any             `json:"result,omitempty"`
 	ID        string          `json:"id,omitempty"`
 	Name      string          `json:"name,omitempty"`

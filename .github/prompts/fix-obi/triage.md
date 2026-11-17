@@ -15,7 +15,7 @@
 
 ## `triage.md` structure
 
-```
+```markdown
 # CI failure triage
 
 ## OBI SHAs

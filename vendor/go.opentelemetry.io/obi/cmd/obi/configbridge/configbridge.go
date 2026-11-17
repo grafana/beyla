@@ -7,12 +7,21 @@ package configbridge
 import (
 	"context"
 	"errors"
+	"io"
 
+	"go.opentelemetry.io/obi/cmd/obi/internal/configcmd"
 	"go.opentelemetry.io/obi/cmd/obi/internal/configload"
 	"go.opentelemetry.io/obi/cmd/obi/internal/configwatch"
 	"go.opentelemetry.io/obi/internal/config/schema"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
+
+// RunConfigCommand runs OBI's `config validate` and `config migrate` commands.
+// It reports whether args selected the config command group, and the exit code
+// to use when it did.
+func RunConfigCommand(args []string, stdout, stderr io.Writer) (bool, int) {
+	return configcmd.MaybeRun(args, stdout, stderr)
+}
 
 // LoadV2 converts a standalone config v2 document into a runtime config.
 func LoadV2(data []byte) (*obi.Config, error) {

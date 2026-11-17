@@ -154,12 +154,12 @@ You can specify a combination of `otel_metrics_export` and `otel_traces_export` 
 
 Run Beyla with a named configuration file:
 
-```
+```bash
 beyla -config instrument-config.yml
 ```
 
 or
 
-```
+```bash
 BEYLA_CONFIG_PATH=instrument-config.yml beyla
 ```

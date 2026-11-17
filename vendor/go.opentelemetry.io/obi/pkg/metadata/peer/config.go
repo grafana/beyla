@@ -7,7 +7,9 @@ package peer // import "go.opentelemetry.io/obi/pkg/metadata/peer"
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,22 +32,29 @@ const (
 
 // MetadataConfig configures peer metadata exchange.
 type MetadataConfig struct {
-	Enabled          bool              `yaml:"enabled"`
-	Mode             Mode              `yaml:"mode" validate:"omitempty,oneof=peer central"`
-	ListenAddress    string            `yaml:"listen_address"`
-	Port             int               `yaml:"port"`
-	PeerCIDRs        []string          `yaml:"peer_cidrs"`
-	RefreshInterval  time.Duration     `yaml:"refresh_interval" validate:"gte=1ms"`
-	CallerTTL        time.Duration     `yaml:"caller_ttl" validate:"gte=1ms"`
-	CacheTTL         time.Duration     `yaml:"cache_ttl" validate:"gte=1ms"`
-	RequestTimeout   time.Duration     `yaml:"request_timeout" validate:"gte=1ms"`
-	MaxPeers         int               `yaml:"max_peers" validate:"gt=0"`
-	MaxConcurrent    int               `yaml:"max_concurrent" validate:"gt=0"`
-	MaxCallerEntries int               `yaml:"max_caller_entries" validate:"gt=0"`
-	MaxResponseBytes int               `yaml:"max_response_bytes" validate:"gt=0"`
-	MaxCacheBytes    int               `yaml:"max_cache_bytes" validate:"gt=0"`
-	Token            string            `yaml:"token"`
-	TLS              MetadataTLSConfig `yaml:"tls"`
+	Enabled          bool                  `yaml:"enabled"`
+	Mode             Mode                  `yaml:"mode" validate:"omitempty,oneof=peer central"`
+	ListenAddress    string                `yaml:"listen_address"`
+	Port             int                   `yaml:"port"`
+	PeerCIDRs        []string              `yaml:"peer_cidrs"`
+	RefreshInterval  time.Duration         `yaml:"refresh_interval" validate:"gte=1ms"`
+	CallerTTL        time.Duration         `yaml:"caller_ttl" validate:"gte=1ms"`
+	CacheTTL         time.Duration         `yaml:"cache_ttl" validate:"gte=1ms"`
+	RequestTimeout   time.Duration         `yaml:"request_timeout" validate:"gte=1ms"`
+	MaxPeers         int                   `yaml:"max_peers" validate:"gt=0"`
+	MaxConcurrent    int                   `yaml:"max_concurrent" validate:"gt=0"`
+	MaxCallerEntries int                   `yaml:"max_caller_entries" validate:"gt=0"`
+	MaxResponseBytes int                   `yaml:"max_response_bytes" validate:"gt=0"`
+	MaxCacheBytes    int                   `yaml:"max_cache_bytes" validate:"gt=0"`
+	Token            string                `yaml:"token"`
+	TLS              MetadataTLSConfig     `yaml:"tls"`
+	Central          MetadataCentralConfig `yaml:"central"`
+}
+
+// MetadataCentralConfig configures the connection to the central metadata service in ModeCentral.
+type MetadataCentralConfig struct {
+	// Address is the host:port of the metadata service.
+	Address string `yaml:"address"`
 }
 
 type MetadataTLSConfig struct {
@@ -137,12 +146,36 @@ func (c MetadataConfig) Validate() error {
 		return errors.New("peer metadata token requires TLS")
 	}
 
-	if c.TLS.Enabled && (c.TLS.CertFile == "" || c.TLS.KeyFile == "") {
+	// In central mode, agents only connect as clients, so they do not need a certificate.
+	if c.Mode != ModeCentral && c.TLS.Enabled && (c.TLS.CertFile == "" || c.TLS.KeyFile == "") {
 		return errors.New("peer metadata TLS requires cert_file and key_file")
+	}
+
+	if c.Mode == ModeCentral {
+		if err := validateCentralAddress(c.Central.Address); err != nil {
+			return fmt.Errorf("peer metadata central.address: %w", err)
+		}
 	}
 
 	if c.MaxCacheBytes < c.MaxResponseBytes {
 		return errors.New("peer metadata max_cache_bytes must be at least max_response_bytes")
+	}
+
+	return nil
+}
+
+func validateCentralAddress(address string) error {
+	if address == "" {
+		return errors.New("required in central mode")
+	}
+
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+
+	if number, err := strconv.Atoi(port); host == "" || err != nil || number < 1 || number > 65535 {
+		return errors.New("must be a host:port address")
 	}
 
 	return nil

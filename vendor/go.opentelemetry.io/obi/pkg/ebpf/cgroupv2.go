@@ -88,8 +88,12 @@ func fsmountCgroupV2() (int, error) {
 
 // AttachCgroupSockOps attaches a sockops program to the cgroupv2 hierarchy,
 // hiding the path-vs-fd distinction between tier 1/2 and tier 3.
-// An empty cgroupPath auto-detects the hierarchy.
-func AttachCgroupSockOps(prog *ebpf.Program, attach ebpf.AttachType, cgroupPath string) (link.Link, error) {
+func AttachCgroupSockOps(prog *ebpf.Program, attach ebpf.AttachType) (link.Link, error) {
+	return AttachCgroupSockOpsAtPath(prog, attach, "")
+}
+
+// AttachCgroupSockOpsAtPath uses the configured hierarchy, or auto-detects it when empty.
+func AttachCgroupSockOpsAtPath(prog *ebpf.Program, attach ebpf.AttachType, cgroupPath string) (link.Link, error) {
 	r := resolveCgroupV2(cgroupPath)
 	if r.err != nil {
 		return nil, r.err

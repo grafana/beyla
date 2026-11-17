@@ -56,13 +56,12 @@ type ProtocolEnablement struct {
 	Metrics bool `yaml:"metrics"`
 }
 
-// HTTPProtocolEnablement adds the HTTP-only body size histograms to the shared
-// traces and metrics switches. They are Opt-In in the semantic conventions, and
-// they only exist for HTTP, so they are not part of ProtocolEnablement.
+// HTTPProtocolEnablement contains HTTP trace and metric switches.
 type HTTPProtocolEnablement struct {
 	ProtocolEnablement `yaml:",inline"`
 
-	BodySizeMetrics bool `yaml:"body_size_metrics"`
+	BodySizeMetrics   bool  `yaml:"body_size_metrics"`
+	RequestPhaseSpans *bool `yaml:"request_phase_spans,omitempty"`
 }
 
 // HTTPInstrumentation describes HTTP capture, filtering, route, and payload

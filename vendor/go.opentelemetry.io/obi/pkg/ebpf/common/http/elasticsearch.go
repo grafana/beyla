@@ -135,7 +135,7 @@ func isOpensearchResponse(resp *http.Response) bool {
 // we can have different operations where the name of the operation is found in
 // the last or second to last part of the url
 func extractElasticsearchOperationName(req *http.Request) string {
-	path := strings.Trim(req.URL.Path, "/")
+	path := strings.Trim(req.URL.EscapedPath(), "/")
 	if path == "" {
 		return ""
 	}

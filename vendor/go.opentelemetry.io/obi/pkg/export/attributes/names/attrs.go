@@ -154,6 +154,8 @@ var OBIIP = Name("obi.ip")
 // otherwise.
 var OBIHTTPResponseObserved = Name("obi.http.response.observed")
 
+var OBIRequestPhase = Name("obi.request.phase")
+
 const (
 	Transport       = Name("transport")
 	NetworkType     = Name(semconv.NetworkTypeKey)
@@ -330,6 +332,7 @@ const (
 	GenAIToolCallResult    = Name(semconv.GenAIToolCallResultKey)
 	GenAIPromptName        = Name(semconv.GenAIPromptNameKey)
 	GenAIResponseError     = Name("gen_ai.response.error")
+	OpenAIRequestQuestions = Name("openai.request.questions")
 )
 
 // OBI specific GPU events
@@ -393,4 +396,5 @@ const (
 	TCPFailedConnectionReason = Name("reason")
 	NetworkTCPHandshakeRole   = Name("network.tcp.handshake.role")
 	NetworkIoDirection        = Name(semconv.NetworkIODirectionKey)
+	NetworkTCPResetCause      = Name("network.tcp.reset.cause")
 )

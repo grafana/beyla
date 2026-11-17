@@ -27,6 +27,18 @@
           }
         ]
       },
+      "r": {
+        "versions": {
+          "oldest": "1.17.0",
+          "newest": "1.27.3"
+        },
+        "offsets": [
+          {
+            "offset": 40,
+            "since": "1.17.0"
+          }
+        ]
+      },
       "w": {
         "versions": {
           "oldest": "1.17.0",
@@ -286,7 +298,7 @@
       "config": {
         "versions": {
           "oldest": "5.0.0",
-          "newest": "5.11.0"
+          "newest": "5.12.0"
         },
         "offsets": [
           {
@@ -300,7 +312,7 @@
       "Host": {
         "versions": {
           "oldest": "5.0.0",
-          "newest": "5.11.0"
+          "newest": "5.12.0"
         },
         "offsets": [
           {
@@ -432,7 +444,7 @@
       "name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.9.2"
+          "newest": "2.10.0"
         },
         "offsets": [
           {
@@ -446,7 +458,7 @@
       "Database": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.9.2"
+          "newest": "2.10.0"
         },
         "offsets": [
           {
@@ -458,7 +470,7 @@
       "Name": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.9.2"
+          "newest": "2.10.0"
         },
         "offsets": [
           {
@@ -480,7 +492,7 @@
       "Describer": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.9.2"
+          "newest": "2.10.0"
         },
         "offsets": [
           {
@@ -498,7 +510,7 @@
       "connection": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.9.2"
+          "newest": "2.10.0"
         },
         "offsets": [
           {
@@ -512,7 +524,7 @@
       "addr": {
         "versions": {
           "oldest": "2.0.1",
-          "newest": "2.9.2"
+          "newest": "2.10.0"
         },
         "offsets": [
           {

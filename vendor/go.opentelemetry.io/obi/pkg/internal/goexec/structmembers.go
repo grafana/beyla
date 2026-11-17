@@ -135,6 +135,7 @@ const (
 	TextReaderRPos
 	BufReaderBufPos
 	BufReaderWPos
+	BufReaderRPos
 	// grpc
 	GrpcStreamStPtrPos
 	GrpcStreamMethodPtrPos
@@ -259,6 +260,7 @@ const (
 	// Go connection interface types
 	GrpcSyscallConnTypeAddress
 	TLSConnTypeAddress
+	TCPConnTypeAddress
 )
 
 //go:embed offsets.json
@@ -537,6 +539,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"buf": BufReaderBufPos,
 			"w":   BufReaderWPos,
+			"r":   BufReaderRPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {

@@ -40,6 +40,12 @@ type dynamicPIDAttributes struct {
 	resourceAttributes map[string]string
 }
 
+func (a dynamicPIDAttributes) equal(b dynamicPIDAttributes) bool {
+	return a.serviceName == b.serviceName &&
+		a.serviceNamespace == b.serviceNamespace &&
+		maps.Equal(a.resourceAttributes, b.resourceAttributes)
+}
+
 type dynamicPIDRecord struct {
 	signals         dynamicPIDSignal
 	attrs           dynamicPIDAttributes

@@ -85,6 +85,7 @@ func readDNSEventIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Record) (r
 			SpanID:            trace.SpanID(event.Tp.SpanId),
 			ParentSpanID:      trace.SpanID(event.Tp.ParentId),
 			ParentConditional: event.ParentStatus == parentStatusConditional,
+			TraceFlags:        event.Tp.Flags,
 			Status:            int(-1),
 			Pid: request.PidInfo{
 				HostPID:   app.PID(event.Pid.HostPid),

@@ -35,8 +35,13 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: go
+
       - name: Generate OBI tests
-        run: make generate-obi-tests
+        run: mise run generate:obi-tests
 
       - name: Build test matrix
         id: build-matrix
@@ -49,8 +54,8 @@ jobs:
           PARTITIONS: 4
           TEST_TAGS: integration
         run: |
-          echo -n "matrix=" >> $GITHUB_OUTPUT
-          make vm-integration-test-matrix-json >> $GITHUB_OUTPUT
+          echo -n "matrix=" >> "$GITHUB_OUTPUT"
+          mise run integration:matrix:multiprocess >> "$GITHUB_OUTPUT"
 
       - name: Build kernel matrix
         id: build-kernel-matrix
@@ -114,24 +119,17 @@ jobs:
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
-        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+        uses: grafana/shared-workflows/actions/dockerhub-login@3e6b757dee9d45b7c1b16d7f53b8cab2c9532ccb # dockerhub-login/v3.0.0
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: "go.mod"
-          cache: true # zizmor: ignore[cache-poisoning] go.sum verifies module integrity
-
-      - name: Go build cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] go build cache is content-addressable and self-verifying
-        with:
-          path: ~/.cache/go-build
-          key: go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.go', 'go.sum') }}
-          restore-keys: |
-            go-build-vm-integration-${{ runner.os }}-${{ runner.arch }}-
-
+          cache-build: "true"
+          cache-build-prefix: "go-build-vm-integration"
+          profile: bpf
+          cache-modules: "true"
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Install qemu-utils and musl-tools
         run: |
@@ -230,6 +228,8 @@ jobs:
     name: kernel ${{ matrix.kernel.id }} ${{ matrix.test.description }}
     needs: [vm-test-matrix, prep]
     timeout-minutes: 45
+    env:
+      DOCKER_BUILDKIT: "1"
     permissions:
       contents: read
       pull-requests: write
@@ -357,19 +357,16 @@ jobs:
             PRECOMPILED_TESTS_DIR="$(pwd)/compiled-tests" \
             && [ -f testoutput/success ]
 
-      - name: Process coverage data
-        run: make itest-coverage-data
-
-      - id: get-codecov-token
-        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
-        continue-on-error: true
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          # Secrets placed in the ci/repo/grafana/beyla/codecov path in Vault
-          repo_secrets: |
-            CODECOV_TOKEN=codecov:token
+          profile: go
+
+      - name: Process coverage data
+        run: mise run integration:coverage-data
 
       - name: Report coverage
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: ./.github/actions/report-codecov
         with:
           files: ./testoutput/itest-covdata.txt
           flags: integration-test-vm-${{ matrix.kernel.id }}

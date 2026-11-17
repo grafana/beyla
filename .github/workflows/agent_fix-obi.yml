@@ -227,14 +227,12 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: go.mod
-          cache: false
-
+          profile: obi-fix
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Download triage artifact
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -314,14 +312,12 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
         with:
-          go-version-file: go.mod
-          cache: false
-
+          profile: obi-fix
       - name: Generate files
-        run: make prereqs vendor-obi
+        run: "mise run test:prepare-output ::: vendor:obi"
 
       - name: Download triage artifact
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

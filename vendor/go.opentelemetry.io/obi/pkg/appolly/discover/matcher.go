@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -79,6 +78,9 @@ type Matcher struct {
 	HasHostPidAccess bool
 	CriteriaUpdates  *services.CriteriaUpdates
 	observed         map[app.PID]observedProcess
+	// samplerConfig is the global sampler when criteria updates can replace it. Every match
+	// carries it, so a refresh can replace it per process instead of in each of its consumers.
+	samplerConfig *services.SamplerConfig
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -86,6 +88,7 @@ type ProcessMatch struct {
 	Criteria            []services.Selector
 	LogEnricherCriteria []services.Selector
 	Process             *services.ProcessInfo
+	SamplerConfig       *services.SamplerConfig
 	// DynamicSelectorPID is the runtime dynamic-selection owner PID. It is set by DynamicMatcher
 	// on direct matches and inherited unchanged by child processes matched via PPid. CriteriaMatcher
 	// leaves it zero so static discovery continues to use ProcPID downstream.
@@ -105,6 +108,7 @@ func (m *Matcher) Run(ctx context.Context) {
 		updates = m.CriteriaUpdates.Requests()
 		defer m.CriteriaUpdates.Stop()
 		m.observed = map[app.PID]observedProcess{}
+		m.samplerConfig = m.CriteriaUpdates.Sampler()
 	}
 
 	for {
@@ -130,7 +134,7 @@ func (m *Matcher) Run(ctx context.Context) {
 func (m *Matcher) filter(events []Event[ProcessAttrs]) []Event[ProcessMatch] {
 	var matches []Event[ProcessMatch]
 	for _, ev := range events {
-		if ev.Type == EventDeleted {
+		if ev.Type == EventDeleted || ev.Type == EventExecutableReplaced {
 			delete(m.observed, ev.Obj.pid)
 			if ev, ok := m.filterDeleted(ev.Obj); ok {
 				matches = append(matches, ev)
@@ -165,7 +169,7 @@ func (m *Matcher) confirmedMatch(pid app.PID, criterion services.Selector) bool 
 
 func containsCriterion(criteria []services.Selector, criterion services.Selector) bool {
 	return slices.ContainsFunc(criteria, func(previous services.Selector) bool {
-		return reflect.DeepEqual(previous, criterion)
+		return sameCriterion(previous, criterion)
 	})
 }
 
@@ -216,7 +220,7 @@ func (m *Matcher) matchCriteria(obj ProcessAttrs, proc *services.ProcessInfo, fi
 		m.Log.Debug("found process", "pid", proc.Pid, "comm", proc.ExePath, "metadata",
 			obj.metadata, "podLabels", obj.podLabels, "criteria", criteria, "logEnricherCriteria", logEnricherCriteria)
 
-		return &ProcessMatch{Criteria: criteria, LogEnricherCriteria: logEnricherCriteria, Process: proc}
+		return &ProcessMatch{Criteria: criteria, LogEnricherCriteria: logEnricherCriteria, Process: proc, SamplerConfig: m.samplerConfig}
 	}
 
 	if len(logEnricherCriteria) > 0 {

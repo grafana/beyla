@@ -111,12 +111,13 @@ func (s *localStore) expire(now time.Time) {
 	}
 }
 
-func (s *localStore) snapshot(targets map[string]struct{}, now time.Time) Snapshot {
+// snapshot returns the local metadata with the caller observations of the destinations that includeCallers
+// accepts. A nil includeCallers omits all caller observations.
+func (s *localStore) snapshot(includeCallers func(destination Endpoint) bool, now time.Time) Snapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	snapshot := Snapshot{
-		Version:               ProtocolVersion,
 		Hostname:              s.hostname,
 		Services:              append([]Service{}, s.services...),
 		Listeners:             append([]Listener{}, s.listeners...),
@@ -127,7 +128,7 @@ func (s *localStore) snapshot(targets map[string]struct{}, now time.Time) Snapsh
 	}
 
 	for destination, services := range s.callers {
-		if _, ok := targets[destination.IP]; !ok {
+		if includeCallers == nil || !includeCallers(destination) {
 			continue
 		}
 
@@ -146,6 +147,14 @@ func (s *localStore) snapshot(targets map[string]struct{}, now time.Time) Snapsh
 	}
 	return snapshot
 }
+
+// callersTo includes the caller observations of destinations on the given IP.
+func callersTo(ip string) func(Endpoint) bool {
+	return func(destination Endpoint) bool { return destination.IP == ip }
+}
+
+// allCallers includes every caller observation.
+func allCallers(Endpoint) bool { return true }
 
 func remainingMillis(expires, now time.Time) int64 {
 	return max(int64(0), expires.Sub(now).Milliseconds())

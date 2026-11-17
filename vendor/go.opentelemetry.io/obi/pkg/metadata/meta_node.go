@@ -117,23 +117,43 @@ func NewNodeMeta(
 	kubeInformer *kube.MetadataProvider,
 	retryCfg RetryConfig,
 ) NodeMeta {
-	return fetchEntries(ctx,
-		retryCfg,
-		// some fetchers will only retrieve the host name while others
-		// will retrieve also host attributes that will be merged
-		// in order of the priority below (the later the highest)
+	return NewNodeMetaWithMetadataProvider(ctx, overrideHost, &MetadataProvider{
+		K8sInformer:   kubeInformer,
+		CloudMetadata: CloudMetadataConfig{DetectionEnabled: true},
+	}, retryCfg)
+}
+
+// NewNodeMetaWithMetadataProvider applies the provider's cloud detection settings.
+func NewNodeMetaWithMetadataProvider(
+	ctx context.Context,
+	overrideHost string,
+	provider *MetadataProvider,
+	retryCfg RetryConfig,
+) NodeMeta {
+	// some fetchers will only retrieve the host name while others
+	// will retrieve also host attributes that will be merged
+	// in order of the priority below (the later the highest)
+	fetchers := []fetcher{
 		linuxLocalFetcher,
-		kubeNodeFetcher(kubeInformer),
-		otelNodeFetcher(ClusterAzureVM, azurevm.NewResourceDetector(
-			azurevm.WithAttributeFilter(azureVMAttributeFilter),
-		)),
-		otelNodeFetcher(ClusterGCP, gcp.NewDetector()),
-		ec2NodeFetcher,
-		ecsNodeFetcher,
-		func(_ context.Context) (NodeMeta, error) {
-			return NodeMeta{HostID: overrideHost}, nil
-		},
-	)
+		kubeNodeFetcher(provider.K8sInformer),
+	}
+
+	if provider.CloudMetadata.DetectionEnabled {
+		fetchers = append(fetchers,
+			otelNodeFetcher(ClusterAzureVM, azurevm.NewResourceDetector(
+				azurevm.WithAttributeFilter(azureVMAttributeFilter),
+			)),
+			otelNodeFetcher(ClusterGCP, gcp.NewDetector()),
+			ec2NodeFetcher,
+			ecsNodeFetcher,
+		)
+	}
+
+	fetchers = append(fetchers, func(_ context.Context) (NodeMeta, error) {
+		return NodeMeta{HostID: overrideHost}, nil
+	})
+
+	return fetchEntries(ctx, retryCfg, fetchers...)
 }
 
 func fetchEntries(

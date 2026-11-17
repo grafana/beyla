@@ -35,7 +35,7 @@ grep -Fxq 'version=1.2.3~rc.1' "$tmp/github-output"
 test "$(dpkg-deb --field "$deb" Package)" = beyla
 test "$(dpkg-deb --field "$deb" Version)" = 1.2.3~rc.1
 dpkg-deb --field "$deb" Description | grep -q '^Experimental Beyla instrumentation package for Ubuntu$'
-! dpkg-deb --field "$deb" Description | grep -qi 'companion\|poc'
+dpkg-deb --field "$deb" Description | grep -qi 'companion\|poc' && exit 1
 dpkg --compare-versions "$(dpkg-deb --field "$deb" Version)" lt 1.2.3
 dpkg-deb --control "$deb" "$tmp/control"
 grep -Fxq "Template: beyla/mode" "$tmp/control/templates"
@@ -43,7 +43,7 @@ grep -Fxq "Template: beyla/fleet-enabled" "$tmp/control/templates"
 grep -Fxq "Default: false" "$tmp/control/templates"
 grep -Fxq "Template: beyla/fleet-url" "$tmp/control/templates"
 grep -Fxq "Template: beyla/fleet-instance-id" "$tmp/control/templates"
-! grep -q "Template: grafana-beyla-sdk/" "$tmp/control/templates"
+grep -q "Template: grafana-beyla-sdk/" "$tmp/control/templates" && exit 1
 dpkg-deb --field "$deb" Depends | grep -q 'alloy'
 contents=$(dpkg-deb --contents "$deb")
 for path in \
@@ -57,12 +57,12 @@ for path in \
   usr/share/beyla/config.alloy; do
   grep -Fq "$path" <<<"$contents"
 done
-! grep -qE 'grafana-beyla-sdk|grafana/beyla-sdk' <<<"$contents"
+grep -qE 'grafana-beyla-sdk|grafana/beyla-sdk' <<<"$contents" && exit 1
 dpkg-deb --extract "$deb" "$tmp/extracted"
 grep -Fxq 'jvm_auto_instrumentation_agent_path=/opt/beyla/sdk/dist/agents/jvm/opentelemetry-javaagent.jar' \
   "$tmp/extracted/opt/beyla/sdk/dist/injector/otelinject.conf"
-! grep -q '/__otel_sdk_auto_instrumentation__' \
-  "$tmp/extracted/opt/beyla/sdk/dist/injector/otelinject.conf"
+grep -q '/__otel_sdk_auto_instrumentation__' \
+  "$tmp/extracted/opt/beyla/sdk/dist/injector/otelinject.conf" && exit 1
 grep -q '127.0.0.1:14318' "$tmp/extracted/usr/share/beyla/config.alloy"
 echo "Package fixture tests passed (SDK payload binaries were synthetic)."
 
@@ -76,7 +76,7 @@ test ! -e "$tmp/invalid-version/beyla_not a version_amd64.deb"
 # Dockerfile adapter may qualify base images, but must preserve every other
 # canonical Dockerfile line and must not pass Podman-private storage flags.
 mock_engine="$tmp/mock-engine"
-cat > "$mock_engine" <<'MOCK'
+cat >"$mock_engine" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 command=$1
@@ -103,14 +103,14 @@ chmod +x "$mock_engine"
 engine_output="$tmp/engine-output"
 mkdir -p "$engine_output"
 ENGINE_LOG="$tmp/engine.log" \
-CAPTURED_DOCKERFILE="$tmp/captured.Dockerfile" \
-FIXTURE_DIST="$fixture" \
-OUTPUT_DIR="$engine_output" \
-CONTAINER_ENGINE="$mock_engine" \
+  CAPTURED_DOCKERFILE="$tmp/captured.Dockerfile" \
+  FIXTURE_DIST="$fixture" \
+  OUTPUT_DIR="$engine_output" \
+  CONTAINER_ENGINE="$mock_engine" \
   "$PACKAGE_DIR/build-deb.sh"
 sed -E 's/^FROM (alpine|ruby|python|node):/FROM docker.io\/library\/\1:/' \
-  "$ROOT_DIR/pkg/webhook/image/Dockerfile" > "$tmp/expected.Dockerfile"
+  "$ROOT_DIR/pkg/webhook/image/Dockerfile" >"$tmp/expected.Dockerfile"
 cmp "$tmp/expected.Dockerfile" "$tmp/captured.Dockerfile"
-! grep -q -- '--root\|--runroot' "$tmp/engine.log"
+grep -q -- '--root\|--runroot' "$tmp/engine.log" && exit 1
 grep -q '^build --platform linux/amd64 --build-arg TARGETARCH=amd64 ' "$tmp/engine.log"
 echo "Container-engine adapter tests passed."

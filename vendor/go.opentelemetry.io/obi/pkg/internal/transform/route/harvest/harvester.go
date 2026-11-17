@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -31,9 +32,9 @@ type RouteHarvester struct {
 
 	// testing related
 	javaExtractRoutes   func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
-	nodeExtractRoutes   func(pid app.PID) (*RouteHarvesterResult, error)
-	denoExtractRoutes   func(pid app.PID) (*RouteHarvesterResult, error)
-	pythonExtractRoutes func(fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
+	nodeExtractRoutes   func(ctx context.Context, pid app.PID) (*RouteHarvesterResult, error)
+	denoExtractRoutes   func(ctx context.Context, pid app.PID) (*RouteHarvesterResult, error)
+	pythonExtractRoutes func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
 	dotnetExtract       func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
 	phpExtractRoutes    func(ctx context.Context, fileInfo *exec.FileInfo) (*RouteHarvesterResult, error)
 	rubyExtractRoutes   func(ctx context.Context, pid app.PID) (*RouteHarvesterResult, error)
@@ -152,7 +153,7 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			resultChan <- result{r: r, err: err}
 		case svc.InstrumentableNodejs:
 			if _, ok := h.disabled[runtime]; !ok {
-				r, err := h.nodeExtractRoutes(fileInfo.Pid())
+				r, err := h.nodeExtractRoutes(ctx, fileInfo.Pid())
 				if err != nil {
 					resultChan <- result{err: err}
 					return
@@ -165,7 +166,7 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			}
 		case svc.InstrumentableDeno:
 			if _, ok := h.disabled[runtime]; !ok {
-				r, err := h.denoExtractRoutes(fileInfo.Pid())
+				r, err := h.denoExtractRoutes(ctx, fileInfo.Pid())
 				if err != nil {
 					resultChan <- result{err: err}
 					return
@@ -178,7 +179,7 @@ func (h *RouteHarvester) HarvestRoutes(fileInfo *exec.FileInfo) (*RouteHarvester
 			}
 		case svc.InstrumentablePython:
 			if _, ok := h.disabled[runtime]; !ok {
-				r, err := h.pythonExtractRoutes(fileInfo)
+				r, err := h.pythonExtractRoutes(ctx, fileInfo)
 				if err != nil {
 					resultChan <- result{err: err}
 					return
@@ -265,7 +266,25 @@ func isDir(path string) bool {
 // for testing purposes
 var isDirFunc = isDir
 
+func relativeScriptOutsideCwd(cwd, script string) (string, bool) {
+	if script == "" || filepath.IsAbs(script) {
+		return "", false
+	}
+
+	resolved := langtools.AbsoluteProcessPath(cwd, script)
+	if langtools.PathWithinBoundary(cwd, resolved) ||
+		slices.Contains(strings.Split(resolved, string(filepath.Separator)), "node_modules") {
+		return "", false
+	}
+
+	return resolved, true
+}
+
 func FindScriptDirectory(root, firstArg, cwd string) string {
+	if script, ok := relativeScriptOutsideCwd(cwd, firstArg); ok {
+		firstArg = script
+	}
+
 	if strings.HasPrefix(firstArg, "/") {
 		if dir := resolveProcessDirectory(root, firstArg); dir != "" {
 			return dir

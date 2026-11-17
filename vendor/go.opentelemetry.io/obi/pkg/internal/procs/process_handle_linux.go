@@ -111,15 +111,22 @@ func (p *ProcessHandle) Open(name string, flags int) (*os.File, error) {
 	return os.NewFile(uintptr(fd), name), nil
 }
 
-// Alive verifies that the referenced process still exists. An unsupported
-// pidfd_send_signal syscall is an error because numeric-PID signaling is not a
-// safe fallback.
+// Alive verifies that the referenced process still exists. EPERM can come from
+// a seccomp filter before the kernel checks the descriptor, so the pinned proc
+// directory is checked as well. An unsupported pidfd_send_signal syscall is an
+// error because numeric-PID signaling is not a safe fallback.
 func (p *ProcessHandle) Alive() error {
 	if p == nil || p.procDir == nil {
 		return errors.New("process handle is unavailable")
 	}
 
-	return pidfdSendSignal(int(p.procDir.Fd()), 0, nil, 0)
+	err := pidfdSendSignal(int(p.procDir.Fd()), 0, nil, 0)
+	if !errors.Is(err, unix.EPERM) {
+		return err
+	}
+
+	_, err = p.startTime()
+	return err
 }
 
 func (p *ProcessHandle) SendSignal(signal unix.Signal) error {

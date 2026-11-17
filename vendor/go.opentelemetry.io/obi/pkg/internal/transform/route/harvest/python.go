@@ -5,6 +5,7 @@ package harvest // import "go.opentelemetry.io/obi/pkg/internal/transform/route/
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -38,7 +39,10 @@ var pySkipDirs = map[string]struct{}{
 	"venv":          {},
 }
 
-func ExtractPythonRoutes(fi *exec.FileInfo) (*RouteHarvesterResult, error) {
+func ExtractPythonRoutes(ctx context.Context, fi *exec.FileInfo) (*RouteHarvesterResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if fi == nil {
 		return nil, errors.New("python route harvesting requires process file info")
 	}
@@ -47,44 +51,56 @@ func ExtractPythonRoutes(fi *exec.FileInfo) (*RouteHarvesterResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return extractPythonRoutes(dir)
+	return extractPythonRoutes(ctx, dir)
 }
 
-func extractPythonRoutes(dir string) (*RouteHarvesterResult, error) {
+func extractPythonRoutes(ctx context.Context, dir string) (*RouteHarvesterResult, error) {
 	log := slog.With("component", "route.harvester.python")
 	e := pythonExtractor{
 		routes:       map[string]struct{}{},
 		djangoRoutes: map[string][]djangoRoute{},
 	}
 	kind := PartialRoutes
-	err := walkPythonFiles(dir, func(path string) {
-		if err := e.scanFile(path); err != nil {
+	err := walkPythonFiles(ctx, dir, func(path string) error {
+		if err := e.scanFile(ctx, path); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			log.Debug("error processing file", "file", path, "error", err)
-			return
+			return nil
 		}
 		if len(e.djangoRoutes[path]) > 0 {
 			kind = CompleteRoutes
 		}
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("scan Python directory: %w", err)
 	}
 
-	resolveDjangoRoutes(dir, e.djangoRoutes, e.routes)
+	if err := resolveDjangoRoutes(ctx, dir, e.djangoRoutes, e.routes); err != nil {
+		return nil, err
+	}
 
 	result := make([]string, 0, len(e.routes))
 	for route := range e.routes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		result = append(result, route)
 	}
 	sort.Strings(result)
 	return &RouteHarvesterResult{Routes: result, Kind: kind}, nil
 }
 
-func walkPythonFiles(root string, fn func(string)) error {
-	return walkPythonFilesN(root, maxPythonFiles, fn)
+func walkPythonFiles(ctx context.Context, root string, fn func(string) error) error {
+	return walkPythonFilesN(ctx, root, maxPythonFiles, fn)
 }
 
-func walkPythonFilesN(root string, maxFiles int, fn func(string)) error {
+func walkPythonFilesN(ctx context.Context, root string, maxFiles int, fn func(string) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	files, err := os.ReadDir(root)
 	if err != nil {
 		return err
@@ -94,6 +110,9 @@ func walkPythonFilesN(root string, maxFiles int, fn func(string)) error {
 	for _, file := range files {
 		path := filepath.Join(root, file.Name())
 		if err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if err != nil {
 				return err
 			}
@@ -107,7 +126,9 @@ func walkPythonFilesN(root string, maxFiles int, fn func(string)) error {
 				return nil
 			}
 			scanned++
-			fn(path)
+			if err := fn(path); err != nil {
+				return err
+			}
 			if scanned >= maxFiles {
 				limit = true
 				return filepath.SkipAll
@@ -120,7 +141,7 @@ func walkPythonFilesN(root string, maxFiles int, fn func(string)) error {
 			break
 		}
 	}
-	return nil
+	return ctx.Err()
 }
 
 func skipPythonDir(name string) bool {
@@ -136,7 +157,10 @@ type pythonExtractor struct {
 	djangoRoutes map[string][]djangoRoute
 }
 
-func (e *pythonExtractor) scanFile(path string) error {
+func (e *pythonExtractor) scanFile(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	file, _ := langtools.OpenMetadataFile(path, maxPythonFileBytes)
 	if file == nil {
 		return nil
@@ -173,6 +197,9 @@ func (e *pythonExtractor) scanFile(path string) error {
 	var stmt strings.Builder
 	depth := 0
 	for scan.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		line := strings.TrimSpace(scan.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -206,12 +233,15 @@ func (e *pythonExtractor) scanFile(path string) error {
 	}
 	for name, list := range djangoLists {
 		for _, declaration := range list.routes {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			declaration.listName = name
 			djangoRoutes = append(djangoRoutes, declaration)
 		}
 	}
 	e.djangoRoutes[path] = djangoRoutes
-	return nil
+	return ctx.Err()
 }
 
 func scanPythonStmt(stmt string, routes map[string]struct{}) {

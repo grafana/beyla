@@ -69,8 +69,10 @@ const (
 	FeatureApplicationRuntime
 	FeatureEBPF
 	FeatureConnectionInfo
-	// FeatureAll preserves the legacy all-features behavior while keeping connection info opt-in.
-	FeatureAll = Features(^uint(0)) &^ FeatureConnectionInfo
+	FeatureStatsTCPResets
+	// FeatureAll preserves the legacy all-features behavior while keeping the Config v2-only
+	// features opt-in.
+	FeatureAll = Features(^uint(0)) &^ (FeatureConnectionInfo | FeatureStatsTCPResets)
 )
 
 // FeatureStats enables all stat metrics, including TCP IO.
@@ -78,6 +80,17 @@ const (
 // higher event volume than the other stat metrics (which fire on close, failure, or retransmit).
 // If overhead is a concern, enable the lower-frequency metrics individually and opt into stats_tcp_io explicitly.
 const FeatureStats = FeatureStatsTCPRtt | FeatureStatsTCPFailedConnections | FeatureStatsTCPRetransmits | FeatureStatsTCPIo | FeatureStatsTCPSuccessfulConnections
+
+// v2OnlyFeatures are selectable only from Config v2. They stay out of FeatureMapper so the
+// frozen v1 feature names do not change, and out of FeatureStats so the "stats" aggregate
+// keeps its v1 meaning.
+var v2OnlyFeatures = []struct {
+	name    string
+	feature Features
+}{
+	{name: "application_service_graph_connection_info", feature: FeatureConnectionInfo},
+	{name: "stats_tcp_resets", feature: FeatureStatsTCPResets},
+}
 
 // FeatureMapper stays public so any extension package can add and remove feature
 // definitions before loading them.
@@ -242,8 +255,10 @@ func (f Features) Names() []string {
 			remaining = Features(maps.Bits(remaining) &^ maps.Bits(feature))
 		}
 	}
-	if remaining.has(FeatureConnectionInfo) {
-		names = append(names, "application_service_graph_connection_info")
+	for _, v2 := range v2OnlyFeatures {
+		if remaining.has(v2.feature) {
+			names = append(names, v2.name)
+		}
 	}
 	return names
 }
@@ -279,18 +294,19 @@ func loadFeatures(features []string, allowV2 bool) (Features, error) {
 	feats := Features(0)
 	validNames := validFeatureNames()
 	if allowV2 {
-		validNames = append(validNames, "application_service_graph_connection_info")
+		for _, v2 := range v2OnlyFeatures {
+			validNames = append(validNames, v2.name)
+		}
 	}
 	for _, f := range features {
 		name := strings.TrimSpace(f)
 		if name == "" {
 			continue
 		}
-		if allowV2 && name == "application_service_graph_connection_info" {
-			feats |= FeatureConnectionInfo
-			continue
-		}
 		feature, ok := FeatureMapper[name]
+		if !ok && allowV2 {
+			feature, ok = v2OnlyFeature(name)
+		}
 		if !ok {
 			return Features(0), fmt.Errorf("unknown metrics feature %q (valid features: %s)",
 				name, strings.Join(validNames, ", "))
@@ -298,6 +314,15 @@ func loadFeatures(features []string, allowV2 bool) (Features, error) {
 		feats |= feature
 	}
 	return feats, nil
+}
+
+func v2OnlyFeature(name string) (Features, bool) {
+	for _, v2 := range v2OnlyFeatures {
+		if v2.name == name {
+			return v2.feature, true
+		}
+	}
+	return 0, false
 }
 
 func (f Features) has(feature Features) bool {
@@ -418,7 +443,7 @@ func (f Features) NetworkFlowPackets() bool {
 }
 
 func (f Features) StatMetrics() bool {
-	return f.any(FeatureStats)
+	return f.any(FeatureStats | FeatureStatsTCPResets)
 }
 
 func (f Features) StatsTCPRtt() bool {
@@ -439,6 +464,10 @@ func (f Features) StatsTCPRetransmits() bool {
 
 func (f Features) StatsTCPIo() bool {
 	return f.any(FeatureStatsTCPIo)
+}
+
+func (f Features) StatsTCPResets() bool {
+	return f.any(FeatureStatsTCPResets)
 }
 
 func (f Features) NetworkInterZone() bool {

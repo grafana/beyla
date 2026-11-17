@@ -10,7 +10,8 @@ import (
 // OBI accepts services.ExceptionsConfig only from config v2. The exported
 // fields match that struct so FromOBI and AsOBI copy them by name.
 type ExceptionsConfig struct {
-	Enabled bool `yaml:"enabled" env:"BEYLA_EXCEPTIONS_ENABLED"`
+	Enabled bool                        `yaml:"enabled" env:"BEYLA_EXCEPTIONS_ENABLED"`
+	Go      services.GoExceptionsConfig `yaml:"go"`
 }
 
 func (c ExceptionsConfig) obi() services.ExceptionsConfig {

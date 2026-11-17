@@ -7,6 +7,7 @@
 #include <bpfcore/bpf_helpers.h>
 #include <bpfcore/bpf_tracing.h>
 
+#include <common/protocol_defs.h>
 #include <pid/types/pid_info.h>
 
 #define S_IFMT 0xF000   // File type mask.
@@ -20,7 +21,7 @@ char LICENSE[] SEC("license") = "Dual MIT/GPL";
 
 struct survey_process {
   u64 start_time;
-  pid_info id;
+  struct pid_info id;
   u32 reserved; // Explicit padding keeps map keys fully initialized.
 };
 
@@ -105,10 +106,22 @@ static __always_inline u8 port_flags(u16 port) {
   return port < 1024 ? SURVEY_SOCK_PRIV : SURVEY_SOCK_NONPRIV;
 }
 
+// Only IP sockets have ports. In particular, unix socket listeners must not
+// qualify root processes for the privileged-port exception.
+static __always_inline u8 listener_flags(struct sock *sk) {
+  u16 family = BPF_CORE_READ(sk, __sk_common.skc_family);
+  if (family != AF_INET && family != AF_INET6) {
+    return 0;
+  }
+
+  return port_flags(BPF_CORE_READ(sk, __sk_common.skc_num));
+}
+
 // These hooks receive validated sockets and also cover nonblocking/failed
 // attempts, Unix sockets, and io_uring operations. There is deliberately no OBI
 // PID filter.
 SEC("kprobe/security_socket_connect")
+// NOLINTNEXTLINE(misc-unused-parameters): BPF hook ABI requires context.
 int survey_watch_connect(void *ctx) {
   remember_socket((struct task_struct *)bpf_get_current_task(), SURVEY_SOCK_ANY,
                   true);
@@ -116,16 +129,27 @@ int survey_watch_connect(void *ctx) {
 }
 
 SEC("kprobe/security_socket_listen")
+// NOLINTNEXTLINE(misc-unused-parameters): BPF hook ABI requires context.
 int BPF_KPROBE(survey_watch_listen, struct socket *sock) {
   struct sock *sk = BPF_CORE_READ(sock, sk);
-  u16 port = BPF_CORE_READ(sk, __sk_common.skc_num);
 
   remember_socket((struct task_struct *)bpf_get_current_task(),
-                  SURVEY_SOCK_ANY | port_flags(port), true);
+                  SURVEY_SOCK_ANY | listener_flags(sk), true);
+  return 0;
+}
+
+SEC("kprobe/security_socket_accept")
+// NOLINTNEXTLINE(misc-unused-parameters): BPF hook ABI requires context.
+int BPF_KPROBE(survey_watch_accept, struct socket *sock) {
+  struct sock *sk = BPF_CORE_READ(sock, sk);
+
+  remember_socket((struct task_struct *)bpf_get_current_task(),
+                  SURVEY_SOCK_ANY | listener_flags(sk), true);
   return 0;
 }
 
 SEC("tracepoint/sched/sched_process_exit")
+// NOLINTNEXTLINE(misc-unused-parameters): BPF hook ABI requires context.
 int survey_watch_exit(void *ctx) {
   struct task_struct *task = (struct task_struct *)bpf_get_current_task();
 
@@ -151,12 +175,11 @@ int survey_seed_sockets(struct bpf_iter__task_file *ctx) {
     if (sock) {
       struct sock *sk = BPF_CORE_READ(sock, sk);
       if (sk) {
-        u16 port = BPF_CORE_READ(sk, __sk_common.skc_num);
         u8 state = BPF_CORE_READ(sk, __sk_common.skc_state);
         // UDP sockets have no listen state. Their bound port is recorded as
         // evidence of serving.
         if (state == TCP_LISTEN || BPF_CORE_READ(sk, sk_type) == SOCK_DGRAM) {
-          flags |= port_flags(port);
+          flags |= listener_flags(sk);
         }
       }
     }

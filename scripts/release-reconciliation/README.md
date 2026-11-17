@@ -16,12 +16,28 @@ weekly. Neither schedule is a release trigger or gate. The report may flag
 prerelease-only observations for policy review; owners still need to decide
 whether prereleases qualify. No release version is selected.
 
-```mermaid
-flowchart LR
-    A[Daily schedule or manual run] --> B[Read GitHub facts]
-    B --> C[Validate and summarize]
-    C --> D[Actions workflow summary]
-```
+## Data flow and ownership
+
+GitHub is the authoritative store for release refs, workflow runs, releases,
+deployment outcomes, and approvals. The report is derived from a point-in-time
+read of those facts. It is emitted to the Actions run log and human-readable
+workflow summary; neither is durable release truth, and normal Actions run
+retention applies. Grot may be configured separately as a consumer to explain
+or investigate the report and notify people. It is not an execution engine,
+checkpoint, or resume store, and this repository does not configure or verify
+that integration.
+
+| Where | Writer | Reader | Meaning |
+|---|---|---|---|
+| GitHub refs, Actions runs, releases, deployment and approval records | Existing GitHub workflows and authorized operators | Reconciliation workflow and maintainers | Authoritative current facts; future progression gates must inspect these facts. |
+| Reconciliation JSON in the run log and workflow summary | Read-only reconciliation workflow | Maintainers; optionally a separately configured Grot consumer | Derived, disposable observation snapshot; never a command or resume checkpoint. |
+
+The operational data flow is therefore: (1) GitHub records release facts; (2)
+the scheduled or manually started workflow reads and summarizes those facts;
+(3) maintainers inspect the human summary, while an optional external consumer
+may explain or investigate the marked JSON and notify people; and (4) any
+future Actions progression re-reads GitHub's current facts and applies explicit
+gates. It does not deserialize an old report to decide where to resume.
 
 The workflow does not notify Grot or Slack. Its summary is not durable train
 state. The current implementation is read-only; the architecture below is a
@@ -57,28 +73,10 @@ release workflows behind their exact candidate gates. In sequence, it would:
 
 Daily checks observe release and CI facts; the weekly publication cadence is
 distinct from those checks. Completion events can wake reconciliation, but
-GitHub remains authoritative. Grot conversation or investigation may be an
-optional integration, not a core dependency. The core assumes no database or
-always-on service. Candidate selection, health criteria, approvals, and
-prerelease policy remain maintainer decisions, not guarantees enforced by
+GitHub remains authoritative. Candidate selection, health criteria, approvals,
+and prerelease policy remain maintainer decisions, not guarantees enforced by
 these workflows; this target does not promise unconditional publication. The
 current workflow above remains read-only and does not implement this lifecycle.
-
-The diagram summarizes target coordination components; the numbered list
-describes the release sequence.
-
-```mermaid
-flowchart TD
-    A[Daily check] --> B[Actions]
-    B --> C[Release gate]
-    C --> D[Workflows]
-    D --> E[Results]
-    E --> B
-    F[Weekly cadence] --> C
-```
-
-The diagram is a target summary for public review. The current workflow above
-only observes and reports; it does not implement lifecycle progression.
 
 ## Local checks
 

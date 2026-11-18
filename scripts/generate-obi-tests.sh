@@ -600,10 +600,54 @@ drain_every_instrumenter_service() {
     # OBI #4228 dropped the wait on "obi": Stop() now gracefully stops every
     # service whose name has an "obi" token (obi, client-obi) before killing
     # the rest, so upstream already drains every instrumenter. Accept that
-    # shape and add nothing; fail on anything else.
-    if grep -q 'func (c \*Compose) obiServices()' "$file" &&
-      grep -qF 'slices.Contains(strings.Split(name, "-"), "obi")' "$file" &&
-      grep -qF 'c.command(append([]string{"stop", "--timeout", stopTimeout}, obiServices...)...)' "$file"; then
+    # exact known Stop() body and add nothing; fail on anything else. Keep the
+    # checks scoped to that method so matching snippets elsewhere cannot mask
+    # a changed shutdown path.
+    local stop_body expected_stop_body
+    stop_body=$(awk '
+      /^func \(c \*Compose\) Stop\(\) error \{$/ {
+        if (seen++) {
+          invalid = 1
+          exit
+        }
+        capture = 1
+      }
+      capture {
+        print
+        line = $0
+        opens = gsub(/\{/, "", line)
+        closes = gsub(/\}/, "", line)
+        depth += opens - closes
+        if (depth == 0) {
+          complete = 1
+          exit
+        }
+      }
+      END {
+        if (!complete || invalid || seen != 1) {
+          exit 1
+        }
+      }
+    ' "$file" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; /^$/d') || stop_body=""
+    expected_stop_body=$(
+      cat <<'EOF'
+func (c *Compose) Stop() error {
+obiServices, ok := c.obiServices()
+if !ok {
+return c.command("stop", "--timeout", stopTimeout)
+}
+if len(obiServices) > 0 {
+if err := c.command(append([]string{"stop", "--timeout", stopTimeout}, obiServices...)...); err != nil {
+return err
+}
+}
+return c.command("kill")
+}
+EOF
+    )
+    if grep -Fq 'func (c *Compose) obiServices()' "$file" &&
+      grep -Fq 'slices.Contains(strings.Split(name, "-"), "obi")' "$file" &&
+      [[ "$stop_body" == "$expected_stop_body" ]]; then
       return 0
     fi
     echo "ERROR: compose.go neither waits for \"obi\" nor stops obiServices() as expected; update the instrumenter drain transform" >&2

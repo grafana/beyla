@@ -207,7 +207,7 @@ done
 # shapes: the old one that waits only on "obi" (rewrite it to wait on every
 # instrumenter), and OBI #4228's Stop() that already stops every obi-named
 # service (leave it untouched). Any other shape must fail without editing.
-mkdir -p "$tmp/drain/old/components/docker" "$tmp/drain/new/components/docker" "$tmp/drain/bad/components/docker"
+mkdir -p "$tmp/drain/old/components/docker" "$tmp/drain/new/components/docker" "$tmp/drain/bad/components/docker" "$tmp/drain/decoy/components/docker" "$tmp/drain/reordered/components/docker"
 cat >"$tmp/drain/old/components/docker/compose.go" <<'GO'
 package docker
 
@@ -225,12 +225,17 @@ package docker
 
 // obiServices lists the services running OBI, such as obi or client-obi
 func (c *Compose) obiServices() ([]string, bool) {
+	services, ok := c.services()
+	if !ok {
+		return nil, false
+	}
 	var obiServices []string
 	for name := range services {
 		if slices.Contains(strings.Split(name, "-"), "obi") {
 			obiServices = append(obiServices, name)
 		}
 	}
+	slices.Sort(obiServices)
 	return obiServices, true
 }
 
@@ -254,13 +259,29 @@ if grep -qF 'obiServices...)...)' "$tmp/drain/bad/components/docker/compose.go";
   echo 'Unexpected-shape drain fixture still stops obiServices().' >&2
   exit 1
 fi
-for shape in old new bad; do
+# A decoy keeps all expected helper/command snippets in the file, but not in
+# Stop(). The guard must inspect the actual shutdown method, not global text.
+awk '/^func \(c \*Compose\) Stop\(\) error \{$/ { exit } { print }' \
+  "$tmp/drain/new/components/docker/compose.go" >"$tmp/drain/decoy/components/docker/compose.go"
+cat >>"$tmp/drain/decoy/components/docker/compose.go" <<'GO'
+func (c *Compose) Stop() error { return c.command("kill") }
+
+func unrelated() {
+	_ = slices.Contains(strings.Split(name, "-"), "obi")
+	_ = c.command(append([]string{"stop", "--timeout", stopTimeout}, obiServices...)...)
+}
+GO
+# Reordered/altered shutdown behavior must not pass as the supported shape.
+sed 's/return c.command("kill")/return c.command("stop", "--timeout", stopTimeout)/' \
+  "$tmp/drain/new/components/docker/compose.go" >"$tmp/drain/reordered/components/docker/compose.go"
+for shape in old new bad decoy reordered; do
   cp "$tmp/drain/$shape/components/docker/compose.go" "$tmp/drain/$shape.unchanged.go"
 done
 drain() {
   (
     # shellcheck source=/dev/null
     source "$root/scripts/generate-obi-tests.sh"
+    # shellcheck disable=SC2034 # Consumed by drain_every_instrumenter_service from the sourced script.
     OBI_DEST="$1"
     drain_every_instrumenter_service
   )
@@ -276,11 +297,13 @@ grep -qF 'if err := c.commandContext(waitCtx, args...); err != nil {' "$old_out"
 grep -q 'func (c \*Compose) instrumenterServices() \[\]string' "$old_out"
 drain "$tmp/drain/new"
 diff -u "$tmp/drain/new.unchanged.go" "$tmp/drain/new/components/docker/compose.go"
-if drain "$tmp/drain/bad" 2>"$tmp/drain/bad.err"; then
-  echo 'Instrumenter drain transform must reject an unexpected compose.go shape.' >&2
-  exit 1
-fi
-grep -qF 'update the instrumenter drain transform' "$tmp/drain/bad.err"
-diff -u "$tmp/drain/bad.unchanged.go" "$tmp/drain/bad/components/docker/compose.go"
+for shape in bad decoy reordered; do
+  if drain "$tmp/drain/$shape" 2>"$tmp/drain/$shape.err"; then
+    echo "Instrumenter drain transform must reject unsupported $shape compose.go shape." >&2
+    exit 1
+  fi
+  grep -qF 'update the instrumenter drain transform' "$tmp/drain/$shape.err"
+  diff -u "$tmp/drain/$shape.unchanged.go" "$tmp/drain/$shape/components/docker/compose.go"
+done
 
 echo 'mise task contract tests passed'

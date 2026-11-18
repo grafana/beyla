@@ -177,6 +177,10 @@ sed '/^input:[[:space:]]*$/,/^expected:[[:space:]]*$/s/^      timeout: 10s$/    
   "$tmp/oats-window/upstream.yaml" >"$tmp/oats-window/expected.yaml"
 diff -u "$tmp/oats-window/expected.yaml" "$tmp/oats-window/beyla.yaml"
 [[ $(grep -F -c '      timeout: 10s' "$tmp/oats-window/upstream.yaml") -eq 1 ]]
+sed 's/^      timeout: 10s$/      timeout: 30s/' "$tmp/oats-window/upstream.yaml" >"$tmp/oats-window/beyla.yaml"
+cp "$tmp/oats-window/beyla.yaml" "$tmp/oats-window/unchanged.yaml"
+"$root/scripts/extend-beyla-kafka-oats-window.sh" "$tmp/oats-window/beyla.yaml"
+diff -u "$tmp/oats-window/unchanged.yaml" "$tmp/oats-window/beyla.yaml"
 for invalid_value in 'wrong-duration' 'trailing-comment' 'shifted-indentation'; do
   cp "$tmp/oats-window/upstream.yaml" "$tmp/oats-window/beyla.yaml"
   case "$invalid_value" in
@@ -198,5 +202,85 @@ for invalid_value in 'wrong-duration' 'trailing-comment' 'shifted-indentation'; 
   fi
   diff -u "$tmp/oats-window/unchanged.yaml" "$tmp/oats-window/beyla.yaml"
 done
+
+# The instrumenter drain transform must handle both upstream Close()/Stop()
+# shapes: the old one that waits only on "obi" (rewrite it to wait on every
+# instrumenter), and OBI #4228's Stop() that already stops every obi-named
+# service (leave it untouched). Any other shape must fail without editing.
+mkdir -p "$tmp/drain/old/components/docker" "$tmp/drain/new/components/docker" "$tmp/drain/bad/components/docker"
+cat >"$tmp/drain/old/components/docker/compose.go" <<'GO'
+package docker
+
+func (c *Compose) Close() error {
+	if waitCtx != nil {
+		if err := c.commandContext(waitCtx, "wait", "obi"); err != nil {
+			return err
+		}
+	}
+	return c.command("stop", "--timeout", stopTimeout)
+}
+GO
+cat >"$tmp/drain/new/components/docker/compose.go" <<'GO'
+package docker
+
+// obiServices lists the services running OBI, such as obi or client-obi
+func (c *Compose) obiServices() ([]string, bool) {
+	var obiServices []string
+	for name := range services {
+		if slices.Contains(strings.Split(name, "-"), "obi") {
+			obiServices = append(obiServices, name)
+		}
+	}
+	return obiServices, true
+}
+
+func (c *Compose) Stop() error {
+	obiServices, ok := c.obiServices()
+	if !ok {
+		return c.command("stop", "--timeout", stopTimeout)
+	}
+	if len(obiServices) > 0 {
+		if err := c.command(append([]string{"stop", "--timeout", stopTimeout}, obiServices...)...); err != nil {
+			return err
+		}
+	}
+	return c.command("kill")
+}
+GO
+# Unexpected: neither the old wait nor a graceful stop of obiServices().
+sed 's/c.command(append(\[\]string{"stop", "--timeout", stopTimeout}, obiServices...)...)/c.command("kill")/' \
+  "$tmp/drain/new/components/docker/compose.go" >"$tmp/drain/bad/components/docker/compose.go"
+if grep -qF 'obiServices...)...)' "$tmp/drain/bad/components/docker/compose.go"; then
+  echo 'Unexpected-shape drain fixture still stops obiServices().' >&2
+  exit 1
+fi
+for shape in old new bad; do
+  cp "$tmp/drain/$shape/components/docker/compose.go" "$tmp/drain/$shape.unchanged.go"
+done
+drain() {
+  (
+    # shellcheck source=/dev/null
+    source "$root/scripts/generate-obi-tests.sh"
+    OBI_DEST="$1"
+    drain_every_instrumenter_service
+  )
+}
+drain "$tmp/drain/old"
+old_out="$tmp/drain/old/components/docker/compose.go"
+if grep -qF 'c.commandContext(waitCtx, "wait", "obi")' "$old_out"; then
+  echo 'Old-shape drain transform left the wait on "obi" in place.' >&2
+  exit 1
+fi
+grep -qF 'args := append([]string{"wait"}, c.instrumenterServices()...)' "$old_out"
+grep -qF 'if err := c.commandContext(waitCtx, args...); err != nil {' "$old_out"
+grep -q 'func (c \*Compose) instrumenterServices() \[\]string' "$old_out"
+drain "$tmp/drain/new"
+diff -u "$tmp/drain/new.unchanged.go" "$tmp/drain/new/components/docker/compose.go"
+if drain "$tmp/drain/bad" 2>"$tmp/drain/bad.err"; then
+  echo 'Instrumenter drain transform must reject an unexpected compose.go shape.' >&2
+  exit 1
+fi
+grep -qF 'update the instrumenter drain transform' "$tmp/drain/bad.err"
+diff -u "$tmp/drain/bad.unchanged.go" "$tmp/drain/bad/components/docker/compose.go"
 
 echo 'mise task contract tests passed'

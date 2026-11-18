@@ -597,7 +597,16 @@ drain_every_instrumenter_service() {
   local file="$OBI_DEST/components/docker/compose.go"
 
   if ! grep -q 'c.commandContext(waitCtx, "wait", "obi")' "$file"; then
-    echo "ERROR: compose.go no longer waits for \"obi\" as expected; update the instrumenter drain transform" >&2
+    # OBI #4228 dropped the wait on "obi": Stop() now gracefully stops every
+    # service whose name has an "obi" token (obi, client-obi) before killing
+    # the rest, so upstream already drains every instrumenter. Accept that
+    # shape and add nothing; fail on anything else.
+    if grep -q 'func (c \*Compose) obiServices()' "$file" &&
+      grep -qF 'slices.Contains(strings.Split(name, "-"), "obi")' "$file" &&
+      grep -qF 'c.command(append([]string{"stop", "--timeout", stopTimeout}, obiServices...)...)' "$file"; then
+      return 0
+    fi
+    echo "ERROR: compose.go neither waits for \"obi\" nor stops obiServices() as expected; update the instrumenter drain transform" >&2
     exit 1
   fi
   awk '
@@ -1689,6 +1698,12 @@ apply_component_path_transform() {
 # =============================================================================
 # MAIN
 # =============================================================================
+
+# Allow scripts/tests/mise-task-contracts.sh to source this file and exercise
+# individual transforms without running the generator.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
 
 case "${1:-}" in
 --clean | -c)

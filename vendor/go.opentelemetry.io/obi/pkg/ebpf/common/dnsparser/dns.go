@@ -3,7 +3,7 @@
 
 package dnsparser // import "go.opentelemetry.io/obi/pkg/ebpf/common/dnsparser"
 
-import "fmt"
+import "strconv"
 
 type DNSId struct {
 	HostPID uint32
@@ -91,7 +91,7 @@ func (t Type) String() string {
 	if n, ok := typeNames[t]; ok {
 		return n
 	}
-	return fmt.Sprintf("%d", t)
+	return strconv.FormatUint(uint64(t), 10)
 }
 
 // String implements fmt.Stringer.String.
@@ -99,5 +99,5 @@ func (r RCode) String() string {
 	if n, ok := rCodeNames[r]; ok {
 		return n
 	}
-	return fmt.Sprintf("%d", r)
+	return strconv.FormatUint(uint64(r), 10)
 }

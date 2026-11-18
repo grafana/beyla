@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/filter"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
@@ -1175,6 +1176,7 @@ func applyFullV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	cfg.EBPF.ProtocolDebug = engine.Debug.ProtocolPrint
 	cfg.Discovery.BPFPidFilterOff = engine.PIDFilter.Disabled
 	cfg.EBPF.WakeupLen = engine.Batching.WakeupLen
+	cfg.EBPF.StatsWakeupDataBytes = engine.Batching.Stats.WakeupBytes
 	cfg.EBPF.BatchLength = engine.Batching.BatchLength
 	cfg.EBPF.BatchTimeout = engine.Batching.BatchTimeout.TimeDuration()
 	cfg.EBPF.ContextPropagation = engine.Propagation.ContextPropagation
@@ -1202,6 +1204,9 @@ func applyPartialV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	}
 	if engine.Batching.WakeupLen != 0 {
 		cfg.EBPF.WakeupLen = engine.Batching.WakeupLen
+	}
+	if engine.Batching.Stats.WakeupBytes != 0 {
+		cfg.EBPF.StatsWakeupDataBytes = engine.Batching.Stats.WakeupBytes
 	}
 	if engine.Batching.BatchLength != 0 {
 		cfg.EBPF.BatchLength = engine.Batching.BatchLength
@@ -1277,8 +1282,9 @@ func applyV2Instrumentation(cfg *obi.Config, instrumentation schema.Instrumentat
 func applyFullV2Instrumentation(cfg *obi.Config, instrumentation schema.Instrumentation) {
 	applyFullV2HTTPInstrumentation(cfg, instrumentation.HTTP)
 
+	cfg.Attributes.SanitizeDBQueryText = instrumentation.DB.SanitizeQueryText
+
 	cfg.EBPF.HeuristicSQLDetect = instrumentation.SQL.HeuristicDetect
-	cfg.Attributes.SanitizeSQLQueryText = instrumentation.SQL.SanitizeQueryText
 	cfg.EBPF.BufferSizes.MySQL = instrumentation.SQL.MySQL.BufferSize
 	cfg.EBPF.MySQLPreparedStatementsCacheSize = instrumentation.SQL.MySQL.PreparedStatementsCacheSize
 	cfg.EBPF.BufferSizes.Postgres = instrumentation.SQL.Postgres.BufferSize
@@ -1307,12 +1313,13 @@ func applyPartialV2Instrumentation(cfg *obi.Config, instrumentation schema.Instr
 		applyPartialV2HTTPInstrumentation(cfg, instrumentation.HTTP)
 	}
 
+	if instrumentation.DB.SanitizeQueryText {
+		cfg.Attributes.SanitizeDBQueryText = true
+	}
+
 	if !zeroValue(instrumentation.SQL) {
 		if instrumentation.SQL.HeuristicDetect {
 			cfg.EBPF.HeuristicSQLDetect = true
-		}
-		if instrumentation.SQL.SanitizeQueryText {
-			cfg.Attributes.SanitizeSQLQueryText = true
 		}
 		if instrumentation.SQL.MySQL.BufferSize != 0 {
 			cfg.EBPF.BufferSizes.MySQL = instrumentation.SQL.MySQL.BufferSize
@@ -2065,6 +2072,7 @@ func applyFullV2KubernetesEnricher(cfg *obi.Config, kubernetes schema.Kubernetes
 	cfg.Attributes.Kubernetes.DropExternal = kubernetes.DropExternal
 	cfg.Attributes.Kubernetes.DisableInformers = cloneStrings(kubernetes.Informers.Disabled)
 	cfg.Attributes.Kubernetes.MetaCacheAddress = kubernetes.MetadataCache.Address
+	cfg.Attributes.Kubernetes.MetaCacheTLS = kubecache.ClientTLSConfig(kubernetes.MetadataCache.TLS)
 	cfg.Attributes.Kubernetes.MetaRestrictLocalNode = kubernetes.MetadataCache.RestrictLocalNode
 	cfg.Attributes.Kubernetes.MetaSourceLabels.ServiceName = kubernetes.MetadataCache.SourceLabels.ServiceName
 	cfg.Attributes.Kubernetes.MetaSourceLabels.ServiceNamespace = kubernetes.MetadataCache.SourceLabels.ServiceNamespace
@@ -2105,6 +2113,9 @@ func applyPartialV2KubernetesEnricher(cfg *obi.Config, kubernetes schema.Kuberne
 	}
 	if kubernetes.MetadataCache.Address != "" {
 		cfg.Attributes.Kubernetes.MetaCacheAddress = kubernetes.MetadataCache.Address
+	}
+	if !zeroValue(kubernetes.MetadataCache.TLS) {
+		cfg.Attributes.Kubernetes.MetaCacheTLS = kubecache.ClientTLSConfig(kubernetes.MetadataCache.TLS)
 	}
 	if kubernetes.MetadataCache.RestrictLocalNode {
 		cfg.Attributes.Kubernetes.MetaRestrictLocalNode = kubernetes.MetadataCache.RestrictLocalNode

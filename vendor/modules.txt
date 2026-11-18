@@ -519,6 +519,10 @@ github.com/gorilla/websocket
 github.com/grafana/go-offsets-tracker/pkg/offsets
 github.com/grafana/go-offsets-tracker/pkg/utils
 github.com/grafana/go-offsets-tracker/pkg/versions
+# github.com/grafana/jvmtools v0.0.5
+## explicit; go 1.23.2
+github.com/grafana/jvmtools/jvm
+github.com/grafana/jvmtools/util
 # github.com/grafana/pyroscope-go/godeltaprof v0.1.12
 ## explicit; go 1.25.0
 github.com/grafana/pyroscope-go/godeltaprof

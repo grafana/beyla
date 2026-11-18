@@ -41,6 +41,8 @@ type Config struct {
 	SendTimeout time.Duration `yaml:"informer_send_timeout" env:"OTEL_EBPF_K8S_CACHE_INFORMER_SEND_TIMEOUT" validate:"gte=0"`
 
 	InternalMetrics instrument.InternalMetricsConfig `yaml:"internal_metrics"`
+
+	TLS TLSConfig `yaml:"tls" envPrefix:"OTEL_EBPF_K8S_CACHE_TLS_"`
 }
 
 var DefaultConfig = Config{
@@ -71,6 +73,9 @@ func LoadConfig(file io.Reader) (*Config, error) {
 	}
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)
+	}
+	if err := cfg.TLS.Validate(); err != nil {
+		return nil, err
 	}
 	return &cfg, nil
 }

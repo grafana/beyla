@@ -77,9 +77,19 @@ type ResourceLabels map[string][]string
 // KubernetesMetadataCache describes the Kubernetes metadata cache connection
 // and source label settings.
 type KubernetesMetadataCache struct {
-	Address           string                 `yaml:"address"`
-	RestrictLocalNode bool                   `yaml:"restrict_local_node"`
-	SourceLabels      KubernetesSourceLabels `yaml:"source_labels"`
+	Address           string                     `yaml:"address"`
+	RestrictLocalNode bool                       `yaml:"restrict_local_node"`
+	SourceLabels      KubernetesSourceLabels     `yaml:"source_labels"`
+	TLS               KubernetesMetadataCacheTLS `yaml:"tls"`
+}
+
+// KubernetesMetadataCacheTLS describes the TLS settings of the Kubernetes
+// metadata cache connection.
+type KubernetesMetadataCacheTLS struct {
+	CAFile     string `yaml:"ca_file"`
+	CertFile   string `yaml:"cert_file"`
+	KeyFile    string `yaml:"key_file"`
+	ServerName string `yaml:"server_name"`
 }
 
 // KubernetesSourceLabels describes metadata labels used as service identity

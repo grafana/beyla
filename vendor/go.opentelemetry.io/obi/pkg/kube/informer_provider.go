@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
 )
@@ -51,6 +52,7 @@ type MetadataConfig struct {
 	ReconnectInitialInterval time.Duration
 	ResyncPeriod             time.Duration
 	MetaCacheAddr            string
+	MetaCacheTLS             kubecache.ClientTLSConfig
 	ResourceLabels           ResourceLabels
 	RestrictLocalNode        bool
 	ServiceNameTemplate      *template.Template
@@ -308,6 +310,7 @@ func (mp *MetadataProvider) initLocalInformers(ctx context.Context) (*meta.Infor
 func (mp *MetadataProvider) initRemoteInformerCacheClient(ctx context.Context) *cacheSvcClient {
 	client := &cacheSvcClient{
 		address:                  mp.cfg.MetaCacheAddr,
+		tls:                      mp.cfg.MetaCacheTLS,
 		BaseNotifier:             meta.NewBaseNotifier(klog()),
 		syncTimeout:              mp.cfg.SyncTimeout,
 		reconnectInitialInterval: mp.cfg.ReconnectInitialInterval,

@@ -117,10 +117,9 @@ func captureInstrumentation(cfg *obi.Config) schema.Instrumentation {
 
 	sql := protocols[protocolSQL]
 	sqlInstrumentation := schema.SQLInstrumentation{
-		Enabled:           sql.Enabled,
-		Filters:           sql.Filters,
-		HeuristicDetect:   cfg.EBPF.HeuristicSQLDetect,
-		SanitizeQueryText: cfg.Attributes.SanitizeSQLQueryText,
+		Enabled:         sql.Enabled,
+		Filters:         sql.Filters,
+		HeuristicDetect: cfg.EBPF.HeuristicSQLDetect,
 		MySQL: schema.SQLDatabaseInstrumentation{
 			BufferSize:                  cfg.EBPF.BufferSizes.MySQL,
 			PreparedStatementsCacheSize: cfg.EBPF.MySQLPreparedStatementsCacheSize,
@@ -191,6 +190,7 @@ func captureInstrumentation(cfg *obi.Config) schema.Instrumentation {
 	return schema.Instrumentation{
 		HTTP:      httpInstrumentation,
 		GRPC:      protocols[protocolGRPC],
+		DB:        schema.DBInstrumentation{SanitizeQueryText: cfg.Attributes.SanitizeDBQueryText},
 		SQL:       sqlInstrumentation,
 		Redis:     redisInstrumentation,
 		Kafka:     kafkaInstrumentation,
@@ -432,6 +432,9 @@ func captureEngine(cfg *obi.Config) schema.CaptureEngine {
 			WakeupLen:    cfg.EBPF.WakeupLen,
 			BatchLength:  cfg.EBPF.BatchLength,
 			BatchTimeout: schema.Duration(cfg.EBPF.BatchTimeout),
+			Stats: schema.StatsBatching{
+				WakeupBytes: cfg.EBPF.StatsWakeupDataBytes,
+			},
 		},
 		Propagation: schema.Propagation{
 			ContextPropagation:     cfg.EBPF.ContextPropagation,
@@ -665,6 +668,7 @@ func enrich(cfg *obi.Config) *schema.Enrich {
 				MetadataCache: schema.KubernetesMetadataCache{
 					Address:           cfg.Attributes.Kubernetes.MetaCacheAddress,
 					RestrictLocalNode: cfg.Attributes.Kubernetes.MetaRestrictLocalNode,
+					TLS:               schema.KubernetesMetadataCacheTLS(cfg.Attributes.Kubernetes.MetaCacheTLS),
 					SourceLabels: schema.KubernetesSourceLabels{
 						ServiceName:      cfg.Attributes.Kubernetes.MetaSourceLabels.ServiceName,
 						ServiceNamespace: cfg.Attributes.Kubernetes.MetaSourceLabels.ServiceNamespace,

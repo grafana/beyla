@@ -14,6 +14,7 @@ import (
 type Instrumentation struct {
 	HTTP      HTTPInstrumentation       `yaml:"http"`
 	GRPC      ProtocolInstrumentation   `yaml:"grpc"`
+	DB        DBInstrumentation         `yaml:"db"`
 	SQL       SQLInstrumentation        `yaml:"sql"`
 	Redis     RedisInstrumentation      `yaml:"redis"`
 	Kafka     KafkaInstrumentation      `yaml:"kafka"`
@@ -106,16 +107,20 @@ type HTTPRouteJavaDiscovery struct {
 	Delay Duration `yaml:"delay"`
 }
 
+// DBInstrumentation describes settings shared by all database protocols.
+type DBInstrumentation struct {
+	SanitizeQueryText bool `yaml:"sanitize_query_text"`
+}
+
 // SQLInstrumentation describes SQL capture and database-specific buffering
 // settings.
 type SQLInstrumentation struct {
-	Enabled           ProtocolEnablement         `yaml:"enabled"`
-	Filters           SignalFilters              `yaml:"filters"`
-	HeuristicDetect   bool                       `yaml:"heuristic_detect"`
-	SanitizeQueryText bool                       `yaml:"sanitize_query_text"`
-	MySQL             SQLDatabaseInstrumentation `yaml:"mysql"`
-	Postgres          SQLDatabaseInstrumentation `yaml:"postgres"`
-	MSSQL             SQLDatabaseInstrumentation `yaml:"mssql"`
+	Enabled         ProtocolEnablement         `yaml:"enabled"`
+	Filters         SignalFilters              `yaml:"filters"`
+	HeuristicDetect bool                       `yaml:"heuristic_detect"`
+	MySQL           SQLDatabaseInstrumentation `yaml:"mysql"`
+	Postgres        SQLDatabaseInstrumentation `yaml:"postgres"`
+	MSSQL           SQLDatabaseInstrumentation `yaml:"mssql"`
 }
 
 // SQLDatabaseInstrumentation describes capture buffers and prepared statement

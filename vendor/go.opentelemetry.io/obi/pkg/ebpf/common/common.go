@@ -220,6 +220,26 @@ type USDTProbeDesc struct {
 	SpecsMap    *ebpf.Map
 	IPMap       *ebpf.Map
 	SpecManager *USDTSpecManager
+
+	// Fallback is attached instead when no USDT probe sharing it is found in the library
+	Fallback *USDTFallback
+}
+
+// USDTFallback replaces USDT probes in libraries built without them. Every
+// probe must resolve at least one of its symbols, or none is attached.
+type USDTFallback struct {
+	Probes []USDTFallbackProbe
+}
+
+// USDTFallbackProbe attaches Start as a uprobe and Return as a uretprobe to
+// every function in the library named in Symbols, starting with SymbolPrefix,
+// or ending in SymbolSuffix.
+type USDTFallbackProbe struct {
+	Symbols      []string
+	SymbolPrefix string
+	SymbolSuffix string
+	Start        *ebpf.Program
+	Return       *ebpf.Program
 }
 
 type Filter struct {

@@ -27,7 +27,8 @@ func ParseGunicorn(args []string, env map[string]string) PythonLaunch {
 	applyGunicornSettings(args, &settings)
 
 	chdir := settings.chdir
-	if chdir == "" {
+	// Gunicorn has already applied a relative --chdir to the process working directory.
+	if !filepath.IsAbs(chdir) {
 		chdir = "."
 	}
 	launch := PythonLaunch{

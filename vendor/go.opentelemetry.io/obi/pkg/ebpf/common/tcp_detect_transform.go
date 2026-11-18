@@ -467,7 +467,9 @@ func matchRedis(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer
 			db = -1 // if we don't have the db in cache, we assume it's not set
 		}
 
-		spans = append(spans, TCPToRedisToSpan(event, cmd.op, cmd.text, status, db, redisErr))
+		span := TCPToRedisToSpan(event, cmd.op, cmd.text, status, db, redisErr)
+		span.DBQueryTextSanitized = cmd.sanitizedText
+		spans = append(spans, span)
 	}
 
 	if len(spans) > 1 {

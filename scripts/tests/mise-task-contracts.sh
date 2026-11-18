@@ -271,9 +271,13 @@ func unrelated() {
 	_ = c.command(append([]string{"stop", "--timeout", stopTimeout}, obiServices...)...)
 }
 GO
-# Reordered/altered shutdown behavior must not pass as the supported shape.
-sed 's/return c.command("kill")/return c.command("stop", "--timeout", stopTimeout)/' \
-  "$tmp/drain/new/components/docker/compose.go" >"$tmp/drain/reordered/components/docker/compose.go"
+# Killing the compose stack before the instrumenter drain must not pass as the
+# supported shape, even when the expected calls are still present afterward.
+awk '
+  /if len\(obiServices\) > 0 \{/ { print "\treturn c.command(\"kill\")" }
+  /return c.command\("kill"\)/ { print "\treturn nil"; next }
+  { print }
+' "$tmp/drain/new/components/docker/compose.go" >"$tmp/drain/reordered/components/docker/compose.go"
 for shape in old new bad decoy reordered; do
   cp "$tmp/drain/$shape/components/docker/compose.go" "$tmp/drain/$shape.unchanged.go"
 done

@@ -60,6 +60,7 @@ func (w *Watcher) Subscribe(ctx context.Context) (<-chan Event, error) {
 }
 
 func (w *Watcher) sendUpdates(ctx context.Context, out chan Event) {
+	defer close(out)
 	log := slog.With("component", "ifaces.Watcher")
 
 	// subscribe for interface events
@@ -76,7 +77,7 @@ func (w *Watcher) sendUpdates(ctx context.Context, out chan Event) {
 	} else {
 		for _, name := range names {
 			w.current[name] = struct{}{}
-			out <- Event{Type: EventAdded, Interface: name}
+			send(ctx, out, Event{Type: EventAdded, Interface: name})
 		}
 	}
 
@@ -94,7 +95,7 @@ func (w *Watcher) sendUpdates(ctx context.Context, out chan Event) {
 				"name", attrs.Name)
 			if _, ok := w.current[iface]; !ok {
 				w.current[iface] = struct{}{}
-				out <- Event{Type: EventAdded, Interface: iface}
+				send(ctx, out, Event{Type: EventAdded, Interface: iface})
 			}
 		} else {
 			log.Debug("Interface down or not running",
@@ -103,7 +104,7 @@ func (w *Watcher) sendUpdates(ctx context.Context, out chan Event) {
 				"name", attrs.Name)
 			if _, ok := w.current[iface]; ok {
 				delete(w.current, iface)
-				out <- Event{Type: EventDeleted, Interface: iface}
+				send(ctx, out, Event{Type: EventDeleted, Interface: iface})
 			}
 		}
 	}

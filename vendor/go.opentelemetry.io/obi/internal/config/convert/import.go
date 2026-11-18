@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/export/debug"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/filter"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
@@ -744,10 +745,15 @@ func validateV2HTTPPayloadExtraction(payload schema.PayloadExtraction) error {
 }
 
 func validV2HTTPPayloadExtractor(extractor string) bool {
+	if _, ok := payloadExtractorGroups[extractor]; ok {
+		return true
+	}
 	switch extractor {
 	case payloadExtractorGraphQL,
 		payloadExtractorElasticsearch,
-		payloadExtractorAWS,
+		payloadExtractorAWSS3,
+		payloadExtractorAWSSQS,
+		payloadExtractorAWSSNS,
 		payloadExtractorSQLPP,
 		payloadExtractorOpenAI,
 		payloadExtractorAnthropic,
@@ -1175,11 +1181,13 @@ func applyFullV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	cfg.EBPF.ProtocolDebug = engine.Debug.ProtocolPrint
 	cfg.Discovery.BPFPidFilterOff = engine.PIDFilter.Disabled
 	cfg.EBPF.WakeupLen = engine.Batching.WakeupLen
+	cfg.EBPF.StatsWakeupDataBytes = engine.Batching.Stats.WakeupBytes
 	cfg.EBPF.BatchLength = engine.Batching.BatchLength
 	cfg.EBPF.BatchTimeout = engine.Batching.BatchTimeout.TimeDuration()
 	cfg.EBPF.ContextPropagation = engine.Propagation.ContextPropagation
 	cfg.EBPF.OverrideBPFLoopEnabled = engine.Propagation.OverrideBPFLoopEnabled
 	cfg.EBPF.DisableBlackBoxCP = engine.Propagation.DisableBlackBoxCP
+	cfg.EBPF.DisableGoChannelLinks = engine.Propagation.DisableGoChannelLinks
 	cfg.EBPF.PopulateTraceContext = engine.Propagation.PopulateTraceContext
 	cfg.EBPF.TCBackend = engine.Traffic.ControlBackend
 	cfg.EBPF.HighRequestVolume = engine.Traffic.HighRequestVolume
@@ -1203,6 +1211,9 @@ func applyPartialV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	if engine.Batching.WakeupLen != 0 {
 		cfg.EBPF.WakeupLen = engine.Batching.WakeupLen
 	}
+	if engine.Batching.Stats.WakeupBytes != 0 {
+		cfg.EBPF.StatsWakeupDataBytes = engine.Batching.Stats.WakeupBytes
+	}
 	if engine.Batching.BatchLength != 0 {
 		cfg.EBPF.BatchLength = engine.Batching.BatchLength
 	}
@@ -1217,6 +1228,9 @@ func applyPartialV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	}
 	if engine.Propagation.DisableBlackBoxCP {
 		cfg.EBPF.DisableBlackBoxCP = true
+	}
+	if engine.Propagation.DisableGoChannelLinks {
+		cfg.EBPF.DisableGoChannelLinks = true
 	}
 	if engine.Propagation.PopulateTraceContext {
 		cfg.EBPF.PopulateTraceContext = true
@@ -1277,8 +1291,9 @@ func applyV2Instrumentation(cfg *obi.Config, instrumentation schema.Instrumentat
 func applyFullV2Instrumentation(cfg *obi.Config, instrumentation schema.Instrumentation) {
 	applyFullV2HTTPInstrumentation(cfg, instrumentation.HTTP)
 
+	cfg.Attributes.SanitizeDBQueryText = instrumentation.DB.SanitizeQueryText
+
 	cfg.EBPF.HeuristicSQLDetect = instrumentation.SQL.HeuristicDetect
-	cfg.Attributes.SanitizeSQLQueryText = instrumentation.SQL.SanitizeQueryText
 	cfg.EBPF.BufferSizes.MySQL = instrumentation.SQL.MySQL.BufferSize
 	cfg.EBPF.MySQLPreparedStatementsCacheSize = instrumentation.SQL.MySQL.PreparedStatementsCacheSize
 	cfg.EBPF.BufferSizes.Postgres = instrumentation.SQL.Postgres.BufferSize
@@ -1307,12 +1322,13 @@ func applyPartialV2Instrumentation(cfg *obi.Config, instrumentation schema.Instr
 		applyPartialV2HTTPInstrumentation(cfg, instrumentation.HTTP)
 	}
 
+	if instrumentation.DB.SanitizeQueryText {
+		cfg.Attributes.SanitizeDBQueryText = true
+	}
+
 	if !zeroValue(instrumentation.SQL) {
 		if instrumentation.SQL.HeuristicDetect {
 			cfg.EBPF.HeuristicSQLDetect = true
-		}
-		if instrumentation.SQL.SanitizeQueryText {
-			cfg.Attributes.SanitizeSQLQueryText = true
 		}
 		if instrumentation.SQL.MySQL.BufferSize != 0 {
 			cfg.EBPF.BufferSizes.MySQL = instrumentation.SQL.MySQL.BufferSize
@@ -1538,6 +1554,9 @@ func applyV2HTTPPayloadExtractorMembership(http *obiconfig.HTTPConfig, enabled [
 	http.GraphQL.Enabled = false
 	http.Elasticsearch.Enabled = false
 	http.AWS.Enabled = false
+	http.AWS.S3 = false
+	http.AWS.SQS = false
+	http.AWS.SNS = false
 	http.SQLPP.Enabled = false
 	http.GenAI.OpenAI.Enabled = false
 	http.GenAI.Anthropic.Enabled = false
@@ -1554,14 +1573,18 @@ func applyV2HTTPPayloadExtractorMembership(http *obiconfig.HTTPConfig, enabled [
 	http.JSONRPC.Enabled = false
 	http.Enrichment.Enabled = false
 
-	for _, extractor := range enabled {
+	for _, extractor := range expandV2HTTPPayloadExtractors(enabled) {
 		switch extractor {
 		case payloadExtractorGraphQL:
 			http.GraphQL.Enabled = true
 		case payloadExtractorElasticsearch:
 			http.Elasticsearch.Enabled = true
-		case payloadExtractorAWS:
-			http.AWS.Enabled = true
+		case payloadExtractorAWSS3:
+			http.AWS.S3 = true
+		case payloadExtractorAWSSQS:
+			http.AWS.SQS = true
+		case payloadExtractorAWSSNS:
+			http.AWS.SNS = true
 		case payloadExtractorSQLPP:
 			http.SQLPP.Enabled = true
 		case payloadExtractorOpenAI:
@@ -1594,6 +1617,18 @@ func applyV2HTTPPayloadExtractorMembership(http *obiconfig.HTTPConfig, enabled [
 			http.Enrichment.Enabled = true
 		}
 	}
+}
+
+func expandV2HTTPPayloadExtractors(enabled []string) []string {
+	expanded := make([]string, 0, len(enabled))
+	for _, extractor := range enabled {
+		if members, ok := payloadExtractorGroups[extractor]; ok {
+			expanded = append(expanded, members...)
+			continue
+		}
+		expanded = append(expanded, extractor)
+	}
+	return expanded
 }
 
 func applyFullV2HTTPEnrichment(http *obiconfig.HTTPConfig, enrichment schema.HTTPEnrichment) {
@@ -2065,6 +2100,7 @@ func applyFullV2KubernetesEnricher(cfg *obi.Config, kubernetes schema.Kubernetes
 	cfg.Attributes.Kubernetes.DropExternal = kubernetes.DropExternal
 	cfg.Attributes.Kubernetes.DisableInformers = cloneStrings(kubernetes.Informers.Disabled)
 	cfg.Attributes.Kubernetes.MetaCacheAddress = kubernetes.MetadataCache.Address
+	cfg.Attributes.Kubernetes.MetaCacheTLS = kubecache.ClientTLSConfig(kubernetes.MetadataCache.TLS)
 	cfg.Attributes.Kubernetes.MetaRestrictLocalNode = kubernetes.MetadataCache.RestrictLocalNode
 	cfg.Attributes.Kubernetes.MetaSourceLabels.ServiceName = kubernetes.MetadataCache.SourceLabels.ServiceName
 	cfg.Attributes.Kubernetes.MetaSourceLabels.ServiceNamespace = kubernetes.MetadataCache.SourceLabels.ServiceNamespace
@@ -2105,6 +2141,9 @@ func applyPartialV2KubernetesEnricher(cfg *obi.Config, kubernetes schema.Kuberne
 	}
 	if kubernetes.MetadataCache.Address != "" {
 		cfg.Attributes.Kubernetes.MetaCacheAddress = kubernetes.MetadataCache.Address
+	}
+	if !zeroValue(kubernetes.MetadataCache.TLS) {
+		cfg.Attributes.Kubernetes.MetaCacheTLS = kubecache.ClientTLSConfig(kubernetes.MetadataCache.TLS)
 	}
 	if kubernetes.MetadataCache.RestrictLocalNode {
 		cfg.Attributes.Kubernetes.MetaRestrictLocalNode = kubernetes.MetadataCache.RestrictLocalNode

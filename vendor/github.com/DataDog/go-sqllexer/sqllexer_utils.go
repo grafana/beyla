@@ -19,6 +19,8 @@ const (
 	DBMSMySQL DBMSType = "mysql"
 	// DBMSOracle is a Oracle Server
 	DBMSOracle DBMSType = "oracle"
+	// DBMSDB2 is IBM Db2 LUW. The name matches the Agent integration.
+	DBMSDB2 DBMSType = "ibm_db2"
 	// DBMSSnowflake is a Snowflake Server
 	DBMSSnowflake DBMSType = "snowflake"
 )

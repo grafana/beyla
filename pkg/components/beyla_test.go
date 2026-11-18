@@ -8,10 +8,31 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/pkg/kube/kubecache"
+	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
+
+func TestKubernetesMetadataConfigPreservesMetadataCacheTLS(t *testing.T) {
+	want := kubecache.ClientTLSConfig{
+		CAFile:     "/tls/ca.crt",
+		CertFile:   "/tls/client.crt",
+		KeyFile:    "/tls/client.key",
+		ServerName: "k8s-cache",
+	}
+	obiConfig := &obi.Config{}
+	obiConfig.Attributes.Kubernetes.MetaCacheTLS = want
+	config := beyla.FromOBI(obiConfig)
+	require.Equal(t, want, config.Attributes.Kubernetes.MetaCacheTLS)
+
+	metadataConfig := kubernetesMetadataConfig(config, nil, nil)
+	require.Equal(t, want, metadataConfig.MetaCacheTLS)
+
+	plainTextConfig := kubernetesMetadataConfig(&beyla.Config{}, nil, nil)
+	require.Equal(t, kubecache.ClientTLSConfig{}, plainTextConfig.MetaCacheTLS)
+}
 
 func TestServiceNameTemplate(t *testing.T) {
 

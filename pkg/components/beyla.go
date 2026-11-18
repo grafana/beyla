@@ -292,18 +292,7 @@ func buildCommonContextInfo(
 	// created, so the reporter's OTLP resource carries host metadata (host.id,
 	// etc.). The kube informer is created first — NewNodeMeta reads it but not
 	// its metrics reporter — and the reporter is wired back in afterwards.
-	ctxInfo.K8sInformer = kube.NewMetadataProvider(kube.MetadataConfig{
-		Enable:                   config.Attributes.Kubernetes.Enable,
-		KubeConfigPath:           config.Attributes.Kubernetes.KubeconfigPath,
-		SyncTimeout:              config.Attributes.Kubernetes.InformersSyncTimeout,
-		ReconnectInitialInterval: config.Attributes.Kubernetes.ReconnectInitialInterval,
-		ResyncPeriod:             config.Attributes.Kubernetes.InformersResyncPeriod,
-		DisabledInformers:        config.Attributes.Kubernetes.DisableInformers,
-		MetaCacheAddr:            config.Attributes.Kubernetes.MetaCacheAddress,
-		ResourceLabels:           resourceLabels,
-		RestrictLocalNode:        config.Attributes.Kubernetes.MetaRestrictLocalNode,
-		ServiceNameTemplate:      templ,
-	}, imetrics.NoopReporter{})
+	ctxInfo.K8sInformer = kube.NewMetadataProvider(kubernetesMetadataConfig(config, resourceLabels, templ), imetrics.NoopReporter{})
 
 	ctxInfo.NodeMeta = meta.NewNodeMeta(
 		ctx,
@@ -332,6 +321,22 @@ func buildCommonContextInfo(
 	attributeGroups(config, ctxInfo)
 
 	return ctxInfo, nil
+}
+
+func kubernetesMetadataConfig(config *beyla.Config, resourceLabels kube.ResourceLabels, templ *template.Template) kube.MetadataConfig {
+	return kube.MetadataConfig{
+		Enable:                   config.Attributes.Kubernetes.Enable,
+		KubeConfigPath:           config.Attributes.Kubernetes.KubeconfigPath,
+		SyncTimeout:              config.Attributes.Kubernetes.InformersSyncTimeout,
+		ReconnectInitialInterval: config.Attributes.Kubernetes.ReconnectInitialInterval,
+		ResyncPeriod:             config.Attributes.Kubernetes.InformersResyncPeriod,
+		DisabledInformers:        config.Attributes.Kubernetes.DisableInformers,
+		MetaCacheAddr:            config.Attributes.Kubernetes.MetaCacheAddress,
+		MetaCacheTLS:             config.Attributes.Kubernetes.MetaCacheTLS,
+		ResourceLabels:           resourceLabels,
+		RestrictLocalNode:        config.Attributes.Kubernetes.MetaRestrictLocalNode,
+		ServiceNameTemplate:      templ,
+	}
 }
 
 // attributeGroups specifies, based in the provided configuration, which groups of attributes

@@ -21,7 +21,7 @@ import (
 )
 
 func (f *Filter) Close() error {
-	return syscall.SetsockoptInt(f.Fd, unix.SOL_SOCKET, unix.SO_DETACH_BPF, 0)
+	return unix.Close(f.Fd)
 }
 
 func (s *SockMsg) Close() error {

@@ -43,9 +43,13 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	ic.metrics = instrument.FromContext(ctx)
 	ic.log = slog.With("component", "server.InformersCache")
 
+	creds, err := ic.Config.TLS.Credentials()
+	if err != nil {
+		return fmt.Errorf("configuring TLS: %w", err)
+	}
+
 	lis := ic.listener
 	if lis == nil {
-		var err error
 		lis, err = net.Listen("tcp", fmt.Sprintf(":%d", ic.Config.Port))
 		if err != nil {
 			return fmt.Errorf("starting TCP connection: %w", err)
@@ -60,7 +64,7 @@ func (ic *InformersCache) Run(ctx context.Context, opts ...meta.InformerOption) 
 	ic.informers = informers
 
 	s := grpc.NewServer(
-		// TODO: configure other aspects (e.g. secure connections)
+		grpc.Creds(creds),
 		grpc.MaxConcurrentStreams(uint32(ic.Config.MaxConnections)),
 	)
 	informer.RegisterEventStreamServiceServer(s, ic)

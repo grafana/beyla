@@ -5,7 +5,7 @@ package mqttparser // import "go.opentelemetry.io/obi/pkg/internal/ebpf/mqttpars
 
 import (
 	"errors"
-	"fmt"
+	"strconv"
 )
 
 // ConnectPacket represents a parsed MQTT CONNECT packet.
@@ -226,6 +226,6 @@ func (pl ProtocolLevel) String() string {
 	case ProtocolLevelMQTT50:
 		return "5.0"
 	default:
-		return fmt.Sprintf("%d", pl)
+		return strconv.FormatUint(uint64(pl), 10)
 	}
 }

@@ -583,123 +583,7 @@ transform_go_imports_and_paths() {
   if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
     sed_i -e 's|"internal", "test", "integration"|"internal", "testgenerated", "integration"|g' \
       "$OBI_DEST/components/docker/compose.go"
-    drain_every_instrumenter_service
   fi
-}
-
-# Close() upstream drains only the service literally named "obi".
-# docker-compose-peer-metadata.yml declares a second instrumenter
-# ("client-obi") that shares the client workload's PID and network namespaces;
-# leaving it undrained means Remove() force-kills it while it still holds
-# probes on a live workload, which breaks the workload container. Wait on
-# every instrumenter service the compose file declares instead.
-drain_every_instrumenter_service() {
-  local file="$OBI_DEST/components/docker/compose.go"
-
-  if ! grep -q 'c.commandContext(waitCtx, "wait", "obi")' "$file"; then
-    # OBI #4228 dropped the wait on "obi": Stop() now gracefully stops every
-    # service whose name has an "obi" token (obi, client-obi) before killing
-    # the rest, so upstream already drains every instrumenter. Accept that
-    # exact known Stop() body and add nothing; fail on anything else. Keep the
-    # checks scoped to that method so matching snippets elsewhere cannot mask
-    # a changed shutdown path.
-    local stop_body expected_stop_body
-    stop_body=$(awk '
-      /^func \(c \*Compose\) Stop\(\) error \{$/ {
-        if (seen++) {
-          invalid = 1
-          exit
-        }
-        capture = 1
-      }
-      capture {
-        print
-        line = $0
-        opens = gsub(/\{/, "", line)
-        closes = gsub(/\}/, "", line)
-        depth += opens - closes
-        if (depth == 0) {
-          complete = 1
-          exit
-        }
-      }
-      END {
-        if (!complete || invalid || seen != 1) {
-          exit 1
-        }
-      }
-    ' "$file" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; /^$/d') || stop_body=""
-    expected_stop_body=$(
-      cat <<'EOF'
-func (c *Compose) Stop() error {
-obiServices, ok := c.obiServices()
-if !ok {
-return c.command("stop", "--timeout", stopTimeout)
-}
-if len(obiServices) > 0 {
-if err := c.command(append([]string{"stop", "--timeout", stopTimeout}, obiServices...)...); err != nil {
-return err
-}
-}
-return c.command("kill")
-}
-EOF
-    )
-    if grep -Fq 'func (c *Compose) obiServices()' "$file" &&
-      grep -Fq 'slices.Contains(strings.Split(name, "-"), "obi")' "$file" &&
-      [[ "$stop_body" == "$expected_stop_body" ]]; then
-      return 0
-    fi
-    echo "ERROR: compose.go neither waits for \"obi\" nor stops obiServices() as expected; update the instrumenter drain transform" >&2
-    exit 1
-  fi
-  awk '
-        /if err := c.commandContext\(waitCtx, "wait", "obi"\); err != nil \{/ {
-            print "\t\targs := append([]string{\"wait\"}, c.instrumenterServices()...)"
-            print "\t\tif err := c.commandContext(waitCtx, args...); err != nil {"
-            next
-        }
-        { print }
-    ' "$file" >"$file.tmp" && mv "$file.tmp" "$file"
-
-  cat >>"$file" <<EOF
-
-// instrumenterServices lists the Beyla instrumenter services declared in the
-// compose file. Most suites have a single service named "obi", but
-// docker-compose-peer-metadata.yml runs a second instrumenter ("client-obi")
-// that shares the client workload's PID and network namespaces. Draining only
-// "obi" leaves that one attached while Remove() force-kills it.
-func (c *Compose) instrumenterServices() []string {
-	data, err := os.ReadFile(c.Path)
-	if err != nil {
-		return []string{"obi"}
-	}
-
-	var doc struct {
-		Services map[string]struct {
-			Build struct {
-				Dockerfile string \`yaml:"dockerfile"\`
-			} \`yaml:"build"\`
-		} \`yaml:"services"\`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return []string{"obi"}
-	}
-
-	var services []string
-	for name, svc := range doc.Services {
-		if strings.Contains(svc.Build.Dockerfile, "${BEYLA_DOCKERFILE}") {
-			services = append(services, name)
-		}
-	}
-	if len(services) == 0 {
-		return []string{"obi"}
-	}
-	slices.Sort(services)
-
-	return services
-}
-EOF
 }
 
 apply_component_consolidation() {
@@ -1703,11 +1587,6 @@ generate() {
   adjust_oats_compose_paths
   transform_oats_go_files "$jobs"
   apply_oats_behavioral_transforms "$jobs"
-  # OATS v0.11 sends inputs before polling assertions, unlike v0.7's per-poll
-  # input replay. The generic Kafka fixture has shown HTTP probe attachment
-  # after the default 10s input window; keep /produce active for 30s without
-  # changing either expected-span assertion.
-  scripts/extend-beyla-kafka-oats-window.sh "$OATS_DEST/kafka/oats_go_kafka-generic.yaml"
 
   # -----------------------------------------------------------------
   # VM test infrastructure
@@ -1742,12 +1621,6 @@ apply_component_path_transform() {
 # =============================================================================
 # MAIN
 # =============================================================================
-
-# Allow scripts/tests/mise-task-contracts.sh to source this file and exercise
-# individual transforms without running the generator.
-if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
-  return 0
-fi
 
 case "${1:-}" in
 --clean | -c)

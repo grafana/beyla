@@ -4,6 +4,19 @@ on:
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
+    inputs:
+      source_pr:
+        description: "Same-repository Beyla cleanup PR to combine with this OBI adoption"
+        required: true
+        type: string
+      source_sha:
+        description: "Exact head SHA of source_pr (must still be current when run)"
+        required: true
+        type: string
+      obi_sha:
+        description: "Exact OBI commit to adopt (must be reachable from Grafana OBI main)"
+        required: true
+        type: string
 
 concurrency:
   group: sync-obi-submodule-${{ github.head_ref || github.run_id }}
@@ -14,6 +27,7 @@ permissions: {}
 
 jobs:
   update-obi:
+    if: github.event_name == 'schedule'
     name: Update OBI submodule and open PR
     runs-on: ubuntu-latest
     permissions:
@@ -83,4 +97,257 @@ jobs:
           base: main
           branch: "update-obi-submodule-${{ github.run_id }}"
           labels: automated-pr
+          delete-branch: true
+
+  prepare-obi-adoption:
+    if: github.event_name == 'workflow_dispatch'
+    name: Build a dispatcher-selected exact-SHA OBI adoption candidate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      base_sha: ${{ steps.prepare.outputs.base_sha }}
+      source_sha: ${{ steps.prepare.outputs.source_sha }}
+      source_pr: ${{ steps.prepare.outputs.source_pr }}
+      obi_sha: ${{ steps.prepare.outputs.obi_sha }}
+      patch_sha256: ${{ steps.package.outputs.patch_sha256 }}
+      artifact_name: ${{ steps.package.outputs.artifact_name }}
+    steps:
+      - name: Check out trusted main workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Validate selected source PR and exact commits
+        id: prepare
+        env:
+          SOURCE_PR: ${{ inputs.source_pr }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          OBI_SHA: ${{ inputs.obi_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Dispatch from main to use the trusted workflow definition." >&2; exit 1; }
+          [[ "$SOURCE_PR" =~ ^[1-9][0-9]*$ ]] || { echo "source_pr must be a positive decimal PR number." >&2; exit 1; }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "source_sha must be a lowercase 40-character SHA." >&2; exit 1; }
+          [[ "$OBI_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "obi_sha must be a lowercase 40-character SHA." >&2; exit 1; }
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${SOURCE_PR}")"
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" \
+            '.state == "open" and .base.ref == "main" and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .head.sha == $sha' \
+            <<<"$pr_json" >/dev/null || { echo "source_pr must be an open same-repository PR to main at source_sha." >&2; exit 1; }
+
+          base_sha="$(git rev-parse HEAD)"
+          git fetch --no-tags origin "refs/pull/${SOURCE_PR}/head:refs/remotes/origin/obi-source"
+          [[ "$(git rev-parse refs/remotes/origin/obi-source)" == "$SOURCE_SHA" ]] || { echo "Source PR head moved; use its newly selected exact SHA." >&2; exit 1; }
+          [[ "$(git merge-base "$base_sha" "$SOURCE_SHA")" == "$base_sha" ]] || { echo "Source PR must be based on this exact main commit." >&2; exit 1; }
+
+          paths="$RUNNER_TEMP/source-paths"
+          git diff --name-only -z "$base_sha" "$SOURCE_SHA" >"$paths"
+          found_generator=false
+          found_contracts=false
+          found_removed_helper=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              scripts/generate-obi-tests.sh) found_generator=true ;;
+              scripts/tests/mise-task-contracts.sh) found_contracts=true ;;
+              scripts/extend-beyla-kafka-oats-window.sh)
+                found_removed_helper=true
+                if git cat-file -e "${SOURCE_SHA}:${path}" 2>/dev/null; then
+                  echo "The obsolete Kafka helper must be deleted by the source PR." >&2
+                  exit 1
+                fi
+                ;;
+              *) echo "Unexpected source PR path: $path" >&2; exit 1 ;;
+            esac
+          done <"$paths"
+          [[ "$found_generator" == true && "$found_contracts" == true && "$found_removed_helper" == true ]] || { echo "Source PR is missing expected transform cleanup files." >&2; exit 1; }
+
+          [[ "$(git -C .obi-src remote get-url origin)" == "https://github.com/grafana/opentelemetry-ebpf-instrumentation.git" ]] || { echo "Unexpected OBI submodule remote." >&2; exit 1; }
+          git -C .obi-src fetch --no-tags origin main
+          fork_main_sha="$(git -C .obi-src rev-parse FETCH_HEAD)"
+          git -C .obi-src fetch --no-tags origin "$OBI_SHA"
+          [[ "$(git -C .obi-src cat-file -t "$OBI_SHA")" == commit ]] || { echo "obi_sha is not a commit." >&2; exit 1; }
+          git -C .obi-src merge-base --is-ancestor "$OBI_SHA" "$fork_main_sha" || { echo "obi_sha is not reachable from Grafana OBI main." >&2; exit 1; }
+
+          git diff --binary "$base_sha" "$SOURCE_SHA" >"$RUNNER_TEMP/source.patch"
+          git apply --check --binary "$RUNNER_TEMP/source.patch"
+          git apply --binary "$RUNNER_TEMP/source.patch"
+          git -C .obi-src checkout --detach "$OBI_SHA"
+          git add -- .obi-src
+          {
+            echo "base_sha=$base_sha"
+            echo "source_sha=$SOURCE_SHA"
+            echo "source_pr=$SOURCE_PR"
+            echo "obi_sha=$OBI_SHA"
+          } >>"$GITHUB_OUTPUT"
+          echo "Building adoption candidate from Beyla $SOURCE_SHA and OBI $OBI_SHA (main $base_sha)."
+
+      - name: Set up mise
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: bpf
+
+      - name: Generate and vendor the exact OBI commit
+        run: mise run vendor:obi
+
+      - name: Restore generated binary artifacts outside this source update
+        run: |
+          git ls-files -z -- vendor | while IFS= read -r -d '' path; do
+            case "$path" in
+              *_bpfel.*|vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar) git restore --worktree -- "$path" ;;
+            esac
+          done
+
+      - name: Package selected source and generated diff
+        id: package
+        env:
+          BASE_SHA: ${{ steps.prepare.outputs.base_sha }}
+          SOURCE_PR: ${{ steps.prepare.outputs.source_pr }}
+          SOURCE_SHA: ${{ steps.prepare.outputs.source_sha }}
+          OBI_SHA: ${{ steps.prepare.outputs.obi_sha }}
+        run: |
+          set -euo pipefail
+          validate_path() {
+            case "$1" in
+              .obi-src|go.mod|go.sum|internal/testgenerated/*|schemas/*|vendor/*|scripts/generate-obi-tests.sh|scripts/tests/mise-task-contracts.sh|scripts/extend-beyla-kafka-oats-window.sh) ;;
+              *) echo "Unexpected adoption path: $1" >&2; exit 1 ;;
+            esac
+          }
+          while IFS= read -r -d '' path; do validate_path "$path"; done < <(git diff --name-only -z "$BASE_SHA")
+          while IFS= read -r -d '' path; do validate_path "$path"; done < <(git ls-files --others --exclude-standard -z)
+          while IFS= read -r -d '' path; do git add -- "$path"; done < <(git diff --name-only -z "$BASE_SHA")
+          while IFS= read -r -d '' path; do git add -- "$path"; done < <(git ls-files --others --exclude-standard -z)
+
+          while IFS= read -r -d '' path; do
+            mode="$(git ls-files -s -- "$path" | awk 'NR == 1 { print $1 }')"
+            [[ "$mode" != 120000 ]] || { echo "Symlink changes are not allowed in an adoption artifact: $path" >&2; exit 1; }
+          done < <(git diff --cached --name-only -z "$BASE_SHA")
+
+          patch="$RUNNER_TEMP/obi-adoption.patch"
+          # Git apply cannot update a submodule gitlink. Carry the exact OBI
+          # SHA in metadata and let the trusted publisher set that one index
+          # entry after checking out the target submodule.
+          git diff --cached --binary "$BASE_SHA" -- . ':(exclude).obi-src' >"$patch"
+          [[ -s "$patch" ]] || { echo "The adoption produced no diff." >&2; exit 1; }
+          patch_sha256="$(sha256sum "$patch" | cut -d ' ' -f 1)"
+          artifact_name="obi-adoption-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "base_sha=$BASE_SHA" "source_pr=$SOURCE_PR" "source_sha=$SOURCE_SHA" "obi_sha=$OBI_SHA" "patch_sha256=$patch_sha256" >"$RUNNER_TEMP/metadata.txt"
+          {
+            echo "artifact_name=$artifact_name"
+            echo "patch_sha256=$patch_sha256"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Upload adoption patch
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: obi-adoption-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/obi-adoption.patch
+            ${{ runner.temp }}/metadata.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-obi-adoption:
+    if: github.event_name == 'workflow_dispatch'
+    needs: prepare-obi-adoption
+    name: Publish the selected build as a draft PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Check out the exact main base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare-obi-adoption.outputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Download adoption patch
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.prepare-obi-adoption.outputs.artifact_name }}
+          path: ${{ runner.temp }}/obi-adoption
+
+      - name: Verify artifact and apply without executing candidate code
+        env:
+          BASE_SHA: ${{ needs.prepare-obi-adoption.outputs.base_sha }}
+          SOURCE_PR: ${{ needs.prepare-obi-adoption.outputs.source_pr }}
+          SOURCE_SHA: ${{ needs.prepare-obi-adoption.outputs.source_sha }}
+          OBI_SHA: ${{ needs.prepare-obi-adoption.outputs.obi_sha }}
+          PATCH_SHA256: ${{ needs.prepare-obi-adoption.outputs.patch_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/obi-adoption"
+          [[ "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" == "$BASE_SHA" ]] || { echo "Publisher checkout is not the verified main base." >&2; exit 1; }
+          [[ "$(sha256sum obi-adoption.patch | cut -d ' ' -f 1)" == "$PATCH_SHA256" ]] || { echo "Adoption patch digest mismatch." >&2; exit 1; }
+          grep -Fxq "base_sha=$BASE_SHA" metadata.txt
+          grep -Fxq "source_pr=$SOURCE_PR" metadata.txt
+          grep -Fxq "source_sha=$SOURCE_SHA" metadata.txt
+          grep -Fxq "obi_sha=$OBI_SHA" metadata.txt
+          grep -Fxq "patch_sha256=$PATCH_SHA256" metadata.txt
+          validate_path() {
+            case "$1" in
+              .obi-src|go.mod|go.sum|internal/testgenerated/*|schemas/*|vendor/*|scripts/generate-obi-tests.sh|scripts/tests/mise-task-contracts.sh|scripts/extend-beyla-kafka-oats-window.sh) ;;
+              *) echo "Unexpected adoption artifact path: $1" >&2; exit 1 ;;
+            esac
+          }
+          patch=obi-adoption.patch
+          while IFS= read -r -d '' record; do
+            path="${record#*$'\t'}"
+            path="${path#*$'\t'}"
+            [[ -n "$path" ]] || { echo "Rename records are not allowed in adoption artifacts." >&2; exit 1; }
+            validate_path "$path"
+          done < <(git apply --numstat -z "$patch")
+          if grep -Eq '^(old mode|new mode|new file mode) 120000$' "$patch"; then
+            echo "Symlink changes are not allowed in adoption artifacts." >&2
+            exit 1
+          fi
+          current_main_sha="$(git -C "$GITHUB_WORKSPACE" ls-remote origin refs/heads/main | cut -f 1)"
+          [[ "$current_main_sha" == "$BASE_SHA" ]] || { echo "main advanced during the build; rerun from its current base." >&2; exit 1; }
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${SOURCE_PR}")"
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" \
+            '.state == "open" and .base.ref == "main" and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .head.sha == $sha' \
+            <<<"$pr_json" >/dev/null || { echo "Source PR changed after the build; no adoption PR was published." >&2; exit 1; }
+          git -C "$GITHUB_WORKSPACE" apply --check --binary "$patch"
+          git -C "$GITHUB_WORKSPACE" apply --binary "$patch"
+          [[ "$OBI_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid OBI SHA in build metadata." >&2; exit 1; }
+          git -C "$GITHUB_WORKSPACE/.obi-src" fetch --depth=1 --no-tags origin "$OBI_SHA"
+          git -C "$GITHUB_WORKSPACE/.obi-src" checkout --detach "$OBI_SHA"
+          git -C "$GITHUB_WORKSPACE" add -- .obi-src
+          while IFS= read -r -d '' path; do validate_path "$path"; done < <(git -C "$GITHUB_WORKSPACE" diff --name-only -z "$BASE_SHA")
+          while IFS= read -r -d '' path; do validate_path "$path"; done < <(git -C "$GITHUB_WORKSPACE" ls-files --others --exclude-standard -z)
+
+      - name: Get GitHub App token
+        id: get-github-app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
+        with:
+          github_app: grafana-beyla-bot
+
+      - name: Clean up stray action checkouts
+        run: rm -rf _shared-workflows-*
+
+      - name: Create a draft OBI adoption PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.get-github-app-token.outputs.token }}
+          sign-commits: true
+          commit-message: "Adopt OBI ${{ needs.prepare-obi-adoption.outputs.obi_sha }} with generator cleanup"
+          title: "Adopt OBI ${{ needs.prepare-obi-adoption.outputs.obi_sha }} with generator cleanup"
+          body: |
+            I prepared this candidate from [Beyla PR #${{ needs.prepare-obi-adoption.outputs.source_pr }}](https://github.com/${{ github.repository }}/pull/${{ needs.prepare-obi-adoption.outputs.source_pr }}) at `${{ needs.prepare-obi-adoption.outputs.source_sha }}` and OBI commit `${{ needs.prepare-obi-adoption.outputs.obi_sha }}`.
+
+            This draft combines the selected generator cleanup with the exact OBI submodule pin and generated source/vendor updates so they can be tested and merged together. It was generated from main `${{ needs.prepare-obi-adoption.outputs.base_sha }}`; no auto-merge is enabled.
+          base: main
+          branch: "update-obi-adoption-${{ github.run_id }}"
+          labels: automated-pr
+          draft: true
           delete-branch: true

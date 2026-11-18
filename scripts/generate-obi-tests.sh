@@ -217,7 +217,7 @@ CODE_INJECTIONS=(
   # (internal/test/beyla_extensions/config_reload_beyla.go) runs the same flow on Config v1.
   '^func TestConfigReload[(]|t.Skip("Beyla loads Config v1 only: TestConfigReloadV1 covers this flow")'
   # The server can answer before instrumentation attaches on slower VM kernels.
-  't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL, "testserver")'
+  't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL)'
   # Manual spans can reach Jaeger before the automatic outgoing client span.
   'if len[(]traces[[]i[]][.]FindByOperationName[(]"checkout", "internal"[)][)] > 0 [{]|if len(traces[i].FindByOperationName("GET /", "client")) == 0 { continue }'
 )

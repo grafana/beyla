@@ -220,6 +220,7 @@ const (
 	// route harvesting offsets
 	MuxTemplatePos
 	GinFullpathPos
+	RestfulRoutePathPos
 	// Go runtime metrics
 	RuntimeMemstatsNumGCPos
 	RuntimeGCControllerMemoryLimitPos
@@ -761,6 +762,12 @@ var structMembers = map[string]structInfo{
 		lib: "github.com/gin-gonic/gin",
 		fields: map[string]GoOffset{
 			"fullPath": GinFullpathPos,
+		},
+	},
+	"github.com/emicklei/go-restful/v3.Route": {
+		lib: "github.com/emicklei/go-restful/v3",
+		fields: map[string]GoOffset{
+			"Path": RestfulRoutePathPos,
 		},
 	},
 	"runtime.mstats": {

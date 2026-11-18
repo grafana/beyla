@@ -96,7 +96,7 @@ github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/shared
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/version
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/managedidentity
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/public
-# github.com/DataDog/go-sqllexer v0.2.5
+# github.com/DataDog/go-sqllexer v0.2.6
 ## explicit; go 1.25
 github.com/DataDog/go-sqllexer
 # github.com/Microsoft/go-winio v0.6.3
@@ -348,8 +348,8 @@ github.com/foxboron/go-tpm-keyfiles/template
 # github.com/fxamacker/cbor/v2 v2.9.4
 ## explicit; go 1.20
 github.com/fxamacker/cbor/v2
-# github.com/gabriel-vasile/mimetype v1.4.15
-## explicit; go 1.21
+# github.com/gabriel-vasile/mimetype v1.4.16
+## explicit; go 1.24
 github.com/gabriel-vasile/mimetype
 github.com/gabriel-vasile/mimetype/internal/cdf
 github.com/gabriel-vasile/mimetype/internal/charset
@@ -424,7 +424,7 @@ github.com/go-playground/locales/currency
 # github.com/go-playground/universal-translator v0.18.2
 ## explicit; go 1.26
 github.com/go-playground/universal-translator
-# github.com/go-playground/validator/v10 v10.30.5
+# github.com/go-playground/validator/v10 v10.30.6
 ## explicit; go 1.26.0
 github.com/go-playground/validator/v10
 # github.com/go-viper/mapstructure/v2 v2.5.0
@@ -519,10 +519,6 @@ github.com/gorilla/websocket
 github.com/grafana/go-offsets-tracker/pkg/offsets
 github.com/grafana/go-offsets-tracker/pkg/utils
 github.com/grafana/go-offsets-tracker/pkg/versions
-# github.com/grafana/jvmtools v0.0.5
-## explicit; go 1.23.2
-github.com/grafana/jvmtools/jvm
-github.com/grafana/jvmtools/util
 # github.com/grafana/pyroscope-go/godeltaprof v0.1.12
 ## explicit; go 1.25.0
 github.com/grafana/pyroscope-go/godeltaprof
@@ -588,7 +584,7 @@ github.com/lufia/plan9stats
 ## explicit; go 1.20
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jwriter
-# github.com/microsoft/go-winmd v0.0.0-20261026085843-5b48fee0edb4
+# github.com/microsoft/go-winmd v0.0.0-20261109085045-a22c885c141f
 ## explicit; go 1.26
 github.com/microsoft/go-winmd/winmd
 # github.com/minio/sha256-simd v1.0.1
@@ -1579,7 +1575,7 @@ gopkg.in/inf.v0
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# k8s.io/api v0.37.1
+# k8s.io/api v0.37.2
 ## explicit; go 1.26.0
 k8s.io/api/admission/v1
 k8s.io/api/admissionregistration/v1
@@ -1639,7 +1635,7 @@ k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
 k8s.io/api/storagemigration/v1
 k8s.io/api/storagemigration/v1beta1
-# k8s.io/apimachinery v0.37.1
+# k8s.io/apimachinery v0.37.2
 ## explicit; go 1.26.0
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -1703,7 +1699,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/client-go v0.37.1
+# k8s.io/client-go v0.37.2
 ## explicit; go 1.26.0
 k8s.io/client-go/applyconfigurations
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
@@ -2078,7 +2074,7 @@ k8s.io/kube-openapi/pkg/spec3
 k8s.io/kube-openapi/pkg/util
 k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kube-openapi/pkg/validation/spec
-# k8s.io/streaming v0.37.1
+# k8s.io/streaming v0.37.2
 ## explicit; go 1.26.0
 k8s.io/streaming/pkg/httpstream
 k8s.io/streaming/pkg/httpstream/spdy
@@ -2093,7 +2089,7 @@ k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/ptr
 k8s.io/utils/trace
-# sigs.k8s.io/controller-runtime v0.25.2
+# sigs.k8s.io/controller-runtime v0.25.3
 ## explicit; go 1.26.0
 sigs.k8s.io/controller-runtime/pkg/cache/cacheapi
 sigs.k8s.io/controller-runtime/pkg/client

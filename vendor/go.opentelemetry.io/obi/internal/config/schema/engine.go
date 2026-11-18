@@ -47,6 +47,7 @@ type Propagation struct {
 	ContextPropagation     config.ContextPropagationMode `yaml:"context_propagation"`
 	OverrideBPFLoopEnabled bool                          `yaml:"override_bpfloop_enabled"`
 	DisableBlackBoxCP      bool                          `yaml:"disable_black_box_cp"`
+	DisableGoChannelLinks  bool                          `yaml:"disable_go_channel_links"`
 	PopulateTraceContext   bool                          `yaml:"populate_trace_context"`
 }
 

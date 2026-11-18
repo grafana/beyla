@@ -226,6 +226,24 @@
         ]
       }
     },
+    "github.com/emicklei/go-restful/v3.Route": {
+      "Path": {
+        "versions": {
+          "oldest": "3.0.0",
+          "newest": "3.14.0"
+        },
+        "offsets": [
+          {
+            "offset": 64,
+            "since": "3.0.0"
+          },
+          {
+            "offset": 72,
+            "since": "3.6.0"
+          }
+        ]
+      }
+    },
     "github.com/gin-gonic/gin.nodeValue": {
       "fullPath": {
         "versions": {
@@ -248,7 +266,7 @@
       "Addr": {
         "versions": {
           "oldest": "1.5.0",
-          "newest": "1.10.1"
+          "newest": "1.10.2"
         },
         "offsets": [
           {
@@ -262,7 +280,7 @@
       "cfg": {
         "versions": {
           "oldest": "1.5.0",
-          "newest": "1.10.1"
+          "newest": "1.10.2"
         },
         "offsets": [
           {
@@ -680,7 +698,7 @@
       "fr": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {
@@ -724,7 +742,7 @@
       "nextStreamID": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {
@@ -752,7 +770,7 @@
       "tconn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {
@@ -764,7 +782,7 @@
       "tlsState": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {
@@ -782,7 +800,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {
@@ -796,7 +814,7 @@
       "Fields": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {
@@ -810,7 +828,7 @@
       "conn": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {
@@ -824,7 +842,7 @@
       "w": {
         "versions": {
           "oldest": "0.12.0",
-          "newest": "0.62.0"
+          "newest": "0.63.0"
         },
         "offsets": [
           {

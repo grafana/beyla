@@ -745,10 +745,15 @@ func validateV2HTTPPayloadExtraction(payload schema.PayloadExtraction) error {
 }
 
 func validV2HTTPPayloadExtractor(extractor string) bool {
+	if _, ok := payloadExtractorGroups[extractor]; ok {
+		return true
+	}
 	switch extractor {
 	case payloadExtractorGraphQL,
 		payloadExtractorElasticsearch,
-		payloadExtractorAWS,
+		payloadExtractorAWSS3,
+		payloadExtractorAWSSQS,
+		payloadExtractorAWSSNS,
 		payloadExtractorSQLPP,
 		payloadExtractorOpenAI,
 		payloadExtractorAnthropic,
@@ -1182,6 +1187,7 @@ func applyFullV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	cfg.EBPF.ContextPropagation = engine.Propagation.ContextPropagation
 	cfg.EBPF.OverrideBPFLoopEnabled = engine.Propagation.OverrideBPFLoopEnabled
 	cfg.EBPF.DisableBlackBoxCP = engine.Propagation.DisableBlackBoxCP
+	cfg.EBPF.DisableGoChannelLinks = engine.Propagation.DisableGoChannelLinks
 	cfg.EBPF.PopulateTraceContext = engine.Propagation.PopulateTraceContext
 	cfg.EBPF.TCBackend = engine.Traffic.ControlBackend
 	cfg.EBPF.HighRequestVolume = engine.Traffic.HighRequestVolume
@@ -1222,6 +1228,9 @@ func applyPartialV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	}
 	if engine.Propagation.DisableBlackBoxCP {
 		cfg.EBPF.DisableBlackBoxCP = true
+	}
+	if engine.Propagation.DisableGoChannelLinks {
+		cfg.EBPF.DisableGoChannelLinks = true
 	}
 	if engine.Propagation.PopulateTraceContext {
 		cfg.EBPF.PopulateTraceContext = true
@@ -1545,6 +1554,9 @@ func applyV2HTTPPayloadExtractorMembership(http *obiconfig.HTTPConfig, enabled [
 	http.GraphQL.Enabled = false
 	http.Elasticsearch.Enabled = false
 	http.AWS.Enabled = false
+	http.AWS.S3 = false
+	http.AWS.SQS = false
+	http.AWS.SNS = false
 	http.SQLPP.Enabled = false
 	http.GenAI.OpenAI.Enabled = false
 	http.GenAI.Anthropic.Enabled = false
@@ -1561,14 +1573,18 @@ func applyV2HTTPPayloadExtractorMembership(http *obiconfig.HTTPConfig, enabled [
 	http.JSONRPC.Enabled = false
 	http.Enrichment.Enabled = false
 
-	for _, extractor := range enabled {
+	for _, extractor := range expandV2HTTPPayloadExtractors(enabled) {
 		switch extractor {
 		case payloadExtractorGraphQL:
 			http.GraphQL.Enabled = true
 		case payloadExtractorElasticsearch:
 			http.Elasticsearch.Enabled = true
-		case payloadExtractorAWS:
-			http.AWS.Enabled = true
+		case payloadExtractorAWSS3:
+			http.AWS.S3 = true
+		case payloadExtractorAWSSQS:
+			http.AWS.SQS = true
+		case payloadExtractorAWSSNS:
+			http.AWS.SNS = true
 		case payloadExtractorSQLPP:
 			http.SQLPP.Enabled = true
 		case payloadExtractorOpenAI:
@@ -1601,6 +1617,18 @@ func applyV2HTTPPayloadExtractorMembership(http *obiconfig.HTTPConfig, enabled [
 			http.Enrichment.Enabled = true
 		}
 	}
+}
+
+func expandV2HTTPPayloadExtractors(enabled []string) []string {
+	expanded := make([]string, 0, len(enabled))
+	for _, extractor := range enabled {
+		if members, ok := payloadExtractorGroups[extractor]; ok {
+			expanded = append(expanded, members...)
+			continue
+		}
+		expanded = append(expanded, extractor)
+	}
+	return expanded
 }
 
 func applyFullV2HTTPEnrichment(http *obiconfig.HTTPConfig, enrichment schema.HTTPEnrichment) {

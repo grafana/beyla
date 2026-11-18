@@ -214,20 +214,25 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 }
 
 func postProcessHTTPSpan(parseCtx *EBPFParseContext, httpSpan *request.Span, req *http.Request, resp *http.Response) request.Span {
-	if httpSpan.IsClientSpan() && parseCtx != nil && parseCtx.payloadExtraction.HTTP.AWS.Enabled {
-		span, ok := ebpfhttp.AWSSNSSpan(httpSpan, req, resp)
-		if ok {
-			return span
+	if httpSpan.IsClientSpan() && parseCtx != nil {
+		aws := parseCtx.payloadExtraction.HTTP.AWS
+
+		if aws.SNSEnabled() {
+			if span, ok := ebpfhttp.AWSSNSSpan(httpSpan, req, resp); ok {
+				return span
+			}
 		}
 
-		span, ok = ebpfhttp.AWSS3Span(httpSpan, req, resp)
-		if ok {
-			return span
+		if aws.S3Enabled() {
+			if span, ok := ebpfhttp.AWSS3Span(httpSpan, req, resp); ok {
+				return span
+			}
 		}
 
-		span, ok = ebpfhttp.AWSSQSSpan(httpSpan, req, resp)
-		if ok {
-			return span
+		if aws.SQSEnabled() {
+			if span, ok := ebpfhttp.AWSSQSSpan(httpSpan, req, resp); ok {
+				return span
+			}
 		}
 	}
 
@@ -651,7 +656,7 @@ func httpRequestToSpan(event *BPFHTTPInfo, requestBuffer *largebuf.LargeBuffer) 
 	result.Method = httpMethodFromBuf(raw)
 	result.ProtoVersion = request.HTTPProtoVersionFromRequestLine(raw)
 
-	if request.EventType(result.Type) == request.EventTypeHTTPClient && !parsedHost {
+	if !parsedHost {
 		bufHost, _ = httpHostFromBuf(raw)
 	}
 
@@ -693,14 +698,29 @@ func httpMethodFromBuf(req []byte) string {
 	return string(method)
 }
 
+// headerIndex returns the offset of the value for an exact header match,
+// searching only at line boundaries to avoid matching headers that share a suffix
+// (e.g. X-Forwarded-Host when looking for Host).
+func headerIndex(req []byte, header string) int {
+	if bytes.HasPrefix(req, []byte(header)) {
+		return 0
+	}
+	needle := "\r\n" + header
+	idx := bytes.Index(req, []byte(needle))
+	if idx < 0 {
+		return -1
+	}
+	return idx + 2 // skip the \r\n
+}
+
 func httpHostFromBuf(req []byte) (string, int) {
 	if end := bytes.IndexByte(req, 0); end >= 0 {
 		req = req[:end]
 	}
 
-	idx := bytes.Index(req, []byte("Host: "))
+	idx := headerIndex(req, "Host: ")
 	if idx < 0 {
-		idx = bytes.Index(req, []byte("host: "))
+		idx = headerIndex(req, "host: ")
 	}
 	if idx < 0 {
 		return "", -1

@@ -141,6 +141,14 @@ jobs:
           mkdir compiled-tests
           CC=musl-gcc CGO_ENABLED=1 go test -c -tags=integration -mod vendor -ldflags="-s -w" -o compiled-tests/ ./internal/testgenerated/integration
 
+      - name: Read OBI submodule revision for image cache key
+        id: obi-sha
+        run: echo "sha=$(git rev-parse HEAD:.obi-src)" >> "$GITHUB_OUTPUT"
+
+      - name: Read Beyla revision for image cache key
+        id: beyla-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Cache Docker images
         id: docker-images-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] keyed on hash of build-context inputs
@@ -150,7 +158,7 @@ jobs:
           # keys must include those copied source/module inputs as well as the
           # compose and Dockerfile definitions. Otherwise a PR code change can
           # reuse an image built before the change.
-          key: vm-docker-images-${{ hashFiles('internal/testgenerated/integration/docker-compose-multiexec*.yml', 'internal/testgenerated/integration/**/Dockerfile*', 'internal/test/beyla_extensions/**/Dockerfile*', 'go.mod', 'go.sum', 'Makefile', 'bpf/**', 'cmd/**', 'internal/goabi/**', 'internal/goversion/**', 'internal/config/**', 'internal/test/integration/components/obi/testtool/**', 'pkg/**') }}
+          key: vm-docker-images-${{ hashFiles('internal/testgenerated/integration/docker-compose-multiexec*.yml', 'internal/testgenerated/integration/**/Dockerfile*', 'internal/test/beyla_extensions/**/Dockerfile*', 'go.mod', 'go.sum', 'vendor/**', 'cmd/**', 'pkg/**', 'bpf/**', 'internal/goabi/**', 'internal/goversion/**', 'internal/config/**', 'mise.toml', 'mise.lock', '.mise/**', 'internal/java/mise.toml', 'internal/java/.mise/**', 'internal/test/oats/mise.toml', 'internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh') }}-${{ steps.beyla-sha.outputs.sha }}-${{ steps.obi-sha.outputs.sha }}
 
       - name: Pre-build Docker images for VM tests
         if: steps.docker-images-cache.outputs.cache-hit != 'true'

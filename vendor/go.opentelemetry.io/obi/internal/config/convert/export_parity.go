@@ -73,7 +73,9 @@ func httpRoutePolicy(policy services.RoutePolicy) *schema.HTTPRoutePolicy {
 const (
 	payloadExtractorGraphQL          = "graphql"
 	payloadExtractorElasticsearch    = "elasticsearch"
-	payloadExtractorAWS              = "aws"
+	payloadExtractorAWSS3            = "aws_s3"
+	payloadExtractorAWSSQS           = "aws_sqs"
+	payloadExtractorAWSSNS           = "aws_sns"
 	payloadExtractorSQLPP            = "sqlpp"
 	payloadExtractorOpenAI           = "openai"
 	payloadExtractorAnthropic        = "anthropic"
@@ -89,7 +91,54 @@ const (
 	payloadExtractorOpenAICompatible = "openai_compatible"
 	payloadExtractorJSONRPC          = "jsonrpc"
 	payloadExtractorEnrichment       = "enrichment"
+
+	payloadExtractorAll      = "all"
+	payloadExtractorWildcard = "*"
+	payloadExtractorGenAI    = "genai"
+	payloadExtractorDatabase = "database"
+	payloadExtractorAWS      = "aws"
 )
+
+var payloadExtractorAWSMembers = []string{
+	payloadExtractorAWSS3,
+	payloadExtractorAWSSQS,
+	payloadExtractorAWSSNS,
+}
+
+var payloadExtractorDatabaseMembers = []string{
+	payloadExtractorElasticsearch,
+	payloadExtractorSQLPP,
+}
+
+var payloadExtractorGenAIMembers = []string{
+	payloadExtractorOpenAI,
+	payloadExtractorAnthropic,
+	payloadExtractorGemini,
+	payloadExtractorQwen,
+	payloadExtractorBedrock,
+	payloadExtractorMCP,
+	payloadExtractorEmbedding,
+	payloadExtractorRerank,
+	payloadExtractorRetrieval,
+	payloadExtractorOllama,
+	payloadExtractorCohere,
+	payloadExtractorOpenAICompatible,
+}
+
+var payloadExtractorAllMembers = slices.Concat(
+	[]string{payloadExtractorGraphQL, payloadExtractorJSONRPC},
+	payloadExtractorDatabaseMembers,
+	payloadExtractorAWSMembers,
+	payloadExtractorGenAIMembers,
+)
+
+var payloadExtractorGroups = map[string][]string{
+	payloadExtractorAll:      payloadExtractorAllMembers,
+	payloadExtractorWildcard: payloadExtractorAllMembers,
+	payloadExtractorGenAI:    payloadExtractorGenAIMembers,
+	payloadExtractorDatabase: payloadExtractorDatabaseMembers,
+	payloadExtractorAWS:      payloadExtractorAWSMembers,
+}
 
 func payloadExtraction(cfg *obi.Config) schema.PayloadExtraction {
 	http := cfg.EBPF.PayloadExtraction.HTTP
@@ -100,8 +149,14 @@ func payloadExtraction(cfg *obi.Config) schema.PayloadExtraction {
 	if http.Elasticsearch.Enabled {
 		enabled = append(enabled, payloadExtractorElasticsearch)
 	}
-	if http.AWS.Enabled {
-		enabled = append(enabled, payloadExtractorAWS)
+	if http.AWS.S3Enabled() {
+		enabled = append(enabled, payloadExtractorAWSS3)
+	}
+	if http.AWS.SQSEnabled() {
+		enabled = append(enabled, payloadExtractorAWSSQS)
+	}
+	if http.AWS.SNSEnabled() {
+		enabled = append(enabled, payloadExtractorAWSSNS)
 	}
 	if http.SQLPP.Enabled {
 		enabled = append(enabled, payloadExtractorSQLPP)

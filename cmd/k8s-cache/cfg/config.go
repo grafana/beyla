@@ -27,6 +27,15 @@ type Config struct {
 	SendTimeout time.Duration `yaml:"informer_send_timeout" env:"BEYLA_K8S_CACHE_INFORMER_SEND_TIMEOUT"`
 
 	InternalMetrics InternalMetricsConfig `yaml:"internal_metrics"`
+	TLS             TLSConfig             `yaml:"tls" envPrefix:"BEYLA_K8S_CACHE_TLS_"`
+}
+
+// TLSConfig mirrors the TLS options in OBI's kubecache.Config while keeping
+// the cache service's existing BEYLA_K8S_CACHE_* environment variable prefix.
+type TLSConfig struct {
+	CertFile     string `yaml:"cert_file" env:"CERT_FILE"`
+	KeyFile      string `yaml:"key_file" env:"KEY_FILE"`
+	ClientCAFile string `yaml:"client_ca_file" env:"CLIENT_CA_FILE"`
 }
 
 // mimic InternalMetricsConfig in .obi-src/pkg/kubecache/config.go

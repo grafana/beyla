@@ -2,7 +2,7 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-path = Path(__file__).parents[1] / "obi-adoption-preflight" / "reconcile.py"
+path = Path(__file__).parents[1] / "adoption" / "preflight" / "reconcile.py"
 spec = importlib.util.spec_from_file_location("reconcile", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -181,7 +181,7 @@ class CollectorHelperTests(unittest.TestCase):
         import sys
         from unittest.mock import patch
 
-        script_dir = str(Path(__file__).parents[1] / "obi-adoption-preflight")
+        script_dir = str(Path(__file__).parents[1] / "adoption" / "preflight")
         sys.path.insert(0, script_dir)
         try:
             import collect
@@ -223,7 +223,7 @@ class CollectorHelperTests(unittest.TestCase):
         import sys
         from unittest.mock import patch
 
-        script_dir = str(Path(__file__).parents[1] / "obi-adoption-preflight")
+        script_dir = str(Path(__file__).parents[1] / "adoption" / "preflight")
         sys.path.insert(0, script_dir)
         try:
             import collect
@@ -267,7 +267,7 @@ class CollectorHelperTests(unittest.TestCase):
         import sys
         from unittest.mock import patch
 
-        script_dir = str(Path(__file__).parents[1] / "obi-adoption-preflight")
+        script_dir = str(Path(__file__).parents[1] / "adoption" / "preflight")
         sys.path.insert(0, script_dir)
         try:
             import collect
@@ -294,7 +294,7 @@ class CollectorHelperTests(unittest.TestCase):
         from contextlib import redirect_stdout
         from unittest.mock import call, patch
 
-        script_dir = str(Path(__file__).parents[1] / "obi-adoption-preflight")
+        script_dir = str(Path(__file__).parents[1] / "adoption" / "preflight")
         sys.path.insert(0, script_dir)
         try:
             import collect
@@ -347,7 +347,7 @@ class CollectorHelperTests(unittest.TestCase):
         from contextlib import redirect_stdout
         from unittest.mock import patch
 
-        script_dir = str(Path(__file__).parents[1] / "obi-adoption-preflight")
+        script_dir = str(Path(__file__).parents[1] / "adoption" / "preflight")
         sys.path.insert(0, script_dir)
         try:
             import collect
@@ -435,7 +435,7 @@ class PublishPlanTests(unittest.TestCase):
     def module(self):
         import sys
 
-        path = str(Path(__file__).parents[1] / "obi-adoption-preflight")
+        path = str(Path(__file__).parents[1] / "adoption" / "preflight")
         sys.path.insert(0, path)
         try:
             import plan

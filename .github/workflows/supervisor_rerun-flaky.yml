@@ -464,7 +464,7 @@ jobs:
           OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
           OBI_ADOPTION_REPAIR_ENABLED: ${{ vars.OBI_ADOPTION_REPAIR_ENABLED }}
         run: >-
-          python3 scripts/obi_adoption_supervisor.py reconcile-event
+          python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile-event
           --workflow-run-id '${{ github.event.workflow_run.id }}'
           --allow-repair
           --output "$GITHUB_OUTPUT"
@@ -523,7 +523,7 @@ jobs:
           TARGET_SHA: ${{ needs.managed-adoption-status.outputs.obi-sha }}
           BASE_SHA: ${{ needs.managed-adoption-status.outputs.expected-base }}
         run: >-
-          python3 scripts/obi_adoption_supervisor.py reconcile
+          python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile
           --pr-number "$PR_NUMBER"
           --target-sha "$TARGET_SHA"
           --base-sha "$BASE_SHA"

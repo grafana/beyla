@@ -60,7 +60,7 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
           OBI_SHA: ${{ inputs.obi_sha }}
-        run: python3 scripts/obi-adoption-preflight/collect.py
+        run: python3 scripts/release-reconciliation/adoption/preflight/collect.py
       - name: Report preflight decision
         if: steps.collect.outputs.publish_action != 'create'
         env:
@@ -270,7 +270,7 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
           OBI_SHA: ${{ needs.prepare-obi-adoption.outputs.obi_sha }}
-        run: python3 scripts/obi-adoption-preflight/collect.py
+        run: python3 scripts/release-reconciliation/adoption/preflight/collect.py
 
       - name: Verify artifact paths and exact source without applying candidate changes
         env:
@@ -343,7 +343,7 @@ jobs:
           BRANCH: ${{ needs.prepare-obi-adoption.outputs.branch }}
         run: |
           set -euo pipefail
-          result="$(python3 scripts/obi-adoption-preflight/publish.py)"
+          result="$(python3 scripts/release-reconciliation/adoption/preflight/publish.py)"
           printf '%s\n' "$result" | jq -r '"number=" + (.number|tostring), "head_sha=" + .head_sha, "branch=" + .branch' >>"$GITHUB_OUTPUT"
           printf 'Created draft adoption PR #%s at %s. Human review and merge remain required.\n' \
             "$(jq -r .number <<<"$result")" "$(jq -r .head_sha <<<"$result")" >>"$GITHUB_STEP_SUMMARY"
@@ -364,7 +364,7 @@ jobs:
           jq -e --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg target "$TARGET_SHA" --arg base "$BASE_SHA" \
             '.state == "open" and .draft == true and .base.ref == "main" and .head.repo.full_name == $repo and .head.ref == $branch and (.body | contains("<!-- grafana-beyla-obi-adoption:v1 target=" + $target + " base=" + $base + " -->"))' \
             <<<"$pr_json" >/dev/null || { echo "Created PR does not match the validated managed candidate." >&2; exit 1; }
-          python3 scripts/obi_adoption_supervisor.py init-state --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA" --base-sha "$BASE_SHA" --head-sha "$(jq -r .head.sha <<<"$pr_json")" --new-pr
+          python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py init-state --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA" --base-sha "$BASE_SHA" --head-sha "$(jq -r .head.sha <<<"$pr_json")" --new-pr
 
   reconcile-managed-obi-adoption:
     needs: preflight-obi-adoption
@@ -396,9 +396,9 @@ jobs:
           set -euo pipefail
           [[ "$GITHUB_REF" == refs/heads/main && "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "Untrusted workflow snapshot or invalid PR selection." >&2; exit 1; }
           if [[ "$ACTION" == superseded ]]; then
-            python3 scripts/obi_adoption_supervisor.py reconcile-superseded --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA"
+            python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile-superseded --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA"
           else
-            python3 scripts/obi_adoption_supervisor.py reconcile --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA" --base-sha "$BASE_SHA" --no-repair
+            python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA" --base-sha "$BASE_SHA" --no-repair
           fi
 
   writer-disabled-report:

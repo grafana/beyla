@@ -10,8 +10,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
+ROOT = Path(__file__).resolve().parents[4]
+ADOPTION_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ADOPTION_DIR))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from manifest import build
 from obi_adoption_repair import GitHub, RepairError, create_git_commit, create_ref

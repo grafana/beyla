@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-path = Path(__file__).parents[1] / "obi-adoption-preflight" / "manifest.py"
+path = Path(__file__).parents[1] / "adoption" / "preflight" / "manifest.py"
 spec = importlib.util.spec_from_file_location("obi_manifest", path)
 manifest = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(manifest)
-publisher_path = Path(__file__).parents[1] / "obi-adoption-preflight" / "publish.py"
+publisher_path = Path(__file__).parents[1] / "adoption" / "preflight" / "publish.py"
 publisher_spec = importlib.util.spec_from_file_location("obi_publisher", publisher_path)
 publisher = importlib.util.module_from_spec(publisher_spec)
 publisher_spec.loader.exec_module(publisher)

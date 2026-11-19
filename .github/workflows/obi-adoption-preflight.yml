@@ -26,4 +26,4 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: python3 scripts/obi-adoption-preflight/collect.py
+        run: python3 scripts/release-reconciliation/adoption/preflight/collect.py

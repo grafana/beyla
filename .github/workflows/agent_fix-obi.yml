@@ -160,7 +160,7 @@ jobs:
           GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: python3 scripts/collect_fix_obi_triage.py --output ci-context.md
+        run: python3 scripts/release-reconciliation/adoption/legacy/collect_fix_obi_triage.py --output ci-context.md
 
       - name: Get vault secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1

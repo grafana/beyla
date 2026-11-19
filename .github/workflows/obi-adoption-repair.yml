@@ -89,7 +89,7 @@ jobs:
           OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
           OBI_ADOPTION_REPAIR_ENABLED: ${{ vars.OBI_ADOPTION_REPAIR_ENABLED }}
         run: >-
-          python3 scripts/obi_adoption_repair.py collect-context
+          python3 scripts/release-reconciliation/adoption/obi_adoption_repair.py collect-context
           --pr-number "$REPAIR_PR_NUMBER"
           --target-sha "$OBI_SHA"
           --base-sha "$EXPECTED_BASE"
@@ -142,7 +142,7 @@ jobs:
           OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
           OBI_ADOPTION_REPAIR_ENABLED: ${{ vars.OBI_ADOPTION_REPAIR_ENABLED }}
         run: >-
-          python3 scripts/obi_adoption_repair.py propose
+          python3 scripts/release-reconciliation/adoption/obi_adoption_repair.py propose
           --context repair-context.json
           --context-sha256 "$CONTEXT_SHA256"
           --output repair-manifest.json
@@ -197,7 +197,7 @@ jobs:
         env:
           MANIFEST_SHA256: ${{ needs.analyze.outputs.manifest_sha256 }}
         run: >-
-          python3 scripts/obi_adoption_repair.py apply
+          python3 scripts/release-reconciliation/adoption/obi_adoption_repair.py apply
           --manifest repair-input/repair-manifest.json
           --workspace candidate
           --manifest-sha256 "$MANIFEST_SHA256"
@@ -212,7 +212,7 @@ jobs:
           mise run test:prepare-output
           mise run vendor:obi
       - name: Run formatting and targeted Go tests without credentials
-        run: python3 scripts/obi_adoption_repair.py test --target-file test-targets.json --workspace candidate
+        run: python3 scripts/release-reconciliation/adoption/obi_adoption_repair.py test --target-file test-targets.json --workspace candidate
 
   publish:
     needs: [collect, analyze, test]
@@ -267,7 +267,7 @@ jobs:
           RESERVATION_DIGEST: ${{ inputs.reservation_digest }}
           MANIFEST_SHA256: ${{ needs.analyze.outputs.manifest_sha256 }}
         run: >-
-          python3 scripts/obi_adoption_repair.py publish
+          python3 scripts/release-reconciliation/adoption/obi_adoption_repair.py publish
           --manifest repair-manifest.json
           --pr-number "$REPAIR_PR_NUMBER"
           --target-sha "$OBI_SHA"

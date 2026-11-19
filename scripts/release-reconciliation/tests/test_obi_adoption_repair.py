@@ -10,7 +10,7 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
+sys.path.insert(0, str(Path(__file__).parents[1] / "adoption"))
 import obi_adoption_repair as repair
 
 TARGET = "b" * 40
@@ -290,7 +290,7 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_repair_workflow_is_double_gated_and_prepares_candidate(self):
         workflow = (
-            Path(__file__).parents[2] / ".github/workflows/obi-adoption-repair.yml"
+            Path(__file__).parents[3] / ".github/workflows/obi-adoption-repair.yml"
         ).read_text(encoding="utf-8")
         self.assertGreaterEqual(
             workflow.count("vars.OBI_ADOPTION_WRITER_ENABLED == 'true'"), 4

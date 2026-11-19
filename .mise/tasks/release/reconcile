@@ -39,7 +39,7 @@ FACTS_DIR="$facts_dir" python3 - <<'PY' >"$facts_dir/report.json"
 import importlib.util
 import json
 import os
-spec = importlib.util.spec_from_file_location("reconcile", "scripts/release-reconciliation/report.py")
+spec = importlib.util.spec_from_file_location("reconcile", "scripts/release-reconciliation/observer/report.py")
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 facts = helper.load_facts(os.environ["FACTS_DIR"], os.environ["REPOSITORY"])

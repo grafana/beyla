@@ -163,6 +163,29 @@ jobs:
               -mod vendor \
               "${MATRIX_TEST_PATTERN}"
 
+      - name: Export kind logs after test failure
+        if: failure()
+        timeout-minutes: 5
+        run: |
+          if ! clusters=$(kind get clusters 2>/dev/null); then
+            echo "::warning::Could not list live kind clusters for log export"
+            exit 0
+          fi
+
+          if [ -z "$clusters" ]; then
+            echo "No live kind clusters remain to export"
+            exit 0
+          fi
+
+          while IFS= read -r cluster; do
+            [ -n "$cluster" ] || continue
+
+            echo "Exporting logs for kind cluster $cluster"
+            if ! kind export logs "testoutput/kind/$cluster" --name "$cluster"; then
+              echo "::warning::Could not export logs for kind cluster $cluster"
+            fi
+          done <<< "$clusters"
+
       - name: Process coverage data
         run: mise run integration:coverage-data
 

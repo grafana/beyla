@@ -356,12 +356,12 @@ func (s *Lexer) scanStringWithDelimiter(delimiter rune) *Token {
 // stringBackslashEscapes reports whether a backslash inside the literal that
 // starts at s.start escapes the following character.
 //
-// SQL Server and Oracle never treat backslash as an escape. PostgreSQL does
+// SQL Server, Oracle, and Db2 never treat backslash as an escape. PostgreSQL does
 // so only for escape strings (E'...' / e'...'). Ordinary PostgreSQL strings
 // follow standard_conforming_strings: a quote is escaped by doubling it.
 func (s *Lexer) stringBackslashEscapes() bool {
 	switch s.config.DBMS {
-	case DBMSSQLServer, DBMSOracle:
+	case DBMSSQLServer, DBMSOracle, DBMSDB2:
 		return false
 	case DBMSPostgres:
 		return s.hasPostgresEscapeStringPrefix()

@@ -1334,9 +1334,9 @@ conda_deps = [
 ]
 
 [[tools.ginkgo]]
-version = "2.33.0"
+version = "2.34.0"
 backend = "go:github.com/onsi/ginkgo/v2/ginkgo"
-specifiers = ["2.33.0"]
+specifiers = ["2.34.0"]
 
 [[tools."github:cpp-linter/clang-tools-static-binaries"]]
 version = "2026.09.01-5fb8802d"

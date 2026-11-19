@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 
 	"golang.org/x/sys/unix"
 
@@ -105,6 +106,22 @@ func findLanguageFromElf(filePath string) (result svc.InstrumentableType) {
 }
 
 func FindExeSymbols(f *elf.File, symbolNames []string, types ...elf.SymType) (map[string]Sym, error) {
+	wanted := make(map[string]string, len(symbolNames))
+	for _, name := range symbolNames {
+		if name != "" {
+			wanted[name] = name
+		}
+	}
+
+	return findExeSymbols(f, wanted, nil, types...)
+}
+
+// FindExeSymbolsMatching returns the symbols whose name satisfies match, keyed by name.
+func FindExeSymbolsMatching(f *elf.File, match func(name string) bool, types ...elf.SymType) (map[string]Sym, error) {
+	return findExeSymbols(f, nil, match, types...)
+}
+
+func findExeSymbols(f *elf.File, wanted map[string]string, match func(string) bool, types ...elf.SymType) (map[string]Sym, error) {
 	addresses := map[string]Sym{}
 	if f.SectionByType(elf.SHT_SYMTAB) == nil && f.SectionByType(elf.SHT_DYNSYM) == nil {
 		return addresses, nil
@@ -118,13 +135,6 @@ func FindExeSymbols(f *elf.File, symbolNames []string, types ...elf.SymType) (ma
 
 	if len(types) == 0 {
 		types = []elf.SymType{elf.STT_FUNC}
-	}
-
-	wanted := make(map[string]string, len(symbolNames))
-	for _, name := range symbolNames {
-		if name != "" {
-			wanted[name] = name
-		}
 	}
 
 	for _, sectionType := range []uint32{fastelf.SHT_SYMTAB, fastelf.SHT_DYNSYM} {
@@ -162,7 +172,13 @@ func FindExeSymbols(f *elf.File, symbolNames []string, types ...elf.SymType) (ma
 				}
 
 				name := fastelf.GetCStringUnsafe(strtab, symbol.Name)
-				requested, ok := wanted[name]
+				var requested string
+				var ok bool
+				if match == nil {
+					requested, ok = wanted[name]
+				} else if match(name) {
+					requested, ok = strings.Clone(name), true
+				}
 				if !ok {
 					continue
 				}

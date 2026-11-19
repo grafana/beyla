@@ -393,6 +393,7 @@ func getDefinitions(
 			attr.HTTPURLScheme:          true,
 			attr.HTTPResponseStatusCode: true,
 			attr.ErrorType:              true,
+			attr.NetworkProtocolVersion: false,
 		},
 		extraGroupAttributes[GroupHTTPCommon],
 	)
@@ -431,9 +432,15 @@ func getDefinitions(
 		},
 		HTTPServerRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpRoutes, &serverInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		HTTPServerResponseSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpRoutes, &serverInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		HTTPClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientDurationRoutes, &httpClientInfo},
@@ -443,9 +450,15 @@ func getDefinitions(
 		},
 		HTTPClientRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientRoutes, &httpClientInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		HTTPClientResponseSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientRoutes, &httpClientInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		RPCClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &grpcClientInfo},

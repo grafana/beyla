@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.6
+
+### Bug Fixes
+
+- **Handle IBM Db2 LUW string literals correctly** ([#115](https://github.com/DataDog/go-sqllexer/pull/115))
+  Recognize the `ibm_db2` dialect and treat backslashes as ordinary characters inside strings, preserving literal boundaries and preventing literal values from appearing in normalized query text.
+
 ## v0.2.5
 
 ### Bug Fixes

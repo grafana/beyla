@@ -691,9 +691,20 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 		}
 	}
 
+	awsEnabledPath := yamlPath{"ebpf", "payload_extraction", "http", "aws", "enabled"}
+	awsEnabledName := formatPath(awsEnabledPath)
+	if _, configured := valueAtPath(source, awsEnabledPath); configured {
+		if !sameAWSServiceEnablement(before.EBPF.PayloadExtraction.HTTP.AWS, after.EBPF.PayloadExtraction.HTTP.AWS) {
+			changed = append(changed, awsEnabledName)
+		}
+	}
+
 	for _, path := range leafPaths(source, nil) {
 		name := formatPath(path)
 		if name == languageDetectionSkipsName || strings.HasPrefix(name, languageDetectionSkipsName+"[") {
+			continue
+		}
+		if name == awsEnabledName {
 			continue
 		}
 		if name == logEnricherName || strings.HasPrefix(name, logEnricherName+"[") {
@@ -967,6 +978,12 @@ func zeroMigrationValue(value any) bool {
 	default:
 		return false
 	}
+}
+
+func sameAWSServiceEnablement(before, after obiconfig.AWSConfig) bool {
+	return before.S3Enabled() == after.S3Enabled() &&
+		before.SQSEnabled() == after.SQSEnabled() &&
+		before.SNSEnabled() == after.SNSEnabled()
 }
 
 func equalMigrationValues(path string, before, after any) bool {

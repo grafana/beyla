@@ -149,7 +149,7 @@ func GroupSpans(ctx context.Context, spans []request.Span, traceAttrs map[attr.N
 
 type GroupSpansOptions struct {
 	RedactKeys                   []string
-	SanitizeSQLQueryText         bool
+	SanitizeDBQueryText          bool
 	DisableHTTPRequestPhaseSpans bool
 }
 
@@ -166,7 +166,7 @@ func GroupSpansWithOptions(ctx context.Context, spans []request.Span, traceAttrs
 			continue
 		}
 
-		selectedAttrs := traceAttributesSelectorInternal(span, traceAttrs, redactSet, opts.SanitizeSQLQueryText)
+		selectedAttrs := traceAttributesSelectorInternal(span, traceAttrs, redactSet, opts.SanitizeDBQueryText)
 		samplerAttrs, responseErrorSelected := removeGenAIResponseErrorControl(selectedAttrs)
 
 		spanSampler := func() trace.Sampler {
@@ -761,6 +761,13 @@ func sqlQueryText(statement string, kind request.SQLKind, sanitize bool) string 
 	return sqlprune.SanitizeSQL(statement, kind)
 }
 
+func redisQueryText(span *request.Span, sanitize bool) string {
+	if !sanitize {
+		return span.Path
+	}
+	return span.DBQueryTextSanitized
+}
+
 func sqlppQueryText(statement string, sanitize bool) string {
 	if !sanitize {
 		return statement
@@ -841,7 +848,7 @@ func appendPeerService(attrs []attribute.KeyValue, span *request.Span, optionalA
 }
 
 //nolint:cyclop
-func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.Name]struct{}, redactSet map[string]struct{}, sanitizeSQLQueryText bool) []attribute.KeyValue {
+func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.Name]struct{}, redactSet map[string]struct{}, sanitizeDBQueryText bool) []attribute.KeyValue {
 	var attrs []attribute.KeyValue
 
 	switch span.Type {
@@ -907,7 +914,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendIfSet(attrs, request.DBCollectionName, span.Route)
 			attrs = appendIfSet(attrs, request.DBNamespace, span.DBNamespace)
 			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
-				attrs = appendIfSet(attrs, request.DBQueryText, sqlppQueryText(span.Statement, sanitizeSQLQueryText))
+				attrs = appendIfSet(attrs, request.DBQueryText, sqlppQueryText(span.Statement, sanitizeDBQueryText))
 			}
 			attrs = appendIfSet(attrs, request.DBOperationName, span.Method)
 			if span.DBError.ErrorCode != "" {
@@ -1671,7 +1678,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 			attrs = appendPeerService(attrs, span, optionalAttrs)
 		}
 		if _, ok := optionalAttrs[attr.DBQueryText]; ok {
-			attrs = appendIfSet(attrs, request.DBQueryText, sqlQueryText(span.Statement, request.SQLKind(span.SubType), sanitizeSQLQueryText))
+			attrs = appendIfSet(attrs, request.DBQueryText, sqlQueryText(span.Statement, request.SQLKind(span.SubType), sanitizeDBQueryText))
 		}
 		operation := span.Method
 		if operation != "" {
@@ -1700,8 +1707,7 @@ func traceAttributesSelectorInternal(span *request.Span, optionalAttrs map[attr.
 		if operation != "" {
 			attrs = append(attrs, request.DBOperationName(operation))
 			if _, ok := optionalAttrs[attr.DBQueryText]; ok {
-				query := span.Path
-				attrs = appendIfSet(attrs, request.DBQueryText, query)
+				attrs = appendIfSet(attrs, request.DBQueryText, redisQueryText(span, sanitizeDBQueryText))
 			}
 		}
 		if span.Status == 1 {

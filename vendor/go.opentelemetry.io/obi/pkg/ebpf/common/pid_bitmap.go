@@ -26,6 +26,41 @@ type PIDBitmap struct {
 	words []uint64
 }
 
+// Set updates one process without changing the other bits in its word.
+func (b *PIDBitmap) Set(m *ebpf.Map, pid app.PID, selected bool) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	word := uint32(pid / 64)
+	if word >= PIDBitmapWords {
+		return fmt.Errorf("pid %d is beyond the BPF PID filter", pid)
+	}
+	if b.words == nil {
+		b.words = make([]uint64, PIDBitmapWords)
+	}
+
+	bits := b.words[word] &^ (uint64(1) << (pid % 64))
+	if selected {
+		bits |= uint64(1) << (pid % 64)
+	}
+	if bits == b.words[word] {
+		return nil
+	}
+	if err := m.Put(word, bits); err != nil {
+		return fmt.Errorf("writing word %d of the BPF PID filter: %w", word, err)
+	}
+	b.words[word] = bits
+	return nil
+}
+
+// Contains reports whether the pid's bit was last written as set
+func (b *PIDBitmap) Contains(pid app.PID) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.contains(pid)
+}
+
 // Rebuild sets exactly the bits of the filter's pids of the given types and returns the added ones
 func (b *PIDBitmap) Rebuild(m *ebpf.Map, filter ServiceFilter, types PIDType, log *slog.Logger) ([]app.PID, error) {
 	b.mu.Lock()

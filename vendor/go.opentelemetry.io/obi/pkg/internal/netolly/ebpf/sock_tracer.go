@@ -51,6 +51,7 @@ import (
 // in the map
 type SockFlowFetcher struct {
 	log           *slog.Logger
+	socketFD      int
 	objectsMu     sync.Mutex
 	objects       *NetSkObjects
 	ringbufReader *ringbuf.Reader
@@ -104,22 +105,26 @@ func NewSockFlowFetcher(
 	}
 
 	fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_ALL)))
-	if err == nil {
-		ssoErr := syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, objects.ObiSocketFilter.FD())
-		if ssoErr != nil {
-			return nil, fmt.Errorf("loading and assigning BPF objects: %w", ssoErr)
-		}
-	} else {
+	if err != nil {
+		objects.Close()
+		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
+	}
+	if err := syscall.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, objects.ObiSocketFilter.FD()); err != nil {
+		unix.Close(fd)
+		objects.Close()
 		return nil, fmt.Errorf("loading and assigning BPF objects: %w", err)
 	}
 
 	// read events from socket filter ringbuffer
 	flows, err := ringbuf.NewReader(objects.DirectFlows)
 	if err != nil {
+		unix.Close(fd)
+		objects.Close()
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
 	return &SockFlowFetcher{
 		log:           tlog,
+		socketFD:      fd,
 		objects:       &objects,
 		ringbufReader: flows,
 		flowMapReader: chooseMapReader(cfg.ForceBPFMapReader, objects.AggregatedFlows, cacheMaxSize, startTime),
@@ -169,6 +174,9 @@ func (m *SockFlowFetcher) Close() error {
 	m.objectsMu.Unlock()
 
 	if obj != nil {
+		if err := unix.Close(m.socketFD); err != nil {
+			errs = append(errs, err)
+		}
 		if err := obj.Close(); err != nil {
 			errs = append(errs, err)
 		}

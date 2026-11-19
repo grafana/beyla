@@ -130,6 +130,7 @@ Use the `-dbms` flag to specify the database type:
 - `mysql` - MySQL
 - `oracle` - Oracle
 - `snowflake` - Snowflake
+- `ibm_db2` - IBM Db2 LUW
 
 ## Testing
 

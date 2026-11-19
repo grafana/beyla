@@ -18,6 +18,8 @@
   ],
   ignorePaths: [
     '.obi-src/**',
+    // Generated from mise.lock; the mise manager updates these sidecars together.
+    '.mise/locks/**',
     'internal/test/beyla_extensions/k8s/manifests/**',
     'vendor/**',
   ],
@@ -56,7 +58,7 @@
       depNameTemplate: 'open-telemetry/opentelemetry-injector',
       extractVersionTemplate: '^v?(?<version>.*)$',
       managerFilePatterns: [
-        '(^|/)pkg/webhook/image/opentelemetry-injector/version\\.txt$',
+        '/(^|/)pkg/webhook/image/opentelemetry-injector/version\\.txt$/',
       ],
       matchStrings: [
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
@@ -69,7 +71,7 @@
       depNameTemplate: 'grafana/grafana-opentelemetry-java',
       extractVersionTemplate: '^v?(?<version>.*)$',
       managerFilePatterns: [
-        '(^|/)pkg/webhook/image/java/version\\.txt$',
+        '/(^|/)pkg/webhook/image/java/version\\.txt$/',
       ],
       matchStrings: [
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
@@ -82,7 +84,7 @@
       depNameTemplate: 'open-telemetry/opentelemetry-operator',
       extractVersionTemplate: '^v?(?<version>.*)$',
       managerFilePatterns: [
-        '(^|/)pkg/webhook/image/opentelemetry-operator/version\\.txt$',
+        '/(^|/)pkg/webhook/image/opentelemetry-operator/version\\.txt$/',
       ],
       matchStrings: [
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
@@ -354,6 +356,21 @@
         'pkg/webhook/image/opentelemetry-operator/version.txt',
       ],
       commitMessageTopic: 'inject-sdk-image: OpenTelemetry Operator version',
+    },
+    {
+      description: 'Update the Renovate mise tool weekly and keep its sidecar lock aligned',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'npm:renovate',
+      ],
+      updatePinnedDependencies: true,
+      schedule: [
+        '* 0-3 * * 1',
+      ],
+      timezone: 'UTC',
+      updateNotScheduled: false,
     },
   ],
   labels: [

@@ -249,6 +249,9 @@ for each discovery criteria by adding `metrics > features` as a property to indi
 
 Accepted values for `features` are: `application`, `application_red`, `application_sizes`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_service_graph_connection_info`, `application_process`, `application_runtime`, `gpu`, `network`, `network_flow_packets`, `network_inter_zone`, `stats`, `stats_tcp_successful_connections`, `stats_tcp_failed_connections`, `stats_tcp_io`, `stats_tcp_retransmits`, and `stats_tcp_rtt`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
 
+With `gpu`, discovery rules select which NVIDIA GPU processes contribute per-process metrics. Device metrics cover each supported GPU on the host. Refer to [GPU metrics](../export-data/#gpu-metrics).
+
+
 For example:
 
 ```yaml

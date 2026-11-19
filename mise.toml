@@ -106,7 +106,7 @@ clang = { version = "22.1.8" }
 # @yarnpkg/libzip@3.2.2 has an npm signature and matches Yarn's release commit,
 # but was published without provenance; the no-downgrade policy rejects Renovate.
 [tools."npm:renovate"]
-version = "latest"
+version = "44.252.0"
 allow_builds = ["re2"]
 trust_policy_excludes = ["@yarnpkg/libzip@3.2.2"]
 

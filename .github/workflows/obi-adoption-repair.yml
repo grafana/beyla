@@ -1,0 +1,306 @@
+name: OBI adoption repair worker
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        description: Reserved managed adoption PR number
+        required: true
+        type: number
+      obi_sha:
+        description: Exact immutable OBI source target
+        required: true
+        type: string
+      expected_head:
+        description: Reserved current PR head SHA
+        required: true
+        type: string
+      expected_base:
+        description: Reserved current main/base SHA
+        required: true
+        type: string
+      trigger_run_id:
+        description: Exact completed failing pull_request workflow run
+        required: true
+        type: number
+      attempt:
+        description: 1-based reservation for this PR and OBI SHA
+        required: true
+        type: number
+      max_attempts:
+        description: Fixed maximum repair reservations
+        required: true
+        type: number
+      reservation_digest:
+        description: SHA-256 digest of canonical reserved status state
+        required: true
+        type: string
+    outputs:
+      repair_outcome:
+        description: patch, no-change, or blocked; never means CI is green
+        value: ${{ jobs.result.outputs.repair_outcome }}
+      new_head_sha:
+        description: New PR head after a validated repair commit, if published
+        value: ${{ jobs.result.outputs.new_head_sha }}
+
+permissions: {}
+
+jobs:
+  collect:
+    if: >-
+      vars.OBI_ADOPTION_WRITER_ENABLED == 'true' &&
+      vars.OBI_ADOPTION_REPAIR_ENABLED == 'true' &&
+      github.repository == 'grafana/beyla' &&
+      github.event_name == 'workflow_run' &&
+      github.workflow_ref == 'grafana/beyla/.github/workflows/supervisor_rerun-flaky.yml@refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      context_sha256: ${{ steps.collect.outputs.context_sha256 }}
+      context_identity: ${{ steps.collect.outputs.identity }}
+    steps:
+      - name: Check out trusted caller revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Collect and validate bounded CI context
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+          REPAIR_PR_NUMBER: ${{ inputs.pr_number }}
+          OBI_SHA: ${{ inputs.obi_sha }}
+          EXPECTED_BASE: ${{ inputs.expected_base }}
+          EXPECTED_HEAD: ${{ inputs.expected_head }}
+          TRIGGER_RUN_ID: ${{ inputs.trigger_run_id }}
+          REPAIR_ATTEMPT: ${{ inputs.attempt }}
+          MAX_ATTEMPTS: ${{ inputs.max_attempts }}
+          RESERVATION_DIGEST: ${{ inputs.reservation_digest }}
+          OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
+          OBI_ADOPTION_REPAIR_ENABLED: ${{ vars.OBI_ADOPTION_REPAIR_ENABLED }}
+        run: >-
+          python3 scripts/obi_adoption_repair.py collect-context
+          --pr-number "$REPAIR_PR_NUMBER"
+          --target-sha "$OBI_SHA"
+          --base-sha "$EXPECTED_BASE"
+          --head-sha "$EXPECTED_HEAD"
+          --trigger-run-id "$TRIGGER_RUN_ID"
+          --attempt "$REPAIR_ATTEMPT"
+          --max-attempts "$MAX_ATTEMPTS"
+          --reservation-digest "$RESERVATION_DIGEST"
+          --output repair-context.json
+      - name: Upload bounded context
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: obi-repair-context
+          path: repair-context.json
+          if-no-files-found: error
+          retention-days: 1
+
+  analyze:
+    needs: collect
+    if: vars.OBI_ADOPTION_WRITER_ENABLED == 'true' && vars.OBI_ADOPTION_REPAIR_ENABLED == 'true' && needs.collect.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      repair_outcome: ${{ steps.metadata.outputs.repair_outcome }}
+      manifest_sha256: ${{ steps.metadata.outputs.manifest_sha256 }}
+    steps:
+      - name: Check out trusted caller revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Download bounded context
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: obi-repair-context
+      - name: Get Anthropic API key from Vault
+        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
+        with:
+          repo_secrets: |
+            ANTHROPIC_API_KEY=anthropic-token:token
+      - name: Generate a constrained JSON proposal (no tools)
+        id: propose
+        env:
+          ANTHROPIC_API_KEY: ${{ env.ANTHROPIC_API_KEY }}
+          CONTEXT_SHA256: ${{ needs.collect.outputs.context_sha256 }}
+          OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
+          OBI_ADOPTION_REPAIR_ENABLED: ${{ vars.OBI_ADOPTION_REPAIR_ENABLED }}
+        run: >-
+          python3 scripts/obi_adoption_repair.py propose
+          --context repair-context.json
+          --context-sha256 "$CONTEXT_SHA256"
+          --output repair-manifest.json
+          --meta proposal-meta.json
+      - name: Expose proposal metadata
+        id: metadata
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          m=json.load(open("proposal-meta.json", encoding="utf-8"))
+          print("repair_outcome=" + m.get("outcome", "blocked"))
+          print("manifest_sha256=" + m.get("manifest_sha256", ""))
+          PY
+      - name: Upload immutable proposed patch
+        if: steps.metadata.outputs.repair_outcome == 'patch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: obi-repair-manifest
+          path: repair-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  test:
+    needs: analyze
+    if: vars.OBI_ADOPTION_WRITER_ENABLED == 'true' && vars.OBI_ADOPTION_REPAIR_ENABLED == 'true' && needs.analyze.result == 'success' && needs.analyze.outputs.repair_outcome == 'patch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted helper code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Check out reserved PR head as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_head }}
+          path: candidate
+          token: ${{ github.token }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Download immutable patch artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: obi-repair-manifest
+          path: repair-input
+      - name: Apply patch and validate reserved inputs
+        id: apply
+        env:
+          MANIFEST_SHA256: ${{ needs.analyze.outputs.manifest_sha256 }}
+        run: >-
+          python3 scripts/obi_adoption_repair.py apply
+          --manifest repair-input/repair-manifest.json
+          --workspace candidate
+          --manifest-sha256 "$MANIFEST_SHA256"
+          --output test-targets.json
+      - name: Set up Go from trusted tool profile
+        uses: ./.github/actions/setup-mise
+        with:
+          profile: obi-fix
+      - name: Prepare generated OBI bindings and vendor inputs
+        working-directory: candidate
+        run: |
+          mise run test:prepare-output
+          mise run vendor:obi
+      - name: Run formatting and targeted Go tests without credentials
+        run: python3 scripts/obi_adoption_repair.py test --target-file test-targets.json --workspace candidate
+
+  publish:
+    needs: [collect, analyze, test]
+    if: vars.OBI_ADOPTION_WRITER_ENABLED == 'true' && vars.OBI_ADOPTION_REPAIR_ENABLED == 'true' && needs.test.result == 'success' && needs.analyze.outputs.repair_outcome == 'patch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: obi-adoption-writer
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      issues: read
+      pull-requests: read
+    outputs:
+      new_head_sha: ${{ steps.publish.outputs.new_head_sha }}
+    steps:
+      - name: Check out trusted publisher code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Download immutable proposed patch
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: obi-repair-manifest
+      - name: Get GitHub App token from the existing default permission set
+        id: app-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
+        with:
+          github_app: grafana-beyla-bot
+          permission_set: default
+      - name: Revalidate reservation and publish with CAS
+        id: publish
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+          OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
+          OBI_ADOPTION_REPAIR_ENABLED: ${{ vars.OBI_ADOPTION_REPAIR_ENABLED }}
+          REPAIR_PR_NUMBER: ${{ inputs.pr_number }}
+          OBI_SHA: ${{ inputs.obi_sha }}
+          EXPECTED_BASE: ${{ inputs.expected_base }}
+          EXPECTED_HEAD: ${{ inputs.expected_head }}
+          TRIGGER_RUN_ID: ${{ inputs.trigger_run_id }}
+          REPAIR_ATTEMPT: ${{ inputs.attempt }}
+          MAX_ATTEMPTS: ${{ inputs.max_attempts }}
+          RESERVATION_DIGEST: ${{ inputs.reservation_digest }}
+          MANIFEST_SHA256: ${{ needs.analyze.outputs.manifest_sha256 }}
+        run: >-
+          python3 scripts/obi_adoption_repair.py publish
+          --manifest repair-manifest.json
+          --pr-number "$REPAIR_PR_NUMBER"
+          --target-sha "$OBI_SHA"
+          --expected-base "$EXPECTED_BASE"
+          --expected-head "$EXPECTED_HEAD"
+          --trigger-run-id "$TRIGGER_RUN_ID"
+          --attempt "$REPAIR_ATTEMPT"
+          --max-attempts "$MAX_ATTEMPTS"
+          --reservation-digest "$RESERVATION_DIGEST"
+          --manifest-sha256 "$MANIFEST_SHA256"
+
+  result:
+    if: always()
+    needs: [collect, analyze, test, publish]
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      repair_outcome: ${{ steps.outcome.outputs.repair_outcome }}
+      new_head_sha: ${{ needs.publish.outputs.new_head_sha }}
+    steps:
+      - name: Return bounded outcome to caller
+        id: outcome
+        env:
+          COLLECT: ${{ needs.collect.result }}
+          ANALYZE: ${{ needs.analyze.result }}
+          PROPOSAL: ${{ needs.analyze.outputs.repair_outcome }}
+          TEST: ${{ needs.test.result }}
+          PUBLISH: ${{ needs.publish.result }}
+        run: |
+          if [[ "$PUBLISH" == success ]]; then
+            echo 'repair_outcome=patch' >> "$GITHUB_OUTPUT"
+          elif [[ "$COLLECT" == success && "$ANALYZE" == success && "$PROPOSAL" == no-change ]]; then
+            echo 'repair_outcome=no-change' >> "$GITHUB_OUTPUT"
+          else
+            echo 'repair_outcome=blocked' >> "$GITHUB_OUTPUT"
+          fi

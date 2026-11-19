@@ -16,6 +16,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -124,6 +125,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -212,6 +214,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -297,6 +300,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -385,7 +389,11 @@ jobs:
   cleanup:
     name: Remove agent label
     needs: implement
-    if: ${{ always() && !cancelled() && github.event.label.name == 'agent/fix-obi' }}
+    if: >
+      always() && !cancelled() &&
+      github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
+      github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

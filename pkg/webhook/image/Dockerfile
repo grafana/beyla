@@ -183,9 +183,15 @@ COPY node.js/tsconfig.json .
 
 RUN npm install
 COPY node.js/*.js .
-RUN cp build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js \
-    build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/otel-register.js && \
-    cp ./*.js build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/
+# Resolve the package export instead of relying on its internal build/src or dist layout.
+# Keep the resolved entrypoint and its sibling bundles together because the
+# injector wrapper patches the same utils module used by auto-instrumentation.
+RUN NODE_REGISTER_FILE="$(node -p "require.resolve('@opentelemetry/auto-instrumentations-node/register')")" && \
+    NODE_REGISTER_DIR="$(dirname "${NODE_REGISTER_FILE}")" && \
+    mkdir -p nodejs-runtime && \
+    cp -R "${NODE_REGISTER_DIR}/." nodejs-runtime/ && \
+    cp "${NODE_REGISTER_FILE}" nodejs-runtime/otel-register.js && \
+    cp ./*.js nodejs-runtime/
 RUN ls -al -- *
 
 # build the final instrumentation image
@@ -199,7 +205,7 @@ COPY opentelemetry-injector/otelinject.conf /dist/injector/otelinject.conf
 COPY --from=download-dotnet-sdk /glibc /dist/agents/dotnet/glibc
 COPY --from=download-dotnet-sdk /musl /dist/agents/dotnet/musl
 COPY --from=download-java-sdk /opentelemetry-javaagent.jar /dist/agents/jvm/opentelemetry-javaagent.jar
-COPY --from=build-nodejs-sdk /operator-build/build/workspace/node_modules/@opentelemetry/auto-instrumentations-node/build/src/ /dist/agents/node.js/
+COPY --from=build-nodejs-sdk /operator-build/nodejs-runtime/ /dist/agents/node.js/
 COPY --from=build-nodejs-sdk /operator-build/node_modules /dist/agents/node.js/node_modules
 COPY --from=build-python-glibc /operator-build/ /dist/agents/python/glibc
 COPY --from=build-python-musl /operator-build/ /dist/agents/python/musl

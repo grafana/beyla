@@ -71,7 +71,7 @@ assert {
     "go",
     "golangci-lint",
     "hk",
-    "packslip:grafana/flint",
+    "aqua:grafana/flint",
     "npm:renovate",
     "shellcheck",
     "shfmt",

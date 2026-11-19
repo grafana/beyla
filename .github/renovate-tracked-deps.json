@@ -827,6 +827,7 @@
     "mise.toml": {
       "mise": [
         "actionlint",
+        "aqua:grafana/flint",
         "clang",
         "clang-format",
         "conda:llvm-tools",
@@ -841,7 +842,6 @@
         "hk",
         "kind",
         "npm:renovate",
-        "packslip:grafana/flint",
         "pkl",
         "rumdl",
         "setup-envtest",

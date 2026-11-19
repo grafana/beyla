@@ -71,6 +71,8 @@ assert {
     "go",
     "golangci-lint",
     "hk",
+    "packslip:grafana/flint",
+    "npm:renovate",
     "shellcheck",
     "shfmt",
     "github:cpp-linter/clang-tools-static-binaries",

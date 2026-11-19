@@ -18,6 +18,8 @@
   ],
   ignorePaths: [
     '.obi-src/**',
+    // Generated from mise.lock; the mise manager updates these sidecars together.
+    '.mise/locks/**',
     'internal/test/beyla_extensions/k8s/manifests/**',
     'vendor/**',
   ],
@@ -354,6 +356,21 @@
         'pkg/webhook/image/opentelemetry-operator/version.txt',
       ],
       commitMessageTopic: 'inject-sdk-image: OpenTelemetry Operator version',
+    },
+    {
+      description: 'Update the Renovate mise tool weekly and keep its sidecar lock aligned',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'npm:renovate',
+      ],
+      updatePinnedDependencies: true,
+      schedule: [
+        '* 0-3 * * 1',
+      ],
+      timezone: 'UTC',
+      updateNotScheduled: false,
     },
   ],
   labels: [

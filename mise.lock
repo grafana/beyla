@@ -1770,7 +1770,7 @@ url_api = "https://api.github.com/repos/kubernetes-sigs/kind/releases/assets/531
 version = "44.252.0"
 aube = { path = ".mise/locks/npm-renovate/44.252.0~026f02c4", digest = "sha256:dcf298d9ccad1439c8ff13ef7327fbda2e1ad5fdd4adcda9748efd31d7fbac1b" }
 backend = "npm:renovate"
-specifiers = ["latest"]
+specifiers = ["44.252.0"]
 
 [tools."npm:renovate".options]
 allow_builds = '["re2"]'

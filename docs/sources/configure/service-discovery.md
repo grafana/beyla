@@ -251,7 +251,6 @@ Accepted values for `features` are: `application`, `application_red`, `applicati
 
 With `gpu`, discovery rules select which NVIDIA GPU processes contribute per-process metrics. Device metrics cover each supported GPU on the host. Refer to [GPU metrics](../export-data/#gpu-metrics).
 
-
 For example:
 
 ```yaml

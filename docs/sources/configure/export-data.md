@@ -204,7 +204,7 @@ Device metrics have the `hw.id`, `hw.name`, and `hw.vendor` attributes. OTLP met
 
 #### Per-process metrics on NVIDIA GPUs
 
-With `gpu` enabled, Beyla also reports GPU memory usage and utilization for the processes selected by [application discovery](../service-discovery/). Run Beyla in the host PID namespace so it can match the PIDs reported by NVML to the instrumented processes.
+With `gpu` enabled, Beyla also reports GPU memory usage and utilization for the processes selected by [application discovery](../service-discovery/). Run Beyla in the host PID namespace so it can match the `PIDs` reported by NVML to the instrumented processes.
 
 For example, add this rule to the configuration above to instrument the service listening on port 8080:
 

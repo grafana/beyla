@@ -54,6 +54,7 @@
     },
     ".github/workflows/bot_sync-obi-fork.yml": {
       "github-actions": [
+        "actions/checkout",
         "grafana/shared-workflows",
         "ubuntu"
       ]

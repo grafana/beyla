@@ -23,6 +23,7 @@
     'internal/test/beyla_extensions/k8s/manifests/**',
     'vendor/**',
   ],
+  automerge: true,
   customManagers: [
     {
       customType: 'regex',

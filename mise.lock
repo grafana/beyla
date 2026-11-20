@@ -78,6 +78,10 @@ checksum = "sha256:d22c666eb887afd2119aac2110e23a0e817e9391bda99293421f7c46dab15
 url = "https://conda.anaconda.org/conda-forge/linux-aarch64/libllvm22-22.1.8-h680871c_3.conda"
 checksum = "sha256:ce3b3adf238db44eb054e70f7f82f5959598542b2c31161bb89fb537d15084c9"
 
+[conda-packages.linux-arm64."libllvm23-23.1.5-h680871c_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/libllvm23-23.1.5-h680871c_0.conda"
+checksum = "sha256:fc290d5795cd007a36dd92963fd96f6ae4e88b64873bf20b396b851ca942d994"
+
 [conda-packages.linux-arm64."liblzma-5.8.3-he30d5cf_1"]
 url = "https://conda.anaconda.org/conda-forge/linux-aarch64/liblzma-5.8.3-he30d5cf_1.conda"
 checksum = "sha256:f760669fd1cea27f689f411c0d5488e26ce50e382c9b63e4ad348f959850124a"
@@ -102,9 +106,9 @@ checksum = "sha256:76efa6cc9d7e6f5ee3bbca0939f64054af2bdfb3c3632531f8e633cf6c2ea
 url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-openmp-23.1.4-hde6636f_0.conda"
 checksum = "sha256:46eb282d04f311a2b465271c707c0477d165c7eb7012fa16b743a50477f34222"
 
-[conda-packages.linux-arm64."llvm-tools-22-22.1.8-h2c72a67_3"]
-url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-22-22.1.8-h2c72a67_3.conda"
-checksum = "sha256:f28fecd2065fcac15b17ef4cca5a68a0e0dc264fa1287ad2e0160541198de347"
+[conda-packages.linux-arm64."llvm-tools-23-23.1.5-h2c72a67_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-23-23.1.5-h2c72a67_0.conda"
+checksum = "sha256:c8dd7e656905ca252e886ddd6df30ab0b59da86ba6669778a76c8ce59b8d4cde"
 
 [conda-packages.linux-arm64."sysroot_linux-aarch64-2.39-h934ec21_6"]
 url = "https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-aarch64-2.39-h934ec21_6.conda"
@@ -194,6 +198,10 @@ checksum = "sha256:d22c666eb887afd2119aac2110e23a0e817e9391bda99293421f7c46dab15
 url = "https://conda.anaconda.org/conda-forge/linux-aarch64/libllvm22-22.1.8-h680871c_3.conda"
 checksum = "sha256:ce3b3adf238db44eb054e70f7f82f5959598542b2c31161bb89fb537d15084c9"
 
+[conda-packages.linux-arm64-musl."libllvm23-23.1.5-h680871c_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/libllvm23-23.1.5-h680871c_0.conda"
+checksum = "sha256:fc290d5795cd007a36dd92963fd96f6ae4e88b64873bf20b396b851ca942d994"
+
 [conda-packages.linux-arm64-musl."liblzma-5.8.3-he30d5cf_1"]
 url = "https://conda.anaconda.org/conda-forge/linux-aarch64/liblzma-5.8.3-he30d5cf_1.conda"
 checksum = "sha256:f760669fd1cea27f689f411c0d5488e26ce50e382c9b63e4ad348f959850124a"
@@ -218,9 +226,9 @@ checksum = "sha256:76efa6cc9d7e6f5ee3bbca0939f64054af2bdfb3c3632531f8e633cf6c2ea
 url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-openmp-23.1.4-hde6636f_0.conda"
 checksum = "sha256:46eb282d04f311a2b465271c707c0477d165c7eb7012fa16b743a50477f34222"
 
-[conda-packages.linux-arm64-musl."llvm-tools-22-22.1.8-h2c72a67_3"]
-url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-22-22.1.8-h2c72a67_3.conda"
-checksum = "sha256:f28fecd2065fcac15b17ef4cca5a68a0e0dc264fa1287ad2e0160541198de347"
+[conda-packages.linux-arm64-musl."llvm-tools-23-23.1.5-h2c72a67_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-23-23.1.5-h2c72a67_0.conda"
+checksum = "sha256:c8dd7e656905ca252e886ddd6df30ab0b59da86ba6669778a76c8ce59b8d4cde"
 
 [conda-packages.linux-arm64-musl."sysroot_linux-aarch64-2.39-h934ec21_6"]
 url = "https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-aarch64-2.39-h934ec21_6.conda"
@@ -314,6 +322,10 @@ checksum = "sha256:f943117edb9cd4d9c61cc972eee5a34291dc55ea7a6e9e38da104995841cb
 url = "https://conda.anaconda.org/conda-forge/linux-64/libllvm22-22.1.8-h474f4eb_3.conda"
 checksum = "sha256:135b8b9bfed6a20cdbda657ddb4584d483203eb0e4c29e448a60d4bcc762f391"
 
+[conda-packages.linux-x64."libllvm23-23.1.5-h474f4eb_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/libllvm23-23.1.5-h474f4eb_0.conda"
+checksum = "sha256:9ab8b037a54db1abeb20f9a5e82e90a22f8a4b27094b599c04846ab58ed9a654"
+
 [conda-packages.linux-x64."liblzma-5.8.3-hb03c661_1"]
 url = "https://conda.anaconda.org/conda-forge/linux-64/liblzma-5.8.3-hb03c661_1.conda"
 checksum = "sha256:9787df8c22a59c9a70d3e5a10db9ad663485e75e9ccc3f09bd092cb7b95e0dab"
@@ -338,9 +350,9 @@ checksum = "sha256:eb8a0db0aa570124f7d2a93d7c7f596e3390df5e047818d873baad32985fc
 url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-openmp-23.1.4-h7148c6a_0.conda"
 checksum = "sha256:7de1204abbcf20aa8cb62c8a1385177ded2b7ca536b79c409866e46f30b0242f"
 
-[conda-packages.linux-x64."llvm-tools-22-22.1.8-h7399f5f_3"]
-url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-22-22.1.8-h7399f5f_3.conda"
-checksum = "sha256:cebf84b6b8a66138ab3d4ca657aaa70b78b2bd39baa088d84cf60794937a0341"
+[conda-packages.linux-x64."llvm-tools-23-23.1.5-h7399f5f_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-23-23.1.5-h7399f5f_0.conda"
+checksum = "sha256:5d27f4f1141b721a13fbbcb1adc7c2b4dfcb2a52acd925f8eaabf5144cd94321"
 
 [conda-packages.linux-x64."sysroot_linux-64-2.39-hc4b9eeb_6"]
 url = "https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-64-2.39-hc4b9eeb_6.conda"
@@ -434,6 +446,10 @@ checksum = "sha256:f943117edb9cd4d9c61cc972eee5a34291dc55ea7a6e9e38da104995841cb
 url = "https://conda.anaconda.org/conda-forge/linux-64/libllvm22-22.1.8-h474f4eb_3.conda"
 checksum = "sha256:135b8b9bfed6a20cdbda657ddb4584d483203eb0e4c29e448a60d4bcc762f391"
 
+[conda-packages.linux-x64-musl."libllvm23-23.1.5-h474f4eb_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/libllvm23-23.1.5-h474f4eb_0.conda"
+checksum = "sha256:9ab8b037a54db1abeb20f9a5e82e90a22f8a4b27094b599c04846ab58ed9a654"
+
 [conda-packages.linux-x64-musl."liblzma-5.8.3-hb03c661_1"]
 url = "https://conda.anaconda.org/conda-forge/linux-64/liblzma-5.8.3-hb03c661_1.conda"
 checksum = "sha256:9787df8c22a59c9a70d3e5a10db9ad663485e75e9ccc3f09bd092cb7b95e0dab"
@@ -458,9 +474,9 @@ checksum = "sha256:eb8a0db0aa570124f7d2a93d7c7f596e3390df5e047818d873baad32985fc
 url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-openmp-23.1.4-h7148c6a_0.conda"
 checksum = "sha256:7de1204abbcf20aa8cb62c8a1385177ded2b7ca536b79c409866e46f30b0242f"
 
-[conda-packages.linux-x64-musl."llvm-tools-22-22.1.8-h7399f5f_3"]
-url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-22-22.1.8-h7399f5f_3.conda"
-checksum = "sha256:cebf84b6b8a66138ab3d4ca657aaa70b78b2bd39baa088d84cf60794937a0341"
+[conda-packages.linux-x64-musl."llvm-tools-23-23.1.5-h7399f5f_0"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-23-23.1.5-h7399f5f_0.conda"
+checksum = "sha256:5d27f4f1141b721a13fbbcb1adc7c2b4dfcb2a52acd925f8eaabf5144cd94321"
 
 [conda-packages.linux-x64-musl."sysroot_linux-64-2.39-hc4b9eeb_6"]
 url = "https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-64-2.39-hc4b9eeb_6.conda"
@@ -538,6 +554,10 @@ checksum = "sha256:ed70856638465fa1e3dbce41b7512425a63789774368e4b9878249517daee
 url = "https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.4-h55c6f16_2.conda"
 checksum = "sha256:9c390b4f403db32346754ccef6b84b7e5d9b70cb6d76258fd23b05f2db2ab216"
 
+[conda-packages.macos-arm64."libcxx-23.1.6-hc645fd0_0"]
+url = "https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.6-hc645fd0_0.conda"
+checksum = "sha256:822b2a88313977594230b7be745324e4c50293a35cf9244bb19ecc9c2c385288"
+
 [conda-packages.macos-arm64."libiconv-1.18-he4c29f2_3"]
 url = "https://conda.anaconda.org/conda-forge/osx-arm64/libiconv-1.18-he4c29f2_3.conda"
 checksum = "sha256:689a14968267f2f97c07112fca5636e7d756036b9aee969911267c20bd3eea1f"
@@ -545,6 +565,10 @@ checksum = "sha256:689a14968267f2f97c07112fca5636e7d756036b9aee969911267c20bd3ee
 [conda-packages.macos-arm64."libllvm22-22.1.8-h759d1ac_3"]
 url = "https://conda.anaconda.org/conda-forge/osx-arm64/libllvm22-22.1.8-h759d1ac_3.conda"
 checksum = "sha256:70d7bbba65233fec41fb2294e81351d81b8d7e21206113135604fed4dd7fdcf6"
+
+[conda-packages.macos-arm64."libllvm23-23.1.5-h759d1ac_0"]
+url = "https://conda.anaconda.org/conda-forge/osx-arm64/libllvm23-23.1.5-h759d1ac_0.conda"
+checksum = "sha256:9288fdfba716a08aa6dca482a180ebf1bcf1cd1573d479b92e39d6c7cf97b412"
 
 [conda-packages.macos-arm64."liblzma-5.8.3-h8088a28_1"]
 url = "https://conda.anaconda.org/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_1.conda"
@@ -577,6 +601,10 @@ checksum = "sha256:c12ad5ec1b2c49035ee7a3cce1cd50e343501197690c72f2c2a39ab191cb1
 [conda-packages.macos-arm64."llvm-tools-22.1.8-hdb3d66b_3"]
 url = "https://conda.anaconda.org/conda-forge/osx-arm64/llvm-tools-22.1.8-hdb3d66b_3.conda"
 checksum = "sha256:67137f6b0a06e4eb2a06db9f5abf9abaa24a939c2685c2adc8d9d3fbeadcdb25"
+
+[conda-packages.macos-arm64."llvm-tools-23-23.1.5-h79441dc_0"]
+url = "https://conda.anaconda.org/conda-forge/osx-arm64/llvm-tools-23-23.1.5-h79441dc_0.conda"
+checksum = "sha256:e79c2c30133f6187b87534d191f69f6d9a51478c40a63c7605794c790e4599ac"
 
 [conda-packages.macos-arm64."ncurses-6.6-he64c551_1"]
 url = "https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.6-he64c551_1.conda"
@@ -662,6 +690,10 @@ checksum = "sha256:bc8bb814e26cce74498cabf5505f8770b3ee240723bf7632a786e3014133f
 url = "https://conda.anaconda.org/conda-forge/osx-64/libcxx-23.1.4-h19cb2f5_2.conda"
 checksum = "sha256:5d66e121f30c4b3792480de92230ec05d024106df5c031452bba356153df8c65"
 
+[conda-packages.macos-x64."libcxx-23.1.6-h88b51c2_0"]
+url = "https://conda.anaconda.org/conda-forge/osx-64/libcxx-23.1.6-h88b51c2_0.conda"
+checksum = "sha256:a3c8011337fb36e3972152a2d18eaea0923dc4a67868f76c46792da7fbcb82f2"
+
 [conda-packages.macos-x64."libiconv-1.18-h4ae439b_3"]
 url = "https://conda.anaconda.org/conda-forge/osx-64/libiconv-1.18-h4ae439b_3.conda"
 checksum = "sha256:2389e03a58ed0f5e8f2469eb4d4ba80d0af378b38854ae5eee65e5b641244082"
@@ -669,6 +701,10 @@ checksum = "sha256:2389e03a58ed0f5e8f2469eb4d4ba80d0af378b38854ae5eee65e5b641244
 [conda-packages.macos-x64."libllvm22-22.1.8-hd11396f_3"]
 url = "https://conda.anaconda.org/conda-forge/osx-64/libllvm22-22.1.8-hd11396f_3.conda"
 checksum = "sha256:ad09d02257ad9e4d3cf9b4e446a1541019169bf334d3fe2e3e6d702a86901d49"
+
+[conda-packages.macos-x64."libllvm23-23.1.5-hd11396f_0"]
+url = "https://conda.anaconda.org/conda-forge/osx-64/libllvm23-23.1.5-hd11396f_0.conda"
+checksum = "sha256:b91a9c4e827d057d1a8bae46d3a4d75835dfbcdd23ae3dac43623ab29ea3206f"
 
 [conda-packages.macos-x64."liblzma-5.8.3-hbb4bfdb_1"]
 url = "https://conda.anaconda.org/conda-forge/osx-64/liblzma-5.8.3-hbb4bfdb_1.conda"
@@ -701,6 +737,10 @@ checksum = "sha256:44a34bf09fb7311b830ce415a9010c964e73bc5b0638351c55547c1b48b42
 [conda-packages.macos-x64."llvm-tools-22.1.8-h8c1e6b9_3"]
 url = "https://conda.anaconda.org/conda-forge/osx-64/llvm-tools-22.1.8-h8c1e6b9_3.conda"
 checksum = "sha256:564f057fc9c99975d46a65cb4eb92b4691af79c77848f73b76fe4a4155a3e0b5"
+
+[conda-packages.macos-x64."llvm-tools-23-23.1.5-h36529c3_0"]
+url = "https://conda.anaconda.org/conda-forge/osx-64/llvm-tools-23-23.1.5-h36529c3_0.conda"
+checksum = "sha256:ef0450aceaa5b03794b8e88bc050fc75ae4de6d5f1906a279c12884fb55a574b"
 
 [conda-packages.macos-x64."ncurses-6.6-hcc0dc9a_1"]
 url = "https://conda.anaconda.org/conda-forge/osx-64/ncurses-6.6-hcc0dc9a_1.conda"
@@ -742,9 +782,9 @@ checksum = "sha256:75c549b55b673e15de8785a8e5dd85bca7eb612eee0ff4dc8d7bdaa15eacb
 url = "https://conda.anaconda.org/conda-forge/win-64/libiconv-1.18-hc1393d2_3.conda"
 checksum = "sha256:35e04e3ddac7720fc7c550a1c9f998604299d6a7bd1f3ec9b2825d825061daa2"
 
-[conda-packages.windows-x64."libllvm22-22.1.8-h830ff33_3"]
-url = "https://conda.anaconda.org/conda-forge/win-64/libllvm22-22.1.8-h830ff33_3.conda"
-checksum = "sha256:9f3d17c126cf7ea258e53c14b3e94e68c16adb3bed7a99d4fba74392de06026a"
+[conda-packages.windows-x64."libllvm23-23.1.5-h830ff33_0"]
+url = "https://conda.anaconda.org/conda-forge/win-64/libllvm23-23.1.5-h830ff33_0.conda"
+checksum = "sha256:4891b64fd4d271918dbc939688d223b9b28645b3472c00f6d4753617a8bc9321"
 
 [conda-packages.windows-x64."liblzma-5.8.3-hfd05255_1"]
 url = "https://conda.anaconda.org/conda-forge/win-64/liblzma-5.8.3-hfd05255_1.conda"
@@ -774,9 +814,21 @@ checksum = "sha256:3005729dce6f3d3f5ec91dfc49fc75a0095f9cd23bab49efb899657297ac9
 url = "https://conda.anaconda.org/conda-forge/win-64/vc-14.5-ha367084_42.conda"
 checksum = "sha256:0598ca1ce913618cff9bd90391bcf75cd9edb22057c85dd6784dd762b7a888e2"
 
+[conda-packages.windows-x64."vc-14.5-hda273ae_44"]
+url = "https://conda.anaconda.org/conda-forge/win-64/vc-14.5-hda273ae_44.conda"
+checksum = "sha256:2db82e4c8848e34728776539e0cd40b1eea12858c6135e92326b8e083f204fe4"
+
 [conda-packages.windows-x64."vc14_runtime-14.51.36247-habf1de7_42"]
 url = "https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.51.36247-habf1de7_42.conda"
 checksum = "sha256:8dfbfd68ebf53249d11e528cbb80ad5a2460b0c5b4636eed82ee0d3950827a3d"
+
+[conda-packages.windows-x64."vc14_runtime-14.51.36247-hb06f545_44"]
+url = "https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.51.36247-hb06f545_44.conda"
+checksum = "sha256:8221fe78686f3b11586a7585f902f1403c923fb3a5040cff59a16db27782db8d"
+
+[conda-packages.windows-x64."vcomp14-14.51.36247-h1c3f1cb_44"]
+url = "https://conda.anaconda.org/conda-forge/win-64/vcomp14-14.51.36247-h1c3f1cb_44.conda"
+checksum = "sha256:81490037bc6d4843fc83d16019bc113be60c849d21614caa3e2f8ff4389fefca"
 
 [conda-packages.windows-x64."vcomp14-14.51.36247-habf1de7_42"]
 url = "https://conda.anaconda.org/conda-forge/win-64/vcomp14-14.51.36247-habf1de7_42.conda"
@@ -1249,19 +1301,19 @@ conda_deps = [
 ]
 
 [[tools."conda:llvm-tools"]]
-version = "22.1.8"
+version = "23.1.5"
 backend = "conda:llvm-tools"
-specifiers = ["22.1.8"]
+specifiers = ["23.1.5"]
 
 [tools."conda:llvm-tools".options]
 channel = "conda-forge"
 
 [tools."conda:llvm-tools"."platforms.linux-arm64"]
-checksum = "sha256:7d0809408a36471f9ef012bf48a0b6070b916065d828a7e22ccdb3c8c3fb90ae"
-url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-22.1.8-hde6636f_3.conda"
+checksum = "sha256:21040c5ed8f401dad9730dc89e2abf296546fe688e5109995515b6fbe0a8eb6a"
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-23.1.5-hde6636f_0.conda"
 conda_deps = [
-    "llvm-tools-22-22.1.8-h2c72a67_3",
-    "libllvm22-22.1.8-h680871c_3",
+    "llvm-tools-23-23.1.5-h2c72a67_0",
+    "libllvm23-23.1.5-h680871c_0",
     "libgcc-16.2.0-h205dda4_7",
     "libstdcxx-16.2.0-hef695bb_7",
     "_openmp_mutex-4.5-20_gnu",
@@ -1275,11 +1327,11 @@ conda_deps = [
 ]
 
 [tools."conda:llvm-tools"."platforms.linux-arm64-musl"]
-checksum = "sha256:7d0809408a36471f9ef012bf48a0b6070b916065d828a7e22ccdb3c8c3fb90ae"
-url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-22.1.8-hde6636f_3.conda"
+checksum = "sha256:21040c5ed8f401dad9730dc89e2abf296546fe688e5109995515b6fbe0a8eb6a"
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/llvm-tools-23.1.5-hde6636f_0.conda"
 conda_deps = [
-    "llvm-tools-22-22.1.8-h2c72a67_3",
-    "libllvm22-22.1.8-h680871c_3",
+    "llvm-tools-23-23.1.5-h2c72a67_0",
+    "libllvm23-23.1.5-h680871c_0",
     "libgcc-16.2.0-h205dda4_7",
     "libstdcxx-16.2.0-hef695bb_7",
     "_openmp_mutex-4.5-20_gnu",
@@ -1293,11 +1345,11 @@ conda_deps = [
 ]
 
 [tools."conda:llvm-tools"."platforms.linux-x64"]
-checksum = "sha256:692f39f18b6e969a8f94da51fc69f67c871db074573f69409460ebfe5840eea1"
-url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-22.1.8-h7148c6a_3.conda"
+checksum = "sha256:67c30f29f1cb88f7ca51a3e0b951d706825e30f9f638367d78dc1a9046b6dffd"
+url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-23.1.5-h7148c6a_0.conda"
 conda_deps = [
-    "llvm-tools-22-22.1.8-h7399f5f_3",
-    "libllvm22-22.1.8-h474f4eb_3",
+    "llvm-tools-23-23.1.5-h7399f5f_0",
+    "libllvm23-23.1.5-h474f4eb_0",
     "libgcc-16.2.0-ha9f2e26_7",
     "libstdcxx-16.2.0-h934c35e_7",
     "_openmp_mutex-4.5-20_gnu",
@@ -1312,11 +1364,11 @@ conda_deps = [
 ]
 
 [tools."conda:llvm-tools"."platforms.linux-x64-musl"]
-checksum = "sha256:692f39f18b6e969a8f94da51fc69f67c871db074573f69409460ebfe5840eea1"
-url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-22.1.8-h7148c6a_3.conda"
+checksum = "sha256:67c30f29f1cb88f7ca51a3e0b951d706825e30f9f638367d78dc1a9046b6dffd"
+url = "https://conda.anaconda.org/conda-forge/linux-64/llvm-tools-23.1.5-h7148c6a_0.conda"
 conda_deps = [
-    "llvm-tools-22-22.1.8-h7399f5f_3",
-    "libllvm22-22.1.8-h474f4eb_3",
+    "llvm-tools-23-23.1.5-h7399f5f_0",
+    "libllvm23-23.1.5-h474f4eb_0",
     "libgcc-16.2.0-ha9f2e26_7",
     "libstdcxx-16.2.0-h934c35e_7",
     "_openmp_mutex-4.5-20_gnu",
@@ -1331,13 +1383,13 @@ conda_deps = [
 ]
 
 [tools."conda:llvm-tools"."platforms.macos-arm64"]
-checksum = "sha256:67137f6b0a06e4eb2a06db9f5abf9abaa24a939c2685c2adc8d9d3fbeadcdb25"
-url = "https://conda.anaconda.org/conda-forge/osx-arm64/llvm-tools-22.1.8-hdb3d66b_3.conda"
+checksum = "sha256:f0d66a877aa39288bc77cfedf86d1ab976a5f2534b5bc9f1899610528d25f62c"
+url = "https://conda.anaconda.org/conda-forge/osx-arm64/llvm-tools-23.1.5-hdb3d66b_0.conda"
 conda_deps = [
-    "llvm-tools-22-22.1.8-h79441dc_3",
-    "libllvm22-22.1.8-h759d1ac_3",
+    "llvm-tools-23-23.1.5-h79441dc_0",
+    "libllvm23-23.1.5-h759d1ac_0",
     "libzlib-1.3.2-h8088a28_3",
-    "libcxx-23.1.4-h55c6f16_2",
+    "libcxx-23.1.6-hc645fd0_0",
     "libxml2-2.15.4-h550178d_1",
     "libxml2-16-2.15.4-heb56d2d_1",
     "zstd-1.5.7-hf451053_7",
@@ -1347,13 +1399,13 @@ conda_deps = [
 ]
 
 [tools."conda:llvm-tools"."platforms.macos-x64"]
-checksum = "sha256:564f057fc9c99975d46a65cb4eb92b4691af79c77848f73b76fe4a4155a3e0b5"
-url = "https://conda.anaconda.org/conda-forge/osx-64/llvm-tools-22.1.8-h8c1e6b9_3.conda"
+checksum = "sha256:5cf57a9cb66bb6d8ed1984862afc7067140400e5efae9032de2c37d746f1d8a4"
+url = "https://conda.anaconda.org/conda-forge/osx-64/llvm-tools-23.1.5-h8c1e6b9_0.conda"
 conda_deps = [
-    "llvm-tools-22-22.1.8-h36529c3_3",
-    "libllvm22-22.1.8-hd11396f_3",
+    "llvm-tools-23-23.1.5-h36529c3_0",
+    "libllvm23-23.1.5-hd11396f_0",
     "libzlib-1.3.2-hbb4bfdb_3",
-    "libcxx-23.1.4-h19cb2f5_2",
+    "libcxx-23.1.6-h88b51c2_0",
     "libxml2-2.15.4-hb56241c_1",
     "libxml2-16-2.15.4-h8376fb4_1",
     "zstd-1.5.7-hbc1a06c_7",
@@ -1363,17 +1415,17 @@ conda_deps = [
 ]
 
 [tools."conda:llvm-tools"."platforms.windows-x64"]
-checksum = "sha256:28c41f4a7c78bc49362365f93f2e66d312160d4db4ada252d0897982dd0bc113"
-url = "https://conda.anaconda.org/conda-forge/win-64/llvm-tools-22.1.8-he5be12e_3.conda"
+checksum = "sha256:4bd51ea338284c1b51c0170f3831db244cae68bfab7d0e8b5eb04b9c9d7fc458"
+url = "https://conda.anaconda.org/conda-forge/win-64/llvm-tools-23.1.5-he5be12e_0.conda"
 conda_deps = [
-    "libllvm22-22.1.8-h830ff33_3",
+    "libllvm23-23.1.5-h830ff33_0",
     "libzlib-1.3.2-hfd05255_3",
     "libxml2-2.15.4-he095d88_1",
     "libxml2-16-2.15.4-h3cfd58e_1",
     "ucrt-10.0.26100.0-h57928b3_0",
-    "vc-14.5-ha367084_42",
-    "vc14_runtime-14.51.36247-habf1de7_42",
-    "vcomp14-14.51.36247-habf1de7_42",
+    "vc-14.5-hda273ae_44",
+    "vc14_runtime-14.51.36247-hb06f545_44",
+    "vcomp14-14.51.36247-h1c3f1cb_44",
     "zstd-1.5.7-h534d264_7",
     "icu-78.3-h5112557_2",
     "libiconv-1.18-hc1393d2_3",

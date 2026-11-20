@@ -106,7 +106,7 @@ ginkgo = { version = "2.34.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", 
 "go:github.com/google/go-licenses/v2" = { version = "2.0.1", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 "go:github.com/cilium/ebpf/cmd/bpf2go" = { version = "0.22.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 clang = { version = "22.1.8" }
-"conda:llvm-tools" = { version = "22.1.8" }
+"conda:llvm-tools" = { version = "23.1.5" }
 "clang-format" = { version = "22.1.8" }
 "aqua:grafana/flint" = "0.22.15"
 

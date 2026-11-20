@@ -108,6 +108,14 @@ ginkgo = { version = "2.34.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", 
 clang = { version = "22.1.8" }
 "conda:llvm-tools" = { version = "22.1.8" }
 "clang-format" = { version = "22.1.8" }
+"aqua:grafana/flint" = "0.22.15"
+
+# @yarnpkg/libzip@3.2.2 has an npm signature and matches Yarn's release commit,
+# but was published without provenance; the no-downgrade policy rejects Renovate.
+[tools."npm:renovate"]
+version = "44.252.0"
+allow_builds = ["re2"]
+trust_policy_excludes = ["@yarnpkg/libzip@3.2.2"]
 
 [tools."github:cpp-linter/clang-tools-static-binaries"]
 version = "2026.09.01-5fb8802d"

@@ -1,0 +1,1046 @@
+{
+  "meta": {},
+  "files": {
+    ".devcontainer/Dockerfile": {
+      "dockerfile": [
+        "bash",
+        "ca-certificates",
+        "curl",
+        "debian",
+        "docker-cli",
+        "gcc",
+        "ghcr.io/jdx/mise",
+        "git",
+        "golang",
+        "jq",
+        "libc6-dev",
+        "libfreetype6",
+        "libstdc++6",
+        "libxext6",
+        "libxi6",
+        "libxrender1",
+        "libxtst6",
+        "make",
+        "procps",
+        "sudo",
+        "unzip"
+      ]
+    },
+    ".github/actions/report-codecov/action.yml": {
+      "github-actions": [
+        "codecov/codecov-action",
+        "grafana/shared-workflows"
+      ]
+    },
+    ".github/actions/setup-mise/action.yml": {
+      "github-actions": [
+        "actions/cache",
+        "jdx/mise",
+        "jdx/mise-action"
+      ],
+      "regex": [
+        "jdx/mise"
+      ]
+    },
+    ".github/workflows/agent_fix-obi.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "anthropics/claude-code-action",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/bot_sync-obi-fork.yml": {
+      "github-actions": [
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/bot_sync-obi-submodule.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/build-alloy-beyla-image.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "docker/build-push-action",
+        "docker/login-action",
+        "docker/setup-buildx-action",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/deploy-alloy-beyla-dev.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/deploy-pr-preview.yml": {
+      "github-actions": [
+        "grafana/writers-toolkit"
+      ]
+    },
+    ".github/workflows/devcontainer-smoke.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/grot-handoff-approval-test.yml": {
+      "github-actions": [
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/grot-handoff-readiness-test.yml": {
+      "github-actions": [
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/helm-chart-bump.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "grafana/shared-workflows",
+        "peter-evans/create-pull-request",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/helm-release.yml": {
+      "github-actions": [
+        "grafana/helm-charts"
+      ],
+      "regex": [
+        "grafana/helm-charts"
+      ]
+    },
+    ".github/workflows/helm-test.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "azure/setup-helm",
+        "fluxcd/flux2",
+        "helm/chart-testing-action",
+        "helm/kind-action",
+        "jnorwood/helm-docs",
+        "medyagh/setup-minikube",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/obi-adoption-preflight.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/obi-adoption-repair.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/promote-patch-to-stable.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "docker/setup-buildx-action",
+        "google-github-actions/setup-gcloud",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/publish_gar_main.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "docker/build-push-action",
+        "docker/setup-buildx-action",
+        "google-github-actions/setup-gcloud",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/publish_gar_pre_release.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "docker/build-push-action",
+        "docker/metadata-action",
+        "docker/setup-buildx-action",
+        "google-github-actions/setup-gcloud",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/publish_gar_release.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "docker/build-push-action",
+        "docker/metadata-action",
+        "docker/setup-buildx-action",
+        "google-github-actions/setup-gcloud",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/publish_inject_sdk_image.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "docker/build-push-action",
+        "docker/login-action",
+        "docker/setup-buildx-action",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "grafana/dashboard-linter",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request_beyla_integration_tests.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/upload-artifact",
+        "grafana/shared-workflows"
+      ]
+    },
+    ".github/workflows/pull_request_check_license.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request_deb_package.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request_integration_tests.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/upload-artifact",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request_integration_tests_arm.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/upload-artifact",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request_k8s_integration_tests.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/upload-artifact",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request_oats_test.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/upload-artifact",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/pull_request_test_docker_build.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "docker/build-push-action",
+        "docker/setup-buildx-action",
+        "grafana/shared-workflows"
+      ]
+    },
+    ".github/workflows/release-binaries-base.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/upload-release-asset"
+      ]
+    },
+    ".github/workflows/release-binaries.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/upload-release-asset",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/release-notes.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "mariomac/linked-release-notes",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/release-reconciliation.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "jdx/mise",
+        "jdx/mise-action",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/release-train-prepare.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "actions/setup-java",
+        "grafana/shared-workflows",
+        "java-jdk",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/release-train-tag.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/supervisor_rerun-flaky.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "grafana/beyla",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/vale.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "grafana/vale",
+        "grafana/writers-toolkit",
+        "ubuntu"
+      ]
+    },
+    ".github/workflows/workflow_integration_tests_vm.yml": {
+      "github-actions": [
+        "actions/cache",
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
+        "grafana/shared-workflows",
+        "ubuntu"
+      ]
+    },
+    "Dockerfile": {
+      "dockerfile": [
+        "bash",
+        "ca-certificates",
+        "curl",
+        "gcc-aarch64-linux-gnu",
+        "gcc-x86-64-linux-gnu",
+        "ghcr.io/jdx/mise",
+        "ghcr.io/open-telemetry/obi-generator",
+        "git",
+        "golang",
+        "gradle",
+        "libc6-dev-amd64-cross",
+        "libc6-dev-arm64-cross",
+        "make"
+      ]
+    },
+    "charts/beyla/values.yaml": {
+      "helm-values": [
+        "docker.io/grafana/beyla",
+        "docker.io/grafana/beyla-k8s-cache"
+      ]
+    },
+    "debug.Dockerfile": {
+      "dockerfile": [
+        "alpine",
+        "bash",
+        "ca-certificates",
+        "curl",
+        "ghcr.io/jdx/mise",
+        "git",
+        "golang"
+      ]
+    },
+    "examples/alloy/values.yaml": {
+      "helm-values": [
+        "docker.io/grafana/alloy",
+        "ghcr.io/jimmidyson/configmap-reload"
+      ]
+    },
+    "examples/greeting-apps/docker-compose.yaml": {
+      "docker-compose": [
+        "ghcr.io/grafana/beyla-demo/greeting-actix-rust/0.0.1",
+        "ghcr.io/grafana/beyla-demo/greeting-go/0.0.1",
+        "ghcr.io/grafana/beyla-demo/greeting-graalvm-native/0.0.1",
+        "grafana/agent",
+        "grafana/beyla",
+        "grafana/grafana",
+        "grafana/mimir",
+        "grafana/tempo",
+        "nginx"
+      ]
+    },
+    "examples/quickstart/nodejs/package.json": {
+      "npm": [
+        "express",
+        "start"
+      ]
+    },
+    "go.mod": {
+      "gomod": [
+        "./.obi-src",
+        "./scripts/obi-configbridge",
+        "cloud.google.com/go/auth",
+        "cloud.google.com/go/auth/oauth2adapt",
+        "cloud.google.com/go/compute/metadata",
+        "github.com/AlessandroPomponio/go-gibberish",
+        "github.com/Azure/azure-sdk-for-go/sdk/azcore",
+        "github.com/Azure/azure-sdk-for-go/sdk/azidentity",
+        "github.com/Azure/azure-sdk-for-go/sdk/internal",
+        "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v9",
+        "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12",
+        "github.com/AzureAD/microsoft-authentication-library-for-go",
+        "github.com/DataDog/go-sqllexer",
+        "github.com/Microsoft/go-winio",
+        "github.com/andybalholm/brotli",
+        "github.com/aws/aws-sdk-go-v2",
+        "github.com/aws/aws-sdk-go-v2/config",
+        "github.com/aws/aws-sdk-go-v2/credentials",
+        "github.com/aws/aws-sdk-go-v2/feature/ec2/imds",
+        "github.com/aws/aws-sdk-go-v2/internal/configsources",
+        "github.com/aws/aws-sdk-go-v2/internal/endpoints/v2",
+        "github.com/aws/aws-sdk-go-v2/internal/v4a",
+        "github.com/aws/aws-sdk-go-v2/service/ecs",
+        "github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding",
+        "github.com/aws/aws-sdk-go-v2/service/internal/presigned-url",
+        "github.com/aws/aws-sdk-go-v2/service/route53",
+        "github.com/aws/aws-sdk-go-v2/service/signin",
+        "github.com/aws/aws-sdk-go-v2/service/sso",
+        "github.com/aws/aws-sdk-go-v2/service/ssooidc",
+        "github.com/aws/aws-sdk-go-v2/service/sts",
+        "github.com/aws/smithy-go",
+        "github.com/bahlo/generic-list-go",
+        "github.com/beorn7/perks",
+        "github.com/blang/semver/v4",
+        "github.com/brunoscheufler/aws-ecs-metadata-go",
+        "github.com/buger/jsonparser",
+        "github.com/caarlos0/env/v11",
+        "github.com/cenkalti/backoff/v5",
+        "github.com/cenkalti/backoff/v7",
+        "github.com/cespare/xxhash/v2",
+        "github.com/cilium/ebpf",
+        "github.com/containerd/errdefs",
+        "github.com/containerd/errdefs/pkg",
+        "github.com/containers/common",
+        "github.com/davecgh/go-spew",
+        "github.com/distribution/reference",
+        "github.com/docker/go-connections",
+        "github.com/docker/go-units",
+        "github.com/ebitengine/purego",
+        "github.com/elastic/go-freelru",
+        "github.com/emicklei/go-restful/v3",
+        "github.com/evanphx/json-patch/v5",
+        "github.com/felixge/httpsnoop",
+        "github.com/foxboron/go-tpm-keyfiles",
+        "github.com/fxamacker/cbor/v2",
+        "github.com/gabriel-vasile/mimetype",
+        "github.com/go-logr/logr",
+        "github.com/go-logr/stdr",
+        "github.com/go-ole/go-ole",
+        "github.com/go-openapi/jsonpointer",
+        "github.com/go-openapi/jsonreference",
+        "github.com/go-openapi/swag",
+        "github.com/go-openapi/swag/cmdutils",
+        "github.com/go-openapi/swag/conv",
+        "github.com/go-openapi/swag/fileutils",
+        "github.com/go-openapi/swag/jsonutils",
+        "github.com/go-openapi/swag/loading",
+        "github.com/go-openapi/swag/mangling",
+        "github.com/go-openapi/swag/netutils",
+        "github.com/go-openapi/swag/pools",
+        "github.com/go-openapi/swag/stringutils",
+        "github.com/go-openapi/swag/typeutils",
+        "github.com/go-openapi/swag/yamlutils",
+        "github.com/go-playground/locales",
+        "github.com/go-playground/universal-translator",
+        "github.com/go-playground/validator/v10",
+        "github.com/go-viper/mapstructure/v2",
+        "github.com/gobwas/glob",
+        "github.com/goccy/go-json",
+        "github.com/golang-jwt/jwt/v5",
+        "github.com/golang/snappy",
+        "github.com/google/gnostic-models",
+        "github.com/google/go-tpm",
+        "github.com/google/s2a-go",
+        "github.com/google/uuid",
+        "github.com/googleapis/enterprise-certificate-proxy",
+        "github.com/googleapis/gax-go/v2",
+        "github.com/gorilla/websocket",
+        "github.com/grafana/go-offsets-tracker",
+        "github.com/grafana/pyroscope-go/godeltaprof",
+        "github.com/grpc-ecosystem/grpc-gateway/v2",
+        "github.com/hashicorp/go-version",
+        "github.com/hashicorp/golang-lru/v2",
+        "github.com/invopop/jsonschema",
+        "github.com/json-iterator/go",
+        "github.com/klauspost/compress",
+        "github.com/klauspost/cpuid/v2",
+        "github.com/knadh/koanf/maps",
+        "github.com/knadh/koanf/providers/confmap",
+        "github.com/knadh/koanf/v2",
+        "github.com/kylelemons/godebug",
+        "github.com/leodido/go-urn",
+        "github.com/lufia/plan9stats",
+        "github.com/mailru/easyjson",
+        "github.com/microsoft/go-winmd",
+        "github.com/minio/sha256-simd",
+        "github.com/mitchellh/copystructure",
+        "github.com/mitchellh/reflectwalk",
+        "github.com/moby/docker-image-spec",
+        "github.com/moby/moby/api",
+        "github.com/moby/moby/client",
+        "github.com/moby/spdystream",
+        "github.com/modern-go/concurrent",
+        "github.com/modern-go/reflect2",
+        "github.com/munnerz/goautoneg",
+        "github.com/ohler55/ojg",
+        "github.com/opencontainers/go-digest",
+        "github.com/opencontainers/image-spec",
+        "github.com/ory/dockertest/v4",
+        "github.com/oschwald/maxminddb-golang/v2",
+        "github.com/pelletier/go-toml/v2",
+        "github.com/pierrec/lz4/v4",
+        "github.com/pkg/browser",
+        "github.com/pkg/errors",
+        "github.com/pmezard/go-difflib",
+        "github.com/power-devops/perfstat",
+        "github.com/prometheus/client_golang",
+        "github.com/prometheus/client_model",
+        "github.com/prometheus/common",
+        "github.com/prometheus/otlptranslator",
+        "github.com/prometheus/procfs",
+        "github.com/rs/cors",
+        "github.com/shirou/gopsutil/v4",
+        "github.com/spf13/pflag",
+        "github.com/stretchr/testify",
+        "github.com/tidwall/jsonc",
+        "github.com/tklauser/go-sysconf",
+        "github.com/tklauser/numcpus",
+        "github.com/vektah/gqlparser/v2",
+        "github.com/vishvananda/netlink",
+        "github.com/vishvananda/netns",
+        "github.com/vladimirvivien/gexe",
+        "github.com/wk8/go-ordered-map/v2",
+        "github.com/x448/float16",
+        "github.com/xwb1989/sqlparser",
+        "github.com/yl2chen/cidranger",
+        "github.com/yusufpapurcu/wmi",
+        "github.com/zeebo/xxh3",
+        "go",
+        "go.mongodb.org/mongo-driver/v2",
+        "go.opentelemetry.io/auto/sdk",
+        "go.opentelemetry.io/collector",
+        "go.opentelemetry.io/collector/client",
+        "go.opentelemetry.io/collector/component",
+        "go.opentelemetry.io/collector/config/configauth",
+        "go.opentelemetry.io/collector/config/configcompression",
+        "go.opentelemetry.io/collector/config/configgrpc",
+        "go.opentelemetry.io/collector/config/confighttp",
+        "go.opentelemetry.io/collector/config/configmiddleware",
+        "go.opentelemetry.io/collector/config/confignet",
+        "go.opentelemetry.io/collector/config/configopaque",
+        "go.opentelemetry.io/collector/config/configoptional",
+        "go.opentelemetry.io/collector/config/configretry",
+        "go.opentelemetry.io/collector/config/configtls",
+        "go.opentelemetry.io/collector/confmap",
+        "go.opentelemetry.io/collector/consumer",
+        "go.opentelemetry.io/collector/consumer/consumererror",
+        "go.opentelemetry.io/collector/consumer/consumererror/xconsumererror",
+        "go.opentelemetry.io/collector/consumer/xconsumer",
+        "go.opentelemetry.io/collector/exporter",
+        "go.opentelemetry.io/collector/exporter/exporterhelper",
+        "go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper",
+        "go.opentelemetry.io/collector/exporter/otlpexporter",
+        "go.opentelemetry.io/collector/exporter/otlphttpexporter",
+        "go.opentelemetry.io/collector/exporter/xexporter",
+        "go.opentelemetry.io/collector/extension",
+        "go.opentelemetry.io/collector/extension/extensionauth",
+        "go.opentelemetry.io/collector/extension/extensionmiddleware",
+        "go.opentelemetry.io/collector/extension/xextension",
+        "go.opentelemetry.io/collector/featuregate",
+        "go.opentelemetry.io/collector/internal/componentalias",
+        "go.opentelemetry.io/collector/pdata",
+        "go.opentelemetry.io/collector/pdata/pprofile",
+        "go.opentelemetry.io/collector/pdata/xpdata",
+        "go.opentelemetry.io/collector/pipeline",
+        "go.opentelemetry.io/collector/pipeline/xpipeline",
+        "go.opentelemetry.io/contrib/detectors/aws/ec2/v2",
+        "go.opentelemetry.io/contrib/detectors/aws/ecs",
+        "go.opentelemetry.io/contrib/detectors/aws/eks",
+        "go.opentelemetry.io/contrib/detectors/azure/azurevm",
+        "go.opentelemetry.io/contrib/detectors/gcp",
+        "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+        "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+        "go.opentelemetry.io/contrib/otelconf",
+        "go.opentelemetry.io/contrib/propagators/autoprop",
+        "go.opentelemetry.io/contrib/propagators/aws",
+        "go.opentelemetry.io/contrib/propagators/b3",
+        "go.opentelemetry.io/contrib/propagators/jaeger",
+        "go.opentelemetry.io/contrib/propagators/ot",
+        "go.opentelemetry.io/ebpf-profiler",
+        "go.opentelemetry.io/obi",
+        "go.opentelemetry.io/obi/cmd/obi/configbridge",
+        "go.opentelemetry.io/otel",
+        "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc",
+        "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp",
+        "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc",
+        "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp",
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+        "go.opentelemetry.io/otel/exporters/prometheus",
+        "go.opentelemetry.io/otel/exporters/stdout/stdoutlog",
+        "go.opentelemetry.io/otel/exporters/stdout/stdoutmetric",
+        "go.opentelemetry.io/otel/exporters/stdout/stdouttrace",
+        "go.opentelemetry.io/otel/log",
+        "go.opentelemetry.io/otel/metric",
+        "go.opentelemetry.io/otel/sdk",
+        "go.opentelemetry.io/otel/sdk/log",
+        "go.opentelemetry.io/otel/sdk/metric",
+        "go.opentelemetry.io/otel/trace",
+        "go.opentelemetry.io/proto/otlp",
+        "go.opentelemetry.io/proto/otlp/processcontext/v1development",
+        "go.uber.org/multierr",
+        "go.uber.org/zap",
+        "go.yaml.in/yaml/v2",
+        "go.yaml.in/yaml/v3",
+        "golang.org/x/arch",
+        "golang.org/x/crypto",
+        "golang.org/x/exp",
+        "golang.org/x/mod",
+        "golang.org/x/net",
+        "golang.org/x/oauth2",
+        "golang.org/x/sync",
+        "golang.org/x/sys",
+        "golang.org/x/term",
+        "golang.org/x/text",
+        "golang.org/x/time",
+        "google.golang.org/api",
+        "google.golang.org/genproto/googleapis/api",
+        "google.golang.org/genproto/googleapis/rpc",
+        "google.golang.org/grpc",
+        "google.golang.org/protobuf",
+        "gopkg.in/evanphx/json-patch.v4",
+        "gopkg.in/inf.v0",
+        "gopkg.in/yaml.v3",
+        "k8s.io/api",
+        "k8s.io/apimachinery",
+        "k8s.io/client-go",
+        "k8s.io/component-base",
+        "k8s.io/klog/v2",
+        "k8s.io/kube-openapi",
+        "k8s.io/streaming",
+        "k8s.io/utils",
+        "sigs.k8s.io/controller-runtime",
+        "sigs.k8s.io/e2e-framework",
+        "sigs.k8s.io/json",
+        "sigs.k8s.io/randfill",
+        "sigs.k8s.io/structured-merge-diff/v6",
+        "sigs.k8s.io/yaml"
+      ]
+    },
+    "internal/java/mise.toml": {
+      "mise": [
+        "gradle",
+        "java"
+      ]
+    },
+    "internal/test/beyla_extensions/components/beyla-k8s-cache/Dockerfile": {
+      "dockerfile": [
+        "ca-certificates",
+        "curl",
+        "ghcr.io/jdx/mise",
+        "golang"
+      ]
+    },
+    "internal/test/beyla_extensions/components/beyla/Dockerfile": {
+      "dockerfile": [
+        "ca-certificates",
+        "curl",
+        "ghcr.io/jdx/mise",
+        "golang",
+        "ubuntu"
+      ]
+    },
+    "internal/test/beyla_extensions/components/beyla/Dockerfile-with-javaagent": {
+      "dockerfile": [
+        "ca-certificates",
+        "curl",
+        "gcc-aarch64-linux-gnu",
+        "gcc-x86-64-linux-gnu",
+        "ghcr.io/jdx/mise",
+        "golang",
+        "gradle",
+        "libc6-dev-amd64-cross",
+        "libc6-dev-arm64-cross",
+        "ubuntu"
+      ]
+    },
+    "internal/test/beyla_extensions/components/beyla/Dockerfile_dbg": {
+      "dockerfile": [
+        "ca-certificates",
+        "curl",
+        "ghcr.io/jdx/mise",
+        "golang"
+      ]
+    },
+    "internal/test/beyla_extensions/components/mongo/Dockerfile": {
+      "dockerfile": [
+        "mongo"
+      ]
+    },
+    "internal/test/beyla_extensions/docker-compose-client-promscrape.yml": {
+      "docker-compose": [
+        "jaegertracing/all-in-one",
+        "otel/opentelemetry-collector-contrib",
+        "quay.io/prometheus/prometheus"
+      ]
+    },
+    "internal/test/beyla_extensions/docker-compose-python-sql.yml": {
+      "docker-compose": [
+        "jaegertracing/all-in-one",
+        "otel/opentelemetry-collector-contrib",
+        "quay.io/prometheus/prometheus"
+      ]
+    },
+    "internal/test/integration/components/beyla/Dockerfile": {
+      "dockerfile": [
+        "ca-certificates",
+        "curl",
+        "ghcr.io/jdx/mise",
+        "golang",
+        "ubuntu"
+      ]
+    },
+    "internal/test/integration/components/beyla/Dockerfile_dbg": {
+      "dockerfile": [
+        "ca-certificates",
+        "curl",
+        "ghcr.io/jdx/mise",
+        "golang"
+      ]
+    },
+    "internal/test/integration/components/local-process/Dockerfile": {
+      "dockerfile": [
+        "ghcr.io/open-telemetry/obi-testimg"
+      ]
+    },
+    "internal/test/integration/components/openai/Dockerfile": {
+      "dockerfile": [
+        "python"
+      ]
+    },
+    "internal/test/integration/components/openai/mock-server/Dockerfile": {
+      "dockerfile": [
+        "debian",
+        "golang"
+      ]
+    },
+    "internal/test/integration/components/openai/requirements.txt": {
+      "pip_requirements": [
+        "annotated-doc",
+        "annotated-types",
+        "anyio",
+        "certifi",
+        "charset-normalizer",
+        "click",
+        "fastapi",
+        "h11",
+        "idna",
+        "pydantic",
+        "pydantic-core",
+        "requests",
+        "starlette",
+        "typing-extensions",
+        "typing-inspection",
+        "urllib3",
+        "uvicorn"
+      ]
+    },
+    "internal/test/integration/components/survey/Dockerfile": {
+      "dockerfile": [
+        "golang"
+      ]
+    },
+    "internal/test/integration/compose/docker-compose-instrument-all-local.yml": {
+      "docker-compose": [
+        "beyla-local-process",
+        "ghcr.io/open-telemetry/obi-testimg",
+        "quay.io/prometheus/prometheus"
+      ]
+    },
+    "internal/test/integration/compose/docker-compose-process.yml": {
+      "docker-compose": [
+        "ghcr.io/open-telemetry/obi-testimg",
+        "otel/opentelemetry-collector-contrib",
+        "quay.io/prometheus/prometheus"
+      ]
+    },
+    "internal/test/integration/compose/docker-compose-sigil.yml": {
+      "docker-compose": [
+        "jaegertracing/all-in-one",
+        "otel/opentelemetry-collector-contrib",
+        "quay.io/prometheus/prometheus"
+      ]
+    },
+    "internal/test/integration/compose/docker-compose-survey-options.yml": {
+      "docker-compose": [
+        "beyla-survey-fixture",
+        "otel/opentelemetry-collector-contrib",
+        "quay.io/prometheus/prometheus"
+      ]
+    },
+    "internal/test/integration/compose/docker-compose-webhook.yml": {
+      "docker-compose": [
+        "quay.io/prometheus/prometheus"
+      ]
+    },
+    "javaagent.Dockerfile": {
+      "dockerfile": [
+        "golang",
+        "gradle"
+      ]
+    },
+    "k8scache.Dockerfile": {
+      "dockerfile": [
+        "ca-certificates",
+        "curl",
+        "ghcr.io/jdx/mise",
+        "golang"
+      ]
+    },
+    "mise.toml": {
+      "mise": [
+        "actionlint",
+        "aqua:grafana/flint",
+        "clang",
+        "clang-format",
+        "conda:llvm-tools",
+        "ginkgo",
+        "github:cpp-linter/clang-tools-static-binaries",
+        "go",
+        "go:github.com/cilium/ebpf/cmd/bpf2go",
+        "go:github.com/google/go-licenses/v2",
+        "golangci-lint",
+        "gotestsum",
+        "hadolint",
+        "hk",
+        "kind",
+        "npm:renovate",
+        "pkl",
+        "rumdl",
+        "setup-envtest",
+        "shellcheck",
+        "shfmt",
+        "taplo"
+      ]
+    },
+    "pkg/webhook/image/Dockerfile": {
+      "dockerfile": [
+        "alpine",
+        "build-base",
+        "build-essential",
+        "curl",
+        "git",
+        "jq",
+        "node",
+        "python",
+        "ruby",
+        "unzip",
+        "wget"
+      ]
+    },
+    "pkg/webhook/image/java/version.txt": {
+      "regex": [
+        "grafana/grafana-opentelemetry-java"
+      ]
+    },
+    "pkg/webhook/image/opentelemetry-injector/version.txt": {
+      "regex": [
+        "open-telemetry/opentelemetry-injector"
+      ]
+    },
+    "pkg/webhook/image/opentelemetry-operator/version.txt": {
+      "regex": [
+        "open-telemetry/opentelemetry-operator"
+      ]
+    },
+    "pkg/webhook/image/python/requirements.extra.txt": {
+      "pip_requirements": [
+        "certifi",
+        "idna",
+        "requests"
+      ]
+    },
+    "pkg/webhook/image/ruby/Gemfile": {
+      "bundler": [
+        "opentelemetry-auto-instrumentation"
+      ]
+    },
+    "scripts/obi-configbridge/go.mod": {
+      "gomod": [
+        "../../.obi-src",
+        "go",
+        "go.opentelemetry.io/obi"
+      ]
+    }
+  },
+  "actionMeta": {
+    "actions/cache": {
+      "packageName": "actions/cache",
+      "refKind": "version-tag"
+    },
+    "actions/checkout": {
+      "packageName": "actions/checkout",
+      "refKind": "version-tag"
+    },
+    "actions/download-artifact": {
+      "packageName": "actions/download-artifact",
+      "refKind": "version-tag"
+    },
+    "actions/setup-java": {
+      "packageName": "actions/setup-java",
+      "refKind": "version-tag"
+    },
+    "actions/upload-artifact": {
+      "packageName": "actions/upload-artifact",
+      "refKind": "version-tag"
+    },
+    "actions/upload-release-asset": {
+      "packageName": "actions/upload-release-asset",
+      "refKind": "version-tag"
+    },
+    "anthropics/claude-code-action": {
+      "packageName": "anthropics/claude-code-action",
+      "refKind": "version-tag"
+    },
+    "azure/setup-helm": {
+      "packageName": "azure/setup-helm",
+      "refKind": "version-tag"
+    },
+    "codecov/codecov-action": {
+      "packageName": "codecov/codecov-action",
+      "refKind": "version-tag"
+    },
+    "docker/build-push-action": {
+      "packageName": "docker/build-push-action",
+      "refKind": "version-tag"
+    },
+    "docker/login-action": {
+      "packageName": "docker/login-action",
+      "refKind": "version-tag"
+    },
+    "docker/metadata-action": {
+      "packageName": "docker/metadata-action",
+      "refKind": "version-tag"
+    },
+    "docker/setup-buildx-action": {
+      "packageName": "docker/setup-buildx-action",
+      "refKind": "version-tag"
+    },
+    "fluxcd/flux2/action": {
+      "packageName": "fluxcd/flux2",
+      "refKind": "version-tag"
+    },
+    "google-github-actions/setup-gcloud": {
+      "packageName": "google-github-actions/setup-gcloud",
+      "refKind": "version-tag"
+    },
+    "grafana/beyla/.github/workflows/obi-adoption-repair.yml": {
+      "packageName": "grafana/beyla",
+      "refKind": "branch",
+      "ref": "refs/heads/main"
+    },
+    "grafana/dashboard-linter": {
+      "packageName": "grafana/dashboard-linter",
+      "refKind": "version-tag"
+    },
+    "grafana/shared-workflows/actions/create-github-app-token": {
+      "packageName": "grafana/shared-workflows",
+      "refKind": "version-tag",
+      "compatibility": "create-github-app-token"
+    },
+    "grafana/shared-workflows/actions/dockerhub-login": {
+      "packageName": "grafana/shared-workflows",
+      "refKind": "version-tag",
+      "compatibility": "dockerhub-login"
+    },
+    "grafana/shared-workflows/actions/get-vault-secrets": {
+      "packageName": "grafana/shared-workflows",
+      "refKind": "version-tag",
+      "compatibility": "get-vault-secrets"
+    },
+    "grafana/shared-workflows/actions/login-to-gar": {
+      "packageName": "grafana/shared-workflows",
+      "refKind": "version-tag",
+      "compatibility": "login-to-gar"
+    },
+    "grafana/vale": {
+      "packageName": "grafana/vale",
+      "refKind": "branch",
+      "ref": "sha256:4b9632f0b4ba1def1355d63303379a1da5c8bc59ec7282c8018437f6cafe8a0b"
+    },
+    "grafana/writers-toolkit/.github/workflows/deploy-preview.yml": {
+      "packageName": "grafana/writers-toolkit",
+      "refKind": "branch",
+      "ref": "main"
+    },
+    "grafana/writers-toolkit/vale-action": {
+      "packageName": "grafana/writers-toolkit",
+      "refKind": "version-tag",
+      "compatibility": "ale-action"
+    },
+    "helm/chart-testing-action": {
+      "packageName": "helm/chart-testing-action",
+      "refKind": "version-tag"
+    },
+    "helm/kind-action": {
+      "packageName": "helm/kind-action",
+      "refKind": "version-tag"
+    },
+    "jdx/mise-action": {
+      "packageName": "jdx/mise-action",
+      "refKind": "version-tag"
+    },
+    "mariomac/linked-release-notes": {
+      "packageName": "mariomac/linked-release-notes",
+      "refKind": "version-tag"
+    },
+    "medyagh/setup-minikube": {
+      "packageName": "medyagh/setup-minikube",
+      "refKind": "version-tag"
+    },
+    "peter-evans/create-pull-request": {
+      "packageName": "peter-evans/create-pull-request",
+      "refKind": "version-tag"
+    }
+  }
+}

@@ -61,7 +61,7 @@ jobs:
           echo "alloy-beyla dev image tag: ${IMAGE_TAG}, beyla image tag: ${VERSION}, beyla short SHA: ${SHORT_SHA}"
 
       - name: Log in to Google Artifact Registry
-        uses: grafana/shared-workflows/actions/login-to-gar@00646b30431b955ec3c00982b23b1eeb7b66445b # v1.0.0
+        uses: grafana/shared-workflows/actions/login-to-gar@00646b30431b955ec3c00982b23b1eeb7b66445b # login-to-gar/v1.0.0
 
       - name: Get GitHub App token
         id: get-github-app-token

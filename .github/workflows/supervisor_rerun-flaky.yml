@@ -1,6 +1,6 @@
 name: "CI Supervisor: Rerun flaky failures"
 
-on: # zizmor: ignore[dangerous-triggers] no code checkout; GITHUB_TOKEN used for all ops except label addition
+on: # zizmor: ignore[dangerous-triggers] trusted workflow_run code checks out github.workflow_sha from default branch; candidate PR code is never checked out or executed in privileged jobs
   workflow_run:
     # Fix OBI submodule CI is the agent workflow, not a CI flake. Watching it
     # made a failed triage look like exhausted CI, which re-added agent/fix-obi
@@ -32,7 +32,8 @@ jobs:
     if: >
       (github.event.workflow_run.conclusion == 'failure' ||
        github.event.workflow_run.conclusion == 'timed_out') &&
-      github.event.workflow_run.head_repository.id == github.event.workflow_run.repository.id
+      github.event.workflow_run.head_repository.id == github.event.workflow_run.repository.id &&
+      !startsWith(github.event.workflow_run.head_branch, 'update-obi-adoption-')
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -154,7 +155,8 @@ jobs:
     if: >-
       always() &&
       needs.evaluate-and-rerun.result == 'success' &&
-      needs.evaluate-and-rerun.outputs.should-label == 'true'
+      needs.evaluate-and-rerun.outputs.should-label == 'true' &&
+      !startsWith(github.event.workflow_run.head_branch, 'update-obi-adoption-')
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -265,6 +267,7 @@ jobs:
     name: Handle CI completion
     if: >
       github.event.workflow_run.head_repository.id == github.event.workflow_run.repository.id
+      && !startsWith(github.event.workflow_run.head_branch, 'update-obi-adoption-')
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -417,3 +420,112 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "repos/${REPO}/pulls/${PR_NUMBER}/requested_reviewers" \
             -f "reviewers[]=Copilot"
+
+  # Managed adoption PRs are reconciled from this trusted default-branch
+  # workflow before any legacy rerun, label, fixer, or review-request action.
+  managed-adoption-status:
+    name: Reconcile managed OBI adoption
+    if: >
+      github.event.workflow_run.head_repository.id == github.event.workflow_run.repository.id &&
+      startsWith(github.event.workflow_run.head_branch, 'update-obi-adoption-')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: obi-adoption-writer
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      issues: write
+      pull-requests: read
+    timeout-minutes: 10
+    outputs:
+      stage: ${{ steps.reconcile.outputs.stage }}
+      should-repair: ${{ steps.reconcile.outputs.should_repair }}
+      pr-number: ${{ steps.reconcile.outputs.pr_number }}
+      obi-sha: ${{ steps.reconcile.outputs.obi_sha }}
+      expected-head: ${{ steps.reconcile.outputs.expected_head }}
+      expected-base: ${{ steps.reconcile.outputs.expected_base }}
+      trigger-run-id: ${{ steps.reconcile.outputs.trigger_run_id }}
+      attempt: ${{ steps.reconcile.outputs.attempt }}
+      max-attempts: ${{ steps.reconcile.outputs.max_attempts }}
+      reservation-digest: ${{ steps.reconcile.outputs.reservation_digest }}
+    steps:
+      - name: Check out trusted supervisor code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Reconcile current PR and reserve any eligible repair
+        id: reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
+          OBI_ADOPTION_REPAIR_ENABLED: ${{ vars.OBI_ADOPTION_REPAIR_ENABLED }}
+        run: >-
+          python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile-event
+          --workflow-run-id '${{ github.event.workflow_run.id }}'
+          --allow-repair
+          --output "$GITHUB_OUTPUT"
+
+  managed-adoption-repair:
+    name: Run bounded managed OBI repair
+    needs: managed-adoption-status
+    if: >-
+      needs.managed-adoption-status.outputs.should-repair == 'true' &&
+      vars.OBI_ADOPTION_WRITER_ENABLED == 'true' &&
+      vars.OBI_ADOPTION_REPAIR_ENABLED == 'true'
+    uses: grafana/beyla/.github/workflows/obi-adoption-repair.yml@refs/heads/main
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      id-token: write
+      issues: read
+      pull-requests: read
+    with:
+      pr_number: ${{ fromJSON(needs.managed-adoption-status.outputs.pr-number) }}
+      obi_sha: ${{ needs.managed-adoption-status.outputs.obi-sha }}
+      expected_head: ${{ needs.managed-adoption-status.outputs.expected-head }}
+      expected_base: ${{ needs.managed-adoption-status.outputs.expected-base }}
+      trigger_run_id: ${{ fromJSON(needs.managed-adoption-status.outputs.trigger-run-id) }}
+      attempt: ${{ fromJSON(needs.managed-adoption-status.outputs.attempt) }}
+      max_attempts: ${{ fromJSON(needs.managed-adoption-status.outputs.max-attempts) }}
+      reservation_digest: ${{ needs.managed-adoption-status.outputs.reservation-digest }}
+
+  finalize-managed-adoption-repair:
+    name: Reconcile after bounded repair
+    needs: [managed-adoption-status, managed-adoption-repair]
+    if: always() && needs.managed-adoption-status.outputs.should-repair == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: obi-adoption-writer
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      issues: write
+      pull-requests: read
+    timeout-minutes: 10
+    steps:
+      - name: Check out trusted supervisor code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Reconcile current evidence without reserving another repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.managed-adoption-status.outputs.pr-number }}
+          TARGET_SHA: ${{ needs.managed-adoption-status.outputs.obi-sha }}
+          BASE_SHA: ${{ needs.managed-adoption-status.outputs.expected-base }}
+        run: >-
+          python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile
+          --pr-number "$PR_NUMBER"
+          --target-sha "$TARGET_SHA"
+          --base-sha "$BASE_SHA"
+          --worker-finished
+          --no-repair

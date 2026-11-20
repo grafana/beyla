@@ -60,7 +60,6 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	})
 
 	addHostInfoExporters(config, swi, ctxInfo, processEventsCh)
-	addGPUExporters(config, swi, ctxInfo, processEventsCh)
 
 	selectorCfg := &attributes.SelectorConfig{
 		SelectionCfg:            config.Attributes.Select,
@@ -107,10 +106,11 @@ func addHostInfoExporters(
 	}
 }
 
-// BuildGPU instantiates the GPU hardware exporters for operation without application discovery.
-func BuildGPU(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo) (*swarm.Runner, error) {
+// BuildGPU instantiates the GPU metrics exporters. processEventsCh is optional: when nil,
+// GPU usage is not attributed to processes.
+func BuildGPU(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInfo, processEventsCh *msg.Queue[exec.ProcessEvent]) (*swarm.Runner, error) {
 	swi := &swarm.Instancer{}
-	addGPUExporters(config, swi, ctxInfo, nil)
+	addGPUExporters(config, swi, ctxInfo, processEventsCh)
 	return swi.Instance(ctx)
 }
 

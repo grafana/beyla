@@ -34,6 +34,7 @@ func TestProcessEventsLoopDoesntBlock(t *testing.T) {
 				TracesEndpoint: "http://something",
 			},
 		},
+		msg.NewQueue[exec.ProcessEvent](msg.Name("processEvents"), msg.ChannelBufferLen(1)),
 	)
 
 	events := make(chan discover.Event[*ebpf.Instrumentable])

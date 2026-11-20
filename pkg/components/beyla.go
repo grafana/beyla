@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/docker"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -27,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -63,23 +65,33 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
 	stats := cfg.Enabled(beyla.FeatureStatsO11y)
+	gpu := cfg.GPUMetricsEnabled()
 	webhookEnabled := cfg.Injector.Webhook.Enabled()
+
+	var processEvents *msg.Queue[exec.ProcessEvent]
+	if app {
+		processEvents = msg2.QueueFromConfig[exec.ProcessEvent](cfg.AsOBI(), "processEvents")
+	}
 
 	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
+
+	if gpu {
+		runGPU, err := setupGPUMetrics(ctx, ctxInfo, cfg, processEvents)
+		if err != nil {
+			return fmt.Errorf("setupGPUMetrics: %w", err)
+		}
+		g.Go(runGPU)
+	}
 
 	startHealthCheck(ctx, g, cfg.HealthCheck)
 
 	if app {
 		g.Go(func() error {
-			if err := setupAppO11y(ctx, ctxInfo, cfg); err != nil {
+			if err := setupAppO11y(ctx, ctxInfo, cfg, processEvents); err != nil {
 				return fmt.Errorf("setupAppO11y: %w", err)
 			}
 			return nil
-		})
-	} else if cfg.GPUMetricsEnabled() {
-		g.Go(func() error {
-			return setupGPUMetrics(ctx, ctxInfo, cfg)
 		})
 	}
 
@@ -137,10 +149,10 @@ func normalizeConfig(c *beyla.Config) {
 	c.Attributes.Select.Normalize()
 }
 
-func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
+func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config, processEvents *msg.Queue[exec.ProcessEvent]) error {
 	slog.Info("starting Beyla in Application Observability mode")
 
-	instr, err := appolly.New(ctx, ctxInfo, config)
+	instr, err := appolly.New(ctx, ctxInfo, config, processEvents)
 	if err != nil {
 		slog.Debug("can't create new instrumenter", "error", err)
 		return fmt.Errorf("can't create new instrumenter: %w", err)
@@ -161,14 +173,18 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 	return nil
 }
 
-func setupGPUMetrics(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
-	slog.Info("starting Beyla GPU hardware metrics")
-	runner, err := pipe.BuildGPU(ctx, cfg, ctxInfo)
+// setupGPUMetrics instantiates the GPU metrics pipeline and returns the function that runs it.
+// processEvents is optional: without it, GPU usage is not attributed to processes.
+func setupGPUMetrics(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config, processEvents *msg.Queue[exec.ProcessEvent]) (func() error, error) {
+	slog.Info("starting Beyla GPU metrics")
+	runner, err := pipe.BuildGPU(ctx, cfg, ctxInfo, processEvents)
 	if err != nil {
-		return fmt.Errorf("instantiating GPU metrics pipeline: %w", err)
+		return nil, fmt.Errorf("instantiating GPU metrics pipeline: %w", err)
 	}
-	runner.Start(ctx, swarm.WithCancelTimeout(cfg.ShutdownTimeout))
-	return <-runner.Done()
+	return func() error {
+		runner.Start(ctx, swarm.WithCancelTimeout(cfg.ShutdownTimeout))
+		return <-runner.Done()
+	}, nil
 }
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {

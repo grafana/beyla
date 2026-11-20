@@ -68,20 +68,13 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	gpu := cfg.GPUMetricsEnabled()
 	webhookEnabled := cfg.Injector.Webhook.Enabled()
 
-	var processEvents *msg.Queue[exec.ProcessEvent]
-	if app {
-		processEvents = msg2.QueueFromConfig[exec.ProcessEvent](cfg.AsOBI(), "processEvents")
-	}
+	processEvents := msg2.QueueFromConfig[exec.ProcessEvent](cfg.AsOBI(), "processEvents")
 
 	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
 
 	if gpu {
-		runGPU, err := setupGPUMetrics(ctx, ctxInfo, cfg, processEvents)
-		if err != nil {
-			return fmt.Errorf("setupGPUMetrics: %w", err)
-		}
-		g.Go(runGPU)
+		startGPUMetrics(ctx, g, ctxInfo, cfg, processEvents)
 	}
 
 	startHealthCheck(ctx, g, cfg.HealthCheck)
@@ -173,18 +166,19 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 	return nil
 }
 
-// setupGPUMetrics instantiates the GPU metrics pipeline and returns the function that runs it.
-// processEvents is optional: without it, GPU usage is not attributed to processes.
-func setupGPUMetrics(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config, processEvents *msg.Queue[exec.ProcessEvent]) (func() error, error) {
+// startGPUMetrics instantiates the GPU metrics pipeline and runs it in g. It instantiates the
+// pipeline before returning, so it is subscribed to processEvents before the app pipeline sends any.
+func startGPUMetrics(ctx context.Context, g *errgroup.Group, ctxInfo *global.ContextInfo, cfg *beyla.Config, processEvents *msg.Queue[exec.ProcessEvent]) {
 	slog.Info("starting Beyla GPU metrics")
 	runner, err := pipe.BuildGPU(ctx, cfg, ctxInfo, processEvents)
 	if err != nil {
-		return nil, fmt.Errorf("instantiating GPU metrics pipeline: %w", err)
+		g.Go(func() error { return fmt.Errorf("instantiating GPU metrics pipeline: %w", err) })
+		return
 	}
-	return func() error {
+	g.Go(func() error {
 		runner.Start(ctx, swarm.WithCancelTimeout(cfg.ShutdownTimeout))
 		return <-runner.Done()
-	}, nil
+	})
 }
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {

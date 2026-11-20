@@ -15,6 +15,22 @@ permissions:
   contents: read
 
 jobs:
+  obi-adoption-tests:
+    name: Release reconciliation and OBI adoption tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Run hermetic adoption-controller tests
+        run: python3 -m unittest discover -s scripts/release-reconciliation/tests -p 'test_*.py'
+
   generate:
     name: Generate
     runs-on: ubuntu-latest

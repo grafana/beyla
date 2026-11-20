@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Collect a bounded CI-failure report for the fix-obi triage step.
 
 The triage model used to discover failures itself (workflow YAML, full logs,
@@ -21,7 +20,7 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from typing import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 EXCLUDED_WORKFLOWS = {
     "Fix OBI submodule CI",
@@ -243,7 +242,9 @@ def render_context(
         lines.append(f"- old (main): {old_obi or 'unknown'}")
         lines.append(f"- new (this branch): {new_obi or 'unknown'}")
     else:
-        lines.append("- .obi-src did not resolve to a gitlink on main and on this branch.")
+        lines.append(
+            "- .obi-src did not resolve to a gitlink on main and on this branch."
+        )
     lines.append("")
 
     if not runs:
@@ -262,7 +263,8 @@ def render_context(
         # Successful shards upload logs too. Naming them makes triage treat
         # every shard on the artifact page as a failed job.
         artifacts = artifacts_for_failed_jobs(
-            [str(job.get("name") or "") for job in jobs] + [str(name) for name in omitted],
+            [str(job.get("name") or "") for job in jobs]
+            + [str(name) for name in omitted],
             list(run.get("artifacts") or []),
         )
         if artifacts:
@@ -313,7 +315,9 @@ def git_output(args: Sequence[str]) -> str | None:
     return value or None
 
 
-def obi_shas(head_sha: str, base_ref: str = "origin/main") -> tuple[str | None, str | None]:
+def obi_shas(
+    head_sha: str, base_ref: str = "origin/main"
+) -> tuple[str | None, str | None]:
     # Prefer the PR head recorded by the API. Fall back to HEAD for a checkout
     # that has not fetched that object yet.
     new_obi = git_output(["git", "rev-parse", f"{head_sha}:.obi-src"]) or git_output(
@@ -393,12 +397,18 @@ def artifact_names(repo: str, run_id: int) -> list[str]:
             ]
         )
         pages = parse_concatenated_json(raw)
-    except (subprocess.CalledProcessError, json.JSONDecodeError, subprocess.TimeoutExpired):
+    except (
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+        subprocess.TimeoutExpired,
+    ):
         return []
     return artifact_names_from_pages(pages)
 
 
-def artifacts_for_failed_jobs(job_names: Sequence[str], artifacts: Sequence[str]) -> list[str]:
+def artifacts_for_failed_jobs(
+    job_names: Sequence[str], artifacts: Sequence[str]
+) -> list[str]:
     """Keep artifacts that belong to a failed job, in job order."""
     seen: set[str] = set()
     matched: list[str] = []
@@ -501,8 +511,14 @@ def collect(repo: str, pr_number: str) -> str:
             excerpt: list[str] = []
             if job_id:
                 try:
-                    excerpt = excerpt_messages(job_log_messages(repo, run_id, int(job_id)))
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+                    excerpt = excerpt_messages(
+                        job_log_messages(repo, run_id, int(job_id))
+                    )
+                except (
+                    subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired,
+                    OSError,
+                ) as exc:
                     excerpt = [f"(log fetch failed: {exc})"]
             job["excerpt"] = excerpt
         rendered_runs.append(
@@ -538,8 +554,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     with open(args.output, "w", encoding="utf-8") as handle:
         handle.write(text)
     print(
-        f"Wrote {args.output} ({len(text)} bytes, "
-        f"{text.count('### ')} job section(s))"
+        f"Wrote {args.output} ({len(text)} bytes, {text.count('### ')} job section(s))"
     )
 
 
@@ -548,16 +563,56 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 def _test_choose_failed_runs_skips_agent_and_superseded_failures() -> None:
     runs = [
-        {"id": 1, "name": "Fix OBI submodule CI", "status": "completed", "conclusion": "failure"},
-        {"id": 2, "name": "CI Supervisor: Rerun flaky failures", "status": "completed", "conclusion": "success"},
-        {"id": 3, "name": "Pull request checks", "status": "completed", "conclusion": "failure"},
-        {"id": 4, "name": "Pull request checks", "status": "completed", "conclusion": "success"},
-        {"id": 5, "name": "PR OATS test", "status": "completed", "conclusion": "failure"},
-        {"id": 6, "name": "PR OATS test", "status": "completed", "conclusion": "cancelled"},
+        {
+            "id": 1,
+            "name": "Fix OBI submodule CI",
+            "status": "completed",
+            "conclusion": "failure",
+        },
+        {
+            "id": 2,
+            "name": "CI Supervisor: Rerun flaky failures",
+            "status": "completed",
+            "conclusion": "success",
+        },
+        {
+            "id": 3,
+            "name": "Pull request checks",
+            "status": "completed",
+            "conclusion": "failure",
+        },
+        {
+            "id": 4,
+            "name": "Pull request checks",
+            "status": "completed",
+            "conclusion": "success",
+        },
+        {
+            "id": 5,
+            "name": "PR OATS test",
+            "status": "completed",
+            "conclusion": "failure",
+        },
+        {
+            "id": 6,
+            "name": "PR OATS test",
+            "status": "completed",
+            "conclusion": "cancelled",
+        },
         {"id": 7, "name": "Helm Test", "status": "completed", "conclusion": "failure"},
         {"id": 8, "name": "Helm Test", "status": "in_progress", "conclusion": None},
-        {"id": 10, "name": "Documentation CI", "status": "completed", "conclusion": "failure"},
-        {"id": 11, "name": "Documentation CI", "status": "completed", "conclusion": "skipped"},
+        {
+            "id": 10,
+            "name": "Documentation CI",
+            "status": "completed",
+            "conclusion": "failure",
+        },
+        {
+            "id": 11,
+            "name": "Documentation CI",
+            "status": "completed",
+            "conclusion": "skipped",
+        },
     ]
     chosen = choose_failed_runs(runs)
     # OATS walks back past the cancelled rerun. Helm's newer in-progress run wins.
@@ -595,7 +650,9 @@ def _test_failed_jobs_ignore_agent_jobs_and_record_steps() -> None:
                 "name": "Triage CI failures",
                 "conclusion": "failure",
                 "databaseId": 1,
-                "steps": [{"name": "Run Claude Code – Triage", "conclusion": "failure"}],
+                "steps": [
+                    {"name": "Run Claude Code – Triage", "conclusion": "failure"}
+                ],
             },
             {
                 "name": "shard-0 (5 tests)",

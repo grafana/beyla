@@ -795,6 +795,7 @@
               "application_sizes",
               "application_span_otel",
               "ebpf",
+              "gpu",
               "network",
               "network_flow_packets",
               "network_inter_zone",

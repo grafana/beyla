@@ -381,6 +381,7 @@
       ],
       matchDepNames: [
         'actionlint',
+        'aqua:grafana/flint',
         'clang-format',
         'github:cpp-linter/clang-tools-static-binaries',
         'golangci-lint',
@@ -414,22 +415,6 @@
       groupName: 'linters',
       commitMessageTopic: 'linter updates',
       separateMajorMinor: false,
-      schedule: [
-        '* 0-3 * * 1',
-      ],
-      timezone: 'UTC',
-      updateNotScheduled: false,
-    },
-    {
-      // Flint's own version is also a linter tool; retain its separate group.
-      description: 'Schedule Flint updates weekly',
-      matchManagers: [
-        'mise',
-      ],
-      matchPackageNames: [
-        'grafana/flint',
-      ],
-      groupName: 'flint',
       schedule: [
         '* 0-3 * * 1',
       ],

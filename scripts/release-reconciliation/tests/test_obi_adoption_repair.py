@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -304,6 +305,19 @@ class WorkflowContractTests(unittest.TestCase):
             workflow.index("name: Prepare generated OBI bindings"),
             workflow.index("name: Run formatting and targeted Go tests"),
         )
+
+    def test_supervisor_calls_repair_worker_from_same_workflow_revision(self):
+        workflow = (
+            Path(__file__).parents[3]
+            / ".github/workflows/supervisor_rerun-flaky.yml"
+        ).read_text(encoding="utf-8")
+        match = re.search(
+            r"(?ms)^  managed-adoption-repair:\n(.*?)(?=^  [\w-]+:\s*$|\Z)",
+            workflow,
+        )
+        self.assertIsNotNone(match, "managed repair caller job is missing")
+        uses = re.findall(r"(?m)^\s+uses:\s*(\S+)\s*$", match.group(1))
+        self.assertEqual(["./.github/workflows/obi-adoption-repair.yml"], uses)
 
     def test_wrong_actor_and_digest_fail(self):
         github = FakeGitHub()

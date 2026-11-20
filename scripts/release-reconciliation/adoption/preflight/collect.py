@@ -231,6 +231,7 @@ def emit(report):
             "outcome": adoption["outcome"],
             "upstream_sha": source.get("upstream_sha") or "",
             "pin_sha": source.get("pin_sha") or "",
+            "fork_relation": source.get("fork_relation") or "unknown",
             "main_head_sha": source.get("main_head_sha") or "",
             "active_prs_json": json.dumps(
                 adoption["active_prs"], separators=(",", ":")

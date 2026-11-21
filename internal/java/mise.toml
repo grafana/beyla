@@ -1,6 +1,6 @@
 [tools]
 java = "temurin-21.0.8+9.0.LTS"
-gradle = "9.6.1"
+gradle = "9.9.1"
 
 [tasks.clean]
 dir = "{{ config_root }}/../.."

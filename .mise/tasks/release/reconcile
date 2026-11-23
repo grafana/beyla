@@ -34,7 +34,6 @@ gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-p
 gh api --paginate --slurp "repos/${REPOSITORY}/actions/workflows/release-train-tag.yml/runs?per_page=100" >"$facts_dir/tag-runs.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/tag-runs.json"
 gh api --paginate --slurp "repos/${REPOSITORY}/releases?per_page=100" >"$facts_dir/releases.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/releases.json"
 gh api --paginate --slurp "repos/${REPOSITORY}/git/matching-refs/heads/release-" >"$facts_dir/beyla-refs.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/beyla-refs.json"
-gh api --paginate --slurp "repos/grafana/opentelemetry-ebpf-instrumentation/git/matching-refs/heads/release-" >"$facts_dir/obi-refs.json" 2>/dev/null || printf 'invalid response' >"$facts_dir/obi-refs.json"
 FACTS_DIR="$facts_dir" python3 - <<'PY' >"$facts_dir/report.json"
 import importlib.util
 import json

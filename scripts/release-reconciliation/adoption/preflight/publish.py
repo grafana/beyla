@@ -87,20 +87,17 @@ def validate_source(token):
 
 
 def validate_source_reachability(token, target):
-    for repo in (
-        "open-telemetry/opentelemetry-ebpf-instrumentation",
-        "grafana/opentelemetry-ebpf-instrumentation",
-    ):
-        head = api(token, "GET", "/commits/main", repo=repo)
-        if not head or not SHA.fullmatch(head.get("sha", "")):
-            raise RuntimeError(
-                "Could not sample current OBI main for exact-SHA reachability recheck."
-            )
-        comparison = api(token, "GET", f"/compare/{target}...{head['sha']}", repo=repo)
-        if not comparison or comparison.get("status") not in {"ahead", "identical"}:
-            raise RuntimeError(
-                "Selected OBI SHA is no longer proven reachable from both upstream and fork main."
-            )
+    repo = "open-telemetry/opentelemetry-ebpf-instrumentation"
+    head = api(token, "GET", "/commits/main", repo=repo)
+    if not head or not SHA.fullmatch(head.get("sha", "")):
+        raise RuntimeError(
+            "Could not sample current OBI main for exact-SHA reachability recheck."
+        )
+    comparison = api(token, "GET", f"/compare/{target}...{head['sha']}", repo=repo)
+    if not comparison or comparison.get("status") not in {"ahead", "identical"}:
+        raise RuntimeError(
+            "Selected OBI SHA is no longer proven reachable from upstream OBI main."
+        )
 
 
 def apply_candidate_patch(repo, patch):

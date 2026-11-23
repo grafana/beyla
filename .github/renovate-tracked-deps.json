@@ -300,9 +300,7 @@
     ".github/workflows/release-train-prepare.yml": {
       "github-actions": [
         "actions/checkout",
-        "actions/setup-java",
         "grafana/shared-workflows",
-        "java-jdk",
         "ubuntu"
       ]
     },
@@ -917,10 +915,6 @@
     },
     "actions/download-artifact": {
       "packageName": "actions/download-artifact",
-      "refKind": "version-tag"
-    },
-    "actions/setup-java": {
-      "packageName": "actions/setup-java",
       "refKind": "version-tag"
     },
     "actions/upload-artifact": {

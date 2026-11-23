@@ -20,12 +20,10 @@ class ReconcileTests(unittest.TestCase):
             "source": {
                 "upstream_sha": "b" * 40,
                 "pin_sha": "a" * 40,
-                "fork_sha": "c" * 40,
                 "graph_complete": True,
                 "snapshot_current_main": True,
                 "pin_is_ancestor": True,
                 "upstream_is_ancestor_of_pin": False,
-                "fork_relation": "contains",
                 "pending_count": 0,
                 "timestamps_valid": True,
             },
@@ -51,10 +49,10 @@ class ReconcileTests(unittest.TestCase):
             module.reconcile(facts, "2026-11-19T12:00:00Z")["adoption"]["outcome"],
         )
 
-    def test_noop_does_not_depend_on_fork_or_pr_inventory(self):
+    def test_noop_does_not_depend_on_pr_inventory(self):
         facts = self.facts()
         facts["source"].update(
-            upstream_sha="a" * 40, pin_sha="a" * 40, fork_sha=None, pending_count=0
+            upstream_sha="a" * 40, pin_sha="a" * 40, pending_count=0
         )
         facts["open_pr_inventory_complete"] = False
         self.assertEqual(
@@ -135,14 +133,6 @@ class ReconcileTests(unittest.TestCase):
         facts["source"]["graph_complete"] = False
         self.assertEqual(
             "unknown",
-            module.reconcile(facts, "2026-11-19T12:00:00Z")["adoption"]["outcome"],
-        )
-
-    def test_fork_behind_defers(self):
-        facts = self.facts()
-        facts["source"]["fork_relation"] = "behind"
-        self.assertEqual(
-            "deferred",
             module.reconcile(facts, "2026-11-19T12:00:00Z")["adoption"]["outcome"],
         )
 
@@ -288,7 +278,7 @@ class CollectorHelperTests(unittest.TestCase):
             sys.path.remove(script_dir)
             sys.modules.pop("collect", None)
 
-    def test_noop_still_reads_open_prs_without_fork_or_closed_history_scans(self):
+    def test_noop_still_reads_open_prs_without_closed_history_scans(self):
         import io
         import sys
         from contextlib import redirect_stdout
@@ -418,7 +408,6 @@ class PublishPlanTests(unittest.TestCase):
                 "pin_sha": "a" * 40,
                 "main_head_sha": "c" * 40,
                 "snapshot_current_main": True,
-                "fork_relation": "contains",
             },
             "pending": {"freshness": "stale"},
             "inventory": {

@@ -13,7 +13,6 @@ from reconcile import SHA, parse_time, reconcile
 
 REPO = "grafana/beyla"
 UPSTREAM = "https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation.git"
-FORK = "https://github.com/grafana/opentelemetry-ebpf-instrumentation.git"
 
 
 def cmd(args, timeout=30):
@@ -173,7 +172,7 @@ def _collect_pr_inventory(facts, upstream):
 
 
 def collect_open_pr_inventory(facts):
-    """Inspect live open PRs without the ancestry/fork/closed-history work used for new candidates."""
+    """Inspect live open PRs without the ancestry/closed-history work used for new candidates."""
     facts["open_pr_inventory_complete"] = False
     try:
         _collect_open_pr_inventory(facts)
@@ -219,7 +218,7 @@ def emit(report):
         Path(summary_path).write_text(
             "# OBI adoption preflight (read-only)\n\n"
             f"- Outcome: **{adopt['outcome']}**\n- Upstream: `{source['upstream_sha']}`\n- Current pin: `{source['pin_sha']}`\n"
-            f"- Fork: `{source.get('fork_sha') or 'not checked (no-op)'}`\n- Pending: {pending['count']} (age proxy: {pending['freshness']})\n"
+            f"- Pending: {pending['count']} (age proxy: {pending['freshness']})\n"
             f"- Blocker: {adopt['blocker'] or 'none'}\n- Next action: {adopt['next_action']}\n\n"
             "A report is not publication or release authorization.\n"
         )
@@ -349,29 +348,6 @@ def main():
                 raise RuntimeError(
                     "Sampled upstream SHA is not reachable from the fetched upstream main."
                 )
-            # Bounded fetch retries always compare the same sampled upstream SHA.
-            fork = None
-            for attempt in range(1, 4):
-                cmd(
-                    [
-                        "git",
-                        "-C",
-                        repo,
-                        "fetch",
-                        "--filter=blob:none",
-                        "--no-tags",
-                        FORK,
-                        "+refs/heads/main:refs/remotes/fork/main",
-                    ],
-                    timeout=180,
-                )
-                fork = cmd(["git", "-C", repo, "rev-parse", "refs/remotes/fork/main"])
-                if is_ancestor(repo, upstream, fork):
-                    break
-                if attempt < 3:
-                    import time
-
-                    time.sleep(2)
             # Pin object must be in the sampled ancestry; a missing object is unknown, not guessed.
             present = (
                 subprocess.run(
@@ -406,30 +382,6 @@ def main():
                     == 0
                 )
             if not present:
-                subprocess.run(
-                    [
-                        "git",
-                        "-C",
-                        repo,
-                        "fetch",
-                        "--filter=blob:none",
-                        "--no-tags",
-                        FORK,
-                        pin,
-                    ],
-                    check=False,
-                    capture_output=True,
-                    timeout=180,
-                )
-                present = (
-                    subprocess.run(
-                        ["git", "-C", repo, "cat-file", "-e", pin + "^{commit}"],
-                        check=False,
-                        timeout=30,
-                    ).returncode
-                    == 0
-                )
-            if not present:
                 raise RuntimeError(
                     "Current pin object is unavailable in fetched graph."
                 )
@@ -440,9 +392,6 @@ def main():
                 raise RuntimeError("Fetched graph is shallow.")
             ancestor = is_ancestor(repo, pin, upstream)
             upstream_ancestor_of_pin = is_ancestor(repo, upstream, pin)
-            u_in_f = is_ancestor(repo, upstream, fork)
-            f_in_u = is_ancestor(repo, fork, upstream)
-            relation = "contains" if u_in_f else "behind" if f_in_u else "diverged"
             pending_result = subprocess.run(
                 ["git", "-C", repo, "rev-list", upstream, "^" + pin],
                 check=False,
@@ -478,14 +427,11 @@ def main():
         facts["source"] = {
             "upstream_sha": upstream,
             "pin_sha": pin,
-            "fork_sha": fork,
             "graph_complete": True,
             "snapshot_current_main": current_main == run_facts["head_sha"],
             "main_head_sha": current_main,
             "pin_is_ancestor": ancestor,
             "upstream_is_ancestor_of_pin": upstream_ancestor_of_pin,
-            "fork_relation": relation,
-            "fork_attempts": attempt,
             "pending_count": len(pending),
             "oldest_committer_at": oldest[2],
             "oldest_sha": oldest[1],

@@ -39,7 +39,7 @@ The lanes do not hand off automatically: adoption ends at a human-merged Beyla P
 
 ## OBI adoption
 
-The daily scheduled/manual path in `.github/workflows/bot_sync-obi-submodule.yml` replaces that workflow's former weekly updater schedule; it is one coordinated writer, not a second daily writer. The separate 15-minute OBI fork synchronization is unchanged. Before merge, owners must approve the schedule cutover and publication policy. Merging replaces the weekly cron even if the default-off publication flag remains unset.
+The daily scheduled/manual path in `.github/workflows/bot_sync-obi-submodule.yml` replaces that workflow's former weekly updater schedule; it is one coordinated writer, not a second daily writer. Before merge, owners must approve the schedule cutover and publication policy. Merging replaces the weekly cron even if the default-off publication flag remains unset.
 
 Preflight samples one immutable upstream commit (`U`), compares Beyla's `.obi-src` pin (`P`) and current main (`B`), verifies ancestry and exact-`U` reachability from the OBI fork, and inspects existing/rejected adoption PRs. The accepted 24-hour goal is a conservative commit-age proxy for the oldest pending upstream change, using committer timestamps; it is not true first-availability lag and does not block adoption by itself. It is freshness context, not publish or release authorization. Unknown source evidence fails closed. The selected SHA is not changed mid-run.
 

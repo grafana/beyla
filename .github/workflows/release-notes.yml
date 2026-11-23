@@ -23,8 +23,8 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.event.release.tag_name }}
-          # since our submodule is grafana/opentelemetry-ebpf-instrumentation, we need to replace it
-          # with the original repo in the release notes, so the PR links won't be broken
+          # keep release-note links pointed at upstream OBI (including across
+          # historical tags that predate switching .obi-src directly to upstream)
           generated_submodule_link: open-telemetry/opentelemetry-ebpf-instrumentation
 
       - name: Update Release with Notes

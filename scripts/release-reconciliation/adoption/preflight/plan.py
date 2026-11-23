@@ -88,11 +88,6 @@ def publish_plan(report, repository="grafana/beyla"):
             **result,
             "reason": "Exact-target closed-PR history is incomplete; do not respawn a possibly rejected SHA.",
         }
-    if source.get("fork_relation") != "contains":
-        return {
-            **result,
-            "reason": "Exact sampled SHA is not proven reachable from the Grafana OBI fork.",
-        }
     return {
         **result,
         "action": "create",

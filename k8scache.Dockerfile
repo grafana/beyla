@@ -17,7 +17,7 @@ COPY LICENSE LICENSE
 COPY NOTICE NOTICE
 COPY mise.toml mise.lock ./
 COPY .mise/ .mise/
-COPY internal/java/mise.toml internal/java/
+COPY internal/java/mise.toml internal/java/mise.lock internal/java/
 COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
 COPY third_party_licenses.csv third_party_licenses.csv

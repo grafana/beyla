@@ -1617,46 +1617,6 @@ checksum = "sha256:fd5a6dc69e46a0970593e70d85a7e75f16714e9c61d6d72ccc324eb82df5b
 url = "https://github.com/gotestyourself/gotestsum/releases/download/v1.13.0/gotestsum_1.13.0_windows_amd64.tar.gz"
 url_api = "https://api.github.com/repos/gotestyourself/gotestsum/releases/assets/291996823"
 
-[[tools.gradle]]
-version = "9.6.1"
-backend = "aqua:gradle/gradle-distributions"
-specifiers = ["9.6.1"]
-
-[tools.gradle."platforms.linux-arm64"]
-checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
-url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
-url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
-
-[tools.gradle."platforms.linux-arm64-musl"]
-checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
-url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
-url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
-
-[tools.gradle."platforms.linux-x64"]
-checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
-url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
-url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
-
-[tools.gradle."platforms.linux-x64-musl"]
-checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
-url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
-url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
-
-[tools.gradle."platforms.macos-arm64"]
-checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
-url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
-url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
-
-[tools.gradle."platforms.macos-x64"]
-checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
-url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
-url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
-
-[tools.gradle."platforms.windows-x64"]
-checksum = "sha256:9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
-url = "https://github.com/gradle/gradle-distributions/releases/download/v9.6.1/gradle-9.6.1-bin.zip"
-url_api = "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/458711386"
-
 [[tools.hadolint]]
 version = "2.15.1"
 backend = "aqua:hadolint/hadolint"
@@ -1744,39 +1704,6 @@ checksum = "sha256:60b925d9734cd6bec5fab78b9c825b39b2ad9b1c9d9f03b685423c2d21ae9
 url = "https://github.com/jdx/hk/releases/download/v2.11.1/hk-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
-
-[[tools.java]]
-version = "temurin-21.0.8+9.0.LTS"
-backend = "core:java"
-specifiers = ["temurin-21.0.8+9.0.LTS"]
-
-[tools.java."platforms.linux-arm64"]
-checksum = "sha256:e5c41a1ab0865ea5de9b4529bf8526005f1d4593090845387d14fe450ce39c33"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.linux-arm64-musl"]
-checksum = "sha256:4773cfdc59d66b75f4a68ac843b2b5854791840114cf8bb1b56fb6f7826ae498"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_alpine-linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.linux-x64"]
-checksum = "sha256:f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.linux-x64-musl"]
-checksum = "sha256:73c4cbe10f4f385383d9cb54d34f2bee2c68b5265f9e3d954f3326948c40c0be"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_alpine-linux_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.macos-arm64"]
-checksum = "sha256:59422c2292ae4e76b87e00d8808dbe49cffa39af731e08bb0292ddb0af4e0261"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.macos-x64"]
-checksum = "sha256:0ceaf7060b2c9dbbe8ecc4fb9351c6b4cf24e4350d58772c9656589933a4fdeb"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_mac_hotspot_21.0.8_9.tar.gz"
-
-[tools.java."platforms.windows-x64"]
-checksum = "sha256:5dbb74a4edda94c2aae97a1e30f448db0ad9023a9466fe31a8c68377d9dfbac4"
-url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.8_9.zip"
 
 [[tools.kind]]
 version = "0.33.0"

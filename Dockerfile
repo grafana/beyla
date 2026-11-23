@@ -95,7 +95,7 @@ COPY go.sum go.sum
 COPY .obi-src/ .obi-src/
 COPY mise.toml mise.lock ./
 COPY .mise/ .mise/
-COPY internal/java/mise.toml internal/java/
+COPY internal/java/mise.toml internal/java/mise.lock internal/java/
 COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
 COPY Makefile Makefile

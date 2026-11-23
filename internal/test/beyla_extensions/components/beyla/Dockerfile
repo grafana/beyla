@@ -25,7 +25,7 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 COPY mise.toml mise.lock ./
 COPY .mise/ .mise/
-COPY internal/java/mise.toml internal/java/
+COPY internal/java/mise.toml internal/java/mise.lock internal/java/
 COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
 COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh

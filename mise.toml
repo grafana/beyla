@@ -4,7 +4,9 @@ min_version = "2026.11.4"
 monorepo_root = true
 
 [monorepo]
-lockfile = true
+# Keep project lockfiles until Renovate supports monorepo lockfiles; re-enable
+# once https://github.com/renovatebot/renovate/pull/45903 ships.
+lockfile = false
 config_roots = ["internal/java", "internal/test/oats"]
 
 [monorepo.path_aliases]

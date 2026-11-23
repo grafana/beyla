@@ -10,6 +10,7 @@ on:
       - "mise.lock"
       - ".mise/**"
       - "internal/java/mise.toml"
+      - "internal/java/mise.lock"
       - "internal/java/.mise/**"
       - "internal/test/oats/mise.toml"
       - "internal/test/oats/.mise/**"

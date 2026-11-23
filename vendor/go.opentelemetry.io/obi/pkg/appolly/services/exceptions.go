@@ -13,10 +13,20 @@ func (c GoExceptionsConfig) PanicsEnabled() bool {
 	return c.Panics == nil || *c.Panics
 }
 
+type PythonExceptionsConfig struct {
+	// Omitted enabled defaults to true when exception capture is enabled.
+	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
+func (c PythonExceptionsConfig) IsEnabled() bool {
+	return c.Enabled == nil || *c.Enabled
+}
+
 // ExceptionsConfig controls runtime exception acquisition independently of trace export.
 type ExceptionsConfig struct {
-	Enabled bool               `yaml:"enabled"`
-	Go      GoExceptionsConfig `yaml:"go"`
+	Enabled bool                   `yaml:"enabled"`
+	Go      GoExceptionsConfig     `yaml:"go"`
+	Python  PythonExceptionsConfig `yaml:"python,omitempty"`
 }
 
 // GoExceptionsOverride inherits each omitted option from the global settings.
@@ -27,8 +37,9 @@ type GoExceptionsOverride struct {
 
 // ExceptionsOverride preserves omission separately from explicitly disabled capture.
 type ExceptionsOverride struct {
-	Enabled *bool                 `yaml:"enabled,omitempty"`
-	Go      *GoExceptionsOverride `yaml:"go,omitempty"`
+	Enabled *bool                   `yaml:"enabled,omitempty"`
+	Go      *GoExceptionsOverride   `yaml:"go,omitempty"`
+	Python  *PythonExceptionsConfig `yaml:"python,omitempty"`
 }
 
 // Resolve applies a workload override to global defaults.
@@ -38,6 +49,9 @@ func (o *ExceptionsOverride) Resolve(defaults ExceptionsConfig) ExceptionsConfig
 	}
 	if o.Enabled != nil {
 		defaults.Enabled = *o.Enabled
+	}
+	if o.Python != nil && o.Python.Enabled != nil {
+		defaults.Python.Enabled = o.Python.Enabled
 	}
 	if o.Go != nil {
 		if o.Go.Panics != nil {

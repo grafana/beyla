@@ -219,6 +219,7 @@ shell = "bash -euo pipefail -c"
 alias = ["obi-submodule"]
 description = "Initialize and update the pinned OBI submodule"
 run = '''echo "# Updating OBI Git submodule..."
+git submodule sync --recursive
 git submodule update --init --recursive'''
 
 [tasks."test:matrix"]

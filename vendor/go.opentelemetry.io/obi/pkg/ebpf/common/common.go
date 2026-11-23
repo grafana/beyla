@@ -40,7 +40,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS -type protocol_type -type event_type -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t -type node_span_event_t -type process_event_t -type pid_namespace_mode -type valid_pids_size -type ringbuf_write_stats_t -type ringbuf_id -type sampler_t -type exception_event_header_t -type exception_runtime -type exception_owner -type pid_info_t Bpf ../../../bpf/common/common.c -- -I../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target $BPF_TARGETS -type protocol_type -type event_type -type http_request_trace_t -type sql_request_trace_t -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t -type redis_client_req_t -type tcp_large_buffer_t -type otel_span_t -type channel_link_trace_t -type go_auto_span_t -type mongo_go_client_req_t -type dns_req_t -type node_span_event_t -type process_event_t -type pid_namespace_mode -type valid_pids_size -type ringbuf_write_stats_t -type ringbuf_id -type sampler_t -type exception_event_header_t -type exception_runtime -type exception_owner -type pid_info_t -type python_exception_payload_t -type python_exception_flags Bpf ../../../bpf/common/common.c -- -I../../../bpf
 
 // HTTPRequestTrace contains information from an HTTP request as directly received from the
 // eBPF layer. This contains low-level C structures for accurate binary read from ring buffer.
@@ -135,6 +135,13 @@ var IntegrityModeOverride = false
 
 type TracerCapability uint64
 
+type SymbolMatcher uint8
+
+const (
+	SymbolMatcherExact SymbolMatcher = iota
+	SymbolMatcherContains
+)
+
 // ProbeDesc holds the information of the instrumentation points of a given
 // function/symbol
 type ProbeDesc struct {
@@ -159,6 +166,10 @@ type ProbeDesc struct {
 	// UsePadStart attaches Start after WriteHeaders has spilled PadLength to
 	// its stack slot and before the value is first consumed.
 	UsePadStart bool
+
+	// SymbolMatcher controls how the probe name is matched against executable symbols.
+	// The zero value preserves exact symbol matching.
+	SymbolMatcher SymbolMatcher
 
 	// Skip is set when an optional uprobe symbol was not resolved.
 	Skip bool
@@ -331,6 +342,7 @@ type EBPFParseContext struct {
 	largeBuffers                *expirable.LRU[largeBufferKey, *largebuf.LargeBuffer]
 	mongoRequestCache           PendingMongoDBRequests
 	mysqlPreparedStatements     *simplelru.LRU[mysqlPreparedStatementsKey, string]
+	mysqlConns                  *simplelru.LRU[BpfConnectionInfoT, mysqlConnInfo]
 	postgresPreparedStatements  *simplelru.LRU[postgresPreparedStatementsKey, postgresPreparedStatement]
 	postgresPortals             *simplelru.LRU[postgresPortalsKey, string]
 	postgresNamespaces          *simplelru.LRU[BpfConnectionInfoT, postgresNamespace]
@@ -441,6 +453,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 	h2c, _ := lru.New[uint64, *h2Connection](1024 * 10)
 	largeBuffers := expirable.NewLRU[largeBufferKey, *largebuf.LargeBuffer](1024, nil, 5*time.Minute)
 	postgresNamespaces, _ := simplelru.NewLRU[BpfConnectionInfoT, postgresNamespace](4096, nil)
+	mysqlConns, _ := simplelru.NewLRU[BpfConnectionInfoT, mysqlConnInfo](4096, nil)
 
 	emitCtx, stopEmitting := context.WithCancel(context.Background())
 	if spansChan != nil {
@@ -527,6 +540,7 @@ func NewEBPFParseContext(cfg *config.EBPFTracer, spansChan *msg.Queue[[]request.
 		largeBuffers:               largeBuffers,
 		mongoRequestCache:          mongoRequestCache,
 		mysqlPreparedStatements:    mysqlPreparedStatements,
+		mysqlConns:                 mysqlConns,
 		postgresPreparedStatements: postgresPreparedStatements,
 		postgresPortals:            postgresPortals,
 		postgresNamespaces:         postgresNamespaces,
@@ -831,6 +845,8 @@ func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
 		for _, name := range []string{
 			"obi_protocol_http", "obi_continue_protocol_http", "obi_handle_buf_with_args",
 			"obi_uprobe_writeSubset_returns",
+			"obi_protocol_http2_grpc_handle_start_frame_server",
+			"obi_protocol_http2_grpc_handle_start_frame_server_finalize",
 		} {
 			if legacy, ok := spec.Programs[name+"_legacy"]; ok {
 				spec.Programs[name] = legacy
@@ -876,6 +892,8 @@ func FixupSpec(spec *ebpf.CollectionSpec, overrideKernelVersion bool) {
 	for _, name := range []string{
 		"obi_protocol_http_legacy", "obi_continue_protocol_http_legacy", "obi_handle_buf_with_args_legacy",
 		"obi_uprobe_writeSubset_returns_legacy",
+		"obi_protocol_http2_grpc_handle_start_frame_server_legacy",
+		"obi_protocol_http2_grpc_handle_start_frame_server_finalize_legacy",
 	} {
 		if _, ok := spec.Programs[name]; ok {
 			spec.Programs[name] = dummy

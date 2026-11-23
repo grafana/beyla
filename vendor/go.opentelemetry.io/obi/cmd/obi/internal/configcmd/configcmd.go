@@ -733,6 +733,15 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 			changed = append(changed, name)
 		}
 	}
+	if hasAnyPath(root, "attributes.sensitive_query_params") {
+		beforeKeys := slices.Clone(before.Attributes.SensitiveQueryParams.Effective())
+		afterKeys := slices.Clone(after.Attributes.SensitiveQueryParams.Effective())
+		slices.Sort(beforeKeys)
+		slices.Sort(afterKeys)
+		if !slices.Equal(slices.Compact(beforeKeys), slices.Compact(afterKeys)) {
+			changed = append(changed, "attributes.sensitive_query_params")
+		}
+	}
 	changed = append(changed, unsupportedLayeredRoutePaths(root, before.Routes)...)
 	changed = append(changed, unsupportedFeaturePaths(root)...)
 	if hasAnyPath(root, "otel_traces_export.sampler") {
@@ -1101,6 +1110,7 @@ func migrationAlias(path string) bool {
 		return true
 	}
 	for _, prefix := range []string{
+		"attributes.sensitive_query_params",
 		"executable_path",
 		"filter.application",
 		"open_port",

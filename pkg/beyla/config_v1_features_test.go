@@ -165,6 +165,8 @@ discovery:
     - open_ports: 8080
 exceptions:
   enabled: true
+  python:
+    enabled: false
 otel_logs_export:
   endpoint: http://localhost:4318/v1/logs
   protocol: http/protobuf
@@ -182,6 +184,7 @@ attributes:
 
 	got := cfg.AsOBI()
 	assert.True(t, got.Exceptions.Enabled)
+	assert.False(t, got.Exceptions.Python.IsEnabled())
 	assert.True(t, got.Attributes.SanitizeDBQueryText)
 	assert.Equal(t, otelcfg.LogsConfig{
 		Endpoint:     "http://localhost:4318/v1/logs",

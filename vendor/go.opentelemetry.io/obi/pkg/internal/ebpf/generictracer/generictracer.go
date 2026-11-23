@@ -64,12 +64,13 @@ type Tracer struct {
 	pidsMu     sync.Mutex
 	pidsClosed bool
 	// the valid_pids words as last written to the BPF map
-	validPids      ebpfcommon.PIDBitmap
-	pidSamplers    ebpfcommon.PIDSamplers
-	seenNetns      *expirable.LRU[uint64, struct{}]
-	eventCtx       *ebpfcommon.EBPFEventContext
-	jvmUSDTManager ebpfcommon.USDTSpecManager
-	pythonRuntime  *pythonRuntimeController
+	validPids        ebpfcommon.PIDBitmap
+	pidSamplers      ebpfcommon.PIDSamplers
+	seenNetns        *expirable.LRU[uint64, struct{}]
+	eventCtx         *ebpfcommon.EBPFEventContext
+	jvmUSDTManager   ebpfcommon.USDTSpecManager
+	pythonRuntime    *pythonRuntimeController
+	pythonExceptions *pythonExceptionController
 }
 
 func tlog() *slog.Logger {
@@ -99,6 +100,7 @@ func New(pidFilter ebpfcommon.ServiceFilter, cfg *obi.Config, metrics imetrics.R
 		seenNetns:          expirable.NewLRU[uint64, struct{}](seenNetnsCacheLen, nil, seenNetnsTTL),
 	}
 	tracer.pythonRuntime = newPythonRuntimeController(tracer)
+	tracer.pythonExceptions = newPythonExceptionController(tracer)
 	return tracer
 }
 
@@ -137,6 +139,7 @@ func (p *Tracer) AllowPID(pid app.PID, ns uint32, fi *exec.FileInfo) {
 	if p.pythonRuntime != nil {
 		p.pythonRuntime.allow(pid, ns, fi, serviceSource)
 	}
+	p.pythonExceptions.allow(pid, serviceSource)
 
 	p.pidsMu.Lock()
 	defer p.pidsMu.Unlock()
@@ -183,6 +186,7 @@ func ensureJVMRuntimeMetricGeneration(fi *exec.FileInfo) uint64 {
 
 func (p *Tracer) BlockPID(pid app.PID, ns uint32) {
 	p.jvmGenerations.Delete(pid)
+	p.pythonExceptions.block(pid)
 	p.pidsFilter.BlockPID(pid, ns)
 
 	p.pidsMu.Lock()
@@ -222,6 +226,9 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 	}
 
 	ebpfcommon.FixupSpec(spec, p.cfg.EBPF.OverrideBPFLoopEnabled)
+	if !p.exceptionsEnabled() {
+		ebpfcommon.ShrinkPythonExceptionMaps(spec)
+	}
 	if !ebpfcommon.SupportsJavaHTTP1ReservationCleanup() {
 		ebpfcommon.DisableJavaHTTP1Atomics(spec)
 	}
@@ -289,7 +296,7 @@ func (p *Tracer) constants(eventsRingBufSize uint32) map[string]any {
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["jvm_sampling_interval_ns"] = uint64(p.cfg.JVMRuntimeMetrics.SamplingInterval.Nanoseconds())
 	}
-	m["g_exceptions_enabled"] = p.cfg.ExceptionsEnabled() && p.cfg.Logs.Enabled()
+	m["g_exceptions_enabled"] = p.exceptionsEnabled()
 	m["nodejs_runtime_metrics_enabled"] = uint64(0)
 	if p.cfg.AppRuntimeMetricsEnabled() {
 		m["nodejs_runtime_metrics_enabled"] = uint64(1)
@@ -805,6 +812,7 @@ func (p *Tracer) Run(
 	if p.pythonRuntime != nil {
 		defer p.pythonRuntime.close()
 	}
+	defer p.pythonExceptions.close()
 
 	// At this point we now have loaded the bpf objects, which means we should insert any
 	// pids that are allowed into the bpf map

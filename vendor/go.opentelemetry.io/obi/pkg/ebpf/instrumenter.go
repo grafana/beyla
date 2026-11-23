@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -536,6 +535,7 @@ func dedupModuleProbes(
 ) map[string][]*ebpfcommon.ProbeDesc {
 	type probeKey struct {
 		symbol     string
+		matcher    ebpfcommon.SymbolMatcher
 		start, end *ebpf.Program
 	}
 
@@ -544,7 +544,7 @@ func dedupModuleProbes(
 	for _, m := range existing {
 		for sym, descs := range m {
 			for _, d := range descs {
-				seen[probeKey{sym, d.Start, d.End}] = struct{}{}
+				seen[probeKey{sym, d.SymbolMatcher, d.Start, d.End}] = struct{}{}
 			}
 		}
 	}
@@ -555,7 +555,7 @@ func dedupModuleProbes(
 		kept := make([]*ebpfcommon.ProbeDesc, 0, len(descs))
 
 		for _, d := range descs {
-			if _, dup := seen[probeKey{sym, d.Start, d.End}]; dup {
+			if _, dup := seen[probeKey{sym, d.SymbolMatcher, d.Start, d.End}]; dup {
 				continue
 			}
 			kept = append(kept, d)
@@ -1347,6 +1347,19 @@ func processMaps(pid app.PID) ([]*procfs.ProcMap, error) {
 	return procs.FindLibMaps(pid)
 }
 
+func symbolNames(probes map[string][]*ebpfcommon.ProbeDesc, matcher ebpfcommon.SymbolMatcher) []string {
+	var names []string
+	for name, descriptors := range probes {
+		for _, descriptor := range descriptors {
+			if descriptor.SymbolMatcher == matcher {
+				names = append(names, name)
+				break
+			}
+		}
+	}
+	return names
+}
+
 // gatherOffsets resolves the offsets of every probe map with a single scan of
 // the executable's symbol tables. The returned slice holds the outcome of each
 // probe map, so a failure in one map does not affect the others. The error
@@ -1372,19 +1385,42 @@ func gatherOffsetsImpl(
 	instrPath string,
 	log *slog.Logger,
 ) ([]error, error) {
-	var symbolNames []string
+	exactNames := map[string]struct{}{}
+	var substringNames []string
 	for _, probes := range probeMaps {
-		symbolNames = slices.AppendSeq(symbolNames, maps.Keys(probes))
+		for _, name := range symbolNames(probes, ebpfcommon.SymbolMatcherExact) {
+			if name != "" {
+				exactNames[name] = struct{}{}
+			}
+		}
+		substringNames = append(substringNames, symbolNames(probes, ebpfcommon.SymbolMatcherContains)...)
 	}
 
-	syms, err := procs.FindExeSymbols(elfFile, symbolNames)
+	substringMatches := map[string]string{}
+	syms, err := procs.FindExeSymbolsMatching(elfFile, func(name string) bool {
+		_, matched := exactNames[name]
+		for _, substring := range substringNames {
+			if strings.Contains(name, substring) {
+				// Keep the last ELF match, as the v1 substring lookup did.
+				// The callback's name refers to memory unmapped after the scan.
+				substringMatches[substring] = strings.Clone(name)
+				matched = true
+			}
+		}
+		return matched
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup symbols for %s: %w", instrPath, err)
 	}
 
+	substringSyms := make(map[string]procs.Sym, len(substringMatches))
+	for substring, name := range substringMatches {
+		substringSyms[substring] = syms[name]
+	}
+
 	errs := make([]error, len(probeMaps))
 	for i, probes := range probeMaps {
-		errs[i] = resolveProbeOffsets(probes, syms, instrPath, log)
+		errs[i] = resolveProbeOffsets(probes, syms, substringSyms, instrPath, log)
 	}
 
 	return errs, nil
@@ -1392,12 +1428,16 @@ func gatherOffsetsImpl(
 
 func resolveProbeOffsets(
 	probes map[string][]*ebpfcommon.ProbeDesc,
-	syms map[string]procs.Sym,
+	exactSyms, substringSyms map[string]procs.Sym,
 	instrPath string,
 	log *slog.Logger,
 ) error {
 	for symbolName, probeArray := range probes {
 		for _, probe := range probeArray {
+			syms := exactSyms
+			if probe.SymbolMatcher == ebpfcommon.SymbolMatcherContains {
+				syms = substringSyms
+			}
 			sym, ok := syms[symbolName]
 
 			if !ok {

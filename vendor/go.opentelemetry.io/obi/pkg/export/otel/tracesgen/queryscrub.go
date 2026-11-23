@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const defaultQueryParamReplacement = "REDACTED"
+
 // Returns nil when keys is empty so callers can short-circuit cheaply.
 func buildRedactSet(keys []string) map[string]struct{} {
 	if len(keys) == 0 {
@@ -21,7 +23,7 @@ func buildRedactSet(keys []string) map[string]struct{} {
 }
 
 // Returns qs unchanged when redactSet is nil/empty or qs is empty.
-func scrubQuery(qs string, redactSet map[string]struct{}) string {
+func scrubQuery(qs string, redactSet map[string]struct{}, replacement string) string {
 	if len(redactSet) == 0 || qs == "" {
 		return qs
 	}
@@ -53,7 +55,7 @@ func scrubQuery(qs string, redactSet map[string]struct{}) string {
 				lookupKey = decoded
 			}
 			if _, isSensitive := redactSet[lookupKey]; isSensitive {
-				b.WriteString("REDACTED")
+				b.WriteString(replacement)
 			} else {
 				b.WriteString(val)
 			}

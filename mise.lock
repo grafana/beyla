@@ -1668,6 +1668,7 @@ provenance = "github-attestations"
 version = "2.11.1"
 backend = "packslip:github.com/jdx/hk"
 specifiers = ["2.11.1"]
+unsupported_platforms = ["macos-x64"]
 
 [tools.hk."platforms.linux-arm64"]
 checksum = "sha256:b94d3b405a9e392d0286491693fd22386d3c5be086bf4b8698df33623bfe91a9"
@@ -1747,7 +1748,7 @@ url_api = "https://api.github.com/repos/kubernetes-sigs/kind/releases/assets/531
 
 [[tools."npm:renovate"]]
 version = "44.252.0"
-aube = { path = ".mise/locks/npm-renovate/44.252.0~026f02c4", digest = "sha256:dcf298d9ccad1439c8ff13ef7327fbda2e1ad5fdd4adcda9748efd31d7fbac1b" }
+aube = { path = ".mise/locks/npm-renovate/44.252.0~026f02c4", digest = "sha256:a86d76f081eec51c03b7484bffab527c088c6e50ba7726b342a2f2e265352434" }
 backend = "npm:renovate"
 specifiers = ["44.252.0"]
 

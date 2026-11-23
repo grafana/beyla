@@ -989,6 +989,59 @@ ensure_weaver_tap_survives_weavercol_startup() {
   done
 }
 
+ensure_django_gunicorn_no_control_socket() {
+  # Avoid gunicorn 25.1.0's ControlSocketServer + os.fork() deadlock in
+  # TestSuite_DjangoRoutes (benoitc/gunicorn#3509, benoitc/gunicorn#3529,
+  # fixed in benoitc/gunicorn#3520).
+  #
+  # DURABLE FIX (upstream, then drop this step): upgrade gunicorn past 25.1.0
+  # (with benoitc/gunicorn#3520) or pass --no-control-socket in OBI's
+  # internal/test/integration/components/djangoserver/Dockerfile.
+  local compose="$OBI_DEST/docker-compose-django.yml"
+  [[ -f "$compose" ]] || return 0
+  grep -q 'GUNICORN_CMD_ARGS' "$compose" && return 0
+
+  awk '
+      /^  testserver:[[:space:]]*$/ { in_ts = 1; print; next }
+      in_ts && /^$/ {
+          if (!injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+              injected = 1
+          }
+          in_ts = 0
+          print
+          next
+      }
+      in_ts && /^  [^ ]/ {
+          if (!injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+              print ""
+              injected = 1
+          }
+          in_ts = 0
+      }
+      in_ts && /^    environment:[[:space:]]*$/ {
+          print
+          print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+          injected = 1
+          next
+      }
+      { print }
+      END {
+          if (in_ts && !injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+          }
+      }
+      ' "$compose" >"$compose.tmp" && mv "$compose.tmp" "$compose"
+
+  if ! grep -q 'GUNICORN_CMD_ARGS' "$compose"; then
+    echo "  WARNING: could not inject GUNICORN_CMD_ARGS into $compose"
+  fi
+}
+
 restore_weaver_registry_mount_paths() {
   # The weaver container (from OBI's components/weaver/service.yml) hardcodes
   # --registry /obi-registry and working_dir: /obi-registry. The BEHAVIORAL_TRANSFORMS
@@ -1577,6 +1630,7 @@ generate() {
   ensure_nodejs_traces_are_complete
   ensure_malicious_ioctl_local_downstream
   ensure_weaver_tap_survives_weavercol_startup
+  ensure_django_gunicorn_no_control_socket
   cleanup_and_inject_build_tags "$jobs"
 
   # -----------------------------------------------------------------

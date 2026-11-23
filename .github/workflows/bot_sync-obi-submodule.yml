@@ -1,4 +1,5 @@
 name: Update OBI submodule
+run-name: OBI adoption target ${{ inputs.obi_sha || 'sampled-upstream' }} request ${{ inputs.request_run_id || 'scheduled' }}
 
 on:
   schedule:
@@ -15,6 +16,10 @@ on:
         type: string
       source_sha:
         description: "Exact head SHA of source_pr; required when source_pr is supplied"
+        required: false
+        type: string
+      request_run_id:
+        description: "Originating daily OBI adoption request run ID, if continuing from a fork sync"
         required: false
         type: string
 
@@ -35,6 +40,7 @@ jobs:
       publish_action: ${{ steps.collect.outputs.publish_action }}
       upstream_sha: ${{ steps.collect.outputs.upstream_sha }}
       pin_sha: ${{ steps.collect.outputs.pin_sha }}
+      fork_relation: ${{ steps.collect.outputs.fork_relation }}
       main_head_sha: ${{ steps.collect.outputs.main_head_sha }}
       active_prs_json: ${{ steps.collect.outputs.active_prs_json }}
       open_pr_complete: ${{ steps.collect.outputs.open_pr_complete }}
@@ -68,6 +74,36 @@ jobs:
           REASON: ${{ steps.collect.outputs.publish_reason }}
         run: |
           printf 'Preflight action: **%s**\n\n%s\n' "$ACTION" "$REASON" >> "$GITHUB_STEP_SUMMARY"
+
+  request-fork-sync:
+    needs: preflight-obi-adoption
+    if: >-
+      (needs.preflight-obi-adoption.outputs.fork_relation == 'behind' ||
+       needs.preflight-obi-adoption.outputs.fork_relation == 'diverged') &&
+      (github.event_name == 'schedule' ||
+       (inputs.request_run_id == '' && inputs.source_pr == '' && inputs.source_sha == '')) &&
+      vars.OBI_ADOPTION_WRITER_ENABLED == 'true' &&
+      vars.OBI_FORK_SYNC_WRITER_ENABLED == 'true'
+    name: Request the exact daily SHA from the fork-sync workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Check out trusted main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Dispatch one exact-SHA fork request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REF: ${{ github.ref }}
+          OBI_SHA: ${{ needs.preflight-obi-adoption.outputs.upstream_sha }}
+          REQUEST_RUN_ID: ${{ github.run_id }}
+        run: python3 scripts/release-reconciliation/adoption/obi_fork_sync.py request
 
   prepare-obi-adoption:
     needs: preflight-obi-adoption

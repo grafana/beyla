@@ -476,7 +476,7 @@ jobs:
       needs.managed-adoption-status.outputs.should-repair == 'true' &&
       vars.OBI_ADOPTION_WRITER_ENABLED == 'true' &&
       vars.OBI_ADOPTION_REPAIR_ENABLED == 'true'
-    uses: grafana/beyla/.github/workflows/obi-adoption-repair.yml@refs/heads/main
+    uses: ./.github/workflows/obi-adoption-repair.yml
     permissions:
       actions: read
       checks: read

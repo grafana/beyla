@@ -52,12 +52,6 @@
         "ubuntu"
       ]
     },
-    ".github/workflows/bot_sync-obi-fork.yml": {
-      "github-actions": [
-        "grafana/shared-workflows",
-        "ubuntu"
-      ]
-    },
     ".github/workflows/bot_sync-obi-submodule.yml": {
       "github-actions": [
         "actions/checkout",
@@ -322,7 +316,6 @@
     ".github/workflows/supervisor_rerun-flaky.yml": {
       "github-actions": [
         "actions/checkout",
-        "grafana/beyla",
         "grafana/shared-workflows",
         "ubuntu"
       ]
@@ -973,11 +966,6 @@
     "google-github-actions/setup-gcloud": {
       "packageName": "google-github-actions/setup-gcloud",
       "refKind": "version-tag"
-    },
-    "grafana/beyla/.github/workflows/obi-adoption-repair.yml": {
-      "packageName": "grafana/beyla",
-      "refKind": "branch",
-      "ref": "refs/heads/main"
     },
     "grafana/dashboard-linter": {
       "packageName": "grafana/dashboard-linter",

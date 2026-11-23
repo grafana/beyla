@@ -32,7 +32,6 @@ Example used in this document:
 
 ## Automation Workflows
 
-- `bot_sync-obi-fork.yml`: continuously syncs Grafana OBI fork main with upstream.
 - `bot_sync-obi-submodule.yml`: weekly (Monday) update of Beyla `.obi-src` on `main`.
 - [`release-train-prepare.yml`](../.github/workflows/release-train-prepare.yml): creates or updates OBI and Beyla release branches and regenerates artifacts.
   - Manual dispatch after OBI fork is synced.

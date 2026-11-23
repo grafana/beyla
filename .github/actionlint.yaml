@@ -1,3 +1,5 @@
 self-hosted-runner:
   labels:
     - ubuntu-x64
+    # GitHub-hosted; missing from actionlint 1.7.12 (rhysd/actionlint#682)
+    - ubuntu-26.04-arm

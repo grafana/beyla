@@ -113,7 +113,7 @@ func (pf *ProcessFinder) startMixedPipeline(ctx context.Context) (<-chan obiDisc
 		}
 		obiPFStart <- instrumentableEvents
 		return func(_ context.Context) {
-			<-pf.obiProcessFinder.Done()
+			<-pf.obiProcessFinder.Done() //nolint:errcheck // The pipeline's shutdown result is intentionally ignored.
 		}, err
 	}, swarm.WithID("OBIProcessFinderSubPipeline"))
 

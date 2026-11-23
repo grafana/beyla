@@ -78,12 +78,13 @@ func ProcessStartTime(pid app.PID) (uint64, error) {
 }
 
 // resolveRuntimeObjectCandidates requires one runtime owner and gives operational errors precedence over compatibility results.
-func resolveRuntimeObjectCandidates(
+func resolveRuntimeObjectCandidates[T interface{ Close() error }](
 	pid app.PID,
 	objects []*procfs.ProcMap,
-	resolve func(*procfs.ProcMap) (*MetricTarget, error),
-) (*MetricTarget, error) {
-	var targets []*MetricTarget
+	resolve func(*procfs.ProcMap) (T, error),
+) (T, error) {
+	var zero T
+	var targets []T
 	var operationalErr, unsupportedErr error
 	for _, object := range objects {
 		target, resolveErr := resolve(object)
@@ -104,23 +105,23 @@ func resolveRuntimeObjectCandidates(
 	}
 
 	if operationalErr != nil {
-		closeMetricTargets(targets)
-		return nil, fmt.Errorf("resolving CPython runtime for PID %d: %w", pid, operationalErr)
+		closeRuntimeTargets(targets)
+		return zero, fmt.Errorf("resolving CPython runtime for PID %d: %w", pid, operationalErr)
 	}
 	if len(targets) > 1 {
-		closeMetricTargets(targets)
-		return nil, fmt.Errorf("%w: multiple mapped objects own a supported CPython runtime", errUnsupportedLayout)
+		closeRuntimeTargets(targets)
+		return zero, fmt.Errorf("%w: multiple mapped objects own a supported CPython runtime", errUnsupportedLayout)
 	}
 	if len(targets) == 1 {
 		return targets[0], nil
 	}
 	if unsupportedErr != nil {
-		return nil, unsupportedErr
+		return zero, unsupportedErr
 	}
-	return nil, fmt.Errorf("%w for PID %d", errRuntimeNotFound, pid)
+	return zero, fmt.Errorf("%w for PID %d", errRuntimeNotFound, pid)
 }
 
-func closeMetricTargets(targets []*MetricTarget) {
+func closeRuntimeTargets[T interface{ Close() error }](targets []T) {
 	for _, target := range targets {
 		_ = target.Close()
 	}

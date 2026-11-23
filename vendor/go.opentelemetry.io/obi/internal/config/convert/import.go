@@ -138,6 +138,12 @@ func V2ToRuntime(src *schema.Extension) (*obi.Config, error) {
 		}
 	}
 
+	if cfg.NameResolver != nil && len(cfg.CloudMetadata.Route53.HostedZoneIDs) == 0 {
+		cfg.CloudMetadata.Route53.DiscoverHostedZones = slices.ContainsFunc(cfg.NameResolver.Sources, func(source transform.Source) bool {
+			return strings.EqualFold(string(source), string(transform.SourceRoute53))
+		})
+	}
+
 	return &cfg, nil
 }
 
@@ -1187,7 +1193,6 @@ func applyFullV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	cfg.EBPF.ContextPropagation = engine.Propagation.ContextPropagation
 	cfg.EBPF.OverrideBPFLoopEnabled = engine.Propagation.OverrideBPFLoopEnabled
 	cfg.EBPF.DisableBlackBoxCP = engine.Propagation.DisableBlackBoxCP
-	cfg.EBPF.DisableGoChannelLinks = engine.Propagation.DisableGoChannelLinks
 	cfg.EBPF.PopulateTraceContext = engine.Propagation.PopulateTraceContext
 	cfg.EBPF.TCBackend = engine.Traffic.ControlBackend
 	cfg.EBPF.HighRequestVolume = engine.Traffic.HighRequestVolume
@@ -1228,9 +1233,6 @@ func applyPartialV2Engine(cfg *obi.Config, engine schema.CaptureEngine) {
 	}
 	if engine.Propagation.DisableBlackBoxCP {
 		cfg.EBPF.DisableBlackBoxCP = true
-	}
-	if engine.Propagation.DisableGoChannelLinks {
-		cfg.EBPF.DisableGoChannelLinks = true
 	}
 	if engine.Propagation.PopulateTraceContext {
 		cfg.EBPF.PopulateTraceContext = true
@@ -1276,6 +1278,7 @@ func applyV2Instrumentation(cfg *obi.Config, instrumentation schema.Instrumentat
 	}
 
 	applyV2InstrumentationFilters(cfg, instrumentation)
+	applyV2HTTPQueryParameters(cfg, instrumentation.HTTP.QueryParameters)
 
 	complete = complete || completeInstrumentation(instrumentation)
 	if !complete {
@@ -1380,6 +1383,25 @@ func applyPartialV2Instrumentation(cfg *obi.Config, instrumentation schema.Instr
 	if !zeroValue(instrumentation.GPU.EnabledMode) {
 		cfg.EBPF.InstrumentCuda = instrumentation.GPU.EnabledMode
 	}
+}
+
+func applyV2HTTPQueryParameters(cfg *obi.Config, params schema.HTTPQueryParameters) {
+	if params.Redaction == nil {
+		return
+	}
+	redaction := &cfg.Attributes.SensitiveQueryParams
+	redaction.Replacement = params.Redaction.Replacement
+	if params.Redaction.Names == nil {
+		return
+	}
+	redaction.Add = nil
+	redaction.Remove = nil
+	if slices.Equal(*params.Redaction.Names, attributes.DefaultSensitiveQueryParams) {
+		return
+	}
+	// Adapt a complete v2 selection to the existing runtime's default-relative list.
+	redaction.Remove = slices.Clone(attributes.DefaultSensitiveQueryParams)
+	redaction.Add = slices.Clone(*params.Redaction.Names)
 }
 
 func applyFullV2HTTPInstrumentation(cfg *obi.Config, http schema.HTTPInstrumentation) {
@@ -1948,6 +1970,10 @@ func applyPartialV2StatsEnrichment(cfg *obi.Config, enrichment schema.NetworkEnr
 func applyV2Runtimes(cfg *obi.Config, runtimes schema.CaptureRuntimes, complete bool) {
 	if zeroValue(runtimes) && !complete {
 		return
+	}
+
+	if enabled := runtimes.Go.ChannelLinks; enabled != nil {
+		cfg.EBPF.DisableGoChannelLinks = !*enabled
 	}
 
 	if complete || completeRuntimes(runtimes) {

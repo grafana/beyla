@@ -747,6 +747,9 @@
         },
         "go": {
           "$ref": "#/$defs/GoExceptionsConfig"
+        },
+        "python": {
+          "$ref": "#/$defs/PythonExceptionsConfig"
         }
       },
       "type": "object",
@@ -2351,6 +2354,14 @@
         "port": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT"
+        }
+      },
+      "type": "object"
+    },
+    "PythonExceptionsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
         }
       },
       "type": "object"

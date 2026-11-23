@@ -499,6 +499,9 @@ func (p *Tracer) LoadSpecs() ([]*ebpfcommon.SpecBundle, error) {
 		ebpfcommon.DisableJavaHTTP1Atomics(spec)
 	}
 	p.privateExceptionEvents(spec)
+	if !p.exceptionsEnabled {
+		ebpfcommon.ShrinkPythonExceptionMaps(spec)
+	}
 
 	return []*ebpfcommon.SpecBundle{{
 		Spec:      spec,

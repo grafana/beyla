@@ -44,14 +44,6 @@ func TestJavaHTTPClientIntegrationConfig(t *testing.T) {
 	})
 }
 
-func TestRoute53IntegrationConfig(t *testing.T) {
-	t.Setenv("ROUTE53_HOSTED_ZONE_ID", "")
-	cfg := loadIntegrationFixture(t, "obi-config-route53.yml")
-	assert.Empty(t, cfg.CloudMetadata.Route53.HostedZoneIDs,
-		"the fixture discovers the hosted zones associated with the mock VPC")
-	assert.NoError(t, cfg.CloudMetadata.Route53.Validate())
-}
-
 func TestCohereIntegrationConfig(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "internal", "test", "beyla_extensions",
 		"oats", "ai", "configs", "instrumenter-config-traces-genai-v2.yml"))

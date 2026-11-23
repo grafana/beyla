@@ -11,6 +11,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
 
+type runtimeSnapshot struct {
+	runtimemetrics.DotnetRuntimeMetricSnapshot
+	exceptions map[string]uint64
+}
+
 type runtimeCollection struct {
 	gc            gcRound
 	fragmentation gcFragmentation
@@ -24,7 +29,7 @@ type runtimeCollection struct {
 	exceptionsUnavailable bool
 }
 
-func (c *runtimeCollection) observeEvent(event netTraceRuntimeEvent) (*runtimemetrics.DotnetRuntimeMetricSnapshot, error) {
+func (c *runtimeCollection) observeEvent(event netTraceRuntimeEvent) (*runtimeSnapshot, error) {
 	if event.gc != nil {
 		return nil, c.fragmentation.observe(*event.gc)
 	}
@@ -60,7 +65,7 @@ func (c *runtimeCollection) observeException(rawName string, count uint64) error
 	return nil
 }
 
-func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.DotnetRuntimeMetricSnapshot, error) {
+func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimeSnapshot, error) {
 	if counter.Name == "processor-count" {
 		count := int64(counter.Value)
 		c.processorCount = &count
@@ -70,12 +75,12 @@ func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.Dot
 	if c.polling.ProcessMemoryWorkingSet == nil && counter.Name != "working-set" {
 		return nil, nil
 	}
-	var completed *runtimemetrics.DotnetRuntimeMetricSnapshot
+	var completed *runtimeSnapshot
 	if counter.Name == "working-set" && c.polling.ProcessMemoryWorkingSet != nil {
 		if c.polling.GCCollections[0] != nil {
-			snapshot := c.polling
+			snapshot := runtimeSnapshot{DotnetRuntimeMetricSnapshot: c.polling}
 			snapshot.ProcessCPUCount = c.processorCount
-			snapshot.Exceptions = maps.Clone(c.exceptions)
+			snapshot.exceptions = maps.Clone(c.exceptions)
 			snapshot.GCHeapFragmentation = c.fragmentation.snapshot()
 			completed = &snapshot
 		}
@@ -97,14 +102,14 @@ func (c *runtimeCollection) observe(counter runtimeCounter) (*runtimemetrics.Dot
 	return completed, nil
 }
 
-func (c *runtimeCollection) finish() *runtimemetrics.DotnetRuntimeMetricSnapshot {
+func (c *runtimeCollection) finish() *runtimeSnapshot {
 	// time-in-jit is the last supported counter in the runtime's polling order.
 	if c.polling.JITCompilationTime == nil || c.polling.GCCollections[0] == nil {
 		return nil
 	}
-	snapshot := c.polling
+	snapshot := runtimeSnapshot{DotnetRuntimeMetricSnapshot: c.polling}
 	snapshot.ProcessCPUCount = c.processorCount
-	snapshot.Exceptions = maps.Clone(c.exceptions)
+	snapshot.exceptions = maps.Clone(c.exceptions)
 	snapshot.GCHeapFragmentation = c.fragmentation.snapshot()
 	c.polling = runtimemetrics.DotnetRuntimeMetricSnapshot{}
 	return &snapshot

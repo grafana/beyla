@@ -61,9 +61,14 @@ var route53PublicExceptions = []netip.Prefix{
 }
 
 type Route53Client interface {
+	ListResourceRecordSets(context.Context, *route53.ListResourceRecordSetsInput, ...func(*route53.Options)) (*route53.ListResourceRecordSetsOutput, error)
+}
+
+// Route53DiscoveryClient can enumerate the zones available to Config v2.
+type Route53DiscoveryClient interface {
+	Route53Client
 	ListHostedZonesByVPC(context.Context, *route53.ListHostedZonesByVPCInput, ...func(*route53.Options)) (*route53.ListHostedZonesByVPCOutput, error)
 	ListHostedZones(context.Context, *route53.ListHostedZonesInput, ...func(*route53.Options)) (*route53.ListHostedZonesOutput, error)
-	ListResourceRecordSets(context.Context, *route53.ListResourceRecordSetsInput, ...func(*route53.Options)) (*route53.ListResourceRecordSetsOutput, error)
 }
 
 type Route53Inventory struct {
@@ -73,6 +78,7 @@ type Route53Inventory struct {
 	initialized     bool
 	backoff         time.Duration
 	client          Route53Client
+	discoveryClient Route53DiscoveryClient
 	hostedZoneIDs   []string
 }
 
@@ -84,6 +90,13 @@ func NewRoute53Inventory(client Route53Client, hostedZoneIDs []string) *Route53I
 	}
 }
 
+// NewRoute53DiscoveryInventory discovers zones with VPC and address filtering.
+func NewRoute53DiscoveryInventory(client Route53DiscoveryClient, hostedZoneIDs []string) *Route53Inventory {
+	inventory := NewRoute53Inventory(client, hostedZoneIDs)
+	inventory.discoveryClient = client
+	return inventory
+}
+
 func (i *Route53Inventory) Name() string { return "route53" }
 
 func (i *Route53Inventory) Refresh(ctx context.Context, snapshot *MetadataSnapshot) error {
@@ -93,7 +106,7 @@ func (i *Route53Inventory) Refresh(ctx context.Context, snapshot *MetadataSnapsh
 		i.backoff = 0
 		return nil
 	}
-	if !i.initialized && route53AccessDenied(err) {
+	if i.discoveryClient != nil && !i.initialized && route53AccessDenied(err) {
 		permissions := "route53:ListResourceRecordSets, route53:ListHostedZones"
 		if i.VPCID != "" && i.VPCRegion != "" {
 			permissions += ", route53:ListHostedZonesByVPC"
@@ -113,6 +126,14 @@ func (i *Route53Inventory) Refresh(ctx context.Context, snapshot *MetadataSnapsh
 }
 
 func (i *Route53Inventory) refresh(ctx context.Context, snapshot *MetadataSnapshot) error {
+	if i.discoveryClient == nil {
+		for _, id := range i.hostedZoneIDs {
+			if err := i.readZoneRecords(ctx, route53Zone{id: id}, snapshot.ServiceByIP); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	zones, err := i.discoverZones(ctx)
 	if err != nil {
 		return err
@@ -125,9 +146,9 @@ func (i *Route53Inventory) refresh(ctx context.Context, snapshot *MetadataSnapsh
 		if !i.zoneSelected(zone.id) {
 			continue
 		}
-		zoneNames, err := i.readZoneRecords(ctx, zone)
-		if err != nil {
-			if route53AccessDenied(err) {
+		zoneNames := map[string]string{}
+		if err := i.readZoneRecords(ctx, zone, zoneNames); err != nil {
+			if i.discoveryClient != nil && route53AccessDenied(err) {
 				accessDenied = err
 				continue
 			}
@@ -171,19 +192,18 @@ func route53AccessDenied(err error) bool {
 		(apiErr.ErrorCode() == "AccessDenied" || apiErr.ErrorCode() == "AccessDeniedException")
 }
 
-func (i *Route53Inventory) readZoneRecords(ctx context.Context, zone route53Zone) (map[string]string, error) {
-	names := map[string]string{}
+func (i *Route53Inventory) readZoneRecords(ctx context.Context, zone route53Zone, names map[string]string) error {
 	pages := route53.NewListResourceRecordSetsPaginator(i.client, &route53.ListResourceRecordSetsInput{HostedZoneId: &zone.id})
 	for pages.HasMorePages() {
 		out, err := pages.NextPage(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("listing Route53 records for hosted zone %q: %w", zone.id, err)
+			return fmt.Errorf("listing Route53 records for hosted zone %q: %w", zone.id, err)
 		}
 		for _, record := range out.ResourceRecordSets {
 			addRoute53Record(names, record, zone.public)
 		}
 	}
-	return names, nil
+	return nil
 }
 
 type route53Zone struct {
@@ -193,7 +213,7 @@ type route53Zone struct {
 
 func (i *Route53Inventory) discoverZones(ctx context.Context) ([]route53Zone, error) {
 	var zones []route53Zone
-	pages := route53.NewListHostedZonesPaginator(i.client, &route53.ListHostedZonesInput{})
+	pages := route53.NewListHostedZonesPaginator(i.discoveryClient, &route53.ListHostedZonesInput{})
 	for pages.HasMorePages() {
 		out, err := pages.NextPage(ctx)
 		if err != nil {
@@ -212,7 +232,7 @@ func (i *Route53Inventory) discoverZones(ctx context.Context) ([]route53Zone, er
 		VPCId: &i.VPCID, VPCRegion: types.VPCRegion(i.VPCRegion),
 	}
 	for {
-		out, err := i.client.ListHostedZonesByVPC(ctx, input)
+		out, err := i.discoveryClient.ListHostedZonesByVPC(ctx, input)
 		if err != nil {
 			return nil, fmt.Errorf("listing Route53 hosted zones for VPC %q: %w", i.VPCID, err)
 		}

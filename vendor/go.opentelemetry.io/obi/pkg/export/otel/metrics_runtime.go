@@ -648,10 +648,10 @@ func recordDotnetRuntimeMetrics(ctx context.Context, metrics *dotnetRuntimeMetri
 	}
 	previous.lastSeen = metrics.clock()
 	recordDotnetCurrentMetrics(ctx, metrics, previous, snapshot.Dotnet)
-	if len(snapshot.Dotnet.Exceptions) > 0 && previous.exceptions == nil {
+	if len(snapshot.DotnetExceptions) > 0 && previous.exceptions == nil {
 		previous.exceptions = make(map[string]runtimeCounterValue)
 	}
-	for label, count := range snapshot.Dotnet.Exceptions {
+	for label, count := range snapshot.DotnetExceptions {
 		baseline := previous.exceptions[label]
 		recordRuntimeCounterWithAttributes(ctx, metrics.exceptions, &baseline, count,
 			attribute.String(string(attr.ErrorType), label))

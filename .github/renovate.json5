@@ -249,6 +249,16 @@
       ],
     },
     {
+      description: 'Block gradle:9.9.2-jdk21-noble until upstream publishes a linux/arm64 manifest (adoptium/containers#1146), while allowing later releases through',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchPackageNames: [
+        'gradle',
+      ],
+      allowedVersions: '!/^9\\.9\\.2-jdk21-noble$/',
+    },
+    {
       description: 'Group Go base image tags with the selected Go toolchain and module directives',
       matchManagers: [
         'dockerfile',

@@ -1,5 +1,5 @@
 # download the opentelemetry-injector binary for the target architecture
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS download-injector-binary
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS download-injector-binary
 ARG TARGETARCH
 WORKDIR /
 
@@ -17,7 +17,7 @@ RUN case ${TARGETARCH} in \
   wget -q -O /libotelinject.so "https://github.com/open-telemetry/opentelemetry-injector/releases/download/v$(cat version.txt)/${INJECTOR_LIB}"
 
 # Fetch the operator's Python requirements and append beyla-specific additions
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS prepare-python-deps
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS prepare-python-deps
 WORKDIR /build
 # Keep packages current with security updates from the pinned Alpine base.
 # hadolint ignore=DL3018
@@ -79,7 +79,7 @@ COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
 RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
 
 # Get the Python SDK for glibc
-FROM python:3.14.6-trixie@sha256:55dd7c1ea6c2b2c45a26d797187706eb9e5e0046f8e54fd759e38647b505c36b AS build-python-glibc
+FROM python:3.14.10-trixie@sha256:8a6b0a0ed63fb9d4ea59ee320591109f14205bbe7a787c51d9f72ad2a2f7e89c AS build-python-glibc
 WORKDIR /operator-build
 COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -101,7 +101,7 @@ COPY python/sitecustomize.py .
 COPY python/_beyla_otel ./_beyla_otel
 
 # Get the Python SDK for musl
-FROM python:3.14.6-alpine3.23@sha256:b165067c5afc37fa5608a3c05609cc3d51aafd808a30fbfd822ee594fef55ad4 AS build-python-musl
+FROM python:3.14.10-alpine3.23@sha256:f6a7dec95e6205059dccfcb07faca3ca38729ea35df01231caf1d127bacedec8 AS build-python-musl
 WORKDIR /operator-build
 COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -123,7 +123,7 @@ COPY python/sitecustomize.py .
 COPY python/_beyla_otel ./_beyla_otel
 
 # Get the OTel Java SDK
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS download-java-sdk
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS download-java-sdk
 WORKDIR /
 
 # Keep security updates in the pinned Alpine base's package set.
@@ -136,7 +136,7 @@ RUN curl -sSfL -o opentelemetry-javaagent.jar \
     "https://github.com/grafana/grafana-opentelemetry-java/releases/download/v$(cat version.txt)/grafana-opentelemetry-java.jar"
 
 # Get the OTel .NET SDK
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS download-dotnet-sdk
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS download-dotnet-sdk
 ARG TARGETARCH
 WORKDIR /
 
@@ -162,7 +162,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
     unzip -q dotnet-instrumentation-musl.zip -d /musl
 
 # Fetch the operator's Node.js package.json and merge in beyla-specific dependencies
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS prepare-nodejs-deps
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS prepare-nodejs-deps
 WORKDIR /build
 # Keep security updates in the pinned Alpine base's package set.
 # hadolint ignore=DL3018
@@ -175,7 +175,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
         package-operator.json package.extra.json > package.json
 
 # Build the Node.js artifacts
-FROM node:26@sha256:e18c3ccdf7d71619990b0e85639f506e2028a95410999cab24cc373cbd10e0ac AS build-nodejs-sdk
+FROM node:26@sha256:c18e48adb93fd04bc41b6ab8f12bd9c83791644afba36359ef6bb225353fef1d AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY --from=prepare-nodejs-deps /build/package.json .
@@ -195,7 +195,7 @@ RUN NODE_REGISTER_FILE="$(node -p "require.resolve('@opentelemetry/auto-instrume
 RUN ls -al -- *
 
 # build the final instrumentation image
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 COPY copy-to-volume.sh /
 RUN mkdir -p /dist
 

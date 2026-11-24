@@ -23,6 +23,24 @@
     'internal/test/beyla_extensions/k8s/manifests/**',
     'vendor/**',
   ],
+  'pip-compile': {
+    managerFilePatterns: [
+      '/^internal/test/integration/components/openai/requirements\\.txt$/',
+    ],
+  },
+  pip_requirements: {
+    // ignorePaths is non-mergeable in Renovate, so repeat the repo-wide ignores
+    // alongside the compiled requirements.txt managed by pip-compile.
+    ignorePaths: [
+      '**/node_modules/**',
+      '**/bower_components/**',
+      '.obi-src/**',
+      '.mise/locks/**',
+      'internal/test/beyla_extensions/k8s/manifests/**',
+      'vendor/**',
+      'internal/test/integration/components/openai/requirements.txt',
+    ],
+  },
   automerge: true,
   customManagers: [
     {
@@ -247,6 +265,16 @@
       schedule: [
         'before 8am on Tuesday',
       ],
+    },
+    {
+      description: 'Block gradle:9.9.2-jdk21-noble until upstream publishes a linux/arm64 manifest (adoptium/containers#1146), while allowing later releases through',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchPackageNames: [
+        'gradle',
+      ],
+      allowedVersions: '!/^9\\.9\\.2-jdk21-noble$/',
     },
     {
       description: 'Group Go base image tags with the selected Go toolchain and module directives',

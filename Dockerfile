@@ -4,7 +4,7 @@ ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.18@sha256:00da54aef610c9d8e
 # Build JNI native library using Go image (has gcc + apt; installs cross-compiler)
 FROM golang:1.27.4@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS jni-builder
 ARG BUILDARCH=amd64
-COPY --from=gradle:9.6.1-jdk21-noble@sha256:8074080ea0c9d663076211abc189ba1472474d3019a0da49c4216dce3184cf85 /opt/java/openjdk/include /opt/java/include
+COPY --from=gradle:9.9.1-jdk21-noble@sha256:59e9d5c9f158ab16081ff924a02e99a1c2a5ac636dafb6f00fedccdaaf293d43 /opt/java/openjdk/include /opt/java/include
 WORKDIR /build
 COPY .obi-src/pkg/internal/java/agent/src/main/c/ src/main/c/
 COPY .obi-src/pkg/internal/java/agent/Makefile.jni Makefile.jni
@@ -37,7 +37,7 @@ RUN case "$BUILDARCH" in \
     make -f Makefile.jni CC="$CC" JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR="build/jni/$SLUG" TARGET_DIR="target/classes/native/$SLUG"
 
 # Build the Java OBI agent
-FROM gradle:9.6.1-jdk21-noble@sha256:8074080ea0c9d663076211abc189ba1472474d3019a0da49c4216dce3184cf85 AS javaagent-builder
+FROM gradle:9.9.1-jdk21-noble@sha256:59e9d5c9f158ab16081ff924a02e99a1c2a5ac636dafb6f00fedccdaaf293d43 AS javaagent-builder
 
 WORKDIR /build
 
@@ -81,7 +81,7 @@ RUN apk add --no-cache ca-certificates curl git bash make
 
 # The generator image provides Go, bpf2go, and Clang. Copy only Mise metadata
 # so repository tasks can run without installing a second Go toolchain.
-COPY --from=ghcr.io/jdx/mise:2026.11.4@sha256:085be191bbe51dbe93894681b7f29f6c014ae267e7a365c0b8b6a2fdd882ac63 /usr/local/bin/mise /usr/local/bin/mise
+COPY --from=ghcr.io/jdx/mise:2026.11.11@sha256:14a30b9945ea5c2fbae70d8b6be8f2c8b2456698f2a258f3f6315f7784c84676 /usr/local/bin/mise /usr/local/bin/mise
 ENV MISE_ENABLE_TOOLS=none
 
 # Copy the go manifests and source

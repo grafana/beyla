@@ -28,7 +28,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
     curl -sSfL "https://raw.githubusercontent.com/open-telemetry/opentelemetry-operator/v${OPERATOR_VERSION}/autoinstrumentation/python/requirements.txt" -o requirements.txt && \
     cat requirements.extra.txt >> requirements.txt
 
-FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS prepare-ruby
+FROM ruby:4.0.10-alpine3.23@sha256:24be9067c09756e3c5d8315bc1c91d069e89b122b05d0f4f01eb06d7500308ea AS prepare-ruby
 WORKDIR /source
 # Use the latest patched Git package from the pinned Alpine base repository.
 # hadolint ignore=DL3018
@@ -42,7 +42,7 @@ RUN revision=$(cat upstream-revision.txt) && \
     git checkout --quiet --detach FETCH_HEAD && \
     gem build opentelemetry-auto-instrumentation.gemspec --output /opentelemetry-auto-instrumentation.gem
 
-FROM ruby:3.3.12-slim-bookworm@sha256:df209d82bb55aeb26b9b08922ee22c15f19b3458455690132dc07a5c52dc1c99 AS build-ruby-glibc
+FROM ruby:4.0.10-slim-bookworm@sha256:2ae2957252f1d59985f012f876f4f70d8fc643537766499ba5efa2c991319823 AS build-ruby-glibc
 WORKDIR /
 # Track current Debian security revisions rather than pinning package versions
 # that can disappear from the archive.
@@ -62,7 +62,7 @@ COPY ruby/beyla /operator-build/beyla
 COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
 RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
 
-FROM ruby:3.3.12-alpine3.23@sha256:11da101dfad607c6193a921abc815c989bc9f19b43f5f686bbcc7d424298d596 AS build-ruby-musl
+FROM ruby:4.0.10-alpine3.23@sha256:24be9067c09756e3c5d8315bc1c91d069e89b122b05d0f4f01eb06d7500308ea AS build-ruby-musl
 # Keep Alpine security updates current rather than pinning ephemeral versions.
 # hadolint ignore=DL3018
 RUN apk add --no-cache build-base
@@ -175,7 +175,7 @@ RUN OPERATOR_VERSION=$(cat version.txt) && \
         package-operator.json package.extra.json > package.json
 
 # Build the Node.js artifacts
-FROM node:24@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 AS build-nodejs-sdk
+FROM node:26@sha256:e18c3ccdf7d71619990b0e85639f506e2028a95410999cab24cc373cbd10e0ac AS build-nodejs-sdk
 
 WORKDIR /operator-build
 COPY --from=prepare-nodejs-deps /build/package.json .

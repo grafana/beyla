@@ -79,7 +79,7 @@ COPY ruby/verify_bundle.rb ruby/dependency_requirements_generator.rb /tmp/
 RUN ruby /tmp/verify_bundle.rb /operator-build /tmp/Gemfile.lock /tmp/upstream-revision.txt
 
 # Get the Python SDK for glibc
-FROM python:3.14.10-trixie@sha256:8a6b0a0ed63fb9d4ea59ee320591109f14205bbe7a787c51d9f72ad2a2f7e89c AS build-python-glibc
+FROM python:3.15.2-trixie@sha256:cc8e02af50fcaf0944fd02158cd77abce78eb4b41ac0217a8434bbc475225e09 AS build-python-glibc
 WORKDIR /operator-build
 COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .
@@ -101,7 +101,7 @@ COPY python/sitecustomize.py .
 COPY python/_beyla_otel ./_beyla_otel
 
 # Get the Python SDK for musl
-FROM python:3.14.10-alpine3.23@sha256:f6a7dec95e6205059dccfcb07faca3ca38729ea35df01231caf1d127bacedec8 AS build-python-musl
+FROM python:3.15.2-alpine3.23@sha256:32f06114a111c2467804d06194c5584f16804a78cfaf427fb1fcbb0b3391d0f1 AS build-python-musl
 WORKDIR /operator-build
 COPY --from=prepare-python-deps /build/requirements.txt .
 COPY python/build_dep_tree.sh .

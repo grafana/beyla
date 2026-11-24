@@ -4,7 +4,7 @@ ARG GEN_IMG=ghcr.io/open-telemetry/obi-generator:0.2.18@sha256:00da54aef610c9d8e
 # Build JNI native library using Go image (has gcc + apt; installs cross-compiler)
 FROM golang:1.26.11@sha256:4165ee6bf3b7811fd7b40373290405c83d0167dcb87ee5f29c427cdcef45ff8f AS jni-builder
 ARG BUILDARCH=amd64
-COPY --from=gradle:9.6.1-jdk21-noble@sha256:8074080ea0c9d663076211abc189ba1472474d3019a0da49c4216dce3184cf85 /opt/java/openjdk/include /opt/java/include
+COPY --from=gradle:9.9.1-jdk21-noble@sha256:59e9d5c9f158ab16081ff924a02e99a1c2a5ac636dafb6f00fedccdaaf293d43 /opt/java/openjdk/include /opt/java/include
 WORKDIR /build
 COPY .obi-src/pkg/internal/java/agent/src/main/c/ src/main/c/
 COPY .obi-src/pkg/internal/java/agent/Makefile.jni Makefile.jni
@@ -37,7 +37,7 @@ RUN case "$BUILDARCH" in \
     make -f Makefile.jni CC="$CC" JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR="build/jni/$SLUG" TARGET_DIR="target/classes/native/$SLUG"
 
 # Build the Java OBI agent
-FROM gradle:9.6.1-jdk21-noble@sha256:8074080ea0c9d663076211abc189ba1472474d3019a0da49c4216dce3184cf85 AS javaagent-builder
+FROM gradle:9.9.1-jdk21-noble@sha256:59e9d5c9f158ab16081ff924a02e99a1c2a5ac636dafb6f00fedccdaaf293d43 AS javaagent-builder
 
 WORKDIR /build
 

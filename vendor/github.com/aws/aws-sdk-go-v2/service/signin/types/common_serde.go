@@ -6,10 +6,17 @@ import (
 	smithy "github.com/aws/smithy-go"
 )
 
-func serializeConditionValues(s smithy.ShapeSerializer, schema *smithy.Schema, v []string) {
-	if v == nil {
-		return
+func serializeBatchRevokeSessionErrorList(s smithy.ShapeSerializer, schema *smithy.Schema, v []BatchRevokeSessionError) {
+	s.WriteList(schema)
+	for _, vv := range v {
+		s.WriteStruct(schema.ListMember())
+		vv.SerializeMembers(s)
+		s.CloseStruct()
 	}
+	s.CloseList()
+}
+
+func serializeConditionValues(s smithy.ShapeSerializer, schema *smithy.Schema, v []string) {
 	s.WriteList(schema)
 	for _, vv := range v {
 		s.WriteString(schema.ListMember(), string(vv))
@@ -18,9 +25,6 @@ func serializeConditionValues(s smithy.ShapeSerializer, schema *smithy.Schema, v
 }
 
 func serializePermissionStatementSummaries(s smithy.ShapeSerializer, schema *smithy.Schema, v []PermissionStatementSummary) {
-	if v == nil {
-		return
-	}
 	s.WriteList(schema)
 	for _, vv := range v {
 		s.WriteStruct(schema.ListMember())
@@ -31,9 +35,6 @@ func serializePermissionStatementSummaries(s smithy.ShapeSerializer, schema *smi
 }
 
 func serializePolicyActions(s smithy.ShapeSerializer, schema *smithy.Schema, v []string) {
-	if v == nil {
-		return
-	}
 	s.WriteList(schema)
 	for _, vv := range v {
 		s.WriteString(schema.ListMember(), string(vv))
@@ -42,9 +43,6 @@ func serializePolicyActions(s smithy.ShapeSerializer, schema *smithy.Schema, v [
 }
 
 func serializePolicyStatements(s smithy.ShapeSerializer, schema *smithy.Schema, v []PolicyStatement) {
-	if v == nil {
-		return
-	}
 	s.WriteList(schema)
 	for _, vv := range v {
 		s.WriteStruct(schema.ListMember())
@@ -52,6 +50,56 @@ func serializePolicyStatements(s smithy.ShapeSerializer, schema *smithy.Schema, 
 		s.CloseStruct()
 	}
 	s.CloseList()
+}
+
+func serializeRevokedSessionList(s smithy.ShapeSerializer, schema *smithy.Schema, v []RevokedSession) {
+	s.WriteList(schema)
+	for _, vv := range v {
+		s.WriteStruct(schema.ListMember())
+		vv.SerializeMembers(s)
+		s.CloseStruct()
+	}
+	s.CloseList()
+}
+
+func serializeSessionArnList(s smithy.ShapeSerializer, schema *smithy.Schema, v []string) {
+	s.WriteList(schema)
+	for _, vv := range v {
+		s.WriteString(schema.ListMember(), string(vv))
+	}
+	s.CloseList()
+}
+
+func serializeSessionSummaryList(s smithy.ShapeSerializer, schema *smithy.Schema, v []Session) {
+	s.WriteList(schema)
+	for _, vv := range v {
+		s.WriteStruct(schema.ListMember())
+		vv.SerializeMembers(s)
+		s.CloseStruct()
+	}
+	s.CloseList()
+}
+
+func deserializeBatchRevokeSessionErrorList(d smithy.ShapeDeserializer, s *smithy.Schema, v *[]BatchRevokeSessionError) error {
+	*v = make([]BatchRevokeSessionError, 0)
+	var vv BatchRevokeSessionError
+	return smithy.ReadList(d, s, func() error {
+		if isNil, err := d.ReadNil(s.ListMember()); err != nil {
+			return err
+		} else if isNil {
+			var zero BatchRevokeSessionError
+			*v = append(*v, zero)
+			return nil
+		}
+
+		vv = BatchRevokeSessionError{}
+		if err := vv.Deserialize(d); err != nil {
+			return err
+		}
+
+		*v = append(*v, vv)
+		return nil
+	})
 }
 
 func deserializeConditionValues(d smithy.ShapeDeserializer, s *smithy.Schema, v *[]string) error {
@@ -140,10 +188,72 @@ func deserializePolicyStatements(d smithy.ShapeDeserializer, s *smithy.Schema, v
 	})
 }
 
+func deserializeRevokedSessionList(d smithy.ShapeDeserializer, s *smithy.Schema, v *[]RevokedSession) error {
+	*v = make([]RevokedSession, 0)
+	var vv RevokedSession
+	return smithy.ReadList(d, s, func() error {
+		if isNil, err := d.ReadNil(s.ListMember()); err != nil {
+			return err
+		} else if isNil {
+			var zero RevokedSession
+			*v = append(*v, zero)
+			return nil
+		}
+
+		vv = RevokedSession{}
+		if err := vv.Deserialize(d); err != nil {
+			return err
+		}
+
+		*v = append(*v, vv)
+		return nil
+	})
+}
+
+func deserializeSessionArnList(d smithy.ShapeDeserializer, s *smithy.Schema, v *[]string) error {
+	*v = make([]string, 0)
+	var vv string
+	return smithy.ReadList(d, s, func() error {
+		if isNil, err := d.ReadNil(s.ListMember()); err != nil {
+			return err
+		} else if isNil {
+			var zero string
+			*v = append(*v, zero)
+			return nil
+		}
+
+		if err := d.ReadString(s.ListMember(), &vv); err != nil {
+			return err
+		}
+
+		*v = append(*v, vv)
+		return nil
+	})
+}
+
+func deserializeSessionSummaryList(d smithy.ShapeDeserializer, s *smithy.Schema, v *[]Session) error {
+	*v = make([]Session, 0)
+	var vv Session
+	return smithy.ReadList(d, s, func() error {
+		if isNil, err := d.ReadNil(s.ListMember()); err != nil {
+			return err
+		} else if isNil {
+			var zero Session
+			*v = append(*v, zero)
+			return nil
+		}
+
+		vv = Session{}
+		if err := vv.Deserialize(d); err != nil {
+			return err
+		}
+
+		*v = append(*v, vv)
+		return nil
+	})
+}
+
 func serializeCondition(s smithy.ShapeSerializer, schema *smithy.Schema, v map[string][]string) {
-	if v == nil {
-		return
-	}
 	s.WriteMap(schema)
 	for k, vv := range v {
 		s.WriteKey(schema.MapKey(), k)
@@ -153,9 +263,6 @@ func serializeCondition(s smithy.ShapeSerializer, schema *smithy.Schema, v map[s
 }
 
 func serializeConditionBlock(s smithy.ShapeSerializer, schema *smithy.Schema, v map[string]map[string][]string) {
-	if v == nil {
-		return
-	}
 	s.WriteMap(schema)
 	for k, vv := range v {
 		s.WriteKey(schema.MapKey(), k)
@@ -165,9 +272,6 @@ func serializeConditionBlock(s smithy.ShapeSerializer, schema *smithy.Schema, v 
 }
 
 func serializePrincipal(s smithy.ShapeSerializer, schema *smithy.Schema, v map[string]string) {
-	if v == nil {
-		return
-	}
 	s.WriteMap(schema)
 	for k, vv := range v {
 		s.WriteKey(schema.MapKey(), k)

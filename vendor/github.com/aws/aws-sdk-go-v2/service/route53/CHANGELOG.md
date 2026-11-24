@@ -1,3 +1,33 @@
+# v1.73.0 (2026-11-20)
+
+* **Feature**: Amazon Route 53 support for advanced hosted zones. Including change guardrails, public dns fallback, change history. Also support for AZAffinityRouting.
+
+# v1.72.0 (2026-11-19)
+
+* **Feature**: Route 53 Private Endpoint Health Checks support
+
+# v1.71.0 (2026-11-12)
+
+* **Feature**: Amazon Route 53 now supports Record Set Protection, which blocks changes to protected records in a hosted zone.
+
+# v1.70.10 (2026-11-10)
+
+* **Dependency Update**: Update to smithy-go v1.28.9.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.70.9 (2026-11-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.70.8 (2026-11-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.70.7 (2026-11-04)
+
+* **Dependency Update**: Update to smithy-go v1.28.8.
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.70.6 (2026-10-27)
 
 * **Dependency Update**: Update to smithy-go v1.28.7.

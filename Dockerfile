@@ -81,7 +81,7 @@ RUN apk add --no-cache ca-certificates curl git bash make
 
 # The generator image provides Go, bpf2go, and Clang. Copy only Mise metadata
 # so repository tasks can run without installing a second Go toolchain.
-COPY --from=ghcr.io/jdx/mise:2026.11.4@sha256:085be191bbe51dbe93894681b7f29f6c014ae267e7a365c0b8b6a2fdd882ac63 /usr/local/bin/mise /usr/local/bin/mise
+COPY --from=ghcr.io/jdx/mise:2026.11.11@sha256:14a30b9945ea5c2fbae70d8b6be8f2c8b2456698f2a258f3f6315f7784c84676 /usr/local/bin/mise /usr/local/bin/mise
 ENV MISE_ENABLE_TOOLS=none
 
 # Copy the go manifests and source

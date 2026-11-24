@@ -1,7 +1,6 @@
 name: Documentation CI
 on:
   pull_request:
-    paths: ["docs/sources/**"]
   workflow_dispatch:
 
 permissions:
@@ -9,7 +8,18 @@ permissions:
   pull-requests: write
 
 jobs:
+  scope:
+    uses: ./.github/workflows/_required-check-scope.yml
+    permissions:
+      contents: read
+    with:
+      paths: |
+        docs/sources/**
+        .github/workflows/vale.yml
+
   vale:
+    needs: scope
+    if: needs.scope.outputs.applicable == 'true'
     runs-on: ubuntu-latest
     container:
       image: grafana/vale@sha256:4b9632f0b4ba1def1355d63303379a1da5c8bc59ec7282c8018437f6cafe8a0b
@@ -20,3 +30,23 @@ jobs:
       - uses: grafana/writers-toolkit/vale-action@67d43d461804a3413c2e11fd7899ff01e05b2563 # vale-action/v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  required-check:
+    name: Beyla documentation CI
+    if: always()
+    needs: [scope, vale]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Report required-check result
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          APPLICABLE: ${{ needs.scope.outputs.applicable }}
+          TEST_RESULT: ${{ needs.vale.result }}
+        run: |
+          if [[ "${SCOPE_RESULT}" == success && ( ( "${APPLICABLE}" == false && "${TEST_RESULT}" == skipped ) || ( "${APPLICABLE}" == true && "${TEST_RESULT}" == success ) ) ]]; then
+            exit 0
+          fi
+          echo "Unexpected required-check results: scope=${SCOPE_RESULT}, applicable=${APPLICABLE}, vale=${TEST_RESULT}" >&2
+          exit 1

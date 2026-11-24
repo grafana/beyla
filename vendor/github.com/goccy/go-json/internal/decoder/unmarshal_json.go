@@ -12,35 +12,43 @@ import (
 )
 
 type unmarshalJSONDecoder struct {
-	typ        reflect.Type
-	structName string
-	fieldName  string
+	typ reflect.Type
 	// retainsNothing is set for a type whose UnmarshalJSON keeps nothing of the bytes it is given, which are then
-	// the ones of the buffer. The bytes of any other type are copied: its UnmarshalJSON may keep them, and the
-	// buffer is written again by the next call.
+	// the ones of the buffer: a type of the standard library ( see runtime.IsStdMarshalerType ), a type which has
+	// the UnmarshalJSON of one only by embedding it, and json.RawMessage, which copies them. The bytes of any other type are copied: its UnmarshalJSON may keep them,
+	// and the buffer is written again by the next call.
 	retainsNothing bool
 }
 
-// timePtrType is the type of *time.Time, whose UnmarshalJSON parses the bytes it is given and keeps nothing of
-// them. The decoder is made for the pointer type, whose method set has UnmarshalJSON.
+// timePtrType is the type of *time.Time, which is decoded from a string only. The decoder is made for the pointer
+// type, whose method set has UnmarshalJSON.
 var timePtrType = reflect.TypeOf(&time.Time{})
+
+// rawMessagePtrType is the type of *json.RawMessage, whose UnmarshalJSON copies the bytes it is given: a copy of
+// them made here would be copied again.
+var rawMessagePtrType = reflect.TypeOf(&json.RawMessage{})
 
 // timeType is the type of time.Time.
 var timeType = timePtrType.Elem()
 
-func newUnmarshalJSONDecoder(typ reflect.Type, structName, fieldName string) *unmarshalJSONDecoder {
+func newUnmarshalJSONDecoder(typ reflect.Type) *unmarshalJSONDecoder {
 	return &unmarshalJSONDecoder{
 		typ:            typ,
-		structName:     structName,
-		fieldName:      fieldName,
-		retainsNothing: typ == timePtrType,
+		retainsNothing: typ == rawMessagePtrType || runtime.IsStdMarshalerType(typ) || promotesStdUnmarshalJSON(typ),
 	}
+}
+
+// promotesStdUnmarshalJSON is whether the UnmarshalJSON of the type is the one of an embedded type of the standard
+// library, which the type doesn't declare itself ( see runtime.PromotedStdMethod ).
+func promotesStdUnmarshalJSON(typ reflect.Type) bool {
+	_, _, _, ok := runtime.PromotedStdMethod(typ, runtime.UnmarshalJSONMethod)
+	return ok
 }
 
 func (d *unmarshalJSONDecoder) Decode(ctx *RuntimeContext, cursor, depth int64, p unsafe.Pointer) (int64, error) {
 	buf := ctx.Buf
 	cursor = skipWhiteSpace(buf, cursor)
-	if timeKindTypeErrors && d.typ == timePtrType {
+	if d.typ == timePtrType {
 		if c := buf[cursor]; c != '"' && c != 'n' {
 			// a time.Time is decoded from a string only: any other value is a type error
 			return ctx.skipTypeError(cursor, depth, timeType)
@@ -72,11 +80,11 @@ func (d *unmarshalJSONDecoder) Decode(ctx *RuntimeContext, cursor, depth int64, 
 			c = context.Background()
 		}
 		if err := v.UnmarshalJSON(c, dst); err != nil {
-			return ctx.methodError(cursor, end, err, d.structName, d.fieldName)
+			ctx.methodError(err)
 		}
 	case json.Unmarshaler:
 		if err := v.UnmarshalJSON(dst); err != nil {
-			return ctx.methodError(cursor, end, err, d.structName, d.fieldName)
+			ctx.methodError(err)
 		}
 	}
 	return end, nil

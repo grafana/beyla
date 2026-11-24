@@ -4,6 +4,7 @@ package route53
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,6 +23,7 @@ import (
 	"github.com/aws/smithy-go/logging"
 	"github.com/aws/smithy-go/metrics"
 	"github.com/aws/smithy-go/middleware"
+	smithyrand "github.com/aws/smithy-go/rand"
 	"github.com/aws/smithy-go/tracing"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"net"
@@ -203,6 +205,8 @@ func New(options Options, optFns ...func(*Options)) *Client {
 	resolveHTTPClient(&options)
 
 	resolveHTTPSignerV4(&options)
+
+	resolveIdempotencyTokenProvider(&options)
 
 	resolveEndpointResolverV2(&options)
 
@@ -715,6 +719,13 @@ func addIsPaginatorUserAgent(o *Options) {
 	})
 }
 
+func resolveIdempotencyTokenProvider(o *Options) {
+	if o.IdempotencyTokenProvider != nil {
+		return
+	}
+	o.IdempotencyTokenProvider = smithyrand.NewUUIDIdempotencyToken(cryptorand.Reader)
+}
+
 func addRetry(stack *middleware.Stack, o Options, c *Client) error {
 	attempt := retry.NewAttemptMiddleware(o.Retryer, smithyhttp.RequestCloner, func(m *retry.Attempt) {
 		m.LogAttempts = o.ClientLogMode.IsRetries()
@@ -806,6 +817,11 @@ func resolveMeterProvider(options *Options) {
 	}
 }
 
+// IdempotencyTokenProvider interface for providing idempotency token
+type IdempotencyTokenProvider interface {
+	GetIdempotencyToken() (string, error)
+}
+
 func resolveServiceMetadata(ctx context.Context, options Options, operation string) context.Context {
 	ctx = awsmiddleware.SetServiceID(ctx, ServiceID)
 	if options.Region != "" {
@@ -883,6 +899,13 @@ func sanitizeURLInput(input interface{}) error {
 			i.HostedZoneId = &v
 		}
 
+	case *CreateResourceRecordSetProtectionsInput:
+		if i.HostedZoneId != nil {
+			idx := strings.LastIndex(*i.HostedZoneId, `/`)
+			v := (*i.HostedZoneId)[idx+1:]
+			i.HostedZoneId = &v
+		}
+
 	case *CreateReusableDelegationSetInput:
 		if i.HostedZoneId != nil {
 			idx := strings.LastIndex(*i.HostedZoneId, `/`)
@@ -919,6 +942,13 @@ func sanitizeURLInput(input interface{}) error {
 		}
 
 	case *DeleteKeySigningKeyInput:
+		if i.HostedZoneId != nil {
+			idx := strings.LastIndex(*i.HostedZoneId, `/`)
+			v := (*i.HostedZoneId)[idx+1:]
+			i.HostedZoneId = &v
+		}
+
+	case *DeleteResourceRecordSetProtectionsInput:
 		if i.HostedZoneId != nil {
 			idx := strings.LastIndex(*i.HostedZoneId, `/`)
 			v := (*i.HostedZoneId)[idx+1:]
@@ -981,6 +1011,18 @@ func sanitizeURLInput(input interface{}) error {
 			i.Id = &v
 		}
 
+	case *GetHostedZoneChangeBatchInput:
+		if i.HostedZoneId != nil {
+			idx := strings.LastIndex(*i.HostedZoneId, `/`)
+			v := (*i.HostedZoneId)[idx+1:]
+			i.HostedZoneId = &v
+		}
+		if i.ChangeId != nil {
+			idx := strings.LastIndex(*i.ChangeId, `/`)
+			v := (*i.ChangeId)[idx+1:]
+			i.ChangeId = &v
+		}
+
 	case *GetHostedZoneLimitInput:
 		if i.HostedZoneId != nil {
 			idx := strings.LastIndex(*i.HostedZoneId, `/`)
@@ -1002,6 +1044,18 @@ func sanitizeURLInput(input interface{}) error {
 			i.DelegationSetId = &v
 		}
 
+	case *ListHostedZoneChangeBatchesInput:
+		if i.HostedZoneId != nil {
+			idx := strings.LastIndex(*i.HostedZoneId, `/`)
+			v := (*i.HostedZoneId)[idx+1:]
+			i.HostedZoneId = &v
+		}
+		if i.StartAfterChangeId != nil {
+			idx := strings.LastIndex(*i.StartAfterChangeId, `/`)
+			v := (*i.StartAfterChangeId)[idx+1:]
+			i.StartAfterChangeId = &v
+		}
+
 	case *ListHostedZonesInput:
 		if i.DelegationSetId != nil {
 			idx := strings.LastIndex(*i.DelegationSetId, `/`)
@@ -1017,6 +1071,20 @@ func sanitizeURLInput(input interface{}) error {
 		}
 
 	case *ListQueryLoggingConfigsInput:
+		if i.HostedZoneId != nil {
+			idx := strings.LastIndex(*i.HostedZoneId, `/`)
+			v := (*i.HostedZoneId)[idx+1:]
+			i.HostedZoneId = &v
+		}
+
+	case *ListResourceRecordSetChangesInput:
+		if i.HostedZoneId != nil {
+			idx := strings.LastIndex(*i.HostedZoneId, `/`)
+			v := (*i.HostedZoneId)[idx+1:]
+			i.HostedZoneId = &v
+		}
+
+	case *ListResourceRecordSetProtectionsInput:
 		if i.HostedZoneId != nil {
 			idx := strings.LastIndex(*i.HostedZoneId, `/`)
 			v := (*i.HostedZoneId)[idx+1:]
@@ -1073,6 +1141,13 @@ func sanitizeURLInput(input interface{}) error {
 		}
 
 	case *UpdateHostedZoneFeaturesInput:
+		if i.HostedZoneId != nil {
+			idx := strings.LastIndex(*i.HostedZoneId, `/`)
+			v := (*i.HostedZoneId)[idx+1:]
+			i.HostedZoneId = &v
+		}
+
+	case *UpdateHostedZoneTierInput:
 		if i.HostedZoneId != nil {
 			idx := strings.LastIndex(*i.HostedZoneId, `/`)
 			v := (*i.HostedZoneId)[idx+1:]

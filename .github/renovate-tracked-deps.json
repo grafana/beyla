@@ -755,8 +755,8 @@
         "golang"
       ]
     },
-    "internal/test/integration/components/openai/requirements.txt": {
-      "pip_requirements": [
+    "internal/test/integration/components/openai/requirements.in": {
+      "pip-compile": [
         "annotated-doc",
         "annotated-types",
         "anyio",

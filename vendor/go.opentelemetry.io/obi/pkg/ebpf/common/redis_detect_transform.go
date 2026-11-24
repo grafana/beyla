@@ -166,8 +166,9 @@ func crlfTerminatedMatch(buf []uint8, matches func(c uint8) bool) bool {
 }
 
 type redisCommand struct {
-	op   string
-	text string
+	op            string
+	text          string
+	sanitizedText string
 }
 
 type redisReply struct {
@@ -236,11 +237,11 @@ func isPrintableToken(tok []byte) bool {
 	return true
 }
 
-func salvageRedisCommand(op string, text *strings.Builder) *redisCommand {
+func newRedisCommand(op string, text *strings.Builder, args [][]byte) *redisCommand {
 	if op == "" {
 		return nil
 	}
-	return &redisCommand{op: op, text: text.String()}
+	return &redisCommand{op: op, text: text.String(), sanitizedText: sanitizeRedisCommand(op, args)}
 }
 
 // parseRedisCommand reads one RESP array at pos, honoring bulk lengths so binary
@@ -261,21 +262,22 @@ func parseRedisCommand(buf []byte, pos int) (*redisCommand, int, bool) {
 	op := ""
 	textDone := false
 	var text strings.Builder
+	var args [][]byte
 	pos = next
 
 	for i := range n {
 		lenLine, tokStart, ok := readRESPLine(buf, pos)
 		if !ok || len(lenLine) < 2 || lenLine[0] != '$' {
-			return salvageRedisCommand(op, &text), 0, false
+			return newRedisCommand(op, &text, args), 0, false
 		}
 		l, ok := parseRESPInt(lenLine[1:])
 		if !ok || l < 0 {
-			return salvageRedisCommand(op, &text), 0, false
+			return newRedisCommand(op, &text, args), 0, false
 		}
 		tokEnd := tokStart + l
 		if tokEnd+len(redisDelimBytes) > len(buf) ||
 			!bytes.Equal(buf[tokEnd:tokEnd+len(redisDelimBytes)], redisDelimBytes) {
-			return salvageRedisCommand(op, &text), 0, false
+			return newRedisCommand(op, &text, args), 0, false
 		}
 		tok := buf[tokStart:tokEnd]
 		if i == 0 {
@@ -288,6 +290,7 @@ func parseRedisCommand(buf []byte, pos int) (*redisCommand, int, bool) {
 			if isPrintableToken(tok) {
 				text.WriteByte(' ')
 				text.Write(tok)
+				args = append(args, tok)
 			} else {
 				textDone = true
 			}
@@ -295,7 +298,7 @@ func parseRedisCommand(buf []byte, pos int) (*redisCommand, int, bool) {
 		pos = tokEnd + len(redisDelimBytes)
 	}
 
-	return &redisCommand{op: op, text: text.String()}, pos, true
+	return newRedisCommand(op, &text, args), pos, true
 }
 
 // parseRedisCommands splits a buffer into its pipelined commands; nil means
@@ -488,12 +491,12 @@ func ReadGoRedisRequestIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Reco
 	if len(cmds) == 0 {
 		// We know it's redis request here, it just didn't complete correctly
 		event.Err = 1
-		return goRedisSpan(event, "", ""), false, nil
+		return goRedisSpan(event, "", "", ""), false, nil
 	}
 
 	spans := make([]request.Span, 0, len(cmds))
 	for i := range cmds {
-		spans = append(spans, goRedisSpan(event, cmds[i].op, cmds[i].text))
+		spans = append(spans, goRedisSpan(event, cmds[i].op, cmds[i].text, cmds[i].sanitizedText))
 	}
 	if len(spans) > 1 {
 		detachExtraSpans(spans[1:])
@@ -502,7 +505,7 @@ func ReadGoRedisRequestIntoSpan(parseCtx *EBPFParseContext, record *ringbuf.Reco
 	return spans[0], false, nil
 }
 
-func goRedisSpan(event *GoRedisClientInfo, op, text string) request.Span {
+func goRedisSpan(event *GoRedisClientInfo, op, text, sanitizedText string) request.Span {
 	peer := ""
 	hostname := ""
 	hostPort := 0
@@ -533,5 +536,6 @@ func goRedisSpan(event *GoRedisClientInfo, op, text string) request.Span {
 			UserPID:   app.PID(event.Pid.UserPid),
 			Namespace: event.Pid.Ns,
 		},
+		DBQueryTextSanitized: sanitizedText,
 	}
 }

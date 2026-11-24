@@ -103,11 +103,3 @@ func mysqlCommandIDToString(commandID uint8) string {
 		return ""
 	}
 }
-
-func mysqlParseStatementID(buf []byte) uint32 {
-	if len(buf) < MySQLHdrSize+1+4 {
-		return 0
-	}
-	// The statement ID is a 4-byte little-endian integer after the header and command ID
-	return binary.LittleEndian.Uint32(buf[MySQLHdrSize+1:])
-}

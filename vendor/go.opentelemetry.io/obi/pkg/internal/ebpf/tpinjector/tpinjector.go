@@ -70,6 +70,7 @@ type Tracer struct {
 	pidsFilter              ebpfcommon.ServiceFilter
 	pidsMu                  sync.Mutex
 	instrumentedPids        ebpfcommon.PIDBitmap
+	otelTracesPids          ebpfcommon.PIDBitmap
 	pidsStopped             bool
 	closerMu                sync.Mutex
 	detached                bool
@@ -365,6 +366,11 @@ func (p *Tracer) detach() {
 	p.detached = true
 	p.closerMu.Unlock()
 
+	// once detached is set, Run cannot register the writer again before the maps close
+	if filter, ok := p.pidsFilter.(*ebpfcommon.PIDsFilter); ok {
+		filter.RemoveOTelTracesPIDFilter()
+	}
+
 	p.closeAllReverse(closers)
 
 	p.bpfObjects.Close()
@@ -481,6 +487,7 @@ func (p *Tracer) AlreadyInstrumentedLib(uint64) bool {
 
 func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg.Queue[[]request.Span]) {
 	p.log.Debug("tpinjector started")
+	p.registerOTelTracesPIDFilter()
 
 	// with enrollment scoped to instrumented processes, AllowPID backfills each of them instead
 	if !p.enrollInstrumentedOnly {
@@ -496,6 +503,40 @@ func (p *Tracer) Run(ctx context.Context, _ *ebpfcommon.EBPFEventContext, _ *msg
 	p.detach()
 
 	p.log.Debug("tpinjector terminated")
+}
+
+// under closerMu, so detach cannot close the maps between the check and the registration
+func (p *Tracer) registerOTelTracesPIDFilter() {
+	if !p.cfg.Discovery.ExcludeOTelInstrumentedServices || !p.cfg.EBPF.ContextPropagation.HasHeaders() {
+		return
+	}
+
+	filter, ok := p.pidsFilter.(*ebpfcommon.PIDsFilter)
+	if !ok {
+		return
+	}
+
+	p.closerMu.Lock()
+	defer p.closerMu.Unlock()
+
+	if p.detached {
+		return
+	}
+
+	filter.SetOTelTracesPIDFilter(otelTracesPIDFilter{tracer: p})
+}
+
+// otel_traces_pids, as PIDsFilter marks the processes exporting OTLP traces in it
+type otelTracesPIDFilter struct {
+	tracer *Tracer
+}
+
+func (f otelTracesPIDFilter) Marked(pid app.PID) bool {
+	return f.tracer.otelTracesPids.Contains(pid)
+}
+
+func (f otelTracesPIDFilter) Mark(pid app.PID, exportsTraces bool) error {
+	return f.tracer.otelTracesPids.Set(f.tracer.bpfObjects.OtelTracesPids, pid, exportsTraces)
 }
 
 func (p *Tracer) SetEventContext(_ *ebpfcommon.EBPFEventContext) {}

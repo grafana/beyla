@@ -46,6 +46,10 @@ type RuntimeMetricSnapshot struct {
 	Python          *PythonRuntimeMetricSnapshot
 	Dotnet          *DotnetRuntimeMetricSnapshot
 
+	// DotnetExceptions accompanies Dotnet with cumulative counts since attachment,
+	// keyed by error.type. Nil means unavailable; published maps must not be mutated.
+	DotnetExceptions map[string]uint64
+
 	Histogram *GoRuntimeHistogramSnapshot
 }
 
@@ -119,9 +123,6 @@ type DotnetRuntimeMetricSnapshot struct {
 	JITCompilationTime      *float64
 	ThreadPoolWorkItemCount *uint64
 	MonitorLockContentions  *uint64
-	// Exceptions contains cumulative counts since attachment, keyed by error.type.
-	// Nil means unavailable; a published map must not be mutated.
-	Exceptions map[string]uint64
 }
 
 type GoRuntimeMetricSnapshot struct {

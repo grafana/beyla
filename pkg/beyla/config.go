@@ -38,7 +38,7 @@ import (
 
 	"github.com/grafana/beyla/v3/pkg/config"
 	botel "github.com/grafana/beyla/v3/pkg/export/otel"
-	_ "github.com/grafana/beyla/v3/pkg/export/otel/bexport"
+	"github.com/grafana/beyla/v3/pkg/export/otel/bexport"
 	"github.com/grafana/beyla/v3/pkg/export/otel/spanscfg"
 	maps2 "github.com/grafana/beyla/v3/pkg/internal/helpers/maps"
 	"github.com/grafana/beyla/v3/pkg/internal/infraolly/process"
@@ -407,7 +407,7 @@ func (c *Config) validate(context validationContext) error {
 	appEnabled := context.applicationPipelineInitialized || c.Enabled(FeatureAppO11y)
 
 	if !c.Enabled(FeatureNetO11y) && !appEnabled &&
-		!c.Enabled(FeatureStatsO11y) && !c.Injector.Webhook.Enabled() {
+		!c.Enabled(FeatureStatsO11y) && !c.GPUMetricsEnabled() && !c.Injector.Webhook.Enabled() {
 		return ConfigError("missing application discovery section or network metrics configuration. Check documentation.")
 	}
 	if c.EBPF.BatchLength == 0 {
@@ -612,6 +612,13 @@ func (c *Config) promStatsO11yEnabled() bool {
 
 func (c *Config) otelStatsO11yEnabled() bool {
 	return (c.OTELMetrics.EndpointEnabled() || c.Grafana.OTLP.MetricsEnabled()) && c.Metrics.Features.StatMetrics()
+}
+
+// GPUMetricsEnabled reports whether GPU metrics and a metrics exporter are enabled.
+func (c *Config) GPUMetricsEnabled() bool {
+	obiCfg := c.AsOBI()
+	return bexport.Has(obiCfg.JoinMetricsConfig().Features, bexport.FeatureGPU) &&
+		(obiCfg.OTELMetrics.EndpointEnabled() || c.Prometheus.EndpointEnabled())
 }
 
 func (c *Config) willUseTC() bool {

@@ -1,6 +1,9 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 
 const { loadWithLinuxProcessDetector } = require("../resource-detector-registration");
@@ -92,3 +95,43 @@ test("registry is restored when upstream loading throws", () => {
   );
   assert.equal(utils.getResourceDetectorsFromEnv, original);
 });
+
+for (const utilsFilename of ["utils.cjs", "utils.js"]) {
+  test(`default registry loader patches staged ${utilsFilename}`, () => {
+    const sourceDir = path.resolve(__dirname, "..");
+    const stagedDir = fs.mkdtempSync(path.join(os.tmpdir(), "beyla-node-runtime-"));
+
+    try {
+      for (const filename of [
+        "log.js",
+        "linux-process-resource-detector.js",
+        "resource-detector-registration.js",
+        "service-metadata.js",
+      ]) {
+        fs.copyFileSync(path.join(sourceDir, filename), path.join(stagedDir, filename));
+      }
+      fs.writeFileSync(
+        path.join(stagedDir, utilsFilename),
+        `const original = () => [];\nexports.getResourceDetectorsFromEnv = original;\n`,
+      );
+
+      const utils = require(path.join(stagedDir, utilsFilename));
+      const original = utils.getResourceDetectorsFromEnv;
+      const detector = { detect() {} };
+      let observed;
+
+      require(path.join(stagedDir, "resource-detector-registration.js"))
+        .loadWithLinuxProcessDetector(
+          () => {
+            observed = utils.getResourceDetectorsFromEnv();
+          },
+          { detector, logger: createLogger() },
+        );
+
+      assert.deepEqual(observed, [detector]);
+      assert.equal(utils.getResourceDetectorsFromEnv, original);
+    } finally {
+      fs.rmSync(stagedDir, { recursive: true, force: true });
+    }
+  });
+}

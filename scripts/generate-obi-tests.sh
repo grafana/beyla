@@ -217,7 +217,7 @@ CODE_INJECTIONS=(
   # (internal/test/beyla_extensions/config_reload_beyla.go) runs the same flow on Config v1.
   '^func TestConfigReload[(]|t.Skip("Beyla loads Config v1 only: TestConfigReloadV1 covers this flow")'
   # The server can answer before instrumentation attaches on slower VM kernels.
-  't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL, "testserver")'
+  't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL)'
   # Manual spans can reach Jaeger before the automatic outgoing client span.
   'if len[(]traces[[]i[]][.]FindByOperationName[(]"checkout", "internal"[)][)] > 0 [{]|if len(traces[i].FindByOperationName("GET /", "client")) == 0 { continue }'
 )
@@ -509,10 +509,25 @@ transform_go_imports_and_paths() {
     sed_i -e "s|\".obi-src/${OBI_DOCKERFILE}\"|\"${BEYLA_DOCKERFILE}\"|g" \
       "$OBI_DEST/dockerutil_test.go"
 
+    # Build the transformed Beyla image with the Docker CLI. The Moby SDK
+    # BuildKit API requires a BuildKit session for registry metadata resolution,
+    # while the CLI uses DOCKER_BUILDKIT from the test job environment.
+    local obi_image_build='return buildDockerImage(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")'
+    if ! grep -qF "$obi_image_build" "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: dockerutil_test.go Beyla image build changed; update the CLI build transform" >&2
+      exit 1
+    fi
+    sed_i -e 's|return buildDockerImage(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")|return buildBeylaDockerImageCLI(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")|' \
+      "$OBI_DEST/dockerutil_test.go"
+    if ! grep -qF 'return buildBeylaDockerImageCLI(ctx, os.Stdout, "hatest-obi", "internal/test/beyla_extensions/components/beyla/Dockerfile")' "$OBI_DEST/dockerutil_test.go"; then
+      echo "ERROR: failed to select CLI for generated Beyla image build" >&2
+      exit 1
+    fi
+
     # obi.instrument() mounts the instrumenter configs as /configs. Mount the
     # generated copy instead of .obi-src, so the Beyla overrides copied by
-    # copy_beyla_extensions (e.g. the v1 obi-config-route53.yml) take effect,
-    # as they already do for the docker compose suites.
+    # copy_beyla_extensions (e.g. the v1 obi-config-gce.yml and obi-config-azure.yml)
+    # take effect, as they already do for the docker compose suites.
     local obi_configs_mount='bindMount(filepath.Join(pathRoot, ".obi-src/internal/test/integration/configs"), "/configs")'
     if ! grep -qF "$obi_configs_mount" "$OBI_DEST/dockerutil_test.go"; then
       echo "ERROR: dockerutil_test.go no longer mounts /configs as expected; update the obi.instrument() configs transform" >&2
@@ -568,70 +583,7 @@ transform_go_imports_and_paths() {
   if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
     sed_i -e 's|"internal", "test", "integration"|"internal", "testgenerated", "integration"|g' \
       "$OBI_DEST/components/docker/compose.go"
-    drain_every_instrumenter_service
   fi
-}
-
-# Close() upstream drains only the service literally named "obi".
-# docker-compose-peer-metadata.yml declares a second instrumenter
-# ("client-obi") that shares the client workload's PID and network namespaces;
-# leaving it undrained means Remove() force-kills it while it still holds
-# probes on a live workload, which breaks the workload container. Wait on
-# every instrumenter service the compose file declares instead.
-drain_every_instrumenter_service() {
-  local file="$OBI_DEST/components/docker/compose.go"
-
-  if ! grep -q 'c.commandContext(waitCtx, "wait", "obi")' "$file"; then
-    echo "ERROR: compose.go no longer waits for \"obi\" as expected; update the instrumenter drain transform" >&2
-    exit 1
-  fi
-  awk '
-        /if err := c.commandContext\(waitCtx, "wait", "obi"\); err != nil \{/ {
-            print "\t\targs := append([]string{\"wait\"}, c.instrumenterServices()...)"
-            print "\t\tif err := c.commandContext(waitCtx, args...); err != nil {"
-            next
-        }
-        { print }
-    ' "$file" >"$file.tmp" && mv "$file.tmp" "$file"
-
-  cat >>"$file" <<EOF
-
-// instrumenterServices lists the Beyla instrumenter services declared in the
-// compose file. Most suites have a single service named "obi", but
-// docker-compose-peer-metadata.yml runs a second instrumenter ("client-obi")
-// that shares the client workload's PID and network namespaces. Draining only
-// "obi" leaves that one attached while Remove() force-kills it.
-func (c *Compose) instrumenterServices() []string {
-	data, err := os.ReadFile(c.Path)
-	if err != nil {
-		return []string{"obi"}
-	}
-
-	var doc struct {
-		Services map[string]struct {
-			Build struct {
-				Dockerfile string \`yaml:"dockerfile"\`
-			} \`yaml:"build"\`
-		} \`yaml:"services"\`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return []string{"obi"}
-	}
-
-	var services []string
-	for name, svc := range doc.Services {
-		if strings.Contains(svc.Build.Dockerfile, "${BEYLA_DOCKERFILE}") {
-			services = append(services, name)
-		}
-	}
-	if len(services) == 0 {
-		return []string{"obi"}
-	}
-	slices.Sort(services)
-
-	return services
-}
-EOF
 }
 
 apply_component_consolidation() {
@@ -1037,6 +989,59 @@ ensure_weaver_tap_survives_weavercol_startup() {
   done
 }
 
+ensure_django_gunicorn_no_control_socket() {
+  # Avoid gunicorn 25.1.0's ControlSocketServer + os.fork() deadlock in
+  # TestSuite_DjangoRoutes (benoitc/gunicorn#3509, benoitc/gunicorn#3529,
+  # fixed in benoitc/gunicorn#3520).
+  #
+  # DURABLE FIX (upstream, then drop this step): upgrade gunicorn past 25.1.0
+  # (with benoitc/gunicorn#3520) or pass --no-control-socket in OBI's
+  # internal/test/integration/components/djangoserver/Dockerfile.
+  local compose="$OBI_DEST/docker-compose-django.yml"
+  [[ -f "$compose" ]] || return 0
+  grep -q 'GUNICORN_CMD_ARGS' "$compose" && return 0
+
+  awk '
+      /^  testserver:[[:space:]]*$/ { in_ts = 1; print; next }
+      in_ts && /^$/ {
+          if (!injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+              injected = 1
+          }
+          in_ts = 0
+          print
+          next
+      }
+      in_ts && /^  [^ ]/ {
+          if (!injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+              print ""
+              injected = 1
+          }
+          in_ts = 0
+      }
+      in_ts && /^    environment:[[:space:]]*$/ {
+          print
+          print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+          injected = 1
+          next
+      }
+      { print }
+      END {
+          if (in_ts && !injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+          }
+      }
+      ' "$compose" >"$compose.tmp" && mv "$compose.tmp" "$compose"
+
+  if ! grep -q 'GUNICORN_CMD_ARGS' "$compose"; then
+    echo "  WARNING: could not inject GUNICORN_CMD_ARGS into $compose"
+  fi
+}
+
 restore_weaver_registry_mount_paths() {
   # The weaver container (from OBI's components/weaver/service.yml) hardcodes
   # --registry /obi-registry and working_dir: /obi-registry. The BEHAVIORAL_TRANSFORMS
@@ -1118,47 +1123,6 @@ adjust_oats_compose_paths() {
   done
 }
 
-rewrite_oats_go_mod() {
-  local mise_config ginkgo_version
-  mise_config="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/mise.toml"
-  ginkgo_version=$(awk -F '"' '$1 ~ /^[[:space:]]*ginkgo = / { print $2; exit }' "$mise_config")
-  if [[ -z "$ginkgo_version" ]]; then
-    echo "Could not read the pinned Ginkgo version from $mise_config" >&2
-    return 1
-  fi
-  echo "  Rewriting OATs go.mod files..."
-  find "$OATS_DEST" -name "go.mod" -type f | while read -r modfile; do
-    # Rewrite all OBI oats module references (module declarations, require, and replace
-    # directives) to the Beyla module path. Use ${BEYLA_MODULE} (with /v3) to match
-    # the Go import transforms applied to .go files by transform_oats_go_files().
-    sed_i -e "s|${OBI_MODULE}/internal/test/oats|${BEYLA_MODULE}/internal/testgenerated/oats|g" "$modfile"
-
-    # The upstream OATS modules require the OBI ROOT module (added for the
-    # weavercheck package) via a local replace to the repo root. In Beyla
-    # the repo root IS the Beyla module, so repoint both the require and the
-    # replace at ${BEYLA_MODULE}. After the oats-path rewrite above, the only
-    # remaining go.opentelemetry.io/obi tokens are this root require and
-    # replace (the go.opentelemetry.io/{otel,collector,proto,auto} deps and
-    # the prose comment mentioning the OBI module are untouched).
-    # "../../../.." from internal/testgenerated/oats/{harness,http,…} is the
-    # Beyla repo root, whose module path is ${BEYLA_MODULE}, so the replace
-    # now matches and provides …/internal/testgenerated/weavercheck.
-    # The require version must carry the module's major-version suffix
-    # (Go rejects "v0.0.0" for a /v3 module path), so bump v0.0.0 → v3.0.0;
-    # the local replace makes the exact version immaterial at build time.
-    sed_i \
-      -e "s|${OBI_MODULE} v0.0.0|${BEYLA_MODULE} v3.0.0|g" \
-      -e "s|replace ${OBI_MODULE} =>|replace ${BEYLA_MODULE} =>|g" \
-      "$modfile"
-
-    # Keep the compiled Ginkgo version in lockstep with the CLI installed
-    # from mise.toml (v${ginkgo_version}). The upstream OATS modules pin
-    # v2.32.0, which triggers a "Ginkgo detected a version mismatch"
-    # failure against the newer CLI. The target version comes from mise.toml.
-    sed_i -e "s|github.com/onsi/ginkgo/v2 v2.32.0|github.com/onsi/ginkgo/v2 v${ginkgo_version}|g" "$modfile"
-  done
-}
-
 transform_oats_go_files() {
   local jobs="$1"
   echo "  Transforming OATs Go files..."
@@ -1172,21 +1136,6 @@ apply_oats_behavioral_transforms() {
   local jobs="$1"
   echo "  Applying OBI → Beyla behavioral transforms to OATs..."
   find "$OATS_DEST" -type f \( -name "*.go" -o -name "*.yml" -o -name "*.yaml" \) | run_parallel "$jobs" apply_transforms "${BEHAVIORAL_TRANSFORMS[@]}"
-}
-
-tidy_oats_go_mods() {
-  # The rewrites above introduce a new require (the Beyla root module, for
-  # weavercheck) and bump the Ginkgo pin, so each OATS module's go.sum is now
-  # stale ("go: updates to go.mod needed; to update it: go mod tidy"). Tidy
-  # every generated OATS module. This needs module-cache/network access,
-  # consistent with the vendor-obi-tests / copy-obi-vendor make targets that
-  # already run go get / go mod tidy / go mod vendor.
-  echo "  Tidying generated OATs modules..."
-  # Tidy the shared harness first (group modules replace it via ../harness).
-  for modfile in "$OATS_DEST/harness/go.mod" $(find "$OATS_DEST" -name go.mod -type f ! -path "*/harness/go.mod"); do
-    [[ -f "$modfile" ]] || continue
-    (cd "$(dirname "$modfile")" && go mod tidy)
-  done
 }
 
 # =============================================================================
@@ -1681,17 +1630,17 @@ generate() {
   ensure_nodejs_traces_are_complete
   ensure_malicious_ioctl_local_downstream
   ensure_weaver_tap_survives_weavercol_startup
+  ensure_django_gunicorn_no_control_socket
   cleanup_and_inject_build_tags "$jobs"
 
   # -----------------------------------------------------------------
-  # OATs generation
+  # OATS v3 generation: suite manifests select case YAML files; no Go
+  # harness modules or Ginkgo tests are copied with the suites.
   # -----------------------------------------------------------------
   copy_oats
   adjust_oats_compose_paths
-  rewrite_oats_go_mod
   transform_oats_go_files "$jobs"
   apply_oats_behavioral_transforms "$jobs"
-  tidy_oats_go_mods
 
   # -----------------------------------------------------------------
   # VM test infrastructure

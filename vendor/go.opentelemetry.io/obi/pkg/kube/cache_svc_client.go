@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
+	"go.opentelemetry.io/obi/pkg/kube/kubecache"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 )
@@ -25,6 +25,7 @@ const defaultReconnectInitialInterval = 5 * time.Second
 type cacheSvcClient struct {
 	meta.BaseNotifier
 	address string
+	tls     kubecache.ClientTLSConfig
 	log     *slog.Logger
 
 	lastEventTSEpoch         int64
@@ -95,10 +96,12 @@ func normalizeReconnectInitialInterval(interval time.Duration) time.Duration {
 }
 
 func (sc *cacheSvcClient) connect(ctx context.Context) error {
+	creds, err := sc.tls.Credentials()
+	if err != nil {
+		return fmt.Errorf("configuring TLS: %w", err)
+	}
 	// Set up a connection to the server.
-	conn, err := grpc.NewClient(sc.address,
-		// TODO: allow configuring the transport credentials
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(sc.address, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return fmt.Errorf("did not connect: %w", err)
 	}

@@ -20,5 +20,6 @@ func TestWatcherSpec(t *testing.T) {
 	assert.Equal(t, ebpf.AttachTraceIter, spec.Programs["survey_seed_sockets"].AttachType)
 	assert.Contains(t, w.KProbes(), "security_socket_connect")
 	assert.Contains(t, w.KProbes(), "security_socket_listen")
+	assert.Contains(t, w.KProbes(), "security_socket_accept")
 	assert.Contains(t, w.Tracepoints(), "sched/sched_process_exit")
 }

@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/cloud"
 	"go.opentelemetry.io/obi/pkg/docker"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -27,6 +28,8 @@ import (
 	"go.opentelemetry.io/obi/pkg/netolly/flowdef"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
+	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/obi/pkg/pipe/swarm"
 	statsagent "go.opentelemetry.io/obi/pkg/statsolly/agent"
 	"go.opentelemetry.io/obi/pkg/transform"
 
@@ -34,6 +37,7 @@ import (
 	"github.com/grafana/beyla/v3/pkg/export/otel"
 	"github.com/grafana/beyla/v3/pkg/internal/appolly"
 	msg2 "github.com/grafana/beyla/v3/pkg/internal/helpers/msg"
+	"github.com/grafana/beyla/v3/pkg/internal/pipe"
 	"github.com/grafana/beyla/v3/pkg/webhook"
 )
 
@@ -45,8 +49,7 @@ func WithCriteriaUpdater(updater *obiDiscover.CriteriaUpdater) Option {
 	return func(info *global.ContextInfo) { info.CriteriaUpdates = updater.Updates() }
 }
 
-// RunBeyla in the foreground process. This is a blocking function and won't exit
-// until both the AppO11y and NetO11y components end
+// RunBeyla runs the enabled pipelines in the foreground until they stop or the context is canceled.
 func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	normalizeConfig(cfg)
 
@@ -62,16 +65,23 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
 	stats := cfg.Enabled(beyla.FeatureStatsO11y)
+	gpu := cfg.GPUMetricsEnabled()
 	webhookEnabled := cfg.Injector.Webhook.Enabled()
+
+	processEvents := msg2.QueueFromConfig[exec.ProcessEvent](cfg.AsOBI(), "processEvents")
 
 	// if one of nodes fail, the other should stop
 	g, ctx := errgroup.WithContext(ctx)
+
+	if gpu {
+		startGPUMetrics(ctx, g, ctxInfo, cfg, processEvents)
+	}
 
 	startHealthCheck(ctx, g, cfg.HealthCheck)
 
 	if app {
 		g.Go(func() error {
-			if err := setupAppO11y(ctx, ctxInfo, cfg); err != nil {
+			if err := setupAppO11y(ctx, ctxInfo, cfg, processEvents); err != nil {
 				return fmt.Errorf("setupAppO11y: %w", err)
 			}
 			return nil
@@ -105,11 +115,7 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config, opts ...Option) error {
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	return nil
+	return g.Wait()
 }
 
 func applyRunOptions(ctxInfo *global.ContextInfo, opts []Option) {
@@ -136,10 +142,10 @@ func normalizeConfig(c *beyla.Config) {
 	c.Attributes.Select.Normalize()
 }
 
-func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) error {
+func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config, processEvents *msg.Queue[exec.ProcessEvent]) error {
 	slog.Info("starting Beyla in Application Observability mode")
 
-	instr, err := appolly.New(ctx, ctxInfo, config)
+	instr, err := appolly.New(ctx, ctxInfo, config, processEvents)
 	if err != nil {
 		slog.Debug("can't create new instrumenter", "error", err)
 		return fmt.Errorf("can't create new instrumenter: %w", err)
@@ -158,6 +164,21 @@ func setupAppO11y(ctx context.Context, ctxInfo *global.ContextInfo, config *beyl
 	}
 
 	return nil
+}
+
+// startGPUMetrics instantiates the GPU metrics pipeline and runs it in g. It instantiates the
+// pipeline before returning, so it is subscribed to processEvents before the app pipeline sends any.
+func startGPUMetrics(ctx context.Context, g *errgroup.Group, ctxInfo *global.ContextInfo, cfg *beyla.Config, processEvents *msg.Queue[exec.ProcessEvent]) {
+	slog.Info("starting Beyla GPU metrics")
+	runner, err := pipe.BuildGPU(ctx, cfg, ctxInfo, processEvents)
+	if err != nil {
+		g.Go(func() error { return fmt.Errorf("instantiating GPU metrics pipeline: %w", err) })
+		return
+	}
+	g.Go(func() error {
+		runner.Start(ctx, swarm.WithCancelTimeout(cfg.ShutdownTimeout))
+		return <-runner.Done()
+	})
 }
 
 func setupNetO11y(ctx context.Context, ctxInfo *global.ContextInfo, cfg *beyla.Config) error {
@@ -292,18 +313,7 @@ func buildCommonContextInfo(
 	// created, so the reporter's OTLP resource carries host metadata (host.id,
 	// etc.). The kube informer is created first — NewNodeMeta reads it but not
 	// its metrics reporter — and the reporter is wired back in afterwards.
-	ctxInfo.K8sInformer = kube.NewMetadataProvider(kube.MetadataConfig{
-		Enable:                   config.Attributes.Kubernetes.Enable,
-		KubeConfigPath:           config.Attributes.Kubernetes.KubeconfigPath,
-		SyncTimeout:              config.Attributes.Kubernetes.InformersSyncTimeout,
-		ReconnectInitialInterval: config.Attributes.Kubernetes.ReconnectInitialInterval,
-		ResyncPeriod:             config.Attributes.Kubernetes.InformersResyncPeriod,
-		DisabledInformers:        config.Attributes.Kubernetes.DisableInformers,
-		MetaCacheAddr:            config.Attributes.Kubernetes.MetaCacheAddress,
-		ResourceLabels:           resourceLabels,
-		RestrictLocalNode:        config.Attributes.Kubernetes.MetaRestrictLocalNode,
-		ServiceNameTemplate:      templ,
-	}, imetrics.NoopReporter{})
+	ctxInfo.K8sInformer = kube.NewMetadataProvider(kubernetesMetadataConfig(config, resourceLabels, templ), imetrics.NoopReporter{})
 
 	ctxInfo.NodeMeta = meta.NewNodeMeta(
 		ctx,
@@ -332,6 +342,22 @@ func buildCommonContextInfo(
 	attributeGroups(config, ctxInfo)
 
 	return ctxInfo, nil
+}
+
+func kubernetesMetadataConfig(config *beyla.Config, resourceLabels kube.ResourceLabels, templ *template.Template) kube.MetadataConfig {
+	return kube.MetadataConfig{
+		Enable:                   config.Attributes.Kubernetes.Enable,
+		KubeConfigPath:           config.Attributes.Kubernetes.KubeconfigPath,
+		SyncTimeout:              config.Attributes.Kubernetes.InformersSyncTimeout,
+		ReconnectInitialInterval: config.Attributes.Kubernetes.ReconnectInitialInterval,
+		ResyncPeriod:             config.Attributes.Kubernetes.InformersResyncPeriod,
+		DisabledInformers:        config.Attributes.Kubernetes.DisableInformers,
+		MetaCacheAddr:            config.Attributes.Kubernetes.MetaCacheAddress,
+		MetaCacheTLS:             config.Attributes.Kubernetes.MetaCacheTLS,
+		ResourceLabels:           resourceLabels,
+		RestrictLocalNode:        config.Attributes.Kubernetes.MetaRestrictLocalNode,
+		ServiceNameTemplate:      templ,
+	}
 }
 
 // attributeGroups specifies, based in the provided configuration, which groups of attributes

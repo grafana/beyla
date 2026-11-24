@@ -67,8 +67,10 @@ jobs:
   test:
     name: ${{ matrix.description }}
     needs: test-matrix
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 45
+    env:
+      DOCKER_BUILDKIT: "1"
     # Grant specific permissions needed only for this job
     permissions:
       contents: read
@@ -127,7 +129,7 @@ jobs:
 
       - name: Login to DockerHub
         if: github.repository == 'grafana/beyla' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
-        uses: grafana/shared-workflows/actions/dockerhub-login@e5b7989c92b55fe3ac6dd006d6de49082ba8c507
+        uses: grafana/shared-workflows/actions/dockerhub-login@3e6b757dee9d45b7c1b16d7f53b8cab2c9532ccb # dockerhub-login/v3.0.0
 
       - name: Set up mise
         uses: ./.github/actions/setup-mise

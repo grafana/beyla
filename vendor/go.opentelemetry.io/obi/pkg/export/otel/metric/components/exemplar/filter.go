@@ -27,3 +27,8 @@ func SampledFilter(ctx context.Context) bool {
 func AlwaysOnFilter(_ context.Context) bool {
 	return true
 }
+
+// AlwaysOffFilter is a [Filter] that never offers measurements.
+func AlwaysOffFilter(_ context.Context) bool {
+	return false
+}

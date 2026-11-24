@@ -21,6 +21,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/filter"
 	msg2 "go.opentelemetry.io/obi/pkg/internal/helpers/msg"
 	"go.opentelemetry.io/obi/pkg/internal/traces"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -97,7 +98,7 @@ func newGraphBuilderWithProtocolMetricSelection(
 		UseV2Selection:          config.Attributes.UseV2Selection,
 		ExtraGroupAttributesCfg: config.Attributes.ExtraGroupAttributes,
 		SensitiveQueryParamsCfg: config.Attributes.SensitiveQueryParams,
-		SanitizeSQLQueryText:    config.Attributes.SanitizeSQLQueryText,
+		SanitizeDBQueryText:     config.Attributes.SanitizeDBQueryText,
 	}
 
 	// Second, we register instancers for each pipe node, as well as communication queues between them
@@ -125,8 +126,12 @@ func newGraphBuilderWithProtocolMetricSelection(
 	// We connect the Kube and Docker metadata decorators in series, but only
 	// one of them will be active at the same time and bypass the other's queues
 	kubeToContainerDecorator := msg2.QueueFromConfig[[]request.Span](config, ctxInfo.Metrics, "kubeToContainerDecorator")
-	swi.Add(transform.KubeDecoratorProvider(
-		ctxInfo, &config.Attributes.Kubernetes,
+	swi.Add(transform.KubeDecoratorProviderWithMetadataProvider(
+		&metadata.MetadataProvider{
+			K8sInformer:   ctxInfo.K8sInformer,
+			CloudMetadata: config.CloudMetadata,
+		},
+		&config.Attributes.Kubernetes,
 		routerToKubeDecorator, kubeToContainerDecorator,
 	), swarm.WithID("KubeDecorator"))
 

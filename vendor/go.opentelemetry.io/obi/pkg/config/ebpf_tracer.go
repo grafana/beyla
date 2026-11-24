@@ -96,6 +96,12 @@ type EBPFTracer struct {
 	// Disables OBI black-box context propagation. Used for testing purposes only.
 	DisableBlackBoxCP bool `yaml:"disable_black_box_cp" env:"OTEL_EBPF_BPF_DISABLE_BLACK_BOX_CP" validate:"boolean"`
 
+	// Disables the Go channel probes (runtime.chansend1, runtime.chanrecv1, runtime.chanrecv2) that
+	// link spans across goroutines. They run on every channel send and receive, which can add notable
+	// kernel CPU to busy Go services. Setups that only export metrics do not need these links.
+	// Loaded from Config v2 only.
+	DisableGoChannelLinks bool `yaml:"-" env:"-"`
+
 	// Optimizes for getting requests information immediately when request response is seen
 	HighRequestVolume bool `yaml:"high_request_volume" env:"OTEL_EBPF_BPF_HIGH_REQUEST_VOLUME" validate:"boolean"`
 

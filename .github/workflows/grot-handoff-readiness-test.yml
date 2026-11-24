@@ -1,0 +1,33 @@
+name: Grot handoff readiness test
+run-name: Grot handoff readiness test — ${{ github.run_id }}
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  report:
+    # Opt-in is deliberately separate from dispatch. Configure the protected
+    # environment and its required reviewer before enabling this repository variable.
+    if: vars.GROT_HANDOFF_TEST_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit test-only readiness report
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo 'BEGIN_RELEASE_RECONCILIATION_REPORT'
+            printf '{"testOnly":true,"type":"grot-handoff-readiness","state":"ready","note":"TEST ONLY — no release or deployment facts","runId":"%s","sha":"%s"}\n' "$RUN_ID" "$SHA"
+            echo 'END_RELEASE_RECONCILIATION_REPORT'
+            echo
+            echo '## TEST ONLY — Grot handoff readiness'
+            echo
+            echo '- This report is a test fixture, not a release or deployment signal.'
+            echo "- Readiness run: [#${RUN_ID}](https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}) (commit ${SHA})."
+            echo '- No release or deployment operation was performed.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"

@@ -71,6 +71,8 @@ assert {
     "go",
     "golangci-lint",
     "hk",
+    "aqua:grafana/flint",
+    "npm:renovate",
     "shellcheck",
     "shfmt",
     "github:cpp-linter/clang-tools-static-binaries",
@@ -82,6 +84,6 @@ assert {
 } <= set(resolved["lint"])
 assert {"setup-envtest", "gotestsum"} <= set(resolved["unit"])
 assert {"java", "gradle"} <= set(resolved["release"])
-assert "ginkgo" in resolved["oats"]
+assert "ginkgo" not in resolved["oats"]
 assert "kind" in resolved["integration"]
 PY

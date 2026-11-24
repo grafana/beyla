@@ -1,6 +1,7 @@
 [global]
 # Keep existing paragraph wrapping; Vale remains the prose and style checker.
-disable = ["MD013"]
+# Preserve tight-list rendering; blank lines alter generated Markdown spacing.
+disable = ["MD013", "MD076"]
 exclude = [
   ".obi-src/**",
   "vendor/**",

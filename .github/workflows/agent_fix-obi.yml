@@ -16,6 +16,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -124,6 +125,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -158,7 +160,7 @@ jobs:
           GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-        run: python3 scripts/collect_fix_obi_triage.py --output ci-context.md
+        run: python3 scripts/release-reconciliation/adoption/legacy/collect_fix_obi_triage.py --output ci-context.md
 
       - name: Get vault secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
@@ -181,7 +183,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Run Claude Code – Triage
-        uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267
+        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
@@ -212,6 +214,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -266,7 +269,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Run Claude Code – Plan
-        uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267
+        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
@@ -297,6 +300,7 @@ jobs:
     if: >
       github.event.action == 'labeled' &&
       github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
       github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
@@ -356,7 +360,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Run Claude Code – Implement
-        uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267
+        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
         with:
           anthropic_api_key: ${{ env.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.get-github-app-token.outputs.token }}
@@ -385,7 +389,11 @@ jobs:
   cleanup:
     name: Remove agent label
     needs: implement
-    if: ${{ always() && !cancelled() && github.event.label.name == 'agent/fix-obi' }}
+    if: >
+      always() && !cancelled() &&
+      github.event.label.name == 'agent/fix-obi' &&
+      !startsWith(github.event.pull_request.head.ref, 'update-obi-adoption-') &&
+      github.event.pull_request.head.repo.id == github.repository_id
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

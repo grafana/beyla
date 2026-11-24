@@ -56,8 +56,8 @@ type Instrumenter struct {
 	runtimeMetrics *msg.Queue[[]runtimemetrics.RuntimeMetricSnapshot]
 }
 
-// New Instrumenter, given a Config
-func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config) (*Instrumenter, error) {
+// New Instrumenter, given a Config. The decorated process events are sent to processEvents.
+func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config, processEvents *msg.Queue[exec.ProcessEvent]) (*Instrumenter, error) {
 	setupFeatureContextInfo(ctx, ctxInfo, config)
 
 	tracesInput := msg2.QueueFromConfig[[]request.Span](config.AsOBI(), "tracesInput")
@@ -89,9 +89,8 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 		processEventsDockerDecorated,
 	))
 
-	processEventsCloudDecorated := msg2.QueueFromConfig[exec.ProcessEvent](obiCfg, "processEventsCloudDecorated")
 	swi.Add(transform.CloudProcessEventDecoratorProviderWithConfig(
-		ctxInfo, obiCfg.NameResolver, processEventsDockerDecorated, processEventsCloudDecorated,
+		ctxInfo, obiCfg.NameResolver, processEventsDockerDecorated, processEvents,
 	), swarm.WithID("CloudProcessEventDecorator"))
 
 	runtimeMetrics := newRuntimeMetricsQueue(config.AsOBI())
@@ -104,7 +103,7 @@ func New(ctx context.Context, ctxInfo *global.ContextInfo, config *beyla.Config)
 	}
 	ctxInfo.AppO11y.EBPFEventContext = ebpfEventContext
 
-	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEventsCloudDecorated, runtimeMetrics)
+	bp, err := pipe.Build(ctx, config, ctxInfo, tracesInput, processEvents, runtimeMetrics)
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate instrumentation pipeline: %w", err)
 	}
@@ -217,7 +216,7 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 
 	i.bp.Start(ctx)
 
-	<-i.bp.Done()
+	<-i.bp.Done() //nolint:errcheck // Shutdown errors are reported by stop below.
 
 	log.Info("exiting auto-instrumenter")
 
@@ -293,7 +292,7 @@ func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.R
 	graph.Start(ctx)
 	// run until either the graph is finished or the context is cancelled
 	select {
-	case <-graph.Done():
+	case <-graph.Done(): //nolint:errcheck // This background pipeline only needs completion.
 	case <-ctx.Done():
 	}
 }

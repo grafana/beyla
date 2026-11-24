@@ -1,0 +1,65 @@
+name: Devcontainer smoke test
+
+on:
+  pull_request:
+    branches: ["main", "release-*"]
+    paths:
+      - ".devcontainer/**"
+      - "Dockerfile"
+      - "mise.toml"
+      - "mise.lock"
+      - ".mise/**"
+      - "internal/java/mise.toml"
+      - "internal/java/mise.lock"
+      - "internal/java/.mise/**"
+      - "internal/test/oats/mise.toml"
+      - "internal/test/oats/.mise/**"
+      - ".github/actions/setup-mise/**"
+      - ".github/workflows/devcontainer-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Build and run mise in devcontainer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build devcontainer image
+        run: docker build --file .devcontainer/Dockerfile --tag beyla-devcontainer-smoke:ci .devcontainer
+
+      - name: Verify mise and run a repository task
+        env:
+          MISE_TRUSTED_CONFIG_PATHS: /workspace
+          MISE_ENABLE_TOOLS: none
+          TEST_OUTPUT: /tmp/beyla-devcontainer-smoke
+        run: |
+          set -euo pipefail
+          expected_version="$(sed -n 's/^[[:space:]]*version: "\([^"]*\)".*/\1/p' .github/actions/setup-mise/action.yml | head -n 1)"
+          build_image_version="$(sed -n 's|.*ghcr.io/jdx/mise:\([^@]*\)@.*|\1|p' Dockerfile | head -n 1)"
+          test -n "${expected_version}"
+          test "${build_image_version}" = "${expected_version}"
+
+          docker run --rm \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},target=/workspace,readonly" \
+            --workdir /workspace \
+            --env "EXPECTED_MISE_VERSION=${expected_version}" \
+            --env MISE_TRUSTED_CONFIG_PATHS \
+            --env MISE_ENABLE_TOOLS \
+            --env TEST_OUTPUT \
+            --entrypoint /bin/bash \
+            beyla-devcontainer-smoke:ci \
+            -euo pipefail -c '
+              mise_output="$(mise --version)"
+              printf "%s\n" "${mise_output}"
+              actual_version="${mise_output%% *}"
+              test "${actual_version}" = "${EXPECTED_MISE_VERSION}"
+
+              mise run --skip-tools test:prepare-output
+              test -d "${TEST_OUTPUT}/run"
+            '

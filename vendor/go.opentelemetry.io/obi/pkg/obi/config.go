@@ -231,8 +231,9 @@ var DefaultConfig = Config{
 	},
 	PeerMetadata: peer.DefaultConfig(),
 	CloudMetadata: transform.CloudMetadataConfig{
-		RefreshInterval: 30 * time.Second,
-		Route53:         transform.Route53MetadataConfig{RefreshInterval: cloud.DefaultRoute53RefreshInterval},
+		DetectionEnabled: true,
+		RefreshInterval:  30 * time.Second,
+		Route53:          transform.Route53MetadataConfig{RefreshInterval: cloud.DefaultRoute53RefreshInterval},
 	},
 	NameResolver: &transform.NameResolverConfig{
 		Sources: []transform.Source{
@@ -730,8 +731,8 @@ type Attributes struct {
 	// SensitiveQueryParams controls which query-parameter keys are redacted in url.full and url.query.
 	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
 
-	SanitizeSQLQueryText bool `yaml:"-" env:"-" json:"-"`
-	UseV2Selection       bool `yaml:"-" env:"-" json:"-"`
+	SanitizeDBQueryText bool `yaml:"-" env:"-" json:"-"`
+	UseV2Selection      bool `yaml:"-" env:"-" json:"-"`
 }
 
 type HostIDConfig struct {
@@ -955,6 +956,10 @@ func (c *Config) validate(context validationContext) error {
 	}
 
 	if err := c.PeerMetadata.Validate(); err != nil {
+		return ConfigError(err.Error())
+	}
+
+	if err := c.Attributes.Kubernetes.MetaCacheTLS.Validate(); err != nil {
 		return ConfigError(err.Error())
 	}
 

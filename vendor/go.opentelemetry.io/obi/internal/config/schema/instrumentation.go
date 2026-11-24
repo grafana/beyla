@@ -4,6 +4,9 @@
 package schema // import "go.opentelemetry.io/obi/internal/config/schema"
 
 import (
+	"errors"
+	"fmt"
+
 	"go.yaml.in/yaml/v3"
 
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -14,6 +17,7 @@ import (
 type Instrumentation struct {
 	HTTP      HTTPInstrumentation       `yaml:"http"`
 	GRPC      ProtocolInstrumentation   `yaml:"grpc"`
+	DB        DBInstrumentation         `yaml:"db"`
 	SQL       SQLInstrumentation        `yaml:"sql"`
 	Redis     RedisInstrumentation      `yaml:"redis"`
 	Kafka     KafkaInstrumentation      `yaml:"kafka"`
@@ -74,7 +78,57 @@ type HTTPInstrumentation struct {
 	GoHTTPClientBufferTimeout Duration               `yaml:"go_http_client_buffer_timeout"`
 	BufferSize                uint32                 `yaml:"buffer_size"`
 	Routes                    HTTPRoutes             `yaml:"routes"`
+	QueryParameters           HTTPQueryParameters    `yaml:"query_parameters"`
 	PayloadExtraction         PayloadExtraction      `yaml:"payload_extraction"`
+}
+
+// HTTPQueryParameters controls query-parameter values emitted in HTTP span URLs.
+type HTTPQueryParameters struct {
+	Redaction *Redaction `yaml:"redaction,omitempty"`
+}
+
+// Redaction selects names and replacement text. Omitted fields retain the data
+// component's defaults; an explicit empty names list disables redaction.
+type Redaction struct {
+	Names       *[]string `yaml:"names,omitempty"`
+	Replacement *string   `yaml:"replacement,omitempty"`
+}
+
+func (r *Redaction) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return errors.New("redaction must be an object")
+	}
+	var fields struct {
+		Names       yaml.Node `yaml:"names"`
+		Replacement yaml.Node `yaml:"replacement"`
+	}
+	if err := decodeKnownFields(value, &fields); err != nil {
+		return err
+	}
+	var policy Redaction
+	if fields.Names.Kind != 0 && fields.Names.Tag != "!!null" {
+		if fields.Names.Kind != yaml.SequenceNode {
+			return errors.New("redaction.names must be a list of strings")
+		}
+		for i, entry := range fields.Names.Content {
+			if entry.Tag != "!!str" {
+				return fmt.Errorf("redaction.names[%d] must be a string", i)
+			}
+		}
+		var names []string
+		if err := fields.Names.Decode(&names); err != nil {
+			return err
+		}
+		policy.Names = &names
+	}
+	if fields.Replacement.Kind != 0 && fields.Replacement.Tag != "!!null" {
+		if fields.Replacement.Tag != "!!str" {
+			return errors.New("redaction.replacement must be a string")
+		}
+		policy.Replacement = new(fields.Replacement.Value)
+	}
+	*r = policy
+	return nil
 }
 
 // HTTPRoutes describes directional global HTTP route normalization and discovery settings.
@@ -106,16 +160,20 @@ type HTTPRouteJavaDiscovery struct {
 	Delay Duration `yaml:"delay"`
 }
 
+// DBInstrumentation describes settings shared by all database protocols.
+type DBInstrumentation struct {
+	SanitizeQueryText bool `yaml:"sanitize_query_text"`
+}
+
 // SQLInstrumentation describes SQL capture and database-specific buffering
 // settings.
 type SQLInstrumentation struct {
-	Enabled           ProtocolEnablement         `yaml:"enabled"`
-	Filters           SignalFilters              `yaml:"filters"`
-	HeuristicDetect   bool                       `yaml:"heuristic_detect"`
-	SanitizeQueryText bool                       `yaml:"sanitize_query_text"`
-	MySQL             SQLDatabaseInstrumentation `yaml:"mysql"`
-	Postgres          SQLDatabaseInstrumentation `yaml:"postgres"`
-	MSSQL             SQLDatabaseInstrumentation `yaml:"mssql"`
+	Enabled         ProtocolEnablement         `yaml:"enabled"`
+	Filters         SignalFilters              `yaml:"filters"`
+	HeuristicDetect bool                       `yaml:"heuristic_detect"`
+	MySQL           SQLDatabaseInstrumentation `yaml:"mysql"`
+	Postgres        SQLDatabaseInstrumentation `yaml:"postgres"`
+	MSSQL           SQLDatabaseInstrumentation `yaml:"mssql"`
 }
 
 // SQLDatabaseInstrumentation describes capture buffers and prepared statement

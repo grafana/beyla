@@ -67,7 +67,7 @@ func (r *Registerer) Subscribe(ctx context.Context) (<-chan Event, error) {
 				}
 				r.m.Unlock()
 			}
-			out <- ev
+			send(ctx, out, ev)
 		}
 	}()
 	return out, nil

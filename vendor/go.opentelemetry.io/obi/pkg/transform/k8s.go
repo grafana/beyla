@@ -22,9 +22,11 @@ import (
 	isync "go.opentelemetry.io/obi/pkg/internal/helpers/sync"
 	ikube "go.opentelemetry.io/obi/pkg/internal/kube"
 	"go.opentelemetry.io/obi/pkg/kube"
+	"go.opentelemetry.io/obi/pkg/kube/kubecache"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
+	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/pipe/swarm"
@@ -77,6 +79,9 @@ type KubernetesDecorator struct {
 	// MetaCacheAddress specifies the host:port address of the obi-k8s-cache service instance
 	MetaCacheAddress string `yaml:"meta_cache_address" env:"OTEL_EBPF_KUBE_META_CACHE_ADDRESS"`
 
+	// MetaCacheTLS is only settable through config v2, since v1 receives no new features
+	MetaCacheTLS kubecache.ClientTLSConfig `yaml:"-" env:"-" jsonschema:"-" validate:"-"`
+
 	// MetaRestrictLocalNode will download only the metadata from the Pods that are located in the same
 	// node as the OBI instance. It will also restrict the Node information to the local node.
 	MetaRestrictLocalNode bool `yaml:"meta_restrict_local_node" env:"OTEL_EBPF_KUBE_META_RESTRICT_LOCAL_NODE" validate:"boolean"`
@@ -104,18 +109,31 @@ func KubeDecoratorProvider(
 	cfg *KubernetesDecorator,
 	input, output *msg.Queue[[]request.Span],
 ) swarm.InstanceFunc {
+	return KubeDecoratorProviderWithMetadataProvider(&metadata.MetadataProvider{
+		K8sInformer:   ctxInfo.K8sInformer,
+		CloudMetadata: metadata.CloudMetadataConfig{DetectionEnabled: true},
+	}, cfg, input, output)
+}
+
+// KubeDecoratorProviderWithMetadataProvider applies the provider's cloud detection settings
+// when looking up the cluster name.
+func KubeDecoratorProviderWithMetadataProvider(
+	provider *metadata.MetadataProvider,
+	cfg *KubernetesDecorator,
+	input, output *msg.Queue[[]request.Span],
+) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !ctxInfo.K8sInformer.IsKubeEnabled() {
+		if !provider.K8sInformer.IsKubeEnabled() {
 			// if kubernetes decoration is disabled, we just bypass the node
 			return swarm.Bypass(input, output)
 		}
-		store, err := ctxInfo.K8sInformer.Get(ctx)
+		store, err := provider.K8sInformer.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
 		}
 		decorator := &metadataDecorator{
 			store:       store,
-			clusterName: KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
+			clusterName: KubeClusterNameWithMetadataProvider(ctx, cfg, provider),
 			input:       input.Subscribe(msg.SubscriberName("transform.KubeDecorator")),
 			output:      output,
 		}
@@ -128,11 +146,24 @@ func KubeProcessEventDecoratorProvider(
 	cfg *KubernetesDecorator,
 	input, output *msg.Queue[exec.ProcessEvent],
 ) swarm.InstanceFunc {
+	return KubeProcessEventDecoratorProviderWithMetadataProvider(&metadata.MetadataProvider{
+		K8sInformer:   ctxInfo.K8sInformer,
+		CloudMetadata: metadata.CloudMetadataConfig{DetectionEnabled: true},
+	}, cfg, input, output)
+}
+
+// KubeProcessEventDecoratorProviderWithMetadataProvider applies the provider's cloud detection
+// settings when looking up the cluster name.
+func KubeProcessEventDecoratorProviderWithMetadataProvider(
+	provider *metadata.MetadataProvider,
+	cfg *KubernetesDecorator,
+	input, output *msg.Queue[exec.ProcessEvent],
+) swarm.InstanceFunc {
 	return func(ctx context.Context) (swarm.RunFunc, error) {
-		if !ctxInfo.K8sInformer.IsKubeEnabled() {
+		if !provider.K8sInformer.IsKubeEnabled() {
 			return swarm.Bypass(input, output)
 		}
-		store, err := ctxInfo.K8sInformer.Get(ctx)
+		store, err := provider.K8sInformer.Get(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("initializing KubeDecoratorProvider: %w", err)
 		}
@@ -140,7 +171,7 @@ func KubeProcessEventDecoratorProvider(
 		decorator := &procEventMetadataDecorator{
 			log:                 slog.With("component", "transform.KubeProcessEventDecoratorProvider"),
 			store:               store,
-			clusterName:         KubeClusterName(ctx, cfg, ctxInfo.K8sInformer),
+			clusterName:         KubeClusterNameWithMetadataProvider(ctx, cfg, provider),
 			input:               input.Subscribe(msg.SubscriberName("transform.KubeProcessEventDecorator")),
 			output:              output,
 			podEvents:           isync.NewQueue[Event[*informer.ObjectMeta]](),
@@ -522,6 +553,15 @@ func OwnerLabelName(kind string) attr.Name {
 }
 
 func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator, k8sInformer *kube.MetadataProvider) string {
+	return KubeClusterNameWithMetadataProvider(ctx, cfg, &metadata.MetadataProvider{
+		K8sInformer:   k8sInformer,
+		CloudMetadata: metadata.CloudMetadataConfig{DetectionEnabled: true},
+	})
+}
+
+// KubeClusterNameWithMetadataProvider applies the provider's cloud detection settings
+// when looking up the cluster name.
+func KubeClusterNameWithMetadataProvider(ctx context.Context, cfg *KubernetesDecorator, provider *metadata.MetadataProvider) string {
 	log := klog().With("func", "KubeClusterName")
 	if cfg.ClusterName != "" {
 		log.Debug("using cluster name from configuration", "cluster_name", cfg.ClusterName)
@@ -529,7 +569,7 @@ func KubeClusterName(ctx context.Context, cfg *KubernetesDecorator, k8sInformer 
 	}
 	retries := 0
 	for retries < clusterMetadataRetries {
-		if clusterName := fetchClusterName(ctx, k8sInformer); clusterName != "" {
+		if clusterName := fetchClusterName(ctx, provider); clusterName != "" {
 			return clusterName
 		}
 		retries++

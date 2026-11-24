@@ -157,7 +157,7 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 			log.Debug("started EventPipe GC collection", "session", session.id)
 			base := totals
 			cumulativeBase := cumulativeTotals
-			err = c.readSession(ctx, session, target.info.PID, &types, func(publishCtx context.Context, snapshot *runtimemetrics.DotnetRuntimeMetricSnapshot) error {
+			err = c.readSession(ctx, session, target.info.PID, &types, func(publishCtx context.Context, snapshot *runtimeSnapshot) error {
 				for gcGeneration, count := range snapshot.GCCollections {
 					if *count > math.MaxInt64-base[gcGeneration] {
 						return errors.New(".NET GC collections exceed exporter integer range")
@@ -180,7 +180,7 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 				}
 				c.queue.SendCtx(publishCtx, []runtimemetrics.RuntimeMetricSnapshot{{
 					Service: file.ServiceAttrs(), PID: process.PID(), Generation: generation,
-					Time: time.Now(), Dotnet: snapshot,
+					Time: time.Now(), Dotnet: &snapshot.DotnetRuntimeMetricSnapshot, DotnetExceptions: snapshot.exceptions,
 				}})
 				return nil
 			})
@@ -212,7 +212,7 @@ func (c *SessionManager) run(ctx context.Context, process *procs.ProcessHandle, 
 
 // readSession drains concurrently with StopTracing. A deadline bounds both
 // control IPC and the final stream drain when the process stops responding.
-func (c *SessionManager) readSession(ctx context.Context, session *eventPipeSession, pid uint64, types *exceptionTypes, publish func(context.Context, *runtimemetrics.DotnetRuntimeMetricSnapshot) error) error {
+func (c *SessionManager) readSession(ctx context.Context, session *eventPipeSession, pid uint64, types *exceptionTypes, publish func(context.Context, *runtimeSnapshot) error) error {
 	defer session.stream.Close()
 	publishCtx, cancelPublish := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelPublish()

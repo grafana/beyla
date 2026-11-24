@@ -1591,6 +1591,10 @@ type Span struct {
 	GenAI             *GenAI         `json:"-"`
 	JSONRPC           *JSONRPC       `json:"-"`
 
+	// DBQueryTextSanitized is db.query.text with literal values replaced, for
+	// protocols whose rendered query text loses the argument boundaries.
+	DBQueryTextSanitized string `json:"-"`
+
 	// Anything but ResponseParsed means Status holds no observation. Whether the
 	// duration is a measurement is recorded separately, by ignoreDurations.
 	ResponseObservation ResponseObservation `json:"-"`

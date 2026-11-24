@@ -747,6 +747,9 @@
         },
         "go": {
           "$ref": "#/$defs/GoExceptionsConfig"
+        },
+        "python": {
+          "$ref": "#/$defs/PythonExceptionsConfig"
         }
       },
       "type": "object",
@@ -795,6 +798,7 @@
               "application_sizes",
               "application_span_otel",
               "ebpf",
+              "gpu",
               "network",
               "network_flow_packets",
               "network_inter_zone",
@@ -2350,6 +2354,14 @@
         "port": {
           "type": "integer",
           "x-env-var": "OTEL_EBPF_INTERNAL_METRICS_PROMETHEUS_PORT"
+        }
+      },
+      "type": "object"
+    },
+    "PythonExceptionsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
         }
       },
       "type": "object"

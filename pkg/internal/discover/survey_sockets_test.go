@@ -272,6 +272,28 @@ func TestSurveyProcessStartTime(t *testing.T) {
 	assert.Positive(t, start)
 }
 
+func TestSurveySocketFilterUnixSockets(t *testing.T) {
+	for _, uid := range []uint32{0, 1000} {
+		name := "non-root worker"
+		if uid == 0 {
+			name = "root master"
+		}
+		t.Run(name, func(t *testing.T) {
+			f, sockets, _ := newTestSocketFilter()
+			f.realUID = func(app.PID) (uint32, error) { return uid, nil }
+			created := nonRootSocketMatch(10, obiDiscover.EventCreated)
+			require.Empty(t, f.filter([]surveyMatch{created}))
+			// Unix listeners and accepts supply socket evidence without IP port flags.
+			sockets.snapshot[surveywatcher.Process{PID: 10, StartTime: 100, Flags: surveywatcher.FlagAny}] = struct{}{}
+			if uid == 0 {
+				assert.Empty(t, f.promote(), "a Unix socket must not grant the privileged-port exception")
+			} else {
+				assert.Equal(t, []surveyMatch{created}, f.promote(), "non-root Unix socket workers qualify")
+			}
+		})
+	}
+}
+
 func TestSurveySocketFilterPIDNamespaceAliases(t *testing.T) {
 	f, sockets, lifetimes := newTestSocketFilter()
 	registry := f.pids.(*fakeSurveyPIDRegistry)

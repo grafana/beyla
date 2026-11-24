@@ -34,7 +34,9 @@ discovery:
   instrument_all_local: true
 ```
 
-A process becomes eligible when socket activity is observed, including sockets already open when Beyla starts. Non-root processes qualify through socket activity; root processes (real UID 0) require a listener on a port below 1024. Once admitted, a process remains eligible until it exits, even if its sockets close.
+A process becomes eligible when socket activity is observed, including sockets already open when Beyla starts. Non-root processes qualify through socket activity; root processes (real UID 0) require a listener on a port below 1024. After admitted, a process remains eligible until it exits, even if its sockets close.
+
+Unix socket connections also qualify non-root processes.
 
 This mode uses the same default system-process exclusions as survey mode and honors configured discovery exclusions. It is mutually exclusive with `discovery.instrument`, `discovery.services`, and executable, language, port, or PID instrumentation selectors.
 
@@ -245,7 +247,9 @@ For an export signal to function, you must configure the corresponding exporter 
 Additionally to configuring custom export modes per discovery instrumentation criteria, Beyla allows you to override the global metrics export features
 for each discovery criteria by adding `metrics > features` as a property to individual `discovery > instrument` entries.
 
-Accepted values for `features` are: `application`, `application_red`, `application_sizes`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_service_graph_connection_info`, `application_process`, `application_runtime`, `network`, `network_flow_packets`, `network_inter_zone`, `stats`, `stats_tcp_successful_connections`, `stats_tcp_failed_connections`, `stats_tcp_io`, `stats_tcp_retransmits`, and `stats_tcp_rtt`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
+Accepted values for `features` are: `application`, `application_red`, `application_sizes`, `application_span`, `application_span_otel`, `application_host`, `application_service_graph`, `application_service_graph_connection_info`, `application_process`, `application_runtime`, `gpu`, `network`, `network_flow_packets`, `network_inter_zone`, `stats`, `stats_tcp_successful_connections`, `stats_tcp_failed_connections`, `stats_tcp_io`, `stats_tcp_retransmits`, and `stats_tcp_rtt`. Refer to [metrics export features](../export-data/#metrics-export-features) for a description of each group.
+
+With `gpu`, discovery rules select which NVIDIA GPU processes contribute per-process metrics. Device metrics cover each supported GPU on the host. Refer to [GPU metrics](../export-data/#gpu-metrics).
 
 For example:
 
@@ -360,7 +364,7 @@ all other processes must use sockets. You can also use `socket_apps.enabled: tru
 in an entry to select any process with socket activity. The socket watcher starts
 only if at least one survey entry enables it.
 
-A Beyla-specific eBPF watcher observes `connect` and `listen` attempts on valid
+A Beyla-specific eBPF watcher observes `connect`, `listen`, and `accept` attempts on valid
 sockets, including failed or non-blocking connections and Unix sockets. A listening
 port isn't required, meaning, client-only applications qualify too. At startup, a kernel
 task/file iterator also records processes already holding sockets, including

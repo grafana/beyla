@@ -1,0 +1,32 @@
+name: Read-only release reconciliation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily observation at 14:00 UTC; release publication is still evaluated on a weekly cadence.
+    - cron: "0 14 * * *"
+
+permissions: {}
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out report helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up mise
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        with:
+          version: "2026.11.4"
+          cache: false
+          install: false
+      - name: Reconcile read-only GitHub facts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: mise run release:reconcile

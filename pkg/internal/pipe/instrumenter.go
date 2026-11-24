@@ -41,8 +41,12 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 	// 2. the process metrics swarm pipeline, connected to the output of (1)
 	swi := &swarm.Instancer{}
 	swi.Add(func(ctx context.Context) (swarm.RunFunc, error) {
+		appConfig, err := applicationMetricConfig(config.AsOBI(), ctxInfo.MetricAttributeGroups)
+		if err != nil {
+			return nil, fmt.Errorf("selecting application metric attributes: %w", err)
+		}
 		obiSwarm, err := appolly.BuildWithProtocolMetricSelection(
-			ctx, config.AsOBI(), ctxInfo, tracesCh, processEventsCh, runtimeMetrics,
+			ctx, appConfig, ctxInfo, tracesCh, processEventsCh, runtimeMetrics,
 			config.V2ProtocolSelection(),
 		)
 		if err != nil {

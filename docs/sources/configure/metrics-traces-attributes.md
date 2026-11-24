@@ -134,6 +134,28 @@ When a metric name matches multiple definitions using wildcards, exact matches t
 
 ## Select HTTP and RPC metric attributes
 
+Beyla omits `server.address` and `server.port` by default on the HTTP server request duration, request body size, and response body size histograms. Requests that differ only by host or port contribute to the same histogram. Server spans still report the captured endpoint.
+
+If your metrics previously inherited either endpoint attribute, omitting it starts new time series at upgrade. Dashboards, alerts, and SLOs that filter by a specific host or port need the corresponding attribute on each histogram they query.
+
+To report both endpoint attributes on request duration:
+
+```yaml
+attributes:
+  select:
+    http_server_request_duration:
+      include:
+        - http.request.method
+        - http.response.status_code
+        - http.route
+        - url.scheme
+        - error.type
+        - server.address
+        - server.port
+```
+
+This explicit list replaces the defaults for duration. Add any service or Kubernetes dimensions your queries rely on. You can select either endpoint attribute independently. To break down body sizes by endpoint, configure `http_server_request_body_size` and `http_server_response_body_size` separately. A matching wildcard include, such as `server.*`, also opts in. Existing explicit exclusions can stay in place.
+
 HTTP and RPC metrics include `error.type` (`error_type`) by default when available. RPC duration metrics also include `rpc.response.status_code` (`rpc_response_status_code`). Use `exclude` to remove a dimension while retaining the other defaults:
 
 ```yaml

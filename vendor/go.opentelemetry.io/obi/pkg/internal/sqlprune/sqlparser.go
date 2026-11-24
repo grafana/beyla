@@ -5,6 +5,8 @@ package sqlprune // import "go.opentelemetry.io/obi/pkg/internal/sqlprune"
 
 import (
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/xwb1989/sqlparser"
 
@@ -150,6 +152,100 @@ func SQLParseOperationAndTables(query string) (string, []string) {
 	return operation, tables
 }
 
+// SQLParseUseDatabase returns the database named by a single-statement USE, and
+// whether the query starts with USE at all.
+func SQLParseUseDatabase(query string) (string, bool) {
+	tokens := sqlparser.NewStringTokenizer(query)
+
+	if scanSkippingComments(tokens) != sqlparser.USE {
+		return "", false
+	}
+
+	db, rest := cutDatabaseName(query[nextTokenOffset(tokens, query):])
+	if db == "" {
+		return "", true
+	}
+
+	tokens = sqlparser.NewStringTokenizer(rest)
+	tokenType := scanSkippingComments(tokens)
+	if tokenType == ';' {
+		tokenType = scanSkippingComments(tokens)
+	}
+	if tokenType != 0 {
+		return "", true
+	}
+
+	return db, true
+}
+
+func nextTokenOffset(tokens *sqlparser.Tokenizer, query string) int {
+	for {
+		offset := min(tokens.Position-1, len(query))
+		if tokenType, _ := tokens.Scan(); tokenType != sqlparser.COMMENT {
+			return offset
+		}
+	}
+}
+
+func cutDatabaseName(s string) (string, string) {
+	s = strings.TrimLeftFunc(s, unicode.IsSpace)
+
+	if strings.HasPrefix(s, "`") {
+		tokens := sqlparser.NewStringTokenizer(s)
+		tokenType, db := tokens.Scan()
+		if tokenType != sqlparser.ID {
+			return "", ""
+		}
+		return string(db), s[min(tokens.Position-1, len(s)):]
+	}
+
+	n := unquotedIdentifierLen(s)
+	return s[:n], s[n:]
+}
+
+const maxUnquotedIdentifierRune = 0xFFFF
+
+func unquotedIdentifierLen(s string) int {
+	n := 0
+	hasNonDigit := false
+	for n < len(s) {
+		r, size := utf8.DecodeRuneInString(s[n:])
+		if r >= '0' && r <= '9' {
+			n += size
+			continue
+		}
+		if !isUnquotedIdentifierRune(r, size) {
+			break
+		}
+		hasNonDigit = true
+		n += size
+	}
+
+	if !hasNonDigit {
+		return 0
+	}
+	return n
+}
+
+func isUnquotedIdentifierRune(r rune, size int) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r == '_', r == '$':
+		return true
+	case r == utf8.RuneError && size == 1:
+		return false
+	default:
+		return r >= utf8.RuneSelf && r <= maxUnquotedIdentifierRune
+	}
+}
+
+func scanSkippingComments(tokens *sqlparser.Tokenizer) int {
+	tokenType, _ := tokens.Scan()
+	for tokenType == sqlparser.COMMENT {
+		tokenType, _ = tokens.Scan()
+	}
+	return tokenType
+}
+
 func SQLParseError(kind request.SQLKind, buf []uint8) *request.SQLError {
 	var sqlErr *request.SQLError
 
@@ -177,14 +273,5 @@ func SQLParseCommandID(kind request.SQLKind, buf []byte) string {
 		return mssqlCommandIDToString(parseMSSQLCommandID(buf))
 	default:
 		return ""
-	}
-}
-
-func SQLParseStatementID(kind request.SQLKind, buf []byte) uint32 {
-	switch kind {
-	case request.DBMySQL:
-		return mysqlParseStatementID(buf)
-	default:
-		return 0
 	}
 }

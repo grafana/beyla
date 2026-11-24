@@ -158,7 +158,7 @@ jobs:
           # keys must include those copied source/module inputs as well as the
           # compose and Dockerfile definitions. Otherwise a PR code change can
           # reuse an image built before the change.
-          key: vm-docker-images-${{ hashFiles('internal/testgenerated/integration/docker-compose-multiexec*.yml', 'internal/testgenerated/integration/**/Dockerfile*', 'internal/test/beyla_extensions/**/Dockerfile*', 'go.mod', 'go.sum', 'vendor/**', 'cmd/**', 'pkg/**', 'bpf/**', 'internal/goabi/**', 'internal/goversion/**', 'internal/config/**', 'mise.toml', 'mise.lock', '.mise/**', 'internal/java/mise.toml', 'internal/java/.mise/**', 'internal/test/oats/mise.toml', 'internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh') }}-${{ steps.beyla-sha.outputs.sha }}-${{ steps.obi-sha.outputs.sha }}
+          key: vm-docker-images-${{ hashFiles('internal/testgenerated/integration/docker-compose-multiexec*.yml', 'internal/testgenerated/integration/**/Dockerfile*', 'internal/test/beyla_extensions/**/Dockerfile*', 'go.mod', 'go.sum', 'vendor/**', 'cmd/**', 'pkg/**', 'bpf/**', 'internal/goabi/**', 'internal/goversion/**', 'internal/config/**', 'mise.toml', 'mise.lock', '.mise/**', 'internal/java/mise.toml', 'internal/java/mise.lock', 'internal/java/.mise/**', 'internal/test/oats/mise.toml', 'internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh') }}-${{ steps.beyla-sha.outputs.sha }}-${{ steps.obi-sha.outputs.sha }}
 
       - name: Pre-build Docker images for VM tests
         if: steps.docker-images-cache.outputs.cache-hit != 'true'

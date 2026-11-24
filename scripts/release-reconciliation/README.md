@@ -14,7 +14,7 @@ stateDiagram-v2
     Reconcile --> NoOp: pin already equals U and no candidate is open
     Reconcile --> ExistingPR: observe matching managed PR
     Reconcile --> Hold: unknown, conflict, or stale snapshot
-    Reconcile --> Generate: consistent new source and fork facts
+    Reconcile --> Generate: consistent new upstream source facts
     Generate --> Hold: generation or validation fails
     Generate --> Publish: bounded candidate is valid
     Publish --> Hold: writer disabled or source/base changed
@@ -39,9 +39,9 @@ The lanes do not hand off automatically: adoption ends at a human-merged Beyla P
 
 ## OBI adoption
 
-The daily scheduled/manual path in `.github/workflows/bot_sync-obi-submodule.yml` replaces that workflow's former weekly updater schedule; it is one coordinated writer, not a second daily writer. The separate 15-minute OBI fork synchronization is unchanged. Before merge, owners must approve the schedule cutover and publication policy. Merging replaces the weekly cron even if the default-off publication flag remains unset.
+The daily scheduled/manual path in `.github/workflows/bot_sync-obi-submodule.yml` replaces that workflow's former weekly updater schedule; it is one coordinated writer, not a second daily writer. Before merge, owners must approve the schedule cutover and publication policy. Merging replaces the weekly cron even if the default-off publication flag remains unset.
 
-Preflight samples one immutable upstream commit (`U`), compares Beyla's `.obi-src` pin (`P`) and current main (`B`), verifies ancestry and exact-`U` reachability from the OBI fork, and inspects existing/rejected adoption PRs. The accepted 24-hour goal is a conservative commit-age proxy for the oldest pending upstream change, using committer timestamps; it is not true first-availability lag and does not block adoption by itself. It is freshness context, not publish or release authorization. Unknown source evidence fails closed. The selected SHA is not changed mid-run.
+Preflight samples one immutable upstream commit (`U`), compares Beyla's `.obi-src` pin (`P`) and current main (`B`), verifies ancestry against upstream OBI `main`, and inspects existing/rejected adoption PRs. The accepted 24-hour goal is a conservative commit-age proxy for the oldest pending upstream change, using committer timestamps; it is not true first-availability lag and does not block adoption by itself. It is freshness context, not publish or release authorization. Unknown source evidence fails closed. The selected SHA is not changed mid-run.
 
 A consistent new candidate combines `.obi-src=U` with generated/vendor/compatibility changes. Generation has no repository-write credential; a trusted publisher rechecks current source/base/PR state, creates a managed branch only after GitHub verifies the candidate commit signature, then opens a draft PR. It never retargets or overwrites an existing candidate. Human review and merge remain required. With the writer flag off, a new candidate is not published; status-only reconciliation may still update the trusted status comment on an existing managed PR.
 
@@ -76,7 +76,7 @@ mise run release:reconcile
 
 Requirements: Mise, authenticated `gh` with read-only GitHub API access, `jq`, and Python 3. Set `REPOSITORY=owner/name` to select a repository, or run within a repository recognized by `gh`. The workflow uses only `contents:read` and `actions:read`.
 
-The observer samples Beyla `main` and its pinned `.obi-src` SHA, preparation/tag workflow runs, GitHub releases, and paired `release-` refs. It emits deterministic JSON between `BEGIN_RELEASE_RECONCILIATION_REPORT` / `END_RELEASE_RECONCILIATION_REPORT` and appends the same report to the Actions summary. Missing or malformed facts are `unknown`, not success. The report is an observation snapshot, not a resume checkpoint or release decision. Weekly cadence and stable/prerelease policy remain owner decisions.
+The observer samples Beyla `main` and its pinned `.obi-src` SHA, preparation/tag workflow runs, GitHub releases, and Beyla `release-` refs. It emits deterministic JSON between `BEGIN_RELEASE_RECONCILIATION_REPORT` / `END_RELEASE_RECONCILIATION_REPORT` and appends the same report to the Actions summary. Missing or malformed facts are `unknown`, not success. The report is an observation snapshot, not a resume checkpoint or release decision. Weekly cadence and stable/prerelease policy remain owner decisions.
 
 ## Checks
 

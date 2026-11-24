@@ -50,7 +50,6 @@ def load_facts(directory, repository):
     )
     releases = _read(base / "releases.json", "array", unavailable)
     beyla_refs = _read(base / "beyla-refs.json", "array", unavailable)
-    obi_refs = _read(base / "obi-refs.json", "array", unavailable)
 
     def refs(rows, label):
         if not all(
@@ -66,7 +65,6 @@ def load_facts(directory, repository):
         "runs": runs,
         "releases": releases,
         "beyla_refs": refs(beyla_refs, "Beyla refs"),
-        "obi_refs": refs(obi_refs, "OBI refs"),
         "unavailable": unavailable,
     }
 
@@ -110,7 +108,7 @@ def report(facts, as_of=None):
         unavailable.append(
             "candidate Beyla/OBI source SHA (expected full 40-character SHA)"
         )
-    for key in ("runs", "releases", "beyla_refs", "obi_refs"):
+    for key in ("runs", "releases", "beyla_refs"):
         if not isinstance(facts.get(key), list):
             unavailable.append(key)
     if unavailable:
@@ -193,27 +191,20 @@ def report(facts, as_of=None):
         if r.get("conclusion") in FAILURES
     ]
     try:
-        beyla_refs, obi_refs = set(facts["beyla_refs"]), set(facts["obi_refs"])
+        beyla_refs = set(facts["beyla_refs"])
     except TypeError:
         return {
             "state": "unknown",
             "unavailable": ["malformed release refs"],
             "next_step": "Inspect GitHub ref facts.",
         }
-    if not all(isinstance(ref, str) for ref in beyla_refs | obi_refs):
+    if not all(isinstance(ref, str) for ref in beyla_refs):
         return {
             "state": "unknown",
             "unavailable": ["malformed release refs"],
             "next_step": "Inspect GitHub ref facts.",
         }
-    asymmetry = sorted(beyla_refs ^ obi_refs)
-    state = (
-        "underway"
-        if active_all
-        else "needs-review"
-        if asymmetry or failed_all
-        else "candidate"
-    )
+    state = "underway" if active_all else "needs-review" if failed_all else "candidate"
     return {
         "state": state,
         "candidate": {
@@ -236,14 +227,11 @@ def report(facts, as_of=None):
         "new_publication_this_utc_week": observed_week,
         "proposed_week_start_utc": week_start.isoformat(),
         "weekly_cadence_observation": cadence,
-        "release_refs": {"beyla": sorted(beyla_refs), "obi": sorted(obi_refs)},
-        "branch_asymmetry": asymmetry,
+        "release_refs": {"beyla": sorted(beyla_refs)},
         "next_step": "Wait for active preparation/tag workflow, then reconcile again."
         if active_all
         else "Review latest failed workflow attempt(s)."
         if failed_all
-        else "Investigate asymmetric refs; this is a diagnostic, not proof of an active train."
-        if asymmetry
         else "Review the source SHA candidate and unresolved cadence/version policy; no release action was taken.",
         "note": "Read-only observation. Weekly cadence is proposed; stable/prerelease qualification and version selection require owner policy. Workflow success is not a health claim.",
     }

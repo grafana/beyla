@@ -100,6 +100,10 @@ func captureInstrumentation(cfg *obi.Config) schema.Instrumentation {
 	}
 
 	http := protocols[protocolHTTP]
+	redaction := schema.Redaction{
+		Names:       new(cloneStrings(cfg.Attributes.SensitiveQueryParams.Effective())),
+		Replacement: cfg.Attributes.SensitiveQueryParams.Replacement,
+	}
 	httpInstrumentation := schema.HTTPInstrumentation{
 		Enabled: schema.HTTPProtocolEnablement{
 			ProtocolEnablement: http.Enabled,
@@ -112,6 +116,7 @@ func captureInstrumentation(cfg *obi.Config) schema.Instrumentation {
 		GoHTTPClientBufferTimeout: schema.Duration(cfg.EBPF.GoHTTPClientBufferTimeout),
 		BufferSize:                cfg.EBPF.BufferSizes.HTTP,
 		Routes:                    httpRoutes(cfg),
+		QueryParameters:           schema.HTTPQueryParameters{Redaction: &redaction},
 		PayloadExtraction:         payloadExtraction(cfg),
 	}
 
@@ -277,9 +282,12 @@ func protocolSelected(list []instrumentations.Instrumentation, mapping protocolM
 }
 
 func captureRuntimes(cfg *obi.Config) schema.CaptureRuntimes {
+	goChannelLinks := !cfg.EBPF.DisableGoChannelLinks
+
 	return schema.CaptureRuntimes{
-		Go: schema.Runtime{
-			Enabled: !cfg.Discovery.SkipGoSpecificTracers,
+		Go: schema.GoRuntime{
+			Enabled:      !cfg.Discovery.SkipGoSpecificTracers,
+			ChannelLinks: &goChannelLinks,
 		},
 		NodeJS: schema.Runtime{
 			Enabled: cfg.NodeJS.Enabled,
@@ -440,7 +448,6 @@ func captureEngine(cfg *obi.Config) schema.CaptureEngine {
 			ContextPropagation:     cfg.EBPF.ContextPropagation,
 			OverrideBPFLoopEnabled: cfg.EBPF.OverrideBPFLoopEnabled,
 			DisableBlackBoxCP:      cfg.EBPF.DisableBlackBoxCP,
-			DisableGoChannelLinks:  cfg.EBPF.DisableGoChannelLinks,
 			PopulateTraceContext:   cfg.EBPF.PopulateTraceContext,
 		},
 		Traffic: schema.Traffic{

@@ -40,6 +40,9 @@ func TestV2FixturesRoundTrip(t *testing.T) {
 			path: "../../.obi-src/internal/test/integration/configs/obi-config-route53.yml",
 			check: func(t *testing.T, cfg *Config) {
 				require.Equal(t, time.Second, cfg.CloudMetadata.Route53.RefreshInterval)
+				require.Empty(t, cfg.CloudMetadata.Route53.HostedZoneIDs)
+				require.True(t, cfg.CloudMetadata.Route53.DiscoverHostedZones)
+				require.NoError(t, cfg.CloudMetadata.Route53.Validate())
 				require.True(t, hasOpenPort(cfg, 8080))
 				require.Equal(t, 8999, cfg.Prometheus.Port)
 			},

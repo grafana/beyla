@@ -216,7 +216,7 @@ func (i *Instrumenter) ReadAndForward(ctx context.Context) error {
 
 	i.bp.Start(ctx)
 
-	<-i.bp.Done()
+	<-i.bp.Done() //nolint:errcheck // Shutdown errors are reported by stop below.
 
 	log.Info("exiting auto-instrumenter")
 
@@ -292,7 +292,7 @@ func (i *Instrumenter) processEventsPipeline(ctx context.Context, graph *swarm.R
 	graph.Start(ctx)
 	// run until either the graph is finished or the context is cancelled
 	select {
-	case <-graph.Done():
+	case <-graph.Done(): //nolint:errcheck // This background pipeline only needs completion.
 	case <-ctx.Done():
 	}
 }

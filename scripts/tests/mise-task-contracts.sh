@@ -150,4 +150,46 @@ grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
 
+# Contract-test argument forwarding and failure handling without Mise or real
+# test execution. Workflow checks exercise the three variants.
+cat >"$tmp/bin/gotestsum" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$GOTESTSUM_LOG"
+exit "${GOTESTSUM_EXIT:-0}"
+SH
+chmod +x "$tmp/bin/gotestsum"
+shard_task="$root/.mise/tasks/integration/run/shard"
+shard_env=(
+  "PATH=$tmp/bin:$PATH"
+  'MATRIX_ID=shard-test'
+  'MATRIX_JSON={"id":"shard-test"}'
+  'MATRIX_TEST_PATTERN=TestAlpha'
+  "RUN_NUMBER=1"
+  "TEST_TAGS=integration"
+  "REPORT_DIR=$tmp/reports"
+  "GOTESTSUM_LOG=$tmp/shard-gotestsum"
+)
+forwarded="-run=Test Alpha [literal]*;\$(touch $tmp/should-not-exist)"
+env "${shard_env[@]}" bash "$shard_task" ./internal/testgenerated/integration \
+  "$forwarded" >/dev/null
+grep -Fxq -- "$forwarded" "$tmp/shard-gotestsum"
+[[ ! -e "$tmp/should-not-exist" ]]
+
+invalid_log="$tmp/invalid-shard-gotestsum"
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='' GOTESTSUM_LOG="$invalid_log" \
+  bash "$shard_task" ./internal/testgenerated/integration >/dev/null 2>&1; then
+  echo 'Integration shard accepted an empty pattern' >&2
+  exit 1
+fi
+[[ ! -e "$invalid_log" ]]
+
+if env "${shard_env[@]}" GOTESTSUM_LOG="$tmp/failing-gotestsum" GOTESTSUM_EXIT=23 bash "$shard_task" \
+  ./internal/testgenerated/integration >/dev/null 2>&1; then
+  echo 'Integration shard did not propagate gotestsum failure' >&2
+  exit 1
+else
+  shard_status=$?
+fi
+[[ "$shard_status" -eq 23 ]]
+
 echo 'mise task contract tests passed'

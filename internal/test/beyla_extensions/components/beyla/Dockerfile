@@ -1,7 +1,7 @@
 # Development version of the beyla Dockerfile that compiles for coverage
 # and allows retrieving coverage files.
 # The production-ready minimal image is in the project root's dockerfile.
-FROM golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 AS builder
+FROM golang:1.26.11@sha256:4165ee6bf3b7811fd7b40373290405c83d0167dcb87ee5f29c427cdcef45ff8f AS builder
 
 # Track the pinned base image's current security updates instead of archive
 # package versions that can disappear.
@@ -25,7 +25,7 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 COPY mise.toml mise.lock ./
 COPY .mise/ .mise/
-COPY internal/java/mise.toml internal/java/
+COPY internal/java/mise.toml internal/java/mise.lock internal/java/
 COPY internal/java/.mise/ internal/java/.mise/
 COPY internal/test/oats/mise.toml internal/test/oats/
 COPY internal/test/beyla_extensions/components/beyla/beyla_wrapper.sh /beyla_wrapper.sh

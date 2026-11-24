@@ -18,9 +18,7 @@ def parse_time(value):
 
 def reconcile(facts, now):
     run, source = facts.get("run", {}), facts.get("source", {})
-    upstream, pin, fork = (
-        source.get(key) for key in ("upstream_sha", "pin_sha", "fork_sha")
-    )
+    upstream, pin = (source.get(key) for key in ("upstream_sha", "pin_sha"))
     result = {
         "schema_version": 1,
         "observed_at": now,
@@ -28,15 +26,12 @@ def reconcile(facts, now):
         "source": {
             "upstream_sha": upstream,
             "pin_sha": pin,
-            "fork_sha": fork,
             "graph_complete": source.get("graph_complete") is True,
             "timestamps_valid": source.get("timestamps_valid"),
             "pin_is_ancestor": source.get("pin_is_ancestor"),
             "upstream_is_ancestor_of_pin": source.get("upstream_is_ancestor_of_pin"),
-            "fork_relation": source.get("fork_relation"),
             "snapshot_current_main": source.get("snapshot_current_main"),
             "main_head_sha": source.get("main_head_sha"),
-            "fork_attempts": source.get("fork_attempts"),
         },
         "pending": {
             "count": source.get("pending_count"),
@@ -99,9 +94,6 @@ def reconcile(facts, now):
             next_action="Do not roll back; report that this sampled target is superseded.",
         )
         return result
-    if not isinstance(fork, str) or not SHA.fullmatch(fork):
-        adoption["blocker"] = "Missing or non-full fork SHA."
-        return result
     if (
         source.get("graph_complete") is not True
         or source.get("pin_is_ancestor") is not True
@@ -151,16 +143,6 @@ def reconcile(facts, now):
         return result
     if facts.get("open_pr_inventory_complete") is not True:
         adoption["blocker"] = "Open adoption PR inventory is incomplete."
-        return result
-    if source.get("fork_relation") == "behind":
-        adoption.update(
-            outcome="deferred",
-            blocker="Fork does not yet contain sampled upstream SHA.",
-            next_action="Retry later against this same sampled SHA; do not chase a moving tip.",
-        )
-        return result
-    if source.get("fork_relation") != "contains":
-        adoption["blocker"] = "Fork reachability is unknown or diverged."
         return result
     closed_complete = facts.get("closed_target_history_complete") is True
     adoption.update(

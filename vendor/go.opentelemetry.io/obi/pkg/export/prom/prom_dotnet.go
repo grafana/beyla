@@ -202,7 +202,7 @@ func (r *metricsReporter) collectDotnetRuntimeMetrics(snapshot runtimemetrics.Ru
 	replacement := current
 	replacement.values = oldValues
 	c.updateCurrentMetrics(replacement, &current.values)
-	for label, count := range snapshot.Dotnet.Exceptions {
+	for label, count := range snapshot.DotnetExceptions {
 		counterLabels := append(append([]string(nil), labels...), label)
 		key := dotnetRuntimeCounterKey{
 			pid: snapshot.PID, generation: snapshot.Generation, metric: attributes.DotnetExceptions.Prom,

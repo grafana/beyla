@@ -44,17 +44,20 @@ const (
 	progObiStatsRawTpTCPRetransmitSkb                     = "obi_stats_raw_tp_tcp_retransmit_skb"
 	progObiStatsRawTpTCPSendReset                         = "obi_stats_raw_tp_tcp_send_reset"
 	progObiStatsRawTpTCPReceiveReset                      = "obi_stats_raw_tp_tcp_receive_reset"
+	progObiStatsRawTpTCPDestroySockSegRst                 = "obi_stats_raw_tp_tcp_destroy_sock_seg_rst"
 	progObiStatsKprobeTCPSendmsg                          = "obi_stats_kprobe_tcp_sendmsg"
 	progObiStatsKretprobeTCPSendmsg                       = "obi_stats_kretprobe_tcp_sendmsg"
 	progObiStatsKprobeTCPCleanupRbuf                      = "obi_stats_kprobe_tcp_cleanup_rbuf"
+	progObiStatsKprobeTCPRcvStateProcess                  = "obi_stats_kprobe_tcp_rcv_state_process"
 )
 
 // Hook point names, grouped by attach type.
 const (
 	// Kprobes: kernel function names.
-	KprobeTCPClose       = "tcp_close"
-	KprobeTCPSendMsg     = "tcp_sendmsg"
-	KprobeTCPCleanupRbuf = "tcp_cleanup_rbuf"
+	KprobeTCPClose           = "tcp_close"
+	KprobeTCPSendMsg         = "tcp_sendmsg"
+	KprobeTCPCleanupRbuf     = "tcp_cleanup_rbuf"
+	KprobeTCPRcvStateProcess = "tcp_rcv_state_process"
 
 	// Tracepoints: group/name, are validated by TestTracepointConstantFormat
 	TracepointInetSockSetState = "sock/inet_sock_set_state"
@@ -64,6 +67,7 @@ const (
 	RawTracepointTCPRetransmitSkb = "tcp_retransmit_skb"
 	RawTracepointTCPSendReset     = "tcp_send_reset"
 	RawTracepointTCPReceiveReset  = "tcp_receive_reset"
+	RawTracepointTCPDestroySock   = "tcp_destroy_sock"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -123,7 +127,7 @@ func NewStatsFetcher(cfg *config.EBPFTracer, features *export.Features, selector
 		toDisable = append(toDisable, progObiStatsRawTpTCPRetransmitSkb)
 	}
 	if !features.StatsTCPResets() {
-		toDisable = append(toDisable, progObiStatsRawTpTCPSendReset, progObiStatsRawTpTCPReceiveReset)
+		toDisable = append(toDisable, progObiStatsRawTpTCPSendReset, progObiStatsRawTpTCPReceiveReset, progObiStatsKprobeTCPRcvStateProcess, progObiStatsRawTpTCPDestroySockSegRst)
 	}
 	if !features.StatsTCPIo() {
 		toDisable = append(toDisable, progObiStatsKprobeTCPSendmsg, progObiStatsKretprobeTCPSendmsg, progObiStatsKprobeTCPCleanupRbuf, progObiStatsKprobeTCPCloseIoFlush)
@@ -167,6 +171,11 @@ func NewStatsFetcher(cfg *config.EBPFTracer, features *export.Features, selector
 			name:    KprobeTCPCleanupRbuf,
 			program: objects.ObiStatsKprobeTcpCleanupRbuf,
 			enabled: features.StatsTCPIo(),
+		},
+		{
+			name:    KprobeTCPRcvStateProcess,
+			program: objects.ObiStatsKprobeTcpRcvStateProcess,
+			enabled: features.StatsTCPResets(),
 		},
 	} {
 		if !k.enabled {
@@ -252,6 +261,11 @@ func NewStatsFetcher(cfg *config.EBPFTracer, features *export.Features, selector
 		{
 			name:    RawTracepointTCPReceiveReset,
 			program: objects.ObiStatsRawTpTcpReceiveReset,
+			enabled: features.StatsTCPResets(),
+		},
+		{
+			name:    RawTracepointTCPDestroySock,
+			program: objects.ObiStatsRawTpTcpDestroySockSegRst,
 			enabled: features.StatsTCPResets(),
 		},
 	} {

@@ -53,7 +53,7 @@ func Build(ctx context.Context, config *beyla.Config, ctxInfo *global.ContextInf
 			select {
 			case <-ctx.Done():
 				ilog().Debug("context done, stopping OBI internal swarm")
-			case <-obiFinished:
+			case <-obiFinished: //nolint:errcheck // OBI has stopped; its shutdown result is unused.
 				ilog().Debug("OBI internal swarm stopped")
 			}
 		}, nil

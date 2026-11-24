@@ -129,7 +129,7 @@ func id3v2(raw []byte) bool {
 
 	size := uint32(raw[6])<<21 | uint32(raw[7])<<14 | uint32(raw[8])<<7 | uint32(raw[9])
 	// The synchsafe integer is already bounded to 28 bits (~256MB). A 10MB
-	// cap rejected legitimate files with large ID3v2 album art. #839
+	// cap rejected legitimate files with large ID3v2 album art. #839 
 	return size > 0
 }
 

@@ -144,12 +144,12 @@ jobs:
             [[ "$found_generator" == true && "$found_contracts" == true && "$found_removed_helper" == true ]] || { echo "Source PR is missing expected transform cleanup files." >&2; exit 1; }
           fi
 
-          [[ "$(git -C .obi-src remote get-url origin)" == "https://github.com/grafana/opentelemetry-ebpf-instrumentation.git" ]] || { echo "Unexpected OBI submodule remote." >&2; exit 1; }
+          [[ "$(git -C .obi-src remote get-url origin)" == "https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation.git" ]] || { echo "Unexpected OBI submodule remote." >&2; exit 1; }
           git -C .obi-src fetch --no-tags origin main
-          fork_main_sha="$(git -C .obi-src rev-parse FETCH_HEAD)"
+          upstream_main_sha="$(git -C .obi-src rev-parse FETCH_HEAD)"
           git -C .obi-src fetch --no-tags origin "$OBI_SHA"
           [[ "$(git -C .obi-src cat-file -t "$OBI_SHA")" == commit ]] || { echo "obi_sha is not a commit." >&2; exit 1; }
-          git -C .obi-src merge-base --is-ancestor "$OBI_SHA" "$fork_main_sha" || { echo "obi_sha is not reachable from Grafana OBI main." >&2; exit 1; }
+          git -C .obi-src merge-base --is-ancestor "$OBI_SHA" "$upstream_main_sha" || { echo "obi_sha is not reachable from upstream OBI main." >&2; exit 1; }
 
           if [[ -n "$SOURCE_PR" ]]; then
             git diff --binary "$base_sha" "$SOURCE_SHA" >"$RUNNER_TEMP/source.patch"

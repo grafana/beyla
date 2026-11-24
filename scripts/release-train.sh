@@ -1,31 +1,27 @@
 #!/usr/bin/env bash
 #
-# Automate the Beyla/OBI release train workflow.
+# Automate the Beyla release train workflow.
 #
 # Commands:
-#   prepare  - Cut/update release branches in OBI and Beyla
-#   tag      - Create tags and prereleases in OBI and Beyla
+#   prepare  - Cut/update release branch in Beyla
+#   tag      - Create tag and prerelease in Beyla
 #
 # Notes:
 #   - Versions must be SemVer tags: vMAJOR.MINOR.PATCH
 #   - Release branch naming is: release-MAJOR.MINOR (no "v" prefix, no PATCH)
 #   - Run from any directory (the script uses temporary clones)
+#   - Upstream OBI (.obi-src) is treated as a read-only dependency and is never mutated
 
 set -euo pipefail
 
 BEYLA_REPO="grafana/beyla"
-OBI_REPO="grafana/opentelemetry-ebpf-instrumentation"
-UPSTREAM_OBI_REPO="open-telemetry/opentelemetry-ebpf-instrumentation"
 BEYLA_MAIN_BRANCH="main"
-OBI_MAIN_BRANCH="main"
 
 COMMAND=""
 BEYLA_VERSION=""
-OBI_VERSION=""
 BUMP_MODE="auto"
 DRY_RUN=false
 SKIP_CI_CHECK=false
-SKIP_UPSTREAM_SYNC_CHECK=false
 EXCLUDE_CHECK_NAME=""
 WORKDIR=""
 
@@ -35,8 +31,6 @@ OUTPUT_FILE="${RELEASE_TRAIN_OUTPUT_FILE:-}"
 WORKSPACE=""
 WORKSPACE_AUTO_CREATED=false
 BEYLA_DIR=""
-OBI_DIR=""
-OBI_RELEASE_REMOTE_SHA=""
 
 DATE_BIN=""
 
@@ -59,20 +53,18 @@ die() {
 
 show_help() {
   cat <<'EOF'
-Automate the Beyla/OBI release train workflow
+Automate the Beyla release train workflow
 
 Usage:
   ./scripts/release-train.sh <command> [options]
 
 Commands:
-  prepare                 Cut/update OBI+Beyla release branches
-  tag                     Tag OBI+Beyla and create prereleases
+  prepare                 Cut/update Beyla release branch
+  tag                     Tag Beyla and create prerelease
 
 Common options:
   --beyla-version <vX.Y.Z>
-  --obi-version <vX.Y.Z>   Defaults to --beyla-version when omitted
   --beyla-repo <owner/repo>
-  --obi-repo <owner/repo>
   --dry-run               Validate and print actions, without pushing/tags/releases
   --skip-ci-check         Skip CI-green checks (main for prepare, release branch for tag)
   --exclude-check <name>  Exclude a check-run by name (e.g. the calling job itself)
@@ -84,20 +76,15 @@ Prepare-only options:
                           auto  -> weekly rule: bump MINOR unless latest tag is from this week, then bump PATCH
                           minor -> force MINOR bump
                           patch -> force PATCH bump
-  --skip-upstream-sync-check
-                          Skip verification that grafana OBI main includes upstream OBI main
 
 Examples:
-  # Auto compute the next Beyla version and cut release branches (OBI version defaults to Beyla)
+  # Auto compute the next Beyla version and cut release branch
   ./scripts/release-train.sh prepare
 
-  # Force a specific Beyla version (OBI inherits the same version)
+  # Force a specific Beyla version
   ./scripts/release-train.sh prepare --beyla-version v4.3.0
 
-  # Override OBI version explicitly (escape hatch for out-of-band OBI releases)
-  ./scripts/release-train.sh prepare --beyla-version v4.3.0 --obi-version v4.3.1
-
-  # After CI is green, create tags and prereleases (OBI defaults to Beyla)
+  # After CI is green, create tag and prerelease
   ./scripts/release-train.sh tag --beyla-version v4.3.0
 EOF
 }
@@ -325,7 +312,6 @@ setup_workspace() {
   fi
 
   BEYLA_DIR="${WORKSPACE}/beyla"
-  OBI_DIR="${WORKSPACE}/obi"
   log_info "Workspace: ${WORKSPACE}"
 }
 
@@ -452,26 +438,6 @@ check_ci_green() {
   log_warn "No check-runs found for ${label}; legacy commit status is success."
 }
 
-check_obi_fork_sync() {
-  if git -C "$OBI_DIR" remote get-url upstream >/dev/null 2>&1; then
-    :
-  else
-    run_cmd git -C "$OBI_DIR" remote add upstream "https://github.com/${UPSTREAM_OBI_REPO}.git"
-  fi
-
-  if ! run_git_remote_cmd -C "$OBI_DIR" fetch upstream "$OBI_MAIN_BRANCH"; then
-    log_warn "Could not fetch ${UPSTREAM_OBI_REPO}:${OBI_MAIN_BRANCH}; skipping informational sync check."
-    return
-  fi
-
-  if git -C "$OBI_DIR" merge-base --is-ancestor "upstream/${OBI_MAIN_BRANCH}" "origin/${OBI_MAIN_BRANCH}"; then
-    log_info "OBI fork main contains upstream/${OBI_MAIN_BRANCH}"
-    return
-  fi
-
-  log_warn "OBI fork ${OBI_REPO}:${OBI_MAIN_BRANCH} is behind ${UPSTREAM_OBI_REPO}:${OBI_MAIN_BRANCH}; release will still use the OBI SHA pinned in ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}."
-}
-
 resolve_obi_sha_from_beyla_main() {
   local tree_line
   tree_line=$(git -C "$BEYLA_DIR" ls-tree "origin/${BEYLA_MAIN_BRANCH}" .obi-src) || {
@@ -517,7 +483,7 @@ auto_compute_next_version() {
 
   local latest_tag
   latest_tag="$(latest_semver_tag_from_repo "$repo_dir")"
-  [[ -n "$latest_tag" ]] || die "Could not auto-compute version for ${repo_slug}: no SemVer tags found. Use --beyla-version or --obi-version."
+  [[ -n "$latest_tag" ]] || die "Could not auto-compute version for ${repo_slug}: no SemVer tags found. Use --beyla-version."
 
   validate_semver_tag "$latest_tag"
 
@@ -563,7 +529,7 @@ auto_compute_next_version() {
   printf "v%s.%s.%s" "$major" "$minor" "$patch"
 }
 
-resolve_prepare_versions() {
+resolve_prepare_version() {
   if [[ -n "$BEYLA_VERSION" ]]; then
     validate_semver_tag "$BEYLA_VERSION"
     log_info "Using explicit Beyla version: ${BEYLA_VERSION}"
@@ -571,25 +537,11 @@ resolve_prepare_versions() {
     BEYLA_VERSION="$(auto_compute_next_version "$BEYLA_DIR" "$BEYLA_REPO")"
     log_info "Auto-computed Beyla version: ${BEYLA_VERSION}"
   fi
-
-  if [[ -n "$OBI_VERSION" ]]; then
-    validate_semver_tag "$OBI_VERSION"
-    log_info "Using explicit OBI version: ${OBI_VERSION}"
-  else
-    OBI_VERSION="$BEYLA_VERSION"
-    log_info "OBI version defaulted to Beyla version: ${OBI_VERSION}"
-  fi
 }
 
-resolve_tag_versions() {
+resolve_tag_version() {
   [[ -n "$BEYLA_VERSION" ]] || die "--beyla-version is required for the tag command."
   validate_semver_tag "$BEYLA_VERSION"
-
-  if [[ -z "$OBI_VERSION" ]]; then
-    OBI_VERSION="$BEYLA_VERSION"
-    log_info "OBI version defaulted to Beyla version: ${OBI_VERSION}"
-  fi
-  validate_semver_tag "$OBI_VERSION"
 }
 
 checkout_or_create_release_branch() {
@@ -604,29 +556,6 @@ checkout_or_create_release_branch() {
   else
     run_cmd git -C "$repo_dir" checkout -B "$release_branch" "origin/${base_branch}"
   fi
-}
-
-uncomment_bpfel_in_gitignore() {
-  local repo_dir="$1"
-  local gitignore="${repo_dir}/.gitignore"
-
-  if [[ ! -f "$gitignore" ]]; then
-    log_warn "No .gitignore found in ${repo_dir}; skipping bpfel uncomment."
-    return
-  fi
-
-  if ! grep -q '^\*_bpfel\.' "$gitignore"; then
-    log_info "No active bpfel gitignore rules found in ${repo_dir}; skipping."
-    return
-  fi
-
-  log_info "Commenting out bpfel exclusions in ${gitignore} for release branch"
-  sed -i.bak \
-    -e 's/^\(\*_bpfel\.go\)$/#\1/' \
-    -e 's/^\(\*_bpfel\.o\)$/#\1/' \
-    -e 's/^\(\*_bpfel\.go\.d\)$/#\1/' \
-    "$gitignore"
-  rm -f "${gitignore}.bak"
 }
 
 remove_tracked_beyla_bpf_artifacts() {
@@ -656,68 +585,18 @@ remove_beyla_java_agent_from_index() {
   fi
 }
 
-prepare_obi_branch() {
-  local version="$1"
-  local release_branch="$2"
-  local obi_sha="$3"
-  local is_patch="${4:-false}"
-
-  run_git_remote_cmd -C "$OBI_DIR" fetch --prune origin
-
-  if git -C "$OBI_DIR" show-ref --verify --quiet "refs/remotes/origin/${release_branch}"; then
-    log_info "OBI branch ${release_branch} already exists; reusing it."
-    run_cmd git -C "$OBI_DIR" checkout -B "$release_branch" "origin/${release_branch}"
-    if ! git -C "$OBI_DIR" merge-base --is-ancestor "$obi_sha" HEAD; then
-      die "Existing OBI branch ${release_branch} does not contain pinned SHA ${obi_sha}"
-    fi
-  else
-    if [[ "$is_patch" == "true" ]]; then
-      die "Patch release requested but OBI branch ${release_branch} does not exist."
-    fi
-    run_cmd git -C "$OBI_DIR" checkout "$obi_sha"
-    run_cmd git -C "$OBI_DIR" checkout -B "$release_branch"
-  fi
-
-  local base_sha
-  base_sha=$(git -C "$OBI_DIR" rev-parse HEAD)
-
-  uncomment_bpfel_in_gitignore "$OBI_DIR"
-
-  run_write_cmd make -C "$OBI_DIR" docker-generate
-  run_write_cmd make -C "$OBI_DIR" java-build
-
-  run_write_cmd git -C "$OBI_DIR" add -A
-  if ! git -C "$OBI_DIR" diff --cached --quiet; then
-    run_write_cmd git -C "$OBI_DIR" commit -m "Release ${version} artifacts"
-  else
-    log_info "No OBI artifact changes to commit."
-  fi
-
-  OBI_RELEASE_REMOTE_SHA=$(push_signed_branch "$OBI_DIR" "$OBI_REPO" "$release_branch" "$base_sha")
-}
-
 prepare_beyla_branch() {
   local version="$1"
   local release_branch="$2"
-  local obi_sha="$3"
 
   checkout_or_create_release_branch "$BEYLA_DIR" "$BEYLA_MAIN_BRANCH" "$release_branch"
 
   local base_sha
   base_sha=$(git -C "$BEYLA_DIR" rev-parse HEAD)
 
+  # Initialize the pinned upstream OBI submodule read-only (never mutated).
   run_cmd git -C "$BEYLA_DIR" submodule sync --recursive
   run_cmd git -C "$BEYLA_DIR" submodule update --init --recursive
-
-  run_git_remote_cmd -C "$BEYLA_DIR/.obi-src" fetch --prune origin
-  run_cmd git -C "$BEYLA_DIR/.obi-src" checkout "$obi_sha"
-
-  run_write_cmd git -C "$BEYLA_DIR" add .obi-src
-  if ! git -C "$BEYLA_DIR" diff --cached --quiet; then
-    run_write_cmd git -C "$BEYLA_DIR" commit -m "Update obi submodule (${version})"
-  else
-    log_info "No Beyla submodule pointer change to commit."
-  fi
 
   # Keep generated Beyla BPF objects ignored on release branches. `make
   # vendor-obi` still updates vendored OBI and generates build inputs. Alloy
@@ -817,12 +696,9 @@ prepare_command() {
   setup_workspace
 
   clone_repo "$BEYLA_REPO" "$BEYLA_DIR"
-  clone_repo "$OBI_REPO" "$OBI_DIR"
   set_git_identity "$BEYLA_DIR"
-  set_git_identity "$OBI_DIR"
 
   run_cmd git -C "$BEYLA_DIR" checkout -B "$BEYLA_MAIN_BRANCH" "origin/${BEYLA_MAIN_BRANCH}"
-  run_cmd git -C "$OBI_DIR" checkout -B "$OBI_MAIN_BRANCH" "origin/${OBI_MAIN_BRANCH}"
 
   if [[ "$SKIP_CI_CHECK" == "true" ]]; then
     log_warn "Skipping CI check for ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}"
@@ -830,25 +706,13 @@ prepare_command() {
     check_ci_green "$BEYLA_REPO" "$BEYLA_MAIN_BRANCH" "${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}" "$EXCLUDE_CHECK_NAME"
   fi
 
-  if [[ "$SKIP_UPSTREAM_SYNC_CHECK" == "true" ]]; then
-    log_warn "Skipping OBI upstream sync check."
-  else
-    check_obi_fork_sync
-  fi
-
-  resolve_prepare_versions
+  resolve_prepare_version
   local beyla_release_branch
   beyla_release_branch="$(release_branch_name "$BEYLA_VERSION")"
-  local obi_release_branch
-  obi_release_branch="$(release_branch_name "$OBI_VERSION")"
 
   local beyla_is_patch="false"
   if is_patch_release "$BEYLA_VERSION"; then
     beyla_is_patch="true"
-  fi
-  local obi_is_patch="false"
-  if is_patch_release "$OBI_VERSION"; then
-    obi_is_patch="true"
   fi
 
   local obi_sha
@@ -866,22 +730,16 @@ prepare_command() {
     log_info "OBI SHA pinned in ${BEYLA_REPO}:${BEYLA_MAIN_BRANCH}: ${obi_sha}"
   fi
 
-  prepare_obi_branch "$OBI_VERSION" "$obi_release_branch" "$obi_sha" "$obi_is_patch"
-  local obi_release_sha="$OBI_RELEASE_REMOTE_SHA"
-  log_info "OBI release branch tip SHA: ${obi_release_sha}"
-  prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch" "$obi_release_sha"
+  prepare_beyla_branch "$BEYLA_VERSION" "$beyla_release_branch"
 
-  log_info "Release branches prepared: beyla_version=${BEYLA_VERSION}, beyla_branch=${beyla_release_branch}, obi_version=${OBI_VERSION}, obi_branch=${obi_release_branch}"
+  log_info "Release branch prepared: beyla_version=${BEYLA_VERSION}, beyla_branch=${beyla_release_branch}, obi_sha=${obi_sha}"
 
   set_output "version" "$BEYLA_VERSION"
   set_output "release_branch" "$beyla_release_branch"
   set_output "beyla_version" "$BEYLA_VERSION"
-  set_output "obi_version" "$OBI_VERSION"
   set_output "beyla_release_branch" "$beyla_release_branch"
-  set_output "obi_release_branch" "$obi_release_branch"
   set_output "obi_sha" "$obi_sha"
   set_output "beyla_repo" "$BEYLA_REPO"
-  set_output "obi_repo" "$OBI_REPO"
 }
 
 tag_command() {
@@ -890,22 +748,14 @@ tag_command() {
   require_cmd jq
   ensure_gh_auth
 
-  resolve_tag_versions
+  resolve_tag_version
   local beyla_release_branch
   beyla_release_branch="$(release_branch_name "$BEYLA_VERSION")"
-  local obi_release_branch
-  obi_release_branch="$(release_branch_name "$OBI_VERSION")"
 
   setup_workspace
 
   clone_repo "$BEYLA_REPO" "$BEYLA_DIR"
-  clone_repo "$OBI_REPO" "$OBI_DIR"
   set_git_identity "$BEYLA_DIR"
-  set_git_identity "$OBI_DIR"
-
-  ensure_release_branch_exists "$OBI_DIR" "$OBI_REPO" "$obi_release_branch"
-  local obi_checked_sha
-  obi_checked_sha=$(git -C "$OBI_DIR" rev-parse "origin/${obi_release_branch}")
 
   ensure_release_branch_exists "$BEYLA_DIR" "$BEYLA_REPO" "$beyla_release_branch"
   local beyla_checked_sha
@@ -914,28 +764,20 @@ tag_command() {
   if [[ "$SKIP_CI_CHECK" == "true" ]]; then
     log_warn "Skipping CI checks for release branches."
   else
-    check_ci_green "$OBI_REPO" "$obi_checked_sha" "${OBI_REPO}:${obi_release_branch}@${obi_checked_sha:0:12}" "$EXCLUDE_CHECK_NAME"
     check_ci_green "$BEYLA_REPO" "$beyla_checked_sha" "${BEYLA_REPO}:${beyla_release_branch}@${beyla_checked_sha:0:12}" "$EXCLUDE_CHECK_NAME"
   fi
-
-  local obi_target_sha
-  obi_target_sha="$(ensure_tag_on_sha "$OBI_DIR" "$OBI_REPO" "$OBI_VERSION" "$obi_checked_sha")"
-  ensure_prerelease_exists "$OBI_REPO" "$OBI_VERSION" "$obi_target_sha" "Release train candidate ${OBI_VERSION}"
 
   local beyla_target_sha
   beyla_target_sha="$(ensure_tag_on_sha "$BEYLA_DIR" "$BEYLA_REPO" "$BEYLA_VERSION" "$beyla_checked_sha")"
   ensure_prerelease_exists "$BEYLA_REPO" "$BEYLA_VERSION" "$beyla_target_sha" "Release train candidate ${BEYLA_VERSION}"
 
-  log_info "Release tags and prereleases prepared: beyla_version=${BEYLA_VERSION}, obi_version=${OBI_VERSION}"
+  log_info "Release tag and prerelease prepared: beyla_version=${BEYLA_VERSION}"
 
   set_output "version" "$BEYLA_VERSION"
   set_output "release_branch" "$beyla_release_branch"
   set_output "beyla_version" "$BEYLA_VERSION"
-  set_output "obi_version" "$OBI_VERSION"
   set_output "beyla_release_branch" "$beyla_release_branch"
-  set_output "obi_release_branch" "$obi_release_branch"
   set_output "beyla_target_sha" "$beyla_target_sha"
-  set_output "obi_target_sha" "$obi_target_sha"
 }
 
 parse_args() {
@@ -978,15 +820,6 @@ parse_args() {
       BEYLA_VERSION="${2:-}"
       shift 2
       ;;
-    --obi-version=*)
-      OBI_VERSION="${1#*=}"
-      shift
-      ;;
-    --obi-version)
-      require_option_value "$1" "${2:-}"
-      OBI_VERSION="${2:-}"
-      shift 2
-      ;;
     --bump=*)
       BUMP_MODE="${1#*=}"
       shift
@@ -1003,15 +836,6 @@ parse_args() {
     --beyla-repo)
       require_option_value "$1" "${2:-}"
       BEYLA_REPO="${2:-}"
-      shift 2
-      ;;
-    --obi-repo=*)
-      OBI_REPO="${1#*=}"
-      shift
-      ;;
-    --obi-repo)
-      require_option_value "$1" "${2:-}"
-      OBI_REPO="${2:-}"
       shift 2
       ;;
     --workdir=*)
@@ -1039,10 +863,6 @@ parse_args() {
       require_option_value "$1" "${2:-}"
       EXCLUDE_CHECK_NAME="${2:-}"
       shift 2
-      ;;
-    --skip-upstream-sync-check)
-      SKIP_UPSTREAM_SYNC_CHECK=true
-      shift
       ;;
     --help | -h)
       show_help

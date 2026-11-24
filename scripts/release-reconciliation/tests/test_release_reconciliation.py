@@ -21,7 +21,6 @@ class ReportTests(unittest.TestCase):
             "runs": [],
             "releases": [],
             "beyla_refs": [],
-            "obi_refs": [],
             "unavailable": [],
         }
         facts.update(overrides)
@@ -42,7 +41,6 @@ class ReportTests(unittest.TestCase):
                 "tag-runs.json": "{}",
                 "releases.json": "[]",
                 "beyla-refs.json": "[]",
-                "obi-refs.json": "[]",
             }
             for name, raw in payloads.items():
                 (Path(directory) / name).write_text(raw)
@@ -94,17 +92,12 @@ class ReportTests(unittest.TestCase):
             report.report(self.facts(runs=[{"status": "new-github-state"}]))["state"],
         )
 
-    def test_branch_asymmetry_is_diagnostic_not_active_train_proof(self):
-        result = report.report(self.facts(beyla_refs=["release-v1"], obi_refs=[]))
-        self.assertEqual("needs-review", result["state"])
-        self.assertIn("not proof", result["next_step"])
-
     def test_missing_source_sha_and_unavailable_are_unknown(self):
         self.assertEqual(
             "unknown", report.report(self.facts(candidate={"sha": "a" * 40}))["state"]
         )
         self.assertEqual(
-            "unknown", report.report(self.facts(unavailable=["OBI fork"]))["state"]
+            "unknown", report.report(self.facts(unavailable=["beyla-refs.json"]))["state"]
         )
 
     def test_paginated_payloads_are_flattened(self):
@@ -120,7 +113,6 @@ class ReportTests(unittest.TestCase):
                 ),
                 "releases.json": json.dumps([[{"id": 1}], [{"id": 2}]]),
                 "beyla-refs.json": "[[]]",
-                "obi-refs.json": "[[]]",
             }
             for name, raw in payloads.items():
                 (Path(directory) / name).write_text(raw)
@@ -246,6 +238,7 @@ else: print('{}')
             calls_text = calls.read_text()
             self.assertIn("contents/.obi-src?ref=" + "a" * 40, calls_text)
             self.assertNotIn("contents/.obi-src?ref=main", calls_text)
+            self.assertNotIn("opentelemetry-ebpf-instrumentation", calls_text)
 
     def test_collector_api_failures_are_unknown_and_temporary_files_are_cleaned(self):
         import os

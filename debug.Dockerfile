@@ -1,4 +1,4 @@
-FROM golang:1.26.10-alpine@sha256:5cb67f19c5e7994dcb80c074f7cfca8aeeada45bbdca035f73df269cefdcce61 as builder
+FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab as builder
 
 ARG TARGETARCH
 
@@ -31,7 +31,7 @@ RUN go install github.com/go-delve/delve/cmd/dlv@latest
 # Prior to using this debug.Dockerfile, regenerate eBPF sources and vendor dependencies.
 RUN mise run --skip-tools compile:debug
 
-FROM alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+FROM alpine:latest@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 WORKDIR /
 

@@ -5,7 +5,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   scope:
@@ -21,6 +20,9 @@ jobs:
     needs: scope
     if: needs.scope.outputs.applicable == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     container:
       image: grafana/vale@sha256:4b9632f0b4ba1def1355d63303379a1da5c8bc59ec7282c8018437f6cafe8a0b
     steps:

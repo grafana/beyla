@@ -7,6 +7,9 @@ package imetrics // import "go.opentelemetry.io/obi/pkg/export/imetrics"
 import (
 	"context"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type InternalMetricsExporter string
@@ -57,6 +60,12 @@ type InternalMetricsConfig struct {
 	AvoidedServices         AvoidedServicesConfig    `yaml:"avoided_services,omitempty"`
 	Exporter                InternalMetricsExporter  `yaml:"exporter,omitempty" env:"OTEL_EBPF_INTERNAL_METRICS_EXPORTER" validate:"omitempty,oneof=disabled prometheus otel"`
 	BpfMetricScrapeInterval time.Duration            `yaml:"bpf_metric_scrape_interval" env:"OTEL_EBPF_BPF_METRIC_SCRAPE_INTERVAL" validate:"omitempty,gt=0"`
+
+	// MeterProvider, when set, receives the internal metrics instead of an exporter.
+	// The Collector receiver sets it to the Collector service telemetry.
+	MeterProvider metric.MeterProvider `yaml:"-" env:"-"`
+	// MeterAttributes identify this reporter among the users of MeterProvider.
+	MeterAttributes attribute.Set `yaml:"-" env:"-"`
 }
 
 // Reporter of internal metrics

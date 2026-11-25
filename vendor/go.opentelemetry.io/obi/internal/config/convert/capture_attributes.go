@@ -37,6 +37,9 @@ func applyV2CaptureAttributes(cfg *obi.Config, src *schema.Extension) error {
 func captureAttributes(cfg *obi.Config) *schema.CaptureAttributes {
 	selection := cloneAttributeSelection(cfg.Attributes.Select)
 	delete(selection, attributes.Resource.Section)
+	if !cfg.Attributes.UseV2Selection {
+		selection = spanMetricSelection(cfg, selection)
+	}
 	if len(selection) == 0 {
 		return nil
 	}

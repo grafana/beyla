@@ -331,6 +331,10 @@ type Tracer struct {
 	currentBinary                     executableIdentity
 	goAutoSDKActivationByExecutable   map[executableIdentity]bool
 	embeddedSDKActivationByExecutable map[executableIdentity]bool
+	goOffsetsMu                       sync.Mutex
+	staleGoOffsets                    map[executableIdentity]struct{}
+	goOffsetsMap                      mapKeyPutDeleter
+	goRuntimeMetricTargetMap          mapKeyPutDeleter
 	goAutoSDKTargetsMu                sync.Mutex
 	goAutoSDKTargets                  map[app.PID]goAutoSDKTargetState
 	goAutoSDKActivationProbes         map[goAutoSDKExecutableKey]goAutoSDKActivationProbe
@@ -522,7 +526,7 @@ func (p *Tracer) constants(eventsRingBufSize uint32) map[string]any {
 		"g_bpf_probe_write_user_enabled": p.supportsContextPropagation(),
 		"g_go_h2_write_fail_step":        goH2WriteFailStepForTest,
 		"wakeup_data_bytes":              ebpfcommon.WakeupDataBytes(p.cfg.WakeupLen, unsafe.Sizeof(ebpfcommon.HTTPRequestTrace{}), eventsRingBufSize),
-		"ringbuf_metrics_enabled":        p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics),
+		"ringbuf_metrics_enabled":        p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics) && p.metrics.BpfInternalMetricsScrapeInterval() > 0,
 		"disable_black_box_cp":           blackBoxCP,
 		"attr_type_invalid":              uint64(attribute.INVALID),
 		"attr_type_bool":                 uint64(attribute.BOOL),
@@ -770,14 +774,12 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 
 	ino := fileInfo.Ino()
 	identity := goOffsetsMapKey(fileInfo)
-	if err := p.bpfObjects.GoOffsetsMap.Put(identity, offTable); err != nil {
+	if err := p.putGoOffsets(identity, offTable); err != nil {
 		p.log.Error("setting Go offsets map failed",
 			"pid", fileInfo.Pid(),
 			"ino", ino,
 			"error", err)
-		delete(p.goAutoSDKActivationByExecutable, identity)
-		delete(p.embeddedSDKActivationByExecutable, identity)
-		delete(p.goRuntimeMetricMaskByExecutable, identity)
+		p.clearExecutableState(identity)
 		p.deleteRuntimeMetricTarget(fileInfo.Pid(), fileInfo.Ns())
 		return
 	}
@@ -788,6 +790,122 @@ func (p *Tracer) RegisterOffsets(fileInfo *exec.FileInfo, offsets *goexec.Offset
 	} else {
 		p.deleteRuntimeMetricTarget(fileInfo.Pid(), fileInfo.Ns())
 	}
+}
+
+func (p *Tracer) goOffsetsTargetMap() mapKeyPutDeleter {
+	if p.goOffsetsMap != nil {
+		return p.goOffsetsMap
+	}
+	if p.bpfObjects.GoOffsetsMap != nil {
+		return p.bpfObjects.GoOffsetsMap
+	}
+	return nil
+}
+
+func (p *Tracer) runtimeMetricTargetMap() mapKeyPutDeleter {
+	if p.goRuntimeMetricTargetMap != nil {
+		return p.goRuntimeMetricTargetMap
+	}
+	if p.bpfObjects.GoRuntimeMetricTargets != nil {
+		return p.bpfObjects.GoRuntimeMetricTargets
+	}
+	return nil
+}
+
+func (p *Tracer) markGoOffsetsActive(fileInfo *exec.FileInfo) {
+	if p == nil || fileInfo == nil {
+		return
+	}
+	p.goOffsetsMu.Lock()
+	delete(p.staleGoOffsets, goOffsetsMapKey(fileInfo))
+	p.goOffsetsMu.Unlock()
+}
+
+func (p *Tracer) markGoOffsetsStale(dev, ino uint64) {
+	if p == nil {
+		return
+	}
+	identity := executableIdentity{Dev: kernelDeviceNumber(dev), Ino: ino}
+	p.goOffsetsMu.Lock()
+	if p.staleGoOffsets == nil {
+		p.staleGoOffsets = map[executableIdentity]struct{}{}
+	}
+	p.staleGoOffsets[identity] = struct{}{}
+	p.goOffsetsMu.Unlock()
+}
+
+func (p *Tracer) drainStaleGoOffsetsLocked(offsetsMap mapKeyPutDeleter) {
+	for stale := range p.staleGoOffsets {
+		err := offsetsMap.Delete(stale)
+		if err == nil || errors.Is(err, ebpf.ErrKeyNotExist) {
+			delete(p.staleGoOffsets, stale)
+		}
+	}
+}
+
+func (p *Tracer) drainStaleGoOffsets() {
+	if p == nil {
+		return
+	}
+	offsetsMap := p.goOffsetsTargetMap()
+	if offsetsMap == nil {
+		return
+	}
+	p.goOffsetsMu.Lock()
+	defer p.goOffsetsMu.Unlock()
+	p.drainStaleGoOffsetsLocked(offsetsMap)
+}
+
+func (p *Tracer) deleteGoOffsets(identity executableIdentity) {
+	if p == nil {
+		return
+	}
+	p.goOffsetsMu.Lock()
+	defer p.goOffsetsMu.Unlock()
+
+	delete(p.staleGoOffsets, identity)
+	if offsetsMap := p.goOffsetsTargetMap(); offsetsMap != nil {
+		_ = offsetsMap.Delete(identity)
+	}
+}
+
+func (p *Tracer) clearExecutableState(identity executableIdentity) {
+	delete(p.goChannelOffsetsByExecutable, identity)
+	delete(p.goAutoSDKActivationByExecutable, identity)
+	delete(p.embeddedSDKActivationByExecutable, identity)
+	delete(p.goRuntimeMetricMaskByExecutable, identity)
+	delete(p.goRuntimeGCGoalSourceByExecutable, identity)
+}
+
+func (p *Tracer) RollbackUncommittedOffsets(fileInfo *exec.FileInfo, keepExecutable bool) {
+	if p == nil || fileInfo == nil {
+		return
+	}
+
+	if !keepExecutable {
+		identity := goOffsetsMapKey(fileInfo)
+		p.deleteGoOffsets(identity)
+		p.clearExecutableState(identity)
+	}
+
+	if p.pidsFilter == nil || !slices.Contains(p.pidsFilter.ProcPIDs(ebpfcommon.PIDTypeGo), fileInfo.Pid()) {
+		p.deleteRuntimeMetricTarget(fileInfo.Pid(), fileInfo.Ns())
+	}
+}
+
+func (p *Tracer) putGoOffsets(identity executableIdentity, offTable BpfOffTableT) error {
+	offsetsMap := p.goOffsetsTargetMap()
+	if offsetsMap == nil {
+		return errors.New("go offsets map is unavailable")
+	}
+
+	p.goOffsetsMu.Lock()
+	defer p.goOffsetsMu.Unlock()
+
+	delete(p.staleGoOffsets, identity)
+	p.drainStaleGoOffsetsLocked(offsetsMap)
+
+	return offsetsMap.Put(identity, offTable)
 }
 
 func setFramerPaddingOffset(
@@ -1554,7 +1672,8 @@ func hasBaseGoRuntimeMetrics(mask uint64) bool {
 // into BPF. Offsets stay inode-scoped in go_offsets_map, but these addresses
 // are process-scoped for PIE/ASLR and must follow the PID allow lifecycle.
 func (p *Tracer) registerRuntimeMetricTarget(pid app.PID, ns uint32, fileInfo *exec.FileInfo) {
-	if !p.runtimeMetricsEnabled || fileInfo == nil || p.bpfObjects.GoRuntimeMetricTargets == nil {
+	targetMap := p.runtimeMetricTargetMap()
+	if !p.runtimeMetricsEnabled || fileInfo == nil || targetMap == nil {
 		return
 	}
 	identity := goOffsetsMapKey(fileInfo)
@@ -1596,7 +1715,7 @@ func (p *Tracer) registerRuntimeMetricTarget(pid app.PID, ns uint32, fileInfo *e
 		Generation:                   generation,
 	}
 
-	if err := p.bpfObjects.GoRuntimeMetricTargets.Put(pidInfo, value); err != nil {
+	if err := targetMap.Put(pidInfo, value); err != nil {
 		p.log.Debug("setting runtime metric target failed", "pid", pid, "ino", fileInfo.Ino(), "error", err)
 		return
 	}
@@ -1660,8 +1779,8 @@ func (p *Tracer) deleteRuntimeMetricTarget(pid app.PID, ns uint32) {
 		}
 	}
 
-	if p.bpfObjects.GoRuntimeMetricTargets != nil {
-		_ = p.bpfObjects.GoRuntimeMetricTargets.Delete(pidInfo)
+	if targetMap := p.runtimeMetricTargetMap(); targetMap != nil {
+		_ = targetMap.Delete(pidInfo)
 	}
 	delete(p.runtimeMetricTargetKeys, runtimeMetricTargetKey{pid: pid, ns: ns})
 }
@@ -1703,6 +1822,7 @@ func (p *Tracer) AddCloser(c ...io.Closer) {
 }
 
 func (p *Tracer) Close() error {
+	p.drainStaleGoOffsets()
 	p.closeExceptionResources()
 	return ebpfcommon.CloseResources(append(p.closers, &p.bpfObjects)...)
 }

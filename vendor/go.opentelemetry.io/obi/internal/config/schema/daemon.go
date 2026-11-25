@@ -114,5 +114,6 @@ type DaemonPrometheusTelemetry struct {
 	AllowServiceGraphSelfReferences bool     `yaml:"allow_service_graph_self_references"`
 	SpanMetricsServiceCacheSize     int      `yaml:"span_metrics_service_cache_size"`
 	ExtraResourceAttributes         []string `yaml:"extra_resource_attributes"`
-	ExtraSpanResourceAttributes     []string `yaml:"extra_span_resource_attributes"`
+	// Deprecated: select span metric dimensions with capture.attributes.select.
+	ExtraSpanResourceAttributes []string `yaml:"extra_span_resource_attributes"`
 }

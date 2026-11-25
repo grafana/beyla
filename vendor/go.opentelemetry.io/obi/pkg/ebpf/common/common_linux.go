@@ -170,6 +170,8 @@ const (
 	KSymPipeWrite     KSym = "pipe_write"
 	KSymAnonPipeWrite KSym = "anon_pipe_write"
 	KSymDoWritev      KSym = "do_writev"
+	// removed in kernel 6.5
+	KSymDoTCPSendPages KSym = "do_tcp_sendpages"
 
 	// Stable symbol, used for testing
 	KSymTCPSendmsg KSym = "tcp_sendmsg"
@@ -183,11 +185,12 @@ var kSymsCache = struct {
 	err  error
 }{
 	syms: map[KSym]bool{
-		KSymPipeWrite:     false,
-		KSymAnonPipeWrite: false,
-		KSymDoWritev:      false,
-		KSymTCPSendmsg:    false,
-		KSymTestDummy:     false,
+		KSymPipeWrite:      false,
+		KSymAnonPipeWrite:  false,
+		KSymDoWritev:       false,
+		KSymDoTCPSendPages: false,
+		KSymTCPSendmsg:     false,
+		KSymTestDummy:      false,
 	},
 }
 

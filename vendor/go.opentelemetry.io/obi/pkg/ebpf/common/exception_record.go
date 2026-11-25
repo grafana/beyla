@@ -23,7 +23,7 @@ import (
 
 // ExceptionPayloadDecoder fills the exception fields of an event from the
 // runtime-specific payload that follows the record header.
-type ExceptionPayloadDecoder func(hdr *BpfExceptionEventHeaderT, payload []byte, event *exceptions.Event) error
+type ExceptionPayloadDecoder func(payload []byte, event *exceptions.Event) error
 
 // exceptionPayloadDecoders holds one decoder per runtime that emits
 // exception_events records.
@@ -74,7 +74,7 @@ func ReadExceptionRecord(record *ringbuf.Record, filter ServiceFilter) (exceptio
 		event.TraceFlags = trace.TraceFlags(hdr.Tp.Flags)
 	}
 
-	if err := decode(&hdr, record.RawSample[exceptionHeaderSize:payloadEnd], &event); err != nil {
+	if err := decode(record.RawSample[exceptionHeaderSize:payloadEnd], &event); err != nil {
 		return exceptions.Event{}, true, err
 	}
 

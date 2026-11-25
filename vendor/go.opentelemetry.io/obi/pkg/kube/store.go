@@ -17,12 +17,12 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
-	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/container"
 	"go.opentelemetry.io/obi/pkg/internal/helpers/maps"
 	"go.opentelemetry.io/obi/pkg/internal/kube"
+	"go.opentelemetry.io/obi/pkg/internal/otelenv"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/informer"
 	"go.opentelemetry.io/obi/pkg/kube/kubecache/meta"
 )
@@ -200,9 +200,9 @@ func (s *Store) cacheResourceMetadata(meta *informer.ObjectMeta) *kube.CachedObj
 		if len(cnt.Env) == 0 {
 			continue
 		}
-		attributes.ParseOTELResourceVariable(cnt.Env[EnvResourceAttributes], func(k, v string) {
+		otelenv.ParseKeyValues(cnt.Env[EnvResourceAttributes], func(k, v string) {
 			if v != "" && !strings.HasPrefix(v, "$") {
-				com.OTELResourceMeta[attr.Name(k)] = v
+				com.OTELResourceMeta[attr.Name(k)] = otelenv.DecodeValue(v)
 			}
 		})
 		if val := cnt.Env[EnvServiceName]; val != "" && !strings.HasPrefix(val, "$") {
@@ -604,7 +604,7 @@ func (s *Store) nameFromResourceAttrs(variable string, c *informer.ContainerInfo
 		collect := func(k string, v string) {
 			allVars[k] = v
 		}
-		attributes.ParseOTELResourceVariable(resourceVars, collect)
+		otelenv.ParseKeyValues(resourceVars, collect)
 		if result, ok := allVars[variable]; ok {
 			return result, true
 		}
@@ -640,7 +640,7 @@ func (s *Store) serviceNameFromEnv(containers iter.Seq[*informer.ContainerInfo],
 				return serviceName, isValidServiceName(serviceName)
 			}
 			if serviceName, ok := s.nameFromResourceAttrs(serviceNameKey, c); ok {
-				return serviceName, isValidServiceName(serviceName)
+				return otelenv.DecodeValue(serviceName), isValidServiceName(serviceName)
 			}
 		}
 	}
@@ -652,7 +652,7 @@ func (s *Store) serviceNamespaceFromEnv(containers iter.Seq[*informer.ContainerI
 	for c := range containers {
 		if containerName == "" || c.Name == containerName {
 			if namespace, ok := s.nameFromResourceAttrs(serviceNamespaceKey, c); ok {
-				return namespace, isValidServiceName(namespace)
+				return otelenv.DecodeValue(namespace), isValidServiceName(namespace)
 			}
 		}
 	}

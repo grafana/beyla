@@ -97,7 +97,7 @@ var pythonFrameSize = int(unsafe.Sizeof(BpfPythonExceptionPayloadT{}.Frames[0]))
 
 // decodePythonException reads the type name and the frames' code objects from
 // the raising process and formats a CPython-style traceback.
-func decodePythonException(_ *BpfExceptionEventHeaderT, payload []byte, event *exceptions.Event) error {
+func decodePythonException(payload []byte, event *exceptions.Event) error {
 	record, err := parsePythonExceptionPayload(payload)
 	if err != nil {
 		return err

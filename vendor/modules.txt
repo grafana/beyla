@@ -552,6 +552,9 @@ github.com/hashicorp/golang-lru/v2
 github.com/hashicorp/golang-lru/v2/expirable
 github.com/hashicorp/golang-lru/v2/internal
 github.com/hashicorp/golang-lru/v2/simplelru
+# github.com/ianlancetaylor/demangle v0.0.0-20260505044615-1ff4bf46051f
+## explicit; go 1.13
+github.com/ianlancetaylor/demangle
 # github.com/invopop/jsonschema v0.13.0
 ## explicit; go 1.18
 github.com/invopop/jsonschema
@@ -1039,6 +1042,7 @@ go.opentelemetry.io/obi/internal/config/convert
 go.opentelemetry.io/obi/internal/config/schema
 go.opentelemetry.io/obi/internal/goabi
 go.opentelemetry.io/obi/internal/goversion
+go.opentelemetry.io/obi/internal/rustexec
 go.opentelemetry.io/obi/pkg/appolly
 go.opentelemetry.io/obi/pkg/appolly/app
 go.opentelemetry.io/obi/pkg/appolly/app/request
@@ -1130,6 +1134,7 @@ go.opentelemetry.io/obi/pkg/internal/netolly/flow/transport
 go.opentelemetry.io/obi/pkg/internal/netolly/ifaces
 go.opentelemetry.io/obi/pkg/internal/nodejs
 go.opentelemetry.io/obi/pkg/internal/nodejstools
+go.opentelemetry.io/obi/pkg/internal/otelenv
 go.opentelemetry.io/obi/pkg/internal/phptools
 go.opentelemetry.io/obi/pkg/internal/pipe
 go.opentelemetry.io/obi/pkg/internal/pipe/cidr

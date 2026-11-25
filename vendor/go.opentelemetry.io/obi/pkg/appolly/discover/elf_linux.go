@@ -83,6 +83,7 @@ func findExecElf(p *services.ProcessInfo, svcID *svc.Attrs) (_ *exec.FileInfo, r
 		StartTime:      startTime,
 		Dev:            stat.Dev,
 		Ino:            stat.Ino,
+		ChangeTime:     stat.Ctim.Nano(),
 		Ns:             ns,
 	})
 	fi.ApplyEnvVariables(envVars)

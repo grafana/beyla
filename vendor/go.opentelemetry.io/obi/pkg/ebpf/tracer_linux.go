@@ -467,10 +467,19 @@ func (pt *ProcessTracer) attachExecutable(exe *link.Executable, exePath string, 
 		processName: ie.FileInfo.ExecutableName(),
 	}
 	committed := false
+	offsetsRegistered := false
 	defer func() {
 		// an uncommitted instrumenter owns probes nobody else will ever close
 		if !committed {
 			pt.unlinkInstrumenter(&i)
+			if offsetsRegistered {
+				keepExecutable := pt.Instrumentables[i.key] != nil
+				for _, p := range pt.Programs {
+					if rb, ok := p.(uncommittedOffsetsRollbacker); ok {
+						rb.RollbackUncommittedOffsets(ie.FileInfo, keepExecutable)
+					}
+				}
+			}
 		}
 	}()
 
@@ -482,6 +491,7 @@ func (pt *ProcessTracer) attachExecutable(exe *link.Executable, exePath string, 
 	for _, p := range pt.Programs {
 		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
 	}
+	offsetsRegistered = true
 
 	if uprobeKey, ok := pt.resolveUprobeTarget(exe, exePath, ie.Offsets); ok {
 		i.uprobeKey = uprobeKey
@@ -638,6 +648,12 @@ func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo, generation uint64
 type executableScopedTracer interface {
 	RegisterExecutable(*exec.FileInfo)
 	UnregisterExecutable(dev, ino uint64)
+}
+
+// uncommittedOffsetsRollbacker cleans up BPF map state written during
+// RegisterOffsets if probe attachment fails before the executable is committed.
+type uncommittedOffsetsRollbacker interface {
+	RollbackUncommittedOffsets(fileInfo *exec.FileInfo, keepExecutable bool)
 }
 
 func (pt *ProcessTracer) removeInstrumenter(key ExecutableKey, i *instrumenter) {

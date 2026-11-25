@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sys/unix"
 
 	"go.opentelemetry.io/obi/pkg/appolly/app"
@@ -19,10 +20,10 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/fastelf"
 )
 
-func FindProcLanguage(pid app.PID) svc.InstrumentableType {
+func FindProcLanguage(pid app.PID) (svc.InstrumentableType, error) {
 	maps, err := FindLibMaps(pid)
 	if err != nil {
-		return svc.InstrumentableGeneric
+		return svc.InstrumentableGeneric, err
 	}
 
 	// We first check for the languages as cheaply as possible when
@@ -30,7 +31,7 @@ func FindProcLanguage(pid app.PID) svc.InstrumentableType {
 	for _, m := range maps {
 		t := instrumentableFromModuleMapSharedLib(m.Pathname)
 		if t != svc.InstrumentableGeneric {
-			return t
+			return t, nil
 		}
 	}
 
@@ -38,71 +39,86 @@ func FindProcLanguage(pid app.PID) svc.InstrumentableType {
 	// before resorting to discovery by path or environment variables.
 	// For example, a Go application can be called 'node' and we must
 	// not identify this application as Node.js.
-	filePath, err := resolveProcBinary(pid)
-	if err != nil {
-		return svc.InstrumentableGeneric
-	}
-
-	t := findLanguageFromElf(filePath)
-
+	exePath := fmt.Sprintf("/proc/%d/exe", pid)
+	t, elfErr := findLanguageFromElf(exePath)
 	if t != svc.InstrumentableGeneric {
-		return t
+		return t, nil
 	}
 
 	for _, m := range maps {
 		t := instrumentableFromModuleMap(m.Pathname)
 		if t != svc.InstrumentableGeneric {
-			return t
+			return t, nil
 		}
 	}
 
+	filePath, err := os.Readlink(exePath)
+	if err != nil {
+		return svc.InstrumentableGeneric, fmt.Errorf("failed to read process binary: %w", err)
+	}
 	t = instrumentableFromPath(filePath)
 	if t != svc.InstrumentableGeneric {
-		return t
+		return t, nil
 	}
 
 	// Last resort to tell Generic from C++ (and maybe others in the future)
 	for _, m := range maps {
 		t := instrumentableLastResort(m.Pathname)
 		if t != svc.InstrumentableGeneric {
-			return t
+			return t, nil
 		}
 	}
 
-	return svc.InstrumentableGeneric
+	return svc.InstrumentableGeneric, elfErr
 }
 
-func resolveProcBinary(pid app.PID) (string, error) {
-	exePath := fmt.Sprintf("/proc/%d/exe", pid)
-
-	realPath, err := os.Readlink(exePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read process binary: %w", err)
-	}
-
-	return fmt.Sprintf("/proc/%d/root%s", pid, realPath), nil
+type elfLanguageKey struct {
+	device     uint64
+	inode      uint64
+	changeTime int64
 }
 
-func findLanguageFromElf(filePath string) (result svc.InstrumentableType) {
+// Only ELF evidence is shared across PIDs. The mapped libraries and path
+// heuristics are evaluated by FindProcLanguage for each process.
+var elfLanguages, _ = lru.New[elfLanguageKey, svc.InstrumentableType](1000)
+
+func findLanguageFromElf(filePath string) (result svc.InstrumentableType, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Warn("panic while parsing ELF file", "file", filePath, "panic", r)
 			result = svc.InstrumentableGeneric
+			err = fmt.Errorf("parsing ELF file %s: %v", filePath, r)
 		}
 	}()
 
-	ctx, err := fastelf.NewElfContextFromFile(filePath)
+	file, err := os.Open(filePath)
 	if err != nil {
-		return svc.InstrumentableGeneric
+		return svc.InstrumentableGeneric, err
+	}
+	defer file.Close()
+
+	var stat unix.Stat_t
+	if err := unix.Fstat(int(file.Fd()), &stat); err != nil {
+		return svc.InstrumentableGeneric, err
+	}
+	key := elfLanguageKey{device: stat.Dev, inode: stat.Ino, changeTime: stat.Ctim.Nano()}
+	if lang, ok := elfLanguages.Get(key); ok {
+		return lang, nil
 	}
 
+	ctx, err := fastelf.NewElfContextFromFileHandle(file, stat.Size)
+	if err != nil {
+		return svc.InstrumentableGeneric, err
+	}
 	defer ctx.Close()
 
 	if ctx.HasSection(".gopclntab") {
-		return svc.InstrumentableGolang
+		result = svc.InstrumentableGolang
+	} else {
+		result = matchExeSymbols(ctx)
 	}
-
-	return matchExeSymbols(ctx)
+	elfLanguages.Add(key, result)
+	return result, nil
 }
 
 func FindExeSymbols(f *elf.File, symbolNames []string, types ...elf.SymType) (map[string]Sym, error) {

@@ -1,5 +1,7 @@
 <img src="docs/sources/assets/logo.png" height=226 alt="Grafana Beyla logo">
 
+<!-- Temporary change to verify PR check discovery. -->
+
 # Grafana Beyla
 
 Open source zero-code automatic instrumentation with eBPF and OpenTelemetry.

@@ -132,6 +132,7 @@ const (
 	CcTLSPos
 	CcTLSVendoredPos
 	ScConnPos
+	ScConnInternalPos
 	CRwcPos
 	CTlsPos
 	TextReaderRPos
@@ -479,10 +480,11 @@ var structMembers = map[string]structInfo{
 			"Fields": MetaHeadersFrameFieldsPtrPos,
 		},
 	},
+	// own constant: the table also answers for the absent vendored serverConn under Go 1.27, with another offset
 	"net/http/internal/http2.serverConn": {
 		lib: "go",
 		fields: map[string]GoOffset{
-			"conn": ScConnPos,
+			"conn": ScConnInternalPos,
 		},
 	},
 	"net.TCPConn": {

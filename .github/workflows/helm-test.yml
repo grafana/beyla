@@ -143,3 +143,25 @@ jobs:
         env:
           TEST_DIRECTORY: "source/${{ env.INTEGRARION_TESTS_DIR }}/${{ matrix.test }}"
           DELETE_CLUSTER: true
+
+  required-check:
+    name: Beyla Helm CI
+    if: always()
+    needs: [run-unit-tests, lint-helm-chart, list-integration-tests, run-integration-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Report required-check result
+        env:
+          UNIT_RESULT: ${{ needs.run-unit-tests.result }}
+          LINT_RESULT: ${{ needs.lint-helm-chart.result }}
+          LIST_RESULT: ${{ needs.list-integration-tests.result }}
+          TESTS: ${{ needs.list-integration-tests.outputs.tests }}
+          INTEGRATION_RESULT: ${{ needs.run-integration-tests.result }}
+        run: |
+          if [[ "${UNIT_RESULT}" == success && "${LINT_RESULT}" == success && "${LIST_RESULT}" == success && ( ( "${TESTS}" == '[]' && "${INTEGRATION_RESULT}" == skipped ) || ( "${TESTS}" != '[]' && "${INTEGRATION_RESULT}" == success ) ) ]]; then
+            exit 0
+          fi
+          echo "Unexpected required-check results: unit=${UNIT_RESULT}, lint=${LINT_RESULT}, list=${LIST_RESULT}, tests=${TESTS}, integration=${INTEGRATION_RESULT}" >&2
+          exit 1

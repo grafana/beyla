@@ -1,0 +1,44 @@
+name: Required check scope
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: Newline-delimited paths that make this check applicable
+        required: true
+        type: string
+    outputs:
+      applicable:
+        description: Whether the required check applies to this change
+        value: ${{ jobs.scope.outputs.applicable }}
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      applicable: ${{ steps.classify.outputs.applicable }}
+    steps:
+      - name: Checkout pull request merge snapshot
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+          submodules: false
+      - name: Classify changed paths
+        id: classify
+        env:
+          PATH_PATTERNS: ${{ inputs.paths }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo 'applicable=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 scripts/ci/required-check-scope.py --patterns "$PATH_PATTERNS"

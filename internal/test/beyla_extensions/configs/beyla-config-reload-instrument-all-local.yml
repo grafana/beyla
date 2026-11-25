@@ -1,0 +1,11 @@
+discovery:
+  instrument_all_local: true
+  poll_interval: 200ms
+  min_process_age: 0s
+otel_traces_export:
+  endpoint: http://jaeger:4318
+  batch_max_size: 1
+  sampler:
+    name: always_on
+ebpf:
+  batch_timeout: 10ms

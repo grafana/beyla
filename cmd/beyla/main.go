@@ -260,5 +260,8 @@ func startConfigRefresh(ctx context.Context, config *beyla.Config, configPath st
 		go configrefresh.Watch(ctx, configPath, configData, refresher)
 	}
 
-	return []components.Option{components.WithCriteriaUpdater(refresher.Updater())}
+	if updater := refresher.Updater(); updater != nil {
+		return []components.Option{components.WithCriteriaUpdater(updater)}
+	}
+	return nil
 }

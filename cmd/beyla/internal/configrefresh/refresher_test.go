@@ -161,23 +161,33 @@ func TestRefresher_InstrumentAllLocalSampling(t *testing.T) {
   exclude_instrument:
     - exe_path: "*debug*"
 `)
-	refresher := newAcceptingRefresher(t, initial)
-	updates := refresher.Updater().Updates()
-	startupSampler := *updates.Sampler()
+	cfg := startupConfig(t, initial)
+	refresher, err := New(cfg, initial)
+	require.NoError(t, err)
+	require.Nil(t, refresher.Updater())
+	require.NotNil(t, refresher.setSampler)
+	require.Same(t, cfg.LocalPIDSelector(), cfg.LocalPIDSelector())
+	var applied []services.SamplerConfig
+	setSampler := refresher.setSampler
+	refresher.setSampler = func(s services.SamplerConfig) {
+		applied = append(applied, s)
+		setSampler(s)
+	}
 	ratio := bytes.Replace(initial, []byte("  endpoint:"), []byte("  sampler: {name: traceidratio, arg: \"0.25\"}\n  endpoint:"), 1)
 	require.NoError(t, refresher.Refresh(t.Context(), ratio))
-	require.Equal(t, services.SamplerConfig{Name: services.SamplerTraceIDRatio, Arg: "0.25"}, *updates.Sampler())
 
 	// A rejected mixed edit cannot reset the sampler to the startup default.
 	editedExclusion := bytes.Replace(initial, []byte("*debug*"), []byte("*other*"), 1)
 	require.ErrorContains(t, refresher.Refresh(t.Context(), editedExclusion), "discovery.exclude_instrument")
-	require.Equal(t, "0.25", updates.Sampler().Arg)
 
 	newRatio := bytes.Replace(ratio, []byte("0.25"), []byte("0.75"), 1)
 	require.NoError(t, refresher.Refresh(t.Context(), newRatio))
-	require.Equal(t, "0.75", updates.Sampler().Arg)
 	require.NoError(t, refresher.Refresh(t.Context(), initial))
-	require.Equal(t, startupSampler, *updates.Sampler())
+	require.Equal(t, []services.SamplerConfig{
+		{Name: services.SamplerTraceIDRatio, Arg: "0.25"},
+		{Name: services.SamplerTraceIDRatio, Arg: "0.75"},
+		cfg.Traces.SamplerConfig,
+	}, applied)
 }
 
 func TestNew_SurveyOnly(t *testing.T) {

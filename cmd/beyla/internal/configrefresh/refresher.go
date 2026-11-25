@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
@@ -19,6 +20,7 @@ type Refresher struct {
 	environment map[string]string
 	startup     *beyla.Config
 	updater     *obiDiscover.CriteriaUpdater
+	setSampler  func(services.SamplerConfig)
 }
 
 // New returns a Refresher for a Beyla running cfg, which was loaded from data, or an error
@@ -39,7 +41,14 @@ func New(cfg *beyla.Config, data []byte) (*Refresher, error) {
 	}
 
 	r.startup = startup
-	r.updater = obiDiscover.NewCriteriaUpdater(startup.AsOBI())
+	if cfg.Discovery.InstrumentAllLocal {
+		selector := obiDiscover.NewDynamicSelector()
+		selector.SetTraceSampler(cfg.Traces.SamplerConfig)
+		cfg.SetLocalPIDSelector(selector)
+		r.setSampler = selector.SetTraceSampler
+	} else {
+		r.updater = obiDiscover.NewCriteriaUpdater(startup.AsOBI())
+	}
 	return r, nil
 }
 
@@ -53,7 +62,7 @@ func environment() map[string]string {
 	return variables
 }
 
-// Updater must be passed to the application pipeline, which then applies the refreshes.
+// Updater supplies the criteria updater for static discovery. Dynamic PID selection owns its sampler.
 func (r *Refresher) Updater() *obiDiscover.CriteriaUpdater { return r.updater }
 
 // Load loads a complete configuration from data, with the environment that Beyla started with.
@@ -61,7 +70,7 @@ func (r *Refresher) Load(data []byte) (*beyla.Config, error) {
 	return beyla.LoadRefreshConfig(data, r.environment)
 }
 
-// Apply waits until the running matcher accepts or rejects the discovery and sampling settings of cfg.
+// Apply sends compatible discovery and sampling changes to the running selector.
 // cfg must not be modified afterwards.
 func (r *Refresher) Apply(ctx context.Context, cfg *beyla.Config) error {
 	if changed := r.startup.ChangedSettings(cfg); len(changed) > 0 {
@@ -69,6 +78,13 @@ func (r *Refresher) Apply(ctx context.Context, cfg *beyla.Config) error {
 			strings.Join(changed, ", "))
 	}
 
+	if r.setSampler != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		r.setSampler(cfg.Traces.SamplerConfig)
+		return nil
+	}
 	return r.updater.Update(ctx, cfg.AsOBI())
 }
 

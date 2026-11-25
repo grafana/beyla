@@ -16,6 +16,8 @@ YAML section: `otel_traces_export.sampler`
 
 You can configure the component under the `otel_traces_export.sampler` section of your YAML configuration or via environment variables.
 
+When Beyla watches a configuration file, you can change the sampler kind or ratio for running services. This includes services discovered with `discovery.instrument_all_local`. Environment variable overrides use the values from startup. Refer to [changing discovery criteria without restarting](../service-discovery/#change-the-discovery-criteria-without-restarting).
+
 ```yaml
 otel_traces_export:
   sampler:

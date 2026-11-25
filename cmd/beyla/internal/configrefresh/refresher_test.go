@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/pkg/appolly/services"
+
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
@@ -127,14 +129,14 @@ func TestRefresher_RejectsOtherChanges(t *testing.T) {
 		{
 			name:   "exporter",
 			config: bytes.Replace(initial, []byte("localhost:4318"), []byte("collector:4318"), 1),
-			error:  "only discovery selection criteria can be refreshed",
+			error:  "restart Beyla to apply changes to otel_traces_export.endpoint",
 		},
 		{
 			name: "survey criteria",
 			config: testConfig(portSelection(8080) + `  survey:
     - exe_path: "*survey*"
 `),
-			error: "only discovery selection criteria can be refreshed",
+			error: "restart Beyla to apply changes to discovery.survey",
 		},
 		{
 			name:   "service settings of an existing predicate",
@@ -154,30 +156,35 @@ func TestRefresher_RejectsOtherChanges(t *testing.T) {
 	}
 }
 
-func TestNew_UnsupportedPipelines(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		config []byte
-		error  string
-	}{
-		{
-			name: "instrument all local",
-			config: testConfig(`  instrument_all_local: true
-`),
-			error: "instrument_all_local",
-		},
-		{
-			name: "survey only",
-			config: testConfig(`  survey:
+func TestRefresher_InstrumentAllLocalSampling(t *testing.T) {
+	initial := testConfig(`  instrument_all_local: true
+  exclude_instrument:
+    - exe_path: "*debug*"
+`)
+	refresher := newAcceptingRefresher(t, initial)
+	updates := refresher.Updater().Updates()
+	startupSampler := *updates.Sampler()
+	ratio := bytes.Replace(initial, []byte("  endpoint:"), []byte("  sampler: {name: traceidratio, arg: \"0.25\"}\n  endpoint:"), 1)
+	require.NoError(t, refresher.Refresh(t.Context(), ratio))
+	require.Equal(t, services.SamplerConfig{Name: services.SamplerTraceIDRatio, Arg: "0.25"}, *updates.Sampler())
+
+	// A rejected mixed edit cannot reset the sampler to the startup default.
+	editedExclusion := bytes.Replace(initial, []byte("*debug*"), []byte("*other*"), 1)
+	require.ErrorContains(t, refresher.Refresh(t.Context(), editedExclusion), "discovery.exclude_instrument")
+	require.Equal(t, "0.25", updates.Sampler().Arg)
+
+	newRatio := bytes.Replace(ratio, []byte("0.25"), []byte("0.75"), 1)
+	require.NoError(t, refresher.Refresh(t.Context(), newRatio))
+	require.Equal(t, "0.75", updates.Sampler().Arg)
+	require.NoError(t, refresher.Refresh(t.Context(), initial))
+	require.Equal(t, startupSampler, *updates.Sampler())
+}
+
+func TestNew_SurveyOnly(t *testing.T) {
+	data := testConfig(`  survey:
     - exe_path: "*survey*"
-`),
-			error: "not enabled at startup",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := New(startupConfig(t, tc.config), tc.config)
-			require.ErrorContains(t, err, tc.error)
-			assert.ErrorContains(t, err, "restart Beyla")
-		})
-	}
+`)
+	_, err := New(startupConfig(t, data), data)
+	require.ErrorContains(t, err, "not enabled at startup")
+	assert.ErrorContains(t, err, "restart Beyla")
 }

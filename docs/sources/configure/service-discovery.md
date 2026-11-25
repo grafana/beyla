@@ -444,7 +444,7 @@ a part of an encompassing inclusion criteria.
 
 ## Change the discovery criteria without restarting
 
-When Beyla starts with a configuration file, through `-config` or `BEYLA_CONFIG_PATH`, it reads the file every second and applies changes to the discovery selection criteria without restarting.
+When Beyla starts with application instrumentation and a configuration file, through `-config` or `BEYLA_CONFIG_PATH`, it reads the file every second and applies compatible discovery and trace sampling changes without restarting.
 Beyla also detects files replaced by editors and Kubernetes ConfigMap updates. In containers, mount the directory that contains the file, so Beyla sees the replaced files.
 A change applies once two consecutive reads return the same contents, so Beyla doesn't apply a file in the middle of a write.
 
@@ -452,18 +452,21 @@ You can change the following settings at runtime:
 
 - The `instrument`, `exclude_instrument`, and `default_exclude_instrument` sections of `discovery`, and their deprecated `services`, `exclude_services`, and `default_exclude_services` equivalents.
 - The deprecated `open_port`, `executable_name`, and `target_pids` settings.
+- The global trace sampler in `otel_traces_export.sampler` and the `sampler` on an individual instrumented service definition. You can change the sampler kind or ratio. Removing a service override restores the last matching rule with a sampler, or the global sampler if none applies.
 
-Beyla re-evaluates the running processes: it instruments the newly selected processes and stops instrumenting the processes that are no longer selected. Processes that remain selected keep their instrumentation.
+Beyla re-evaluates running processes when discovery changes. It applies the new sampler to processes that stay selected and to processes it instruments later.
+
+With `discovery.instrument_all_local`, you can change the global trace sampler while Beyla continues discovering local processes. This also works before the first process is selected. Changing local discovery exclusions requires a restart.
 
 Beyla logs an error that names the changed settings, and keeps running the previous configuration, when an edit:
 
 - Changes any other setting, including exporters, `survey`, and `instrument_all_local`.
-- Changes the name, namespace, sampler, routes, exports, or metric features of an existing definition, or gives an already selected process different service settings.
+- Changes the name, namespace, routes, exports, or metric features of an existing definition, or changes those settings for an already selected process.
 - Adds a definition that requires metric features that weren't enabled at startup.
 
-A later compatible edit still applies. Beyla logs `discovery criteria refreshed` after each applied edit.
+A later compatible edit still applies. Beyla logs `discovery and trace sampling configuration refreshed` after each applied edit.
 
-Beyla doesn't watch its configuration file when it starts with `instrument_all_local`, or without instrumentation criteria, for example in survey-only mode.
+Beyla starts the file watcher when application instrumentation is enabled at startup. Survey-only deployments require a restart to enable application instrumentation.
 
 ## Skip go specific tracers
 

@@ -90,6 +90,7 @@ github.com/grpc-ecosystem/grpc-gateway/v2,https://github.com/grafana/beyla/blob/
 github.com/hashicorp/go-version,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/go-version/LICENSE,MPL-2.0
 github.com/hashicorp/golang-lru/v2,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/golang-lru/v2/LICENSE,MPL-2.0
 github.com/hashicorp/golang-lru/v2/simplelru,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/hashicorp/golang-lru/v2/simplelru/LICENSE_list,BSD-3-Clause
+github.com/ianlancetaylor/demangle,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/ianlancetaylor/demangle/LICENSE,BSD-3-Clause
 github.com/invopop/jsonschema,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/invopop/jsonschema/COPYING,MIT
 github.com/json-iterator/go,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/json-iterator/go/LICENSE,MIT
 github.com/klauspost/compress,https://github.com/grafana/beyla/blob/HEAD/vendor/github.com/klauspost/compress/LICENSE,MIT

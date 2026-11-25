@@ -56,6 +56,10 @@ const goUprobeTargetProbeSymbol = "runtime.newproc1"
 var errTracerStopped = errors.New("the process tracer is shutting down")
 
 func loadSpec(eventContext *common.EBPFEventContext, bundle *common.SpecBundle, otelBPFFSPath string, idx int, cache *btf.Cache) error {
+	if !runtimeAllocatedHashMapsAllowed(common.KernelVersion()) {
+		preallocateHashMaps(bundle.Spec)
+	}
+
 	if err := ebpfconvenience.LoadSpec(
 		bundle.Spec,
 		bundle.Objects,
@@ -239,6 +243,20 @@ func trackedSockCookiesSize(spec *ebpf.CollectionSpec) uint32 {
 func keepTrackedSockCookiesAtLeast(spec *ebpf.CollectionSpec, declared uint32) {
 	if cookies := spec.Maps["tracked_sock_cookies"]; cookies != nil && cookies.MaxEntries < declared {
 		cookies.MaxEntries = declared
+	}
+}
+
+// before 6.1 the verifier WARNs (or rejects, on PREEMPT_RT) tracing programs using non-preallocated hash maps
+func runtimeAllocatedHashMapsAllowed(major, minor int) bool {
+	return major > 6 || (major == 6 && minor >= 1)
+}
+
+func preallocateHashMaps(spec *ebpf.CollectionSpec) {
+	for _, m := range spec.Maps {
+		switch m.Type {
+		case ebpf.Hash, ebpf.PerCPUHash, ebpf.HashOfMaps:
+			m.Flags &^= unix.BPF_F_NO_PREALLOC
+		}
 	}
 }
 

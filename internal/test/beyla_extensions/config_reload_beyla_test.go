@@ -1,6 +1,6 @@
 //go:build ignore
 
-// Beyla variant of OBI's TestConfigReload, which edits a Config v2 document that Beyla can't load.
+// Beyla v1 counterpart to OBI's v2 TestConfigReload.
 // It reuses the helpers of the generated config_reload_test.go.
 // This file is copied to internal/testgenerated/integration/ by generate-obi-tests.sh
 
@@ -81,8 +81,29 @@ func TestConfigReloadV1(t *testing.T) {
 	waitForReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/retained-after-removal")
 	assertNoReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/removed-selection")
 
-	t.Log("reject a sampler change together with a selection change")
+	t.Log("add a service override while disabling global sampling")
+	bothOff := bytes.Replace(both, []byte("name: always_on"), []byte("name: always_off"), 1)
+	override := []byte(configReloadV1FirstDefinition + "\n      sampler: {name: always_on}")
+	replaceReloadConfig(t, configPath, bytes.Replace(bothOff, []byte(configReloadV1FirstDefinition), override, 1))
+	waitForReloadSelection(t, compose, serverPIDs, "server-a", "server-b")
+	waitForReloadSampler(t, compose, "server-a", configReloadAlwaysSampled)
+	waitForReloadSampler(t, compose, "server-b", configReloadNeverSampled)
+	waitForReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/override-on")
+	assertNoReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/global-off")
+
+	t.Log("remove the override and use the current global sampler")
+	replaceReloadConfig(t, configPath, bothOff)
+	waitForReloadSampler(t, compose, "server-a", configReloadNeverSampled)
+	assertNoReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/override-removed")
+
+	replaceReloadConfig(t, configPath, onlyB)
+	waitForReloadSelection(t, compose, serverPIDs, "server-b")
+	waitForReloadSampler(t, compose, "server-b", configReloadAlwaysSampled)
+	waitForReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/global-on")
+
+	t.Log("reject sampler and selection changes combined with a log level change")
 	incompatible := bytes.Replace(initial, []byte("name: always_on"), []byte("name: always_off"), 1)
+	incompatible = bytes.Replace(incompatible, []byte("log_level: info"), []byte("log_level: debug"), 1)
 	replaceReloadConfig(t, configPath, incompatible)
 	waitForBeylaReloadRejection(t, compose)
 	waitForReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/after-rejection")

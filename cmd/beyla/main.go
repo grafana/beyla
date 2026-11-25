@@ -232,7 +232,7 @@ func watchV2Config(version string, cfg *beyla.Config, configPath *string) bool {
 		configPath != nil && *configPath != ""
 }
 
-// startConfigRefresh lets the discovery criteria change without restarting Beyla: through the
+// startConfigRefresh lets discovery and trace sampling change without restarting Beyla through the
 // control socket of a parent process such as Alloy or, without one, by watching the
 // configuration file. It returns the options that connect the refreshes to the pipeline.
 func startConfigRefresh(ctx context.Context, config *beyla.Config, configPath string, configData []byte) []components.Option {
@@ -247,7 +247,7 @@ func startConfigRefresh(ctx context.Context, config *beyla.Config, configPath st
 
 	refresher, err := configrefresh.New(config, configData)
 	if err != nil {
-		slog.Debug("discovery criteria refresh disabled", "reason", err)
+		slog.Debug("configuration refresh disabled", "reason", err)
 		if conn != nil {
 			go configrefresh.Serve(ctx, conn, func(context.Context, []byte) error { return err })
 		}

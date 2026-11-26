@@ -49,6 +49,11 @@ jobs:
       - name: Test mise task contracts
         run: bash scripts/tests/mise-task-contracts.sh
 
+      - name: Test required check path classification
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+
       - name: Test mise action tool profiles
         run: bash .github/actions/setup-mise/test.sh
 

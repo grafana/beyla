@@ -309,14 +309,13 @@ run_parallel() {
   local jobs="$1"
   local worker="$2"
   shift 2
-  local worker_args=("$@")
   local pids=()
   local file
   local running=0
 
   while IFS= read -r file; do
     [[ -n "$file" ]] || continue
-    "$worker" "$file" "${worker_args[@]}" &
+    "$worker" "$file" "$@" &
     pids+=($!)
     running=$((running + 1))
 
@@ -330,10 +329,12 @@ run_parallel() {
     fi
   done
 
-  local pid
-  for pid in "${pids[@]}"; do
-    wait "$pid"
-  done
+  if ((running > 0)); then
+    local pid
+    for pid in "${pids[@]}"; do
+      wait "$pid"
+    done
+  fi
 }
 
 clean() {

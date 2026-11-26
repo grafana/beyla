@@ -95,7 +95,7 @@ go = { version = "1.27.4" }
 golangci-lint = { version = "2.15.0" }
 hk = "2.13.0"
 # Runtime for npm-backed tools (Renovate needs ^24.11.0 || ^26.13.0)
-node = "24.22.3"
+node = "26.13.1"
 rumdl = "v0.3.5"
 actionlint = "1.7.12"
 hadolint = "2.15.1"

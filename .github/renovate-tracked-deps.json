@@ -42,6 +42,12 @@
         "jdx/mise"
       ]
     },
+    ".github/workflows/_required-check-scope.yml": {
+      "github-actions": [
+        "actions/checkout",
+        "ubuntu"
+      ]
+    },
     ".github/workflows/agent_fix-obi.yml": {
       "github-actions": [
         "actions/checkout",
@@ -214,7 +220,8 @@
       "github-actions": [
         "actions/checkout",
         "actions/upload-artifact",
-        "grafana/shared-workflows"
+        "grafana/shared-workflows",
+        "ubuntu"
       ]
     },
     ".github/workflows/pull_request_check_license.yml": {
@@ -266,7 +273,8 @@
         "actions/checkout",
         "docker/build-push-action",
         "docker/setup-buildx-action",
-        "grafana/shared-workflows"
+        "grafana/shared-workflows",
+        "ubuntu"
       ]
     },
     ".github/workflows/release-binaries-base.yml": {

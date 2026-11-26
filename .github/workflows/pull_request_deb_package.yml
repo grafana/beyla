@@ -9,10 +9,6 @@ on:
       - ".github/workflows/pull_request_deb_package.yml"
   pull_request:
     branches: ["main", "release-*"]
-    paths:
-      - "packaging/deb/**"
-      - "pkg/webhook/image/**"
-      - ".github/workflows/pull_request_deb_package.yml"
 
 concurrency:
   group: deb-package-tests-${{ github.head_ref || github.ref }}
@@ -22,8 +18,20 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    uses: ./.github/workflows/_required-check-scope.yml
+    permissions:
+      contents: read
+    with:
+      paths: |
+        packaging/deb/**
+        pkg/webhook/image/**
+        .github/workflows/pull_request_deb_package.yml
+
   package-tests:
     name: Debian package tests
+    needs: scope
+    if: needs.scope.outputs.applicable == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,3 +40,23 @@ jobs:
 
       - name: Test Debian package fixtures
         run: bash packaging/deb/test-package.sh
+
+  required-check:
+    name: Beyla Debian package CI
+    if: always()
+    needs: [scope, package-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Report required-check result
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          APPLICABLE: ${{ needs.scope.outputs.applicable }}
+          TEST_RESULT: ${{ needs.package-tests.result }}
+        run: |
+          if [[ "${SCOPE_RESULT}" == success && ( ( "${APPLICABLE}" == false && "${TEST_RESULT}" == skipped ) || ( "${APPLICABLE}" == true && "${TEST_RESULT}" == success ) ) ]]; then
+            exit 0
+          fi
+          echo "Unexpected required-check results: scope=${SCOPE_RESULT}, applicable=${APPLICABLE}, package-tests=${TEST_RESULT}" >&2
+          exit 1

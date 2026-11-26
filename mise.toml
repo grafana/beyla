@@ -373,7 +373,7 @@ run = [
 description = "Generate OBI and Beyla eBPF bindings locally"
 depends = ["submodule:obi"]
 run = [
-  '''obi_module="${OBI_MODULE:-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' go.mod)}"; BPF2GO="${BPF2GO:-$(command -v bpf2go)}" CLANG="${CLANG:-$(command -v clang)}" make -C "$obi_module" generate''',
+  '''obi_module="${OBI_MODULE:-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' go.mod)}"; BPF2GO="${BPF2GO:-$(command -v bpf2go)}" CLANG="${CLANG:-$(command -v clang)}" GOOS=linux make -C "$obi_module" generate''',
   { task = "generate:beyla" },
 ]
 

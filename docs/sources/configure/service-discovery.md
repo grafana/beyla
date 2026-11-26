@@ -461,6 +461,7 @@ With `discovery.instrument_all_local`, you can change the global trace sampler w
 Beyla logs an error that names the changed settings, and keeps running the previous configuration, when an edit:
 
 - Changes any other setting, including exporters, `survey`, and `instrument_all_local`.
+- Supplies an invalid global or per-service sampler ratio. On reload, ratios must be finite numbers between 0 and 1, inclusive.
 - Changes the name, namespace, routes, exports, or metric features of an existing definition, or changes those settings for an already selected process.
 - Adds a definition that requires metric features that weren't enabled at startup.
 

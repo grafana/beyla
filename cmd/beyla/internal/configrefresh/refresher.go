@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
@@ -73,6 +74,10 @@ func (r *Refresher) Load(data []byte) (*beyla.Config, error) {
 // Apply sends compatible discovery and sampling changes to the running selector.
 // cfg must not be modified afterwards.
 func (r *Refresher) Apply(ctx context.Context, cfg *beyla.Config) error {
+	if err := validateSamplerRatios(cfg); err != nil {
+		return err
+	}
+
 	if changed := r.startup.ChangedSettings(cfg); len(changed) > 0 {
 		return fmt.Errorf("restart Beyla to apply changes to %s",
 			strings.Join(changed, ", "))
@@ -86,6 +91,39 @@ func (r *Refresher) Apply(ctx context.Context, cfg *beyla.Config) error {
 		return nil
 	}
 	return r.updater.Update(ctx, cfg.AsOBI())
+}
+
+func validateSamplerRatios(cfg *beyla.Config) error {
+	if err := validateSamplerRatio(&cfg.Traces.SamplerConfig); err != nil {
+		return fmt.Errorf("otel_traces_export.sampler: %w", err)
+	}
+
+	for i := range cfg.Discovery.Instrument {
+		if err := validateSamplerRatio(cfg.Discovery.Instrument[i].SamplerConfig); err != nil {
+			return fmt.Errorf("discovery.instrument[%d].sampler: %w", i, err)
+		}
+	}
+
+	for i := range cfg.Discovery.Services {
+		if err := validateSamplerRatio(cfg.Discovery.Services[i].SamplerConfig); err != nil {
+			return fmt.Errorf("discovery.services[%d].sampler: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+func validateSamplerRatio(sampler *services.SamplerConfig) error {
+	if sampler == nil || (sampler.Name != services.SamplerTraceIDRatio && sampler.Name != services.SamplerParentBasedTraceIDRatio) {
+		return nil
+	}
+
+	ratio, err := strconv.ParseFloat(sampler.Arg, 64)
+	if err == nil && ratio >= 0 && ratio <= 1 {
+		return nil
+	}
+
+	return fmt.Errorf("invalid arg %q for %s: expected a ratio between 0 and 1 inclusive", sampler.Arg, sampler.Name)
 }
 
 // Refresh loads a complete configuration and applies its discovery and sampling settings.

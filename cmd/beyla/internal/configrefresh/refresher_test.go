@@ -156,6 +156,45 @@ func TestRefresher_RejectsOtherChanges(t *testing.T) {
 	}
 }
 
+func TestRefresher_RejectsMalformedSamplerRatios(t *testing.T) {
+	for _, selection := range []string{"instrument", "services"} {
+		t.Run(selection, func(t *testing.T) {
+			config := func(global, service string) []byte {
+				return fmt.Appendf(nil, `
+otel_traces_export:
+  endpoint: http://localhost:4318
+  sampler: {name: traceidratio, arg: %q}
+discovery:
+  %s:
+    - open_ports: 8080
+      sampler: {name: parentbased_traceidratio, arg: %q}
+`, global, selection, service)
+			}
+
+			// Startup accepts a malformed ratio. A subsequent valid reload can correct it.
+			r := newAcceptingRefresher(t, config("0,1", "0.25"))
+			require.NoError(t, r.Refresh(t.Context(), config("0.1", "0.25")))
+			updates := r.Updater().Updates()
+			for _, tc := range []struct{ global, service, field string }{
+				{"0,1", "0.5", "otel_traces_export.sampler"},
+				{"0.5", "0,25", "discovery." + selection + "[0].sampler"},
+				{"NaN", "0.5", "otel_traces_export.sampler"},
+				{"+Inf", "0.5", "otel_traces_export.sampler"},
+				{"", "0.5", "otel_traces_export.sampler"},
+				{"-0.1", "0.5", "otel_traces_export.sampler"},
+				{"1.1", "0.5", "otel_traces_export.sampler"},
+			} {
+				require.ErrorContains(t, r.Refresh(t.Context(), config(tc.global, tc.service)), tc.field)
+				require.Equal(t, &services.SamplerConfig{Name: services.SamplerTraceIDRatio, Arg: "0.1"}, updates.Sampler())
+				include, _ := updates.Current()
+				require.Len(t, include, 1)
+				require.Equal(t, &services.SamplerConfig{Name: services.SamplerParentBasedTraceIDRatio, Arg: "0.25"}, include[0].GetSamplerConfig())
+			}
+			require.NoError(t, r.Refresh(t.Context(), config("0", "1")))
+		})
+	}
+}
+
 func TestRefresher_InstrumentAllLocalSampling(t *testing.T) {
 	initial := testConfig(`  instrument_all_local: true
   exclude_instrument:
@@ -175,6 +214,8 @@ func TestRefresher_InstrumentAllLocalSampling(t *testing.T) {
 	}
 	ratio := bytes.Replace(initial, []byte("  endpoint:"), []byte("  sampler: {name: traceidratio, arg: \"0.25\"}\n  endpoint:"), 1)
 	require.NoError(t, refresher.Refresh(t.Context(), ratio))
+	malformed := bytes.Replace(ratio, []byte("0.25"), []byte("0,25"), 1)
+	require.ErrorContains(t, refresher.Refresh(t.Context(), malformed), "otel_traces_export.sampler")
 
 	// A rejected mixed edit cannot reset the sampler to the startup default.
 	editedExclusion := bytes.Replace(initial, []byte("*debug*"), []byte("*other*"), 1)

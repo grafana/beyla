@@ -82,7 +82,7 @@ func TestConfigReloadV1(t *testing.T) {
 	incompatible := bytes.Replace(initial, []byte("name: always_on"), []byte("name: always_off"), 1)
 	incompatible = bytes.Replace(incompatible, []byte("log_level: info"), []byte("log_level: debug"), 1)
 	replaceReloadConfig(t, configPath, incompatible)
-	waitForBeylaReloadRejection(t, compose)
+	waitForBeylaReloadRejection(t, compose, "restart Beyla")
 	waitForReloadTrace(t, httpClient, "config-reload-b", configReloadServerB, "/after-rejection")
 	assertNoReloadTrace(t, httpClient, "config-reload-a", configReloadServerA, "/rejected-selection")
 
@@ -101,6 +101,7 @@ func TestConfigReloadInstrumentAllLocalSampling(t *testing.T) {
 	const (
 		service        = "config-reload-a"
 		sampledOutPath = "/local-sampled-out"
+		quarterSampled = configReloadAlwaysSampled / 4
 	)
 	waitForReloadTrace(t, httpClient, service, configReloadServerA, "/local-initially-on")
 
@@ -121,6 +122,14 @@ func TestConfigReloadInstrumentAllLocalSampling(t *testing.T) {
 		}
 		return trace.TraceID != ""
 	}, 3*time.Second, 250*time.Millisecond, "trace appeared for %s after sampling resumed", sampledOutPath)
+
+	ratio := bytes.Replace(initial, []byte("name: always_on"), []byte("name: traceidratio\n    arg: \"0.25\""), 1)
+	replaceReloadConfig(t, configPath, ratio)
+	waitForReloadSampler(t, compose, "server-a", quarterSampled)
+
+	replaceReloadConfig(t, configPath, bytes.Replace(ratio, []byte("0.25"), []byte("0,25"), 1))
+	waitForBeylaReloadRejection(t, compose, "otel_traces_export.sampler")
+	waitForReloadSampler(t, compose, "server-a", quarterSampled)
 }
 
 func startBeylaConfigReload(t *testing.T, initial []byte, overrides ...string) (*docker.Compose, string, *http.Client) {
@@ -161,7 +170,7 @@ func startBeylaConfigReload(t *testing.T, initial []byte, overrides ...string) (
 	return compose, configPath, httpClient
 }
 
-func waitForBeylaReloadRejection(t *testing.T, compose *docker.Compose) {
+func waitForBeylaReloadRejection(t *testing.T, compose *docker.Compose, reason string) {
 	t.Helper()
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		logs, err := compose.LogsTail(200, "obi")
@@ -169,10 +178,10 @@ func waitForBeylaReloadRejection(t *testing.T, compose *docker.Compose) {
 		for line := range strings.SplitSeq(logs, "\n") {
 			if strings.Contains(line, "level=ERROR") &&
 				strings.Contains(line, "can't refresh configuration") &&
-				strings.Contains(line, "restart Beyla") {
+				strings.Contains(line, reason) {
 				return
 			}
 		}
-		assert.Fail(ct, "Beyla did not log a refresh rejection requiring a restart")
+		assert.Failf(ct, "Beyla did not log the expected refresh rejection", "expected %q", reason)
 	}, testTimeout, 250*time.Millisecond)
 }

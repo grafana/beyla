@@ -855,6 +855,7 @@
         "hadolint",
         "hk",
         "kind",
+        "node",
         "npm:renovate",
         "pkl",
         "rumdl",

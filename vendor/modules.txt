@@ -1037,7 +1037,6 @@ go.opentelemetry.io/ebpf-profiler/support
 ## explicit; go 1.26.0
 go.opentelemetry.io/obi/cmd/obi/internal/configcmd
 go.opentelemetry.io/obi/cmd/obi/internal/configload
-go.opentelemetry.io/obi/cmd/obi/internal/configwatch
 go.opentelemetry.io/obi/internal/config/convert
 go.opentelemetry.io/obi/internal/config/schema
 go.opentelemetry.io/obi/internal/goabi

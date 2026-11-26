@@ -1,0 +1,4 @@
+# Beyla v1 file that overrides a v2 base in TestConfigLayers. Only settings shared by
+# both versions can cross versions.
+log_level: debug
+shutdown_timeout: 3s

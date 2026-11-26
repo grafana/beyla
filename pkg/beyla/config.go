@@ -686,11 +686,17 @@ func (c *Config) ExternalLogger(handler slog.Handler, debugMode bool) {
 // 2 - Contents of the provided file reader (nillable)
 // 3 - Environment variables
 func LoadConfig(file io.Reader) (*Config, error) {
-	OverrideOBIGlobalConfig()
-	return loadConfigFile(file, nil)
+	return LoadConfigWithOverrides(file, nil)
 }
 
-func loadConfigFile(file io.Reader, environment map[string]string) (*Config, error) {
+// LoadConfigWithOverrides is like LoadConfig, but applies the passed function to the
+// configuration read from the file, before the environment variables are read.
+func LoadConfigWithOverrides(file io.Reader, apply func(*Config)) (*Config, error) {
+	OverrideOBIGlobalConfig()
+	return loadConfigFile(file, nil, apply)
+}
+
+func loadConfigFile(file io.Reader, environment map[string]string, apply func(*Config)) (*Config, error) {
 	cfg := *DefaultConfig()
 	if file != nil {
 		cfgBuf, err := io.ReadAll(file)
@@ -706,6 +712,9 @@ func loadConfigFile(file io.Reader, environment map[string]string) (*Config, err
 		if err := yaml.Unmarshal(cfgBuf, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing YAML configuration: %w", err)
 		}
+	}
+	if apply != nil {
+		apply(&cfg)
 	}
 	if err := env.ParseWithOptions(&cfg, env.Options{Environment: environment}); err != nil {
 		return nil, fmt.Errorf("reading env vars: %w", err)

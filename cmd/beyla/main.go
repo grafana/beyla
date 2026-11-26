@@ -12,6 +12,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -69,14 +71,12 @@ func main() {
 		os.Exit(-1)
 	}
 
-	configPath := flag.String("config", "", "path to the configuration file")
+	var flagPaths configPaths
+	flag.Var(&flagPaths, "config", "path to a configuration file. Repeat the flag to layer several files, in increasing order of priority")
 	flag.Parse()
 
-	if cfg := os.Getenv("BEYLA_CONFIG_PATH"); cfg != "" {
-		configPath = &cfg
-	}
-
-	config, configVersion, configData := loadConfig(configPath)
+	paths := configFilePaths(flagPaths, os.Getenv("BEYLA_CONFIG_PATH"))
+	config, configVersion, configSources := loadConfig(paths)
 	if err := config.Validate(); err != nil {
 		slog.Error("wrong Beyla configuration", "error", err)
 		os.Exit(-1)
@@ -116,10 +116,10 @@ func main() {
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	var opts []components.Option
-	if watchV2Config(configVersion, config, configPath) {
-		go configbridge.Watch(ctx, *configPath, configData, config.RefreshCriteria)
+	if watchV2Config(configVersion, config, configSources) {
+		go configbridge.WatchSources(ctx, configSources, config.RefreshCriteria)
 	} else {
-		opts = startConfigRefresh(ctx, config, *configPath, configData)
+		opts = startConfigRefresh(ctx, config, configSources)
 	}
 	if err := components.RunBeyla(ctx, config, opts...); err != nil {
 		slog.Error("Beyla ran with errors", "error", err)
@@ -183,21 +183,64 @@ func logConfig(config *beyla.Config) {
 	}
 }
 
-func loadConfig(configPath *string) (*beyla.Config, string, []byte) {
+// configPaths is a repeatable string flag.
+type configPaths []string
+
+func (p *configPaths) String() string {
+	return strings.Join(*p, ",")
+}
+
+func (p *configPaths) Set(path string) error {
+	*p = append(*p, path)
+	return nil
+}
+
+// configFilePaths returns the configuration files in increasing order of priority:
+// the -config flags in order, then the files in BEYLA_CONFIG_PATH, separated by the
+// OS path list separator (colon on Linux), from left to right.
+func configFilePaths(flags []string, envPaths string) []string {
+	paths := slices.Clone(flags)
+	for _, path := range filepath.SplitList(envPaths) {
+		if path != "" {
+			paths = append(paths, path)
+		}
+	}
+	return paths
+}
+
+func loadConfig(paths []string) (*beyla.Config, string, []configbridge.Source) {
 	// Mirror BEYLA_* onto OTEL_EBPF_* before either loader reads the environment.
 	beyla.OverrideOBIGlobalConfig()
 
-	var data []byte
-	if configPath != nil && *configPath != "" {
-		var err error
-		data, err = os.ReadFile(*configPath)
+	sources := make([]configbridge.Source, 0, len(paths))
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
 		if err != nil {
-			slog.Error("can't open "+*configPath, "error", err)
+			slog.Error("can't open "+path, "error", err)
 			os.Exit(-1)
 		}
+		sources = append(sources, configbridge.Source{Path: path, Data: data})
 	}
 
-	if obiCfg, err := configbridge.LoadV2(data); err == nil {
+	cfg, version, err := loadConfigSources(sources)
+	if err != nil {
+		slog.Error("wrong configuration", "error", err)
+		os.Exit(-1)
+	}
+	return cfg, version, sources
+}
+
+func loadConfigSources(sources []configbridge.Source) (*beyla.Config, string, error) {
+	merged, err := configbridge.MergeSources(sources)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if merged.Version == configbridge.VersionV2 {
+		obiCfg, err := configbridge.LoadV2(merged.Data)
+		if err != nil {
+			return nil, "", err
+		}
 		cfg := beyla.FromOBI(obiCfg)
 		selection := instrumentations.NewInstrumentationSelection(obiCfg.OTELMetrics.Instrumentations)
 		var updater *discover.CriteriaUpdater
@@ -205,40 +248,79 @@ func loadConfig(configPath *string) (*beyla.Config, string, []byte) {
 			updater = discover.NewCriteriaUpdater(obiCfg)
 		}
 		cfg.SetV2Runtime(selection, updater)
-		return cfg, configVersionV2, data
-	} else if !configbridge.IsNotV2(err) {
-		slog.Error("wrong configuration", "error", err)
-		os.Exit(-1)
+		return cfg, configVersionV2, nil
 	}
 
 	var reader io.Reader
-	if data != nil {
-		reader = bytes.NewReader(data)
+	if len(sources) > 0 {
+		reader = bytes.NewReader(merged.Data)
 	}
-	config, err := beyla.LoadConfig(reader)
+	cfg, err := beyla.LoadConfigWithOverrides(reader, applyV2Shared(merged.Shared))
 	if err != nil {
-		slog.Error("wrong configuration", "error", err)
-		os.Exit(-1)
+		return nil, "", err
 	}
-	return config, configVersionV1, data
+	return cfg, configVersionV1, nil
 }
 
-// watchV2Config reports whether config v2 should reload through OBI's watcher.
+// applyV2Shared applies the settings that v2 files can override in a v1 base.
+func applyV2Shared(shared *configbridge.V1Shared) func(*beyla.Config) {
+	if shared == nil {
+		return nil
+	}
+	return func(cfg *beyla.Config) {
+		if shared.LogLevel != nil {
+			cfg.LogLevel = *shared.LogLevel
+		}
+		if shared.LogFormat != nil {
+			cfg.LogFormat = obi.LogFormat(*shared.LogFormat)
+		}
+		if shared.ShutdownTimeout != nil {
+			cfg.ShutdownTimeout = *shared.ShutdownTimeout
+		}
+		if shared.ChannelBufferLen != nil {
+			cfg.ChannelBufferLen = *shared.ChannelBufferLen
+		}
+		if shared.ChannelSendTimeout != nil {
+			cfg.ChannelSendTimeout = *shared.ChannelSendTimeout
+		}
+		if shared.ChannelSendTimeoutPanic != nil {
+			cfg.ChannelSendTimeoutPanic = *shared.ChannelSendTimeoutPanic
+		}
+	}
+}
+
+// watchV2Config reports whether config v2 should reload through the bridge watcher.
 // The v1 refresher only understands the legacy document, so it must not replace
 // these criteria.
-func watchV2Config(version string, cfg *beyla.Config, configPath *string) bool {
+func watchV2Config(version string, cfg *beyla.Config, sources []configbridge.Source) bool {
 	return version == configVersionV2 &&
 		cfg.CriteriaUpdates() != nil &&
-		configPath != nil && *configPath != ""
+		len(sources) > 0
 }
 
 // startConfigRefresh lets discovery and trace sampling change without restarting Beyla through the
 // control socket of a parent process such as Alloy or, without one, by watching the
 // configuration file. It returns the options that connect the refreshes to the pipeline.
-func startConfigRefresh(ctx context.Context, config *beyla.Config, configPath string, configData []byte) []components.Option {
+func startConfigRefresh(ctx context.Context, config *beyla.Config, sources []configbridge.Source) []components.Option {
 	conn, err := configrefresh.ControlConn()
 	if err != nil {
 		slog.Error("can't open the configuration control socket", "error", err)
+	}
+
+	// The v1 file watcher reads a single file. With layered files, only the control socket
+	// can refresh the criteria.
+	var configPath string
+	var configData []byte
+	if len(sources) == 1 {
+		configPath, configData = sources[0].Path, sources[0].Data
+	} else if len(sources) > 1 {
+		slog.Debug("discovery criteria refresh from files is not available with multiple v1 configuration files")
+		merged, err := configbridge.MergeSources(sources)
+		if err != nil {
+			slog.Error("can't merge the configuration files", "error", err)
+			return nil
+		}
+		configData = merged.Data
 	}
 
 	if conn == nil && configPath == "" {

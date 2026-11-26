@@ -27,7 +27,7 @@ grafana:
 		{name: "no exporter"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := loadConfigFile(strings.NewReader("metrics:\n  features: [gpu]\n"+tc.yaml), map[string]string{})
+			cfg, err := loadConfigFile(strings.NewReader("metrics:\n  features: [gpu]\n"+tc.yaml), map[string]string{}, nil)
 			require.NoError(t, err)
 			assert.False(t, cfg.Enabled(FeatureAppO11y))
 			assert.Equal(t, tc.enabled, cfg.GPUMetricsEnabled())
@@ -46,7 +46,7 @@ metrics:
   features: [gpu, network]
 prometheus_export:
   port: 9400
-`), map[string]string{})
+`), map[string]string{}, nil)
 	require.NoError(t, err)
 	assert.True(t, cfg.Enabled(FeatureNetO11y))
 	assert.True(t, cfg.GPUMetricsEnabled())
@@ -55,7 +55,7 @@ prometheus_export:
 }
 
 func TestGPUMetricsDisabledWithoutFeature(t *testing.T) {
-	cfg, err := loadConfigFile(strings.NewReader("prometheus_export:\n  port: 9400\n"), map[string]string{})
+	cfg, err := loadConfigFile(strings.NewReader("prometheus_export:\n  port: 9400\n"), map[string]string{}, nil)
 	require.NoError(t, err)
 	assert.False(t, cfg.GPUMetricsEnabled())
 	assert.Error(t, cfg.Validate())

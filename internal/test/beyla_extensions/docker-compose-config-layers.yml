@@ -1,0 +1,4 @@
+services:
+  obi:
+    # The base file is the first one. Each later --config overrides the previous ones.
+    command: ["--config=/configs/obi.yml", "--config=/configs/override.yml"]

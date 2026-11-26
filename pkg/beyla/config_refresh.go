@@ -17,7 +17,7 @@ import (
 // runtime, which the startup load didn't see.
 // A nil environment reads them from the process.
 func LoadRefreshConfig(data []byte, environment map[string]string) (*Config, error) {
-	cfg, err := loadConfigFile(bytes.NewReader(data), environment)
+	cfg, err := loadConfigFile(bytes.NewReader(data), environment, nil)
 	if err != nil {
 		return nil, err
 	}

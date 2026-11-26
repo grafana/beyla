@@ -134,9 +134,18 @@ func TestConfigReloadInstrumentAllLocalSampling(t *testing.T) {
 
 func startBeylaConfigReload(t *testing.T, initial []byte, overrides ...string) (*docker.Compose, string, *http.Client) {
 	t.Helper()
+	return startBeylaConfigReloadFiles(t, map[string][]byte{"obi.yml": initial}, overrides...)
+}
+
+// startBeylaConfigReloadFiles mounts the files in the /configs directory of the Beyla container.
+// It returns the path to obi.yml, which must be one of them.
+func startBeylaConfigReloadFiles(t *testing.T, files map[string][]byte, overrides ...string) (*docker.Compose, string, *http.Client) {
+	t.Helper()
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "obi.yml")
-	replaceReloadConfig(t, configPath, initial)
+	for name, data := range files {
+		replaceReloadConfig(t, filepath.Join(configDir, name), data)
+	}
 
 	require.NoError(t, os.MkdirAll(pathOutput, 0o755))
 	compose, err := docker.ComposeSuiteWithOverrides("docker-compose-config-reload.yml", filepath.Join(pathOutput, t.Name()+".log"), overrides...)

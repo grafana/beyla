@@ -1,0 +1,10 @@
+# Config v2 file that overrides a v1 base in TestConfigLayers. Only settings shared by
+# both versions can cross versions.
+file_format: "1.0"
+log_level: debug
+extensions:
+  obi:
+    version: "2.0"
+    daemon:
+      shutdown:
+        timeout: 3s

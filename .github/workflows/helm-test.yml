@@ -123,13 +123,13 @@ jobs:
           persist-credentials: "false"
 
       - name: Set up Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
 
       - name: Install Flux CLI
         uses: fluxcd/flux2/action@3fa784edd773d56630bb9f62645e08f70c2cff0a # v2.10.0
 
       - name: Install Kind CLI
-        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
         with:
           install_only: true
 
@@ -143,3 +143,25 @@ jobs:
         env:
           TEST_DIRECTORY: "source/${{ env.INTEGRARION_TESTS_DIR }}/${{ matrix.test }}"
           DELETE_CLUSTER: true
+
+  required-check:
+    name: Beyla Helm CI
+    if: always()
+    needs: [run-unit-tests, lint-helm-chart, list-integration-tests, run-integration-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Report required-check result
+        env:
+          UNIT_RESULT: ${{ needs.run-unit-tests.result }}
+          LINT_RESULT: ${{ needs.lint-helm-chart.result }}
+          LIST_RESULT: ${{ needs.list-integration-tests.result }}
+          TESTS: ${{ needs.list-integration-tests.outputs.tests }}
+          INTEGRATION_RESULT: ${{ needs.run-integration-tests.result }}
+        run: |
+          if [[ "${UNIT_RESULT}" == success && "${LINT_RESULT}" == success && "${LIST_RESULT}" == success && ( ( "${TESTS}" == '[]' && "${INTEGRATION_RESULT}" == skipped ) || ( "${TESTS}" != '[]' && "${INTEGRATION_RESULT}" == success ) ) ]]; then
+            exit 0
+          fi
+          echo "Unexpected required-check results: unit=${UNIT_RESULT}, lint=${LINT_RESULT}, list=${LIST_RESULT}, tests=${TESTS}, integration=${INTEGRATION_RESULT}" >&2
+          exit 1

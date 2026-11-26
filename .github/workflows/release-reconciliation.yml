@@ -20,9 +20,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
         with:
-          version: "2026.11.4"
+          version: "2026.11.11"
           cache: false
           install: false
       - name: Reconcile read-only GitHub facts

@@ -217,7 +217,7 @@ CODE_INJECTIONS=(
   # (internal/test/beyla_extensions/config_reload_beyla.go) runs the same flow on Config v1.
   '^func TestConfigReload[(]|t.Skip("Beyla loads Config v1 only: TestConfigReloadV1 covers this flow")'
   # The server can answer before instrumentation attaches on slower VM kernels.
-  't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL, "testserver")'
+  't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL)'
   # Manual spans can reach Jaeger before the automatic outgoing client span.
   'if len[(]traces[[]i[]][.]FindByOperationName[(]"checkout", "internal"[)][)] > 0 [{]|if len(traces[i].FindByOperationName("GET /", "client")) == 0 { continue }'
 )
@@ -526,8 +526,8 @@ transform_go_imports_and_paths() {
 
     # obi.instrument() mounts the instrumenter configs as /configs. Mount the
     # generated copy instead of .obi-src, so the Beyla overrides copied by
-    # copy_beyla_extensions (e.g. the v1 obi-config-route53.yml) take effect,
-    # as they already do for the docker compose suites.
+    # copy_beyla_extensions (e.g. the v1 obi-config-gce.yml and obi-config-azure.yml)
+    # take effect, as they already do for the docker compose suites.
     local obi_configs_mount='bindMount(filepath.Join(pathRoot, ".obi-src/internal/test/integration/configs"), "/configs")'
     if ! grep -qF "$obi_configs_mount" "$OBI_DEST/dockerutil_test.go"; then
       echo "ERROR: dockerutil_test.go no longer mounts /configs as expected; update the obi.instrument() configs transform" >&2
@@ -583,70 +583,7 @@ transform_go_imports_and_paths() {
   if [[ -f "$OBI_DEST/components/docker/compose.go" ]]; then
     sed_i -e 's|"internal", "test", "integration"|"internal", "testgenerated", "integration"|g' \
       "$OBI_DEST/components/docker/compose.go"
-    drain_every_instrumenter_service
   fi
-}
-
-# Close() upstream drains only the service literally named "obi".
-# docker-compose-peer-metadata.yml declares a second instrumenter
-# ("client-obi") that shares the client workload's PID and network namespaces;
-# leaving it undrained means Remove() force-kills it while it still holds
-# probes on a live workload, which breaks the workload container. Wait on
-# every instrumenter service the compose file declares instead.
-drain_every_instrumenter_service() {
-  local file="$OBI_DEST/components/docker/compose.go"
-
-  if ! grep -q 'c.commandContext(waitCtx, "wait", "obi")' "$file"; then
-    echo "ERROR: compose.go no longer waits for \"obi\" as expected; update the instrumenter drain transform" >&2
-    exit 1
-  fi
-  awk '
-        /if err := c.commandContext\(waitCtx, "wait", "obi"\); err != nil \{/ {
-            print "\t\targs := append([]string{\"wait\"}, c.instrumenterServices()...)"
-            print "\t\tif err := c.commandContext(waitCtx, args...); err != nil {"
-            next
-        }
-        { print }
-    ' "$file" >"$file.tmp" && mv "$file.tmp" "$file"
-
-  cat >>"$file" <<EOF
-
-// instrumenterServices lists the Beyla instrumenter services declared in the
-// compose file. Most suites have a single service named "obi", but
-// docker-compose-peer-metadata.yml runs a second instrumenter ("client-obi")
-// that shares the client workload's PID and network namespaces. Draining only
-// "obi" leaves that one attached while Remove() force-kills it.
-func (c *Compose) instrumenterServices() []string {
-	data, err := os.ReadFile(c.Path)
-	if err != nil {
-		return []string{"obi"}
-	}
-
-	var doc struct {
-		Services map[string]struct {
-			Build struct {
-				Dockerfile string \`yaml:"dockerfile"\`
-			} \`yaml:"build"\`
-		} \`yaml:"services"\`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return []string{"obi"}
-	}
-
-	var services []string
-	for name, svc := range doc.Services {
-		if strings.Contains(svc.Build.Dockerfile, "${BEYLA_DOCKERFILE}") {
-			services = append(services, name)
-		}
-	}
-	if len(services) == 0 {
-		return []string{"obi"}
-	}
-	slices.Sort(services)
-
-	return services
-}
-EOF
 }
 
 apply_component_consolidation() {
@@ -1050,6 +987,59 @@ ensure_weaver_tap_survives_weavercol_startup() {
       echo "  WARNING: $file declares otlp/weavercol but no retry_on_failure block was patched"
     fi
   done
+}
+
+ensure_django_gunicorn_no_control_socket() {
+  # Avoid gunicorn 25.1.0's ControlSocketServer + os.fork() deadlock in
+  # TestSuite_DjangoRoutes (benoitc/gunicorn#3509, benoitc/gunicorn#3529,
+  # fixed in benoitc/gunicorn#3520).
+  #
+  # DURABLE FIX (upstream, then drop this step): upgrade gunicorn past 25.1.0
+  # (with benoitc/gunicorn#3520) or pass --no-control-socket in OBI's
+  # internal/test/integration/components/djangoserver/Dockerfile.
+  local compose="$OBI_DEST/docker-compose-django.yml"
+  [[ -f "$compose" ]] || return 0
+  grep -q 'GUNICORN_CMD_ARGS' "$compose" && return 0
+
+  awk '
+      /^  testserver:[[:space:]]*$/ { in_ts = 1; print; next }
+      in_ts && /^$/ {
+          if (!injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+              injected = 1
+          }
+          in_ts = 0
+          print
+          next
+      }
+      in_ts && /^  [^ ]/ {
+          if (!injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+              print ""
+              injected = 1
+          }
+          in_ts = 0
+      }
+      in_ts && /^    environment:[[:space:]]*$/ {
+          print
+          print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+          injected = 1
+          next
+      }
+      { print }
+      END {
+          if (in_ts && !injected) {
+              print "    environment:"
+              print "      GUNICORN_CMD_ARGS: \"--no-control-socket\""
+          }
+      }
+      ' "$compose" >"$compose.tmp" && mv "$compose.tmp" "$compose"
+
+  if ! grep -q 'GUNICORN_CMD_ARGS' "$compose"; then
+    echo "  WARNING: could not inject GUNICORN_CMD_ARGS into $compose"
+  fi
 }
 
 restore_weaver_registry_mount_paths() {
@@ -1640,6 +1630,7 @@ generate() {
   ensure_nodejs_traces_are_complete
   ensure_malicious_ioctl_local_downstream
   ensure_weaver_tap_survives_weavercol_startup
+  ensure_django_gunicorn_no_control_socket
   cleanup_and_inject_build_tags "$jobs"
 
   # -----------------------------------------------------------------
@@ -1650,11 +1641,6 @@ generate() {
   adjust_oats_compose_paths
   transform_oats_go_files "$jobs"
   apply_oats_behavioral_transforms "$jobs"
-  # OATS v0.11 sends inputs before polling assertions, unlike v0.7's per-poll
-  # input replay. The generic Kafka fixture has shown HTTP probe attachment
-  # after the default 10s input window; keep /produce active for 30s without
-  # changing either expected-span assertion.
-  scripts/extend-beyla-kafka-oats-window.sh "$OATS_DEST/kafka/oats_go_kafka-generic.yaml"
 
   # -----------------------------------------------------------------
   # VM test infrastructure

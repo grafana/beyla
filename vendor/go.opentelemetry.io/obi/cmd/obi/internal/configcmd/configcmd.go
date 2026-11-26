@@ -691,9 +691,20 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 		}
 	}
 
+	awsEnabledPath := yamlPath{"ebpf", "payload_extraction", "http", "aws", "enabled"}
+	awsEnabledName := formatPath(awsEnabledPath)
+	if _, configured := valueAtPath(source, awsEnabledPath); configured {
+		if !sameAWSServiceEnablement(before.EBPF.PayloadExtraction.HTTP.AWS, after.EBPF.PayloadExtraction.HTTP.AWS) {
+			changed = append(changed, awsEnabledName)
+		}
+	}
+
 	for _, path := range leafPaths(source, nil) {
 		name := formatPath(path)
 		if name == languageDetectionSkipsName || strings.HasPrefix(name, languageDetectionSkipsName+"[") {
+			continue
+		}
+		if name == awsEnabledName {
 			continue
 		}
 		if name == logEnricherName || strings.HasPrefix(name, logEnricherName+"[") {
@@ -720,6 +731,15 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 		afterValue, afterOK := valueAtPath(afterMap, path)
 		if beforeOK != afterOK || !reflect.DeepEqual(beforeValue, afterValue) {
 			changed = append(changed, name)
+		}
+	}
+	if hasAnyPath(root, "attributes.sensitive_query_params") {
+		beforeKeys := slices.Clone(before.Attributes.SensitiveQueryParams.Effective())
+		afterKeys := slices.Clone(after.Attributes.SensitiveQueryParams.Effective())
+		slices.Sort(beforeKeys)
+		slices.Sort(afterKeys)
+		if !slices.Equal(slices.Compact(beforeKeys), slices.Compact(afterKeys)) {
+			changed = append(changed, "attributes.sensitive_query_params")
 		}
 	}
 	changed = append(changed, unsupportedLayeredRoutePaths(root, before.Routes)...)
@@ -969,6 +989,12 @@ func zeroMigrationValue(value any) bool {
 	}
 }
 
+func sameAWSServiceEnablement(before, after obiconfig.AWSConfig) bool {
+	return before.S3Enabled() == after.S3Enabled() &&
+		before.SQSEnabled() == after.SQSEnabled() &&
+		before.SNSEnabled() == after.SNSEnabled()
+}
+
 func equalMigrationValues(path string, before, after any) bool {
 	if path == "log_level" {
 		return strings.EqualFold(fmt.Sprint(before), fmt.Sprint(after))
@@ -1084,6 +1110,7 @@ func migrationAlias(path string) bool {
 		return true
 	}
 	for _, prefix := range []string{
+		"attributes.sensitive_query_params",
 		"executable_path",
 		"filter.application",
 		"open_port",

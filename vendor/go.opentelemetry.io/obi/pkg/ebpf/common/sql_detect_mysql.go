@@ -23,8 +23,14 @@ type mySQLHdr struct {
 	command uint8  // command type
 }
 
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_init_db.html
+const kMySQLInitDB = uint8(0x2)
+
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html
 const kMySQLQuery = uint8(0x3)
+
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_change_user.html
+const kMySQLChangeUser = uint8(0x11)
 
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_prepare.html
 const kMySQLPrepare = uint8(0x16)
@@ -44,7 +50,7 @@ func readMySQLHeader(b []byte) mySQLHdr {
 	hdr := mySQLHdr{}
 
 	hdr.length = binary.LittleEndian.Uint32(b[:4])
-	hdr.length &= 0x00ffffff // remove the sequence id from the length
+	hdr.length &= mysqlPayloadLengthMask
 	hdr.command = b[4]
 
 	return hdr
@@ -60,7 +66,7 @@ func isMySQL(b *largebuf.LargeBuffer) bool {
 	if err != nil {
 		return false
 	}
-	length &= 0x00ffffff // remove the sequence id from the length
+	length &= mysqlPayloadLengthMask
 	if length == 0 {
 		return false
 	}
@@ -76,34 +82,37 @@ func mysqlNoResponseCommand(command uint8) bool {
 	return command == kMySQLStmtSendLongData || command == kMySQLStmtClose
 }
 
-// skipMySQLNoResponseCommands advances past leading commands without a server
-// response. The kernel keeps such requests pending and appends the next
-// command sent on the connection into the same event, so they can be coalesced
-// in front of the command the response buffer pairs with.
-func skipMySQLNoResponseCommands(reqRaw []byte) ([]byte, []uint32) {
-	var closedStmtIDs []uint32
-
+// skipMySQLNoResponseCommands returns the offset of the first command that is
+// not a leading command without a server response, calling onClose (when not
+// nil) for each statement those leading commands close. The kernel keeps such
+// requests pending and appends the next command sent on the connection into
+// the same event, so they can be coalesced in front of the command the
+// response buffer pairs with.
+func skipMySQLNoResponseCommands(buf *largebuf.LargeBuffer, onClose func(stmtID uint32)) int {
+	off := 0
 	for {
-		if len(reqRaw) < sqlprune.MySQLHdrSize+1 {
-			return reqRaw, closedStmtIDs
+		length, _, ok := mysqlPacketHeader(buf, off)
+		if !ok {
+			return off
 		}
 
-		hdr := readMySQLHeader(reqRaw)
-		if !mysqlNoResponseCommand(hdr.command) {
-			return reqRaw, closedStmtIDs
+		command, ok := mysqlByteAt(buf, off+sqlprune.MySQLHdrSize)
+		if !ok || !mysqlNoResponseCommand(command) {
+			return off
 		}
 
-		packetLen := sqlprune.MySQLHdrSize + int(hdr.length)
-		if packetLen <= sqlprune.MySQLHdrSize || packetLen >= len(reqRaw) {
-			return reqRaw, closedStmtIDs
+		next := off + sqlprune.MySQLHdrSize + length
+		if length == 0 || next >= buf.Len() {
+			return off
 		}
 
-		if hdr.command == kMySQLStmtClose && hdr.length >= 1+mysqlStatementIDSize {
-			stmtIDOffset := sqlprune.MySQLHdrSize + 1
-			closedStmtIDs = append(closedStmtIDs, binary.LittleEndian.Uint32(reqRaw[stmtIDOffset:stmtIDOffset+mysqlStatementIDSize]))
+		if onClose != nil && command == kMySQLStmtClose && length >= 1+mysqlStatementIDSize {
+			if stmtID, err := buf.U32LEAt(off + sqlprune.MySQLHdrSize + 1); err == nil {
+				onClose(stmtID)
+			}
 		}
 
-		reqRaw = reqRaw[packetLen:]
+		off = next
 	}
 }
 
@@ -131,11 +140,6 @@ func mysqlFirstPacket(b []byte) []byte {
 	return b[:min(len(b), sqlprune.MySQLHdrSize+int(readMySQLHeader(b).length))]
 }
 
-func mysqlQueryText(b []byte) []byte {
-	packet := mysqlFirstPacket(b)
-	return packet[min(len(packet), sqlprune.MySQLHdrSize+1):]
-}
-
 func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, error) {
 	var (
 		op, stmt string
@@ -143,31 +147,30 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 		span     request.Span
 	)
 
-	if responseBuffer.Len() < sqlprune.MySQLHdrSize+1 {
-		slog.Debug("MySQL response too short")
-		return span, errFallback
-	}
-	reqRaw := requestBuffer.UnsafeView()
-	respRaw := responseBuffer.UnsafeView()
-
-	// Commands without a server response (e.g. COM_STMT_CLOSE) stay pending in
-	// the kernel, which appends the next command sent on the connection into
-	// the same event. Skip them so the command paired with the response is the
-	// one parsed below.
-	reqRaw, closedStmtIDs := skipMySQLNoResponseCommands(reqRaw)
-	for _, stmtID := range closedStmtIDs {
+	reqOff := skipMySQLNoResponseCommands(requestBuffer, func(stmtID uint32) {
 		parseCtx.mysqlPreparedStatements.Remove(mysqlPreparedStatementsKey{
 			connInfo: event.ConnInfo,
 			stmtID:   stmtID,
 		})
+	})
+
+	if parseCtx.mysqlConns != nil && trackMySQLConnState(parseCtx, event.ConnInfo, requestBuffer, reqOff, responseBuffer) {
+		return span, errIgnore
 	}
-	if len(reqRaw) < sqlprune.MySQLHdrSize+1 {
+
+	if responseBuffer.Len() < sqlprune.MySQLHdrSize+1 {
+		slog.Debug("MySQL response too short")
+		return span, errFallback
+	}
+
+	var cmdPacket [sqlprune.MySQLHdrSize + 1]byte
+	if reqOff+len(cmdPacket) > requestBuffer.Len() || requestBuffer.CopyAt(reqOff, cmdPacket[:]) != nil {
 		slog.Debug("MySQL request too short")
 		return span, errFallback
 	}
 
-	sqlCommand := sqlprune.SQLParseCommandID(request.DBMySQL, reqRaw)
-	sqlError := sqlprune.SQLParseError(request.DBMySQL, respRaw)
+	sqlCommand := sqlprune.SQLParseCommandID(request.DBMySQL, cmdPacket[:])
+	sqlError := mysqlResponseError(responseBuffer)
 
 	switch sqlCommand {
 	case "STMT_PREPARE":
@@ -178,13 +181,13 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 
 		// On the PREPARE command, the statement ID is the first 4 bytes after the header and command ID
 		// in the response buffer.
-		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, respRaw)
+		stmtID := mysqlStatementID(responseBuffer, 0)
 		if stmtID == 0 {
 			slog.Debug("MySQL PREPARE command with invalid statement ID")
 			return span, errFallback
 		}
 
-		_, _, stmt = detectSQL(mysqlQueryText(reqRaw))
+		_, _, stmt = detectSQL(mysqlQueryTextView(requestBuffer, reqOff))
 		parseCtx.mysqlPreparedStatements.Add(mysqlPreparedStatementsKey{
 			connInfo: event.ConnInfo,
 			stmtID:   stmtID,
@@ -194,7 +197,7 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 	case "STMT_EXECUTE":
 		// On the EXECUTE command, the statement ID is the first 4 bytes after the header and command ID
 		// in the request buffer.
-		stmtID := sqlprune.SQLParseStatementID(request.DBMySQL, reqRaw)
+		stmtID := mysqlStatementID(requestBuffer, reqOff)
 		if stmtID == 0 {
 			slog.Debug("MySQL EXECUTE command with invalid statement ID")
 			return span, errFallback
@@ -211,9 +214,9 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 		}
 		op, tables = sqlprune.SQLParseOperationAndTables(stmt)
 	case "QUERY":
-		op, tables, stmt = detectSQL(mysqlQueryText(reqRaw))
+		op, tables, stmt = detectSQL(mysqlQueryTextView(requestBuffer, reqOff))
 	default:
-		slog.Debug("MySQL command ID unhandled", "commandID", reqRaw[sqlprune.MySQLHdrSize])
+		slog.Debug("MySQL command ID unhandled", "commandID", cmdPacket[sqlprune.MySQLHdrSize])
 		return span, errFallback
 	}
 
@@ -222,5 +225,56 @@ func handleMySQL(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffe
 		return span, errFallback
 	}
 
-	return TCPToSQLToSpan(event, op, tables, stmt, request.DBMySQL, sqlCommand, sqlError), nil
+	span = TCPToSQLToSpan(event, op, tables, stmt, request.DBMySQL, sqlCommand, sqlError)
+	setMySQLConnAttributes(parseCtx, event.ConnInfo, &span)
+	return span, nil
+}
+
+// mysqlQueryTextView returns the text of the command packet at off, the only
+// part of the request that is materialized.
+func mysqlQueryTextView(buf *largebuf.LargeBuffer, off int) []byte {
+	length, _, ok := mysqlPacketHeader(buf, off)
+	textOff := off + sqlprune.MySQLHdrSize + 1
+	if !ok || length == 0 || textOff > buf.Len() {
+		return nil
+	}
+
+	text, err := buf.UnsafeViewAt(textOff, min(length-1, buf.Len()-textOff))
+	if err != nil {
+		return nil
+	}
+	return text
+}
+
+func mysqlStatementID(buf *largebuf.LargeBuffer, off int) uint32 {
+	idOff := off + sqlprune.MySQLHdrSize + 1
+	if idOff+mysqlStatementIDSize > buf.Len() {
+		return 0
+	}
+
+	stmtID, err := buf.U32LEAt(idOff)
+	if err != nil {
+		return 0
+	}
+	return stmtID
+}
+
+// mysqlResponseError parses the first response packet only when it is an ERR
+// packet, so other responses are never materialized.
+func mysqlResponseError(resp *largebuf.LargeBuffer) *request.SQLError {
+	marker, ok := mysqlByteAt(resp, sqlprune.MySQLHdrSize)
+	if !ok || marker != sqlprune.MySQLErrPacketMarker {
+		return nil
+	}
+
+	length, _, ok := mysqlPacketHeader(resp, 0)
+	if !ok {
+		return nil
+	}
+
+	packet, err := resp.UnsafeViewAt(0, min(sqlprune.MySQLHdrSize+length, resp.Len()))
+	if err != nil {
+		return nil
+	}
+	return sqlprune.SQLParseError(request.DBMySQL, packet)
 }

@@ -29,14 +29,18 @@ type CloudMetadataConfig struct {
 type Route53MetadataConfig struct {
 	// RefreshInterval controls Route53 polling independently of other cloud sources.
 	RefreshInterval time.Duration `yaml:"refresh_interval" env:"OTEL_EBPF_NAME_RESOLVER_ROUTE53_REFRESH_INTERVAL" validate:"gt=0"`
-	// HostedZoneIDs optionally restricts the discovered zones. Discovery includes account public zones and private zones associated with the detected VPC. Explicit IDs retain the same VPC and address filters.
-	HostedZoneIDs []string `yaml:"hosted_zone_ids" env:"OTEL_EBPF_NAME_RESOLVER_ROUTE53_HOSTED_ZONE_IDS" envSeparator:","`
+	// HostedZoneIDs restricts discovery to these hosted zones. Required when route53 is enabled.
+	HostedZoneIDs       []string `yaml:"hosted_zone_ids" env:"OTEL_EBPF_NAME_RESOLVER_ROUTE53_HOSTED_ZONE_IDS" envSeparator:","`
+	DiscoverHostedZones bool     `yaml:"-" env:"-" json:"-"`
 }
 
 // Validate checks settings required when the Route53 source is enabled.
 func (c Route53MetadataConfig) Validate() error {
 	if c.RefreshInterval <= 0 {
 		return errors.New("enrich.enrichers.cloud.route53.refresh_interval must be greater than zero")
+	}
+	if !c.DiscoverHostedZones && len(c.HostedZoneIDs) == 0 {
+		return errors.New("enrich.enrichers.cloud.route53.hosted_zone_ids is required when the route53 source is enabled")
 	}
 	for _, id := range c.HostedZoneIDs {
 		if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(id), "/hostedzone/")) == "" {

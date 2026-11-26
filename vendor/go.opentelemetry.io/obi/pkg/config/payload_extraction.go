@@ -42,7 +42,7 @@ type HTTPConfig struct {
 // ClientEnabled reports whether any HTTP client payload extraction is enabled.
 func (h HTTPConfig) ClientEnabled() bool {
 	return h.Elasticsearch.Enabled ||
-		h.AWS.Enabled ||
+		h.AWS.AnyEnabled() ||
 		h.SQLPP.Enabled ||
 		h.GenAI.Enabled() ||
 		h.JSONRPC.Enabled ||
@@ -68,6 +68,25 @@ type GraphQLConfig struct {
 type AWSConfig struct {
 	// Enable AWS services (S3, SQS, etc.) payload extraction and parsing
 	Enabled bool `yaml:"enabled" env:"OTEL_EBPF_HTTP_AWS_ENABLED" validate:"boolean"`
+	S3      bool `yaml:"-" json:"-"`
+	SQS     bool `yaml:"-" json:"-"`
+	SNS     bool `yaml:"-" json:"-"`
+}
+
+func (c AWSConfig) S3Enabled() bool {
+	return c.Enabled || c.S3
+}
+
+func (c AWSConfig) SQSEnabled() bool {
+	return c.Enabled || c.SQS
+}
+
+func (c AWSConfig) SNSEnabled() bool {
+	return c.Enabled || c.SNS
+}
+
+func (c AWSConfig) AnyEnabled() bool {
+	return c.S3Enabled() || c.SQSEnabled() || c.SNSEnabled()
 }
 
 type ElasticsearchConfig struct {

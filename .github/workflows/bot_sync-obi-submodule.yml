@@ -2,85 +2,416 @@ name: Update OBI submodule
 
 on:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 * * *"
   workflow_dispatch:
-
-concurrency:
-  group: sync-obi-submodule-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
+    inputs:
+      obi_sha:
+        description: "Optional exact OBI commit; omitted manual runs sample upstream main"
+        required: false
+        type: string
+      source_pr:
+        description: "Optional same-repository generator-cleanup PR (strictly validated)"
+        required: false
+        type: string
+      source_sha:
+        description: "Exact head SHA of source_pr; required when source_pr is supplied"
+        required: false
+        type: string
 
 # Set restrictive permissions at workflow level
 permissions: {}
 
 jobs:
-  update-obi:
-    name: Update OBI submodule and open PR
+  preflight-obi-adoption:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    name: Sample and reconcile exact OBI source
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Needed for creating commits and pushing branch
-      pull-requests: write # Needed for creating PRs
-      id-token: write # Required for DockerHub login and create-github-app-token
+      contents: read
+      pull-requests: read
+    outputs:
+      report_json: ${{ steps.collect.outputs.report_json }}
+      outcome: ${{ steps.collect.outputs.outcome }}
+      publish_action: ${{ steps.collect.outputs.publish_action }}
+      upstream_sha: ${{ steps.collect.outputs.upstream_sha }}
+      pin_sha: ${{ steps.collect.outputs.pin_sha }}
+      main_head_sha: ${{ steps.collect.outputs.main_head_sha }}
+      active_prs_json: ${{ steps.collect.outputs.active_prs_json }}
+      open_pr_complete: ${{ steps.collect.outputs.open_pr_complete }}
+      closed_target_history_complete: ${{ steps.collect.outputs.closed_target_history_complete }}
+      pr_number: ${{ steps.collect.outputs.pr_number }}
+      expected_pr_head: ${{ steps.collect.outputs.expected_pr_head }}
+      branch: ${{ steps.collect.outputs.branch }}
+      publish_reason: ${{ steps.collect.outputs.publish_reason }}
     steps:
-      - name: Checkout repo
+      - name: Check out trusted main source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+      - name: Reconcile one exact upstream snapshot
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          OBI_SHA: ${{ inputs.obi_sha }}
+        run: python3 scripts/release-reconciliation/adoption/preflight/collect.py
+      - name: Report preflight decision
+        if: steps.collect.outputs.publish_action != 'create'
+        env:
+          ACTION: ${{ steps.collect.outputs.publish_action }}
+          REASON: ${{ steps.collect.outputs.publish_reason }}
+        run: |
+          printf 'Preflight action: **%s**\n\n%s\n' "$ACTION" "$REASON" >> "$GITHUB_STEP_SUMMARY"
+
+  prepare-obi-adoption:
+    needs: preflight-obi-adoption
+    if: needs.preflight-obi-adoption.outputs.publish_action == 'create' && vars.OBI_ADOPTION_WRITER_ENABLED == 'true'
+    name: Generate the exact-SHA OBI adoption candidate without write credentials
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      base_sha: ${{ steps.prepare.outputs.base_sha }}
+      source_sha: ${{ steps.prepare.outputs.source_sha }}
+      source_pr: ${{ steps.prepare.outputs.source_pr }}
+      obi_sha: ${{ steps.prepare.outputs.obi_sha }}
+      patch_sha256: ${{ steps.package.outputs.patch_sha256 }}
+      artifact_name: ${{ steps.package.outputs.artifact_name }}
+      branch: ${{ needs.preflight-obi-adoption.outputs.branch }}
+      pr_number: ${{ needs.preflight-obi-adoption.outputs.pr_number }}
+      expected_pr_head: ${{ needs.preflight-obi-adoption.outputs.expected_pr_head }}
+    steps:
+      - name: Check out trusted main workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
           submodules: recursive
 
-      - name: Update submodule
+      - name: Validate selected source PR and exact commits
+        id: prepare
+        env:
+          SOURCE_PR: ${{ inputs.source_pr }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          OBI_SHA: ${{ needs.preflight-obi-adoption.outputs.upstream_sha }}
+          PREFLIGHT_BASE_SHA: ${{ needs.preflight-obi-adoption.outputs.main_head_sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git submodule update --checkout --remote .obi-src
-          git add .obi-src
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Dispatch from main to use the trusted workflow definition." >&2; exit 1; }
+          [[ "$OBI_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "The preflight did not provide a full exact OBI SHA." >&2; exit 1; }
+          base_sha="$(git rev-parse HEAD)"
+          [[ "$base_sha" == "$PREFLIGHT_BASE_SHA" ]] || { echo "Main moved since source preflight; rerun from the current main head." >&2; exit 1; }
+          if [[ -n "$SOURCE_PR" || -n "$SOURCE_SHA" ]]; then
+            [[ "$SOURCE_PR" =~ ^[1-9][0-9]*$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "source_pr and source_sha must be supplied together with exact valid values." >&2; exit 1; }
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${SOURCE_PR}")"
+            jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" \
+              '.state == "open" and .base.ref == "main" and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .head.sha == $sha' \
+              <<<"$pr_json" >/dev/null || { echo "source_pr must be an open same-repository PR to main at source_sha." >&2; exit 1; }
+            git fetch --no-tags origin "refs/pull/${SOURCE_PR}/head:refs/remotes/origin/obi-source"
+            [[ "$(git rev-parse refs/remotes/origin/obi-source)" == "$SOURCE_SHA" ]] || { echo "Source PR head moved; select its new exact SHA." >&2; exit 1; }
+            [[ "$(git merge-base "$base_sha" "$SOURCE_SHA")" == "$base_sha" ]] || { echo "Source PR must be based on this exact main commit." >&2; exit 1; }
+          fi
 
-      - name: Get OBI short SHA
-        id: obi-sha
-        run: |
-          echo "sha=$(git -C .obi-src rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ -n "$SOURCE_PR" ]]; then
+            paths="$RUNNER_TEMP/source-paths"
+            git diff --name-only -z "$base_sha" "$SOURCE_SHA" >"$paths"
+            found_generator=false
+            found_contracts=false
+            found_removed_helper=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                scripts/generate-obi-tests.sh) found_generator=true ;;
+                scripts/tests/mise-task-contracts.sh) found_contracts=true ;;
+                scripts/extend-beyla-kafka-oats-window.sh)
+                  found_removed_helper=true
+                  if git cat-file -e "${SOURCE_SHA}:${path}" 2>/dev/null; then
+                    echo "The obsolete Kafka helper must be deleted by the source PR." >&2
+                    exit 1
+                  fi
+                  ;;
+                *) echo "Unexpected source PR path: $path" >&2; exit 1 ;;
+              esac
+            done <"$paths"
+            [[ "$found_generator" == true && "$found_contracts" == true && "$found_removed_helper" == true ]] || { echo "Source PR is missing expected transform cleanup files." >&2; exit 1; }
+          fi
+
+          [[ "$(git -C .obi-src remote get-url origin)" == "https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation.git" ]] || { echo "Unexpected OBI submodule remote." >&2; exit 1; }
+          git -C .obi-src fetch --no-tags origin main
+          upstream_main_sha="$(git -C .obi-src rev-parse FETCH_HEAD)"
+          git -C .obi-src fetch --no-tags origin "$OBI_SHA"
+          [[ "$(git -C .obi-src cat-file -t "$OBI_SHA")" == commit ]] || { echo "obi_sha is not a commit." >&2; exit 1; }
+          git -C .obi-src merge-base --is-ancestor "$OBI_SHA" "$upstream_main_sha" || { echo "obi_sha is not reachable from upstream OBI main." >&2; exit 1; }
+
+          if [[ -n "$SOURCE_PR" ]]; then
+            git diff --binary "$base_sha" "$SOURCE_SHA" >"$RUNNER_TEMP/source.patch"
+            git apply --check --binary "$RUNNER_TEMP/source.patch"
+            git apply --binary "$RUNNER_TEMP/source.patch"
+          fi
+          git -C .obi-src checkout --detach "$OBI_SHA"
+          git add -- .obi-src
+          {
+            echo "base_sha=$base_sha"
+            echo "source_sha=$SOURCE_SHA"
+            echo "source_pr=$SOURCE_PR"
+            echo "branch=update-obi-adoption-$OBI_SHA"
+            echo "obi_sha=$OBI_SHA"
+          } >>"$GITHUB_OUTPUT"
+          echo "Building adoption candidate from Beyla $SOURCE_SHA and OBI $OBI_SHA (main $base_sha)."
 
       - name: Set up mise
         uses: ./.github/actions/setup-mise
         with:
           profile: bpf
-      # mise run vendor:obi uses pinned native Clang/LLVM to generate and vendor OBI.
-      - name: Rebuild BPF and vendor OBI
+
+      - name: Generate and vendor the exact OBI commit
         run: mise run vendor:obi
 
-      - name: Restore generated Beyla artifacts
+      - name: Restore generated binary artifacts outside this source update
         run: |
-          # Keep this updater focused on the OBI submodule pointer and vendored
-          # source changes. Generated outputs are handled by Beyla's release
-          # process, not by the weekly OBI update PR.
           git ls-files -z -- vendor | while IFS= read -r -d '' path; do
             case "$path" in
-              *_bpfel.*|vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar)
-                git restore --worktree -- "$path"
-                ;;
+              *_bpfel.*|vendor/go.opentelemetry.io/obi/pkg/internal/java/embedded/obi-java-agent.jar) git restore --worktree -- "$path" ;;
             esac
           done
+
+      - name: Package selected source and generated diff
+        id: package
+        env:
+          BASE_SHA: ${{ steps.prepare.outputs.base_sha }}
+          SOURCE_PR: ${{ steps.prepare.outputs.source_pr }}
+          SOURCE_SHA: ${{ steps.prepare.outputs.source_sha }}
+          OBI_SHA: ${{ steps.prepare.outputs.obi_sha }}
+        run: |
+          set -euo pipefail
+          validate_path() {
+            case "$1" in
+              .obi-src|go.mod|go.sum|internal/testgenerated/*|schemas/*|vendor/*|scripts/generate-obi-tests.sh|scripts/tests/mise-task-contracts.sh|scripts/extend-beyla-kafka-oats-window.sh) ;;
+              *) echo "Unexpected adoption path: $1" >&2; exit 1 ;;
+            esac
+          }
+          while IFS= read -r -d '' path; do validate_path "$path"; done < <(git diff --name-only -z "$BASE_SHA")
+          while IFS= read -r -d '' path; do validate_path "$path"; done < <(git ls-files --others --exclude-standard -z)
+          while IFS= read -r -d '' path; do git add -- "$path"; done < <(git diff --name-only -z "$BASE_SHA")
+          while IFS= read -r -d '' path; do git add -- "$path"; done < <(git ls-files --others --exclude-standard -z)
+
+          while IFS= read -r -d '' path; do
+            mode="$(git ls-files -s -- "$path" | awk 'NR == 1 { print $1 }')"
+            [[ "$mode" != 120000 ]] || { echo "Symlink changes are not allowed in an adoption artifact: $path" >&2; exit 1; }
+          done < <(git diff --cached --name-only -z "$BASE_SHA")
+
+          patch="$RUNNER_TEMP/obi-adoption.patch"
+          # Git apply cannot update a submodule gitlink. Carry the exact OBI
+          # SHA in metadata and let the trusted publisher set that one index
+          # entry after checking out the target submodule.
+          git diff --cached --binary "$BASE_SHA" -- . ':(exclude).obi-src' >"$patch"
+          [[ -s "$patch" ]] || { echo "The adoption produced no diff." >&2; exit 1; }
+          patch_sha256="$(sha256sum "$patch" | cut -d ' ' -f 1)"
+          artifact_name="obi-adoption-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "base_sha=$BASE_SHA" "source_pr=$SOURCE_PR" "source_sha=$SOURCE_SHA" "obi_sha=$OBI_SHA" "patch_sha256=$patch_sha256" >"$RUNNER_TEMP/metadata.txt"
+          {
+            echo "artifact_name=$artifact_name"
+            echo "patch_sha256=$patch_sha256"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Upload adoption patch
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: obi-adoption-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/obi-adoption.patch
+            ${{ runner.temp }}/metadata.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-obi-adoption:
+    needs: [preflight-obi-adoption, prepare-obi-adoption]
+    if: needs.preflight-obi-adoption.outputs.publish_action == 'create' && vars.OBI_ADOPTION_WRITER_ENABLED == 'true'
+    concurrency:
+      group: obi-adoption-writer
+      cancel-in-progress: false
+    name: Publish the selected build as a draft PR
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Check out the exact main base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare-obi-adoption.outputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Download adoption patch
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.prepare-obi-adoption.outputs.artifact_name }}
+          path: ${{ runner.temp }}/obi-adoption
+
+      - name: Revalidate source, active PR state, and target SHA
+        id: recheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REF: refs/heads/main
+          GITHUB_SHA: ${{ needs.prepare-obi-adoption.outputs.base_sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          OBI_SHA: ${{ needs.prepare-obi-adoption.outputs.obi_sha }}
+        run: python3 scripts/release-reconciliation/adoption/preflight/collect.py
+
+      - name: Verify artifact paths and exact source without applying candidate changes
+        env:
+          BASE_SHA: ${{ needs.prepare-obi-adoption.outputs.base_sha }}
+          SOURCE_PR: ${{ needs.prepare-obi-adoption.outputs.source_pr }}
+          SOURCE_SHA: ${{ needs.prepare-obi-adoption.outputs.source_sha }}
+          OBI_SHA: ${{ needs.prepare-obi-adoption.outputs.obi_sha }}
+          BRANCH: ${{ needs.prepare-obi-adoption.outputs.branch }}
+          PATCH_SHA256: ${{ needs.prepare-obi-adoption.outputs.patch_sha256 }}
+          RECHECK_ACTION: ${{ steps.recheck.outputs.publish_action }}
+          RECHECK_BASE: ${{ steps.recheck.outputs.main_head_sha }}
+          RECHECK_TARGET: ${{ steps.recheck.outputs.upstream_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/obi-adoption"
+          [[ "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" == "$BASE_SHA" ]] || { echo "Publisher checkout is not the verified main base." >&2; exit 1; }
+          [[ "$RECHECK_ACTION" == create && "$RECHECK_BASE" == "$BASE_SHA" && "$RECHECK_TARGET" == "$OBI_SHA" ]] || { echo "Source, main, or open-PR state changed after generation; refuse publication." >&2; exit 1; }
+          [[ "$(sha256sum obi-adoption.patch | cut -d ' ' -f 1)" == "$PATCH_SHA256" ]] || { echo "Adoption patch digest mismatch." >&2; exit 1; }
+          grep -Fxq "base_sha=$BASE_SHA" metadata.txt
+          grep -Fxq "source_pr=$SOURCE_PR" metadata.txt
+          grep -Fxq "source_sha=$SOURCE_SHA" metadata.txt
+          grep -Fxq "obi_sha=$OBI_SHA" metadata.txt
+          grep -Fxq "patch_sha256=$PATCH_SHA256" metadata.txt
+          validate_path() {
+            case "$1" in
+              .obi-src|go.mod|go.sum|internal/testgenerated/*|schemas/*|vendor/*|scripts/generate-obi-tests.sh|scripts/tests/mise-task-contracts.sh|scripts/extend-beyla-kafka-oats-window.sh) ;;
+              *) echo "Unexpected adoption artifact path: $1" >&2; exit 1 ;;
+            esac
+          }
+          patch=obi-adoption.patch
+          while IFS= read -r -d '' record; do
+            path="${record#*$'\t'}"
+            path="${path#*$'\t'}"
+            [[ -n "$path" ]] || { echo "Rename records are not allowed in adoption artifacts." >&2; exit 1; }
+            validate_path "$path"
+          done < <(git apply --numstat -z "$patch")
+          if grep -Eq '^(old mode|new mode|new file mode) 120000$' "$patch"; then
+            echo "Symlink changes are not allowed in adoption artifacts." >&2
+            exit 1
+          fi
+          current_main_sha="$(git -C "$GITHUB_WORKSPACE" ls-remote origin refs/heads/main | cut -f 1)"
+          [[ "$current_main_sha" == "$BASE_SHA" ]] || { echo "main advanced during the build; rerun from its current base." >&2; exit 1; }
+          if [[ -n "$SOURCE_PR" ]]; then
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${SOURCE_PR}")"
+            jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" \
+              '.state == "open" and .base.ref == "main" and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .head.sha == $sha' \
+              <<<"$pr_json" >/dev/null || { echo "Source PR changed after the build; no adoption PR was published." >&2; exit 1; }
+          fi
+          git -C "$GITHUB_WORKSPACE" apply --check --binary "$RUNNER_TEMP/obi-adoption/$patch"
 
       - name: Get GitHub App token
         id: get-github-app-token
         uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
         with:
           github_app: grafana-beyla-bot
+          permission_set: default
 
-      - name: Clean up stray action checkouts
-        run: rm -rf _shared-workflows-*
+      - name: Create a signed, create-only draft OBI adoption PR
+        id: create-pr
+        env:
+          APP_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ needs.prepare-obi-adoption.outputs.base_sha }}
+          OBI_SHA: ${{ needs.prepare-obi-adoption.outputs.obi_sha }}
+          SOURCE_PR: ${{ needs.prepare-obi-adoption.outputs.source_pr }}
+          SOURCE_SHA: ${{ needs.prepare-obi-adoption.outputs.source_sha }}
+          PATCH: ${{ runner.temp }}/obi-adoption/obi-adoption.patch
+          PATCH_SHA256: ${{ needs.prepare-obi-adoption.outputs.patch_sha256 }}
+          BRANCH: ${{ needs.prepare-obi-adoption.outputs.branch }}
+        run: |
+          set -euo pipefail
+          result="$(python3 scripts/release-reconciliation/adoption/preflight/publish.py)"
+          printf '%s\n' "$result" | jq -r '"number=" + (.number|tostring), "head_sha=" + .head_sha, "branch=" + .branch' >>"$GITHUB_OUTPUT"
+          printf 'Created draft adoption PR #%s at %s. Human review and merge remain required.\n' \
+            "$(jq -r .number <<<"$result")" "$(jq -r .head_sha <<<"$result")" >>"$GITHUB_STEP_SUMMARY"
 
-      - name: Create/update PR
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      - name: Initialize managed adoption status once
+        if: steps.create-pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OBI_ADOPTION_WRITER_ENABLED: ${{ vars.OBI_ADOPTION_WRITER_ENABLED }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.number }}
+          TARGET_SHA: ${{ needs.prepare-obi-adoption.outputs.obi_sha }}
+          BASE_SHA: ${{ needs.prepare-obi-adoption.outputs.base_sha }}
+          BRANCH: ${{ needs.prepare-obi-adoption.outputs.branch }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "PR creation did not return a valid number." >&2; exit 1; }
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg target "$TARGET_SHA" --arg base "$BASE_SHA" \
+            '.state == "open" and .draft == true and .base.ref == "main" and .head.repo.full_name == $repo and .head.ref == $branch and (.body | contains("<!-- grafana-beyla-obi-adoption:v1 target=" + $target + " base=" + $base + " -->"))' \
+            <<<"$pr_json" >/dev/null || { echo "Created PR does not match the validated managed candidate." >&2; exit 1; }
+          python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py init-state --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA" --base-sha "$BASE_SHA" --head-sha "$(jq -r .head.sha <<<"$pr_json")" --new-pr
+
+  reconcile-managed-obi-adoption:
+    needs: preflight-obi-adoption
+    if: needs.preflight-obi-adoption.outputs.publish_action == 'observe' || needs.preflight-obi-adoption.outputs.publish_action == 'superseded'
+    concurrency:
+      group: obi-adoption-writer
+      cancel-in-progress: false
+    name: Reconcile managed adoption status and deadline
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Check out trusted main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ steps.get-github-app-token.outputs.token }}
-          sign-commits: true
-          commit-message: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
-          title: "Update OBI submodule to ${{ steps.obi-sha.outputs.sha }}"
-          body: |
-            Automated update of the OBI (OpenTelemetry eBPF Instrumentation) submodule to the latest commit from grafana/opentelemetry-ebpf-instrumentation main.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Reconcile existing managed PR without repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.preflight-obi-adoption.outputs.pr_number }}
+          TARGET_SHA: ${{ needs.preflight-obi-adoption.outputs.upstream_sha }}
+          BASE_SHA: ${{ needs.preflight-obi-adoption.outputs.main_head_sha }}
+          ACTION: ${{ needs.preflight-obi-adoption.outputs.publish_action }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main && "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "Untrusted workflow snapshot or invalid PR selection." >&2; exit 1; }
+          if [[ "$ACTION" == superseded ]]; then
+            python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile-superseded --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA"
+          else
+            python3 scripts/release-reconciliation/adoption/obi_adoption_supervisor.py reconcile --pr-number "$PR_NUMBER" --target-sha "$TARGET_SHA" --base-sha "$BASE_SHA" --no-repair
+          fi
 
-            OBI commit: `${{ steps.obi-sha.outputs.sha }}`
-
-            If CI fails due to upstream breaking changes, add the **agent/fix-obi** label to this PR to run the agentic workflow and get suggested fixes.
-          base: main
-          branch: "update-obi-submodule-${{ github.run_id }}"
-          labels: automated-pr
-          delete-branch: true
+  writer-disabled-report:
+    needs: preflight-obi-adoption
+    if: needs.preflight-obi-adoption.outputs.publish_action == 'create' && vars.OBI_ADOPTION_WRITER_ENABLED != 'true'
+    name: Report without public writes while writer is disabled
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Explain disabled publication gate
+        env:
+          ACTION: ${{ needs.preflight-obi-adoption.outputs.publish_action }}
+          TARGET_SHA: ${{ needs.preflight-obi-adoption.outputs.upstream_sha }}
+        run: |
+          printf '# OBI adoption writer disabled\n\nRead-only preflight selected %s for %s, but no branch, PR, label, or comment was written because repository variable OBI_ADOPTION_WRITER_ENABLED is not true.\n' \
+            "$ACTION" "$TARGET_SHA" >>"$GITHUB_STEP_SUMMARY"

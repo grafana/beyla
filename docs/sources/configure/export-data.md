@@ -137,6 +137,7 @@ The Beyla metrics exporter can export the following metrics data groups for proc
   `service-graphs-connection-info` processor.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for collection requirements and metric descriptions.
+- `gpu`: Device-wide metrics for each GPU on the host, plus GPU memory usage and utilization for selected NVIDIA GPU processes. Refer to [GPU metrics](#gpu-metrics) for requirements and metric descriptions.
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts. Enables `beyla.network.flow.packets` (`beyla_network_flow_packets_total` in Prometheus)
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
@@ -159,6 +160,68 @@ metrics:
 ```
 
 The counter records successful TCP handshakes rather than application requests. The same feature is accepted in per-service and deprecated exporter feature lists. Use [attribute selection](../metrics-traces-attributes/#select-tcp-handshake-roles) to split connections by handshake role.
+
+### GPU metrics
+
+Add `gpu` to `metrics.features` to collect hardware metrics for each GPU on the host. The `all` feature group also includes `gpu`. The following configuration exports device metrics through Prometheus:
+
+```yaml
+metrics:
+  features: ["gpu"]
+prometheus_export:
+  port: 9400
+```
+
+#### Device metrics
+
+Beyla reports a separate set of readings for each supported GPU. For example, `hw.gpu.memory.usage` measures the total memory in use on one GPU across all processes. Each device and driver determines which readings are available.
+
+| Vendor | Source | Requirements |
+|--------|--------|--------------|
+| AMD | `amdgpu` driver `sysfs` and `hwmon` entries | Read access to `/sys` |
+| Intel | `i915` and `xe` driver `sysfs` and `hwmon` entries | Read access to `/sys` |
+| NVIDIA | NVIDIA Management Library (NVML) | A Beyla binary built with the `beyla_nvml` build tag, and `libnvidia-ml.so.1` available in the container, for example through the NVIDIA Container Toolkit with `NVIDIA_DRIVER_CAPABILITIES=utility` |
+
+For NVIDIA collection in a container, use a runtime image with `glibc`. The `beyla_nvml` build loads NVML at runtime. Beyla logs a warning if it finds NVIDIA GPUs but can't load NVML.
+
+Device metrics have the `hw.id`, `hw.name`, and `hw.vendor` attributes. OTLP metrics carry the `host.id` and `host.name` resource attributes, and Prometheus metrics the `host_id` and `host_name` labels.
+
+| OTLP name | Prometheus name | Type | Extra attributes |
+|-----------|-----------------|------|------------------|
+| `hw.gpu.utilization` | `hw_gpu_utilization_ratio` | Gauge | `hw.gpu.task`: `general`, `encoder`, `decoder` |
+| `hw.gpu.memory.utilization` | `hw_gpu_memory_utilization_ratio` | Gauge | |
+| `hw.gpu.memory.controller.utilization` | `hw_gpu_memory_controller_utilization_ratio` | Gauge | |
+| `hw.gpu.memory.limit` | `hw_gpu_memory_limit_bytes` | UpDownCounter | |
+| `hw.gpu.memory.usage` | `hw_gpu_memory_usage_bytes` | UpDownCounter | |
+| `hw.gpu.speed` | `hw_gpu_speed_hertz` | Gauge | `hw.gpu.clock_domain`: `graphics`, `sm`, `memory` |
+| `hw.temperature` | `hw_temperature_celsius` | Gauge | `hw.sensor_location`, for example `die`, `edge`, `junction`, `mem` |
+| `hw.power` | `hw_power_watts` | Gauge | |
+| `hw.power.limit` | `hw_power_limit_watts` | Gauge | |
+| `hw.energy` | `hw_energy_joules_total` | Counter | |
+| `hw.fan.speed` | `hw_fan_speed_rpm` | Gauge | |
+| `hw.fan.speed_ratio` | `hw_fan_speed_ratio` | Gauge | |
+| `hw.errors` | `hw_errors_total` | Counter | `error.type`: `corrected`, `uncorrected`, `pcie_replay`; `hw.type`: `gpu` |
+
+#### Per-process metrics on NVIDIA GPUs
+
+With `gpu` enabled, Beyla also reports GPU memory usage and utilization for the processes selected by [application discovery](../service-discovery/). Run Beyla in the host PID namespace so it can match the `PIDs` reported by NVML to the instrumented processes.
+
+For example, add this rule to the configuration above to instrument the service listening on port 8080:
+
+```yaml
+discovery:
+  instrument:
+    - open_ports: 8080
+```
+
+With this rule, `process.gpu.memory.usage` reports the GPU memory used by the matching process. The device metrics still cover every supported GPU on the host.
+
+Beyla defines the following per-process metrics. Both include `hw.id`, `process.pid`, `service.name`, `service.namespace`, and `service.instance.id`.
+
+| OTLP name | Prometheus name | Type | Description |
+|-----------|-----------------|------|-------------|
+| `process.gpu.memory.usage` | `process_gpu_memory_usage_bytes` | UpDownCounter | GPU memory used by the process |
+| `process.gpu.utilization` | `process_gpu_utilization_ratio` | Gauge | Average fraction of time the process used the streaming multiprocessors since the most recent collection by any exporter |
 
 ### Application runtime metrics
 
@@ -450,6 +513,7 @@ The Prometheus metrics exporter can export the following metrics data groups:
   In Kubernetes environments, the OpenTelemetry service name set by the service name discovery is the best choice for service graph metrics.
 - `application_process`: Low-level process metrics (for example, CPU, memory, disk metrics) for the selected services
 - `application_runtime`: Go, JVM, Node.js, Python, and .NET runtime metrics. Refer to [Application runtime metrics](#application-runtime-metrics) for collection requirements and metric descriptions.
+- `gpu`: Device-wide metrics for each GPU on the host, plus GPU memory usage and utilization for selected NVIDIA GPU processes. Refer to [GPU metrics](#gpu-metrics)
 - `network`: Network-level metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more
 - `network_flow_packets`: Network packet counts
 - `network_inter_zone`: Network inter-zone metrics, refer to the [network metrics](/docs/beyla/latest/network/) configuration documentation to learn more

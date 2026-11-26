@@ -90,9 +90,8 @@ func parseMSSQLError(buf []uint8) *request.SQLError {
 		msgLen := int(binary.LittleEndian.Uint16(buf[offset : offset+2]))
 		offset += 2
 
-		if offset+msgLen*2 > len(buf) {
-			return nil
-		}
+		// a capture cut inside the message keeps the error with the text captured so far
+		msgLen = min(msgLen, (len(buf)-offset)/2)
 		msgBytes := buf[offset : offset+msgLen*2]
 
 		u16s := make([]uint16, msgLen)

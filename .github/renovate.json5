@@ -18,9 +18,30 @@
   ],
   ignorePaths: [
     '.obi-src/**',
+    // Generated from mise.lock; the mise manager updates these sidecars together.
+    '.mise/locks/**',
     'internal/test/beyla_extensions/k8s/manifests/**',
     'vendor/**',
   ],
+  'pip-compile': {
+    managerFilePatterns: [
+      '/^internal/test/integration/components/openai/requirements\\.txt$/',
+    ],
+  },
+  pip_requirements: {
+    // ignorePaths is non-mergeable in Renovate, so repeat the repo-wide ignores
+    // alongside the compiled requirements.txt managed by pip-compile.
+    ignorePaths: [
+      '**/node_modules/**',
+      '**/bower_components/**',
+      '.obi-src/**',
+      '.mise/locks/**',
+      'internal/test/beyla_extensions/k8s/manifests/**',
+      'vendor/**',
+      'internal/test/integration/components/openai/requirements.txt',
+    ],
+  },
+  automerge: true,
   customManagers: [
     {
       customType: 'regex',
@@ -56,7 +77,7 @@
       depNameTemplate: 'open-telemetry/opentelemetry-injector',
       extractVersionTemplate: '^v?(?<version>.*)$',
       managerFilePatterns: [
-        '(^|/)pkg/webhook/image/opentelemetry-injector/version\\.txt$',
+        '/(^|/)pkg/webhook/image/opentelemetry-injector/version\\.txt$/',
       ],
       matchStrings: [
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
@@ -69,7 +90,7 @@
       depNameTemplate: 'grafana/grafana-opentelemetry-java',
       extractVersionTemplate: '^v?(?<version>.*)$',
       managerFilePatterns: [
-        '(^|/)pkg/webhook/image/java/version\\.txt$',
+        '/(^|/)pkg/webhook/image/java/version\\.txt$/',
       ],
       matchStrings: [
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
@@ -82,7 +103,7 @@
       depNameTemplate: 'open-telemetry/opentelemetry-operator',
       extractVersionTemplate: '^v?(?<version>.*)$',
       managerFilePatterns: [
-        '(^|/)pkg/webhook/image/opentelemetry-operator/version\\.txt$',
+        '/(^|/)pkg/webhook/image/opentelemetry-operator/version\\.txt$/',
       ],
       matchStrings: [
         '^(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\s*$',
@@ -246,6 +267,16 @@
       ],
     },
     {
+      description: 'Block gradle:9.9.2-jdk21-noble until upstream publishes a linux/arm64 manifest (adoptium/containers#1146), while allowing later releases through',
+      matchManagers: [
+        'dockerfile',
+      ],
+      matchPackageNames: [
+        'gradle',
+      ],
+      allowedVersions: '!/^9\\.9\\.2-jdk21-noble$/',
+    },
+    {
       description: 'Group Go base image tags with the selected Go toolchain and module directives',
       matchManagers: [
         'dockerfile',
@@ -354,6 +385,70 @@
         'pkg/webhook/image/opentelemetry-operator/version.txt',
       ],
       commitMessageTopic: 'inject-sdk-image: OpenTelemetry Operator version',
+    },
+    {
+      description: 'Update the Renovate mise tool weekly and keep its sidecar lock aligned',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'npm:renovate',
+      ],
+      updatePinnedDependencies: true,
+      schedule: [
+        '* 0-3 * * 1',
+      ],
+      timezone: 'UTC',
+      updateNotScheduled: false,
+    },
+    {
+      // Local copy of the relevant Flint v0.22.15 linter policy: keep actual
+      // lint tools together, but do not make lint cadence depend on runner.
+      description: 'Group mise-managed lint tool updates weekly (local Flint policy)',
+      matchManagers: [
+        'mise',
+      ],
+      matchDepNames: [
+        'actionlint',
+        'aqua:grafana/flint',
+        'clang-format',
+        'github:cpp-linter/clang-tools-static-binaries',
+        'golangci-lint',
+        'hadolint',
+        'hk',
+        'npm:renovate',
+        'pkl',
+        'rumdl',
+        'shellcheck',
+        'shfmt',
+        'taplo',
+      ],
+      groupName: 'linters',
+      commitMessageTopic: 'linter updates',
+      separateMajorMinor: false,
+      schedule: [
+        '* 0-3 * * 1',
+      ],
+      timezone: 'UTC',
+      updateNotScheduled: false,
+    },
+    {
+      // The dashboard-linter is a GitHub Action rather than a mise tool.
+      description: 'Schedule the dashboard linter with other linter updates',
+      matchManagers: [
+        'github-actions',
+      ],
+      matchDepNames: [
+        'grafana/dashboard-linter',
+      ],
+      groupName: 'linters',
+      commitMessageTopic: 'linter updates',
+      separateMajorMinor: false,
+      schedule: [
+        '* 0-3 * * 1',
+      ],
+      timezone: 'UTC',
+      updateNotScheduled: false,
     },
   ],
   labels: [

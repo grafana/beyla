@@ -5,7 +5,7 @@ package schema // import "go.opentelemetry.io/obi/internal/config/schema"
 
 // CaptureRuntimes groups language runtime capture settings.
 type CaptureRuntimes struct {
-	Go     Runtime     `yaml:"go"`
+	Go     GoRuntime   `yaml:"go"`
 	NodeJS Runtime     `yaml:"nodejs"`
 	Java   JavaRuntime `yaml:"java"`
 }
@@ -14,6 +14,13 @@ type CaptureRuntimes struct {
 type Runtime struct {
 	Enabled bool             `yaml:"enabled"`
 	Filter  AttributeFilters `yaml:"filter,omitempty"`
+}
+
+// GoRuntime describes Go probe enablement and channel span links.
+type GoRuntime struct {
+	Enabled      bool             `yaml:"enabled"`
+	Filter       AttributeFilters `yaml:"filter,omitempty"`
+	ChannelLinks *bool            `yaml:"channel_links,omitempty"`
 }
 
 // JavaRuntime describes Java runtime capture and debug settings.

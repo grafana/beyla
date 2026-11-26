@@ -15,6 +15,22 @@ permissions:
   contents: read
 
 jobs:
+  obi-adoption-tests:
+    name: Release reconciliation and OBI adoption tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Run hermetic adoption-controller tests
+        run: python3 -m unittest discover -s scripts/release-reconciliation/tests -p 'test_*.py'
+
   generate:
     name: Generate
     runs-on: ubuntu-latest
@@ -32,6 +48,11 @@ jobs:
 
       - name: Test mise task contracts
         run: bash scripts/tests/mise-task-contracts.sh
+
+      - name: Test required check path classification
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
 
       - name: Test mise action tool profiles
         run: bash .github/actions/setup-mise/test.sh
@@ -102,6 +123,8 @@ jobs:
 
       - name: Lint
         run: mise run lint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
   lint-dashboard:
     name: Lint dashboards
@@ -169,3 +192,40 @@ jobs:
           files: ./testoutput/cover-shard-${{ matrix.id }}.txt
           flags: unittests
           name: go-unittests-coverage-shard-${{ matrix.id }}-${{ github.run_number }}
+
+  core-ci:
+    name: Beyla core CI
+    if: always()
+    needs:
+      - generate
+      - lint
+      - lint-dashboard
+      - obi-adoption-tests
+      - unit-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Verify required CI jobs succeeded
+        env:
+          GENERATE_RESULT: ${{ needs.generate.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          LINT_DASHBOARD_RESULT: ${{ needs.lint-dashboard.result }}
+          OBI_ADOPTION_TESTS_RESULT: ${{ needs.obi-adoption-tests.result }}
+          UNIT_TEST_RESULT: ${{ needs.unit-test.result }}
+        run: |
+          failed=0
+          for entry in \
+            "generate:$GENERATE_RESULT" \
+            "lint:$LINT_RESULT" \
+            "lint-dashboard:$LINT_DASHBOARD_RESULT" \
+            "obi-adoption-tests:$OBI_ADOPTION_TESTS_RESULT" \
+            "unit-test:$UNIT_TEST_RESULT"; do
+            job="${entry%%:*}"
+            result="${entry#*:}"
+            if [[ "$result" != success ]]; then
+              printf 'Required CI job %s did not succeed (result: %s).\n' "$job" "${result:-missing}"
+              failed=1
+            fi
+          done
+          exit "$failed"

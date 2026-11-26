@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path"
 	"reflect"
@@ -554,7 +555,11 @@ func HeadersFromEnv(varName string) map[string]string {
 	headers := map[string]string{}
 
 	addToMap := func(k string, v string) {
-		headers[k] = v
+		value, err := url.PathUnescape(v)
+		if err != nil {
+			return
+		}
+		headers[k] = strings.TrimSpace(value)
 	}
 
 	parseProcessOTELEnvVar(varName, addToMap)

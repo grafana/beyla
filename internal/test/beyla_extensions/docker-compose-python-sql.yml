@@ -24,7 +24,7 @@ services:
       sqlserver:
         condition: service_started
 
-  autoinstrumenter:
+  obi:
     build:
       context: ../../..
       dockerfile: ./internal/test/beyla_extensions/components/beyla/Dockerfile

@@ -7,8 +7,6 @@ import (
 	"errors"
 	"maps"
 	"math"
-
-	"go.opentelemetry.io/obi/pkg/runtimemetrics"
 )
 
 // cumulativeSessionTotals retains the last published attachment-relative values.
@@ -37,7 +35,7 @@ func mergeExceptionCounts(base, session map[string]uint64) (map[string]uint64, e
 }
 
 // merge applies the session's fixed baseline and retains the resulting totals.
-func (t *cumulativeSessionTotals) merge(base cumulativeSessionTotals, snapshot *runtimemetrics.DotnetRuntimeMetricSnapshot) error {
+func (t *cumulativeSessionTotals) merge(base cumulativeSessionTotals, snapshot *runtimeSnapshot) error {
 	next := *t
 	for _, counter := range []struct {
 		value *uint64
@@ -75,12 +73,12 @@ func (t *cumulativeSessionTotals) merge(base cumulativeSessionTotals, snapshot *
 		*counter.value = seconds
 		*counter.total = seconds
 	}
-	if snapshot.Exceptions != nil {
-		totals, err := mergeExceptionCounts(base.exceptions, snapshot.Exceptions)
+	if snapshot.exceptions != nil {
+		totals, err := mergeExceptionCounts(base.exceptions, snapshot.exceptions)
 		if err != nil {
 			return err
 		}
-		snapshot.Exceptions = totals
+		snapshot.exceptions = totals
 		next.exceptions = totals
 	}
 	*t = next

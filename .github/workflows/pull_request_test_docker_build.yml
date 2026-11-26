@@ -54,3 +54,21 @@ jobs:
           file: ./${{ matrix.file }}
           push: false
           platforms: ${{ matrix.platform }}
+
+  required-check:
+    name: Beyla container builds
+    if: always()
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Report required-check result
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          if [[ "${BUILD_RESULT}" == success ]]; then
+            exit 0
+          fi
+          echo "Unexpected container build result: ${BUILD_RESULT}" >&2
+          exit 1

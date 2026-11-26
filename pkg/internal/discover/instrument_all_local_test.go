@@ -94,6 +94,6 @@ func TestLocalSelectionSharesSocketSnapshots(t *testing.T) {
 		assert.False(t, selector.IncludesPID(pid))
 		assert.Equal(t, []surveyMatch{deleted}, <-surveyEvents)
 		cancel()
-		<-pipeline.Done()
+		<-pipeline.Done() //nolint:errcheck // The test only needs to wait for shutdown.
 	})
 }

@@ -9,7 +9,21 @@ function loadWithLinuxProcessDetector(load, options = {}) {
   const logger = options.logger ?? log;
   let utils;
   try {
-    utils = options.utils ?? require("./utils");
+    // The upstream package changed its bundled utility filename from utils.js
+    // to utils.cjs in v0.82. Keep patching the same module used by its register
+    // entrypoint for both layouts.
+    if (options.utils) {
+      utils = options.utils;
+    } else {
+      let utilsModule;
+      try {
+        utilsModule = require.resolve("./utils.cjs");
+      } catch (error) {
+        if (error.code !== "MODULE_NOT_FOUND") throw error;
+        utilsModule = require.resolve("./utils");
+      }
+      utils = require(utilsModule);
+    }
   } catch (error) {
     logger.warning(`could not load the OpenTelemetry resource detector registry: ${error.message}`);
     return load();

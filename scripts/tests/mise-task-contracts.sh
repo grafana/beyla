@@ -150,53 +150,46 @@ grep -Fx '<./pkg/alpha>' "$tmp/gotestsum"
 grep -Fx '<./pkg/beta>' "$tmp/gotestsum"
 grep -Fx '<./literal*>' "$tmp/gotestsum"
 
-# The Beyla-only OATS adaptation must change only the generic Kafka input
-# retry window, leave the upstream fixture untouched, and reject source drift.
-mkdir -p "$tmp/oats-window"
-cat >"$tmp/oats-window/upstream.yaml" <<'YAML'
-input:
-  - path: /produce
-    retry:
-      timeout: 10s
-      interval: 500ms
-      continue_after_success: true
-expected:
-  traces:
-    - traceql: kafka
-      match_spans:
-        - name: send my-topic
-          match_type: strict
-    - traceql: http
-      match_spans:
-        - name: GET /produce
-          match_type: strict
-YAML
-cp "$tmp/oats-window/upstream.yaml" "$tmp/oats-window/beyla.yaml"
-"$root/scripts/extend-beyla-kafka-oats-window.sh" "$tmp/oats-window/beyla.yaml"
-sed '/^input:[[:space:]]*$/,/^expected:[[:space:]]*$/s/^      timeout: 10s$/      timeout: 30s/' \
-  "$tmp/oats-window/upstream.yaml" >"$tmp/oats-window/expected.yaml"
-diff -u "$tmp/oats-window/expected.yaml" "$tmp/oats-window/beyla.yaml"
-[[ $(grep -F -c '      timeout: 10s' "$tmp/oats-window/upstream.yaml") -eq 1 ]]
-for invalid_value in 'wrong-duration' 'trailing-comment' 'shifted-indentation'; do
-  cp "$tmp/oats-window/upstream.yaml" "$tmp/oats-window/beyla.yaml"
-  case "$invalid_value" in
-  wrong-duration)
-    sed 's/timeout: 10s$/timeout: 5s/' "$tmp/oats-window/beyla.yaml" >"$tmp/oats-window/invalid.yaml"
-    ;;
-  trailing-comment)
-    sed 's/timeout: 10s$/timeout: 10s # note/' "$tmp/oats-window/beyla.yaml" >"$tmp/oats-window/invalid.yaml"
-    ;;
-  shifted-indentation)
-    sed 's/^      timeout: 10s$/        timeout: 10s/' "$tmp/oats-window/beyla.yaml" >"$tmp/oats-window/invalid.yaml"
-    ;;
-  esac
-  mv "$tmp/oats-window/invalid.yaml" "$tmp/oats-window/beyla.yaml"
-  cp "$tmp/oats-window/beyla.yaml" "$tmp/oats-window/unchanged.yaml"
-  if "$root/scripts/extend-beyla-kafka-oats-window.sh" "$tmp/oats-window/beyla.yaml"; then
-    echo 'Kafka OATS input-window adaptation must reject unexpected source values.' >&2
-    exit 1
-  fi
-  diff -u "$tmp/oats-window/unchanged.yaml" "$tmp/oats-window/beyla.yaml"
-done
+# Contract-test argument forwarding and failure handling without Mise or real
+# test execution. Workflow checks exercise the three variants.
+cat >"$tmp/bin/gotestsum" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$GOTESTSUM_LOG"
+exit "${GOTESTSUM_EXIT:-0}"
+SH
+chmod +x "$tmp/bin/gotestsum"
+shard_task="$root/.mise/tasks/integration/run/shard"
+shard_env=(
+  "PATH=$tmp/bin:$PATH"
+  'MATRIX_ID=shard-test'
+  'MATRIX_JSON={"id":"shard-test"}'
+  'MATRIX_TEST_PATTERN=TestAlpha'
+  "RUN_NUMBER=1"
+  "TEST_TAGS=integration"
+  "REPORT_DIR=$tmp/reports"
+  "GOTESTSUM_LOG=$tmp/shard-gotestsum"
+)
+forwarded="-run=Test Alpha [literal]*;\$(touch $tmp/should-not-exist)"
+env "${shard_env[@]}" bash "$shard_task" ./internal/testgenerated/integration \
+  "$forwarded" >/dev/null
+grep -Fxq -- "$forwarded" "$tmp/shard-gotestsum"
+[[ ! -e "$tmp/should-not-exist" ]]
+
+invalid_log="$tmp/invalid-shard-gotestsum"
+if env "${shard_env[@]}" MATRIX_TEST_PATTERN='' GOTESTSUM_LOG="$invalid_log" \
+  bash "$shard_task" ./internal/testgenerated/integration >/dev/null 2>&1; then
+  echo 'Integration shard accepted an empty pattern' >&2
+  exit 1
+fi
+[[ ! -e "$invalid_log" ]]
+
+if env "${shard_env[@]}" GOTESTSUM_LOG="$tmp/failing-gotestsum" GOTESTSUM_EXIT=23 bash "$shard_task" \
+  ./internal/testgenerated/integration >/dev/null 2>&1; then
+  echo 'Integration shard did not propagate gotestsum failure' >&2
+  exit 1
+else
+  shard_status=$?
+fi
+[[ "$shard_status" -eq 23 ]]
 
 echo 'mise task contract tests passed'

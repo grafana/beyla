@@ -33,6 +33,9 @@ func route53InventoryRefresher(
 		return nil, fmt.Errorf("loading AWS configuration for Route53 name resolver: %w", err)
 	}
 	inventory := cloud.NewRoute53Inventory(route53.NewFromConfig(awsCfg), cloudCfg.Route53.HostedZoneIDs)
+	if cloudCfg.Route53.DiscoverHostedZones {
+		inventory = cloud.NewRoute53DiscoveryInventory(route53.NewFromConfig(awsCfg), cloudCfg.Route53.HostedZoneIDs)
+	}
 	inventory.VPCID = nodeMeta.EC2VPCID
 	inventory.VPCRegion = nodeMeta.Region
 	inventory.RefreshInterval = cloudCfg.Route53.RefreshInterval

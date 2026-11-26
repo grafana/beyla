@@ -4,7 +4,9 @@ min_version = "2026.11.4"
 monorepo_root = true
 
 [monorepo]
-lockfile = true
+# Keep project lockfiles until Renovate supports monorepo lockfiles; re-enable
+# once https://github.com/renovatebot/renovate/pull/45903 ships.
+lockfile = false
 config_roots = ["internal/java", "internal/test/oats"]
 
 [monorepo.path_aliases]
@@ -46,7 +48,14 @@ extends = "compile:defaults"
 shell = "bash -euo pipefail -c"
 description = "Compile Beyla"
 run = '''echo "### Compiling Beyla"
-CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
+gpu_ldflags=""
+if [[ " ${BUILD_TAGS:-} " == *" beyla_nvml "* && "$GOOS" == linux ]]; then
+  case "$GOARCH" in
+    amd64) gpu_ldflags="-I /lib64/ld-linux-x86-64.so.2" ;;
+    arm64) gpu_ldflags="-I /lib/ld-linux-aarch64.so.1" ;;
+  esac
+fi
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -tags "${BUILD_TAGS:-}" -ldflags="${gpu_ldflags} -X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
 
 [tasks."compile:cache"]
 extends = "compile:defaults"
@@ -82,25 +91,34 @@ description = "Compile Beyla with debug symbols"
 run = '''CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -gcflags "-N -l" -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
 
 [tools]
-go = { version = "1.26.10" }
-golangci-lint = { version = "2.14.0" }
-hk = "2.11.1"
-rumdl = "v0.3.4"
+go = { version = "1.27.4" }
+golangci-lint = { version = "2.15.0" }
+hk = "2.13.0"
+rumdl = "v0.3.5"
 actionlint = "1.7.12"
 hadolint = "2.15.1"
 shellcheck = "0.11.0"
 shfmt = "3.14.1"
 taplo = "0.10.0"
-pkl = "0.32.2"
+# Pkl 0.33.1 no longer publishes a native Intel macOS artifact.
+pkl = { version = "0.33.1", os = ["linux", "macos/arm64", "windows"] }
 kind = "0.33.0"
-setup-envtest = "0.25.1"
+setup-envtest = "0.25.3"
 gotestsum = "1.13.0"
-ginkgo = { version = "2.33.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
+ginkgo = { version = "2.34.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 "go:github.com/google/go-licenses/v2" = { version = "2.0.1", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 "go:github.com/cilium/ebpf/cmd/bpf2go" = { version = "0.22.0", install_env = { GOARCH = "{{ arch(x64=\"amd64\", arm64=\"arm64\") }}", GOOS = "{{ os(macos=\"darwin\") }}" } }
 clang = { version = "22.1.8" }
-"conda:llvm-tools" = { version = "22.1.8" }
-"clang-format" = { version = "22.1.8" }
+"conda:llvm-tools" = { version = "23.1.6" }
+"clang-format" = { version = "23.1.6" }
+"aqua:grafana/flint" = "0.22.15"
+
+# @yarnpkg/libzip@3.2.2 has an npm signature and matches Yarn's release commit,
+# but was published without provenance; the no-downgrade policy rejects Renovate.
+[tools."npm:renovate"]
+version = "44.255.2"
+allow_builds = ["re2"]
+trust_policy_excludes = ["@yarnpkg/libzip@3.2.2"]
 
 [tools."github:cpp-linter/clang-tools-static-binaries"]
 version = "2026.09.01-5fb8802d"
@@ -202,6 +220,7 @@ shell = "bash -euo pipefail -c"
 alias = ["obi-submodule"]
 description = "Initialize and update the pinned OBI submodule"
 run = '''echo "# Updating OBI Git submodule..."
+git submodule sync --recursive
 git submodule update --init --recursive'''
 
 [tasks."test:matrix"]
@@ -422,3 +441,12 @@ description = "Prepare, run, and clean up Kubernetes integration tests"
 depends = ["integration:prepare"]
 depends_post = ["clean:integration-test"]
 run = [{ task = "integration:run:k8s" }, { task = "integration:coverage-data" }]
+
+# GPU integration tests use fixtures and require no GPU hardware.
+[tasks."test:gpu-integration"]
+alias = ["test-gpu-integration"]
+run = 'CGO_ENABLED=0 go test -mod=vendor -tags "integration ${BUILD_TAGS:-}" ./pkg/export/gpumetrics -run TestGPUIntegration -count=1'
+
+[tasks."test:gpu-nvml-integration"]
+alias = ["test-gpu-nvml-integration"]
+run = 'CGO_ENABLED=0 go test -mod=vendor -tags "integration beyla_nvml" ./pkg/internal/infraolly/gpu -run TestNVMLIntegration -count=1'

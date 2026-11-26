@@ -69,6 +69,14 @@ type Informer interface {
 	Subscribe(ctx context.Context) (<-chan Event, error)
 }
 
+// send drops the event once ctx is done, as the consumer may have stopped reading.
+func send(ctx context.Context, out chan<- Event, ev Event) {
+	select {
+	case out <- ev:
+	case <-ctx.Done():
+	}
+}
+
 func netInterfaces() ([]Interface, error) {
 	ifs, err := net.Interfaces()
 	if err != nil {

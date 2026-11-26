@@ -14,7 +14,6 @@
 set -euo pipefail
 
 UPSTREAM_REPO="open-telemetry/opentelemetry-ebpf-instrumentation"
-FORK_REPO="grafana/opentelemetry-ebpf-instrumentation"
 OBI_SUBMODULE=".obi-src"
 PR_NUMBER=""
 
@@ -256,7 +255,7 @@ if [[ -z "$MERGE_COMMIT" ]]; then
   exit 1
 fi
 
-log_verbose "Checking if commit $MERGE_COMMIT exists in fork $FORK_REPO"
+log_verbose "Checking if commit $MERGE_COMMIT exists in $UPSTREAM_REPO"
 
 # First, ensure the submodule has the latest commits fetched
 log_verbose "Fetching latest commits in OBI submodule..."
@@ -267,9 +266,8 @@ log_verbose "Fetching latest commits in OBI submodule..."
 # Check if the commit exists in the local submodule
 if ! (cd "$OBI_SUBMODULE" && git cat-file -e "$MERGE_COMMIT" 2>/dev/null); then
   # Try checking via API as fallback
-  FORK_COMMIT_CHECK=$(gh api "repos/$FORK_REPO/commits/$MERGE_COMMIT" --jq '.sha' 2>&1) || {
-    log_info "Commit $MERGE_COMMIT not found in $FORK_REPO"
-    log_info "The upstream commit may not have been synced to the Grafana fork yet."
+  UPSTREAM_COMMIT_CHECK=$(gh api "repos/$UPSTREAM_REPO/commits/$MERGE_COMMIT" --jq '.sha' 2>&1) || {
+    log_info "Commit $MERGE_COMMIT not found in $UPSTREAM_REPO"
     echo ""
     if [[ -n "${ORIGINAL_ISSUE:-}" ]]; then
       echo "OBI Issue #$ORIGINAL_ISSUE (PR #$PR_NUMBER) was not yet released as part of Beyla"
@@ -278,7 +276,7 @@ if ! (cd "$OBI_SUBMODULE" && git cat-file -e "$MERGE_COMMIT" 2>/dev/null); then
     fi
     exit 0
   }
-  log_verbose "Commit exists in fork (via API): $FORK_COMMIT_CHECK"
+  log_verbose "Commit exists in upstream (via API): $UPSTREAM_COMMIT_CHECK"
   log_verbose "Attempting to fetch merge commit into local submodule..."
 
   # Try to fetch the specific commit
@@ -291,7 +289,7 @@ if ! (cd "$OBI_SUBMODULE" && git cat-file -e "$MERGE_COMMIT" 2>/dev/null); then
 
     # Verify the commit is now available
     if ! (cd "$OBI_SUBMODULE" && git cat-file -e "$MERGE_COMMIT" 2>/dev/null); then
-      log_error "Commit $MERGE_COMMIT exists in fork but could not be fetched locally."
+      log_error "Commit $MERGE_COMMIT exists in $UPSTREAM_REPO but could not be fetched locally."
       log_error "Try running: cd $OBI_SUBMODULE && git fetch origin"
       exit 1
     fi

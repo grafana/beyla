@@ -23,15 +23,16 @@ func FromOBI(c *obi.Config) *Config {
 	cfgutil.Convert(c, cfg, map[string]string{
 		// Fields that do not exist in OBI Config are marked for skipping,
 		// to avoid that convert panics,
-		".obi":                          cfgutil.SkipConversion,
-		".TracesReceiver":               cfgutil.SkipConversion,
-		".SigilExport":                  cfgutil.SkipConversion,
-		".Processes":                    cfgutil.SkipConversion,
-		".Grafana":                      cfgutil.SkipConversion,
-		".Topology":                     cfgutil.SkipConversion,
-		".Discovery.Survey":             cfgutil.SkipConversion,
-		".Discovery.InstrumentAllLocal": cfgutil.SkipConversion,
-		".Injector":                     cfgutil.SkipConversion,
+		".obi":                             cfgutil.SkipConversion,
+		".TracesReceiver":                  cfgutil.SkipConversion,
+		".SigilExport":                     cfgutil.SkipConversion,
+		".Processes":                       cfgutil.SkipConversion,
+		".Grafana":                         cfgutil.SkipConversion,
+		".Topology":                        cfgutil.SkipConversion,
+		".Discovery.Survey":                cfgutil.SkipConversion,
+		".Discovery.InstrumentAllLocal":    cfgutil.SkipConversion,
+		".Injector":                        cfgutil.SkipConversion,
+		".Attributes.SanitizeSQLQueryText": "SanitizeDBQueryText",
 	})
 	return cfg
 }
@@ -45,7 +46,8 @@ func (c *Config) AsOBI() *obi.Config {
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
 			// TODO: re-enable when we support v2 config
-			".Attributes.UseV2Selection": cfgutil.SkipConversion,
+			".Attributes.UseV2Selection":      cfgutil.SkipConversion,
+			".Attributes.SanitizeDBQueryText": "SanitizeSQLQueryText",
 		})
 		overrideOBI(c, obiCfg)
 		c.obi = obiCfg

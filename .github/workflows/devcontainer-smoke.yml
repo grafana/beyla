@@ -3,25 +3,34 @@ name: Devcontainer smoke test
 on:
   pull_request:
     branches: ["main", "release-*"]
-    paths:
-      - ".devcontainer/**"
-      - "Dockerfile"
-      - "mise.toml"
-      - "mise.lock"
-      - ".mise/**"
-      - "internal/java/mise.toml"
-      - "internal/java/.mise/**"
-      - "internal/test/oats/mise.toml"
-      - "internal/test/oats/.mise/**"
-      - ".github/actions/setup-mise/**"
-      - ".github/workflows/devcontainer-smoke.yml"
 
 permissions:
   contents: read
 
 jobs:
+  scope:
+    uses: ./.github/workflows/_required-check-scope.yml
+    permissions:
+      contents: read
+    with:
+      paths: |
+        .devcontainer/**
+        Dockerfile
+        mise.toml
+        mise.lock
+        .mise/**
+        internal/java/mise.toml
+        internal/java/mise.lock
+        internal/java/.mise/**
+        internal/test/oats/mise.toml
+        internal/test/oats/.mise/**
+        .github/actions/setup-mise/**
+        .github/workflows/devcontainer-smoke.yml
+
   smoke:
     name: Build and run mise in devcontainer
+    needs: scope
+    if: needs.scope.outputs.applicable == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -62,3 +71,23 @@ jobs:
               mise run --skip-tools test:prepare-output
               test -d "${TEST_OUTPUT}/run"
             '
+
+  required-check:
+    name: Beyla devcontainer CI
+    if: always()
+    needs: [scope, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Report required-check result
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          APPLICABLE: ${{ needs.scope.outputs.applicable }}
+          TEST_RESULT: ${{ needs.smoke.result }}
+        run: |
+          if [[ "${SCOPE_RESULT}" == success && ( ( "${APPLICABLE}" == false && "${TEST_RESULT}" == skipped ) || ( "${APPLICABLE}" == true && "${TEST_RESULT}" == success ) ) ]]; then
+            exit 0
+          fi
+          echo "Unexpected required-check results: scope=${SCOPE_RESULT}, applicable=${APPLICABLE}, smoke=${TEST_RESULT}" >&2
+          exit 1

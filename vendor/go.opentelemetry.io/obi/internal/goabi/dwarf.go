@@ -7,12 +7,19 @@ import (
 	"debug/dwarf"
 	"errors"
 	"fmt"
+	"strings"
 
 	"go.opentelemetry.io/obi/internal/goversion"
 )
 
+// RuntimeUnit is the DWARF compile unit to which the Go linker attaches every
+// Go type.
+const RuntimeUnit = "runtime"
+
 type dwarfQuery interface {
 	name() string
+	// unit returns the name of the compile unit that defines name.
+	unit() string
 	extract(*dwarf.Data, *dwarf.Entry) (uint64, bool, error)
 }
 
@@ -38,7 +45,25 @@ func Extract(data *dwarf.Data, targetVersion goversion.Version) (ABI, error) {
 	if err != nil {
 		return ABI{}, err
 	}
-	values, err := readDWARF(data, requested)
+	// Reading only the compile units that define the requested names avoids
+	// decoding the whole DWARF.
+	return extractFromUnitsOrAll(data, requested, definingUnits(requested))
+}
+
+// extractFromUnitsOrAll extracts the ABI from the compile units in units, and
+// from every compile unit if they are not enough.
+func extractFromUnitsOrAll(data *dwarf.Data, requested []definition, units map[string]bool) (ABI, error) {
+	abi, err := extractFromUnits(data, requested, units)
+	if err == nil {
+		return abi, nil
+	}
+	return extractFromUnits(data, requested, nil)
+}
+
+// extractFromUnits is Extract limited to the compile units in units, or to
+// every compile unit if units is nil.
+func extractFromUnits(data *dwarf.Data, requested []definition, units map[string]bool) (ABI, error) {
+	values, err := readDWARF(data, requested, units)
 	if err != nil {
 		return ABI{}, err
 	}
@@ -51,8 +76,20 @@ func Extract(data *dwarf.Data, targetVersion goversion.Version) (ABI, error) {
 	})
 }
 
+func definingUnits(requested []definition) map[string]bool {
+	units := map[string]bool{}
+	for _, definition := range requested {
+		units[definition.query.unit()] = true
+	}
+	return units
+}
+
 func (q fieldQuery) name() string {
 	return q.typeName
+}
+
+func (q fieldQuery) unit() string {
+	return RuntimeUnit
 }
 
 func (q fieldQuery) extract(data *dwarf.Data, entry *dwarf.Entry) (uint64, bool, error) {
@@ -80,6 +117,10 @@ func (q sizeQuery) name() string {
 	return q.typeName
 }
 
+func (q sizeQuery) unit() string {
+	return RuntimeUnit
+}
+
 func (q sizeQuery) extract(_ *dwarf.Data, entry *dwarf.Entry) (uint64, bool, error) {
 	value, err := unsignedValue(entry.Val(dwarf.AttrByteSize))
 	if err != nil {
@@ -90,6 +131,16 @@ func (q sizeQuery) extract(_ *dwarf.Data, entry *dwarf.Entry) (uint64, bool, err
 
 func (q constantQuery) name() string {
 	return q.constantName
+}
+
+// unit returns the package path of the constant: a constant is defined in the
+// compile unit of its package.
+func (q constantQuery) unit() string {
+	dot := strings.LastIndexByte(q.constantName, '.')
+	if dot < 0 {
+		return ""
+	}
+	return q.constantName[:dot]
 }
 
 func (q constantQuery) extract(_ *dwarf.Data, entry *dwarf.Entry) (uint64, bool, error) {
@@ -103,7 +154,9 @@ func (q constantQuery) extract(_ *dwarf.Data, entry *dwarf.Entry) (uint64, bool,
 	return value, true, nil
 }
 
-func readDWARF(data *dwarf.Data, requested []definition) (map[string]uint64, error) {
+// readDWARF reads the requested definitions from the compile units in units,
+// or from every compile unit if units is nil.
+func readDWARF(data *dwarf.Data, requested []definition, units map[string]bool) (map[string]uint64, error) {
 	queries := map[string][]definition{}
 	for _, definition := range requested {
 		name := definition.query.name()
@@ -121,6 +174,10 @@ func readDWARF(data *dwarf.Data, requested []definition) (map[string]uint64, err
 			break
 		}
 		name, _ := entry.Val(dwarf.AttrName).(string)
+		if entry.Tag == dwarf.TagCompileUnit && units != nil && !units[name] {
+			reader.SkipChildren()
+			continue
+		}
 		for _, definition := range queries[name] {
 			value, found, err := definition.query.extract(data, entry)
 			if err != nil {

@@ -55,7 +55,7 @@ if [[ " ${BUILD_TAGS:-} " == *" beyla_nvml "* && "$GOOS" == linux ]]; then
     arm64) gpu_ldflags="-I /lib/ld-linux-aarch64.so.1" ;;
   esac
 fi
-CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -tags "${BUILD_TAGS:-}" -ldflags="${gpu_ldflags} -X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -tags "${BUILD_TAGS:-}" -ldflags="-s -w ${gpu_ldflags} -X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CMD}" "$MAIN_GO_FILE"'''
 
 [tasks."compile:cache"]
 extends = "compile:defaults"
@@ -63,7 +63,7 @@ shell = "bash -euo pipefail -c"
 alias = ["compile-cache"]
 description = "Compile Beyla Kubernetes cache"
 run = '''echo "### Compiling Beyla Kubernetes cache"
-CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CACHE_CMD}" "$CACHE_MAIN_GO_FILE"'''
+CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -mod vendor -ldflags="-s -w -X '${BUILDINFO_PKG}.Version=${RELEASE_VERSION}' -X '${BUILDINFO_PKG}.Revision=${RELEASE_REVISION}'" -a -o "bin/${CACHE_CMD}" "$CACHE_MAIN_GO_FILE"'''
 
 [tasks."compile:cache-coverage"]
 extends = "compile:defaults"

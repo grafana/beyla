@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
+	"go.opentelemetry.io/obi/pkg/appolly/traces"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
@@ -180,6 +181,13 @@ func (pf *ProcessFinder) connectSurveySubPipeline(ctx context.Context, swi *swar
 		pf.cfg.AsOBI(), "surveyEvents")
 	swi.Add(SurveyEventGenerator(&pf.cfg.Attributes.Kubernetes, pf.ctxInfo.K8sInformer, surveyExecutableTypes, surveyEvents),
 		swarm.WithID("SurveyEventGenerator"))
+	if !pf.ctxInfo.K8sInformer.IsKubeEnabled() {
+		hostEvents := msg2.QueueFromConfig[exec.ProcessEvent](obiCfg, "surveyHostEvents")
+		swi.Add(traces.HostProcessEventDecoratorProvider(&obiCfg.Attributes.InstanceID, surveyEvents, hostEvents),
+			swarm.WithID("SurveyHostProcessEventDecorator"))
+		surveyEvents = hostEvents
+	}
+
 	swi.Add(otel.SurveyInfoMetrics(pf.ctxInfo, &pf.cfg.OTELMetrics, surveyEvents),
 		swarm.WithID("SurveyInfoMetrics"))
 	swi.Add(prom.SurveyPrometheusEndpoint(ctx, pf.ctxInfo, &pf.cfg.Prometheus, surveyEvents),

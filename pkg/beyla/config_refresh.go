@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 )
 
-// LoadRefreshConfig loads a configuration that refreshes the discovery criteria of a running
+// LoadRefreshConfig loads a configuration that refreshes discovery and trace sampling in a running
 // Beyla. Unlike LoadConfig, it does not override the OBI process-wide settings again, as the
 // running pipeline reads them concurrently and the startup load already set them.
 //
@@ -30,7 +30,7 @@ func LoadRefreshConfig(data []byte, environment map[string]string) (*Config, err
 }
 
 func (c *Config) ChangedSettings(other *Config) []string {
-	return changedFields("", reflect.ValueOf(c.withoutSelection()), reflect.ValueOf(other.withoutSelection()))
+	return changedFields("", reflect.ValueOf(c.fixedSettings()), reflect.ValueOf(other.fixedSettings()))
 }
 
 // changedFields descends into the struct fields that differ, to report the innermost ones.
@@ -79,9 +79,15 @@ func fieldPath(parent string, field reflect.StructField) string {
 	return parent + "." + name
 }
 
-func (c *Config) withoutSelection() Config {
+func (c *Config) fixedSettings() Config {
 	fixed := *c
 	fixed.obi = nil
+	fixed.localPIDSelector = nil
+	fixed.Traces.SamplerConfig = services.SamplerConfig{}
+	// The local socket matcher applies its exclusions before handing PIDs to OBI.
+	if fixed.Discovery.InstrumentAllLocal {
+		return fixed
+	}
 	fixed.Port = services.IntEnum{}
 	fixed.TargetPIDs = services.IntEnum{}
 	fixed.Exec = services.RegexpAttr{}

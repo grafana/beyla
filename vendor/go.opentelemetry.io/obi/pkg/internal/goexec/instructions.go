@@ -40,7 +40,7 @@ type relocationInfo struct {
 func isSupportedGoBinary(elfF *elf.File) error {
 	versionString, _, err := getGoDetails(elfF)
 	if err == nil && !supportedGoVersion(versionString) {
-		return fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", versionString, minGoVersion.Release())
+		return fmt.Errorf("%w: %v. Minimum supported version is %v", ErrUnsupportedGoVersion, versionString, minGoVersion.Release())
 	}
 	return nil
 }
@@ -445,7 +445,7 @@ func (in *inspection) moduledataABI() (goabi.ABI, error) {
 	}
 	targetVersion, err := goversion.Parse(versionString)
 	if err != nil || targetVersion.Compare(minGoVersion) < 0 {
-		return goabi.ABI{}, fmt.Errorf("unsupported Go version: %v. Minimum supported version is %v", versionString, minGoVersion.Release())
+		return goabi.ABI{}, fmt.Errorf("%w: %v. Minimum supported version is %v", ErrUnsupportedGoVersion, versionString, minGoVersion.Release())
 	}
 
 	if targetVersion.Compare(minGoRuntimeTypeMetadataVersion) < 0 {

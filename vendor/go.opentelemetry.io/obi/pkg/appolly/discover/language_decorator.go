@@ -8,9 +8,6 @@ import (
 	"log/slog"
 	"strings"
 
-	lru "github.com/hashicorp/golang-lru/v2"
-
-	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -27,11 +24,9 @@ func LanguageDecoratorProvider(
 	input, output *msg.Queue[[]Event[ProcessAttrs]],
 ) swarm.InstanceFunc {
 	return func(_ context.Context) (swarm.RunFunc, error) {
-		instrumentableCache, _ := lru.New[cacheKey, svc.InstrumentableType](1000)
 		ld := languageDecorator{
 			in:           input.Subscribe(msg.SubscriberName("LanguageDecorator")),
 			out:          output,
-			typeCache:    instrumentableCache,
 			log:          llog(),
 			ignoredPaths: cfg.Discovery.ExcludedLinuxSystemPaths,
 		}
@@ -42,7 +37,6 @@ func LanguageDecoratorProvider(
 type languageDecorator struct {
 	in           <-chan []Event[ProcessAttrs]
 	out          *msg.Queue[[]Event[ProcessAttrs]]
-	typeCache    *lru.Cache[cacheKey, svc.InstrumentableType]
 	log          *slog.Logger
 	ignoredPaths []string
 }
@@ -57,7 +51,6 @@ func (ld *languageDecorator) isIgnoredPath(exePath string) bool {
 }
 
 var (
-	_findInodeForPID  = FindINodeForPID
 	_executableReady  = ExecutableReady
 	_findProcLanguage = procs.FindProcLanguage
 )
@@ -67,17 +60,9 @@ func (ld *languageDecorator) decorateEvent(ev *Event[ProcessAttrs]) {
 		if ld.isIgnoredPath(exePath) {
 			return
 		}
-		if dev, ino, err := _findInodeForPID(ev.Obj.pid); err == nil {
-			key := cacheKey{Dev: dev, Ino: ino}
-			if t, ok := ld.typeCache.Get(key); ok {
-				ev.Obj.detectedType = t
-				return
-			}
-			t := _findProcLanguage(ev.Obj.pid)
-			ev.Obj.detectedType = t
-			ld.log.Debug("detected type", "pid", ev.Obj.pid, "type", t)
-			ld.typeCache.Add(key, t)
-		}
+		t, _ := _findProcLanguage(ev.Obj.pid)
+		ev.Obj.detectedType = t
+		ld.log.Debug("detected type", "pid", ev.Obj.pid, "type", t)
 	}
 }
 

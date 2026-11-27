@@ -31,6 +31,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obiconfig "go.opentelemetry.io/obi/pkg/config"
 	featureexport "go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/export/attributes"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/transform"
@@ -780,6 +781,11 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 	if changedExemplarFilter(before, after) {
 		changed = append(changed, "prometheus_export.exemplar_filter")
 	}
+	spanMetricPaths, err := changedSpanMetricAttributes(before, after)
+	if err != nil {
+		return nil, err
+	}
+	changed = append(changed, spanMetricPaths...)
 	if before.Enabled(obi.FeatureNetO11y) != after.Enabled(obi.FeatureNetO11y) {
 		changed = append(changed, migrationNetworkEnablePath(root))
 	}
@@ -823,6 +829,27 @@ func changedInputFields(data []byte, before, after *obi.Config) ([]string, error
 	}
 	sort.Strings(changed)
 	return slices.Compact(changed), nil
+}
+
+func changedSpanMetricAttributes(before, after *obi.Config) ([]string, error) {
+	selector, err := attributes.NewAttrSelector(attributes.AttrGroups(-1), &attributes.SelectorConfig{
+		SelectionCfg:            after.Attributes.Select,
+		ExtraGroupAttributesCfg: after.Attributes.ExtraGroupAttributes,
+		UseV2Selection:          after.Attributes.UseV2Selection,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var changed []string
+	for _, exporter := range convert.ActiveSpanMetricExporterAttributes(before) {
+		for _, pair := range convert.EnabledSpanMetricPairs(before) {
+			if !convert.SameSpanMetricAttributes(exporter.Attributes, selector.ForSpanMetrics(nil, pair...)) {
+				changed = append(changed, exporter.Path)
+				break
+			}
+		}
+	}
+	return changed, nil
 }
 
 func changedExemplarFilter(before, after *obi.Config) bool {
@@ -1121,6 +1148,8 @@ func migrationAlias(path string) bool {
 		"otel_metrics_export.protocol",
 		"prometheus_export.exemplar_filter",
 		"prometheus_export.features",
+		convert.OTLPSpanMetricAttributesPath,
+		convert.PrometheusSpanMetricAttributesPath,
 		"routes",
 		"otel_traces_export.protocol",
 		"otel_traces_export.sampler",

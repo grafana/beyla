@@ -498,6 +498,7 @@
         "github.com/grpc-ecosystem/grpc-gateway/v2",
         "github.com/hashicorp/go-version",
         "github.com/hashicorp/golang-lru/v2",
+        "github.com/ianlancetaylor/demangle",
         "github.com/invopop/jsonschema",
         "github.com/json-iterator/go",
         "github.com/klauspost/compress",

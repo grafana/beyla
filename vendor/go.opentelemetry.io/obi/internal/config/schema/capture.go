@@ -194,5 +194,11 @@ type MetricsTelemetry struct {
 
 // CaptureMetrics selects the metric families emitted by OBI.
 type CaptureMetrics struct {
-	Features []string `yaml:"features"`
+	Features   []string          `yaml:"features"`
+	TargetInfo CaptureTargetInfo `yaml:"target_info"`
+}
+
+// CaptureTargetInfo controls the target.info and traces.target.info metrics.
+type CaptureTargetInfo struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
 }

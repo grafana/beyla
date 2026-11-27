@@ -82,7 +82,6 @@ func (ex *ExpiryMap[T]) Delete(lbls []string) (T, bool) {
 	return entry.val, true
 }
 
-// DeleteExpired entries and return their label set
 func (ex *ExpiryMap[T]) DeleteExpired() []T {
 	// If TTL is 0, disable expiration completely
 	if ex.ttl == 0 {

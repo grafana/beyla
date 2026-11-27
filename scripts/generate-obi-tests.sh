@@ -213,9 +213,6 @@ CODE_INJECTIONS=(
   '^func TestTraceparentExtraction|t.Skip("temporarily skipped: investigating http.route/url.path mismatch in Beyla")'
   # Restore once Beyla initializes the shared eBPF reverse-DNS lookup.
   '^func TestNetwork_ReverseDNS[(]|t.Skip("temporarily disabled in Beyla: shared eBPF reverse-DNS initialization needs fixing")'
-  # The upstream test edits a Config v2 document, which Beyla can't load. TestConfigReloadV1
-  # (internal/test/beyla_extensions/config_reload_beyla.go) runs the same flow on Config v1.
-  '^func TestConfigReload[(]|t.Skip("Beyla loads Config v1 only: TestConfigReloadV1 covers this flow")'
   # The server can answer before instrumentation attaches on slower VM kernels.
   't[.]Run[(]"Go RED metrics: usual service"|waitForHTTPServerTrace(t, instrumentedServiceStdURL)'
   # Manual spans can reach Jaeger before the automatic outgoing client span.

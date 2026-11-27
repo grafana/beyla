@@ -12,6 +12,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 )
 
+var (
+	ErrNoInstrumentationPoints = errors.New("couldn't find any instrumentation point")
+	ErrUnsupportedGoVersion    = errors.New("unsupported Go version")
+)
+
 type Offsets struct {
 	// Funcs key: requested function name. Each value contains every resolved
 	// canonical or vendored copy of that function.
@@ -100,7 +105,7 @@ func inspectOffsets(execElf *exec.FileInfo, in *inspection, funcs []string) (*Of
 		return nil, fmt.Errorf("finding instrumentation points: %w", err)
 	}
 	if len(found) == 0 {
-		return nil, fmt.Errorf("couldn't find any instrumentation point in %s", execElf.CmdExePath())
+		return nil, fmt.Errorf("%w in %s", ErrNoInstrumentationPoints, execElf.CmdExePath())
 	}
 
 	// check the offsets of the required fields from the method arguments

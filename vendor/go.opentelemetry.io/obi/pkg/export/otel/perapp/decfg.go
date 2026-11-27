@@ -16,6 +16,10 @@ type GlobalMetricsConfig struct {
 	// application_span, application_service_graph, stats, ...
 	// envDefault is provided to avoid breaking changes
 	Features export.Features `yaml:"features" env:"OTEL_EBPF_METRICS_FEATURES,expand" envDefault:"${OTEL_EBPF_METRIC_FEATURES}" envSeparator:","`
+
+	// DisableTargetInfo turns off the target.info and traces.target.info metrics (target_info and
+	// traces_target_info in Prometheus). It is set from Config v2 capture.metrics.target_info.enabled.
+	DisableTargetInfo bool `yaml:"-" env:"-"`
 }
 
 // SvcMetricsConfig is equivalent to GlobalMetricsConfig, but avoids defining environment variable, since this

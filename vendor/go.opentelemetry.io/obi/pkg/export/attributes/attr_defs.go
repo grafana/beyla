@@ -243,6 +243,8 @@ func getDefinitions(
 		extraGroupAttributes[GroupAppKube],
 	)
 
+	spanMetricsAttributes := AttrReportGroup{}
+
 	// The semantic conventions define service.name and service.namespace as
 	// resource attributes, and OBI reports them there. They are also available
 	// as metric-level attributes for backends that read service identity off
@@ -988,10 +990,17 @@ func getDefinitions(
 			},
 		},
 
-		// span and service graph metrics don't yet implement attribute selection,
-		// but their values can still be filtered, so we list them here just to
-		// make the filter recognize its attributes
-		// TODO: when service graph and span metrics implement attribute selection, replace this section by proper metric names
+		SpanMetricsLatencyLegacy.Section: spanMetricsAttributes,
+		SpanMetricsCallsLegacy.Section:   spanMetricsAttributes,
+		SpanMetricsDurationOTel.Section:  spanMetricsAttributes,
+		SpanMetricsCallsOTel.Section:     spanMetricsAttributes,
+		SpanMetricsRequestSize.Section:   spanMetricsAttributes,
+		SpanMetricsResponseSize.Section:  spanMetricsAttributes,
+
+		// service graph metrics don't yet implement attribute selection, and the
+		// fixed span metric dimensions are not selectable, but their values can
+		// still be filtered, so we list them here just to make the filter recognize them
+		// TODO: when service graph metrics implement attribute selection, replace this section by proper metric names
 		"---- temporary placeholder for span and service graph metrics ----": {
 			Attributes: map[attr.Name]Default{
 				attr.Client:               false,

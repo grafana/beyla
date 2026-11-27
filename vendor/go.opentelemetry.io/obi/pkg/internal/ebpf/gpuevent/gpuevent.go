@@ -126,7 +126,7 @@ func (p *Tracer) constants() map[string]any {
 	m := map[string]any{
 		"filter_pids":             filterPids,
 		"g_bpf_debug":             p.cfg.EBPF.BpfDebug,
-		"ringbuf_metrics_enabled": p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics),
+		"ringbuf_metrics_enabled": p.metrics != nil && !imetrics.IsBuiltinNoopReporter(p.metrics) && p.metrics.BpfInternalMetricsScrapeInterval() > 0,
 	}
 	maps.Copy(m, ebpfcommon.PIDFilterConstants())
 

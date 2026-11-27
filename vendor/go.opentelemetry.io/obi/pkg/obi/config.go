@@ -731,8 +731,7 @@ type Attributes struct {
 	// SensitiveQueryParams controls which query-parameter keys are redacted in url.full and url.query.
 	SensitiveQueryParams attributes.SensitiveQueryParamsConfig `yaml:"sensitive_query_params"`
 
-	SanitizeDBQueryText bool `yaml:"-" env:"-" json:"-"`
-	UseV2Selection      bool `yaml:"-" env:"-" json:"-"`
+	UseV2Selection bool `yaml:"-" env:"-" json:"-"`
 }
 
 type HostIDConfig struct {

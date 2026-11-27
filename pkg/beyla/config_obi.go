@@ -32,8 +32,9 @@ func FromOBI(c *obi.Config) *Config {
 		".Discovery.Survey":                cfgutil.SkipConversion,
 		".Discovery.InstrumentAllLocal":    cfgutil.SkipConversion,
 		".Injector":                        cfgutil.SkipConversion,
-		".Attributes.SanitizeSQLQueryText": "SanitizeDBQueryText",
+		".Attributes.SanitizeSQLQueryText": cfgutil.SkipConversion,
 	})
+	cfg.Attributes.SanitizeSQLQueryText = c.EBPF.SanitizeDBQueryText
 	return cfg
 }
 
@@ -46,9 +47,9 @@ func (c *Config) AsOBI() *obi.Config {
 			// ".Some.Renamed.FieldInDst": "NameInSrc",
 			// ".Some.Missing.FieldInSrc": cfgutil.SkipConversion,
 			// TODO: re-enable when we support v2 config
-			".Attributes.UseV2Selection":      cfgutil.SkipConversion,
-			".Attributes.SanitizeDBQueryText": "SanitizeSQLQueryText",
+			".Attributes.UseV2Selection": cfgutil.SkipConversion,
 		})
+		obiCfg.EBPF.SanitizeDBQueryText = c.Attributes.SanitizeSQLQueryText
 		overrideOBI(c, obiCfg)
 		c.obi = obiCfg
 	}

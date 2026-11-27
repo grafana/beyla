@@ -128,9 +128,11 @@ func (v *dynamicPIDSignalView) AsSelector() services.Selector {
 // Callers may also select Kubernetes workloads via AddK8sWorkload; matching processes are
 // materialized into the PID set so existing signal gates and network/stats IP tracking keep working.
 type DynamicSelector struct {
-	mu         sync.RWMutex
-	byPID      map[app.PID]dynamicPIDRecord
-	byWorkload map[workloadKey]dynamicWorkloadRecord
+	mu             sync.RWMutex
+	byPID          map[app.PID]dynamicPIDRecord
+	byWorkload     map[workloadKey]dynamicWorkloadRecord
+	sampler        *services.SamplerConfig
+	samplerChanged chan struct{}
 
 	fileInfoMu        sync.RWMutex
 	fileInfoByPID     map[app.PID]*exec.FileInfo
@@ -163,6 +165,7 @@ func NewDynamicSelector() *DynamicSelector {
 	d := &DynamicSelector{
 		byPID:                    map[app.PID]dynamicPIDRecord{},
 		byWorkload:               map[workloadKey]dynamicWorkloadRecord{},
+		samplerChanged:           make(chan struct{}),
 		fileInfoByPID:            map[app.PID]*exec.FileInfo{},
 		attrsUpdatedCh:           make(chan app.PID, 64),
 		targetsChangedNotifier:   newDynamicWakeNotifier(),
@@ -175,6 +178,26 @@ func NewDynamicSelector() *DynamicSelector {
 	d.statsMetricsView = newDynamicPIDSignalView(d, signalStatsMetrics)
 	d.appSignalsView = newDynamicPIDSignalView(d, appSignalMask)
 	return d
+}
+
+// SetTraceSampler changes the trace sampler for current and future process matches.
+// Until the first call, processes use the sampler configured at startup.
+func (d *DynamicSelector) SetTraceSampler(sampler services.SamplerConfig) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.sampler != nil && *d.sampler == sampler {
+		return
+	}
+	d.sampler = &sampler
+	close(d.samplerChanged)
+	d.samplerChanged = make(chan struct{})
+}
+
+// traceSampler returns an immutable snapshot and a channel closed on the next change.
+func (d *DynamicSelector) traceSampler() (*services.SamplerConfig, <-chan struct{}) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.sampler, d.samplerChanged
 }
 
 // SetOnFileInfoUpdated registers a hook invoked after SetPID updates a live FileInfo. OBI uses this

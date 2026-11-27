@@ -185,7 +185,7 @@ attributes:
 	got := cfg.AsOBI()
 	assert.True(t, got.Exceptions.Enabled)
 	assert.False(t, got.Exceptions.Python.IsEnabled())
-	assert.True(t, got.Attributes.SanitizeDBQueryText)
+	assert.True(t, got.EBPF.SanitizeDBQueryText)
 	assert.Equal(t, otelcfg.LogsConfig{
 		Endpoint:     "http://localhost:4318/v1/logs",
 		Protocol:     otelcfg.ProtocolHTTPProtobuf,
@@ -232,7 +232,7 @@ attributes:
 	assert.Equal(t, 50, got.Logs.BatchMaxSize)
 	assert.Equal(t, 200, got.Logs.QueueSize)
 	assert.Equal(t, 3*time.Second, got.Logs.BatchTimeout)
-	assert.True(t, got.Attributes.SanitizeDBQueryText)
+	assert.True(t, got.EBPF.SanitizeDBQueryText)
 }
 
 func TestV1ExceptionsRequireLogsExporter(t *testing.T) {
@@ -262,7 +262,7 @@ func TestLogsRuntimeHooksRoundTrip(t *testing.T) {
 		return nil
 	}
 	src.Exceptions.Enabled = true
-	src.Attributes.SanitizeDBQueryText = true
+	src.EBPF.SanitizeDBQueryText = true
 
 	cfg := FromOBI(&src)
 	round := cfg.AsOBI()
@@ -276,15 +276,15 @@ func TestLogsRuntimeHooksRoundTrip(t *testing.T) {
 	assert.Equal(t, src.Logs.Endpoint, round.Logs.Endpoint)
 	assert.True(t, round.Exceptions.Enabled)
 	assert.True(t, cfg.Attributes.SanitizeSQLQueryText)
-	assert.True(t, round.Attributes.SanitizeDBQueryText)
+	assert.True(t, round.EBPF.SanitizeDBQueryText)
 }
 
 func TestSanitizeSQLQueryTextDisabledRoundTrip(t *testing.T) {
 	defer unsetOBIEnv(t)
 	src := obi.DefaultConfig
-	src.Attributes.SanitizeDBQueryText = false
+	src.EBPF.SanitizeDBQueryText = false
 
 	cfg := FromOBI(&src)
 	assert.False(t, cfg.Attributes.SanitizeSQLQueryText)
-	assert.False(t, cfg.AsOBI().Attributes.SanitizeDBQueryText)
+	assert.False(t, cfg.AsOBI().EBPF.SanitizeDBQueryText)
 }

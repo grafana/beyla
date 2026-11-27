@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Copy generated OBI eBPF files from the submodule into vendor/"
+set -euo pipefail
+root=${MISE_CONFIG_ROOT}
+obi_module=${OBI_MODULE-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' "$root/go.mod")}
+dest="$root/vendor/go.opentelemetry.io/obi"
+if [[ ! -d "$dest" ]]; then
+  echo "### $dest does not exist; run 'mise run vendor:obi' first" >&2
+  exit 1
+fi
+echo "### Syncing generated eBPF files into $dest"
+(cd "$obi_module" && find pkg \( -name '*_bpfel.go' -o -name '*_bpfel.o' -o -name '*_bpfeb.go' -o -name '*_bpfeb.o' \) -print0) |
+  while IFS= read -r -d '' f; do
+    mkdir -p "$dest/$(dirname "$f")"
+    cp "$obi_module/$f" "$dest/$f"
+  done

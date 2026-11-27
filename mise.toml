@@ -372,11 +372,21 @@ run = [
 ]
 
 [tasks."generate"]
-description = "Generate OBI and Beyla eBPF bindings locally"
-depends = ["submodule:obi"]
+description = "Generate OBI and Beyla eBPF bindings and sync them into vendor/"
 run = [
-  '''obi_module="${OBI_MODULE:-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' go.mod)}"; BPF2GO="${BPF2GO:-$(command -v bpf2go)}" CLANG="${CLANG:-$(command -v clang)}" GOOS=linux make -C "$obi_module" generate''',
+  { task = "generate:obi" },
   { task = "generate:beyla" },
+  { task = "vendor:sync-generated" },
+]
+
+[tasks."generate:force"]
+alias = ["generate-force"]
+description = "Force full regeneration of OBI and Beyla eBPF bindings and sync them into vendor/"
+env = { FORCE = "1" }
+run = [
+  { task = "generate:obi" },
+  { task = "generate:beyla" },
+  { task = "vendor:sync-generated" },
 ]
 
 [tasks."vendor:obi"]

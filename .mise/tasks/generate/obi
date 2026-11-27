@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#MISE description="Generate OBI eBPF bindings in the OBI submodule (set FORCE=1 to regenerate everything)"
+#MISE depends=["submodule:obi"]
+set -euo pipefail
+root=${MISE_CONFIG_ROOT}
+obi_module=${OBI_MODULE-$(awk '$1 == "replace" && $2 == "go.opentelemetry.io/obi" && $3 == "=>" { print $4; exit }' "$root/go.mod")}
+BPF2GO="${BPF2GO:-$(command -v bpf2go)}"
+CLANG="${CLANG:-$(command -v clang)}"
+export BPF2GO CLANG GOOS=linux
+
+target=generate
+if [[ "${FORCE:-}" == "1" ]]; then
+  target=generate/all
+else
+  # OBI's incremental `generate` only rebuilds files that already exist. A
+  # package with a bpf2go directive but no generated output (e.g. a package
+  # that gained a directive after a submodule bump) would be silently skipped.
+  # shellcheck disable=SC2016 # $BPF2GO is a literal directive, not a shell expansion.
+  while IFS= read -r gofile; do
+    dir=$(dirname "$gofile")
+    if ! compgen -G "$dir/*_bpfel.go" >/dev/null; then
+      echo "### $dir has no generated eBPF files; running a full generation"
+      target=generate/all
+      break
+    fi
+  done < <(grep -rl --include='*.go' '^//go:generate \$BPF2GO' "$obi_module/pkg")
+fi
+echo "### Generating OBI eBPF files (make $target)"
+make -C "$obi_module" "$target"

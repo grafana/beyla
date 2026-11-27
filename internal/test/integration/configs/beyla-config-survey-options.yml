@@ -22,6 +22,10 @@ discovery:
         enabled: true
         non_root: true
 
+attributes:
+  instance_id:
+    override_hostname: survey-host
+
 otel_metrics_export:
   endpoint: http://otelcol:4318
   interval: 500ms

@@ -67,6 +67,8 @@ func testInstrumentAllLocal(t *testing.T, config string, survey bool) {
 
 	if survey && !t.Run("independent survey selection", func(t *testing.T) {
 		waitForLocalServices(t, &pq, requests, "survey_info", "local-nonroot", "local-root-1023", "local-root-1024", "local-python-workers")
+		// The parent and three workers share a listener and a service name.
+		waitForLocalInstances(t, &pq, requests, "survey_info", "local-python-workers", 4)
 	}) {
 		return
 	}

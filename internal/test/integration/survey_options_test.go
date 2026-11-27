@@ -105,6 +105,8 @@ func waitForSurveyServices(t *testing.T, pq *promtest.Client, names ...string) {
 		var actual []string
 		for _, result := range results {
 			actual = append(actual, result.Metric["service_name"])
+			assert.Equal(ct, "survey-host", result.Metric["host_name"])
+			assert.Regexp(ct, `^survey-host:[1-9][0-9]*$`, result.Metric["service_instance_id"])
 			assert.Equal(ct, "1", result.Value[1])
 		}
 		assert.ElementsMatch(ct, names, actual)

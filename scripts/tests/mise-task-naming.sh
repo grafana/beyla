@@ -145,6 +145,8 @@ check_task compile:for-coverage //:compile:coverage
 check_task compile-for-coverage //:compile:coverage
 check_task compile:cache-for-coverage //:compile:cache-coverage
 check_task compile-cache-for-coverage //:compile:cache-coverage
+check_task docker:generate //:generate:docker
+check_task docker-generate //:generate:docker
 check_task generate-config-schema //:generate:config-schema
 check_task generate-obi-tests //:generate:obi-tests
 check_task test:unit-shard //:test:shard

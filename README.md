@@ -168,9 +168,9 @@ do not use `KEY=value` task arguments to set environment variables. Normal
 `[env]` defaults treat an empty value as omitted, while build-only
 `GOOS`/`GOARCH` overrides preserve an explicitly empty value.
 
-Docker is optional for local development. It is used by image-building and
-container-backed integration tasks, but Beyla's default development workflow
-generates BPF bindings with the pinned native Clang/LLVM tools managed by Mise.
+Docker is optional for local development. It is used by Docker-based generation
+and image-building tasks, but Beyla's default development workflow generates
+BPF bindings with the pinned native Clang/LLVM tools managed by Mise.
 
 #### Common Mise tasks
 
@@ -179,8 +179,8 @@ The default build flow is:
 
 - `mise run build` - generate and vendor OBI dependencies with pinned native tools, then verify and compile Beyla
 - `mise run dev` - prepare prerequisites, vendor OBI, and compile a coverage-enabled Beyla binary
-- `mise run generate` - regenerate OBI and Beyla eBPF bindings with pinned native tools; does not refresh vendored dependencies
-- `mise run vendor:obi` - generate OBI bindings and refresh the vendored OBI dependencies
+- `mise run generate` - regenerate OBI and Beyla eBPF bindings with pinned native tools
+- `mise run generate:docker` - optionally regenerate eBPF bindings using the Docker generator image
 - `mise run compile` - compile the `beyla` binary
 - `mise run lint` and `mise run test` - lint and test the code
 - `mise run install:hooks` - install the hk pre-commit hook for C/C++ formatting
@@ -235,7 +235,7 @@ The code is incorporated as a Git submodule, named `obi-src`, in the `.obi-src` 
 The contents of the `.obi-src` are used to build the BPF dependencies, and in a second step they are vendored
 in the `vendor/` directory.
 
-Run `mise run vendor:obi` to generate OBI bindings with Beyla’s pinned native Clang/LLVM tools and vendor them locally, including on macOS. The task invokes GNU Make only at the OBI submodule boundary, where Make is OBI’s own BPF-generation interface; local OBI generation does not need a generator image or Docker socket.
+Usually, run `mise run vendor:obi` to generate OBI bindings with Beyla’s pinned native Clang/LLVM tools and vendor them locally. This task invokes GNU Make only at the OBI submodule boundary, where Make is OBI’s own BPF-generation interface.
 
 `.obi-src` folder is pinned to a concrete version of the OBI Git history. If you did changes in the upstream
 [opentelemetry-ebpf-instrumentation](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation)

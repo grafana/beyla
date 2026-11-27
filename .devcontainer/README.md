@@ -55,10 +55,9 @@ for the IDE workflow. Rebuild the container after changing its configuration.
 ## Other aspects to consider
 
 Development sessions run as the non-root `vscode` user so permission-sensitive
-unit tests work correctly. The mounted Docker socket is useful for building
-images and running container-backed integration tests; local OBI generation uses
-`mise run vendor:obi` and does not require Docker. Use `sudo` only for commands
-that need elevated permissions.
+unit tests work correctly. On startup, this user joins the mounted Docker socket's
+group, allowing `make docker-generate` without running tests as root. Use `sudo`
+only for commands that need elevated permissions.
 
 After updating an existing root-based container, rebuild it in your IDE or run
 `devcontainer up --workspace-folder . --remove-existing-container` from the host.

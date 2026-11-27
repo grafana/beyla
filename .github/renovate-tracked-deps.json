@@ -213,7 +213,6 @@
         "actions/download-artifact",
         "actions/upload-artifact",
         "grafana/dashboard-linter",
-        "macos",
         "ubuntu"
       ]
     },

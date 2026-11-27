@@ -95,7 +95,7 @@ func Serve(ctx context.Context, conn net.Conn, refresh func(context.Context, []b
 			log.Warn("configuration refresh rejected; continuing with the running configuration", "error", err)
 			response.Error = err.Error()
 		} else {
-			log.Info("discovery criteria refreshed")
+			log.Info("discovery and trace sampling configuration refreshed")
 		}
 
 		// Same here, if we can't encode the response back to Alloy, we close the socket and have Alloy reload us.

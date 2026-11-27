@@ -35,8 +35,11 @@ const (
 	javaAgentEmbedPlaceholder = "OBI_JAVA_AGENT_PLACEHOLDER"
 )
 
-//go:embed embedded/obi-java-agent.jar
-var embeddedJavaAgentBytes []byte
+var (
+	//go:embed embedded/obi-java-agent.jar
+	embeddedJavaAgentBytes         []byte
+	javaAgentEmbedPlaceholderBytes = []byte(javaAgentEmbedPlaceholder)
+)
 
 type JavaInjectError struct {
 	Message string
@@ -54,12 +57,16 @@ func (e *JavaInjectError) Unwrap() error {
 }
 
 type JavaInjector struct {
-	log             *slog.Logger
-	cfg             *obi.Config
-	agentVersion    string
-	currentAttachID int64
-	mu              sync.Mutex
-	newAttacher     func(*slog.Logger, int64, func(int64, func() error) error) jvmAttacher
+	log          *slog.Logger
+	cfg          *obi.Config
+	agentVersion string
+	// Set by NewJavaInjector so struct-literal tests can pin agentVersion
+	// (including "") without parsing the embedded JAR.
+	agentVersionLazy bool
+	agentVersionOnce sync.Once
+	currentAttachID  int64
+	mu               sync.Mutex
+	newAttacher      func(*slog.Logger, int64, func(int64, func() error) error) jvmAttacher
 }
 
 type jvmAttacher interface {
@@ -82,19 +89,11 @@ func NewJavaInjector(cfg *obi.Config) (*JavaInjector, error) {
 		return nil, err
 	}
 
-	// A locally built or outdated agent JAR may carry no version marker. Injection still
-	// works, we just cannot tell whether an agent already attached to a JVM is the one we
-	// would inject.
-	agentVersion, err := agentVersionFromJar(embeddedJavaAgentBytes)
-	if err != nil {
-		log.Debug("cannot read the embedded java agent version, compatibility checks are disabled", "error", err)
-	}
-
 	return &JavaInjector{
-		cfg:             cfg,
-		log:             log,
-		agentVersion:    agentVersion,
-		currentAttachID: 0,
+		cfg:              cfg,
+		log:              log,
+		agentVersionLazy: true,
+		currentAttachID:  0,
 	}, nil
 }
 
@@ -368,8 +367,28 @@ func (i *JavaInjector) abortedAttachError(ctx context.Context, pid app.PID) erro
 	return &JavaInjectError{Message: "java attach canceled"}
 }
 
+func (i *JavaInjector) embeddedAgentVersion() string {
+	if !i.agentVersionLazy {
+		return i.agentVersion
+	}
+
+	i.agentVersionOnce.Do(func() {
+		// A locally built or outdated agent JAR may carry no version marker. Injection still
+		// works, we just cannot tell whether an agent already attached to a JVM is the one we
+		// would inject.
+		v, err := agentVersionFromJar(embeddedJavaAgentBytes)
+		if err != nil {
+			i.log.Debug("cannot read the embedded java agent version, compatibility checks are disabled", "error", err)
+			return
+		}
+		i.agentVersion = v
+	})
+
+	return i.agentVersion
+}
+
 func ensureEmbeddedAgent() error {
-	if len(embeddedJavaAgentBytes) == 0 || strings.TrimSpace(string(embeddedJavaAgentBytes)) == javaAgentEmbedPlaceholder {
+	if len(embeddedJavaAgentBytes) == 0 || bytes.Equal(bytes.TrimSpace(embeddedJavaAgentBytes), javaAgentEmbedPlaceholderBytes) {
 		return errors.New("embedded OBI java agent artifact is missing from this build; Java TLS telemetry generation will be disabled")
 	}
 
@@ -620,12 +639,13 @@ func (i *JavaInjector) verifyLoadedAgent(
 	pid app.PID,
 	checkPropagation bool,
 ) error {
-	if i.agentVersion == "" && !checkPropagation {
+	agentVersion := i.embeddedAgentVersion()
+	if agentVersion == "" && !checkPropagation {
 		return nil
 	}
 
 	version, capability, asyncCapability, err := i.loadedAgentProperties(ctx, attacher, process, pid)
-	if i.agentVersion != "" {
+	if agentVersion != "" {
 		if err != nil {
 			return err
 		}
@@ -650,7 +670,8 @@ func (i *JavaInjector) verifyLoadedAgent(
 }
 
 func (i *JavaInjector) verifyAgentVersion(pid app.PID, loadedVersion string) error {
-	if loadedVersion == i.agentVersion {
+	expectedVersion := i.embeddedAgentVersion()
+	if loadedVersion == expectedVersion {
 		return nil
 	}
 
@@ -660,10 +681,10 @@ func (i *JavaInjector) verifyAgentVersion(pid app.PID, loadedVersion string) err
 	}
 
 	i.log.Error("the JVM already runs an incompatible OpenTelemetry eBPF Java Agent, restart the process to instrument it with this OBI version",
-		"pid", pid, "loadedVersion", loadedVersion, "expectedVersion", i.agentVersion)
+		"pid", pid, "loadedVersion", loadedVersion, "expectedVersion", expectedVersion)
 
 	return &JavaInjectError{
-		Message: fmt.Sprintf("incompatible OpenTelemetry eBPF Java Agent already loaded: version %s, expected %s", loadedVersion, i.agentVersion),
+		Message: fmt.Sprintf("incompatible OpenTelemetry eBPF Java Agent already loaded: version %s, expected %s", loadedVersion, expectedVersion),
 	}
 }
 

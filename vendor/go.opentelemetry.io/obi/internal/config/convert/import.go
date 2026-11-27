@@ -360,6 +360,13 @@ func applyV2Capture(cfg *obi.Config, src *schema.Extension, policy schema.Captur
 	applyV2NetworkStats(cfg, src.Capture.Network.Stats, complete || completeNetworkStats(src.Capture.Network.Stats))
 	applyV2Runtimes(cfg, src.Capture.Runtimes, complete || completeRuntimes(src.Capture.Runtimes))
 	applyV2CaptureTelemetry(cfg, src.Capture.Telemetry, complete || completeCaptureTelemetry(src.Capture.Telemetry))
+	applyV2TargetInfo(cfg, src.Capture.Metrics.TargetInfo)
+}
+
+func applyV2TargetInfo(cfg *obi.Config, targetInfo schema.CaptureTargetInfo) {
+	if targetInfo.Enabled != nil {
+		cfg.Metrics.DisableTargetInfo = !*targetInfo.Enabled
+	}
 }
 
 func applyV2Policy(cfg *obi.Config, policy schema.CapturePolicy, complete bool) {
@@ -1294,7 +1301,7 @@ func applyV2Instrumentation(cfg *obi.Config, instrumentation schema.Instrumentat
 func applyFullV2Instrumentation(cfg *obi.Config, instrumentation schema.Instrumentation) {
 	applyFullV2HTTPInstrumentation(cfg, instrumentation.HTTP)
 
-	cfg.Attributes.SanitizeDBQueryText = instrumentation.DB.SanitizeQueryText
+	cfg.EBPF.SanitizeDBQueryText = instrumentation.DB.SanitizeQueryText
 
 	cfg.EBPF.HeuristicSQLDetect = instrumentation.SQL.HeuristicDetect
 	cfg.EBPF.BufferSizes.MySQL = instrumentation.SQL.MySQL.BufferSize
@@ -1326,7 +1333,7 @@ func applyPartialV2Instrumentation(cfg *obi.Config, instrumentation schema.Instr
 	}
 
 	if instrumentation.DB.SanitizeQueryText {
-		cfg.Attributes.SanitizeDBQueryText = true
+		cfg.EBPF.SanitizeDBQueryText = true
 	}
 
 	if !zeroValue(instrumentation.SQL) {

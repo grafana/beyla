@@ -1,0 +1,6 @@
+services:
+  server-a:
+    # A non-root listener on port 18060 qualifies for instrument_all_local.
+    user: "1000:1000"
+  obi:
+    pid: "service:server-a"

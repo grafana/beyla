@@ -44,7 +44,7 @@ import (
 // Option overrides the context information that RunBeyla builds from the configuration.
 type Option func(*global.ContextInfo)
 
-// WithCriteriaUpdater lets updater refresh the discovery criteria of the application pipeline.
+// WithCriteriaUpdater lets updater refresh discovery and trace sampling in the application pipeline.
 func WithCriteriaUpdater(updater *obiDiscover.CriteriaUpdater) Option {
 	return func(info *global.ContextInfo) { info.CriteriaUpdates = updater.Updates() }
 }

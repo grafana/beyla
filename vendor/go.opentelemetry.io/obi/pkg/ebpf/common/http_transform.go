@@ -150,7 +150,7 @@ func httpRequestResponseToSpan(parseCtx *EBPFParseContext, event *BPFHTTPInfo, r
 	}
 
 	scheme := req.URL.Scheme
-	if scheme == "" {
+	if scheme != "http" && scheme != "https" {
 		if event.Ssl == 1 {
 			scheme = "https"
 		} else {

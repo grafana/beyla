@@ -108,23 +108,32 @@ func (incl Selection) Matching(metricName Name) []InclusionLists {
 	return lists
 }
 
+// IsGlob reports whether a metric or attribute selection entry is a pattern rather than an exact name.
+func IsGlob(entry string) bool {
+	return strings.ContainsAny(entry, "*?[")
+}
+
 // MatchingV2 also matches normalized names and applies exact selections after globs.
 func (incl Selection) MatchingV2(metricName Name) []InclusionLists {
-	if incl == nil {
-		return nil
-	}
+	globs, exact := incl.MatchingV2Layers(metricName)
+	return append(globs, exact...)
+}
 
-	// some sections are not normalized (e.g. jvm.thread.count), so we also match their normalized form
-	normalized := normalizeMetric(metricName.Section)
+// MatchingV2Layers returns the inclusion lists of every section matching any of the
+// metrics, split into pattern sections and exact sections, each sorted and listed once.
+func (incl Selection) MatchingV2Layers(metricNames ...Name) (globs, exact []InclusionLists) {
+	if incl == nil {
+		return nil, nil
+	}
 
 	var matchingMetricGlobs, matchingMetricNames []Section
 	for glob := range incl {
-		ok, _ := path.Match(string(glob), string(metricName.Section))
-		okNormalized, _ := path.Match(string(glob), string(normalized))
-		if !ok && !okNormalized {
+		if !slices.ContainsFunc(metricNames, func(metricName Name) bool {
+			return matchesMetric(glob, metricName)
+		}) {
 			continue
 		}
-		if strings.ContainsAny(string(glob), "*?[") {
+		if IsGlob(string(glob)) {
 			matchingMetricGlobs = append(matchingMetricGlobs, glob)
 		} else {
 			matchingMetricNames = append(matchingMetricNames, glob)
@@ -132,12 +141,21 @@ func (incl Selection) MatchingV2(metricName Name) []InclusionLists {
 	}
 	slices.Sort(matchingMetricGlobs)
 	slices.Sort(matchingMetricNames)
-	matchingMetricGlobs = append(matchingMetricGlobs, matchingMetricNames...)
-	inclusionLists := make([]InclusionLists, 0, len(matchingMetricGlobs))
 	for _, glob := range matchingMetricGlobs {
-		inclusionLists = append(inclusionLists, incl[glob])
+		globs = append(globs, incl[glob])
 	}
-	return inclusionLists
+	for _, name := range matchingMetricNames {
+		exact = append(exact, incl[name])
+	}
+	return globs, exact
+}
+
+// matchesMetric also matches the normalized form, because some sections are not
+// normalized (e.g. jvm.thread.count).
+func matchesMetric(glob Section, metricName Name) bool {
+	ok, _ := path.Match(string(glob), string(metricName.Section))
+	okNormalized, _ := path.Match(string(glob), string(normalizeMetric(metricName.Section)))
+	return ok || okNormalized
 }
 
 // RequiresV2Review reports selections whose matching semantics change on migration.

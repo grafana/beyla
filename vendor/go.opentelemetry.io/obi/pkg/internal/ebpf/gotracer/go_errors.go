@@ -57,7 +57,7 @@ const (
 
 // decodeGoErrorEvent decodes a go_exception_payload_t. A stack that cannot be
 // symbolized leaves only the panic header rather than dropping the record.
-func decodeGoErrorEvent(hdr *ebpfcommon.BpfExceptionEventHeaderT, payload []byte, event *exceptions.Event) error {
+func decodeGoErrorEvent(payload []byte, event *exceptions.Event) error {
 	p, err := ebpfcommon.ReinterpretCast[BpfGoExceptionPayloadT](payload)
 	if err != nil {
 		return err
@@ -71,13 +71,13 @@ func decodeGoErrorEvent(hdr *ebpfcommon.BpfExceptionEventHeaderT, payload []byte
 	event.SeverityNumber = goExceptionSeverityError
 
 	if panicked {
-		event.Message = goPanicMessage(app.PID(hdr.Pid.HostPid), p)
+		event.Message = goPanicMessage(app.PID(p.ObiPid), p)
 	} else {
 		event.Message = attributes.SanitizeUTF8(unix.ByteSliceToString(p.Message[:]))
 	}
 
 	pcs := p.Pcs[:min(int(p.Frames), len(p.Pcs))]
-	frames, err := goExceptionFrames(app.PID(hdr.Pid.HostPid), pcs)
+	frames, err := goExceptionFrames(app.PID(p.ObiPid), pcs)
 	if err != nil {
 		frames = nil
 	}

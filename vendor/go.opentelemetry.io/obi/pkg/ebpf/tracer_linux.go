@@ -56,6 +56,10 @@ const goUprobeTargetProbeSymbol = "runtime.newproc1"
 var errTracerStopped = errors.New("the process tracer is shutting down")
 
 func loadSpec(eventContext *common.EBPFEventContext, bundle *common.SpecBundle, otelBPFFSPath string, idx int, cache *btf.Cache) error {
+	if !runtimeAllocatedHashMapsAllowed(common.KernelVersion()) {
+		preallocateHashMaps(bundle.Spec)
+	}
+
 	if err := ebpfconvenience.LoadSpec(
 		bundle.Spec,
 		bundle.Objects,
@@ -239,6 +243,20 @@ func trackedSockCookiesSize(spec *ebpf.CollectionSpec) uint32 {
 func keepTrackedSockCookiesAtLeast(spec *ebpf.CollectionSpec, declared uint32) {
 	if cookies := spec.Maps["tracked_sock_cookies"]; cookies != nil && cookies.MaxEntries < declared {
 		cookies.MaxEntries = declared
+	}
+}
+
+// before 6.1 the verifier WARNs (or rejects, on PREEMPT_RT) tracing programs using non-preallocated hash maps
+func runtimeAllocatedHashMapsAllowed(major, minor int) bool {
+	return major > 6 || (major == 6 && minor >= 1)
+}
+
+func preallocateHashMaps(spec *ebpf.CollectionSpec) {
+	for _, m := range spec.Maps {
+		switch m.Type {
+		case ebpf.Hash, ebpf.PerCPUHash, ebpf.HashOfMaps:
+			m.Flags &^= unix.BPF_F_NO_PREALLOC
+		}
 	}
 }
 
@@ -467,10 +485,19 @@ func (pt *ProcessTracer) attachExecutable(exe *link.Executable, exePath string, 
 		processName: ie.FileInfo.ExecutableName(),
 	}
 	committed := false
+	offsetsRegistered := false
 	defer func() {
 		// an uncommitted instrumenter owns probes nobody else will ever close
 		if !committed {
 			pt.unlinkInstrumenter(&i)
+			if offsetsRegistered {
+				keepExecutable := pt.Instrumentables[i.key] != nil
+				for _, p := range pt.Programs {
+					if rb, ok := p.(uncommittedOffsetsRollbacker); ok {
+						rb.RollbackUncommittedOffsets(ie.FileInfo, keepExecutable)
+					}
+				}
+			}
 		}
 	}()
 
@@ -482,6 +509,7 @@ func (pt *ProcessTracer) attachExecutable(exe *link.Executable, exePath string, 
 	for _, p := range pt.Programs {
 		p.RegisterOffsets(ie.FileInfo, ie.Offsets)
 	}
+	offsetsRegistered = true
 
 	if uprobeKey, ok := pt.resolveUprobeTarget(exe, exePath, ie.Offsets); ok {
 		i.uprobeKey = uprobeKey
@@ -638,6 +666,12 @@ func (pt *ProcessTracer) UnlinkExecutable(info *exec.FileInfo, generation uint64
 type executableScopedTracer interface {
 	RegisterExecutable(*exec.FileInfo)
 	UnregisterExecutable(dev, ino uint64)
+}
+
+// uncommittedOffsetsRollbacker cleans up BPF map state written during
+// RegisterOffsets if probe attachment fails before the executable is committed.
+type uncommittedOffsetsRollbacker interface {
+	RollbackUncommittedOffsets(fileInfo *exec.FileInfo, keepExecutable bool)
 }
 
 func (pt *ProcessTracer) removeInstrumenter(key ExecutableKey, i *instrumenter) {

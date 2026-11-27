@@ -183,6 +183,10 @@ type EBPFTracer struct {
 
 	CouchbaseDBCacheSize int `yaml:"couchbase_db_cache_size" env:"OTEL_EBPF_COUCHBASE_DB_CACHE_SIZE" validate:"gt=0"`
 
+	// Replaces literal values in db.query.text. Couchbase applies it while parsing;
+	// the trace exporter applies it for SQL, SQL++ and Redis. Loaded from Config v2 only.
+	SanitizeDBQueryText bool `yaml:"-" env:"-" json:"-"`
+
 	// BPF path used to pin eBPF maps
 	BPFFSPath string `yaml:"bpf_fs_path" env:"OTEL_EBPF_BPF_FS_PATH"`
 

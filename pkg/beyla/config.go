@@ -212,10 +212,25 @@ type Config struct {
 	// cached equivalent for the OBI conversion
 	obi *obi.Config `yaml:"-"`
 
+	localPIDSelector *discover.DynamicSelector
+
 	// Set from a config v2 document. Unexported so Convert ignores them.
 	v2ProtocolSelection *instrumentations.InstrumentationSelection
 	criteriaUpdates     *services.CriteriaUpdates
 	criteriaUpdater     *discover.CriteriaUpdater
+}
+
+// SetLocalPIDSelector supplies the process selector for instrument_all_local before startup.
+func (c *Config) SetLocalPIDSelector(selector *discover.DynamicSelector) {
+	c.localPIDSelector = selector
+}
+
+// LocalPIDSelector returns the selector for this run of instrument_all_local.
+func (c *Config) LocalPIDSelector() *discover.DynamicSelector {
+	if c.localPIDSelector != nil {
+		return c.localPIDSelector
+	}
+	return discover.NewDynamicSelector()
 }
 
 // SetV2Runtime records the protocol-metric selection and, when application

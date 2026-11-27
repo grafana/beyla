@@ -12,7 +12,7 @@ import (
 
 const configWatchInterval = time.Second
 
-// Watch refreshes the discovery criteria of an initialized application pipeline when the
+// Watch refreshes the discovery and trace sampling settings of an initialized application pipeline when the
 // configuration file changes from the contents loaded at startup.
 // Mirrors .obi-src/cmd/obi/internal/configwatch, which watches Config v2 files only.
 func Watch(ctx context.Context, path string, initial []byte, r *Refresher) {
@@ -72,7 +72,7 @@ func watchConfigFile(ctx context.Context, path string, previous []byte, load fun
 				loaded = nil
 				rejected = nil
 				refreshError = ""
-				log.Info("discovery criteria refreshed", "path", path)
+				log.Info("discovery and trace sampling configuration refreshed", "path", path)
 			}
 		}
 		select {

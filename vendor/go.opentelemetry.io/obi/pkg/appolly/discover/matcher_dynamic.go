@@ -57,11 +57,26 @@ func (m *DynamicMatcher) Run(ctx context.Context) {
 		removedPIDsNotify = m.DynamicSelector.RemovedNotifyContext(ctx)
 	}
 
+	_, samplerChanged := m.DynamicSelector.parent.traceSampler()
 	for {
 		select {
 		case <-ctx.Done():
 			m.Log.Debug("context done, stopping node")
 			return
+		case <-samplerChanged:
+			sampler, changed := m.DynamicSelector.parent.traceSampler()
+			samplerChanged = changed
+			var updates []Event[ProcessMatch]
+			for pid, match := range m.ProcessHistory {
+				if match.SamplerConfig != sampler {
+					match.SamplerConfig = sampler
+					m.ProcessHistory[pid] = match
+					updates = append(updates, Event[ProcessMatch]{Type: EventUpdated, Obj: match})
+				}
+			}
+			if len(updates) > 0 {
+				m.Output.SendCtx(ctx, updates)
+			}
 		case i, ok := <-m.Input:
 			if !ok {
 				m.Log.Debug("input channel closed, stopping node")
@@ -117,6 +132,7 @@ func (m *DynamicMatcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], b
 	}
 
 	if processMatch := m.matchDynamicCriteria(obj, proc); processMatch != nil {
+		processMatch.SamplerConfig, _ = m.DynamicSelector.parent.traceSampler()
 		m.ProcessHistory[obj.pid] = *processMatch
 
 		return Event[ProcessMatch]{
@@ -130,6 +146,7 @@ func (m *DynamicMatcher) filterCreated(obj ProcessAttrs) (Event[ProcessMatch], b
 		m.Log.Debug("found process by matching the process parent id", "pid", proc.Pid, "ppid", proc.PPid, "comm", proc.ExePath, "metadata", obj.metadata)
 
 		procMatch.Process = proc
+		procMatch.SamplerConfig, _ = m.DynamicSelector.parent.traceSampler()
 
 		m.ProcessHistory[obj.pid] = procMatch
 

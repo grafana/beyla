@@ -98,7 +98,7 @@ func (pf *ProcessFinder) startMixedPipeline(ctx context.Context) (<-chan obiDisc
 	pf.connectSurveySubPipeline(ctx, &swi, enrichedProcessEvents, sockets)
 	var opts []obiDiscover.ProcessFinderStartOpt
 	if pf.cfg.Discovery.InstrumentAllLocal {
-		selector := obiDiscover.NewDynamicSelector()
+		selector := pf.cfg.LocalPIDSelector()
 		pf.connectInstrumentAllLocal(&swi, enrichedProcessEvents, sockets, selector)
 		opts = append(opts, obiDiscover.WithDynamicSelector(selector))
 	}

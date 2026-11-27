@@ -246,6 +246,7 @@ func (p *Tracer) readExceptionEvents(ctx context.Context, eventContext *ebpfcomm
 // UnregisterExecutable, for whichever of its processes captures exceptions.
 // The symbol table is only loaded for the first exception.
 func (p *Tracer) RegisterExecutable(fileInfo *exec.FileInfo) {
+	p.markGoOffsetsActive(fileInfo)
 	if !p.exceptionsEnabled || fileInfo == nil {
 		return
 	}
@@ -256,6 +257,7 @@ func (p *Tracer) RegisterExecutable(fileInfo *exec.FileInfo) {
 }
 
 func (p *Tracer) UnregisterExecutable(dev, ino uint64) {
+	p.markGoOffsetsStale(dev, ino)
 	if !p.exceptionsEnabled {
 		return
 	}

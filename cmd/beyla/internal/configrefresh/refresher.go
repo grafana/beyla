@@ -1,4 +1,4 @@
-// Package configrefresh applies discovery criteria changes to a running Beyla without restarting
+// Package configrefresh applies discovery and trace sampling changes to a running Beyla without restarting
 // it, either from its watched configuration file or from a parent process such as Alloy.
 package configrefresh
 
@@ -7,27 +7,29 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	obiDiscover "go.opentelemetry.io/obi/pkg/appolly/discover"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 
 	"github.com/grafana/beyla/v3/pkg/beyla"
 )
 
-// Refresher applies the discovery selection criteria of reloaded configurations to the running
-// application pipeline. Any other configuration change requires a restart.
+// Refresher applies compatible configuration edits to the running application pipeline.
 type Refresher struct {
 	environment map[string]string
 	startup     *beyla.Config
 	updater     *obiDiscover.CriteriaUpdater
+	setSampler  func(services.SamplerConfig)
 }
 
 // New returns a Refresher for a Beyla running cfg, which was loaded from data, or an error
-// explaining why its application pipeline cannot refresh the discovery criteria.
+// explaining why its application pipeline cannot refresh.
 // It must be called before the pipeline starts, which modifies the process environment.
 func New(cfg *beyla.Config, data []byte) (*Refresher, error) {
-	if err := refreshable(cfg); err != nil {
-		return nil, fmt.Errorf("discovery criteria can't be refreshed: %w; restart Beyla to apply configuration changes", err)
+	if !cfg.InstrumentationEnabled() {
+		return nil, errors.New("restart Beyla to apply configuration changes because application instrumentation was not enabled at startup")
 	}
 
 	r := &Refresher{environment: environment()}
@@ -40,21 +42,15 @@ func New(cfg *beyla.Config, data []byte) (*Refresher, error) {
 	}
 
 	r.startup = startup
-	r.updater = obiDiscover.NewCriteriaUpdater(startup.AsOBI())
-	return r, nil
-}
-
-func refreshable(cfg *beyla.Config) error {
-	switch {
-	case cfg.Discovery.InstrumentAllLocal:
-		return errors.New("discovery.instrument_all_local selects the instrumented processes by itself")
-	case !cfg.InstrumentationEnabled():
-		// This might be nice to fix in the future, but the whole app o11y pipeline is not started on the prior
-		// config launch, so we need major changes.
-		return errors.New("the application instrumentation was not enabled at startup")
+	if cfg.Discovery.InstrumentAllLocal {
+		selector := obiDiscover.NewDynamicSelector()
+		selector.SetTraceSampler(cfg.Traces.SamplerConfig)
+		cfg.SetLocalPIDSelector(selector)
+		r.setSampler = selector.SetTraceSampler
+	} else {
+		r.updater = obiDiscover.NewCriteriaUpdater(startup.AsOBI())
 	}
-
-	return nil
+	return r, nil
 }
 
 func environment() map[string]string {
@@ -67,7 +63,7 @@ func environment() map[string]string {
 	return variables
 }
 
-// Updater must be passed to the application pipeline, which then applies the refreshes.
+// Updater supplies the criteria updater for static discovery. Dynamic PID selection owns its sampler.
 func (r *Refresher) Updater() *obiDiscover.CriteriaUpdater { return r.updater }
 
 // Load loads a complete configuration from data, with the environment that Beyla started with.
@@ -75,18 +71,62 @@ func (r *Refresher) Load(data []byte) (*beyla.Config, error) {
 	return beyla.LoadRefreshConfig(data, r.environment)
 }
 
-// Apply waits until the running pipeline applies the discovery criteria of cfg, or rejects them.
+// Apply sends compatible discovery and sampling changes to the running selector.
 // cfg must not be modified afterwards.
 func (r *Refresher) Apply(ctx context.Context, cfg *beyla.Config) error {
+	if err := validateSamplerRatios(cfg); err != nil {
+		return err
+	}
+
 	if changed := r.startup.ChangedSettings(cfg); len(changed) > 0 {
-		return fmt.Errorf("only discovery selection criteria can be refreshed; restart Beyla to apply the changes to %s",
+		return fmt.Errorf("restart Beyla to apply changes to %s",
 			strings.Join(changed, ", "))
 	}
 
+	if r.setSampler != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		r.setSampler(cfg.Traces.SamplerConfig)
+		return nil
+	}
 	return r.updater.Update(ctx, cfg.AsOBI())
 }
 
-// Refresh loads a complete configuration from data and applies its discovery criteria.
+func validateSamplerRatios(cfg *beyla.Config) error {
+	if err := validateSamplerRatio(&cfg.Traces.SamplerConfig); err != nil {
+		return fmt.Errorf("otel_traces_export.sampler: %w", err)
+	}
+
+	for i := range cfg.Discovery.Instrument {
+		if err := validateSamplerRatio(cfg.Discovery.Instrument[i].SamplerConfig); err != nil {
+			return fmt.Errorf("discovery.instrument[%d].sampler: %w", i, err)
+		}
+	}
+
+	for i := range cfg.Discovery.Services {
+		if err := validateSamplerRatio(cfg.Discovery.Services[i].SamplerConfig); err != nil {
+			return fmt.Errorf("discovery.services[%d].sampler: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+func validateSamplerRatio(sampler *services.SamplerConfig) error {
+	if sampler == nil || (sampler.Name != services.SamplerTraceIDRatio && sampler.Name != services.SamplerParentBasedTraceIDRatio) {
+		return nil
+	}
+
+	ratio, err := strconv.ParseFloat(sampler.Arg, 64)
+	if err == nil && ratio >= 0 && ratio <= 1 {
+		return nil
+	}
+
+	return fmt.Errorf("invalid arg %q for %s: expected a ratio between 0 and 1 inclusive", sampler.Arg, sampler.Name)
+}
+
+// Refresh loads a complete configuration and applies its discovery and sampling settings.
 func (r *Refresher) Refresh(ctx context.Context, data []byte) error {
 	cfg, err := r.Load(data)
 	if err != nil {

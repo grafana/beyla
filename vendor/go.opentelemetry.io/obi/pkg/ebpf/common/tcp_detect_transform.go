@@ -236,7 +236,7 @@ func detectGenericProtocol(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, e
 		return span, ignore, matched, err
 	}
 
-	if span, ignore, matched, err := matchCouchbase(parseCtx, event, requestBuffer, responseBuffer); matched {
+	if span, ignore, matched, err := matchCouchbase(parseCtx, cfg, event, requestBuffer, responseBuffer); matched {
 		return span, ignore, matched, err
 	}
 
@@ -338,9 +338,9 @@ func matchMongo(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer
 	return request.Span{}, false, false, nil
 }
 
-func matchCouchbase(parseCtx *EBPFParseContext, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
+func matchCouchbase(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, event *TCPRequestInfo, requestBuffer, responseBuffer *largebuf.LargeBuffer) (request.Span, bool, bool, error) { //nolint:unparam
 	// Check for Couchbase memcached binary protocol
-	cbInfo, ignore, err := ProcessPossibleCouchbaseEvent(event, requestBuffer, responseBuffer, parseCtx.couchbaseBucketCache)
+	cbInfo, ignore, err := processPossibleCouchbaseEvent(event, requestBuffer, responseBuffer, parseCtx.couchbaseBucketCache, cfg.SanitizeDBQueryText)
 
 	if err == nil {
 		if ignore {

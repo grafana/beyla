@@ -137,13 +137,17 @@ func TestServe_Refresher(t *testing.T) {
 	go Serve(t.Context(), child, refresher.Refresh)
 
 	client := newControlClient(t, parent)
-	assert.Empty(t, client.refresh(watcherConfig(9090)).Error)
-	criteria, _ := refresher.Updater().Updates().Current()
+	config := bytes.Replace(watcherConfig(9090), []byte("  endpoint:"), []byte("  sampler: {name: always_off}\n  endpoint:"), 1)
+	assert.Empty(t, client.refresh(config).Error)
+	updates := refresher.Updater().Updates()
+	criteria, _ := updates.Current()
 	require.Len(t, criteria, 1)
 	assert.True(t, criteria[0].GetOpenPorts().Matches(9090))
+	assert.Equal(t, "always_off", string(updates.Sampler().Name))
 
 	rejected := client.refresh(bytes.Replace(watcherConfig(9090), []byte("localhost:4318"), []byte("collector:4318"), 1))
 	assert.Contains(t, rejected.Error, "restart Beyla")
+	assert.Equal(t, "always_off", string(updates.Sampler().Name))
 	criteria, _ = refresher.Updater().Updates().Current()
 	assert.True(t, criteria[0].GetOpenPorts().Matches(9090), "a rejected refresh must keep the running criteria")
 }
